@@ -210,6 +210,12 @@ func checkList(t *testing.T, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("ConnForCell(LocalCellName) failed: %v", err)
 	}
+
+	_, err = conn.Create(ctx, "/some/arbitrary/file", []byte{'a'})
+	if err != nil {
+		t.Fatalf("Create('/myfile') failed: %v", err)
+	}
+
 	_, err = conn.List(ctx, "/")
 	if topo.IsErrType(err, topo.NoImplementation) {
 		// If this is not supported, skip the test

@@ -20,14 +20,12 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 )
 
 func init() {
 	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
-	log.SetLevel(log.ERROR)
 }
 
 var instance1 = Instance{Key: key1}

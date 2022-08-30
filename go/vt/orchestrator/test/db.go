@@ -19,6 +19,8 @@ package test
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
@@ -36,6 +38,7 @@ func NewTestDB(rowMaps [][]sqlutils.RowMap) *DB {
 }
 
 func (t *DB) QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
+	log.Info("test")
 	rowMaps, err := t.getRowMapsForQuery()
 	if err != nil {
 		return err

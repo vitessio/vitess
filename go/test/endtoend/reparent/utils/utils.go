@@ -165,6 +165,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
 	for _, tablet := range tablets {
+		tablet.VttabletProcess.SupportsBackup = false
 		// Start the tablet
 		err := tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
@@ -231,6 +232,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 	// The tablet should come up as serving since the primary for the shard already exists
 	tablet.VttabletProcess.ServingStatus = "SERVING"
+	tablet.VttabletProcess.SupportsBackup = false
 	err = tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
 	return tablet

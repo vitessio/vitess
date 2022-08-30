@@ -15,8 +15,6 @@ jobs:
     if: always()
     name: Get latest release
     runs-on: ubuntu-latest
-    needs:
-      - get_upgrade_downgrade_label
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -73,6 +71,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/upgrade_downgrade_test_reparent_old_vttablet.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

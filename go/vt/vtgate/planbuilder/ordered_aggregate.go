@@ -21,14 +21,14 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -394,8 +394,8 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	return oa.input.Wireup(plan, jt)
 }
 
-func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
-	return oa.input.WireupGen4(semTable)
+func (oa *orderedAggregate) WireupGen4(ctx *plancontext.PlanningContext) error {
+	return oa.input.WireupGen4(ctx)
 }
 
 // OutputColumns implements the logicalPlan interface

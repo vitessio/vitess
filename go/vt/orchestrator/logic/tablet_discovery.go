@@ -26,13 +26,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -59,7 +60,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	tmc = tmclient.NewTabletManagerClient()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecOrchestrator("delete from vitess_tablet"); err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
 		_ = inst.InjectSeed(instanceKey)
@@ -84,7 +85,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 		defer cancel()
 		cells, err := ts.GetKnownCells(ctx)
 		if err != nil {
-			log.Errore(err)
+			log.Error(err)
 			return
 		}
 
@@ -187,14 +188,14 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		latestInstances[instanceKey] = true
 		old, err := inst.ReadTablet(instanceKey)
 		if err != nil && err != inst.ErrTabletAliasNil {
-			log.Errore(err)
+			log.Error(err)
 			continue
 		}
 		if !forceRefresh && proto.Equal(tablet, old) {
 			continue
 		}
 		if err := inst.SaveTablet(tablet); err != nil {
-			log.Errore(err)
+			log.Error(err)
 			continue
 		}
 		loader(&instanceKey)
@@ -211,7 +212,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		if !latestInstances[curKey] {
 			tablet := &topodatapb.Tablet{}
 			if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
-				log.Errore(err)
+				log.Error(err)
 				return nil
 			}
 			toForget[curKey] = tablet
@@ -219,7 +220,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		return nil
 	})
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	for instanceKey, tablet := range toForget {
 		log.Infof("Forgetting: %v", tablet)
@@ -232,10 +233,10 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 			instanceKey.Port,
 		)
 		if err != nil {
-			log.Errore(err)
+			log.Error(err)
 		}
 		if err := inst.ForgetInstance(&instanceKey); err != nil {
-			log.Errore(err)
+			log.Error(err)
 		}
 	}
 }
@@ -267,24 +268,6 @@ func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Conte
 		unlock(e)
 		cancel()
 	}, nil
-}
-
-// TabletRefresh refreshes the tablet info.
-func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
-	tablet, err := inst.ReadTablet(instanceKey)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-	defer cancel()
-	ti, err := ts.GetTablet(ctx, tablet.Alias)
-	if err != nil {
-		return nil, err
-	}
-	if err := inst.SaveTablet(ti.Tablet); err != nil {
-		return nil, err
-	}
-	return ti.Tablet, nil
 }
 
 // tabletUndoDemotePrimary calls the said RPC for the given tablet.

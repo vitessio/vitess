@@ -326,6 +326,7 @@ func (e *Executor) StreamExecute(
 		logStats.TablesUsed = plan.TablesUsed
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
+		logStats.ActiveKeyspace = vc.keyspace
 
 		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
@@ -1342,7 +1343,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
-	if e.allowScatter || sqlparser.AllowScatterDirective(stmt) {
+	if e.allowScatter || plan.Instructions == nil || sqlparser.AllowScatterDirective(stmt) {
 		return nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode

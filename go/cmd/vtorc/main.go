@@ -25,13 +25,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
 
+	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/log"
+	vtlog "vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/app"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/servenv"
-
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -101,6 +102,8 @@ func main() {
 	// TODO(ajm188): after v15, remove this pflag hack and use servenv.ParseFlags
 	// directly.
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
+	vtlog.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
 
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
@@ -123,10 +126,6 @@ func main() {
 	sibling := fs.StringP("sibling", "s", "", "sibling instance, host_fqdn[:port]")
 	destination := fs.StringP("destination", "d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
 	discovery := fs.Bool("discovery", true, "auto discovery mode")
-	quiet := fs.Bool("quiet", false, "quiet")
-	verbose := fs.Bool("verbose", false, "verbose")
-	debug := fs.Bool("debug", false, "debug mode (very verbose)")
-	stack := fs.Bool("stack", false, "add stack trace upon error")
 	config.RuntimeCLIFlags.SkipUnresolve = fs.Bool("skip-unresolve", false, "Do not unresolve a host name")
 	config.RuntimeCLIFlags.SkipUnresolveCheck = fs.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
 	config.RuntimeCLIFlags.Noop = fs.Bool("noop", false, "Dry run; do not perform destructing operations")
@@ -174,17 +173,6 @@ Please update your scripts before the next version, when this will begin to brea
 		*destination = *sibling
 	}
 
-	log.SetLevel(log.ERROR)
-	if *verbose {
-		log.SetLevel(log.INFO)
-	}
-	if *debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *stack {
-		log.SetPrintStackTrace(*stack)
-	}
-
 	startText := "starting orchestrator"
 	if AppVersion != "" {
 		startText += ", version: " + AppVersion
@@ -201,17 +189,6 @@ Please update your scripts before the next version, when this will begin to brea
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false
-	}
-	if config.Config.Debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *quiet {
-		// Override!!
-		log.SetLevel(log.ERROR)
-	}
-	if config.Config.EnableSyslog {
-		log.EnableSyslogWriter("orchestrator")
-		log.SetSyslogLevel(log.INFO)
 	}
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()

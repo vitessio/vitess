@@ -5,8 +5,6 @@ Usage of vtgr:
       --clusters_to_watch strings                                        Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --cpu_profile string                                               deprecated: use '-pprof=cpu' instead
-      --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
-      --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --db_config string                                                 Full path to db config file that will be used by VTGR.
       --db_flavor string                                                 MySQL flavor override. (default "MySQL56")
       --db_port int                                                      Local mysql port, set this to enable local fast check.
@@ -40,9 +38,8 @@ Usage of vtgr:
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
   -h, --help                                                             display usage and exit
-      --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
-      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever) (default 0s)
-      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever) (default 0s)
+      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
@@ -80,7 +77,7 @@ Usage of vtgr:
       --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
-      --tablet_manager_protocol string                                   the protocol to use to talk to vttablet (default "grpc")
+      --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.
@@ -98,10 +95,6 @@ Usage of vtgr:
       --topo_zk_tls_ca string                                            the server ca to use to validate servers when connecting to the zk topo server
       --topo_zk_tls_cert string                                          the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
       --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
-      --tracer string                                                    tracing service to use (default "noop")
-      --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate OptionalFloat64                            sampling rate for the probabilistic jaeger sampler (default 0.1)
-      --tracing-sampling-type OptionalString                             sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default const)
   -v, --v Level                                                          log level for V logs
       --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging

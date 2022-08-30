@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -24,8 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"context"
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
@@ -224,21 +223,21 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (int64, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, preQueries)
+	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, preQueries)
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 	defer conn.UnlockUpdateTime()
-	return conn.ReservedID(), beginSQL, err
+	return conn.ReservedID(), beginSQL, sessionStateChanges, err
 }
 
 // Commit commits the specified transaction and renews connection id if one exists.
@@ -390,7 +389,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+		conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 		if err != nil {
 			allErr.RecordError(err)
 			continue
@@ -505,27 +504,27 @@ func (te *TxEngine) stopWatchdog() {
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
-func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, postBeginQueries []string) (int64, error) {
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, postBeginQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer te.beginRequests.Done()
 
 	conn, err := te.reserve(ctx, options, preQueries)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer conn.UnlockUpdateTime()
-	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, postBeginQueries)
+	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, postBeginQueries)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
-		return 0, err
+		return 0, "", err
 	}
-	return conn.ReservedID(), nil
+	return conn.ReservedID(), sessionStateChanges, nil
 }
 
 var noop = func(int) {}

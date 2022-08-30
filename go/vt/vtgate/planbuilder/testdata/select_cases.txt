@@ -5341,3 +5341,204 @@ Gen4 plan same as above
     "user.user"
   ]
 }
+
+# SQL_CALC_FOUND_ROWS with vindex lookup
+"select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(2)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by id asc limit :__upper_limit",
+            "ResultColumns": 2,
+            "Table": "`user`",
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count(0) AS count",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "Query": "select count(*) from `user` where `name` = 'aa'",
+            "Table": "`user`",
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(2)",
+        "Inputs": [
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  ":name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by id asc limit :__upper_limit",
+                "ResultColumns": 2,
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  ":name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user` where `name` = 'aa'",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
+
+# `None` route being merged with another route via join predicate on Vindex columns
+"SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "None",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music join `user` on music.user_id = `user`.id where 1 != 1",
+    "Query": "select music.id from music join `user` on music.user_id = `user`.id where music.user_id in (null) and `user`.id = 5",
+    "Table": "music, `user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "None",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music, `user` where 1 != 1",
+    "Query": "select music.id from music, `user` where music.user_id in (null) and `user`.id = 5 and music.user_id = `user`.id",
+    "Table": "`user`, music"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}

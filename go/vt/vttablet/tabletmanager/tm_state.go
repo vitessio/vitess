@@ -17,18 +17,14 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
-
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/trace"
@@ -36,14 +32,26 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var publishRetryInterval = flag.Duration("publish_retry_interval", 30*time.Second, "how long vttablet waits to retry publishing the tablet record")
+var publishRetryInterval = 30 * time.Second
+
+func registerStateFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&publishRetryInterval, "publish_retry_interval", publishRetryInterval, "how long vttablet waits to retry publishing the tablet record")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerStateFlags)
+	servenv.OnParseFor("vttablet", registerStateFlags)
+}
 
 // tmState manages the state of the TabletManager.
 type tmState struct {
@@ -333,7 +341,7 @@ func (ts *tmState) populateLocalMetadataLocked() {
 		return
 	}
 
-	if ts.isOpening && !*initPopulateMetadata {
+	if ts.isOpening && !initPopulateMetadata {
 		return
 	}
 
@@ -455,7 +463,7 @@ func (ts *tmState) retryPublish() {
 			}
 			log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
 			ts.mu.Unlock()
-			time.Sleep(*publishRetryInterval)
+			time.Sleep(publishRetryInterval)
 			ts.mu.Lock()
 			continue
 		}

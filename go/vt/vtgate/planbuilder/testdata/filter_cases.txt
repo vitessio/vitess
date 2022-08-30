@@ -259,19 +259,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where costly = 'aa' and name = 'bb'",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
-    "Table": "`user`",
     "Values": [
       "VARCHAR(\"bb\")"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -303,19 +328,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"bb\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -347,19 +397,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -391,19 +466,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -435,19 +535,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -479,19 +604,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -523,19 +673,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"dd\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -611,19 +786,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -655,19 +855,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"ee\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -699,19 +924,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
-    "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"dd\"))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -812,19 +1062,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where (col1, name) in (('aa', 1+1))",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
-    "Table": "`user`",
     "Values": [
       "(INT64(2))"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -928,19 +1203,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where name = :a",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` = :a",
-    "Table": "`user`",
     "Values": [
       ":a"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where `name` = :a",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -972,19 +1272,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` = 18446744073709551615",
-    "Table": "`user`",
     "Values": [
       "UINT64(18446744073709551615)"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where `name` = 18446744073709551615",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -1016,19 +1341,44 @@
   "QueryType": "SELECT",
   "Original": "select id from user where name in ::list",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` in ::__vals",
-    "Table": "`user`",
     "Values": [
       ":list"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where `name` in ::__vals",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -1622,19 +1972,44 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id or col as val from `user` where 1 != 1",
-    "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
-    "Table": "`user`",
     "Values": [
       "VARCHAR(\"aa\")"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id or col as val from `user` where 1 != 1",
+        "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -1666,19 +2041,44 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
-    "Table": "`user`",
     "Values": [
       "VARCHAR(\"aa\")"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"

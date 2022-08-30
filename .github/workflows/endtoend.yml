@@ -4,7 +4,7 @@ jobs:
 
   build:
     name: End-to-End Test
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
@@ -37,6 +37,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/endtoend.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

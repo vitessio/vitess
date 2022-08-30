@@ -37,6 +37,12 @@ Information about which tables are used was being reported through the `Keyspace
 For multi-table queries, this output can be confusing, so we have added `TablesUsed`, that is a string array, listing all tables and which keyspace they are on.
 `Keyspace` and `Table` fields are deprecated and will be removed in the v16 release of Vitess.
 
+#### Connection Pool Prefill
+
+The connection pool with prefilled connections have been removed. The pool now does lazy connection creation.
+Following flags are deprecated: `queryserver-config-pool-prefill-parallelism`, `queryserver-config-stream-pool-prefill-parallelism`, `queryserver-config-transaction-prefill-parallelism`
+and will be removed in future version.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions
@@ -107,8 +113,8 @@ use-case. Here are the flags that control this feature
 
 `--compression-engine-name` specifies the engine used for compression. It can have one of the following values
 
-- pgzip (Default)
-- pargzip
+- pargzip (Default)
+- pgzip
 - lz4
 - zstd
 - external

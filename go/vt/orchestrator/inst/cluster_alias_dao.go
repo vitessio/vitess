@@ -19,8 +19,9 @@ package inst
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -89,7 +90,8 @@ func writeClusterAlias(clusterName string, alias string) error {
 					(?, ?, now())
 			`,
 			clusterName, alias)
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
@@ -104,7 +106,8 @@ func writeClusterAliasManualOverride(clusterName string, alias string) error {
 					(?, ?)
 			`,
 			clusterName, alias)
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
@@ -136,7 +139,8 @@ func UpdateClusterAliases() error {
 						read_only desc,
 						num_replica_hosts asc
 			`, DowntimeLostInRecoveryMessage)
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	if err := ExecDBWriteFunc(writeFunc); err != nil {
 		return err
@@ -155,7 +159,8 @@ func UpdateClusterAliases() error {
 					having
 						sum(suggested_cluster_alias = '') = count(*)
 			`)
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	if err := ExecDBWriteFunc(writeFunc); err != nil {
 		return err
@@ -174,7 +179,8 @@ func ReplaceAliasClusterName(oldClusterName string, newClusterName string) (err 
 				where cluster_name = ?
 			`,
 				newClusterName, oldClusterName)
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		err = ExecDBWriteFunc(writeFunc)
 	}
@@ -186,7 +192,8 @@ func ReplaceAliasClusterName(oldClusterName string, newClusterName string) (err 
 				where cluster_name = ?
 			`,
 				newClusterName, oldClusterName)
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		if ferr := ExecDBWriteFunc(writeFunc); ferr != nil {
 			err = ferr

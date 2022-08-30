@@ -386,7 +386,7 @@ func (vse *Engine) setWatch() {
 }
 
 func getPacketSize() int64 {
-	return int64(*defaultPacketSize)
+	return int64(defaultPacketSize)
 }
 
 // waitForMySQL ensures that the source is able to stay within defined bounds for

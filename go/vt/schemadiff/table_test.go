@@ -351,8 +351,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "dropped primary key",
 			from:  "create table t1 (id int, primary key(id))",
 			to:    "create table t2 (id int)",
-			diff:  "alter table t1 drop key `PRIMARY`",
-			cdiff: "ALTER TABLE `t1` DROP KEY `PRIMARY`",
+			diff:  "alter table t1 drop primary key",
+			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY",
 		},
 		{
 			name:  "dropped key",
@@ -379,8 +379,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "modified primary key",
 			from:  "create table t1 (`id` int, i int, primary key(id), key i_idx(i))",
 			to:    "create table t2 (`id` int, i int, primary key(id, i),key i_idx(`i`))",
-			diff:  "alter table t1 drop key `PRIMARY`, add primary key (id, i)",
-			cdiff: "ALTER TABLE `t1` DROP KEY `PRIMARY`, ADD PRIMARY KEY (`id`, `i`)",
+			diff:  "alter table t1 drop primary key, add primary key (id, i)",
+			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY, ADD PRIMARY KEY (`id`, `i`)",
 		},
 		{
 			name: "reordered key, no diff",
@@ -420,6 +420,13 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "key made invisible",
 			from:  "create table t1 (`id` int primary key, i int, key i_idx(i))",
 			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) invisible)",
+			diff:  "alter table t1 alter index i_idx invisible",
+			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+		},
+		{
+			name:  "key made invisible with different case",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i))",
+			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) INVISIBLE)",
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
 		},
@@ -850,7 +857,7 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "remove table option 2",
 			from:  "create table t1 (id int primary key) CHECKSUM=1",
 			to:    "create table t1 (id int primary key) ",
-			diff:  "alter table t1 CHECKSUM 0",
+			diff:  "alter table t1 checksum 0",
 			cdiff: "ALTER TABLE `t1` CHECKSUM 0",
 		},
 		{
@@ -864,7 +871,7 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "remove table option 4",
 			from:  "create table t1 (id int auto_increment primary key) KEY_BLOCK_SIZE=16 COMPRESSION='zlib'",
 			to:    "create table t2 (id int auto_increment primary key)",
-			diff:  "alter table t1 KEY_BLOCK_SIZE 0 COMPRESSION ''",
+			diff:  "alter table t1 key_block_size 0 compression ''",
 			cdiff: "ALTER TABLE `t1` KEY_BLOCK_SIZE 0 COMPRESSION ''",
 		},
 		{
@@ -884,7 +891,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key)",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			autoinc: AutoIncrementApplyHigher,
-			diff:    "alter table t1 AUTO_INCREMENT 300",
+			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
 		},
 		{
@@ -908,7 +915,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key) AUTO_INCREMENT=100",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			autoinc: AutoIncrementApplyHigher,
-			diff:    "alter table t1 AUTO_INCREMENT 300",
+			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
 		},
 		{
@@ -922,7 +929,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=100",
 			autoinc: AutoIncrementApplyAlways,
-			diff:    "alter table t1 AUTO_INCREMENT 100",
+			diff:    "alter table t1 auto_increment 100",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 100",
 		},
 		{

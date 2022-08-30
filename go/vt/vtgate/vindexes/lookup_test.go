@@ -19,7 +19,6 @@ package vindexes
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -69,14 +68,14 @@ func (vc *vcursor) Execute(ctx context.Context, method string, query string, bin
 	case vtgatepb.CommitOrder_AUTOCOMMIT:
 		vc.autocommits++
 	}
-	return vc.execute(method, query, bindvars, rollbackOnError)
+	return vc.execute(query, bindvars)
 }
 
 func (vc *vcursor) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
+	return vc.execute(query, bindVars)
 }
 
-func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool) (*sqltypes.Result, error) {
+func (vc *vcursor) execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	vc.queries = append(vc.queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bindvars,
@@ -115,14 +114,10 @@ func (vc *vcursor) execute(method string, query string, bindvars map[string]*que
 
 func TestLookupNonUniqueNew(t *testing.T) {
 	l := createLookup(t, "lookup", false /* writeOnly */)
-	if want, got := l.(*LookupNonUnique).writeOnly, false; got != want {
-		t.Errorf("Create(lookup, false): %v, want %v", got, want)
-	}
+	assert.False(t, l.(*LookupNonUnique).writeOnly, "Create(lookup, false)")
 
 	l = createLookup(t, "lookup", true)
-	if want, got := l.(*LookupNonUnique).writeOnly, true; got != want {
-		t.Errorf("Create(lookup, false): %v, want %v", got, want)
-	}
+	assert.True(t, l.(*LookupNonUnique).writeOnly, "Create(lookup, false)")
 
 	_, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
@@ -130,10 +125,7 @@ func TestLookupNonUniqueNew(t *testing.T) {
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	want := "write_only value must be 'true' or 'false': 'invalid'"
-	if err == nil || err.Error() != want {
-		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'")
 }
 
 func TestLookupNonUniqueInfo(t *testing.T) {
@@ -146,12 +138,8 @@ func TestLookupNonUniqueInfo(t *testing.T) {
 
 func TestLookupNilVCursor(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false /* writeOnly */)
-
 	_, err := lookupNonUnique.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	want := "cannot perform lookup: no vcursor provided"
-	if err == nil || err.Error() != want {
-		t.Errorf("Map(nil vcursor) err: %v, want %v", err, want)
-	}
+	require.EqualError(t, err, "cannot perform lookup: no vcursor provided")
 }
 
 func TestLookupNonUniqueMap(t *testing.T) {
@@ -170,9 +158,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 			[]byte("2"),
 		}),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	utils.MustMatch(t, want, got)
 
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
@@ -187,11 +173,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	// Test query fail.
 	vc.mustFail = true
 	_, err = lookupNonUnique.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	wantErr := "lookup.Map: execute failed"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, wantErr)
-	}
-	vc.mustFail = false
+	require.EqualError(t, err, "lookup.Map: execute failed")
 }
 
 func TestLookupNonUniqueMapAutocommit(t *testing.T) {
@@ -201,9 +183,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 		"to":         "toc",
 		"autocommit": "true",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2}
 
@@ -219,9 +199,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 			[]byte("2"),
 		}),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	utils.MustMatch(t, want, got)
 
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
@@ -231,13 +209,8 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 			"fromc": vars,
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Map queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
-
-	if got, want := vc.autocommits, 1; got != want {
-		t.Errorf("Create(autocommit) count: %d, want %d", got, want)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
+	assert.Equal(t, 1, vc.autocommits, "autocommits")
 }
 
 func TestLookupNonUniqueMapWriteOnly(t *testing.T) {
@@ -254,9 +227,7 @@ func TestLookupNonUniqueMapWriteOnly(t *testing.T) {
 			KeyRange: &topodatapb.KeyRange{},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	utils.MustMatch(t, want, got)
 }
 
 func TestLookupNonUniqueMapAbsent(t *testing.T) {
@@ -269,9 +240,7 @@ func TestLookupNonUniqueMapAbsent(t *testing.T) {
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	utils.MustMatch(t, want, got)
 }
 
 func TestLookupNonUniqueVerify(t *testing.T) {
@@ -294,17 +263,12 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 			"toc":   sqltypes.BytesBindVariable([]byte("test2")),
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Verify queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
 
 	// Test query fail.
 	vc.mustFail = true
 	_, err = lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	want := "lookup.Verify: execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "lookup.Verify: execute failed")
 	vc.mustFail = false
 
 	// writeOnly true should always yield true.
@@ -313,13 +277,8 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 
 	got, err := lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
 	require.NoError(t, err)
-	if vc.queries != nil {
-		t.Errorf("lookup.Verify(writeOnly), queries: %v, want nil", vc.queries)
-	}
-	wantBools := []bool{true, true}
-	if !reflect.DeepEqual(got, wantBools) {
-		t.Errorf("lookup.Verify(writeOnly): %v, want %v", got, wantBools)
-	}
+	assert.Empty(t, vc.queries, "lookup verify queries")
+	utils.MustMatch(t, []bool{true, true}, got)
 }
 
 func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
@@ -329,9 +288,7 @@ func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
 		"to":         "toc",
 		"autocommit": "true",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -351,13 +308,9 @@ func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
 			"toc":   sqltypes.BytesBindVariable([]byte("test2")),
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Verify queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
 
-	if got, want := vc.autocommits, 2; got != want {
-		t.Errorf("Create(autocommit) count: %d, want %d", got, want)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
+	assert.Equal(t, 2, vc.autocommits, "autocommits")
 }
 
 func TestLookupNonUniqueCreate(t *testing.T) {
@@ -376,25 +329,18 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 			"toc_1":   sqltypes.BytesBindVariable([]byte("test2")),
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
 
 	// With ignore.
 	vc.queries = nil
 	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
 	require.NoError(t, err)
 	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc_0, :toc_0), (:fromc_1, :toc_1)"
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
 
 	// With ignore_nulls off
 	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
-	want := "lookup.Create: input has null values: row: 1, col: 0"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "lookup.Create: input has null values: row: 1, col: 0")
 
 	// With ignore_nulls on
 	vc.queries = nil
@@ -408,25 +354,17 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 			"toc_0":   sqltypes.BytesBindVariable([]byte("test2")),
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
 
 	// Test query fail.
 	vc.mustFail = true
 	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	want = "lookup.Create: execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "lookup.Create: execute failed")
 	vc.mustFail = false
 
 	// Test column mismatch.
 	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	want = "lookup.Create: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "lookup.Create: column vindex count does not match the columns in the lookup: 2 vs [fromc]")
 }
 
 func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
@@ -436,9 +374,7 @@ func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
 		"to":         "toc",
 		"autocommit": "true",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc := &vcursor{}
 
 	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
@@ -459,13 +395,8 @@ func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
 			"toc_1":   sqltypes.BytesBindVariable([]byte("test2")),
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
-
-	if got, want := vc.autocommits, 1; got != want {
-		t.Errorf("Create(autocommit) count: %d, want %d", got, want)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
+	assert.Equal(t, 1, vc.autocommits, "autocommits")
 }
 
 func TestLookupNonUniqueDelete(t *testing.T) {
@@ -488,25 +419,17 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 			"toc":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Delete queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries)
 
 	// Test query fail.
 	vc.mustFail = true
 	err = lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
-	want := "lookup.Delete: execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "lookup.Delete: execute failed")
 	vc.mustFail = false
 
 	// Test column count fail.
 	err = lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
-	want = "lookup.Delete: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "lookup.Delete: column vindex count does not match the columns in the lookup: 2 vs [fromc]")
 }
 
 func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
@@ -521,10 +444,7 @@ func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
 	err := lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
 	require.NoError(t, err)
 
-	wantqueries := []*querypb.BoundQuery(nil)
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Delete queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, []*querypb.BoundQuery(nil), vc.queries)
 }
 
 func TestLookupNonUniqueUpdate(t *testing.T) {
@@ -547,9 +467,57 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 			"toc_0":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Update queries:\n%v, want\n%v", vc.queries, wantqueries)
+	utils.MustMatch(t, wantqueries, vc.queries)
+}
+
+func TestLookupMapResult(t *testing.T) {
+	lookup := createLookup(t, "lookup", false)
+
+	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
+	results := []*sqltypes.Result{{
+		Fields:       sqltypes.MakeTestFields("key|col", "int64|int32"),
+		RowsAffected: 2,
+		Rows: []sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(3)},
+			{sqltypes.NewInt64(3), sqltypes.NewInt64(4)},
+			{sqltypes.NewInt64(5), sqltypes.NewInt64(6)},
+		},
+	}}
+
+	got, err := lookup.(LookupPlanable).MapResult(ids, results)
+	require.NoError(t, err)
+	want := []key.Destination{
+		key.DestinationKeyspaceIDs([][]byte{
+			[]byte("1"),
+			[]byte("3"),
+			[]byte("5"),
+		}),
 	}
+	utils.MustMatch(t, want, got)
+}
+
+func TestLookupUniqueMapResult(t *testing.T) {
+	lookup := createLookup(t, "lookup_unique", false)
+
+	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
+	results := []*sqltypes.Result{{
+		Fields:       sqltypes.MakeTestFields("key|col", "int64|int32"),
+		RowsAffected: 2,
+		Rows: []sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(3)},
+		},
+	}}
+
+	got, err := lookup.(LookupPlanable).MapResult(ids, results)
+	require.NoError(t, err)
+	want := []key.Destination{
+		key.DestinationKeyspaceID("1"),
+	}
+	utils.MustMatch(t, want, got)
+
+	results[0].Rows = append(results[0].Rows, results[0].Rows...)
+	_, err = lookup.(LookupPlanable).MapResult(ids, results)
+	require.Error(t, err)
 }
 
 func TestLookupNonUniqueCreateMultiShardAutocommit(t *testing.T) {
@@ -596,8 +564,6 @@ func createLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 		"to":         "toc",
 		"write_only": write,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return l.(SingleColumn)
 }

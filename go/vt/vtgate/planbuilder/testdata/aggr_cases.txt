@@ -3830,7 +3830,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "OFFSET(1, 'count(id)') = 10",
+        "Predicate": ":1 = 10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3838,19 +3838,44 @@ Gen4 plan same as above
             "Aggregates": "random(0) AS 1, sum_count(1) AS count(id)",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "Equal",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
-                "Query": "select 1, count(id) from `user` where `name` = 'a'",
-                "Table": "`user`",
                 "Values": [
                   "VARCHAR(\"a\")"
                 ],
-                "Vindex": "name_user_map"
+                "Vindex": "name_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      ":name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
+                    "Query": "select 1, count(id) from `user` where `name` = 'a'",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           }
@@ -3948,7 +3973,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "OFFSET(1, 'count(id)') = 10",
+        "Predicate": ":1 = 10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4794,7 +4819,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "OFFSET(1, 'count(*)') = 3",
+        "Predicate": ":1 = 3",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4841,7 +4866,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "OFFSET(1, 'sum(foo)') + OFFSET(2, 'sum(bar)') = 42",
+        "Predicate": ":1 + :2 = 42",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4888,7 +4913,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "fooSum + OFFSET(2, 'sum(bar)') = 42",
+        "Predicate": "fooSum + :2 = 42",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4933,7 +4958,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "OFFSET(1, 'count(*)') = 3",
+        "Predicate": ":1 = 3",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4977,7 +5002,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "OFFSET(1, 'count(u.`name`)') = 3",
+        "Predicate": ":1 = 3",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -5101,7 +5126,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "OFFSET(1, 'count(*)') \u003c 3 and OFFSET(1, 'count(*)') \u003e 5",
+        "Predicate": ":1 \u003c 3 and :1 \u003e 5",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -5195,7 +5220,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
         "Inputs": [
           {
             "OperatorType": "Filter",
-            "Predicate": "OFFSET(1, 'count(ue.col)') \u003e 10",
+            "Predicate": ":1 \u003e 10",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",

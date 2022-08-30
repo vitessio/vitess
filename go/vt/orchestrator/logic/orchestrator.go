@@ -24,6 +24,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
@@ -31,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/discovery"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
@@ -160,7 +161,7 @@ func handleDiscoveryRequests() {
 				// Possibly this used to be the elected node, but has
 				// been demoted, while still the queue is full.
 				if !IsLeaderOrActive() {
-					log.Debugf("Node apparently demoted. Skipping discovery of %+v. "+
+					log.Infof("Node apparently demoted. Skipping discovery of %+v. "+
 						"Remaining queue size: %+v", instanceKey, discoveryQueue.QueueLen())
 					discoveryQueue.Release(instanceKey)
 					continue
@@ -178,11 +179,11 @@ func handleDiscoveryRequests() {
 // replicas (if any) are also checked.
 func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
-		log.Debugf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
+		log.Infof("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
 		return
 	}
 	if inst.RegexpMatchPatterns(instanceKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
-		log.Debugf("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", instanceKey)
+		log.Infof("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", instanceKey)
 		return
 	}
 
@@ -272,7 +273,7 @@ func onHealthTick() {
 	{
 		myIsElectedNode, err := process.AttemptElection()
 		if err != nil {
-			log.Errore(err)
+			log.Error(err)
 		}
 		if myIsElectedNode {
 			atomic.StoreInt64(&isElectedNode, 1)
@@ -292,7 +293,7 @@ func onHealthTick() {
 	}
 	instanceKeys, err := inst.ReadOutdatedInstanceKeys()
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 
 	if !wasAlreadyElected {
@@ -440,7 +441,7 @@ func ContinuousDiscovery() {
 						if runCheckAndRecoverOperationsTimeRipe() {
 							CheckAndRecover(nil, nil, false)
 						} else {
-							log.Debugf("Waiting for %+v seconds to pass before running failure detection/recovery", checkAndRecoverWaitPeriod.Seconds())
+							log.Infof("Waiting for %+v seconds to pass before running failure detection/recovery", checkAndRecoverWaitPeriod.Seconds())
 						}
 					}()
 				}
