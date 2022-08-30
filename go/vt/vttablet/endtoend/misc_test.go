@@ -302,11 +302,8 @@ func TestBindInSelect(t *testing.T) {
 		"select :bv from dual",
 		map[string]*querypb.BindVariable{"bv": sqltypes.Int64BindVariable(1)},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want := &sqltypes.Result{
+	require.NoError(t, err)
+	want57 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "1",
 			Type:         sqltypes.Int64,
@@ -320,14 +317,15 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !qr.Equal(want) {
-		// MariaDB 10.3 has different behavior.
-		want2 := want.Copy()
-		want2.Fields[0].Type = sqltypes.Int32
-		want2.Rows[0][0] = sqltypes.NewInt32(1)
-		if !qr.Equal(want2) {
-			t.Errorf("Execute:\n%v, want\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want), prettyPrint(*want2))
-		}
+	want80 := want57.Copy()
+	want80.Fields[0].ColumnLength = 2
+
+	wantMaria := want57.Copy()
+	wantMaria.Fields[0].Type = sqltypes.Int32
+	wantMaria.Rows[0][0] = sqltypes.NewInt32(1)
+
+	if !qr.Equal(want57) && !qr.Equal(want80) && !qr.Equal(wantMaria) {
+		t.Errorf("Execute:\n%v, want\n%v,\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want57), prettyPrint(*want80), prettyPrint(*wantMaria))
 	}
 
 	// String bind var.
@@ -339,7 +337,7 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want = &sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "abcd",
 			Type:         sqltypes.VarChar,
@@ -906,8 +904,11 @@ func TestSysSchema(t *testing.T) {
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
 
 	// table_name
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+	// This can be either a VARCHAR or a VARBINARY. On Linux and MySQL 8, the
+	// string is tagged with a binary encoding, so it is VARBINARY.
+	// On case-insensitive filesystems, it's a VARCHAR.
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[0][10].String())
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[1][10].String())
 
 	// The field Type and the row value type are not matching and because of this wrong packet is send regarding the data of bigint unsigned to the client on vttestserver.
 	// On, Vitess cluster using protobuf we are doing the row conversion to field type and so the final row type send to client is same as field type.
