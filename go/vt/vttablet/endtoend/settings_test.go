@@ -149,7 +149,8 @@ func resetTxConnPool(t *testing.T) {
 		clients[i] = client
 	}
 	for _, client := range clients {
-		client.Release()
+		require.NoError(t,
+			client.Release())
 	}
 }
 
