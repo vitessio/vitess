@@ -265,8 +265,6 @@ Usage of vtctld:
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vreplication_copy_phase_max_innodb_history_list_length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
       --vreplication_copy_phase_max_mysql_replication_lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
-      --vstream_dynamic_packet_size                                      Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance. (default true)
-      --vstream_packet_size int                                          Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount. (default 250000)
       --vtctl_healthcheck_retry_delay duration                           delay before retrying a failed healthcheck (default 5s)
       --vtctl_healthcheck_timeout duration                               the health check timeout period (default 1m0s)
       --vtctl_healthcheck_topology_refresh duration                      refresh interval for re-reading the topology (default 30s)
