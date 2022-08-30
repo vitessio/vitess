@@ -674,7 +674,9 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 		return err
 	}
 	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
-	_, _ = e.vreplicationExec(ctx, tablet.Tablet, query)
+	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
+		log.Errorf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err)
+	}
 
 	if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
 		return err
@@ -2378,13 +2380,13 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 }
 
 // failMigration marks a migration as failed
-func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, err error) error {
+func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
-	if err != nil {
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+	if withError != nil {
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
-	return err
+	return withError
 }
 
 func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
@@ -3655,6 +3657,9 @@ func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid str
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationStartedTimestamp: uuid=%s, error=%v", uuid, err)
+	}
 	return err
 }
 
@@ -3670,6 +3675,9 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationStartedTimestamp: uuid=%s, timestampColumn=%v, error=%v", uuid, timestampColumn, err)
+	}
 	return err
 }
 
@@ -3775,6 +3783,9 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 		return err
 	}
 	_, err = e.execQuery(ctx, query)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationStatus: uuid=%s, query=%v, error=%v", uuid, query, err)
+	}
 	return err
 }
 
@@ -3800,6 +3811,9 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 		return err
 	}
 	_, err = e.execQuery(ctx, query)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationMessage: uuid=%s, message=%s, error=%v", uuid, message, err)
+	}
 	return err
 }
 
