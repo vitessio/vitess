@@ -3200,19 +3200,9 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
 func (node *Offset) formatFast(buf *TrackedBuffer) {
-	if node.Original == "" {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteByte(')')
-	} else {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteString(", '")
-		buf.WriteString(node.Original)
-		buf.WriteString("')")
-	}
+	buf.WriteByte(':')
+	buf.WriteString(fmt.Sprintf("%d", node.V))
 }
 
 // formatFast formats the node.
