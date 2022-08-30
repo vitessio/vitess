@@ -608,9 +608,6 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, tables []
 func (ii *Insights) sendAggregates() {
 	// no locks needed if all callers are on the same thread
 
-	if len(ii.Aggregations) > 0 {
-		log.Infof("Sending aggregates for %v query patterns", len(ii.Aggregations))
-	}
 	if ii.LogPatternsExceeded > 0 {
 		log.Infof("Too many patterns: reached limit of %v.  %v statements not aggregated.", ii.MaxPatterns, ii.LogPatternsExceeded)
 		ii.LogPatternsExceeded = 0
@@ -698,7 +695,7 @@ func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables [
 		}
 	}
 	if ls.Error != nil {
-		obj.Error = stringOrNil(errorsanitizer.NormalizeError(ls.Error.Error()))
+		obj.Error = stringOrNil(normalizeError(errorsanitizer.NormalizeError(ls.Error.Error())))
 	}
 
 	var out []byte
@@ -884,6 +881,32 @@ func normalizeSQL(sql string) (string, error) {
 		}
 	})
 	return buf.WriteNode(stmt).String(), nil
+}
+
+// First capture group in pattern is replaced with `replacment`
+var normalizations = []struct {
+	pattern     *regexp.Regexp
+	replacement string
+}{
+	{regexp.MustCompile(`elapsed time: ([^\s,]+)`), `<time>`},
+	{regexp.MustCompile(`query ID ([\d]+)`), `<id>`},
+	{regexp.MustCompile(`transaction ([\d]+)`), `<transaction>`},
+	{regexp.MustCompile(`ended at ([^\s]+ [^\s]+ [^\s]+)`), `<time>`},
+	{regexp.MustCompile(`conn ([\d]+)`), `<conn>`},
+	{regexp.MustCompile(`The table ('[^\s]+')`), `<table>`},
+	{regexp.MustCompile(`at row ([\d]+)`), `<row>`},
+	{regexp.MustCompile(`at position ([\d]+)`), `<position>`},
+}
+
+// Remove highly variable components of error messages (i.e. query ids, dates, etc) so that errors can be grouped
+// together when shown to the user.
+func normalizeError(error string) string {
+	for _, n := range normalizations {
+		if idx := n.pattern.FindStringSubmatchIndex(error); len(idx) >= 4 {
+			error = error[0:idx[2]] + n.replacement + error[idx[3]:]
+		}
+	}
+	return error
 }
 
 func stringOrNil(s string) *wrapperspb.StringValue {

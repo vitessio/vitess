@@ -273,7 +273,7 @@ func TestInsightsErrors(t *testing.T) {
 			{sql: "third bogus", error: "another fake error, Sql: \"third bogus\""},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"syntax error at position 21\"}`, `statement_type:{value:\"ERROR\"}`).butNot("does"),
+			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"syntax error at position <position>\"}`, `statement_type:{value:\"ERROR\"}`).butNot("does"),
 			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:3", "error_count:3").butNot("does", "foo", "bogus"),
 			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"this is a fake error\"}`, `statement_type:{value:\"ERROR\"}`).butNot("foo", "BindVars"),
 			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"another fake error\"}`, `statement_type:{value:\"ERROR\"}`).butNot("Sql", "bogus"),
@@ -709,6 +709,50 @@ func TestRawQueryShortening(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestErrorNormalization(t *testing.T) {
+	testCases := []struct {
+		name, input, output string
+	}{
+		{
+			name:   "Normalizes elapsed time and query id",
+			input:  "vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 20.000937445s, killing query ID 135243 (CallerID: planetscale-admin)",
+			output: "vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: <time>, killing query ID <id> (CallerID: planetscale-admin)",
+		},
+		{
+			name:   "Normalizes transaction id and ended at time",
+			input:  "vttablet: rpc error: code = Aborted desc = transaction 1656362196194291371: ended at 2022-06-30 20:34:09.614 UTC (unlocked closed connection) (CallerID: planetscale-admin)",
+			output: "vttablet: rpc error: code = Aborted desc = transaction <transaction>: ended at <time> (unlocked closed connection) (CallerID: planetscale-admin)",
+		},
+		{
+			name:   "Normalizes connection id",
+			input:  "target: taobench-8.20-40.primary: vttablet: rpc error: code = Unavailable desc = conn 299286: Write(packet) failed: write unix @->/vt/socket/mysql.sock: write: broken pipe (errno 2006) (sqlstate HY000) (CallerID: planetscale-admin)",
+			output: "target: taobench-8.20-40.primary: vttablet: rpc error: code = Unavailable desc = conn <conn>: Write(packet) failed: write unix @->/vt/socket/mysql.sock: write: broken pipe (errno 2006) (sqlstate HY000) (CallerID: planetscale-admin)",
+		},
+		{
+			name:   "Normalizes the the table path",
+			input:  "target: gomy_backend_production.-.primary: vttablet: rpc error: code = ResourceExhausted desc = The table '/vt/vtdataroot/vt_0955681468/tmp/#sql351_1df_2' is full (errno 1114) (sqlstate HY000) (CallerID: planetscale-admin)",
+			output: "target: gomy_backend_production.-.primary: vttablet: rpc error: code = ResourceExhausted desc = The table <table> is full (errno 1114) (sqlstate HY000) (CallerID: planetscale-admin)",
+		},
+		{
+			name:   "Normalizes the row number",
+			input:  "transaction rolled back to reverse changes of partial DML execution: target: targ.a8-b0.primary: vttablet: rpc error: code = InvalidArgument desc = Data too long for column 'media_url' at row 2 (errno 1406) (sqlstate 22001)",
+			output: "transaction rolled back to reverse changes of partial DML execution: target: targ.a8-b0.primary: vttablet: rpc error: code = InvalidArgument desc = Data too long for column 'media_url' at row <row> (errno 1406) (sqlstate 22001)",
+		},
+		{
+			name:   "Normalizes syntax error position",
+			input:  "syntax error at position 29",
+			output: "syntax error at position <position>",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			normalized := normalizeError(tc.input)
+			assert.Equal(t, tc.output, normalized)
 		})
 	}
 }
