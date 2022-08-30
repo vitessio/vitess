@@ -8,7 +8,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -64,8 +64,6 @@ jobs:
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
 
-        # !mysql57
-
         # Uninstall any previously installed MySQL first
         sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
@@ -85,7 +83,7 @@ jobs:
         sudo apt-get update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
