@@ -18,7 +18,6 @@ limitations under the License.
 package streamlog
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,24 +28,16 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
-	RedactDebugUIQueries = flag.Bool("redact-debug-ui-queries", false, "redact full queries and bind variables from debug UI")
-
-	// QueryLogFormat controls the format of the query log (either text or json)
-	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
-
-	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
-	QueryLogFilterTag = flag.String("querylog-filter-tag", "", "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
-
-	// QueryLogRowThreshold only log queries returning or affecting this many rows
-	QueryLogRowThreshold = flag.Uint64("querylog-row-threshold", 0, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
-
 	sendCount      = stats.NewCountersWithSingleLabel("StreamlogSend", "stream log send count", "logger_names")
 	deliveredCount = stats.NewCountersWithMultiLabels(
 		"StreamlogDelivered",
@@ -57,6 +48,34 @@ var (
 		"Dropped messages by streamlog delivery",
 		[]string{"Log", "Subscriber"})
 )
+
+var (
+	RedactDebugUIQueries = false
+	QueryLogFormat       = "text"
+	QueryLogFilterTag    = ""
+	QueryLogRowThreshold = uint64(0)
+)
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerStreamLogFlags)
+	servenv.OnParseFor("vttablet", registerStreamLogFlags)
+	servenv.OnParseFor("vtgate", registerStreamLogFlags)
+}
+
+func registerStreamLogFlags(fs *pflag.FlagSet) {
+	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
+	fs.BoolVar(&RedactDebugUIQueries, "redact-debug-ui-queries", RedactDebugUIQueries, "redact full queries and bind variables from debug UI")
+
+	// QueryLogFormat controls the format of the query log (either text or json)
+	fs.StringVar(&QueryLogFormat, "querylog-format", QueryLogFormat, "format for query logs (\"text\" or \"json\")")
+
+	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
+	fs.StringVar(&QueryLogFilterTag, "querylog-filter-tag", QueryLogFilterTag, "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
+
+	// QueryLogRowThreshold only log queries returning or affecting this many rows
+	fs.Uint64Var(&QueryLogRowThreshold, "querylog-row-threshold", QueryLogRowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
+
+}
 
 const (
 	// QueryLogFormatText is the format specifier for text querylog output
@@ -212,11 +231,11 @@ func GetFormatter(logger *StreamLogger) LogFormatter {
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
 func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
-	if *QueryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && *QueryLogFilterTag == "" {
+	if QueryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && QueryLogFilterTag == "" {
 		return false
 	}
-	if *QueryLogFilterTag != "" {
-		return strings.Contains(sql, *QueryLogFilterTag)
+	if QueryLogFilterTag != "" {
+		return strings.Contains(sql, QueryLogFilterTag)
 	}
 	return true
 }

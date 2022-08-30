@@ -75,9 +75,9 @@ func TestFileLog(t *testing.T) {
 
 // TestFileLog sends a stream of five query records to the plugin, and verifies that they are logged.
 func TestFileLogRedacted(t *testing.T) {
-	*streamlog.RedactDebugUIQueries = true
+	streamlog.RedactDebugUIQueries = true
 	defer func() {
-		*streamlog.RedactDebugUIQueries = false
+		streamlog.RedactDebugUIQueries = false
 	}()
 
 	dir := t.TempDir()

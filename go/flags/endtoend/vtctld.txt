@@ -132,9 +132,6 @@ Usage of vtctld:
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
-      --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
-      --querylog-format string                                           format for query logs ("text" or "json") (default "text")
-      --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
       --queryserver-config-acl-exempt-acl string                         an acl that exempt from table acl checking (this acl is free to access any vitess tables).
       --queryserver-config-annotate-queries                              prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
       --queryserver-config-enable-table-acl-dry-run                      If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results
@@ -167,7 +164,6 @@ Usage of vtctld:
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
       --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
-      --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).

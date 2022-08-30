@@ -548,7 +548,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
 	for _, v := range items {
 		var query string
-		if *streamlog.RedactDebugUIQueries {
+		if streamlog.RedactDebugUIQueries {
 			query, _ = sqlparser.RedactSQLQuery(v.Query)
 		} else {
 			query = v.Query

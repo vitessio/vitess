@@ -45,7 +45,7 @@ func testRedacted(t *testing.T, r *httptest.ResponseRecorder) {
 
 func testHandler(req *http.Request, t *testing.T) {
 	// Test with redactions off to start
-	*streamlog.RedactDebugUIQueries = false
+	streamlog.RedactDebugUIQueries = false
 
 	response := httptest.NewRecorder()
 	tabletenv.TxLogger.Send("test msg")
@@ -80,12 +80,12 @@ func testHandler(req *http.Request, t *testing.T) {
 	testNotRedacted(t, response)
 
 	// Test with redactions on
-	*streamlog.RedactDebugUIQueries = true
+	streamlog.RedactDebugUIQueries = true
 	txlogzHandler(response, req)
 	testRedacted(t, response)
 
 	// Reset to default redaction state
-	*streamlog.RedactDebugUIQueries = false
+	streamlog.RedactDebugUIQueries = false
 }
 
 func TestTxlogzHandler(t *testing.T) {
