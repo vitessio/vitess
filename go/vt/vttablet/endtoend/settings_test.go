@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -55,6 +54,85 @@ func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
 		assert.EqualValues(t, 0, client.ReservedID())
 		assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
 	}
+}
+
+func TestSetttingsReuseConnWithSettings(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	connectionIDQuery := "select connection_id()"
+	setting := "set @@sql_mode = ''"
+
+	// Create a connection
+	connectionIDRes, err := client.BeginExecute(connectionIDQuery, nil, nil)
+	require.NoError(t, err)
+
+	// Add settings to the connection
+	res, err := client.ReserveExecute(connectionIDQuery, []string{setting}, nil)
+	require.NoError(t, err)
+	require.Equal(t, connectionIDRes, res)
+
+	// Release the connection back
+	err = client.Rollback()
+	require.NoError(t, err)
+
+	// We iterate in a loop and try to get a connection with the same settings as before
+	// but only 1 at a time. So we expect the same connection to be reused everytime.
+	for i := 0; i < 100; i++ {
+		res, err = client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
+		require.NoError(t, err)
+		require.True(t, connectionIDRes.Equal(res))
+		err = client.Rollback()
+		require.NoError(t, err)
+	}
+
+	// Create a new client
+	client2 := framework.NewClient()
+	defer client2.Release()
+	// Ask for a connection with the same settings. This too should be reused.
+	res, err = client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
+	require.NoError(t, err)
+	require.True(t, connectionIDRes.Equal(res))
+
+	// Ask for a connection with the same settings, but the previous connection hasn't been released yet. So this will be a new connection.
+	connectionIDRes2, err := client2.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
+	require.NoError(t, err)
+	require.False(t, connectionIDRes.Equal(connectionIDRes2))
+
+	// Release both the connections
+	err = client.Rollback()
+	require.NoError(t, err)
+	err = client2.Rollback()
+	require.NoError(t, err)
+
+	// We iterate in a loop and try to get a connection with the same settings as before
+	// but only 1 at a time. So we expect the two connections to be reused, and we should be seeing both of them.
+	reusedConnection1 := false
+	reusedConnection2 := false
+	for i := 0; i < 100; i++ {
+		res, err = client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
+		require.NoError(t, err)
+		if connectionIDRes.Equal(res) {
+			reusedConnection1 = true
+		} else if connectionIDRes2.Equal(res) {
+			reusedConnection2 = true
+		} else {
+			t.Fatalf("The connection should be either of the already created connections")
+		}
+
+		err = client.Rollback()
+		require.NoError(t, err)
+		if reusedConnection2 && reusedConnection1 {
+			break
+		}
+	}
+	require.True(t, reusedConnection1)
+	require.True(t, reusedConnection2)
 }
 
 func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
