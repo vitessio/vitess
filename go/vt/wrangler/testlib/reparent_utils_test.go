@@ -165,8 +165,6 @@ func TestReparentTablet(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	replica.StartActionLoop(t, wr)

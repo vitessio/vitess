@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"sync"
@@ -102,6 +103,28 @@ func (rm *replManager) check() {
 	rm.checkActionLocked()
 }
 
+func (rm *replManager) checkPrimaryIsSource(status mysql.ReplicationStatus) (bool, error) {
+	tablet := rm.tm.Tablet()
+
+	si, err := rm.tm.TopoServer.GetShard(rm.ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return false, err
+	}
+
+	if !si.HasPrimary() {
+		return false, fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	primary, err := rm.tm.TopoServer.GetTablet(rm.ctx, si.PrimaryAlias)
+	if err != nil {
+		return false, err
+	}
+	host := primary.Tablet.MysqlHostname
+	port := int(primary.Tablet.MysqlPort)
+
+	return status.SourceHost == host && status.SourcePort == port, nil
+}
+
 func (rm *replManager) checkActionLocked() {
 	status, err := rm.tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
@@ -112,7 +135,12 @@ func (rm *replManager) checkActionLocked() {
 		// If only one of the threads is stopped, it's probably
 		// intentional. So, we don't repair replication.
 		if status.SQLHealthy() || status.IOHealthy() {
-			return
+			// Check if the Primary is still the source though
+			// We need this check only when one thread is healthy, since we expect this failure to only cause the IOThread to go unhealthy
+			// and if both the threads are unhealthy, we want to repair replication irrespective of having the correct source port of the primary
+			if primaryIsSource, err := rm.checkPrimaryIsSource(status); err == nil && primaryIsSource {
+				return
+			}
 		}
 	}
 
