@@ -71,6 +71,20 @@ func (mcmp *MySQLCompare) AssertMatches(query, expected string) {
 	}
 }
 
+// AssertMatchesAny ensures the given query produces any one of the expected results.
+func (mcmp *MySQLCompare) AssertMatchesAny(query string, expected ...string) {
+	mcmp.t.Helper()
+	qr := mcmp.Exec(query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, e := range expected {
+		diff := cmp.Diff(e, got)
+		if diff == "" {
+			return
+		}
+	}
+	mcmp.t.Errorf("Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
+}
+
 // AssertContainsError executes the query on both Vitess and MySQL.
 // Both clients need to return an error. The error of Vitess must be matching the given expectation.
 func (mcmp *MySQLCompare) AssertContainsError(query, expected string) {
