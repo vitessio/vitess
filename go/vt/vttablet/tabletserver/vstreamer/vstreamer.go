@@ -511,14 +511,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// will generate a new plan and FIELD event.
 		id := ev.TableID(vs.format)
 
-		if _, ok := vs.plans[id]; ok {
-			return nil, nil
-		}
-
 		tm, err := ev.TableMap(vs.format)
 		if err != nil {
 			return nil, err
 		}
+
+		if plan, ok := vs.plans[id]; ok {
+			// When the underlying mysql server restarts the table map can change.
+			// Usually the vstreamer will also error out when this happens, and vstreamer re-initializes its table map.
+			// But if the vstreamer is not aware of the restart, we could get an id that matches one in the cache, but
+			// is for a different table. We then invalidate and recompute the plan for this id.
+			if plan == nil || plan.Table.Name == tm.Name {
+				return nil, nil
+			}
+			vs.plans[id] = nil
+			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
+		}
+
 		if tm.Database == "_vt" && tm.Name == "resharding_journal" {
 			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
