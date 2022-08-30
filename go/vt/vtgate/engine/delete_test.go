@@ -196,8 +196,10 @@ func TestDeleteOwnedVindex(t *testing.T) {
 				Vindex:   ks.Vindexes["hash"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:            "dummy_delete",
-			Table:            ks.Tables["t1"],
+			Query: "dummy_delete",
+			Table: []*vindexes.Table{
+				ks.Tables["t1"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
 			KsidLength:       1,
@@ -282,8 +284,10 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 				Vindex:   ks.Vindexes["rg_vdx"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			},
-			Query:            "dummy_delete",
-			Table:            ks.Tables["rg_tbl"],
+			Query: "dummy_delete",
+			Table: []*vindexes.Table{
+				ks.Tables["rg_tbl"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
 			KsidLength:       2,
@@ -364,7 +368,9 @@ func TestDeleteSharded(t *testing.T) {
 				Keyspace: ks.Keyspace,
 			},
 			Query: "dummy_delete",
-			Table: ks.Tables["t2"],
+			Table: []*vindexes.Table{
+				ks.Tables["t2"],
+			},
 		},
 	}
 
@@ -391,7 +397,9 @@ func TestDeleteShardedStreaming(t *testing.T) {
 				Keyspace: ks.Keyspace,
 			},
 			Query: "dummy_delete",
-			Table: ks.Tables["t2"],
+			Table: []*vindexes.Table{
+				ks.Tables["t2"],
+			},
 		},
 	}
 
@@ -414,8 +422,10 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
-			Query:            "dummy_delete",
-			Table:            ks.Tables["t1"],
+			Query: "dummy_delete",
+			Table: []*vindexes.Table{
+				ks.Tables["t1"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
 			KsidLength:       1,
@@ -504,8 +514,10 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 					evalengine.NewLiteralInt(3),
 				},
 			},
-			Query:            "dummy_update",
-			Table:            ks.Tables["rg_tbl"],
+			Query: "dummy_update",
+			Table: []*vindexes.Table{
+				ks.Tables["rg_tbl"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
 			KsidLength:       2,

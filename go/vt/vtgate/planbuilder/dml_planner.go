@@ -301,12 +301,17 @@ func buildDMLPlan(
 		tc.addVindexTable(tval.vschemaTable)
 	}
 
+	edml.Table, err = pb.st.AllVschemaTableNames()
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	if !edml.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
 		var subqueryArgs []sqlparser.SQLNode
 		subqueryArgs = append(subqueryArgs, nodes...)
 		subqueryArgs = append(subqueryArgs, where, orderBy, limit)
-		if pb.finalizeUnshardedDMLSubqueries(reservedVars, subqueryArgs...) {
+		subqueryIsUnsharded, subqueryTables := pb.finalizeUnshardedDMLSubqueries(reservedVars, subqueryArgs...)
+		if subqueryIsUnsharded {
 			vschema.WarnUnshardedOnly("subqueries can't be sharded in DML")
 		} else {
 			return nil, nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
@@ -315,6 +320,7 @@ func buildDMLPlan(
 		// Generate query after all the analysis. Otherwise table name substitutions for
 		// routed tables won't happen.
 		edml.Query = generateQuery(stmt)
+		edml.Table = append(edml.Table, subqueryTables...)
 		return edml, tc.getTables(), nil, nil
 	}
 
@@ -336,12 +342,11 @@ func buildDMLPlan(
 	if len(pb.st.tables) != 1 {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table %s statement is not supported in sharded database", dmlType)
 	}
-	for _, tval := range pb.st.tables {
-		// There is only one table.
-		edml.Table = tval.vschemaTable
+	edmlTable, err := edml.GetSingleTable()
+	if err != nil {
+		return nil, nil, nil, err
 	}
-
-	routingType, ksidVindex, vindex, values, err := getDMLRouting(where, edml.Table)
+	routingType, ksidVindex, vindex, values, err := getDMLRouting(where, edmlTable)
 	if err != nil {
 		return nil, nil, nil, err
 	}

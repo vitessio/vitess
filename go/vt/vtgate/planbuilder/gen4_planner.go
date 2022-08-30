@@ -180,7 +180,7 @@ func newBuildSelectPlan(
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
-	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
 		plan, err := unshardedShortcut(selStmt, ks, semTable)
 		return plan, semTable, err
 	}
@@ -265,9 +265,10 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
 		edml := engine.NewDML()
 		edml.Keyspace = ks
+		edml.Table = tables
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		upd := &engine.Update{DML: edml}

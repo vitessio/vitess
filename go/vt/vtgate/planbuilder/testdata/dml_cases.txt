@@ -22,7 +22,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update m1 set val = 1"
+    "Query": "update m1 set val = 1",
+    "Table": "m1"
   },
   "TablesUsed": [
     "main.m1"
@@ -44,7 +45,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded set val = 1"
+    "Query": "update unsharded set val = 1",
+    "Table": "unsharded"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -66,7 +68,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded set col = (select col from unsharded limit 1)"
+    "Query": "update unsharded set col = (select col from unsharded limit 1)",
+    "Table": "unsharded"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -88,7 +91,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
+    "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)",
+    "Table": "unsharded"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -110,7 +114,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
+    "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)",
+    "Table": "unsharded"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -132,7 +137,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+    "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+    "Table": "unsharded"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -203,7 +209,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded_a set a = (select a from unsharded as route2)"
+    "Query": "update unsharded_a set a = (select a from unsharded as route2)",
+    "Table": "unsharded, unsharded_a"
   },
   "TablesUsed": [
     "main.unsharded_a"
@@ -221,7 +228,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded_a set a = (select a from unsharded as route2)"
+    "Query": "update unsharded_a set a = (select a from unsharded as route2)",
+    "Table": "unsharded, unsharded_a"
   },
   "TablesUsed": [
     "main.unsharded",
@@ -243,7 +251,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "delete from unsharded"
+    "Query": "delete from unsharded",
+    "Table": "unsharded"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -840,7 +849,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
+    "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1",
+    "Table": "unsharded_a, unsharded_b"
   },
   "TablesUsed": [
     "main.unsharded_a",
@@ -863,7 +873,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
+    "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1",
+    "Table": "unsharded_a, unsharded_b"
   },
   "TablesUsed": [
     "main.unsharded_a",
@@ -886,10 +897,10 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+    "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+    "Table": "unsharded"
   },
   "TablesUsed": [
-    "main.",
     "main.unsharded"
   ]
 }
@@ -939,7 +950,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
+    "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
+    "Table": "unsharded, unsharded_a"
   },
   "TablesUsed": [
     "main.unsharded_a"
@@ -1010,7 +1022,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
+    "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1",
+    "Table": "unsharded_a, unsharded_b"
   },
   "TablesUsed": [
     "main.unsharded_a",
@@ -1033,7 +1046,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
+    "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1",
+    "Table": "unsharded_a, unsharded_b"
   },
   "TablesUsed": [
     "main.unsharded_a",
@@ -2848,7 +2862,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+    "Table": "unsharded, unsharded_a, unsharded_b"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -2866,7 +2881,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+    "Table": "unsharded, unsharded_a, unsharded_b"
   },
   "TablesUsed": [
     "main.unsharded",
@@ -2889,7 +2905,8 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
+    "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+    "Table": "unsharded, unsharded_a"
   },
   "TablesUsed": [
     "main.unsharded"
@@ -5528,7 +5545,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-
 # explain dml without any directive should fail
 "explain format=vtexplain delete from user"
 "explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
@@ -5595,4 +5611,3 @@ Gen4 plan same as above
   ]
 }
 Gen4 plan same as above
-

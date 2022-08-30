@@ -45,8 +45,11 @@ func buildUpdatePlan(string) stmtPlanner {
 		if dml.Opcode == engine.Unsharded {
 			return newPlanResult(eupd, tables...), nil
 		}
-
-		cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidVindex.Columns)
+		eupdTable, err := eupd.GetSingleTable()
+		if err != nil {
+			return nil, err
+		}
+		cvv, ovq, err := buildChangedVindexesValues(upd, eupdTable, ksidVindex.Columns)
 		if err != nil {
 			return nil, err
 		}

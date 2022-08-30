@@ -41,24 +41,6 @@ type Delete struct {
 	noInputs
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (del *Delete) RouteType() string {
-	return del.Opcode.String()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (del *Delete) GetKeyspaceName() string {
-	return del.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (del *Delete) GetTableName() string {
-	if del.Table != nil {
-		return del.Table.Name.String()
-	}
-	return ""
-}
-
 // TryExecute performs a non-streaming exec.
 func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {
@@ -128,7 +110,11 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 			return err
 		}
 		colnum := del.KsidLength
-		for _, colVindex := range del.Table.Owned {
+		vindexTable, err := del.GetSingleTable()
+		if err != nil {
+			return err
+		}
+		for _, colVindex := range vindexTable.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
 			for range colVindex.Columns {

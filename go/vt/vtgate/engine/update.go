@@ -51,24 +51,6 @@ type Update struct {
 	noInputs
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (upd *Update) RouteType() string {
-	return upd.Opcode.String()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (upd *Update) GetKeyspaceName() string {
-	return upd.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (upd *Update) GetTableName() string {
-	if upd.Table != nil {
-		return upd.Table.Name.String()
-	}
-	return ""
-}
-
 // TryExecute performs a non-streaming exec.
 func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
@@ -148,7 +130,11 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 			return err
 		}
 
-		for _, colVindex := range upd.Table.ColumnVindexes {
+		vindexTable, err := upd.GetSingleTable()
+		if err != nil {
+			return err
+		}
+		for _, colVindex := range vindexTable.ColumnVindexes {
 			// Skip this vindex if no rows are being changed
 			updColValues, ok := upd.ChangedVindexValues[colVindex.Name]
 			if !ok {
