@@ -1060,6 +1060,105 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	conn.writeComQuit()
 }
 
+type alwaysFallbackAuth struct{}
+
+func (a *alwaysFallbackAuth) UserEntryWithCacheHash(conn *Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, CacheState, error) {
+	return &StaticUserData{}, AuthNeedMoreData, nil
+}
+
+// newAuthServerAlwaysFallback returns a new empty AuthServerStatic
+// which will always request more data to trigger fallback auth path
+// for caching sha2.
+func newAuthServerAlwaysFallback(file, jsonConfig string, reloadInterval time.Duration) *AuthServerStatic {
+	a := &AuthServerStatic{
+		file:           file,
+		jsonConfig:     jsonConfig,
+		reloadInterval: reloadInterval,
+		entries:        make(map[string][]*AuthServerStaticEntry),
+	}
+
+	authMethod := NewSha2CachingAuthMethod(&alwaysFallbackAuth{}, a, a)
+	a.methods = []AuthMethod{authMethod}
+
+	a.reload()
+	a.installSignalHandlers()
+	return a
+}
+
+func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := newAuthServerAlwaysFallback("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
+		{Password: "password1"},
+	}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root := t.TempDir()
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	l.TLSConfig.Store(serverConfig)
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		// SSL flags.
+		SslMode:    vttls.VerifyIdentity,
+		SslCa:      path.Join(root, "ca-cert.pem"),
+		SslCert:    path.Join(root, "client-cert.pem"),
+		SslKey:     path.Join(root, "client-key.pem"),
+		ServerName: "server.example.com",
+	}
+
+	// Connection should fail, as server requires SSL for caching_sha2_password.
+	ctx := context.Background()
+
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("unexpected connection error: %v", err)
+	}
+	defer conn.Close()
+
+	// Run a 'select rows' command with results.
+	result, err := conn.ExecuteFetch("select rows", 10000, true)
+	if err != nil {
+		t.Fatalf("ExecuteFetch failed: %v", err)
+	}
+	utils.MustMatch(t, result, selectRowsResult)
+
+	// Send a ComQuit to avoid the error message on the server side.
+	conn.writeComQuit()
+}
+
 func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 	th := &testHandler{}
 
