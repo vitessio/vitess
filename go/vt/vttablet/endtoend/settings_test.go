@@ -62,6 +62,8 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 		framework.Server.Config().EnableSettingsPool = false
 	}()
 
+	resetTxConnPool(t)
+
 	client := framework.NewClient()
 	defer client.Release()
 
@@ -133,6 +135,22 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 	}
 	require.True(t, reusedConnection1)
 	require.True(t, reusedConnection2)
+}
+
+// resetTxConnPool resets the settings pool by fetching all the connections from the pool with no settings.
+// this will make sure that the settings pool connections if any will be taken and settings are reset.
+func resetTxConnPool(t *testing.T) {
+	txPoolSize := framework.Server.Config().TxPool.Size
+	clients := make([]*framework.QueryClient, txPoolSize)
+	for i := 0; i < txPoolSize; i++ {
+		client := framework.NewClient()
+		_, err := client.BeginExecute("select 1", nil, nil)
+		require.NoError(t, err)
+		clients[i] = client
+	}
+	for _, client := range clients {
+		client.Release()
+	}
 }
 
 func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
