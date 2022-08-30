@@ -347,12 +347,12 @@ func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
 }
 
 func (uvs *uvstreamer) init() error {
-	if uvs.startPos == "" || len(uvs.inTablePKs) > 0 {
-		if err := uvs.buildTablePlan(); err != nil {
+	if uvs.startPos != "" {
+		if err := uvs.setStreamStartPosition(); err != nil {
 			return err
 		}
-	} else if uvs.startPos != "" {
-		if err := uvs.setStreamStartPosition(); err != nil {
+	} else if uvs.startPos == "" || len(uvs.inTablePKs) > 0 {
+		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}
 	}
