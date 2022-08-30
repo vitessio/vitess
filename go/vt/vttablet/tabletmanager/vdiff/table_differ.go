@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -68,6 +69,10 @@ type tableDiffer struct {
 	sourceQuery string
 	table       *tabletmanagerdatapb.TableDefinition
 	lastPK      *querypb.QueryResult
+
+	// Handle time zone conversions
+	sourceTimeZone string
+	targetTimeZone string
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -165,6 +170,8 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return err
 		}
 		ct.sources[bls.Shard].position = mpos
+		td.sourceTimeZone = bls.SourceTimeZone
+		td.targetTimeZone = bls.TargetTimeZone
 	}
 
 	return nil
@@ -710,4 +717,49 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
 		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
 	})
 	return buf, err
+}
+
+// If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
+// columns expecting the source to have been in the SourceTimeZone and target in TargetTimeZone. We need to do the reverse
+// conversion in VDiff before comparing to the source
+func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+	if td.sourceTimeZone == "" {
+		return targetSelectExprs
+	}
+	log.Infof("source time zone specified: %s", td.sourceTimeZone)
+	var newSelectExprs sqlparser.SelectExprs
+	var modified bool
+	for _, expr := range targetSelectExprs {
+		converted := false
+		switch selExpr := expr.(type) {
+		case *sqlparser.AliasedExpr:
+			if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
+				var convertTZFuncExpr *sqlparser.FuncExpr
+				colName := colAs.Name.Lowered()
+				fieldType := fields[colName]
+				if fieldType == querypb.Type_DATETIME {
+					convertTZFuncExpr = &sqlparser.FuncExpr{
+						Name: sqlparser.NewIdentifierCI("convert_tz"),
+						Exprs: sqlparser.SelectExprs{
+							expr,
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.targetTimeZone)},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.sourceTimeZone)},
+						},
+					}
+					log.Infof("converting datetime column %s using convert_tz()", colName)
+					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
+					converted = true
+					modified = true
+				}
+			}
+		}
+		if !converted { // not datetime
+			newSelectExprs = append(newSelectExprs, expr)
+		}
+	}
+	if modified { // at least one datetime was found
+		log.Infof("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz()")
+		return newSelectExprs
+	}
+	return targetSelectExprs
 }

@@ -113,6 +113,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		fields[strings.ToLower(field.Name)] = field.Type
 	}
 
+	targetSelect.SelectExprs = td.adjustForSourceTimeZone(targetSelect.SelectExprs, fields)
 	// Start with adding all columns for comparison.
 	tp.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
 	for i := range tp.compareCols {
