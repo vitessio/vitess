@@ -25,6 +25,7 @@ package flag
 
 import (
 	goflag "flag"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -64,6 +65,43 @@ func Parse(fs *flag.FlagSet) {
 
 	flag.CommandLine = fs
 	flag.Parse()
+}
+
+// filterTestFlags returns two slices: the second one has just the flags for `go test` and the first one contains
+// the rest of the flags.
+const goTestFlagSuffix = "=test"
+
+func filterTestFlags() ([]string, []string) {
+	args := os.Args
+	var testFlags []string
+	var otherArgs []string
+	for i := 0; 0 < len(args) && i < len(args); i++ {
+		if strings.HasPrefix(args[i], goTestFlagSuffix) {
+			testFlags = append(testFlags, args[i])
+			continue
+		}
+		otherArgs = append(otherArgs, args[i])
+	}
+	return otherArgs, testFlags
+}
+
+// ParseFlagsForTest parses `go test` flags separately from the app flags. The problem is that pflag.Parse() does not
+// handle `go test` flags correctly. We need to separately parse the test flags using goflags. Additionally flags
+// like test.Short() require that goflag.Parse() is called first.
+func ParseFlagsForTest() {
+	// We need to split up the test flags and the regular app pflags.
+	// Then hand them off the std flags and pflags parsers respectively.
+	args, testFlags := filterTestFlags()
+	os.Args = args
+
+	// Parse the testing flags
+	if err := goflag.CommandLine.Parse(testFlags); err != nil {
+		fmt.Println("Error parsing regular test flags:", err)
+	}
+
+	// parse remaining flags including the log-related ones like --alsologtostderr
+	fs := flag.NewFlagSet("test", flag.ExitOnError)
+	Parse(fs)
 }
 
 // Parsed returns true if the command-line flags have been parsed.
