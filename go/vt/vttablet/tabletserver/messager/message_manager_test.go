@@ -148,7 +148,7 @@ func TestReceiverCancel(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		if mm.receiverCount() != 0 {
+		if len(mm.receivers) != 0 {
 			continue
 		}
 		return
@@ -503,9 +503,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	for {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		mm.streamMu.Lock()
-		pos := mm.lastPollPosition
-		mm.streamMu.Unlock()
+		pos := mm.getLastPollPosition()
 		if pos != nil {
 			break
 		}
