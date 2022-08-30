@@ -31,24 +31,23 @@ import (
 )
 
 // waitForInitialShard waits for the initial Shard to appear.
-func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) (current *topo.WatchShardData, changes <-chan *topo.WatchShardData, cancel context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
+func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) (current *topo.WatchShardData, changes <-chan *topo.WatchShardData, cancel topo.CancelFunc) {
+	ctx := context.Background()
 	start := time.Now()
-	var err error
 	for {
-		current, changes, err = ts.WatchShard(ctx, keyspace, shard)
+		current, changes, cancel = ts.WatchShard(ctx, keyspace, shard)
 		switch {
-		case topo.IsErrType(err, topo.NoNode):
+		case topo.IsErrType(current.Err, topo.NoNode):
 			// hasn't appeared yet
 			if time.Since(start) > 10*time.Second {
 				t.Fatalf("time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
 			continue
-		case err == nil:
+		case current.Err == nil:
 			return
 		default:
-			t.Fatalf("watch failed: %v", err)
+			t.Fatalf("watch failed: %v", current.Err)
 		}
 	}
 }
@@ -60,9 +59,9 @@ func TestWatchShardNoNode(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 
 	// No Shard -> ErrNoNode
-	_, _, err := ts.WatchShard(ctx, keyspace, shard)
-	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchShard(not there): %v", err)
+	current, _, _ := ts.WatchShard(ctx, keyspace, shard)
+	if !topo.IsErrType(current.Err, topo.NoNode) {
+		t.Errorf("Got invalid result from WatchShard(not there): %v", current.Err)
 	}
 }
 
@@ -146,9 +145,9 @@ func TestWatchShard(t *testing.T) {
 	cancel()
 
 	// Bad data in topo, setting the watch should now fail.
-	_, _, err = ts.WatchShard(ctx, keyspace, shard)
-	if err == nil || !strings.Contains(err.Error(), "error unpacking initial Shard object") {
-		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", err)
+	current, _, _ = ts.WatchShard(ctx, keyspace, shard)
+	if current.Err == nil || !strings.Contains(current.Err.Error(), "error unpacking initial Shard object") {
+		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", current.Err)
 	}
 
 	data, err := proto.Marshal(wanted)
@@ -161,9 +160,9 @@ func TestWatchShard(t *testing.T) {
 	}
 	start := time.Now()
 	for {
-		current, changes, err = ts.WatchShard(ctx, keyspace, shard)
-		if err != nil {
-			if strings.Contains(err.Error(), "error unpacking initial Shard object") {
+		current, changes, _ = ts.WatchShard(ctx, keyspace, shard)
+		if current.Err != nil {
+			if strings.Contains(current.Err.Error(), "error unpacking initial Shard object") {
 				// hasn't changed yet
 				if time.Since(start) > 10*time.Second {
 					t.Fatalf("time out waiting for file to appear")
@@ -209,9 +208,9 @@ func TestWatchShardCancel(t *testing.T) {
 	ts := memorytopo.NewServer(cell)
 
 	// No Shard -> ErrNoNode
-	_, _, err := ts.WatchShard(ctx, keyspace, shard)
-	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchShard(not there): %v", err)
+	current, _, _ := ts.WatchShard(ctx, keyspace, shard)
+	if !topo.IsErrType(current.Err, topo.NoNode) {
+		t.Errorf("Got invalid result from WatchShard(not there): %v", current.Err)
 	}
 
 	// Create keyspace

@@ -17,9 +17,10 @@ limitations under the License.
 package topo
 
 import (
-	"context"
 	"fmt"
 	"testing"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -105,13 +106,8 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 }
 
 // Watch is part of the Conn interface
-func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error) {
-	return current, changes, err
-}
-
-// WatchRecursive is part of the Conn interface
-func (st *fakeConn) WatchRecursive(ctx context.Context, path string) (current []*WatchDataRecursive, changes <-chan *WatchDataRecursive, err error) {
-	return current, changes, err
+func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc) {
+	return current, changes, cancel
 }
 
 // NewLeaderParticipation is part of the Conn interface

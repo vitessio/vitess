@@ -656,14 +656,11 @@ type WatchShardData struct {
 // WatchShard will set a watch on the Shard object.
 // It has the same contract as conn.Watch, but it also unpacks the
 // contents into a Shard object
-func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*WatchShardData, <-chan *WatchShardData, error) {
+func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*WatchShardData, <-chan *WatchShardData, CancelFunc) {
 	shardPath := shardFilePath(keyspace, shard)
-	ctx, cancel := context.WithCancel(ctx)
-
-	current, wdChannel, err := ts.globalCell.Watch(ctx, shardPath)
-	if err != nil {
-		cancel()
-		return nil, nil, err
+	current, wdChannel, cancel := ts.globalCell.Watch(ctx, shardPath)
+	if current.Err != nil {
+		return &WatchShardData{Err: current.Err}, nil, nil
 	}
 	value := &topodatapb.Shard{}
 	if err := proto.Unmarshal(current.Contents, value); err != nil {
@@ -671,7 +668,7 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 		cancel()
 		for range wdChannel {
 		}
-		return nil, nil, vterrors.Wrapf(err, "error unpacking initial Shard object")
+		return &WatchShardData{Err: vterrors.Wrapf(err, "error unpacking initial Shard object")}, nil, nil
 	}
 
 	changes := make(chan *WatchShardData, 10)
@@ -681,7 +678,6 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 	// send an ErrInterrupted and then close the channel. We'll
 	// just propagate that back to our caller.
 	go func() {
-		defer cancel()
 		defer close(changes)
 
 		for wd := range wdChannel {
@@ -706,5 +702,5 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 		}
 	}()
 
-	return &WatchShardData{Value: value}, changes, nil
+	return &WatchShardData{Value: value}, changes, cancel
 }

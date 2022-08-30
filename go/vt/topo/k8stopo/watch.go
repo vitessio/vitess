@@ -28,21 +28,25 @@ import (
 )
 
 // Watch is part of the topo.Conn interface.
-func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
+func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
 	log.Info("Starting Kubernetes topo Watch on ", filePath)
 
 	current := &topo.WatchData{}
 
 	// get current
-	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-	defer initialCancel()
-
-	contents, ver, err := s.Get(initialCtx, filePath)
+	contents, ver, err := s.Get(ctx, filePath)
 	if err != nil {
-		return nil, nil, err
+		// Per the topo.Conn interface:
+		// "If the initial read fails, or the file doesn't
+		// exist, current.Err is set, and 'changes'/'cancel' are nil."
+		current.Err = err
+		return current, nil, nil
 	}
 	current.Contents = contents
 	current.Version = ver
+
+	// Create a context, will be used to cancel the watch.
+	watchCtx, watchCancel := context.WithCancel(context.Background())
 
 	// Create the changes channel
 	changes := make(chan *topo.WatchData, 10)
@@ -52,7 +56,11 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 	resource, err := s.buildFileResource(filePath, []byte{})
 	if err != nil {
-		return nil, nil, err
+		// Per the topo.Conn interface:
+		// current.Err is set, and 'changes'/'cancel' are nil
+		watchCancel()
+		current.Err = err
+		return current, nil, nil
 	}
 
 	// Create the informer / indexer to watch the single resource
@@ -103,9 +111,9 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	go memberInformer.Run(informerChan)
 
 	// Handle interrupts
-	go closeOnDone(ctx, filePath, informerChan, gracefulShutdown, changes)
+	go closeOnDone(watchCtx, filePath, informerChan, gracefulShutdown, changes)
 
-	return current, changes, nil
+	return current, changes, topo.CancelFunc(watchCancel)
 }
 
 func closeOnDone(ctx context.Context, filePath string, informerChan chan struct{}, gracefulShutdown chan struct{}, changes chan *topo.WatchData) {
@@ -118,11 +126,4 @@ func closeOnDone(ctx context.Context, filePath string, informerChan chan struct{
 	}
 	close(informerChan)
 	close(changes)
-}
-
-// WatchRecursive is part of the topo.Conn interface.
-func (s *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	// Kubernetes doesn't seem to provide a primitive that watches a prefix
-	// or directory, so this likely can never be implemented.
-	return nil, nil, topo.NewError(topo.NoImplementation, path)
 }

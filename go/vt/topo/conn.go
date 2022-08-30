@@ -17,8 +17,9 @@ limitations under the License.
 package topo
 
 import (
-	"context"
 	"sort"
+
+	"context"
 )
 
 // Conn defines the interface that must be implemented by topology
@@ -119,13 +120,17 @@ type Conn interface {
 
 	// Watch starts watching a file in the provided cell.  It
 	// returns the current value, a 'changes' channel to read the
-	// changes from, and an error.
-	// If the initial read fails, or the file doesn't
-	// exist, an error is returned.
+	// changes from, and a 'cancel' function to call to stop the
+	// watch.  If the initial read fails, or the file doesn't
+	// exist, current.Err is set, and 'changes'/'cancel' are nil.
+	// Otherwise current.Err is nil, and current.Contents /
+	// current.Version are accurate. The provided context is only
+	// used to setup the current watch, and not after Watch()
+	// returns.
 	//
-	// To stop the watch, cancel the provided context.
+	// To stop the watch, just call the returned 'cancel' function.
 	// This will eventually result in a final WatchData result with Err =
-	// ErrInterrupted. It should be safe to cancel the context
+	// ErrInterrupted. It should be safe to call the 'cancel' function
 	// multiple times, or after the Watch already errored out.
 	//
 	// The 'changes' channel may return a record with Err != nil.
@@ -153,45 +158,7 @@ type Conn interface {
 	// being correct quickly, as long as it eventually gets there.
 	//
 	// filePath is a path relative to the root directory of the cell.
-	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error)
-
-	// WatchRecursive starts watching a file prefix in the provided cell. It
-	// returns all the current values for existing files with the given
-	// prefix, a 'changes' channel  to read the changes from and an error.
-	//
-	// The provided context should be canceled when stopping WatchRecursive().
-	// This API is different from Watch() and Watch() will be changed
-	// to match this API as well in the future.
-	//
-	// Canceling will eventually result in a final WatchDataRecursive result with Err =
-	// ErrInterrupted.
-	//
-	// The 'changes' channel may return a record with Err != nil.
-	// In that case, the channel will also be closed right after
-	// that record.  In any case, 'changes' has to be drained of
-	// all events, even when 'stop' is closed.
-	//
-	// Note the 'changes' channel can return twice the same
-	// Version/Contents (for instance, if the watch is interrupted
-	// and restarted within the Conn implementation).
-	// Similarly, the 'changes' channel may skip versions / changes
-	// (that is, if value goes [A, B, C, D, E, F], the watch may only
-	// receive [A, B, F]). This should only happen for rapidly
-	// changing values though. Usually, the initial value will come
-	// back right away. And a stable value (that hasn't changed for
-	// a while) should be seen shortly.
-	//
-	// The WatchRecursive call is not guaranteed to return exactly up to
-	// date data right away. For instance, if a file is created
-	// and saved, and then a watch is set on that file, it may
-	// return ErrNoNode (as the underlying configuration service
-	// may use asynchronous caches that are not up to date
-	// yet). The only guarantee is that the watch data will
-	// eventually converge. Vitess doesn't explicitly depend on the data
-	// being correct quickly, as long as it eventually gets there.
-	//
-	// path is a path relative to the root directory of the cell.
-	WatchRecursive(ctx context.Context, path string) ([]*WatchDataRecursive, <-chan *WatchDataRecursive, error)
+	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
 
 	//
 	// Leader election methods. This is meant to have a small
@@ -309,17 +276,6 @@ type WatchData struct {
 	Err error
 }
 
-// WatchDataRecursive is the structure returned by the WatchRecursive() API.
-// It contains the same data as WatchData, but additionally also the specific
-// path of the entry that the recursive watch applies to, since an entire
-// file prefix can be watched.
-type WatchDataRecursive struct {
-	// Path is the path that has changed
-	Path string
-
-	WatchData
-}
-
 // KVInfo is a structure that contains a generic key/value pair from
 // the topo server, along with important metadata about it.
 // This should be used to provide multiple entries in List like calls
@@ -386,14 +342,4 @@ type LeaderParticipation interface {
 	// GetCurrentLeaderID returns the current primary id.
 	// This may not work after Stop has been called.
 	GetCurrentLeaderID(ctx context.Context) (string, error)
-
-	// WaitForNewLeader allows for nodes to wait until a leadership
-	// election cycle completes and to get subsequent updates of
-	// leadership changes. This way logic that needs to know if leadership
-	// changes also if we're not the leader ourselves doesn't need to
-	// poll for leadership status.
-	//
-	// For topo implementation that have this, it can be used more
-	// efficiently than needing a busy wait loop.
-	WaitForNewLeader(ctx context.Context) (<-chan string, error)
 }

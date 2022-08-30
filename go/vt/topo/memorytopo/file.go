@@ -17,10 +17,10 @@ limitations under the License.
 package memorytopo
 
 import (
-	"context"
 	"fmt"
 	"path"
-	"strings"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -60,15 +60,6 @@ func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (to
 	// Create the file.
 	n := c.factory.newFile(file, contents, p)
 	p.children[file] = n
-
-	n.propagateRecursiveWatch(&topo.WatchDataRecursive{
-		Path: filePath,
-		WatchData: topo.WatchData{
-			Contents: n.contents,
-			Version:  NodeVersion(n.version),
-		},
-	})
-
 	return NodeVersion(n.version), nil
 }
 
@@ -131,21 +122,11 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 
 	// Call the watches
 	for _, w := range n.watches {
-		if w.contents != nil {
-			w.contents <- &topo.WatchData{
-				Contents: n.contents,
-				Version:  NodeVersion(n.version),
-			}
-		}
-	}
-
-	n.propagateRecursiveWatch(&topo.WatchDataRecursive{
-		Path: filePath,
-		WatchData: topo.WatchData{
+		w <- &topo.WatchData{
 			Contents: n.contents,
 			Version:  NodeVersion(n.version),
-		},
-	})
+		}
+	}
 
 	return NodeVersion(n.version), nil
 }
@@ -177,61 +158,7 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 
 // List is part of the topo.Conn interface.
 func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
-	if err := c.dial(ctx); err != nil {
-		return nil, err
-	}
-
-	c.factory.mu.Lock()
-	defer c.factory.mu.Unlock()
-
-	if c.factory.err != nil {
-		return nil, c.factory.err
-	}
-
-	dir, file := path.Split(filePathPrefix)
-	// Get the node to list.
-	n := c.factory.nodeByPath(c.cell, dir)
-	if n == nil {
-		return []topo.KVInfo{}, topo.NewError(topo.NoNode, filePathPrefix)
-	}
-
-	var result []topo.KVInfo
-	for name, child := range n.children {
-		if !strings.HasPrefix(name, file) {
-			continue
-		}
-		if child.isDirectory() {
-			result = append(result, gatherChildren(child, path.Join(dir, name))...)
-		} else {
-			result = append(result, topo.KVInfo{
-				Key:     []byte(path.Join(dir, name)),
-				Value:   child.contents,
-				Version: NodeVersion(child.version),
-			})
-		}
-	}
-
-	if len(result) == 0 {
-		return []topo.KVInfo{}, topo.NewError(topo.NoNode, filePathPrefix)
-	}
-
-	return result, nil
-}
-
-func gatherChildren(n *node, dirPath string) []topo.KVInfo {
-	var result []topo.KVInfo
-	for name, child := range n.children {
-		if child.isDirectory() {
-			result = append(result, gatherChildren(child, path.Join(dirPath, name))...)
-		} else {
-			result = append(result, topo.KVInfo{
-				Key:     []byte(path.Join(dirPath, name)),
-				Value:   child.contents,
-				Version: NodeVersion(child.version),
-			})
-		}
-	}
-	return result
+	return nil, topo.NewError(topo.NoImplementation, "List not supported in memory topo")
 }
 
 // Delete is part of topo.Conn interface.
@@ -276,23 +203,11 @@ func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version
 
 	// Call the watches
 	for _, w := range n.watches {
-		if w.contents != nil {
-			w.contents <- &topo.WatchData{
-				Err: topo.NewError(topo.NoNode, filePath),
-			}
-			close(w.contents)
-		}
-		if w.lock != nil {
-			close(w.lock)
-		}
-	}
-
-	n.propagateRecursiveWatch(&topo.WatchDataRecursive{
-		Path: filePath,
-		WatchData: topo.WatchData{
+		w <- &topo.WatchData{
 			Err: topo.NewError(topo.NoNode, filePath),
-		},
-	})
+		}
+		close(w)
+	}
 
 	return nil
 }

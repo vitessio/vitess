@@ -17,8 +17,9 @@ limitations under the License.
 package etcd2topo
 
 import (
-	"context"
 	"path"
+
+	"context"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -75,11 +76,7 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 	// we just cancel that context.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
 	go func() {
-		select {
-		case <-mp.s.running:
-			return
-		case <-mp.stop:
-		}
+		<-mp.stop
 		if ld != nil {
 			if err := ld.Unlock(context.Background()); err != nil {
 				log.Errorf("failed to unlock electionPath %v: %v", electionPath, err)
@@ -125,68 +122,4 @@ func (mp *etcdLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (stri
 		return "", nil
 	}
 	return string(resp.Kvs[0].Value), nil
-}
-
-func (mp *etcdLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan string, error) {
-	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
-
-	notifications := make(chan string, 8)
-	ctx, cancel := context.WithCancel(ctx)
-
-	// Get the current leader
-	initial, err := mp.s.cli.Get(ctx, electionPath+"/",
-		clientv3.WithPrefix(),
-		clientv3.WithSort(clientv3.SortByModRevision, clientv3.SortAscend),
-		clientv3.WithLimit(1))
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-
-	if len(initial.Kvs) == 1 {
-		leader := initial.Kvs[0].Value
-		notifications <- string(leader)
-	}
-
-	// Create the Watcher.  We start watching from the response we
-	// got, not from the file original version, as the server may
-	// not have that much history.
-	watcher := mp.s.cli.Watch(ctx, electionPath, clientv3.WithPrefix(), clientv3.WithRev(initial.Header.Revision))
-	if watcher == nil {
-		cancel()
-		return nil, convertError(err, electionPath)
-	}
-
-	go func() {
-		defer cancel()
-		defer close(notifications)
-		for {
-			select {
-			case <-mp.s.running:
-				return
-			case <-mp.done:
-				return
-			case <-ctx.Done():
-				return
-			case wresp, ok := <-watcher:
-				if !ok || wresp.Canceled {
-					return
-				}
-
-				currentLeader, err := mp.s.cli.Get(ctx, electionPath+"/",
-					clientv3.WithPrefix(),
-					clientv3.WithSort(clientv3.SortByModRevision, clientv3.SortAscend),
-					clientv3.WithLimit(1))
-				if err != nil {
-					continue
-				}
-				if len(currentLeader.Kvs) != 1 {
-					continue
-				}
-				notifications <- string(currentLeader.Kvs[0].Value)
-			}
-		}
-	}()
-
-	return notifications, nil
 }

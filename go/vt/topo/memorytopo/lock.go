@@ -17,8 +17,9 @@ limitations under the License.
 package memorytopo
 
 import (
-	"context"
 	"fmt"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -76,12 +77,6 @@ func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 		// No one has the lock, grab it.
 		n.lock = make(chan struct{})
 		n.lockContents = contents
-		for _, w := range n.watches {
-			if w.lock == nil {
-				continue
-			}
-			w.lock <- contents
-		}
 		c.factory.mu.Unlock()
 		return &memoryTopoLockDescriptor{
 			c:       c,
@@ -102,10 +97,6 @@ func (ld *memoryTopoLockDescriptor) Unlock(ctx context.Context) error {
 }
 
 func (c *Conn) unlock(ctx context.Context, dirPath string) error {
-	if c.closed {
-		return ErrConnectionClosed
-	}
-
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 

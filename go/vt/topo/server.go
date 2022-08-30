@@ -43,12 +43,13 @@ There are two test sub-packages associated with this code:
 package topo
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -244,9 +245,6 @@ func Open() *Server {
 func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// Global cell is the easy case.
 	if cell == GlobalCell {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
 		return ts.globalCell, nil
 	}
 

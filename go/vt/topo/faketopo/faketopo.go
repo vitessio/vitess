@@ -288,12 +288,12 @@ func (f *FakeConn) Lock(ctx context.Context, dirPath, contents string) (topo.Loc
 }
 
 // Watch implements the Conn interface
-func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
+func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	res, isPresent := f.getResultMap[filePath]
 	if !isPresent {
-		return nil, nil, topo.NewError(topo.NoNode, filePath)
+		return &topo.WatchData{Err: topo.NewError(topo.NoNode, filePath)}, nil, nil
 	}
 	current := &topo.WatchData{
 		Contents: res.contents,
@@ -303,8 +303,7 @@ func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData,
 	notifications := make(chan *topo.WatchData, 100)
 	f.watches[filePath] = append(f.watches[filePath], notifications)
 
-	go func() {
-		<-ctx.Done()
+	cancel := func() {
 		watches, isPresent := f.watches[filePath]
 		if !isPresent {
 			return
@@ -316,12 +315,8 @@ func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData,
 				break
 			}
 		}
-	}()
-	return current, notifications, nil
-}
-
-func (f *FakeConn) WatchRecursive(ctx context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	panic("implement me")
+	}
+	return current, notifications, cancel
 }
 
 // NewLeaderParticipation implements the Conn interface

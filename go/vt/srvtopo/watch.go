@@ -219,8 +219,7 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, ini
 
 	entry.watchState = watchStateIdle
 
-	// only retry the watch if we haven't been explicitly interrupted
-	if len(entry.listeners) > 0 && !topo.IsErrType(err, topo.Interrupted) {
+	if len(entry.listeners) > 0 {
 		go func() {
 			time.Sleep(entry.rw.cacheRefreshInterval)
 

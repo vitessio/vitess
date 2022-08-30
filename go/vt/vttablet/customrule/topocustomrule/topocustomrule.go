@@ -138,11 +138,10 @@ func (cr *topoCustomRule) oneWatch() error {
 		cr.mu.Unlock()
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	current, wdChannel, err := cr.conn.Watch(ctx, cr.filePath)
-	if err != nil {
-		cancel()
-		return err
+	ctx := context.Background()
+	current, wdChannel, cancel := cr.conn.Watch(ctx, cr.filePath)
+	if current.Err != nil {
+		return current.Err
 	}
 
 	cr.mu.Lock()

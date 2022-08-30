@@ -17,11 +17,12 @@ limitations under the License.
 package topo
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -41,17 +42,15 @@ type WatchSrvVSchemaData struct {
 // WatchSrvVSchema will set a watch on the SrvVSchema object.
 // It has the same contract as Conn.Watch, but it also unpacks the
 // contents into a SrvVSchema object.
-func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, error) {
+func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc) {
 	conn, err := ts.ConnForCell(ctx, cell)
 	if err != nil {
-		return nil, nil, err
+		return &WatchSrvVSchemaData{Err: err}, nil, nil
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	current, wdChannel, err := conn.Watch(ctx, SrvVSchemaFile)
-	if err != nil {
-		cancel()
-		return nil, nil, err
+	current, wdChannel, cancel := conn.Watch(ctx, SrvVSchemaFile)
+	if current.Err != nil {
+		return &WatchSrvVSchemaData{Err: current.Err}, nil, nil
 	}
 	value := &vschemapb.SrvVSchema{}
 	if err := proto.Unmarshal(current.Contents, value); err != nil {
@@ -59,7 +58,7 @@ func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVS
 		cancel()
 		for range wdChannel {
 		}
-		return nil, nil, vterrors.Wrapf(err, "error unpacking initial SrvVSchema object")
+		return &WatchSrvVSchemaData{Err: vterrors.Wrapf(err, "error unpacking initial SrvVSchema object")}, nil, nil
 	}
 
 	changes := make(chan *WatchSrvVSchemaData, 10)
@@ -70,7 +69,6 @@ func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVS
 	// send an ErrInterrupted and then close the channel. We'll
 	// just propagate that back to our caller.
 	go func() {
-		defer cancel()
 		defer close(changes)
 
 		for wd := range wdChannel {
@@ -94,7 +92,7 @@ func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVS
 		}
 	}()
 
-	return &WatchSrvVSchemaData{Value: value}, changes, nil
+	return &WatchSrvVSchemaData{Value: value}, changes, cancel
 }
 
 // UpdateSrvVSchema updates the SrvVSchema file for a cell.

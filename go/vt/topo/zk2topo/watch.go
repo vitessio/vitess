@@ -17,9 +17,11 @@ limitations under the License.
 package zk2topo
 
 import (
-	"context"
 	"fmt"
 	"path"
+	"sync"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -27,28 +29,39 @@ import (
 )
 
 // Watch is part of the topo.Conn interface.
-func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
+func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
 	zkPath := path.Join(zs.root, filePath)
 
 	// Get the initial value, set the initial watch
-	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-	defer initialCancel()
-
-	data, stats, watch, err := zs.conn.GetW(initialCtx, zkPath)
+	data, stats, watch, err := zs.conn.GetW(ctx, zkPath)
 	if err != nil {
-		return nil, nil, convertError(err, zkPath)
+		return &topo.WatchData{Err: convertError(err, zkPath)}, nil, nil
 	}
 	if stats == nil {
 		// No stats --> node doesn't exist.
-		return nil, nil, topo.NewError(topo.NoNode, zkPath)
+		return &topo.WatchData{Err: topo.NewError(topo.NoNode, zkPath)}, nil, nil
 	}
 	wd := &topo.WatchData{
 		Contents: data,
 		Version:  ZKVersion(stats.Version),
 	}
 
+	// mu protects the stop channel. We need to make sure the 'cancel'
+	// func can be called multiple times, and that we don't close 'stop'
+	// too many times.
+	mu := sync.Mutex{}
+	stop := make(chan struct{})
+	cancel := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if stop != nil {
+			close(stop)
+			stop = nil
+		}
+	}
+
 	c := make(chan *topo.WatchData, 10)
-	go func() {
+	go func(stop chan struct{}) {
 		defer close(c)
 
 		for {
@@ -65,7 +78,7 @@ func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 					return
 				}
 
-			case <-ctx.Done():
+			case <-stop:
 				// user is not interested any more
 				c <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}
 				return
@@ -91,15 +104,7 @@ func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 				return
 			}
 		}
-	}()
+	}(stop)
 
-	return wd, c, nil
-}
-
-// WatchRecursive is part of the topo.Conn interface.
-func (zs *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	// This isn't implemented yet, but potentially can be implemented if we want
-	// to update the minimum ZooKeeper requirement to 3.6.0 and use recursive watches.
-	// Also see https://zookeeper.apache.org/doc/r3.6.3/zookeeperProgrammers.html#sc_WatchPersistentRecursive
-	return nil, nil, topo.NewError(topo.NoImplementation, path)
+	return wd, c, cancel
 }

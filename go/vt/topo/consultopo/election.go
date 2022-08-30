@@ -17,8 +17,9 @@ limitations under the License.
 package consultopo
 
 import (
-	"context"
 	"path"
+
+	"context"
 
 	"github.com/hashicorp/consul/api"
 
@@ -131,12 +132,4 @@ func (mp *consulLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (st
 		return "", nil
 	}
 	return string(pair.Value), nil
-}
-
-// WaitForNewLeader is part of the topo.LeaderParticipation interface
-func (mp *consulLeaderParticipation) WaitForNewLeader(context.Context) (<-chan string, error) {
-	// This isn't implemented yet, but likely can be implemented using List
-	// with blocking logic on election path.
-	// See also how WatchRecursive could be implemented as well.
-	return nil, topo.NewError(topo.NoImplementation, "wait for leader not supported in Consul topo")
 }
