@@ -114,13 +114,20 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	t.Log("=== checkWatch")
 	ts = factory()
 	checkWatch(t, ts)
-	checkWatchInterrupt(t, ts)
+	ts.Close()
 
+	ts = factory()
+	t.Log("=== checkWatchInterrupt")
+	checkWatchInterrupt(t, ts)
+	ts.Close()
+
+	ts = factory()
 	t.Log("=== checkList")
 	checkList(t, ts)
+	ts.Close()
 
+	ts = factory()
 	t.Log("=== checkWatchRecursive")
 	checkWatchRecursive(t, ts)
-
 	ts.Close()
 }
