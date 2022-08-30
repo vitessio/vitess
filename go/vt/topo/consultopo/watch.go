@@ -21,29 +21,21 @@ import (
 	"path"
 	"time"
 
+	"github.com/hashicorp/consul/api"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
-
-	"github.com/hashicorp/consul/api"
-
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	// flag vars
 	watchPollDuration = 30 * time.Second
 )
 
 func init() {
-	servenv.OnParseFor("vtbackup", registerWatchFlags)
-	servenv.OnParseFor("vtcombo", registerWatchFlags)
-	servenv.OnParseFor("vtctl", registerWatchFlags)
-	servenv.OnParseFor("vtctld", registerWatchFlags)
-	servenv.OnParseFor("vtgate", registerWatchFlags)
-	servenv.OnParseFor("vtgr", registerWatchFlags)
-	servenv.OnParseFor("vttablet", registerWatchFlags)
-	servenv.OnParseFor("vttablet", registerWatchFlags)
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
+		servenv.OnParseFor(cmd, registerWatchFlags)
+	}
 }
 
 func registerWatchFlags(fs *pflag.FlagSet) {

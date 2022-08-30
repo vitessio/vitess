@@ -27,38 +27,29 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/consul/api"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"github.com/hashicorp/consul/api"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	// flag vars
-	consulAuthClientStaticFile = ""
+	consulAuthClientStaticFile string
 	consulLockSessionChecks    = "serfHealth"
-	consulLockSessionTTL       = ""
+	consulLockSessionTTL       string
 	consulLockDelay            = 15 * time.Second
 )
 
 func init() {
-	servenv.OnParseFor("vtbackup", registerConsulFlags)
-	servenv.OnParseFor("vtcombo", registerConsulFlags)
-	servenv.OnParseFor("vtctl", registerConsulFlags)
-	servenv.OnParseFor("vtctld", registerConsulFlags)
-	servenv.OnParseFor("vtgate", registerConsulFlags)
-	servenv.OnParseFor("vtgr", registerConsulFlags)
-	servenv.OnParseFor("vttablet", registerConsulFlags)
-	servenv.OnParseFor("vttablet", registerConsulFlags)
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
+		servenv.OnParseFor(cmd, registerServerFlags)
+	}
 }
 
-func registerConsulFlags(fs *pflag.FlagSet) {
+func registerServerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&consulAuthClientStaticFile, "consul_auth_static_file", consulAuthClientStaticFile, "JSON File to read the topos/tokens from.")
 	// serfHealth is the default check from consul
 	fs.StringVar(&consulLockSessionChecks, "topo_consul_lock_session_checks", consulLockSessionChecks, "List of checks for consul session.")
