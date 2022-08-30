@@ -21,6 +21,7 @@ package memorytopo
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"strings"
 	"sync"
@@ -36,6 +37,8 @@ const (
 	// Path components
 	electionsPath = "elections"
 )
+
+var ErrConnectionClosed = errors.New("connection closed")
 
 const (
 	// UnreachableServerAddr is a sentinel value for CellInfo.ServerAddr.
@@ -125,12 +128,16 @@ type Conn struct {
 	factory    *Factory
 	cell       string
 	serverAddr string
+	closed     bool
 }
 
 // dial returns immediately, unless the Conn points to the sentinel
 // UnreachableServerAddr, in which case it will block until the context expires
 // and return the context's error.
 func (c *Conn) dial(ctx context.Context) error {
+	if c.closed {
+		return ErrConnectionClosed
+	}
 	if c.serverAddr == UnreachableServerAddr {
 		<-ctx.Done()
 		return ctx.Err()
@@ -140,12 +147,8 @@ func (c *Conn) dial(ctx context.Context) error {
 }
 
 // Close is part of the topo.Conn interface.
-// It nils out factory, so any subsequent call will panic.
 func (c *Conn) Close() {
-	c.factory.Lock()
-	f := c.factory
-	defer f.Unlock()
-	c.factory = nil
+	c.closed = true
 }
 
 type watch struct {
