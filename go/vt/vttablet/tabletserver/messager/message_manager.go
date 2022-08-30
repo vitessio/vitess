@@ -189,21 +189,39 @@ type messageManager struct {
 	curReceiver     int
 	messagesPending bool
 
-	// streamMu keeps the cache and database consistent with each other.
-	// Specifically:
+	// streamCancel is set when a vstream is running, and is reset
+	// to nil after a cancel. This allows for startVStream and stopVStream
+	// to be idempotent.
+	// This is implicitly protected by the main mutex because startVStream
+	// and stopVStream are called while holding the main mutex.
+	streamCancel func()
+
+	// cacheManagementMu keeps the cache and database consistent with each
+	// other by ensuring that only one of the streams is processing messages
+	// and updating the cache at a time. The poller uses a results streamer to
+	// pull directly from the message table and the message manager uses a
+	// binlog streamer to process change events. This mutex ensures that only
+	// one of them are updating the cache at any one time.
 	// It prevents items from being removed from cache while the poller
 	// reads from the db and adds items to it. Otherwise, the poller
 	// might add an older snapshot of a row that was just postponed.
-	// It blocks vstream from receiving messages while the poller
-	// reads a snapshot and updates lastPollPosition. Any events older than
-	// lastPollPosition must be ignored by the vstream. It consequently
-	// also blocks vstream from updating the cache while the poller is
-	// active.
-	streamMu sync.Mutex
-	// streamCancel is set when a vstream is running, and is reset
-	// to nil after a cancel. This allows for startVStream and stopVstream
-	// to be idempotent.
-	streamCancel     func()
+	// It blocks the vstream (binlog streamer) from receiving messages while
+	// the poller reads a snapshot and updates lastPollPosition. Any events
+	// older than lastPollPosition must be ignored by the vstream. It
+	// consequently also blocks vstream from updating the cache while the
+	// poller is active.
+	// TODO(mattlord): since this is primarily a flow control mechanism, we
+	// should do it in a more idiomatic go way using channels or cond vars.
+	cacheManagementMu sync.Mutex
+	// The lastPollPosition variable is the main point of coordination
+	// between the poller and the binlog streamer to ensure that we are
+	// not re-processing older events and moving along linearly in the
+	// shared virtual GTID stream within the message manager.
+	// It is theoretically possible for the binlog streamer to be ahead of
+	// the lastPollPosition. This is because of how semi-sync works today
+	// where a replica could have received and processed a GTID that the primary
+	// may not have yet commited; but this is harmless because any events missed
+	// will be picked up during the next poller run.
 	lastPollPosition *mysql.Position
 
 	// wg is for ensuring all running goroutines have returned
@@ -252,7 +270,9 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		}},
 	}
 	mm.readByPriorityAndTimeNext = sqlparser.BuildParsedQuery(
-		"select priority, time_next, epoch, time_acked, %s from %v where time_next < %a order by priority, time_next desc limit %a",
+		// There should be a poller_idx defined on (time_acked, priority, time_next desc)
+		// for this to be as effecient as possible
+		"select priority, time_next, epoch, time_acked, %s from %v where time_acked is null and time_next < %a order by priority, time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
@@ -560,12 +580,12 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	}
 
 	defer func() {
-		// Hold streamMu to prevent the ids from being discarded
+		// Hold cacheManagementMu to prevent the ids from being discarded
 		// if poller is active. Otherwise, it could have read a
 		// snapshot of a row before the postponement and requeue
 		// the message.
-		mm.streamMu.Lock()
-		defer mm.streamMu.Unlock()
+		mm.cacheManagementMu.Lock()
+		defer mm.cacheManagementMu.Unlock()
 		mm.cache.Discard(ids)
 	}()
 
@@ -606,8 +626,6 @@ func (mm *messageManager) postpone(tsv TabletService, ackWaitTime time.Duration,
 }
 
 func (mm *messageManager) startVStream() {
-	mm.streamMu.Lock()
-	defer mm.streamMu.Unlock()
 	if mm.streamCancel != nil {
 		return
 	}
@@ -617,8 +635,7 @@ func (mm *messageManager) startVStream() {
 }
 
 func (mm *messageManager) stopVStream() {
-	mm.streamMu.Lock()
-	defer mm.streamMu.Unlock()
+	log.Infof("messageManager - calling stream cancel")
 	if mm.streamCancel != nil {
 		mm.streamCancel()
 		mm.streamCancel = nil
@@ -652,8 +669,9 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	var fields []*querypb.Field
 
 	err := mm.vs.Stream(ctx, "current", nil, mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
-		mm.streamMu.Lock()
-		defer mm.streamMu.Unlock()
+		// We need to get the flow control lock
+		mm.cacheManagementMu.Lock()
+		defer mm.cacheManagementMu.Unlock()
 
 		select {
 		case <-ctx.Done():
@@ -736,13 +754,18 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 }
 
 func (mm *messageManager) runPoller() {
+	// We need to get the flow control lock first
+	mm.cacheManagementMu.Lock()
+	defer mm.cacheManagementMu.Unlock()
+	// Now we can get the main/structure lock and ensure e.g. that the
+	// the receiver count does not change during the run
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+
 	// Fast-path. Skip all the work.
-	if mm.receiverCount() == 0 {
+	if len(mm.receivers) == 0 {
 		return
 	}
-
-	mm.streamMu.Lock()
-	defer mm.streamMu.Unlock()
 
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer func() {
@@ -755,22 +778,16 @@ func (mm *messageManager) runPoller() {
 		"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 		"max":       sqltypes.Int64BindVariable(int64(size)),
 	}
+
 	qr, err := mm.readPending(ctx, bindVars)
 	if err != nil {
 		return
 	}
 
-	// Obtain mu lock to verify and preserve that len(receivers) != 0.
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
 	mm.messagesPending = false
 	if len(qr.Rows) >= size {
 		// There are probably more messages to be sent.
 		mm.messagesPending = true
-	}
-	if len(mm.receivers) == 0 {
-		// Almost never reachable because we just checked this.
-		return
 	}
 	if len(qr.Rows) != 0 {
 		// We've most likely added items.
@@ -867,7 +884,7 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 	}
 }
 
-// BuildMessageRow builds a MessageRow for a db row.
+// BuildMessageRow builds a MessageRow from a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	mr := &MessageRow{Row: row[4:]}
 	if !row[0].IsNull() {
@@ -901,12 +918,6 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	return mr, nil
 }
 
-func (mm *messageManager) receiverCount() int {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-	return len(mm.receivers)
-}
-
 func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	query, err := mm.readByPriorityAndTimeNext.GenerateQuery(bindVars, nil)
 	if err != nil {
@@ -935,4 +946,16 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 		return nil, err
 	}
 	return qr, err
+}
+
+func (mm *messageManager) getReceiverCount() int {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+	return len(mm.receivers)
+}
+
+func (mm *messageManager) getLastPollPosition() *mysql.Position {
+	mm.cacheManagementMu.Lock()
+	defer mm.cacheManagementMu.Unlock()
+	return mm.lastPollPosition
 }
