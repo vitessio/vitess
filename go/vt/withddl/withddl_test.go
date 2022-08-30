@@ -274,8 +274,17 @@ func checkResult(t *testing.T, wantqr *sqltypes.Result, wanterr string, qr *sqlt
 	assert.Contains(t, goterr, wanterr)
 }
 
+//use this once pflag-tabletenv has been merged
+//func loadTabletEnvFlags() {
+//	_flag.ParseFlagsForTest()
+//	fs := pflag.NewFlagSet("TestFlags", pflag.ContinueOnError)
+//	tabletenv.RegisterTabletEnvFlags(fs)
+//	pflag.Parse()
+//}
+
 func TestMain(m *testing.M) {
-	flag.Parse() // Do not remove this comment, import into google3 depends on it
+	//loadTabletEnvFlags()
+	flag.Parse()
 	tabletenv.Init()
 
 	exitCode := func() int {

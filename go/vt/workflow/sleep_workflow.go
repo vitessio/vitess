@@ -18,10 +18,11 @@ package workflow
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"context"
 
@@ -208,7 +209,7 @@ type SleepWorkflowFactory struct{}
 // Init is part of the workflow.Factory interface.
 func (f *SleepWorkflowFactory) Init(_ *Manager, w *workflowpb.Workflow, args []string) error {
 	// Parse the flags.
-	subFlags := flag.NewFlagSet(sleepFactoryName, flag.ContinueOnError)
+	subFlags := pflag.NewFlagSet(sleepFactoryName, pflag.ContinueOnError)
 	duration := subFlags.Int("duration", 30, "How long to sleep")
 	if err := subFlags.Parse(args); err != nil {
 		return err

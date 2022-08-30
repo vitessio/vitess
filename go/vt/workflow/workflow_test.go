@@ -18,10 +18,11 @@ package workflow
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"strconv"
 	"sync"
+
+	"github.com/spf13/pflag"
 
 	"google.golang.org/protobuf/proto"
 
@@ -55,7 +56,7 @@ type TestWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
 func (*TestWorkflowFactory) Init(_ *Manager, w *workflowpb.Workflow, args []string) error {
-	subFlags := flag.NewFlagSet(testWorkflowFactoryName, flag.ContinueOnError)
+	subFlags := pflag.NewFlagSet(testWorkflowFactoryName, pflag.ContinueOnError)
 	retryFlag := subFlags.Bool("retry", false, "The retry flag should be true if the retry action should be tested")
 	count := subFlags.Int("count", 0, "The number of simple tasks")
 	enableApprovals := subFlags.Bool("enable_approvals", false, "If true, executions of tasks require user's approvals on the UI.")
