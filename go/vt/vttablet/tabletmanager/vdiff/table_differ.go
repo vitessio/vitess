@@ -138,7 +138,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	log.Infof("stopTargetVReplicationStreams")
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped' %s", ct.workflowFilter)
+	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped', message='for vdiff' %s", ct.workflowFilter)
 	if _, err := ct.vde.vre.Exec(query); err != nil {
 		return err
 	}
@@ -170,6 +170,8 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return err
 		}
 		ct.sources[bls.Shard].position = mpos
+
+		// set the time zone information for the table diff
 		td.sourceTimeZone = bls.SourceTimeZone
 		td.targetTimeZone = bls.TargetTimeZone
 	}
