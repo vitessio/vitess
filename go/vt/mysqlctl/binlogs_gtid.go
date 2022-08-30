@@ -18,11 +18,14 @@ package mysqlctl
 
 import (
 	"context"
+	"sort"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+type BackupManifestPath []*BackupManifest
 
 // ChooseBinlogsForIncrementalBackup chooses which binary logs need to be backed up in an incremental backup,
 // given a list of known binary logs, a function that returns the "Previous GTIDs" per binary log, and a
@@ -82,4 +85,105 @@ func ChooseBinlogsForIncrementalBackup(
 		return binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, nil
 	}
 	return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no binary logs to backup (increment is empty)")
+}
+
+// IsValidIncrementalBakcup determines whether the given manifest can be used to extend a backup
+// based on baseGTIDSet. The manifest must be able to pick up from baseGTIDSet, and must extend it by at least
+// one entry.
+func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, manifest *BackupManifest) bool {
+	if !manifest.Incremental {
+		return false
+	}
+	// We want to validate:
+	// manifest.FromPosition <= baseGTID < manifest.Position
+	if !baseGTIDSet.Contains(manifest.FromPosition.GTIDSet) {
+		// the incremental backup has a gap from the base set.
+		return false
+	}
+	if baseGTIDSet.Contains(manifest.Position.GTIDSet) {
+		// the incremental backup adds nothing; it's already contained in the base set
+		return false
+	}
+	if !manifest.Position.GTIDSet.Contains(baseGTIDSet) {
+		// the base set seems to have extra entries?
+		return false
+	}
+	return true
+}
+
+// FindPITRPath evaluates the shortest path to recover a restoreToGTIDSet. The past is composed of:
+// - a full backup, followed by:
+// - zero or more incremental backups
+// The path ends with restoreToGTIDSet or goes beyond it. No shorter path will do the same.
+// The function returns an error when a path cannot be found.
+func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, sortedManifests [](*BackupManifest)) (shortestPath [](*BackupManifest), err error) {
+	sortedManifests = sortedManifests[:]
+	sort.SliceStable(sortedManifests, func(i, j int) bool {
+		return sortedManifests[j].Position.GTIDSet.Contains(sortedManifests[i].Position.GTIDSet)
+	})
+	mostRelevantFullBackupIndex := -1 // an invalid value
+	for i, manifest := range sortedManifests {
+		if manifest.Incremental {
+			continue
+		}
+		if restoreToGTIDSet.Contains(manifest.Position.GTIDSet) {
+			// This backup is <= desired restore point, therefore it's valid
+			mostRelevantFullBackupIndex = i
+		}
+	}
+
+	if mostRelevantFullBackupIndex < 0 {
+		// No full backup prior to desired restore point...
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no full backup found before GTID %v", restoreToGTIDSet)
+	}
+	// All that interests us starts with mostRelevantFullBackupIndex: that's where the full backup is,
+	// and any relevant incremental backups follow that point (because manifests are sorted by backup pos, ascending)
+	sortedManifests = sortedManifests[mostRelevantFullBackupIndex:]
+	// Of all relevant backups, we take the most recent one.
+	fullBackup := sortedManifests[0]
+	if restoreToGTIDSet.Equal(fullBackup.Position.GTIDSet) {
+		// Perfect match, we don't need to look for incremental backups.
+		// We just skip the complexity of the followup section.
+		// The result path is a single full backup.
+		return append(shortestPath, fullBackup), nil
+	}
+
+	var validRestorePaths []BackupManifestPath
+	// recursive function that searches for all possible paths:
+	var findPaths func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest)
+	findPaths = func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) {
+		if baseGTIDSet.Contains(restoreToGTIDSet) {
+			// successful end of path. Update list of successful paths
+			validRestorePaths = append(validRestorePaths, pathManifests)
+			return
+		}
+		if len(remainingManifests) == 0 {
+			// end of the road. No possibilities from here.
+			return
+		}
+		// if the next manifest is eligible to be part of the path, try it out
+		if IsValidIncrementalBakcup(baseGTIDSet, remainingManifests[0]) {
+			nextGTIDSet := baseGTIDSet.Union(remainingManifests[0].Position.GTIDSet)
+			findPaths(nextGTIDSet, append(pathManifests, remainingManifests[0]), remainingManifests[1:])
+		}
+		// also, try without the next manifest
+		findPaths(baseGTIDSet, pathManifests, remainingManifests[1:])
+	}
+	// find all paths, entry point
+	findPaths(fullBackup.Position.GTIDSet, sortedManifests[0:1], sortedManifests[1:])
+	if len(validRestorePaths) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no path found that leads to GTID %v", restoreToGTIDSet)
+	}
+	// Now find a shortest path
+	for i := range validRestorePaths {
+		path := validRestorePaths[i]
+		if shortestPath == nil {
+			shortestPath = path
+			continue
+		}
+		if len(path) < len(shortestPath) {
+			shortestPath = path
+		}
+	}
+	return shortestPath, nil
 }

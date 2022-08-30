@@ -116,3 +116,228 @@ func TestBinlogsToBackup(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidIncrementalBakcup(t *testing.T) {
+	incrementalManifest := func(backupPos string, backupFromPos string) *BackupManifest {
+		return &BackupManifest{
+			Position:     mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
+			FromPosition: mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupFromPos)),
+			Incremental:  true,
+		}
+	}
+	tt := []struct {
+		baseGTID      string
+		backupFromPos string
+		backupPos     string
+		expectIsValid bool
+	}{
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "1-58",
+			backupPos:     "1-70",
+			expectIsValid: true,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "1-51",
+			backupPos:     "1-70",
+			expectIsValid: true,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "1-51",
+			backupPos:     "1-58",
+			expectIsValid: false,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "1-58",
+			backupPos:     "1-58",
+			expectIsValid: false,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "1-51",
+			backupPos:     "1-55",
+			expectIsValid: false,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "1-59",
+			backupPos:     "1-70",
+			expectIsValid: false,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "1-60",
+			backupPos:     "1-70",
+			expectIsValid: false,
+		},
+	}
+	for i, tc := range tt {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			basePos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.baseGTID)
+			require.NoError(t, err)
+			isValid := IsValidIncrementalBakcup(basePos.GTIDSet, incrementalManifest(tc.backupPos, tc.backupFromPos))
+			assert.Equal(t, tc.expectIsValid, isValid)
+		})
+	}
+}
+
+func TestFindPITRPath(t *testing.T) {
+	fullManifest := func(backupPos string) *BackupManifest {
+		return &BackupManifest{
+			Position: mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
+		}
+	}
+	incrementalManifest := func(backupPos string, backupFromPos string) *BackupManifest {
+		return &BackupManifest{
+			Position:     mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
+			FromPosition: mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupFromPos)),
+			Incremental:  true,
+		}
+	}
+	fullBackups := []*BackupManifest{
+		fullManifest("1-50"),
+		fullManifest("1-5"),
+		fullManifest("1-80"),
+		fullManifest("1-70"),
+		fullManifest("1-70"),
+	}
+	incrementalBackups := []*BackupManifest{
+		incrementalManifest("1-34", "1-5"),
+		incrementalManifest("1-38", "1-34"),
+		incrementalManifest("1-52", "1-35"),
+		incrementalManifest("1-60", "1-50"),
+		incrementalManifest("1-70", "1-60"),
+		incrementalManifest("1-82", "1-70"),
+		incrementalManifest("1-92", "1-79"),
+		incrementalManifest("1-95", "1-89"),
+	}
+	tt := []struct {
+		name                       string
+		restoreGTID                string
+		incrementalBackups         []*BackupManifest
+		expectFullManifest         *BackupManifest
+		expectIncrementalManifests []*BackupManifest
+		expectError                string
+	}{
+		{
+			name:               "1-58",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			expectFullManifest: fullManifest("1-50"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-60", "1-50"),
+			},
+		},
+		{
+			name:               "1-50",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-50",
+			expectFullManifest: fullManifest("1-50"),
+		},
+		{
+			name:               "1-78",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-78",
+			expectFullManifest: fullManifest("1-70"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-82", "1-70"),
+			},
+		},
+		{
+			name:               "1-28",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-28",
+			expectFullManifest: fullManifest("1-5"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-34", "1-5"),
+			},
+		},
+		{
+			name:               "1-88",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-88",
+			expectFullManifest: fullManifest("1-80"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-92", "1-79"),
+			},
+		},
+		{
+			name:        "fail 1-2",
+			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-2",
+			expectError: "no full backup",
+		},
+		{
+			name:        "fail unknown UUID",
+			restoreGTID: "00000000-0000-0000-0000-0a43f95f28a3:1-50",
+			expectError: "no full backup",
+		},
+		{
+			name:        "fail 1-99",
+			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-99",
+			expectError: "no path found",
+		},
+		{
+			name:               "fail 1-94",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-94",
+			expectFullManifest: fullManifest("1-80"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-92", "1-79"),
+				incrementalManifest("1-95", "1-89"),
+			},
+		},
+		{
+			name:               "fail 1-95",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-95",
+			expectFullManifest: fullManifest("1-80"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-92", "1-79"),
+				incrementalManifest("1-95", "1-89"),
+			},
+		},
+		{
+			name:        "fail 1-88 with gaps",
+			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-88",
+			incrementalBackups: []*BackupManifest{
+				incrementalManifest("1-34", "1-5"),
+				incrementalManifest("1-38", "1-34"),
+				incrementalManifest("1-52", "1-35"),
+				incrementalManifest("1-60", "1-50"),
+				incrementalManifest("1-70", "1-60"),
+				incrementalManifest("1-82", "1-70"),
+				incrementalManifest("1-92", "1-84"),
+				incrementalManifest("1-95", "1-89"),
+			},
+			expectError: "no path found",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.incrementalBackups == nil {
+				tc.incrementalBackups = incrementalBackups
+			}
+			var manifests []*BackupManifest
+			manifests = append(manifests, fullBackups...)
+			manifests = append(manifests, tc.incrementalBackups...)
+
+			restorePos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.restoreGTID)
+			require.NoErrorf(t, err, "%v", err)
+			path, err := FindPITRPath(restorePos.GTIDSet, manifests)
+			if tc.expectError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectError)
+				return
+			}
+			require.NoErrorf(t, err, "%v", err)
+			require.NotEmpty(t, path)
+			// the path always consists of one full backup and zero or more incremental backups
+			fullBackup := path[0]
+			require.False(t, fullBackup.Incremental)
+			for _, manifest := range path[1:] {
+				require.True(t, manifest.Incremental)
+			}
+			assert.Equal(t, tc.expectFullManifest.Position.GTIDSet, fullBackup.Position.GTIDSet)
+			if tc.expectIncrementalManifests == nil {
+				tc.expectIncrementalManifests = []*BackupManifest{}
+			}
+			assert.Equal(t, tc.expectIncrementalManifests, path[1:])
+		})
+	}
+}
