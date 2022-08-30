@@ -66,7 +66,7 @@ import (
 	"sync"
 	"time"
 
-	//	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	// "vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 )
@@ -176,7 +176,7 @@ func (c *Collection) StartAutoExpiration() {
 	c.monitoring = true
 	c.Unlock()
 
-	// log.Infof("StartAutoExpiration: %p with expirePeriod: %v", c, c.expirePeriod)
+	//log.Infof("StartAutoExpiration: %p with expirePeriod: %v", c, c.expirePeriod)
 	ticker := time.NewTicker(defaultExpireTickerPeriod)
 
 	for {

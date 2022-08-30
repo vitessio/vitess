@@ -18,10 +18,10 @@ package attributes
 
 import (
 	"fmt"
-	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -40,7 +40,8 @@ func SetHostAttributes(hostname string, attributeName string, attributeValue str
 		attributeValue,
 	)
 	if err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 
 	return err
@@ -75,34 +76,9 @@ func getHostAttributesByClause(whereClause string, args []any) ([]HostAttributes
 	})
 
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return res, err
-}
-
-// GetHostAttributesByMatch
-func GetHostAttributesByMatch(hostnameMatch string, attributeNameMatch string, attributeValueMatch string) ([]HostAttributes, error) {
-	terms := []string{}
-	args := sqlutils.Args()
-	if hostnameMatch != "" {
-		terms = append(terms, ` hostname rlike ? `)
-		args = append(args, hostnameMatch)
-	}
-	if attributeNameMatch != "" {
-		terms = append(terms, ` attribute_name rlike ? `)
-		args = append(args, attributeNameMatch)
-	}
-	if attributeValueMatch != "" {
-		terms = append(terms, ` attribute_value rlike ? `)
-		args = append(args, attributeValueMatch)
-	}
-
-	if len(terms) == 0 {
-		return getHostAttributesByClause("", args)
-	}
-	whereCondition := fmt.Sprintf(" where %s ", strings.Join(terms, " and "))
-
-	return getHostAttributesByClause(whereCondition, args)
 }
 
 // GetHostAttribute expects to return a single attribute for a given hostname/attribute-name combination
@@ -114,7 +90,8 @@ func GetHostAttribute(hostname string, attributeName string) (string, error) {
 		return "", err
 	}
 	if len(attributeName) == 0 {
-		return "", log.Errorf("No attribute found for %+v, %+v", hostname, attributeName)
+		log.Errorf("No attribute found for %+v, %+v", hostname, attributeName)
+		return "", fmt.Errorf("No attribute found for %+v, %+v", hostname, attributeName)
 	}
 	return attributes[0].AttributeValue, nil
 }
@@ -130,14 +107,4 @@ func SetGeneralAttribute(attributeName string, attributeValue string) error {
 // GetGeneralAttribute expects to return a single attribute value (not associated with a specific hostname)
 func GetGeneralAttribute(attributeName string) (result string, err error) {
 	return GetHostAttribute("*", attributeName)
-}
-
-// GetHostAttributesByAttribute
-func GetHostAttributesByAttribute(attributeName string, valueMatch string) ([]HostAttributes, error) {
-	if valueMatch == "" {
-		valueMatch = ".?"
-	}
-	whereClause := ` where attribute_name = ? and attribute_value rlike ?`
-
-	return getHostAttributesByClause(whereClause, sqlutils.Args(attributeName, valueMatch))
 }

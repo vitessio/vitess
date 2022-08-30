@@ -22,9 +22,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/app"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 )
 
@@ -41,10 +41,6 @@ func main() {
 	sibling := flag.String("s", "", "sibling instance, host_fqdn[:port]")
 	destination := flag.String("d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
 	discovery := flag.Bool("discovery", true, "auto discovery mode")
-	quiet := flag.Bool("quiet", false, "quiet")
-	verbose := flag.Bool("verbose", false, "verbose")
-	debug := flag.Bool("debug", false, "debug mode (very verbose)")
-	stack := flag.Bool("stack", false, "add stack trace upon error")
 	config.RuntimeCLIFlags.SkipUnresolve = flag.Bool("skip-unresolve", false, "Do not unresolve a host name")
 	config.RuntimeCLIFlags.SkipUnresolveCheck = flag.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
 	config.RuntimeCLIFlags.Noop = flag.Bool("noop", false, "Dry run; do not perform destructing operations")
@@ -75,17 +71,6 @@ func main() {
 		*destination = *sibling
 	}
 
-	log.SetLevel(log.ERROR)
-	if *verbose {
-		log.SetLevel(log.INFO)
-	}
-	if *debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *stack {
-		log.SetPrintStackTrace(*stack)
-	}
-
 	startText := "starting orchestrator"
 	if AppVersion != "" {
 		startText += ", version: " + AppVersion
@@ -102,17 +87,6 @@ func main() {
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false
-	}
-	if config.Config.Debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *quiet {
-		// Override!!
-		log.SetLevel(log.ERROR)
-	}
-	if config.Config.EnableSyslog {
-		log.EnableSyslogWriter("orchestrator")
-		log.SetSyslogLevel(log.INFO)
 	}
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()

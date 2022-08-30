@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
@@ -23,7 +22,6 @@ var (
 func init() {
 	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
-	log.SetLevel(log.ERROR)
 }
 
 func generateTestInstances() (instances [](*Instance), instancesMap map[string](*Instance)) {
