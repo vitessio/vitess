@@ -36,7 +36,15 @@ func registerQueryTruncationFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	servenv.OnParse(registerQueryTruncationFlags)
+	servenv.OnParseFor("vtgate", registerQueryTruncationFlags)
+	servenv.OnParseFor("vttablet", registerQueryTruncationFlags)
+	servenv.OnParseFor("vtcombo", registerQueryTruncationFlags)
+	servenv.OnParseFor("vtctld", registerQueryTruncationFlags)
+	servenv.OnParseFor("vtctl", registerQueryTruncationFlags)
+	servenv.OnParseFor("vtexplain", registerQueryTruncationFlags)
+	servenv.OnParseFor("vtbackup", registerQueryTruncationFlags)
+	servenv.OnParseFor("vttestserver", registerQueryTruncationFlags)
+	servenv.OnParseFor("vtbench", registerQueryTruncationFlags)
 }
 
 // GetTruncateErrLen is a function used to read the value of truncateErrLen
