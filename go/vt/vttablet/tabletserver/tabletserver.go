@@ -737,7 +737,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), reservedID != 0)
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), reservedID != 0 || len(settings) > 0)
 			if err != nil {
 				return err
 			}
@@ -1318,7 +1318,7 @@ func (tsv *TabletServer) beginExecuteWithSettings(ctx context.Context, target *q
 		return txToReserveState(txState), nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, txState.TransactionID, 0, options)
+	result, err := tsv.execute(ctx, target, sql, bindVariables, txState.TransactionID, 0, settings, options)
 	return txToReserveState(txState), result, err
 }
 
@@ -1328,7 +1328,7 @@ func (tsv *TabletServer) beginStreamExecuteWithSettings(ctx context.Context, tar
 		return txToReserveState(txState), err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, txState.TransactionID, 0, options, callback)
+	err = tsv.streamExecute(ctx, target, sql, bindVariables, txState.TransactionID, 0, settings, options, callback)
 	return txToReserveState(txState), err
 }
 

@@ -292,3 +292,23 @@ func TestDMLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
 		})
 	}
 }
+
+func TestSetQueryOnReserveApis(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	setting := "set @@sql_mode = ''"
+
+	_, err := client.ReserveExecute(setting, []string{setting}, nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, client.ReservedID())
+
+	_, err = client.ReserveBeginExecute(setting, []string{setting}, nil, nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, client.ReservedID())
+}

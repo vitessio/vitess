@@ -182,6 +182,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
 		return qre.execShowThrottledApps()
+	case p.PlanSet:
+		if len(qre.settings) == 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without settings connection", qre.query)
+		}
+		// The execution is not required as this setting will be applied when any other query type is executed.
+		return &sqltypes.Result{}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
