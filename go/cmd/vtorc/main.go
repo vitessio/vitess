@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/pflag"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	vtlog "vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -102,6 +103,7 @@ func main() {
 	// TODO(ajm188): after v15, remove this pflag hack and use servenv.ParseFlags
 	// directly.
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
+	grpccommon.RegisterFlags(fs)
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 
