@@ -55,18 +55,17 @@ func init() {
 		params: "<keyspace/shard> <backup name>",
 		help:   "Removes a backup for the BackupStorage.",
 	})
-
 	addCommand("Tablets", command{
 		name:   "Backup",
 		method: commandBackup,
-		params: "[--concurrency=4] [--allow_primary=false] <tablet alias>",
-		help:   "Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes.",
+		params: "[--concurrency=4] [--allow_primary=false] [--incremental_from_pos=<pos>] <tablet alias>",
+		help:   "Run a full or an incremental backup. Uses the BackupStorage service to store a new backup. With full backup, stops mysqld, takes the backup, starts mysqld and resumes replication. With incremental backup (indicated by '--incremental_from_pos', rotate and copy binary logs without disrupting the mysqld service).",
 	})
 	addCommand("Tablets", command{
 		name:   "RestoreFromBackup",
 		method: commandRestoreFromBackup,
-		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
-		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time.",
+		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] [--restore_to_pos=<pos>] <tablet alias>",
+		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time. If '--restore_to_pos' is given, then a point in time restore based on one full backup followed by zero or more incremental backups",
 	})
 }
 
@@ -202,6 +201,7 @@ func (b *backupRestoreEventStreamLogger) Send(resp *vtctldatapb.RestoreFromBacku
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
+	restoreToPos := subFlags.String("restore_to_pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -227,7 +227,8 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	}
 
 	req := &vtctldatapb.RestoreFromBackupRequest{
-		TabletAlias: tabletAlias,
+		TabletAlias:  tabletAlias,
+		RestoreToPos: *restoreToPos,
 	}
 
 	if !backupTime.IsZero() {
