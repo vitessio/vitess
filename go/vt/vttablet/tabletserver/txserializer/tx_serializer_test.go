@@ -71,9 +71,9 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 }
 
 func TestTxSerializerRedactDebugUI(t *testing.T) {
-	*streamlog.RedactDebugUIQueries = true
+	streamlog.SetRedactDebugUIQueries(true)
 	defer func() {
-		*streamlog.RedactDebugUIQueries = false
+		streamlog.SetRedactDebugUIQueries(false)
 	}()
 
 	config := tabletenv.NewDefaultConfig()

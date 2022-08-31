@@ -325,7 +325,7 @@ func (txs *TxSerializer) Pending(key string) int {
 
 // ServeHTTP lists the most recent, cached queries and their count.
 func (txs *TxSerializer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if *streamlog.RedactDebugUIQueries {
+	if streamlog.GetRedactDebugUIQueries() {
 		response.Write([]byte(`
 	<!DOCTYPE html>
 	<html>
