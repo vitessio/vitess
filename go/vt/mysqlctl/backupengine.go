@@ -94,6 +94,9 @@ type RestoreParams struct {
 	// StartTime: if non-zero, look for a backup that was taken at or before this time
 	// Otherwise, find the most recent backup
 	StartTime time.Time
+	// RestoreToPos hints that a point in time recovery is requested, to recover up to the specific given pos.
+	// When empty, the restore is a normal from full backup
+	RestoreToPos mysql.Position
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
@@ -218,12 +221,19 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	checkBackupTime := !params.StartTime.IsZero()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 
+	manifests := make([]*BackupManifest, 0, len(bhs))
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]
 		// Check that the backup MANIFEST exists and can be successfully decoded.
 		bm, err := GetBackupManifest(ctx, bh)
 		if err != nil {
 			params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
+			continue
+		}
+		// the manifest is valid
+		manifests = append(manifests, bm) // manifests's order is insignificant, it will be sorted later on
+		if bm.Incremental {
+			// We're looking for a full backup
 			continue
 		}
 
@@ -235,12 +245,22 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				continue
 			}
 		}
-		if !checkBackupTime || backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
-			if !checkBackupTime {
-				params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
-			} else {
+		switch {
+		case checkBackupTime:
+			// restore to specific time
+			if backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
 				params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
+				break
 			}
+		case !params.RestoreToPos.IsZero():
+			// restore to specific pos
+			if params.RestoreToPos.GTIDSet.Contains(bm.Position.GTIDSet) {
+				// this is the most recent backup <= desired position
+				break
+			}
+		default:
+			// restore latest full backup
+			params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
 			break
 		}
 	}
