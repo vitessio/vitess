@@ -923,6 +923,10 @@ message RestoreFromBackupRequest {
   // BackupTime, if set, will use the backup taken most closely at or before
   // this time. If nil, the latest backup will be restored on the tablet.
   vttime.Time backup_time = 2;
+  // RestoreToPos indicates a position for a point-in-time recovery. The recovery
+  // is expected to utilize one full backup, followed by zero or more incremental backups,
+  // that reach the precise desired position
+  string restore_to_pos = 3;
 }
 
 message RestoreFromBackupResponse {
