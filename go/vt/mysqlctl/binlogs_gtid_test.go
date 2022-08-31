@@ -244,6 +244,16 @@ func TestFindPITRPath(t *testing.T) {
 			},
 		},
 		{
+			name:               "1-45",
+			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-45",
+			expectFullManifest: fullManifest("1-5"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-34", "1-5"),
+				incrementalManifest("1-38", "1-34"),
+				incrementalManifest("1-52", "1-35"),
+			},
+		},
+		{
 			name:               "1-28",
 			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-28",
 			expectFullManifest: fullManifest("1-5"),
@@ -306,6 +316,18 @@ func TestFindPITRPath(t *testing.T) {
 				incrementalManifest("1-95", "1-89"),
 			},
 			expectError: "no path found",
+		},
+		{
+			name:        "1-45 single step",
+			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-45",
+			incrementalBackups: append(
+				incrementalBackups,
+				incrementalManifest("1-99", "1-5"),
+			),
+			expectFullManifest: fullManifest("1-5"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-99", "1-5"),
+			},
 		},
 	}
 	for _, tc := range tt {
