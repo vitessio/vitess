@@ -236,63 +236,28 @@ func TestVStreamCopyBasic(t *testing.T) {
 func TestVStreamCopyResume(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	gconn, conn, mconn, _ := initialize(ctx, t)
-	defer conn.Close()
-	defer mconn.Close()
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
 
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select * from t1",
-		}},
-	}
-	flags := &vtgatepb.VStreamFlags{}
-	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
-
-	// Start with an empty position
-	mpos := mysql.Position{}
-	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
-		Keyspace: "ks",
-		Shard:    "-80",
-		Gtid:     "",
-	})
-	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
-		Keyspace: "ks",
-		Shard:    "80-",
-		Gtid:     "",
-	})
-	vgtid.ShardGtids = shardGtids
-
-	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4)", 1, false)
+	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	// Any subsequent GTIDs will be part of the stream
+	mpos, err := mconn.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.NotNil(t, reader)
-	expectedRowCopyEvents := 4 // id1 and id2 IN(1,2,3,4)
-	expectedCatchupEvents := 0
-	expectedEvents := []string{
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"11"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"22"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"33"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"44"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-	}
-	confirmVStreamEvents(t, cancel, reader, expectedEvents, expectedRowCopyEvents, expectedCatchupEvents)
 
-	// close the connection and the vstream with it
-	gconn.Close()
-
-	// Now we want to pick up where we left off, so we get the current position and set
-	// the lastPK to what it was, id1=4, so we should only copy rows for id1 IN(5,6,7,8,9)
-	mpos, err = mconn.PrimaryPosition()
+	// This GTID should end up as a no-op because we should have copied the
+	// existing row
+	_, err = conn.ExecuteFetch("insert into t1(id1,id2) values(9,9)", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// lastPK is id1=4, meaning we should only copy rows for id1 IN(5,6,7,8,9)
 	lastPK := sqltypes.Result{
 		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT64}},
 		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4)}},
@@ -301,7 +266,15 @@ func TestVStreamCopyResume(t *testing.T) {
 		TableName: "t1",
 		Lastpk:    sqltypes.ResultToProto3(&lastPK),
 	}}
-	shardGtids = []*binlogdatapb.ShardGtid{}
+
+	// This GTID must have a before and after value
+	_, err = conn.ExecuteFetch("update t1 set id2 = 10 where id1 = 1", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var shardGtids []*binlogdatapb.ShardGtid
+	var vgtid = &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -315,45 +288,63 @@ func TestVStreamCopyResume(t *testing.T) {
 		TablePKs: tableLastPK,
 	})
 	vgtid.ShardGtids = shardGtids
-
-	// Open a new connection (as we closed the original)
-	gconn, err = vtgateconn.Dial(ctx, grpcAddress)
-	if err != nil {
-		t.Fatal(err)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
 	}
-	defer gconn.Close()
-
-	reader, err = gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	flags := &vtgatepb.VStreamFlags{}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	if err != nil {
 		t.Fatal(err)
 	}
 	require.NotNil(t, reader)
 
-	_, err = conn.ExecuteFetch("insert into t1(id1,id2) values (5,5), (6,6), (7,7), (8,8), (9,9)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = conn.ExecuteFetch("update t1 set id2 = 119 where id1 = 2", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = conn.ExecuteFetch("update t1 set id2 = 219 where id1 = 7", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expectedRowCopyEvents = 5 // id1 and id2 IN(5,6,7,8,9)
-	expectedCatchupEvents = 2
-	expectedEvents = []string{
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{before:{lengths:1 lengths:1 values:"22"} after:{lengths:1 lengths:3 values:"2119"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+	expectedRowCopyEvents := 5 // id1 and id2 IN(5,6,7,8,9)
+	expectedCatchupEvents := 2 // id1=9 and id2=9; id2=10 where id1=1
+	rowCopyEvents, replCatchupEvents := 0, 0
+	expectedEvents := []string{
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{before:{lengths:1 lengths:1 values:"11"} after:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"55"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
 		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"66"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{before:{lengths:1 lengths:1 values:"77"} after:{lengths:1 lengths:3 values:"7219"}} keyspace:"ks" shard:"80-"} current_time:[0-9]+ keyspace:"ks" shard:"80-"`,
 		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"77"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
 		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"88"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
 		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 	}
-	confirmVStreamEvents(t, cancel, reader, expectedEvents, expectedRowCopyEvents, expectedCatchupEvents)
+	var evs []*binlogdatapb.VEvent
+	for {
+		e, err := reader.Recv()
+		switch err {
+		case nil:
+			for _, ev := range e {
+				if ev.Type == binlogdatapb.VEventType_ROW {
+					evs = append(evs, ev)
+					if ev.Timestamp == 0 {
+						rowCopyEvents++
+					} else {
+						replCatchupEvents++
+					}
+					printEvents(evs) // for debugging ci failures
+				}
+			}
+			if expectedCatchupEvents == replCatchupEvents && expectedRowCopyEvents == rowCopyEvents {
+				sort.Sort(VEventSorter(evs))
+				for i, ev := range evs {
+					require.Regexp(t, expectedEvents[i], ev.String())
+				}
+				t.Logf("TestVStreamCopyResume was successful")
+				return
+			}
+		case io.EOF:
+			log.Infof("stream ended\n")
+			cancel()
+		default:
+			log.Errorf("Returned err %v", err)
+			t.Fatalf("remote error: %v\n", err)
+		}
+	}
 }
 
 func TestVStreamCurrent(t *testing.T) {
@@ -503,51 +494,6 @@ func TestVStreamSharded(t *testing.T) {
 		}
 	}
 
-}
-
-// confirmVStreamEvents confirms that you get the expected number and
-// type of events from a vtgate vstream. It also confirms the specific
-// events using expectedEvents, which is a string of valid regexes to
-// match against that should be sorted in lexicographical order by the
-// AFTER value, with secondary ordering by the timestamp of the event
-// with no timestamp being 0. This is needed as we do not guarantee
-// a strict ordering of events but only eventual consistency and we
-// want to have determinstism for the test to avoid flakes.
-func confirmVStreamEvents(t *testing.T, cancel context.CancelFunc, reader vtgateconn.VStreamReader, expectedEvents []string, expectedRowCopyEventCount, expectedCatchupEventCount int) {
-	var evs []*binlogdatapb.VEvent
-	var rowCopyEvents, replCatchupEvents int
-	for {
-		e, err := reader.Recv()
-		switch err {
-		case nil:
-			for _, ev := range e {
-				if ev.Type == binlogdatapb.VEventType_ROW {
-					evs = append(evs, ev)
-					t.Logf("Event: %v", ev)
-					if ev.Timestamp == 0 {
-						rowCopyEvents++
-					} else {
-						replCatchupEvents++
-					}
-					printEvents(evs) // for debugging ci failures
-				}
-			}
-			if expectedCatchupEventCount == replCatchupEvents && expectedRowCopyEventCount == rowCopyEvents {
-				sort.Sort(VEventSorter(evs))
-				for i, ev := range evs {
-					require.Regexp(t, expectedEvents[i], ev.String())
-				}
-				t.Logf("TestVStreamCopyResume was successful")
-				return
-			}
-		case io.EOF:
-			log.Infof("stream ended\n")
-			cancel()
-		default:
-			log.Errorf("Returned err %v", err)
-			t.Fatalf("remote error: %v\n", err)
-		}
-	}
 }
 
 var printMu sync.Mutex
