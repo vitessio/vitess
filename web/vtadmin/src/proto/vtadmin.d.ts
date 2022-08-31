@@ -21898,6 +21898,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest backup_time */
         backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest restore_to_pos */
+        restore_to_pos?: (string|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -21911,6 +21914,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest backup_time. */
         public backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest restore_to_pos. */
+        public restore_to_pos: string;
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
