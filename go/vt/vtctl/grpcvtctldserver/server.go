@@ -2396,7 +2396,11 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("keyspace", ti.Keyspace)
 	span.Annotate("shard", ti.Shard)
 
-	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, protoutil.TimeFromProto(req.BackupTime))
+	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
+		BackupTime:   req.BackupTime,
+		RestoreToPos: req.RestoreToPos,
+	}
+	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
 		return err
 	}
