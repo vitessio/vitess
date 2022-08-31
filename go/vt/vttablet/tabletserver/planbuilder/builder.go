@@ -57,6 +57,11 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		plan.NextCount = v
 		plan.FullQuery = nil
 	}
+
+	if hasLockFunc(sel) {
+		plan.PlanID = PlanSelectLockFunc
+		plan.NeedsReservedConn = true
+	}
 	return plan, nil
 }
 
@@ -169,8 +174,9 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 
 func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	return &Plan{
-		PlanID:    PlanSet,
-		FullQuery: GenerateFullQuery(set),
+		PlanID:            PlanSet,
+		FullQuery:         GenerateFullQuery(set),
+		NeedsReservedConn: true,
 	}
 }
 

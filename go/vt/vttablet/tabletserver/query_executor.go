@@ -249,7 +249,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {

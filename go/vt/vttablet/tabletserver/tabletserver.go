@@ -737,9 +737,12 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), reservedID != 0 || len(settings) > 0)
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
+			}
+			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
@@ -830,10 +833,12 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
-			// TODO: update the isReservedConn logic when StreamExecute supports reserved connections.
-			plan, err := tsv.qe.GetStreamPlan(query, false /* isReservedConn */)
+			plan, err := tsv.qe.GetStreamPlan(query)
 			if err != nil {
 				return err
+			}
+			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
@@ -947,7 +952,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
 	sql, _ = sqlparser.SplitMarginComments(sql)
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
 		return "", ""
@@ -1194,7 +1199,12 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
 	if tsv.config.EnableSettingsPool {
 		result, err = tsv.executeWithSettings(ctx, target, preQueries, sql, bindVariables, transactionID, options)
-		return state, result, err
+		// If there is an error and the error message is about allowing query in reserved connection only,
+		// then we do not return an error from here and continue to use the reserved connection path.
+		// This is specially for get_lock function call from vtgate that needs a reserved connection.
+		if err == nil || !strings.Contains(err.Error(), "not allowed without reserved connection") {
+			return state, result, err
+		}
 	}
 
 	state.TabletAlias = tsv.alias

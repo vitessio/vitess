@@ -312,3 +312,29 @@ func TestSetQueryOnReserveApis(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, 0, client.ReservedID())
 }
+
+func TestGetLockQueryOnReserveExecute(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	lockQuery := "select get_lock('test', 1)"
+
+	// without settings
+	_, err := client.ReserveExecute(lockQuery, nil, nil)
+	require.NoError(t, err)
+	assert.NotZero(t, client.ReservedID())
+	require.NoError(t,
+		client.Release())
+
+	// with settings
+	_, err = client.ReserveExecute(lockQuery, []string{"set @@sql_mode = ''"}, nil)
+	require.NoError(t, err)
+	assert.NotZero(t, client.ReservedID())
+	require.NoError(t,
+		client.Release())
+}
