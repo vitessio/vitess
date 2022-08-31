@@ -716,6 +716,10 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
+	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)
+}
+
+func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	allowOnShutdown := false
 	timeout := tsv.QueryTimeout.Get()
 	if transactionID != 0 {
@@ -755,6 +759,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				logStats:       logStats,
 				tsv:            tsv,
 				tabletType:     target.GetTabletType(),
+				settings:       settings,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -804,6 +809,10 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
+	return tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options, callback)
+}
+
+func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {
@@ -841,6 +850,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				ctx:            ctx,
 				logStats:       logStats,
 				tsv:            tsv,
+				settings:       settings,
 			}
 			return qre.Stream(callback)
 		},
@@ -1130,7 +1140,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 	state.TransactionID = connID
 	state.SessionStateChanges = sessionStateChanges
 
-	result, err = tsv.Execute(ctx, target, sql, bindVariables, state.TransactionID, state.ReservedID, options)
+	result, err = tsv.execute(ctx, target, sql, bindVariables, state.TransactionID, state.ReservedID, nil, options)
 	return state, result, err
 }
 
@@ -1176,7 +1186,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 	state.TabletAlias = tsv.alias
 	state.SessionStateChanges = sessionStateChanges
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, state.ReservedID, options, callback)
+	err = tsv.streamExecute(ctx, target, sql, bindVariables, state.TransactionID, state.ReservedID, nil, options, callback)
 	return state, err
 }
 
@@ -1217,7 +1227,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		return state, nil, err
 	}
 
-	result, err = tsv.Execute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, options)
+	result, err = tsv.execute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options)
 	return state, result, err
 }
 
@@ -1233,7 +1243,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedState, err error) {
 	if tsv.config.EnableSettingsPool {
-		return state, tsv.streamExecuteWithSettings(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
+		return state, tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, 0, preQueries, options, callback)
 	}
 
 	state.TabletAlias = tsv.alias
@@ -1266,7 +1276,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 		return state, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, options, callback)
+	err = tsv.streamExecute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options, callback)
 	return state, err
 }
 
@@ -1294,114 +1304,12 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 	)
 }
 
-func (tsv *TabletServer) executeWithSettings(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) executeWithSettings(ctx context.Context, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteWithSettings")
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	allowOnShutdown := false
-	timeout := tsv.QueryTimeout.Get()
-	if transactionID != 0 {
-		allowOnShutdown = true
-		// Use the smaller of the two values (0 means infinity).
-		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
-	}
-	err = tsv.execRequest(
-		ctx, timeout,
-		"ExecuteWithSettings", sql, bindVariables,
-		target, options, allowOnShutdown,
-		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			if bindVariables == nil {
-				bindVariables = make(map[string]*querypb.BindVariable)
-			}
-			query, comments := sqlparser.SplitMarginComments(sql)
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), false)
-			if err != nil {
-				return err
-			}
-
-			logStats.TransactionID = transactionID
-			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				connID:         transactionID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
-				tabletType:     target.GetTabletType(),
-				settings:       preQueries,
-			}
-			result, err = qre.Execute()
-			if err != nil {
-				return err
-			}
-			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
-
-			// Change database name in mysql output to the keyspace name
-			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
-				switch qre.plan.PlanID {
-				case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
-					dbName := tsv.config.DB.DBName
-					ksName := tsv.sm.target.Keyspace
-					for _, f := range result.Fields {
-						if f.Database == dbName {
-							f.Database = ksName
-						}
-					}
-				}
-			}
-			return nil
-		},
-	)
-	return result, err
-}
-
-func (tsv *TabletServer) streamExecuteWithSettings(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
-	span, ctx := trace.NewSpan(ctx, "TabletServer.StreamExecuteWithSettings")
-	trace.AnnotateSQL(span, sqlparser.Preview(sql))
-	defer span.Finish()
-
-	allowOnShutdown := false
-	var timeout time.Duration
-	if transactionID != 0 {
-		allowOnShutdown = true
-		// Use the transaction timeout.
-		timeout = tsv.txTimeout.Get()
-	}
-
-	return tsv.execRequest(
-		ctx, timeout,
-		"StreamExecute", sql, bindVariables,
-		target, options, allowOnShutdown,
-		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			if bindVariables == nil {
-				bindVariables = make(map[string]*querypb.BindVariable)
-			}
-			query, comments := sqlparser.SplitMarginComments(sql)
-			// TODO: update the isReservedConn logic when StreamExecute supports reserved connections.
-			plan, err := tsv.qe.GetStreamPlan(query, false /* isReservedConn */)
-			if err != nil {
-				return err
-			}
-
-			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				connID:         transactionID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
-				settings:       preQueries,
-			}
-			return qre.Stream(callback)
-		},
-	)
+	return tsv.execute(ctx, target, sql, bindVariables, transactionID, 0, settings, options)
 }
 
 func (tsv *TabletServer) beginExecuteWithSettings(ctx context.Context, target *querypb.Target, settings []string, savepointQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
