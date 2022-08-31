@@ -69,10 +69,6 @@ type tableDiffer struct {
 	sourceQuery string
 	table       *tabletmanagerdatapb.TableDefinition
 	lastPK      *querypb.QueryResult
-
-	// Handle time zone conversions
-	sourceTimeZone string
-	targetTimeZone string
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -170,10 +166,6 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return err
 		}
 		ct.sources[bls.Shard].position = mpos
-
-		// set the time zone information for the table diff
-		td.sourceTimeZone = bls.SourceTimeZone
-		td.targetTimeZone = bls.TargetTimeZone
 	}
 
 	return nil
@@ -725,10 +717,10 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
 // columns expecting the source to have been in the SourceTimeZone and target in TargetTimeZone. We need to do the reverse
 // conversion in VDiff before comparing to the source
 func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
-	if td.sourceTimeZone == "" {
+	if td.wd.ct.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
-	log.Infof("source time zone specified: %s", td.sourceTimeZone)
+	log.Infof("source time zone specified: %s", td.wd.ct.sourceTimeZone)
 	var newSelectExprs sqlparser.SelectExprs
 	var modified bool
 	for _, expr := range targetSelectExprs {
@@ -744,8 +736,8 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 						Name: sqlparser.NewIdentifierCI("convert_tz"),
 						Exprs: sqlparser.SelectExprs{
 							expr,
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.targetTimeZone)},
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.sourceTimeZone)},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone)},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone)},
 						},
 					}
 					log.Infof("converting datetime column %s using convert_tz()", colName)
