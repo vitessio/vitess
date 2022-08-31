@@ -340,7 +340,7 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 func TestConsolidationsUIRedaction(t *testing.T) {
 	// Reset to default redaction state.
 	defer func() {
-		streamlog.RedactDebugUIQueries = false
+		streamlog.SetRedactDebugUIQueries(false)
 	}()
 
 	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
@@ -349,7 +349,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	redactedSQL := "select * from test_db_01 where col = :redacted1"
 
 	// First with the redaction off
-	streamlog.RedactDebugUIQueries = false
+	streamlog.SetRedactDebugUIQueries(false)
 	unRedactedResponse := httptest.NewRecorder()
 	qe := runConsolidatedQuery(t, sql)
 
@@ -359,7 +359,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	}
 
 	// Now with the redaction on
-	streamlog.RedactDebugUIQueries = true
+	streamlog.SetRedactDebugUIQueries(true)
 	redactedResponse := httptest.NewRecorder()
 	qe.handleHTTPConsolidations(redactedResponse, request)
 
