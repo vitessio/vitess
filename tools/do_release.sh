@@ -101,7 +101,7 @@ else
 fi
 
 # Preparing the release commit
-updateVitessOperatorExample $RELEASE_VERSION $VTOP_VERSION
+updateVitessExamples $RELEASE_VERSION $VTOP_VERSION
 updateJava $RELEASE_VERSION
 updateVersionGo $RELEASE_VERSION
 
