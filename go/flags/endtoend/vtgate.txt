@@ -42,7 +42,7 @@ Usage of vtgate:
       --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
       --grpc_enable_optional_tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
-      --grpc_enable_tracing                                              Enable GRPC tracing
+      --grpc_enable_tracing                                              Enable gRPC tracing.
       --grpc_initial_conn_window_size int                                gRPC initial connection window size
       --grpc_initial_window_size int                                     gRPC initial window size
       --grpc_keepalive_time duration                                     After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
@@ -52,7 +52,7 @@ Usage of vtgate:
       --grpc_max_connection_age_grace duration                           Additional grace period after grpc_max_connection_age, after which connections are forcibly closed. (default 2562047h47m16.854775807s)
       --grpc_max_message_size int                                        Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_port int                                                    Port to listen on for gRPC calls
-      --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus
+      --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus.
       --grpc_server_ca string                                            path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --grpc_server_initial_conn_window_size int                         gRPC server initial connection window size
       --grpc_server_initial_window_size int                              gRPC server initial window size
