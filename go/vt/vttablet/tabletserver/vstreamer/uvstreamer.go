@@ -65,6 +65,10 @@ type uvstreamer struct {
 	plans        map[string]*tablePlan
 	tablesToCopy []string
 
+	// particular type for the purpose that the client wants to pick up where it left off during a previous copy phase
+	// It turns on only if the input parameters of startPos and inTablePKs are given simultaneously.
+	pickingUpInputOffset bool
+
 	// changes for each table being copied
 	fields   []*querypb.Field
 	pkfields []*querypb.Field
@@ -255,8 +259,9 @@ func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.
 			shouldSend = true
 			// If the event is on a table we haven't yet fully copied...
 			if plan, ok := uvs.plans[tableName]; ok {
-				// If there's a lastPK value then we're in the middle of a table's copy phase
-				if plan.tablePK != nil && plan.tablePK.Lastpk != nil {
+				// If the client means to pick up where it left off and there's a lastPK value
+				// then we're in the middle of a table's copy phase
+				if uvs.pickingUpInputOffset && plan.tablePK != nil && plan.tablePK.Lastpk != nil {
 					// Ideally we should compare the PKs and only send events for rows which have been copied.
 					// For now, we send all changes and allow for any duplicate events -- meaning that e.g.
 					// we apply events in the stream for a row insert, table:t2 pk:9, even though we will
@@ -367,6 +372,10 @@ func (uvs *uvstreamer) init() error {
 		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}
+	}
+
+	if uvs.startPos != "" && len(uvs.inTablePKs) > 0 {
+		uvs.pickingUpInputOffset = true
 	}
 
 	if uvs.pos.IsZero() && (len(uvs.plans) == 0) {
