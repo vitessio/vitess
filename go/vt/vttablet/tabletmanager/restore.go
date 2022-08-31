@@ -212,6 +212,13 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		Shard:               tablet.Shard,
 		StartTime:           logutil.ProtoToTime(request.BackupTime),
 	}
+	if request.RestoreToPos != "" {
+		pos, err := mysql.DecodePosition(request.RestoreToPos)
+		if err != nil {
+			return vterrors.Wrapf(err, "restore failed: unable to decode --restore_to_pos: %s", request.RestoreToPos)
+		}
+		params.RestoreToPos = pos
+	}
 
 	// Check whether we're going to restore before changing to RESTORE type,
 	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
