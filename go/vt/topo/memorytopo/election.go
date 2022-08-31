@@ -26,6 +26,10 @@ import (
 
 // NewLeaderParticipation is part of the topo.Server interface
 func (c *Conn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	if c.closed {
+		return nil, ErrConnectionClosed
+	}
+
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
@@ -68,6 +72,10 @@ type cLeaderParticipation struct {
 
 // WaitForLeadership is part of the topo.LeaderParticipation interface.
 func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
+	if mp.c.closed {
+		return nil, ErrConnectionClosed
+	}
+
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
@@ -112,6 +120,10 @@ func (mp *cLeaderParticipation) Stop() {
 
 // GetCurrentLeaderID is part of the topo.LeaderParticipation interface
 func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
+	if mp.c.closed {
+		return "", ErrConnectionClosed
+	}
+
 	electionPath := path.Join(electionsPath, mp.name)
 
 	mp.c.factory.mu.Lock()
@@ -127,6 +139,10 @@ func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string,
 
 // WaitForNewLeader is part of the topo.LeaderParticipation interface
 func (mp *cLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan string, error) {
+	if mp.c.closed {
+		return nil, ErrConnectionClosed
+	}
+
 	mp.c.factory.mu.Lock()
 	defer mp.c.factory.mu.Unlock()
 

@@ -25,11 +25,12 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
 func init() {
-	*tmclient.TabletManagerProtocol = "fuzzing"
+	tmclienttest.SetProtocol("go.test.fuzzing.vtctl_fuzzer", "fuzzing")
 	tmclient.RegisterTabletManagerClientFactory("fuzzing", func() tmclient.TabletManagerClient {
 		return nil
 	})

@@ -400,8 +400,8 @@ Usage of vttablet:
       --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
-      --tablet_manager_protocol string                                   the protocol to use to talk to vttablet (default "grpc")
-      --tablet_protocol string                                           Protocol to use to talk to vttablets. (default "grpc")
+      --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --throttle_check_as_check_self                                     Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)
       --throttle_metrics_query SELECT                                    Override default heartbeat/lag metric. Use either SELECT (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.
       --throttle_metrics_threshold float                                 Override default throttle threshold, respective to -throttle_metrics_query (default 1.7976931348623157e+308)
@@ -460,7 +460,7 @@ Usage of vttablet:
       --vreplication_healthcheck_timeout duration                        healthcheck retry delay (default 1m0s)
       --vreplication_healthcheck_topology_refresh duration               refresh interval for re-reading the topology (default 30s)
       --vreplication_heartbeat_update_interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
-      --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence (default 0s)
+      --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
       --vreplication_replica_lag_tolerance duration                      Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
       --vreplication_retry_delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
       --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of _vt.vreplication
