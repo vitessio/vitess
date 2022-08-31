@@ -1261,7 +1261,7 @@ func tmRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.Tab
 	expectHandleRPCPanic(t, "Backup", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error {
+func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
