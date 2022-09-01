@@ -495,7 +495,7 @@ func main() {
 	flag.Parse()
 
 	// The -version flag must be of a valid format.
-	rx := regexp.MustCompile(`v([0-9]+)\\.([0-9]+)\\.([0-9]+)`)
+	rx := regexp.MustCompile(`v([0-9]+)\.([0-9]+)\.([0-9]+)`)
 	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
 	versionMatch := rx.FindStringSubmatch(*versionName)
 	if len(versionMatch) != 4 {
@@ -544,18 +544,9 @@ func main() {
 	// changelog metrics
 	if commits > 0 && len(authors) > 0 {
 		releaseNotes.ChangeMetrics = fmt.Sprintf(`
-	The
-	release
-	includes % d
-	commits(excluding
-	merges)
+The release includes %d commits(excluding merges)
 
-	Thanks
-	to
-	all
-	our
-contributors: @%s
-	`, commits, strings.Join(authors, ", @"))
+Thanks to all our contributors: @%s`, commits, strings.Join(authors, ", @"))
 	}
 
 	if err := releaseNotes.generate(nil, nil); err != nil {
