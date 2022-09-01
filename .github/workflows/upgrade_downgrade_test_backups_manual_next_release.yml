@@ -26,7 +26,7 @@ jobs:
         run: |
           next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
           echo $next_release_ref
-          echo "::set-output name=next_release_ref::release-14.0"
+          echo "::set-output name=next_release_ref::${next_release_ref}"
 
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
