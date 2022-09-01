@@ -285,7 +285,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	checkBackupTime := !params.StartTime.IsZero()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 
-	manifests := make([]*BackupManifest, len(bhs), len(bhs))
+	manifests := make([]*BackupManifest, len(bhs))
 	manifestHandleMap := NewManifestHandleMap()
 
 	fullBackupIndex := func() int {
