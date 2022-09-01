@@ -234,6 +234,22 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 		}
 	}
 
+	if startTablet {
+		var healthyTab = 0
+		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
+			// wait for both tablet to get into healthy state
+			waitUntil := time.Now().Add(30 * time.Second)
+			for time.Now().Before(waitUntil) {
+				if result := tablet.VttabletProcess.GetStatus(); result != "" {
+					healthyTab++
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+		require.Equal(t, 2, healthyTab, "Not all tablets get into healthy state")
+	}
+
 	if initShardPrimary {
 		// choose primary and start replication
 		err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
