@@ -38,9 +38,10 @@ import (
 
 var (
 	consulAuthClientStaticFile string
-	consulLockSessionChecks    = "serfHealth"
-	consulLockSessionTTL       string
-	consulLockDelay            = 15 * time.Second
+	// serfHealth is the default check from consul
+	consulLockSessionChecks = "serfHealth"
+	consulLockSessionTTL    string
+	consulLockDelay         = 15 * time.Second
 )
 
 func init() {
@@ -51,7 +52,6 @@ func init() {
 
 func registerServerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&consulAuthClientStaticFile, "consul_auth_static_file", consulAuthClientStaticFile, "JSON File to read the topos/tokens from.")
-	// serfHealth is the default check from consul
 	fs.StringVar(&consulLockSessionChecks, "topo_consul_lock_session_checks", consulLockSessionChecks, "List of checks for consul session.")
 	fs.StringVar(&consulLockSessionTTL, "topo_consul_lock_session_ttl", consulLockSessionTTL, "TTL for consul session.")
 	fs.DurationVar(&consulLockDelay, "topo_consul_lock_delay", consulLockDelay, "LockDelay for consul session.")
