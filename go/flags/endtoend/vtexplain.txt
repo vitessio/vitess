@@ -11,7 +11,6 @@ Usage of vtexplain:
       --binlog_player_protocol string                                the protocol to download binlogs from a vttablet (default "grpc")
       --builtinbackup_mysqld_timeout duration                        how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
       --builtinbackup_progress duration                              how often to send progress updates when backing up large files (default 5s)
-      --catch-sigpipe                                                catch and ignore SIGPIPE on stdout and stderr if specified
       --compression-engine-name string                               compressor engine used for compression. (default "pargzip")
       --compression-level int                                        what level to pass to the compressor (default 1)
       --consolidator-stream-query-size int                           Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
@@ -80,7 +79,6 @@ Usage of vtexplain:
       --keep_logs_by_mtime duration                                  keep logs for this long (using mtime) (zero to keep forever)
       --ks-shard-map string                                          JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
       --ks-shard-map-file string                                     File containing json blob of keyspace name -> shard name -> ShardReference object
-      --lameduck-period duration                                     keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock_heartbeat_time duration                                 If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --log_backtrace_at traceLocation                               when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                               If non-empty, write log files in this directory
@@ -118,8 +116,6 @@ Usage of vtexplain:
       --no_scatter                                                   when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize                                                    Whether to enable vtgate normalization
       --normalize_queries                                            Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
-      --onclose_timeout duration                                     wait no more than this for OnClose handlers before stopping (default 1ns)
-      --onterm_timeout duration                                      wait no more than this for OnTermSync handlers before stopping (default 10s)
       --output-mode string                                           Output in human-friendly text or json (default "text")
       --pid_file string                                              If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --planner-version string                                       Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4

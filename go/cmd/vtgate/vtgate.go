@@ -51,6 +51,7 @@ var resilientServer *srvtopo.ResilientServer
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 }
