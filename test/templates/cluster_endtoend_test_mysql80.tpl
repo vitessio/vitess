@@ -29,7 +29,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17.12
+        go-version: 1.17.13
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
