@@ -33,7 +33,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -211,13 +211,18 @@ var logFlagsOnce sync.Once
 
 func parseFlags() (env vttest.Environment, err error) {
 	logFlagsOnce.Do(func() {
-		fs := pflag.NewFlagSet("vtgateclienttest", pflag.ExitOnError)
-		log.RegisterFlags(fs)
-		logutil.RegisterFlags(fs)
+		var tmp []string
+		tmp, os.Args = os.Args[1:], os.Args[0:1]
+		defer func() { os.Args = append(os.Args, tmp...) }()
+
+		servenv.RegisterGRPCServerAuthFlags()
+		servenv.ParseFlags("vttestserver")
 
 		// Move all pflag flags back to the goflag CommandLine.
-		fs.VisitAll(func(f *pflag.Flag) {
-			flag.Var(f.Value, f.Name, f.Usage)
+		pflag.CommandLine.VisitAll(func(f *pflag.Flag) {
+			if flag.Lookup(f.Name) == nil {
+				flag.Var(f.Value, f.Name, f.Usage)
+			}
 		})
 	})
 
