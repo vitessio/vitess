@@ -50,6 +50,7 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterDefaultSocketFileFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 }

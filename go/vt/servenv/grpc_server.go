@@ -19,7 +19,6 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"math"
 	"net"
@@ -27,6 +26,7 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
@@ -55,27 +55,7 @@ import (
 // Note servenv.GRPCServer can only be used in servenv.OnRun,
 // and not before, as it is initialized right before calling OnRun.
 var (
-	// GRPCPort is the port to listen on for gRPC. If not set or zero, don't listen.
-	GRPCPort = flag.Int("grpc_port", 0, "Port to listen on for gRPC calls")
-
-	// GRPCCert is the cert to use if TLS is enabled
-	GRPCCert = flag.String("grpc_cert", "", "server certificate to use for gRPC connections, requires grpc_key, enables TLS")
-
-	// GRPCKey is the key to use if TLS is enabled
-	GRPCKey = flag.String("grpc_key", "", "server private key to use for gRPC connections, requires grpc_cert, enables TLS")
-
-	// GRPCCA is the CA to use if TLS is enabled
-	GRPCCA = flag.String("grpc_ca", "", "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
-
-	// GRPCCRL is the CRL (Certificate Revocation List) to use if TLS is enabled
-	GRPCCRL = flag.String("grpc_crl", "", "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
-
-	GRPCEnableOptionalTLS = flag.Bool("grpc_enable_optional_tls", false, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
-
-	// GRPCServerCA if specified will combine server cert and server CA
-	GRPCServerCA = flag.String("grpc_server_ca", "", "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
-
-	// GRPCAuth specifies which auth plugin to use. Currently only "static" and
+	// gRPCAuth specifies which auth plugin to use. Currently only "static" and
 	// "mtls" are supported.
 	//
 	// To expose this flag, call RegisterGRPCAuthServerFlags before ParseFlags.
@@ -84,37 +64,105 @@ var (
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
 
-	// GRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
-	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
-	GRPCMaxConnectionAge = flag.Duration("grpc_max_connection_age", time.Duration(math.MaxInt64), "Maximum age of a client connection before GoAway is sent.")
-
-	// GRPCMaxConnectionAgeGrace is an additional grace period after GRPCMaxConnectionAge, after which
-	// connections are forcibly closed.
-	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
-
-	// GRPCInitialConnWindowSize ServerOption that sets window size for a connection.
-	// The lower bound for window size is 64K and any value smaller than that will be ignored.
-	GRPCInitialConnWindowSize = flag.Int("grpc_server_initial_conn_window_size", 0, "gRPC server initial connection window size")
-
-	// GRPCInitialWindowSize ServerOption that sets window size for stream.
-	// The lower bound for window size is 64K and any value smaller than that will be ignored.
-	GRPCInitialWindowSize = flag.Int("grpc_server_initial_window_size", 0, "gRPC server initial window size")
-
-	// EnforcementPolicy MinTime that sets the keepalive enforcement policy on the server.
-	// This is the minimum amount of time a client should wait before sending a keepalive ping.
-	GRPCKeepAliveEnforcementPolicyMinTime = flag.Duration("grpc_server_keepalive_enforcement_policy_min_time", 10*time.Second, "gRPC server minimum keepalive time")
-
-	// EnforcementPolicy PermitWithoutStream - If true, server allows keepalive pings
-	// even when there are no active streams (RPCs). If false, and client sends ping when
-	// there are no active streams, server will send GOAWAY and close the connection.
-	GRPCKeepAliveEnforcementPolicyPermitWithoutStream = flag.Bool("grpc_server_keepalive_enforcement_policy_permit_without_stream", false, "gRPC server permit client keepalive pings even when there are no active streams (RPCs)")
-
 	authPlugin Authenticator
 )
 
+// Misc. server variables.
+var (
+	// gRPCPort is the port to listen on for gRPC. If zero, don't listen.
+	gRPCPort int
+
+	// gRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
+	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
+	gRPCMaxConnectionAge = time.Duration(math.MaxInt64)
+
+	// gRPCMaxConnectionAgeGrace is an additional grace period after GRPCMaxConnectionAge, after which
+	// connections are forcibly closed.
+	gRPCMaxConnectionAgeGrace = time.Duration(math.MaxInt64)
+
+	// gRPCInitialConnWindowSize ServerOption that sets window size for a connection.
+	// The lower bound for window size is 64K and any value smaller than that will be ignored.
+	gRPCInitialConnWindowSize int
+
+	// gRPCInitialWindowSize ServerOption that sets window size for stream.
+	// The lower bound for window size is 64K and any value smaller than that will be ignored.
+	gRPCInitialWindowSize int
+
+	// gRPCKeepAliveEnforcementPolicyMinTime sets the keepalive enforcement policy on the server.
+	// This is the minimum amount of time a client should wait before sending a keepalive ping.
+	gRPCKeepAliveEnforcementPolicyMinTime = 10 * time.Second
+
+	// gRPCKeepAliveEnforcementPolicyPermitWithoutStream, if true, instructs the server to allow keepalive pings
+	// even when there are no active streams (RPCs). If false, and client sends ping when
+	// there are no active streams, server will send GOAWAY and close the connection.
+	gRPCKeepAliveEnforcementPolicyPermitWithoutStream bool
+)
+
+// TLS variables.
+var (
+	// gRPCCert is the cert to use if TLS is enabled.
+	gRPCCert string
+	// gRPCKey is the key to use if TLS is enabled.
+	gRPCKey string
+	// gRPCCA is the CA to use if TLS is enabled.
+	gRPCCA string
+	// gRPCCRL is the CRL (Certificate Revocation List) to use if TLS is
+	// enabled.
+	gRPCCRL string
+	// gRPCEnableOptionalTLS enables an optional TLS mode when a server accepts
+	// both TLS and plain-text connections on the same port.
+	gRPCEnableOptionalTLS bool
+	// gRPCServerCA if specified will combine server cert and server CA.
+	gRPCServerCA string
+)
+
+// RegisterGRPCServerFlags registers flags required to run a gRPC server via Run
+// or RunDefault.
+//
+// `go/cmd/*`` entrypoints should call this function before
+// ParseFlags(WithArgs)? if they wish to expose run a gRPC server.
+func RegisterGRPCServerFlags() {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.IntVar(&gRPCPort, "grpc_port", gRPCPort, "Port to listen on for gRPC calls. If zero, do not listen.")
+		fs.DurationVar(&gRPCMaxConnectionAge, "grpc_max_connection_age", gRPCMaxConnectionAge, "Maximum age of a client connection before GoAway is sent.")
+		fs.DurationVar(&gRPCMaxConnectionAgeGrace, "grpc_max_connection_age_grace", gRPCMaxConnectionAgeGrace, "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
+		fs.IntVar(&gRPCInitialConnWindowSize, "grpc_server_initial_conn_window_size", gRPCInitialConnWindowSize, "gRPC server initial connection window size")
+		fs.IntVar(&gRPCInitialWindowSize, "grpc_server_initial_window_size", gRPCInitialWindowSize, "gRPC server initial window size")
+		fs.DurationVar(&gRPCKeepAliveEnforcementPolicyMinTime, "grpc_server_keepalive_enforcement_policy_min_time", gRPCKeepAliveEnforcementPolicyMinTime, "gRPC server minimum keepalive time")
+		fs.BoolVar(&gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "grpc_server_keepalive_enforcement_policy_permit_without_stream", gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "gRPC server permit client keepalive pings even when there are no active streams (RPCs)")
+
+		fs.StringVar(&gRPCCert, "grpc_cert", gRPCCert, "server certificate to use for gRPC connections, requires grpc_key, enables TLS")
+		fs.StringVar(&gRPCKey, "grpc_key", gRPCKey, "server private key to use for gRPC connections, requires grpc_cert, enables TLS")
+		fs.StringVar(&gRPCCA, "grpc_ca", gRPCCA, "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
+		fs.StringVar(&gRPCCRL, "grpc_crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
+		fs.BoolVar(&gRPCEnableOptionalTLS, "grpc_enable_optional_tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
+		fs.StringVar(&gRPCServerCA, "grpc_server_ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+	})
+}
+
+// GRPCCert returns the value of the `--grpc_cert` flag.
+func GRPCCert() string {
+	return gRPCCert
+}
+
+// GRPCCertificateAuthority returns the value of the `--grpc_ca` flag.
+func GRPCCertificateAuthority() string {
+	return gRPCCA
+}
+
+// GRPCKey returns the value of the `--grpc_key` flag.
+func GRPCKey() string {
+	return gRPCKey
+}
+
+// GRPCPort returns the value of the `--grpc_port` flag.
+func GRPCPort() int {
+	return gRPCPort
+}
+
 // isGRPCEnabled returns true if gRPC server is set
 func isGRPCEnabled() bool {
-	if GRPCPort != nil && *GRPCPort != 0 {
+	if gRPCPort != 0 {
 		return true
 	}
 
@@ -138,15 +186,15 @@ func createGRPCServer() {
 	grpccommon.EnableTracingOpt()
 
 	var opts []grpc.ServerOption
-	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
-		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCCRL, *GRPCServerCA, tls.VersionTLS12)
+	if gRPCCert != "" && gRPCKey != "" {
+		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)
 		if err != nil {
 			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}
 
 		// create the creds server options
 		creds := credentials.NewTLS(config)
-		if *GRPCEnableOptionalTLS {
+		if gRPCEnableOptionalTLS {
 			log.Warning("Optional TLS is active. Plain-text connections will be accepted")
 			creds = grpcoptionaltls.New(creds)
 		}
@@ -164,31 +212,27 @@ func createGRPCServer() {
 	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
 
-	if *GRPCInitialConnWindowSize != 0 {
-		log.Infof("Setting grpc server initial conn window size to %d", int32(*GRPCInitialConnWindowSize))
-		opts = append(opts, grpc.InitialConnWindowSize(int32(*GRPCInitialConnWindowSize)))
+	if gRPCInitialConnWindowSize != 0 {
+		log.Infof("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize))
+		opts = append(opts, grpc.InitialConnWindowSize(int32(gRPCInitialConnWindowSize)))
 	}
 
-	if *GRPCInitialWindowSize != 0 {
-		log.Infof("Setting grpc server initial window size to %d", int32(*GRPCInitialWindowSize))
-		opts = append(opts, grpc.InitialWindowSize(int32(*GRPCInitialWindowSize)))
+	if gRPCInitialWindowSize != 0 {
+		log.Infof("Setting grpc server initial window size to %d", int32(gRPCInitialWindowSize))
+		opts = append(opts, grpc.InitialWindowSize(int32(gRPCInitialWindowSize)))
 	}
 
 	ep := keepalive.EnforcementPolicy{
-		MinTime:             *GRPCKeepAliveEnforcementPolicyMinTime,
-		PermitWithoutStream: *GRPCKeepAliveEnforcementPolicyPermitWithoutStream,
+		MinTime:             gRPCKeepAliveEnforcementPolicyMinTime,
+		PermitWithoutStream: gRPCKeepAliveEnforcementPolicyPermitWithoutStream,
 	}
 	opts = append(opts, grpc.KeepaliveEnforcementPolicy(ep))
 
-	if GRPCMaxConnectionAge != nil {
-		ka := keepalive.ServerParameters{
-			MaxConnectionAge: *GRPCMaxConnectionAge,
-		}
-		if GRPCMaxConnectionAgeGrace != nil {
-			ka.MaxConnectionAgeGrace = *GRPCMaxConnectionAgeGrace
-		}
-		opts = append(opts, grpc.KeepaliveParams(ka))
+	ka := keepalive.ServerParameters{
+		MaxConnectionAge:      gRPCMaxConnectionAge,
+		MaxConnectionAgeGrace: gRPCMaxConnectionAgeGrace,
 	}
+	opts = append(opts, grpc.KeepaliveParams(ka))
 
 	opts = append(opts, interceptors()...)
 
@@ -225,7 +269,7 @@ func serveGRPC() {
 		grpc_prometheus.EnableHandlingTimeHistogram()
 	}
 	// skip if not registered
-	if GRPCPort == nil || *GRPCPort == 0 {
+	if gRPCPort == 0 {
 		return
 	}
 
@@ -241,10 +285,10 @@ func serveGRPC() {
 	}
 
 	// listen on the port
-	log.Infof("Listening for gRPC calls on port %v", *GRPCPort)
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *GRPCPort))
+	log.Infof("Listening for gRPC calls on port %v", gRPCPort)
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", gRPCPort))
 	if err != nil {
-		log.Exitf("Cannot listen on port %v for gRPC: %v", *GRPCPort, err)
+		log.Exitf("Cannot listen on port %v for gRPC: %v", gRPCPort, err)
 	}
 
 	// and serve on it

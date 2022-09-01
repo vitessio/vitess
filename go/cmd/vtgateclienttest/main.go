@@ -28,6 +28,7 @@ import (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 }
 
