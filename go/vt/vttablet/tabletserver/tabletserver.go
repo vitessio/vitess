@@ -1116,7 +1116,17 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 // ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
 	if tsv.config.EnableSettingsPool {
-		return tsv.beginExecuteWithSettings(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
+		state, result, err = tsv.beginExecuteWithSettings(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
+		// If there is an error and the error message is about allowing query in reserved connection only,
+		// then we do not return an error from here and continue to use the reserved connection path.
+		// This is specially for get_lock function call from vtgate that needs a reserved connection.
+		if err == nil || !strings.Contains(err.Error(), "not allowed without reserved connection") {
+			return state, result, err
+		}
+		// rollback if transaction was started.
+		if state.TransactionID != 0 {
+			_, _ = tsv.Rollback(ctx, target, state.TransactionID)
+		}
 	}
 	var connID int64
 	var sessionStateChanges string

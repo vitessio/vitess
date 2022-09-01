@@ -216,15 +216,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 	case *sqlparser.Set:
 		plan, err = analyzeSet(stmt), nil
 	case sqlparser.DDLStatement:
-		// DDLs and some other statements below don't get fully parsed.
-		// We have to use the original query at the time of execution.
-		// We are in the process of changing this
-		var fullQuery *sqlparser.ParsedQuery
-		// If the query is fully parsed, then use the ast and store the fullQuery
-		if stmt.IsFullyParsed() {
-			fullQuery = GenerateFullQuery(stmt)
-		}
-		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt}
+		plan = analyzeDDL(stmt, tables)
 	case *sqlparser.AlterMigration:
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.RevertMigration:

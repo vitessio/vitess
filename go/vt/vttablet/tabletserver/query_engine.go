@@ -101,7 +101,7 @@ func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) bool {
 		return true
 	}
 	switch ep.PlanID {
-	case planbuilder.PlanSelectLockFunc:
+	case planbuilder.PlanSelectLockFunc, planbuilder.PlanDDL:
 		if hasReservedCon {
 			return true
 		}
