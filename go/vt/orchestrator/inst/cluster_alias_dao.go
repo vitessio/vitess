@@ -90,7 +90,9 @@ func writeClusterAlias(clusterName string, alias string) error {
 					(?, ?, now())
 			`,
 			clusterName, alias)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -106,7 +108,9 @@ func writeClusterAliasManualOverride(clusterName string, alias string) error {
 					(?, ?)
 			`,
 			clusterName, alias)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -139,7 +143,9 @@ func UpdateClusterAliases() error {
 						read_only desc,
 						num_replica_hosts asc
 			`, DowntimeLostInRecoveryMessage)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	if err := ExecDBWriteFunc(writeFunc); err != nil {
@@ -159,7 +165,9 @@ func UpdateClusterAliases() error {
 					having
 						sum(suggested_cluster_alias = '') = count(*)
 			`)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	if err := ExecDBWriteFunc(writeFunc); err != nil {
@@ -179,7 +187,9 @@ func ReplaceAliasClusterName(oldClusterName string, newClusterName string) (err 
 				where cluster_name = ?
 			`,
 				newClusterName, oldClusterName)
-			log.Error(err)
+			if err != nil {
+				log.Error(err)
+			}
 			return err
 		}
 		err = ExecDBWriteFunc(writeFunc)
@@ -192,7 +202,9 @@ func ReplaceAliasClusterName(oldClusterName string, newClusterName string) (err 
 				where cluster_name = ?
 			`,
 				newClusterName, oldClusterName)
-			log.Error(err)
+			if err != nil {
+				log.Error(err)
+			}
 			return err
 		}
 		if ferr := ExecDBWriteFunc(writeFunc); ferr != nil {

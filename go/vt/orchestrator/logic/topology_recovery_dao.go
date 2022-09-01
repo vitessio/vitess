@@ -109,7 +109,9 @@ func ClearActiveFailureDetections() error {
 			`,
 		config.Config.FailureDetectionPeriodBlockMinutes,
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -125,7 +127,9 @@ func clearAcknowledgedFailureDetections(whereClause string, args []any) error {
 				and %s
 			`, whereClause)
 	_, err := db.ExecOrchestrator(query, args...)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -257,7 +261,9 @@ func ClearActiveRecoveries() error {
 			`,
 		config.Config.RecoveryPeriodBlockSeconds,
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -353,7 +359,9 @@ func ExpireBlockedRecoveries() error {
 					last_blocked_timestamp < NOW() - interval ? second
 			`, (config.RecoveryPollSeconds * 2),
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -386,7 +394,9 @@ func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, w
 		return 0, err
 	}
 	rows, err := sqlResult.RowsAffected()
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return rows, err
 }
 
@@ -498,7 +508,9 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 		strings.Join(topologyRecovery.AllErrors, "\n"),
 		topologyRecovery.UID,
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -583,7 +595,9 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return res, err
 }
 
@@ -726,7 +740,9 @@ func readFailureDetections(whereCondition string, limit string, args []any) ([]*
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return res, err
 }
 
@@ -787,7 +803,9 @@ func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return res, err
 }
 
@@ -805,7 +823,9 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 		return err
 	}
 	topologyRecoveryStep.ID, err = sqlResult.LastInsertId()
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -832,7 +852,9 @@ func ReadTopologyRecoverySteps(recoveryUID string) ([]TopologyRecoveryStep, erro
 		res = append(res, recoveryStep)
 		return nil
 	})
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return res, err
 }
 
