@@ -60,8 +60,8 @@ import (
 )
 
 var (
-	// Port is part of the flags used when calling RegisterDefaultFlags.
-	Port *int
+	// port is part of the flags used when calling RegisterDefaultFlags.
+	port int
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -240,12 +240,19 @@ func FireRunHooks() {
 // listening to a given port for standard connections.
 // If calling this, then call RunDefault()
 func RegisterDefaultFlags() {
-	Port = flag.Int("port", 0, "port for the server")
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.IntVar(&port, "port", port, "port for the server")
+	})
+}
+
+// Port returns the value of the `--port` flag.
+func Port() int {
+	return port
 }
 
 // RunDefault calls Run() with the parameters from the flags.
 func RunDefault() {
-	Run(*Port)
+	Run(port)
 }
 
 var (
