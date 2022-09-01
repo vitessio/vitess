@@ -239,7 +239,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
-	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
+	_, err := conn.ExecuteFetch("insert into t1_copy_resume(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestVStreamCopyResume(t *testing.T) {
 
 	// This GTID should end up as a no-op because we should have copied the
 	// existing row
-	_, err = conn.ExecuteFetch("insert into t1(id1,id2) values(9,9)", 1, false)
+	_, err = conn.ExecuteFetch("insert into t1_copy_resume(id1,id2) values(9,9)", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,12 +263,12 @@ func TestVStreamCopyResume(t *testing.T) {
 		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4)}},
 	}
 	tableLastPK := []*binlogdatapb.TableLastPK{{
-		TableName: "t1",
+		TableName: "t1_copy_resume",
 		Lastpk:    sqltypes.ResultToProto3(&lastPK),
 	}}
 
 	// This GTID must have a before and after value
-	_, err = conn.ExecuteFetch("update t1 set id2 = 10 where id1 = 1", 1, false)
+	_, err = conn.ExecuteFetch("update t1_copy_resume set id2 = 10 where id1 = 1", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,8 +290,8 @@ func TestVStreamCopyResume(t *testing.T) {
 	vgtid.ShardGtids = shardGtids
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select * from t1",
+			Match:  "t1_copy_resume",
+			Filter: "select * from t1_copy_resume",
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
@@ -305,13 +305,13 @@ func TestVStreamCopyResume(t *testing.T) {
 	expectedCatchupEvents := 2 // id1=9 and id2=9; id2=10 where id1=1
 	rowCopyEvents, replCatchupEvents := 0, 0
 	expectedEvents := []string{
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{before:{lengths:1 lengths:1 values:"11"} after:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"55"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"66"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"77"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"88"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"11"} after:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"55"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
+		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"66"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
+		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"77"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
+		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"88"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
+		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 	}
 	var evs []*binlogdatapb.VEvent
 	for {
