@@ -33,14 +33,13 @@ const (
 	mysql80    mysqlVersion = "mysql80"
 	mariadb103 mysqlVersion = "mariadb103"
 
-	defaultMySQLVersion mysqlVersion = mysql57
+	defaultMySQLVersion = mysql80
 )
 
 type mysqlVersions []mysqlVersion
 
 var (
 	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-	mysql80OnlyVersions  = []mysqlVersion{mysql80}
 	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
 )
 
@@ -122,7 +121,6 @@ var (
 		"vreplication_basic",
 		"vreplication_v2",
 		"vtorc",
-		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 	}
@@ -152,7 +150,7 @@ type clusterTest struct {
 	Name, Shard, Platform        string
 	FileName                     string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20, Docker             bool
+	Docker                       bool
 	LimitResourceUsage           bool
 }
 
@@ -171,18 +169,12 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
-	case clusterName == "mysql80":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vtorc_8.0":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vreplication_across_db_versions":
-		return []mysqlVersion{mysql80}
+	case clusterName == "vtorc":
+		return allMySQLVersions
 	case clusterName == "xb_backup":
 		return allMySQLVersions
-	case clusterName == "vtctlbackup_sharded_clustertest_heavy":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vtbackup_transform":
-		return []mysqlVersion{mysql80}
+	case clusterName == "xb_recovery":
+		return allMySQLVersions
 	default:
 		return defaultMySQLVersions
 	}
@@ -299,8 +291,8 @@ func generateSelfHostedClusterWorkflows() error {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
-				test.Platform = string(mysql80)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
@@ -345,9 +337,8 @@ func generateClusterWorkflows(list []string, tpl string) {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
-				test.Ubuntu20 = true
-				test.Platform = string(mysql80)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true
