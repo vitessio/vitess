@@ -16,7 +16,6 @@ Usage of vtexplain:
       --compression-level int                                        what level to pass to the compressor (default 1)
       --consolidator-stream-query-size int                           Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                           Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
-      --cpu_profile string                                           deprecated: use '-pprof=cpu' instead
       --db-credentials-file string                                   db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                                 db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
       --db-credentials-vault-addr string                             URL to Vault server
@@ -92,9 +91,7 @@ Usage of vtexplain:
       --master_connect_retry duration                                Deprecated, use -replication_connect_retry (default 10s)
       --max_memory_rows int                                          Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max_payload_size int                                         The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
-      --mem-profile-rate int                                         deprecated: use '-pprof=mem' instead (default 524288)
       --message_stream_grace_period duration                         the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
-      --mutex-profile-fraction int                                   deprecated: use '-pprof=mutex' instead
       --mysql_allow_clear_text_without_tls                           If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_default_workload string                                Default session workload (OLTP, OLAP, DBA) (default "OLTP")

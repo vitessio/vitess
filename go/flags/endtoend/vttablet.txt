@@ -36,7 +36,6 @@ Usage of vttablet:
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
-      --cpu_profile string                                               deprecated: use '-pprof=cpu' instead
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --db-config-allprivs-charset string                                deprecated: use db_charset (default "utf8mb4")
@@ -265,9 +264,7 @@ Usage of vttablet:
       --logtostderr                                                      log to standard error instead of files
       --master_connect_retry duration                                    Deprecated, use -replication_connect_retry (default 10s)
       --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
-      --mem-profile-rate int                                             deprecated: use '-pprof=mem' instead (default 524288)
       --migration_check_interval duration                                Interval between migration checks (default 1m0s)
-      --mutex-profile-fraction int                                       deprecated: use '-pprof=mutex' instead
       --mycnf-file string                                                path to my.cnf, if reading all config params from there
       --mycnf_bin_log_path string                                        mysql binlog path
       --mycnf_data_dir string                                            data directory for mysql

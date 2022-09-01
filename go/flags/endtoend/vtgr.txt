@@ -4,7 +4,6 @@ Usage of vtgr:
       --catch-sigpipe                              catch and ignore SIGPIPE on stdout and stderr if specified
       --clusters_to_watch strings                  Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --consul_auth_static_file string             JSON File to read the topos/tokens from.
-      --cpu_profile string                         deprecated: use '-pprof=cpu' instead
       --db_config string                           Full path to db config file that will be used by VTGR.
       --db_flavor string                           MySQL flavor override. (default "MySQL56")
       --db_port int                                Local mysql port, set this to enable local fast check.
@@ -30,8 +29,6 @@ Usage of vtgr:
       --log_err_stacks                             log stack traces for errors
       --log_rotate_max_size uint                   size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                log to standard error instead of files
-      --mem-profile-rate int                       deprecated: use '-pprof=mem' instead (default 524288)
-      --mutex-profile-fraction int                 deprecated: use '-pprof=mutex' instead
       --mysql_server_flush_delay duration          Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_version string                MySQL server version to advertise.
       --onclose_timeout duration                   wait no more than this for OnClose handlers before stopping (default 1ns)
