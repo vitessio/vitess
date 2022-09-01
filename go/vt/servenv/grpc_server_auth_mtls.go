@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	// lientCertSubstrings list of substrings of at least one of the client certificate names to use during authorization
+	// clientCertSubstrings list of substrings of at least one of the client certificate names to use during authorization
 	clientCertSubstrings string
 	// MtlsAuthPlugin implements AuthPlugin interface
 	_ Authenticator = (*MtlsAuthPlugin)(nil)
