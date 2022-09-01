@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -149,6 +150,7 @@ func main() {
 
 func run() (*results, error) {
 	fs := pflag.NewFlagSet("vtclient", pflag.ExitOnError)
+	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	_flag.Parse(fs)

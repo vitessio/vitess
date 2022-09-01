@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -56,6 +57,7 @@ func main() {
 	defer logutil.Flush()
 
 	fs := pflag.NewFlagSet("topo2topo", pflag.ExitOnError)
+	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	_flag.Parse(fs)
