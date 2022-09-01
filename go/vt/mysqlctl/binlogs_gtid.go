@@ -91,6 +91,9 @@ func ChooseBinlogsForIncrementalBackup(
 // based on baseGTIDSet. The manifest must be able to pick up from baseGTIDSet, and must extend it by at least
 // one entry.
 func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, manifest *BackupManifest) bool {
+	if manifest == nil {
+		return false
+	}
 	if !manifest.Incremental {
 		return false
 	}
@@ -116,8 +119,13 @@ func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, manifest *BackupManifes
 // - zero or more incremental backups
 // The path ends with restoreToGTIDSet or goes beyond it. No shorter path will do the same.
 // The function returns an error when a path cannot be found.
-func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, sortedManifests [](*BackupManifest)) (shortestPath [](*BackupManifest), err error) {
-	sortedManifests = sortedManifests[:]
+func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest)) (shortestPath [](*BackupManifest), err error) {
+	sortedManifests := make([](*BackupManifest), 0, len(manifests))
+	for _, m := range manifests {
+		if m != nil {
+			sortedManifests = append(sortedManifests, m)
+		}
+	}
 	sort.SliceStable(sortedManifests, func(i, j int) bool {
 		return sortedManifests[j].Position.GTIDSet.Contains(sortedManifests[i].Position.GTIDSet)
 	})
