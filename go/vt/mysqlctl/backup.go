@@ -307,16 +307,19 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, ErrNoBackup
 	}
 
-	bh, err := FindBackupToRestore(ctx, params, bhs)
+	restorePath, err := FindBackupToRestore(ctx, params, bhs)
 	if err != nil {
 		return nil, err
 	}
-
+	if restorePath.IsEmpty() {
+		// This condition should not happen; but we validate for sanity
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
+	}
+	bh := restorePath.FullBackupHandle()
 	re, err := GetRestoreEngine(ctx, bh)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
 	}
-
 	manifest, err := re.ExecuteRestore(ctx, params, bh)
 	if err != nil {
 		return nil, err
@@ -354,6 +357,19 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	params.Logger.Infof("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(); err != nil {
 		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
+	}
+
+	for _, bh := range restorePath.IncrementalBackupHandles() {
+		fmt.Printf("============== RESTORING an incremental backup: %v, %v\n", bh.Name(), bh.Directory())
+		// re, err := GetRestoreEngine(ctx, bh)
+		// if err != nil {
+		// 	return nil, vterrors.Wrap(err, "Failed to find restore engine")
+		// }
+
+		// manifest, err = re.ExecuteRestore(ctx, params, bh)
+		// if err != nil {
+		// 	return nil, err
+		// }
 	}
 
 	// Add backupTime and restorePosition to LocalMetadata

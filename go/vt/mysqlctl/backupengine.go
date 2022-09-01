@@ -215,12 +215,40 @@ func (m *BackupManifest) HashKey() string {
 	return fmt.Sprintf("%v/%v/%v/%t/%v", m.BackupMethod, m.Position, m.FromPosition, m.Incremental, m.BackupTime)
 }
 
+type ManifestHandleMap struct {
+	mp map[string]backupstorage.BackupHandle
+}
+
+func NewManifestHandleMap() *ManifestHandleMap {
+	return &ManifestHandleMap{
+		mp: map[string]backupstorage.BackupHandle{},
+	}
+}
+func (m *ManifestHandleMap) Map(manifest *BackupManifest, handle backupstorage.BackupHandle) {
+	if manifest == nil {
+		return
+	}
+	m.mp[manifest.HashKey()] = handle
+}
+
+func (m *ManifestHandleMap) Handle(manifest *BackupManifest) (handle backupstorage.BackupHandle) {
+	return m.mp[manifest.HashKey()]
+}
+
+func (m *ManifestHandleMap) Handles(manifests []*BackupManifest) (handles []backupstorage.BackupHandle) {
+	handles = make([]backupstorage.BackupHandle, 0, len(manifests))
+	for _, manifest := range manifests {
+		handles = append(handles, m.mp[manifest.HashKey()])
+	}
+	return handles
+}
+
 // RestorePath is an ordered sequence of backup handles & manifests, that can be used to restore from backup.
 // The path could be empty, in which case it's invalid, there's no way to restore. Otherwise, the path
 // consists of exactly one full backup, followed by zero or more incremental backups.
 type RestorePath struct {
 	manifests         []*BackupManifest
-	manifestHandleMap map[string]backupstorage.BackupHandle
+	manifestHandleMap *ManifestHandleMap
 }
 
 func (p *RestorePath) IsEmpty() bool {
@@ -231,33 +259,36 @@ func (p *RestorePath) Len() int {
 	return len(p.manifests)
 }
 
-func (p *RestorePath) Manifest(index int) *BackupManifest {
-	return p.manifests[index]
-}
-
-func (p *RestorePath) Handle(index int) backupstorage.BackupHandle {
-	return p.manifestHandleMap[p.Manifest(index).HashKey()]
+func (p *RestorePath) Add(m *BackupManifest) {
+	p.manifests = append(p.manifests, m)
 }
 
 func (p *RestorePath) FullBackupHandle() backupstorage.BackupHandle {
 	if p.IsEmpty() {
 		return nil
 	}
-	return p.Handle(0)
+	return p.manifestHandleMap.Handle(p.manifests[0])
+}
+
+func (p *RestorePath) IncrementalBackupHandles() []backupstorage.BackupHandle {
+	if p.IsEmpty() {
+		return nil
+	}
+	return p.manifestHandleMap.Handles(p.manifests[1:])
 }
 
 // FindBackupToRestore returns a selected candidate backup to be restored.
 // It returns the most recent backup that is complete, meaning it has a valid
 // MANIFEST file.
-func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, error) {
+func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (*RestorePath, error) {
 	// if a StartTime is provided in params, then find a backup that was taken at or before that time
 	checkBackupTime := !params.StartTime.IsZero()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 
-	manifests := make([]*BackupManifest, 0, len(bhs))
-	manifestHandleMap := map[string]backupstorage.BackupHandle{}
+	manifests := make([]*BackupManifest, len(bhs), len(bhs))
+	manifestHandleMap := NewManifestHandleMap()
 
-	backupHandle := func() backupstorage.BackupHandle {
+	fullBackupIndex := func() int {
 		for index := len(bhs) - 1; index >= 0; index-- {
 			bh := bhs[index]
 			// Check that the backup MANIFEST exists and can be successfully decoded.
@@ -267,8 +298,8 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				continue
 			}
 			// the manifest is valid
-			manifests = append(manifests, bm) // manifests's order is insignificant, it will be sorted later on
-			manifestHandleMap[bm.HashKey()] = bh
+			manifests[index] = bm // manifests's order is insignificant, it will be sorted later on
+			manifestHandleMap.Map(bm, bh)
 			if bm.Incremental {
 				// We're looking for a full backup
 				continue
@@ -288,23 +319,23 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				// restore to specific time
 				if !params.StartTime.After(backupTime) {
 					params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
-					return bh
+					return index
 				}
 			case !params.RestoreToPos.IsZero():
 				// restore to specific pos
 				if params.RestoreToPos.GTIDSet.Contains(bm.Position.GTIDSet) {
 					// this is the most recent backup which is <= desired position
-					return bh
+					return index
 				}
 			default:
 				// restore latest full backup
 				params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
-				return bh
+				return index
 			}
 		}
-		return nil
+		return -1
 	}()
-	if backupHandle == nil {
+	if fullBackupIndex < 0 {
 		if checkBackupTime {
 			params.Logger.Errorf("No valid backup found before time %v", params.StartTime.Format(BackupTimestampFormat))
 		}
@@ -313,8 +344,25 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 		// up empty.
 		return nil, ErrNoCompleteBackup
 	}
-
-	return backupHandle, nil
+	// Anything taken before the full backup that we picked, is not of interest:
+	manifests = manifests[fullBackupIndex:]
+	path := &RestorePath{
+		manifestHandleMap: manifestHandleMap,
+	}
+	if params.RestoreToPos.IsZero() {
+		// restoring from a single full backup:
+		path.Add(manifests[0])
+		return path, nil
+	}
+	// restore to a position (using incremental backups):
+	// we calculate a possible restore path based on the manifests. The resulting manifests are
+	// a sorted subsequence, with the full backup first, and zero or more inremental backups to follow.
+	manifests, err := FindPITRPath(params.RestoreToPos.GTIDSet, manifests)
+	if err != nil {
+		return nil, err
+	}
+	path.manifests = manifests
+	return path, nil
 }
 
 func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
