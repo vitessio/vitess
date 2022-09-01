@@ -318,9 +318,9 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
-	log.Infof("streamOneShard Start %s", participant.tablet.Alias.String())
+	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
 	defer func() {
-		log.Infof("streamOneShard End %s", participant.tablet.Alias.String())
+		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
 		close(participant.result)
 		close(gtidch)
 	}()
@@ -756,4 +756,19 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 		return newSelectExprs
 	}
 	return targetSelectExprs
+}
+
+func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
+	aliasedExpr := selectExpression.(*sqlparser.AliasedExpr)
+	expr := aliasedExpr.Expr
+	var colname string
+	switch t := expr.(type) {
+	case *sqlparser.ColName:
+		colname = t.Name.Lowered()
+	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
+		colname = aliasedExpr.As.Lowered()
+	default:
+		return "", fmt.Errorf("found target SelectExpr which was neither ColName nor FuncExpr: %+v", aliasedExpr)
+	}
+	return colname, nil
 }

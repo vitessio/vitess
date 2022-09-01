@@ -118,15 +118,16 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	tp.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
 	for i := range tp.compareCols {
 		tp.compareCols[i].colIndex = i
-
-		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
+		colname, err := getColumnNameForSelectExpr(targetSelect.SelectExprs[i])
+		if err != nil {
+			return nil, err
+		}
 		_, ok := fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v on tablet %v",
 				colname, tp.table.Name, td.wd.ct.vde.thisTablet.Alias)
 		}
 		tp.compareCols[i].colName = colname
-
 	}
 
 	sourceSelect.From = sel.From
@@ -155,6 +156,8 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
+	log.Info("VDiff query on source: %v", tp.sourceQuery)
+	log.Info("VDiff query on target: %v", tp.targetQuery)
 
 	tp.aggregates = aggregates
 	td.tablePlan = tp

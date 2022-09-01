@@ -236,6 +236,8 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
 			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewIdentifierCI(col.Name), sqlparser.NewIdentifierCI(col.Name))
+		} else if tzExpr := rs.plan.getConvertTZFuncExpr(col.Name); tzExpr != nil {
+			buf.Myprintf("%s%v as %s", prefix, sqlparser.String(tzExpr), sqlparser.NewIdentifierCI(col.Name))
 		} else {
 			buf.Myprintf("%s%v", prefix, sqlparser.NewIdentifierCI(col.Name))
 		}
