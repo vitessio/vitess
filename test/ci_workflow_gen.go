@@ -163,6 +163,10 @@ type selfHostedTest struct {
 	MakeTools, InstallXtraBackup, Docker                        bool
 }
 
+func needsUbuntu20(clusterName string, mysqlVersion mysqlVersion) bool {
+	return mysqlVersion == mysql80 || strings.HasPrefix(clusterName, "vtgate") || strings.HasPrefix(clusterName, "tabletmanager")
+}
+
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
 func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
@@ -348,8 +352,10 @@ func generateClusterWorkflows(list []string, tpl string) {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
+			if needsUbuntu20(cluster, mysqlVersion) {
 				test.Ubuntu20 = true
+			}
+			if mysqlVersion == mysql80 {
 				test.Platform = string(mysql80)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
