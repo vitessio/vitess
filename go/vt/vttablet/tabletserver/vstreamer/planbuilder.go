@@ -638,7 +638,10 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			VindexColumns: vindexColumns,
 		}, nil
 	case *sqlparser.FuncExpr:
-		if inner.Name.Lowered() == "keyspace_id" {
+		switch inner.Name.Lowered() {
+		case "keyspace_id":
+			// This function is used internally to route queries and records properly
+			// in sharded keyspaces using vindexes.
 			if len(inner.Exprs) != 0 {
 				return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
 			}
@@ -658,7 +661,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 				Vindex:        cv.Vindex,
 				VindexColumns: vindexColumns,
 			}, nil
-		} else if inner.Name.Lowered() == "convert_tz" {
+		case "convert_tz":
 			// This function is used when transforming datetime
 			// values between the source and target.
 			colnum, err := findColumn(plan.Table, aliased.As)
@@ -671,7 +674,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 				ColNum: colnum,
 				Field:  field,
 			}, nil
-		} else {
+		default:
 			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
 		}
 	case *sqlparser.Literal:
