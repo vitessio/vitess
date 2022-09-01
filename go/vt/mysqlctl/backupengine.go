@@ -215,56 +215,58 @@ type BackupManifest struct {
 // It returns the most recent backup that is complete, meaning it has a valid
 // MANIFEST file.
 func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, error) {
-	var bh backupstorage.BackupHandle
-	var index int
 	// if a StartTime is provided in params, then find a backup that was taken at or before that time
 	checkBackupTime := !params.StartTime.IsZero()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 
 	manifests := make([]*BackupManifest, 0, len(bhs))
-	for index = len(bhs) - 1; index >= 0; index-- {
-		bh = bhs[index]
-		// Check that the backup MANIFEST exists and can be successfully decoded.
-		bm, err := GetBackupManifest(ctx, bh)
-		if err != nil {
-			params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
-			continue
-		}
-		// the manifest is valid
-		manifests = append(manifests, bm) // manifests's order is insignificant, it will be sorted later on
-		if bm.Incremental {
-			// We're looking for a full backup
-			continue
-		}
-
-		var backupTime time.Time
-		if checkBackupTime {
-			backupTime, err = time.Parse(time.RFC3339, bm.BackupTime)
+	backupHandle := func() backupstorage.BackupHandle {
+		for index := len(bhs) - 1; index >= 0; index-- {
+			bh := bhs[index]
+			// Check that the backup MANIFEST exists and can be successfully decoded.
+			bm, err := GetBackupManifest(ctx, bh)
 			if err != nil {
-				params.Logger.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", backupDir, bh.Name(), bm.BackupTime, err)
+				params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
 				continue
 			}
-		}
-		switch {
-		case checkBackupTime:
-			// restore to specific time
-			if backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
-				params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
-				break
+			// the manifest is valid
+			manifests = append(manifests, bm) // manifests's order is insignificant, it will be sorted later on
+			if bm.Incremental {
+				// We're looking for a full backup
+				continue
 			}
-		case !params.RestoreToPos.IsZero():
-			// restore to specific pos
-			if params.RestoreToPos.GTIDSet.Contains(bm.Position.GTIDSet) {
-				// this is the most recent backup <= desired position
-				break
+
+			var backupTime time.Time
+			if checkBackupTime {
+				backupTime, err = time.Parse(time.RFC3339, bm.BackupTime)
+				if err != nil {
+					params.Logger.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", backupDir, bh.Name(), bm.BackupTime, err)
+					continue
+				}
 			}
-		default:
-			// restore latest full backup
-			params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
-			break
+
+			switch {
+			case checkBackupTime:
+				// restore to specific time
+				if !params.StartTime.After(backupTime) {
+					params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
+					return bh
+				}
+			case !params.RestoreToPos.IsZero():
+				// restore to specific pos
+				if params.RestoreToPos.GTIDSet.Contains(bm.Position.GTIDSet) {
+					// this is the most recent backup <= desired position
+					return bh
+				}
+			default:
+				// restore latest full backup
+				params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
+				return bh
+			}
 		}
-	}
-	if index < 0 {
+		return nil
+	}()
+	if backupHandle == nil {
 		if checkBackupTime {
 			params.Logger.Errorf("No valid backup found before time %v", params.StartTime.Format(BackupTimestampFormat))
 		}
@@ -274,7 +276,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 		return nil, ErrNoCompleteBackup
 	}
 
-	return bh, nil
+	return backupHandle, nil
 }
 
 func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
