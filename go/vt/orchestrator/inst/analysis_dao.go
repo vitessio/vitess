@@ -773,8 +773,9 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 	)
 	if err == nil {
 		analysisChangeWriteCounter.Inc(1)
+	} else {
+		log.Error(err)
 	}
-	log.Error(err)
 	return err
 }
 
@@ -788,7 +789,9 @@ func ExpireInstanceAnalysisChangelog() error {
 			`,
 		config.Config.UnseenInstanceForgetHours,
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
