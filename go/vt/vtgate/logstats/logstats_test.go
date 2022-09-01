@@ -55,8 +55,8 @@ func testFormat(t *testing.T, stats *LogStats, params url.Values) string {
 
 func TestLogStatsFormat(t *testing.T) {
 	defer func() {
-		*streamlog.RedactDebugUIQueries = false
-		*streamlog.QueryLogFormat = "text"
+		streamlog.SetRedactDebugUIQueries(false)
+		streamlog.SetQueryLogFormat("text")
 	}()
 	logStats := NewLogStats(context.Background(), "test", "sql1", "suuid", nil)
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
@@ -126,8 +126,8 @@ func TestLogStatsFormat(t *testing.T) {
 			for _, variable := range logStats.BindVariables {
 				fmt.Println("->" + fmt.Sprintf("%v", variable))
 			}
-			*streamlog.RedactDebugUIQueries = test.redact
-			*streamlog.QueryLogFormat = test.format
+			streamlog.SetRedactDebugUIQueries(test.redact)
+			streamlog.SetQueryLogFormat(test.format)
 			if test.format == "text" {
 				got := testFormat(t, logStats, params)
 				assert.Equal(t, test.expected, got)
@@ -150,7 +150,7 @@ func TestLogStatsFormat(t *testing.T) {
 }
 
 func TestLogStatsFilter(t *testing.T) {
-	defer func() { *streamlog.QueryLogFilterTag = "" }()
+	defer func() { streamlog.SetQueryLogFilterTag("") }()
 
 	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)})
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
@@ -161,19 +161,19 @@ func TestLogStatsFilter(t *testing.T) {
 	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
 
-	*streamlog.QueryLogFilterTag = "LOG_THIS_QUERY"
+	streamlog.SetQueryLogFilterTag("LOG_THIS_QUERY")
 	got = testFormat(t, logStats, params)
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
 
-	*streamlog.QueryLogFilterTag = "NOT_THIS_QUERY"
+	streamlog.SetQueryLogFilterTag("NOT_THIS_QUERY")
 	got = testFormat(t, logStats, params)
 	want = ""
 	assert.Equal(t, want, got)
 }
 
 func TestLogStatsRowThreshold(t *testing.T) {
-	defer func() { *streamlog.QueryLogRowThreshold = 0 }()
+	defer func() { streamlog.SetQueryLogRowThreshold(0) }()
 
 	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)})
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
@@ -184,11 +184,11 @@ func TestLogStatsRowThreshold(t *testing.T) {
 	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
 
-	*streamlog.QueryLogRowThreshold = 0
+	streamlog.SetQueryLogRowThreshold(0)
 	got = testFormat(t, logStats, params)
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
-	*streamlog.QueryLogRowThreshold = 1
+	streamlog.SetQueryLogRowThreshold(1)
 	got = testFormat(t, logStats, params)
 	assert.Empty(t, got)
 }

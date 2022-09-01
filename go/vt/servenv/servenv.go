@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -341,6 +342,23 @@ func init() {
 		"vttablet",
 	} {
 		OnParseFor(cmd, trace.RegisterFlags)
+	}
+
+	// These are the binaries that make gRPC calls.
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctlclient",
+		"vtctld",
+		"vtctldclient",
+		"vtgate",
+		"vtgateclienttest",
+		"vtgr",
+		"vttablet",
+		"vttestserver",
+	} {
+		OnParseFor(cmd, grpccommon.RegisterFlags)
 	}
 
 	// Flags in package log are installed for all binaries.
