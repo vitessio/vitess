@@ -211,6 +211,41 @@ type BackupManifest struct {
 	Shard string
 }
 
+func (m *BackupManifest) HashKey() string {
+	return fmt.Sprintf("%v/%v/%v/%t/%v", m.BackupMethod, m.Position, m.FromPosition, m.Incremental, m.BackupTime)
+}
+
+// RestorePath is an ordered sequence of backup handles & manifests, that can be used to restore from backup.
+// The path could be empty, in which case it's invalid, there's no way to restore. Otherwise, the path
+// consists of exactly one full backup, followed by zero or more incremental backups.
+type RestorePath struct {
+	manifests         []*BackupManifest
+	manifestHandleMap map[string]backupstorage.BackupHandle
+}
+
+func (p *RestorePath) IsEmpty() bool {
+	return len(p.manifests) == 0
+}
+
+func (p *RestorePath) Len() int {
+	return len(p.manifests)
+}
+
+func (p *RestorePath) Manifest(index int) *BackupManifest {
+	return p.manifests[index]
+}
+
+func (p *RestorePath) Handle(index int) backupstorage.BackupHandle {
+	return p.manifestHandleMap[p.Manifest(index).HashKey()]
+}
+
+func (p *RestorePath) FullBackupHandle() backupstorage.BackupHandle {
+	if p.IsEmpty() {
+		return nil
+	}
+	return p.Handle(0)
+}
+
 // FindBackupToRestore returns a selected candidate backup to be restored.
 // It returns the most recent backup that is complete, meaning it has a valid
 // MANIFEST file.
@@ -220,6 +255,8 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 
 	manifests := make([]*BackupManifest, 0, len(bhs))
+	manifestHandleMap := map[string]backupstorage.BackupHandle{}
+
 	backupHandle := func() backupstorage.BackupHandle {
 		for index := len(bhs) - 1; index >= 0; index-- {
 			bh := bhs[index]
@@ -231,6 +268,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 			}
 			// the manifest is valid
 			manifests = append(manifests, bm) // manifests's order is insignificant, it will be sorted later on
+			manifestHandleMap[bm.HashKey()] = bh
 			if bm.Incremental {
 				// We're looking for a full backup
 				continue
@@ -255,7 +293,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 			case !params.RestoreToPos.IsZero():
 				// restore to specific pos
 				if params.RestoreToPos.GTIDSet.Contains(bm.Position.GTIDSet) {
-					// this is the most recent backup <= desired position
+					// this is the most recent backup which is <= desired position
 					return bh
 				}
 			default:
