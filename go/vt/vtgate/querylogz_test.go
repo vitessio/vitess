@@ -151,8 +151,8 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 
 	// ensure querylogz is not affected by the filter tag
-	*streamlog.QueryLogFilterTag = "XXX_SKIP_ME"
-	defer func() { *streamlog.QueryLogFilterTag = "" }()
+	streamlog.SetQueryLogFilterTag("XXX_SKIP_ME")
+	defer func() { streamlog.SetQueryLogFilterTag("") }()
 	ch = make(chan any, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req)

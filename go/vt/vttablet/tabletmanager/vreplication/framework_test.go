@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -111,6 +112,7 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
 	exitCode := func() int {
 		var err error
 		env, err = testenv.Init()

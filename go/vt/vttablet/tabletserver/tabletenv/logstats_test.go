@@ -69,24 +69,24 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
 	params := map[string][]string{"full": {}}
 
-	*streamlog.RedactDebugUIQueries = false
-	*streamlog.QueryLogFormat = "text"
+	streamlog.SetRedactDebugUIQueries(false)
+	streamlog.SetQueryLogFormat("text")
 	got := testFormat(logStats, url.Values(params))
 	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\tmap[intVal:type:INT64 value:\"1\"]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t12345\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
-	*streamlog.RedactDebugUIQueries = true
-	*streamlog.QueryLogFormat = "text"
+	streamlog.SetRedactDebugUIQueries(true)
+	streamlog.SetQueryLogFormat("text")
 	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t12345\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
-	*streamlog.RedactDebugUIQueries = false
-	*streamlog.QueryLogFormat = "json"
+	streamlog.SetRedactDebugUIQueries(false)
+	streamlog.SetQueryLogFormat("json")
 	got = testFormat(logStats, url.Values(params))
 	var parsed map[string]any
 	err := json.Unmarshal([]byte(got), &parsed)
@@ -102,8 +102,8 @@ func TestLogStatsFormat(t *testing.T) {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%v\n", string(formatted), want)
 	}
 
-	*streamlog.RedactDebugUIQueries = true
-	*streamlog.QueryLogFormat = "json"
+	streamlog.SetRedactDebugUIQueries(true)
+	streamlog.SetQueryLogFormat("json")
 	got = testFormat(logStats, url.Values(params))
 	err = json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
@@ -118,20 +118,20 @@ func TestLogStatsFormat(t *testing.T) {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%v\n", string(formatted), want)
 	}
 
-	*streamlog.RedactDebugUIQueries = false
+	streamlog.SetRedactDebugUIQueries(false)
 
 	// Make sure formatting works for string bind vars. We can't do this as part of a single
 	// map because the output ordering is undefined.
 	logStats.BindVariables = map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
 
-	*streamlog.QueryLogFormat = "text"
+	streamlog.SetQueryLogFormat("text")
 	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\tmap[strVal:type:VARCHAR value:\"abc\"]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t12345\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
-	*streamlog.QueryLogFormat = "json"
+	streamlog.SetQueryLogFormat("json")
 	got = testFormat(logStats, url.Values(params))
 	err = json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
@@ -146,11 +146,11 @@ func TestLogStatsFormat(t *testing.T) {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%v\n", string(formatted), want)
 	}
 
-	*streamlog.QueryLogFormat = "text"
+	streamlog.SetQueryLogFormat("text")
 }
 
 func TestLogStatsFilter(t *testing.T) {
-	defer func() { *streamlog.QueryLogFilterTag = "" }()
+	defer func() { streamlog.SetQueryLogFilterTag("") }()
 
 	logStats := NewLogStats(context.Background(), "test")
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
@@ -168,14 +168,14 @@ func TestLogStatsFilter(t *testing.T) {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
-	*streamlog.QueryLogFilterTag = "LOG_THIS_QUERY"
+	streamlog.SetQueryLogFilterTag("LOG_THIS_QUERY")
 	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t0\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
-	*streamlog.QueryLogFilterTag = "NOT_THIS_QUERY"
+	streamlog.SetQueryLogFilterTag("NOT_THIS_QUERY")
 	got = testFormat(logStats, url.Values(params))
 	want = ""
 	if got != want {

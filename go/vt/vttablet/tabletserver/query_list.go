@@ -122,7 +122,7 @@ func (ql *QueryList) AppendQueryzRows(rows []QueryDetailzRow) []QueryDetailzRow 
 	ql.mu.Lock()
 	for _, qd := range ql.queryDetails {
 		query := qd.conn.Current()
-		if *streamlog.RedactDebugUIQueries {
+		if streamlog.GetRedactDebugUIQueries() {
 			query, _ = sqlparser.RedactSQLQuery(query)
 		}
 		row := QueryDetailzRow{
