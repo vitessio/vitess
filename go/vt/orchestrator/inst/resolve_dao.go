@@ -143,7 +143,9 @@ func ReadAllHostnameUnresolves() ([]HostnameUnresolve, error) {
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return unres, err
 }
 
@@ -213,7 +215,9 @@ func DeleteHostnameUnresolve(instanceKey *InstanceKey) error {
 				where hostname=?
 				`, instanceKey.Hostname,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -227,7 +231,9 @@ func ExpireHostnameUnresolve() error {
 				where last_registered < NOW() - INTERVAL ? MINUTE
 				`, config.Config.ExpiryHostnameResolvesMinutes,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -277,7 +283,9 @@ func DeleteInvalidHostnameResolves() error {
 				hostname = ?`,
 			invalidHostname,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 	return err
 }
@@ -308,7 +316,9 @@ func writeHostnameIPs(hostname string, ipv4String string, ipv6String string) err
 			ipv4String,
 			ipv6String,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)

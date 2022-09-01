@@ -187,7 +187,9 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal(err)
 			} else {
 				for _, e := range errs {
-					log.Error(e)
+					if e != nil {
+						log.Error(e)
+					}
 				}
 				for _, replica := range replicas {
 					fmt.Println(replica.Key.DisplayString())
@@ -250,7 +252,9 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal(err)
 			} else {
 				for _, e := range errs {
-					log.Error(e)
+					if e != nil {
+						log.Error(e)
+					}
 				}
 				for _, replica := range movedReplicas {
 					fmt.Println(replica.Key.DisplayString())
@@ -287,7 +291,9 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal(err)
 			} else {
 				for _, e := range errs {
-					log.Error(e)
+					if e != nil {
+						log.Error(e)
+					}
 				}
 				for _, replica := range repointedReplicas {
 					fmt.Printf("%s<%s\n", replica.Key.DisplayString(), instanceKey.DisplayString())
@@ -370,7 +376,9 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal(err)
 			} else {
 				for _, e := range errs {
-					log.Error(e)
+					if e != nil {
+						log.Error(e)
+					}
 				}
 				for _, replica := range movedReplicas {
 					fmt.Println(replica.Key.DisplayString())

@@ -131,6 +131,8 @@ func ExpirePoolInstances() error {
 			`,
 		config.Config.InstancePoolExpiryMinutes,
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }

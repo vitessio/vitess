@@ -1884,7 +1884,9 @@ func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
 		instanceKeyInformativeClusterName.Set(instanceKey.StringCode(), clusterName, cache.DefaultExpiration)
 		return nil
 	})
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return clusterName, err
 }
 
@@ -2427,7 +2429,9 @@ func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) er
 			instanceKey.Hostname,
 			instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2454,7 +2458,9 @@ func UpdateInstanceLastAttemptedCheck(instanceKey *InstanceKey) error {
 			instanceKey.Hostname,
 			instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2635,7 +2641,9 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 					?, ?, ?, ?, NOW()
 				)`,
 		args...)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -2650,7 +2658,9 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 					where first_seen < NOW() - INTERVAL ? SECOND
 					`, expireSeconds,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2668,7 +2678,9 @@ func ResetInstanceRelaylogCoordinatesHistory(instanceKey *InstanceKey) error {
 				hostname=? and port=?
 				`, instanceKey.Hostname, instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
