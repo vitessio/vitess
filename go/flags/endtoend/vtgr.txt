@@ -12,8 +12,6 @@ Usage of vtgr:
       --enable_heartbeat_check                                           Enable heartbeat checking, set together with --group_heartbeat_threshold.
       --gr_port int                                                      Port to bootstrap a MySQL group. (default 33061)
       --group_heartbeat_threshold int                                    VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with --enable_heartbeat_check.
-      --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
-      --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check

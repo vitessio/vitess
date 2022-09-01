@@ -25,6 +25,7 @@ import (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterGRPCServerAuthFlags()
 }
 
 // used at runtime by plug-ins
