@@ -53,7 +53,10 @@ type Plan struct {
 	ColExprs []ColExpr
 
 	convertUsingUTF8Columns map[string]bool
-	convertTZFuncExprs      map[string]*sqlparser.FuncExpr
+
+	// Any columns that require a function expression in the
+	// stream.
+	columnFuncExprs map[string]*sqlparser.FuncExpr
 
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
@@ -476,26 +479,22 @@ func (plan *Plan) setConvertColumnUsingUTF8(columnName string) {
 	plan.convertUsingUTF8Columns[columnName] = true
 }
 
-// setConvertTZFuncExpr sets the convert_tz function expression for the
-// column, which can then be used when building the streamer's query.
-// These expressions are used when transforming datetime values between
-// the source and target.
-func (plan *Plan) setConvertTZFuncExpr(columnName string, tzExpr *sqlparser.FuncExpr) {
-	if plan.convertTZFuncExprs == nil {
-		plan.convertTZFuncExprs = map[string]*sqlparser.FuncExpr{}
+// setColumnFuncExpr sets the function expression for the column, which
+// can then be used when building the streamer's query.
+func (plan *Plan) setColumnFuncExpr(columnName string, funcExpr *sqlparser.FuncExpr) {
+	if plan.columnFuncExprs == nil {
+		plan.columnFuncExprs = map[string]*sqlparser.FuncExpr{}
 	}
-	plan.convertTZFuncExprs[columnName] = tzExpr
+	plan.columnFuncExprs[columnName] = funcExpr
 }
 
-// getConvertTZFuncExpr returns a convert_tz function expression if the
-// column needs one when building the streamer's query.
-// These expressions are used when transforming datetime values between
-// the source and target.
-func (plan *Plan) getConvertTZFuncExpr(columnName string) *sqlparser.FuncExpr {
-	if plan.convertTZFuncExprs == nil {
+// getColumnFuncExpr returns a function expression if the column needs
+// one when building the streamer's query.
+func (plan *Plan) getColumnFuncExpr(columnName string) *sqlparser.FuncExpr {
+	if plan.columnFuncExprs == nil {
 		return nil
 	}
-	if val, ok := plan.convertTZFuncExprs[columnName]; ok {
+	if val, ok := plan.columnFuncExprs[columnName]; ok {
 		return val
 	}
 	return nil
@@ -660,12 +659,14 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 				VindexColumns: vindexColumns,
 			}, nil
 		} else if inner.Name.Lowered() == "convert_tz" {
+			// This function is used when transforming datetime
+			// values between the source and target.
 			colnum, err := findColumn(plan.Table, aliased.As)
 			if err != nil {
 				return ColExpr{}, err
 			}
 			field := plan.Table.Fields[colnum]
-			plan.setConvertTZFuncExpr(field.Name, inner)
+			plan.setColumnFuncExpr(field.Name, inner)
 			return ColExpr{
 				ColNum: colnum,
 				Field:  field,
