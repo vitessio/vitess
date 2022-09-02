@@ -57,6 +57,11 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		plan.NextCount = v
 		plan.FullQuery = nil
 	}
+
+	if hasLockFunc(sel) {
+		plan.PlanID = PlanSelectLockFunc
+		plan.NeedsReservedConn = true
+	}
 	return plan, nil
 }
 
@@ -169,8 +174,9 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 
 func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	return &Plan{
-		PlanID:    PlanSet,
-		FullQuery: GenerateFullQuery(set),
+		PlanID:            PlanSet,
+		FullQuery:         GenerateFullQuery(set),
+		NeedsReservedConn: true,
 	}
 }
 
@@ -196,4 +202,16 @@ func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.
 		return nil
 	}
 	return tables[tableName.String()]
+}
+
+func analyzeDDL(stmt sqlparser.DDLStatement, tables map[string]*schema.Table) *Plan {
+	// DDLs and some other statements below don't get fully parsed.
+	// We have to use the original query at the time of execution.
+	// We are in the process of changing this
+	var fullQuery *sqlparser.ParsedQuery
+	// If the query is fully parsed, then use the ast and store the fullQuery
+	if stmt.IsFullyParsed() {
+		fullQuery = GenerateFullQuery(stmt)
+	}
+	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}
 }

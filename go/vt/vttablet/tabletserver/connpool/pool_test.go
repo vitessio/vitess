@@ -38,7 +38,7 @@ func TestConnPoolGet(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := connPool.Get(context.Background())
+	dbConn, err := connPool.Get(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("should not get an error, but got: %v", err)
 	}
@@ -62,10 +62,10 @@ func TestConnPoolTimeout(t *testing.T) {
 	})
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := connPool.Get(context.Background())
+	dbConn, err := connPool.Get(context.Background(), nil)
 	require.NoError(t, err)
 	defer dbConn.Recycle()
-	_, err = connPool.Get(context.Background())
+	_, err = connPool.Get(context.Background(), nil)
 	assert.EqualError(t, err, "resource pool timed out")
 }
 
@@ -78,7 +78,7 @@ func TestConnPoolMaxWaiters(t *testing.T) {
 	})
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := connPool.Get(context.Background())
+	dbConn, err := connPool.Get(context.Background(), nil)
 	require.NoError(t, err)
 
 	// waiter 1
@@ -86,7 +86,7 @@ func TestConnPoolMaxWaiters(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		c1, err := connPool.Get(context.Background())
+		c1, err := connPool.Get(context.Background(), nil)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -102,7 +102,7 @@ func TestConnPoolMaxWaiters(t *testing.T) {
 	}
 
 	// waiter 2
-	_, err = connPool.Get(context.Background())
+	_, err = connPool.Get(context.Background(), nil)
 	assert.EqualError(t, err, "pool TestPool waiter count exceeded")
 
 	// This recycle will make waiter1 succeed.
@@ -121,7 +121,7 @@ func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, ecid, im)
 	defer connPool.Close()
-	dbConn, err := connPool.Get(ctx)
+	dbConn, err := connPool.Get(ctx, nil)
 	if err != nil {
 		t.Fatalf("should not get an error, but got: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestConnPoolGetAppDebug(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), debugConn)
 	defer connPool.Close()
-	dbConn, err := connPool.Get(ctx)
+	dbConn, err := connPool.Get(ctx, nil)
 	if err != nil {
 		t.Fatalf("should not get an error, but got: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	if connPool.InUse() != 0 {
 		t.Fatalf("pool inUse connections should be 0")
 	}
-	dbConn, _ := connPool.Get(context.Background())
+	dbConn, _ := connPool.Get(context.Background(), nil)
 	if connPool.Available() != 99 {
 		t.Fatalf("pool available connections should be 99")
 	}
