@@ -147,47 +147,62 @@ END;
 `
 )
 
+var enableSettingsPool bool
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+	code := runAllTests(m)
+	if code != 0 {
+		os.Exit(code)
+	}
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
+	println("running with settings pool enabled")
+	// run again with settings pool enabled.
+	enableSettingsPool = true
+	code = runAllTests(m)
+	os.Exit(code)
+}
 
-		// Start keyspace
-		Keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3", "--queryserver-config-max-result-size", "30"}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
-			log.Fatal(err.Error())
-			return 1
-		}
+func runAllTests(m *testing.M) int {
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn_sharded_only=true"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Fatal(err.Error())
-			return 1
-		}
+	// Start topo server
+	if err := clusterInstance.StartTopo(); err != nil {
+		return 1
+	}
 
-		primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
-		if _, err := primaryTablet.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
-			log.Fatal(err.Error())
-			return 1
-		}
+	// Start keyspace
+	Keyspace := &cluster.Keyspace{
+		Name:      KeyspaceName,
+		SchemaSQL: SchemaSQL,
+		VSchema:   VSchema,
+	}
+	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3", "--queryserver-config-max-result-size", "30"}
+	if enableSettingsPool {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver_enable_settings_pool")
+	}
+	if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
+		log.Fatal(err.Error())
+		return 1
+	}
 
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	// Start vtgate
+	clusterInstance.VtGateExtraArgs = []string{"--warn_sharded_only=true"}
+	if err := clusterInstance.StartVtgate(); err != nil {
+		log.Fatal(err.Error())
+		return 1
+	}
+
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+	if _, err := primaryTablet.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
+		log.Fatal(err.Error())
+		return 1
+	}
+
+	return m.Run()
 }
 
 func TestSelectIntoAndLoadFrom(t *testing.T) {

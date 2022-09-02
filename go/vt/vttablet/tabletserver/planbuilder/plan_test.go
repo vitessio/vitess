@@ -41,13 +41,14 @@ import (
 // This is only for testing.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
-		PlanID      PlanType
-		TableName   sqlparser.IdentifierCS `json:",omitempty"`
-		Permissions []Permission           `json:",omitempty"`
-		FieldQuery  *sqlparser.ParsedQuery `json:",omitempty"`
-		FullQuery   *sqlparser.ParsedQuery `json:",omitempty"`
-		NextCount   string                 `json:",omitempty"`
-		WhereClause *sqlparser.ParsedQuery `json:",omitempty"`
+		PlanID            PlanType
+		TableName         sqlparser.IdentifierCS `json:",omitempty"`
+		Permissions       []Permission           `json:",omitempty"`
+		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`
+		NextCount         string                 `json:",omitempty"`
+		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
+		NeedsReservedConn bool                   `json:",omitempty"`
 	}{
 		PlanID:      p.PlanID,
 		TableName:   p.TableName(),
@@ -57,6 +58,9 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	}
 	if p.NextCount != nil {
 		mplan.NextCount = evalengine.FormatExpr(p.NextCount)
+	}
+	if p.NeedsReservedConn {
+		mplan.NeedsReservedConn = true
 	}
 	return json.Marshal(&mplan)
 }
@@ -72,7 +76,7 @@ func TestPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, false, "dbName")
+				plan, err = Build(statement, testSchema, "dbName")
 			}
 			PassthroughDMLs = false
 
@@ -106,10 +110,11 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			require.NoError(t, err)
-			// In Pooled Connection, plan building will fail.
-			plan, err = Build(statement, testSchema, false /* isReservedConn */, "dbName")
-			require.Error(t, err)
-			out := err.Error()
+			// Plan building will not fail, but it will mark that reserved connection is needed.
+			plan, err = Build(statement, testSchema, "dbName")
+			require.NoError(t, err)
+			require.True(t, plan.NeedsReservedConn)
+			out := fmt.Sprintf("%s not allowed without reserved connection", plan.PlanID.String())
 			if out != tcase.output {
 				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 				if err != nil {
@@ -120,10 +125,6 @@ func TestPlanPoolUnsafe(t *testing.T) {
 				}
 				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
 			}
-			// In Reserved Connection, plan will be built.
-			plan, err = Build(statement, testSchema, true /* isReservedConn */, "dbName")
-			require.NoError(t, err)
-			require.NotEmpty(t, plan)
 		})
 	}
 }
@@ -139,7 +140,7 @@ func TestPlanInReservedConn(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, true, "dbName")
+				plan, err = Build(statement, testSchema, "dbName")
 			}
 			PassthroughDMLs = false
 
@@ -190,7 +191,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem, false, "dbName")
+				plan, err := Build(statement, schem, "dbName")
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -212,7 +213,7 @@ func TestCustom(t *testing.T) {
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := BuildStreaming(tcase.input, testSchema, false)
+		plan, err := BuildStreaming(tcase.input, testSchema)
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -226,7 +227,6 @@ func TestStreamPlan(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 		}
-		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
 }
 
@@ -273,7 +273,7 @@ func TestLockPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, false, "dbName")
+				plan, err = Build(statement, testSchema, "dbName")
 			}
 
 			var out string

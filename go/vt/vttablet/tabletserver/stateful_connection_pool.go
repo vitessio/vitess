@@ -168,15 +168,15 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 
 // NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 // the found_rows pool, depending on the options provided
-func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
+func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, settings []string) (*StatefulConnection, error) {
 
 	var conn *connpool.DBConn
 	var err error
 
 	if options.GetClientFoundRows() {
-		conn, err = sf.foundRowsPool.Get(ctx)
+		conn, err = sf.foundRowsPool.Get(ctx, settings)
 	} else {
-		conn, err = sf.conns.Get(ctx)
+		conn, err = sf.conns.Get(ctx, settings)
 	}
 	if err != nil {
 		return nil, err

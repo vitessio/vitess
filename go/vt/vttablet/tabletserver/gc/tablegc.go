@@ -391,7 +391,7 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 		return nil
 	}
 
-	conn, err := collector.pool.Get(ctx)
+	conn, err := collector.pool.Get(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -547,7 +547,7 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string) error
 		return nil
 	}
 
-	conn, err := collector.pool.Get(ctx)
+	conn, err := collector.pool.Get(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -572,7 +572,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 		return nil
 	}
 
-	conn, err := collector.pool.Get(ctx)
+	conn, err := collector.pool.Get(ctx, nil)
 	if err != nil {
 		return err
 	}

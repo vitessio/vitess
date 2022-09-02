@@ -254,7 +254,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltypes.Result, err error) {
 	defer e.env.LogError()
 
-	conn, err := e.pool.Get(ctx)
+	conn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return result, err
 	}
@@ -470,7 +470,7 @@ func (e *Executor) ptPidFileName(uuid string) string {
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
 func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVariables, err error) {
-	conn, err := e.pool.Get(ctx)
+	conn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

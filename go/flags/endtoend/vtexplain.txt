@@ -179,6 +179,7 @@ Usage of vtexplain:
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
       --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
+      --queryserver_enable_settings_pool                                 Enable pooling of connections with modified system settings
       --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
       --replication-mode string                                          The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
