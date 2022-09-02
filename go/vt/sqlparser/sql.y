@@ -327,7 +327,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
+%type <selStmt>  create_query_expression select_statement base_select with_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -571,7 +571,7 @@ load_statement:
   }
 
 select_statement:
-  base_select order_by_opt limit_opt lock_opt into_opt
+  with_select order_by_opt limit_opt lock_opt into_opt
   {
     $1.SetOrderBy($2)
     $1.SetLimit($3)
@@ -608,13 +608,6 @@ base_select:
   base_select_no_cte
   {
     $$ = $1
-  }
-| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt window_opt
-  {
-    $$ = &Select{With: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13), Window: $14}
-    if $6 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
   }
 | union_lhs union_op union_rhs
   {
@@ -669,6 +662,17 @@ variable_list:
   {
     $$ = append($$, $3)
   }
+
+with_select:
+  with_clause base_select
+  {
+    $2.SetWith($1)
+    $$ = $2
+  }
+| base_select
+   {
+     $$ = $1
+   }
 
 with_clause:
   WITH cte_list

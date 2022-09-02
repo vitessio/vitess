@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+//go:generate goyacc -o sql.go sql.y
+
 import (
 	"encoding/hex"
 	"encoding/json"
@@ -47,8 +49,9 @@ var zeroParser = *(yyNewParser().(*yyParserImpl))
 //
 // N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
 // $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
-//    showCollationFilterOpt := $4
-//    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+//
+//	showCollationFilterOpt := $4
+//	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
 func yyParsePooled(yylex yyLexer) int {
 	// Being very particular about using the base type and not an interface type b/c we depend on
 	// the implementation to know how to reinitialize the parser.
@@ -420,6 +423,7 @@ type SelectStatement interface {
 	SetLimit(*Limit)
 	SetLock(string)
 	SetOrderBy(OrderBy)
+	SetWith(*With)
 	SetInto(*Into) error
 	GetInto() *Into
 	WalkableSQLNode
@@ -475,6 +479,10 @@ func (node *Select) AddOrder(order *Order) {
 
 func (node *Select) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
+}
+
+func (node *Select) SetWith(w *With) {
+	node.With = w
 }
 
 func (node *Select) SetLock(lock string) {
@@ -591,6 +599,10 @@ func (node *ParenSelect) SetOrderBy(orders OrderBy) {
 	panic("unreachable")
 }
 
+func (node *ParenSelect) SetWith(w *With) {
+	panic("unreachable")
+}
+
 func (node *ParenSelect) SetLock(lock string) {
 	panic("unreachable")
 }
@@ -649,6 +661,7 @@ type Union struct {
 	Type        string
 	Left, Right SelectStatement
 	OrderBy     OrderBy
+	With        *With
 	Limit       *Limit
 	Lock        string
 	Into        *Into
@@ -668,6 +681,10 @@ func (node *Union) AddOrder(order *Order) {
 
 func (node *Union) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
+}
+
+func (node *Union) SetWith(w *With) {
+	node.With = w
 }
 
 // SetLimit sets the limit clause
@@ -700,7 +717,7 @@ func (node *Union) GetInto() *Into {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v%v%v%s%v", node.Left, node.Type, node.Right,
+	buf.Myprintf("%v%v %s %v%v%v%s%v", node.With, node.Left, node.Type, node.Right,
 		node.OrderBy, node.Limit, node.Lock, node.Into)
 }
 
