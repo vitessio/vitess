@@ -234,20 +234,28 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 		}
 	}
 
-	if startTablet {
-		var healthyTab = 0
-		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-			// wait for both tablet to get into healthy state
-			waitUntil := time.Now().Add(30 * time.Second)
-			for time.Now().Before(waitUntil) {
-				if result := tablet.VttabletProcess.GetStatus(); result != "" {
-					healthyTab++
-					break
+	// wait for both tablet to get into replica state in topo
+	waitUntil := time.Now().Add(10 * time.Second)
+	for time.Now().Before(waitUntil) {
+		result, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", cell)
+		require.Nil(t, err)
+
+		tabletsFromCMD := strings.Split(result, "\n")
+		tabletCountFromCMD := 0
+
+		for _, line := range tabletsFromCMD {
+			if len(line) > 0 {
+				if strings.Contains(line, "replica") {
+					tabletCountFromCMD = tabletCountFromCMD + 1
 				}
-				time.Sleep(1 * time.Second)
 			}
 		}
-		require.Equal(t, 2, healthyTab, "Not all tablets get into healthy state")
+
+		if tabletCountFromCMD == 2 {
+			break
+		}
+
+		time.Sleep(1 * time.Second)
 	}
 
 	if initShardPrimary {
