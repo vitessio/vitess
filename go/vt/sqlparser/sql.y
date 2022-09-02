@@ -385,7 +385,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
-%type <with> with_clause with_clause_opt
+%type <with> with_clause_opt with_opt
 %type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
@@ -638,6 +638,26 @@ base_select:
     $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
 
+with_select:
+  base_select
+  {
+    $$ = $1
+  }
+| WITH with_opt base_select
+  {
+    $3.SetWith($2)
+    $$ = $3
+  }
+
+with_opt:
+  RECURSIVE cte_list
+  {
+    $$ = &With{Ctes: $2, Recursive: true}
+  }
+| cte_list {
+    $$ = &With{Ctes: $1, Recursive: false}
+}
+
 base_select_no_cte:
   SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
@@ -687,34 +707,13 @@ variable_list:
     $$ = append($$, $3)
   }
 
-with_select:
-  with_clause base_select
-  {
-    $2.SetWith($1)
-    $$ = $2
-  }
-| base_select
-   {
-     $$ = $1
-   }
-
-with_clause:
-  WITH cte_list
-  {
-   $$ = &With{Ctes: $2, Recursive: false}
-  }
-| WITH RECURSIVE cte_list
-  {
-    $$ = &With{Ctes: $3, Recursive: true}
-  }
-
 with_clause_opt:
   {
     $$ = nil
   }
-| with_clause
+| WITH with_opt
   {
-    $$ = $1
+    $$ = $2
   }
 
 cte_list:
