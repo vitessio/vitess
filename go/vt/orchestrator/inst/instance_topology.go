@@ -27,9 +27,9 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 	"vitess.io/vitess/go/vt/orchestrator/os"
+	math "vitess.io/vitess/go/vt/orchestrator/util"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 

@@ -29,30 +29,25 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	vitessmysql "vitess.io/vitess/go/mysql"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-
 	"github.com/go-sql-driver/mysql"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	math "vitess.io/vitess/go/vt/orchestrator/util"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
