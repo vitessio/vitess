@@ -398,6 +398,21 @@ var (
 		}, {
 			input: "with recursive t (n) as (select (1) from dual union select n + 1 from t where n < 100) select sum(n) from t",
 		}, {
+			input:  "with recursive a as (select 1 union select 2) select 10 union select 20",
+			output: "with recursive a as (select 1 from dual union select 2 from dual) select 10 from dual union select 20 from dual",
+		}, {
+			input: "with cte1 as (select a from b) update c set d = e",
+		}, {
+			input: "with recursive cte1 as (select a from b) update c set d = e",
+		}, {
+			input: "with cte1 as (select a from b) delete from d where e = f",
+		}, {
+			input: "with recursive cte1 as (select a from b) delete from d where e = f",
+		}, {
+			input: "with cte1 as (select a from b) insert into c select * from cte1",
+		}, {
+			input: "with recursive cte1 as (select a from b) insert into c select * from cte1",
+		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
@@ -1940,13 +1955,13 @@ var (
 		}, {
 			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as ( order by y asc)",
 		}, {
-			input: "select name, dense_rank() over (w1 partition by x), count(*) over (w2) from t window w1 as ( order by y asc), w2 as (w1 partition by x)",
+			input: "select name, dense_rank() over (w1 partition by x), count(*) over w2 from t window w1 as ( order by y asc), w2 as (w1 partition by x)",
 		}, {
-			input: "select name, dense_rank() over (w3) from t window w1 as (w2), w2 as (), w3 as (w1)",
+			input: "select name, dense_rank() over w3 from t window w1 as (w2), w2 as (), w3 as (w1)",
 		}, {
-			input: "select name, dense_rank() over (window_name) from t",
+			input: "select name, dense_rank() over window_name from t",
 		}, {
-			input: "with a as (select (1) from dual) select name, dense_rank() over (window_name) from a",
+			input: "with a as (select (1) from dual) select name, dense_rank() over window_name from a",
 		}, {
 			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as (ROWS UNBOUNDED PRECEDING)",
 		}, {
@@ -2074,6 +2089,9 @@ var (
 		}, {
 			input:  "alter table t change foo bar int not null auto_increment first",
 			output: "alter table t change column foo (\n\tbar int not null auto_increment\n) first",
+		}, {
+			input:  "alter table test change v1 v2 varchar(255) character set utf8mb4 binary not null",
+			output: "alter table test change column v1 (\n\tv2 varchar(255) character set utf8mb4 binary not null\n)",
 		}, {
 			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
 			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after bar",
@@ -2289,6 +2307,9 @@ var (
 		}, {
 			input:  "DROP ROLE IF EXISTS role1, role2@localhost",
 			output: "drop role if exists `role1`@`%`, `role2`@`localhost`",
+		}, {
+			input:  "GRANT ALL PRIVILEGES ON * TO UserName",
+			output: "grant all on * to `UserName`@`%`",
 		}, {
 			input:  "GRANT ALL ON * TO UserName",
 			output: "grant all on * to `UserName`@`%`",
@@ -3665,11 +3686,478 @@ func runParseTestCase(t *testing.T, tcase parseTest) bool {
 	})
 }
 
+// TestFunctionCalls validates that every MySQL built-in function parses correctly. List of functions found here:
+// https://dev.mysql.com/doc/refman/8.0/en/built-in-function-reference.html
+// Some functions are required to have a certain number or type of arguments because they are defined as reserved words.
+// Others are not, which means they parse correctly but lead to semantically meaningless results. That's fine for the
+// purpose of this test: we just want to make sure that all built-in functions parse correctly and aren't broken by
+// grammar changes.
+func TestFunctionCalls(t *testing.T) {
+	queries := []string{
+		"select ABS() from dual",
+		"select ACOS() from dual",
+		"select ADDDATE() from dual",
+		"select ADDTIME() from dual",
+		"select AES_DECRYPT() from dual",
+		"select AES_ENCRYPT() from dual",
+		"select ANY_VALUE() from dual",
+		"select ASCII() from dual",
+		"select ASIN() from dual",
+		"select ATAN() from dual",
+		"select ATAN2() from dual",
+		"select AVG(col) from dual",
+		"select BENCHMARK() from dual",
+		"select BIN() from dual",
+		"select BIN_TO_UUID() from dual",
+		"select BIT_AND(col) from dual",
+		"select BIT_COUNT() from dual",
+		"select BIT_LENGTH() from dual",
+		"select BIT_OR(col) from dual",
+		"select BIT_XOR(col) from dual",
+		"select CAN_ACCESS_COLUMN() from dual",
+		"select CAN_ACCESS_DATABASE() from dual",
+		"select CAN_ACCESS_TABLE() from dual",
+		"select CAN_ACCESS_USER() from dual",
+		"select CAN_ACCESS_VIEW() from dual",
+		"select CEIL() from dual",
+		"select CEILING() from dual",
+		"select CHAR(77, 121, 83, 81, '76') from dual",
+		"select CHAR_LENGTH() from dual",
+		"select CHARACTER_LENGTH() from dual",
+		"select CHARSET() from dual",
+		"select COALESCE() from dual",
+		"select COERCIBILITY() from dual",
+		"select COLLATION() from dual",
+		"select COMPRESS() from dual",
+		"select CONCAT() from dual",
+		"select CONCAT_WS() from dual",
+		"select CONNECTION_ID() from dual",
+		"select CONV() from dual",
+		"select CONVERT('abc', binary) from dual",
+		"select CONVERT_TZ() from dual",
+		"select COS() from dual",
+		"select COT() from dual",
+		"select COUNT(col) from dual",
+		"select COUNT(distinct col) from dual",
+		"select CRC32() from dual",
+		"select CUME_DIST() over mywindow from dual",
+		"select CURDATE() from dual",
+		"select CURRENT_DATE() from dual",
+		"select CURRENT_ROLE() from dual",
+		"select CURRENT_TIME() from dual",
+		"select CURRENT_TIMESTAMP() from dual",
+		"select CURRENT_USER() from dual",
+		"select CURTIME() from dual",
+		"select DATABASE() from dual",
+		"select DATE() from dual",
+		"select DATE_ADD() from dual",
+		"select DATE_FORMAT() from dual",
+		"select DATE_SUB() from dual",
+		"select DATEDIFF() from dual",
+		"select DAY() from dual",
+		"select DAYNAME() from dual",
+		"select DAYOFMONTH() from dual",
+		"select DAYOFWEEK() from dual",
+		"select DAYOFYEAR() from dual",
+		"update mytable set a = default(b)",
+		"select DEGREES() from dual",
+		"select DENSE_RANK() over mywindow from dual",
+		"select ELT() from dual",
+		"select EXP() from dual",
+		"select EXPORT_SET() from dual",
+		"select EXTRACT() from dual",
+		"select ExtractValue() from dual",
+		"select FIELD() from dual",
+		"select FIND_IN_SET() from dual",
+		"select FIRST_VALUE(col) over mywindow from dual",
+		"select FLOOR() from dual",
+		"select FORMAT(col) from dual",
+		"select FORMAT_BYTES() from dual",
+		"select FORMAT_PICO_TIME() from dual",
+		"select FOUND_ROWS() from dual",
+		"select FROM_BASE64() from dual",
+		"select FROM_DAYS() from dual",
+		"select FROM_UNIXTIME() from dual",
+		"select GeomCollection() from dual",
+		"select GeometryCollection() from dual",
+		"select GET_DD_COLUMN_PRIVILEGES() from dual",
+		"select GET_DD_CREATE_OPTIONS() from dual",
+		"select GET_DD_INDEX_SUB_PART_LENGTH() from dual",
+		"select GET_FORMAT() from dual",
+		"select GET_LOCK() from dual",
+		"select GREATEST() from dual",
+		"select group_concat(col) from dual",
+		"select GROUPING(col) from dual",
+		"select GTID_SUBSET() from dual",
+		"select GTID_SUBTRACT() from dual",
+		"select HEX() from dual",
+		"select HOUR() from dual",
+		"select ICU_VERSION() from dual",
+		"select IF(col) from dual",
+		"select IFNULL() from dual",
+		"select INET_ATON() from dual",
+		"select INET_NTOA() from dual",
+		"select INET6_ATON() from dual",
+		"select INET6_NTOA() from dual",
+		"select INSERT(col) from dual",
+		"select INSTR() from dual",
+		"select INTERNAL_AUTO_INCREMENT() from dual",
+		"select INTERNAL_AVG_ROW_LENGTH() from dual",
+		"select INTERNAL_CHECK_TIME() from dual",
+		"select INTERNAL_CHECKSUM() from dual",
+		"select INTERNAL_DATA_FREE() from dual",
+		"select INTERNAL_DATA_LENGTH() from dual",
+		"select INTERNAL_DD_CHAR_LENGTH() from dual",
+		"select INTERNAL_GET_COMMENT_OR_ERROR() from dual",
+		"select INTERNAL_GET_ENABLED_ROLE_JSON() from dual",
+		"select INTERNAL_GET_HOSTNAME() from dual",
+		"select INTERNAL_GET_USERNAME() from dual",
+		"select INTERNAL_GET_VIEW_WARNING_OR_ERROR() from dual",
+		"select INTERNAL_INDEX_COLUMN_CARDINALITY() from dual",
+		"select INTERNAL_INDEX_LENGTH() from dual",
+		"select INTERNAL_IS_ENABLED_ROLE() from dual",
+		"select INTERNAL_IS_MANDATORY_ROLE() from dual",
+		"select INTERNAL_KEYS_DISABLED() from dual",
+		"select INTERNAL_MAX_DATA_LENGTH() from dual",
+		"select INTERNAL_TABLE_ROWS() from dual",
+		"select INTERNAL_UPDATE_TIME() from dual",
+		"select IS_FREE_LOCK() from dual",
+		"select IS_IPV4() from dual",
+		"select IS_IPV4_COMPAT() from dual",
+		"select IS_IPV4_MAPPED() from dual",
+		"select IS_IPV6() from dual",
+		"select IS_USED_LOCK() from dual",
+		"select IS_UUID() from dual",
+		"select ISNULL() from dual",
+		"select JSON_ARRAY() from dual",
+		"select JSON_ARRAY_APPEND() from dual",
+		"select JSON_ARRAY_INSERT() from dual",
+		"select JSON_ARRAYAGG(col) from dual",
+		"select JSON_CONTAINS() from dual",
+		"select JSON_CONTAINS_PATH() from dual",
+		"select JSON_DEPTH() from dual",
+		"select JSON_EXTRACT() from dual",
+		"select JSON_INSERT() from dual",
+		"select JSON_KEYS() from dual",
+		"select JSON_LENGTH() from dual",
+		"select JSON_MERGE() from dual",
+		"select JSON_MERGE_PATCH() from dual",
+		"select JSON_MERGE_PRESERVE() from dual",
+		"select JSON_OBJECT() from dual",
+		"select JSON_OBJECTAGG(col) from dual",
+		"select JSON_OVERLAPS() from dual",
+		"select JSON_PRETTY() from dual",
+		"select JSON_QUOTE() from dual",
+		"select JSON_REMOVE() from dual",
+		"select JSON_REPLACE() from dual",
+		"select JSON_SCHEMA_VALID() from dual",
+		"select JSON_SCHEMA_VALIDATION_REPORT() from dual",
+		"select JSON_SEARCH() from dual",
+		"select JSON_SET() from dual",
+		"select JSON_STORAGE_FREE() from dual",
+		"select JSON_STORAGE_SIZE() from dual",
+		"select JSON_TYPE() from dual",
+		"select JSON_UNQUOTE() from dual",
+		"select JSON_VALID() from dual",
+		"select JSON_VALUE() from dual",
+		"select LAG(col) over mywindow from dual",
+		"select LAST_DAY() from dual",
+		"select LAST_INSERT_ID() from dual",
+		"select LAST_VALUE(col) over mywindow from dual",
+		"select LCASE() from dual",
+		"select LEAD(col) over mywindow from dual",
+		"select LEAST() from dual",
+		"select LEFT('abc', 1) from dual",
+		"select LENGTH() from dual",
+		"select LineString() from dual",
+		"select LN() from dual",
+		"select LOAD_FILE() from dual",
+		"select LOCALTIME() from dual",
+		"select LOCALTIMESTAMP() from dual",
+		"select LOCATE() from dual",
+		"select LOG() from dual",
+		"select LOG10() from dual",
+		"select LOG2() from dual",
+		"select LOWER() from dual",
+		"select LPAD() from dual",
+		"select LTRIM() from dual",
+		"select MAKE_SET() from dual",
+		"select MAKEDATE() from dual",
+		"select MAKETIME() from dual",
+		"select MASTER_POS_WAIT() from dual",
+		"select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
+		"select MAX(col1) from dual",
+		"select MBRContains() from dual",
+		"select MBRCoveredBy() from dual",
+		"select MBRCovers() from dual",
+		"select MBRDisjoint() from dual",
+		"select MBREquals() from dual",
+		"select MBRIntersects() from dual",
+		"select MBROverlaps() from dual",
+		"select MBRTouches() from dual",
+		"select MBRWithin() from dual",
+		"select MD5() from dual",
+		"select MICROSECOND() from dual",
+		"select MID() from dual",
+		"select MIN(col) from dual",
+		"select MINUTE() from dual",
+		"select MOD(col) from dual",
+		"select MONTH() from dual",
+		"select MONTHNAME() from dual",
+		"select MultiLineString() from dual",
+		"select MultiPoint() from dual",
+		"select MultiPolygon() from dual",
+		"select NAME_CONST() from dual",
+		"select NOW() from dual",
+		"select NTH_VALUE(col) over mywindow from dual",
+		"select NTILE() over mywindow from dual",
+		"select NULLIF() from dual",
+		"select OCT() from dual",
+		"select OCTET_LENGTH() from dual",
+		"select ORD() from dual",
+		"select PERCENT_RANK() over mywindow from dual",
+		"select PERIOD_ADD() from dual",
+		"select PERIOD_DIFF() from dual",
+		"select PI() from dual",
+		"select Point() from dual",
+		"select Polygon() from dual",
+		"select POSITION() from dual",
+		"select POW() from dual",
+		"select POWER() from dual",
+		"select PS_CURRENT_THREAD_ID() from dual",
+		"select PS_THREAD_ID() from dual",
+		"select QUARTER() from dual",
+		"select QUOTE() from dual",
+		"select RADIANS() from dual",
+		"select RAND() from dual",
+		"select RANDOM_BYTES() from dual",
+		"select RANK() over mywindow from dual",
+		"select REGEXP_INSTR() from dual",
+		"select REGEXP_LIKE() from dual",
+		"select REGEXP_REPLACE() from dual",
+		"select REGEXP_SUBSTR() from dual",
+		"select RELEASE_ALL_LOCKS() from dual",
+		"select RELEASE_LOCK() from dual",
+		"select REPEAT('a', 2) from dual",
+		"select REPLACE('a', 'b') from dual",
+		"select REVERSE() from dual",
+		"select RIGHT('b', 1) from dual",
+		"select ROLES_GRAPHML() from dual",
+		"select ROUND() from dual",
+		"select ROW_COUNT() from dual",
+		"select ROW_NUMBER() over mywindow from dual",
+		"select RPAD() from dual",
+		"select RTRIM() from dual",
+		"select SCHEMA() from dual",
+		"select SEC_TO_TIME() from dual",
+		"select SECOND() from dual",
+		"select SESSION_USER() from dual",
+		"select SHA1() from dual",
+		"select SHA2() from dual",
+		"select SIGN() from dual",
+		"select SIN() from dual",
+		"select SLEEP() from dual",
+		"select SOUNDEX() from dual",
+		"select SOURCE_POS_WAIT() from dual",
+		"select SPACE() from dual",
+		"select SQRT() from dual",
+		"select ST_Area() from dual",
+		"select ST_AsBinary() from dual",
+		"select ST_AsGeoJSON() from dual",
+		"select ST_AsText() from dual",
+		"select ST_Buffer() from dual",
+		"select ST_Buffer_Strategy() from dual",
+		"select ST_Centroid() from dual",
+		"select ST_Collect() from dual",
+		"select ST_Contains() from dual",
+		"select ST_ConvexHull() from dual",
+		"select ST_Crosses() from dual",
+		"select ST_Difference() from dual",
+		"select ST_Dimension() from dual",
+		"select ST_Disjoint() from dual",
+		"select ST_Distance() from dual",
+		"select ST_Distance_Sphere() from dual",
+		"select ST_EndPoint() from dual",
+		"select ST_Envelope() from dual",
+		"select ST_Equals() from dual",
+		"select ST_ExteriorRing() from dual",
+		"select ST_FrechetDistance() from dual",
+		"select ST_GeoHash() from dual",
+		"select ST_GeomCollFromText() from dual",
+		"select ST_GeomCollFromWKB() from dual",
+		"select ST_GeometryN() from dual",
+		"select ST_GeometryType() from dual",
+		"select ST_GeomFromGeoJSON() from dual",
+		"select ST_GeomFromText() from dual",
+		"select ST_GeomFromWKB() from dual",
+		"select ST_HausdorffDistance() from dual",
+		"select ST_InteriorRingN() from dual",
+		"select ST_Intersection() from dual",
+		"select ST_Intersects() from dual",
+		"select ST_IsClosed() from dual",
+		"select ST_IsEmpty() from dual",
+		"select ST_IsSimple() from dual",
+		"select ST_IsValid() from dual",
+		"select ST_LatFromGeoHash() from dual",
+		"select ST_Latitude() from dual",
+		"select ST_Length() from dual",
+		"select ST_LineFromText() from dual",
+		"select ST_LineFromWKB() from dual",
+		"select ST_LineInterpolatePoint() from dual",
+		"select ST_LineInterpolatePoints() from dual",
+		"select ST_LongFromGeoHash() from dual",
+		"select ST_Longitude() from dual",
+		"select ST_MakeEnvelope() from dual",
+		"select ST_MLineFromText() from dual",
+		"select ST_MultiLineStringFromText() from dual",
+		"select ST_MLineFromWKB() from dual",
+		"select ST_MultiLineStringFromWKB() from dual",
+		"select ST_MPointFromText() from dual",
+		"select ST_MultiPointFromText() from dual",
+		"select ST_MPointFromWKB() from dual",
+		"select ST_MultiPointFromWKB() from dual",
+		"select ST_MPolyFromText() from dual",
+		"select ST_MultiPolygonFromText() from dual",
+		"select ST_MPolyFromWKB() from dual",
+		"select ST_MultiPolygonFromWKB() from dual",
+		"select ST_NumGeometries() from dual",
+		"select ST_NumInteriorRing() from dual",
+		"select ST_NumInteriorRings() from dual",
+		"select ST_NumPoints() from dual",
+		"select ST_Overlaps() from dual",
+		"select ST_PointAtDistance() from dual",
+		"select ST_PointFromGeoHash() from dual",
+		"select ST_PointFromText() from dual",
+		"select ST_PointFromWKB() from dual",
+		"select ST_PointN() from dual",
+		"select ST_PolyFromText() from dual",
+		"select ST_PolyFromWKB() from dual",
+		"select ST_PolygonFromWKB() from dual",
+		"select ST_Simplify() from dual",
+		"select ST_SRID() from dual",
+		"select ST_StartPoint() from dual",
+		"select ST_SwapXY() from dual",
+		"select ST_SymDifference() from dual",
+		"select ST_Touches() from dual",
+		"select ST_Transform() from dual",
+		"select ST_Union() from dual",
+		"select ST_Validate() from dual",
+		"select ST_Within() from dual",
+		"select ST_X() from dual",
+		"select ST_Y() from dual",
+		"select STATEMENT_DIGEST() from dual",
+		"select STATEMENT_DIGEST_TEXT() from dual",
+		"select STD(col) from dual",
+		"select STDDEV(col) from dual",
+		"select STDDEV_POP(col) from dual",
+		"select STDDEV_SAMP(col) from dual",
+		"select STR_TO_DATE() from dual",
+		"select STRCMP() from dual",
+		"select SUBDATE() from dual",
+		"select SUBSTR('a', 'b') from dual",
+		"select SUBSTRING('b', 'c') from dual",
+		"select SUBSTRING_INDEX() from dual",
+		"select SUBTIME() from dual",
+		"select SUM(col) from dual",
+		"select SYSDATE() from dual",
+		"select SYSTEM_USER() from dual",
+		"select TAN() from dual",
+		"select TIME() from dual",
+		"select TIME_FORMAT() from dual",
+		"select TIME_TO_SEC() from dual",
+		"select TIMEDIFF() from dual",
+		"select TIMESTAMP() from dual",
+		"select timestampadd(col, 1, 2) from dual",
+		"select timestampdiff(col, 1, 2) from dual",
+		"select TO_BASE64() from dual",
+		"select TO_DAYS() from dual",
+		"select TO_SECONDS() from dual",
+		"select trim(both ' ' from 'a') from dual",
+		"select TRUNCATE() from dual",
+		"select UCASE() from dual",
+		"select UNCOMPRESS() from dual",
+		"select UNCOMPRESSED_LENGTH() from dual",
+		"select UNHEX() from dual",
+		"select UNIX_TIMESTAMP() from dual",
+		"select UpdateXML() from dual",
+		"select UPPER() from dual",
+		"select USER() from dual",
+		"select UTC_DATE() from dual",
+		"select UTC_TIME() from dual",
+		"select UTC_TIMESTAMP() from dual",
+		"select UUID() from dual",
+		"select UUID_SHORT() from dual",
+		"select UUID_TO_BIN() from dual",
+		"select VALIDATE_PASSWORD_STRENGTH() from dual",
+		"select VAR_POP(col) from dual",
+		"select VAR_SAMP(col) from dual",
+		"select VARIANCE(col) from dual",
+		"select VERSION() from dual",
+		"select WAIT_FOR_EXECUTED_GTID_SET() from dual",
+		"select WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS() from dual",
+		"select WEEK() from dual",
+		"select WEEKDAY() from dual",
+		"select WEEKOFYEAR() from dual",
+		"select WEIGHT_STRING() from dual",
+		"select YEAR() from dual",
+		"select YEARWEEK() from dual",
+	}
+
+	// Functions where the input doesn't match the output. Prefer query tests above when possible.
+	testCases := []parseTest{
+		{
+			input:  "select CAST(1 as datetime) from dual",
+			output: "select CAST(1, datetime) from dual",
+		},
+		{
+			input:  "select LOCALTIMESTAMP from dual",
+			output: "select LOCALTIMESTAMP() from dual",
+		},
+	}
+
+	// Unimplemented or broken functionality
+	skippedTestCases := []parseTest{
+		{
+			// USING syntax parsed but not captured
+			input: "select CHAR(77,121,83,81,'76' USING utf8mb4) from dual",
+		},
+		{
+			// INTERVAL function produces a grammar conflict
+			input: "select INTERVAL(col1, col2) from dual",
+		},
+		{
+			// not implemented
+			input: `select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
+		},
+		{
+			// not implemented
+			input: "select JSON_TABLE('') from dual",
+		},
+	}
+
+	for _, query := range queries {
+		test := parseTest{
+			input: query,
+		}
+		runParseTestCase(t, test)
+	}
+
+	for _, test := range testCases {
+		runParseTestCase(t, test)
+	}
+
+	for _, test := range skippedTestCases {
+		t.Run(test.input, func(t *testing.T) {
+			t.Skip()
+		})
+	}
+}
+
 func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input:  "select cast('abc' as date) from t",
-			output: "select convert('abc', date) from t",
+			output: "select cast('abc', date) from t",
 		}, {
 			input:                      "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
@@ -3879,6 +4367,7 @@ func TestCreateTable(t *testing.T) {
 			"	col_varchar2 varchar(2),\n" +
 			"	col_varchar3 varchar(3) character set ascii,\n" +
 			"	col_varchar4 varchar(4) character set ascii collate ascii_bin,\n" +
+			"	col_varchar5 varchar(5) character set ascii binary,\n" +
 			"	col_character_varying character varying,\n" +
 			"	col_character_varying2 character varying(2),\n" +
 			"	col_character_varying3 character varying(3) character set ascii,\n" +
@@ -4370,39 +4859,7 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	nonsupportedKeywords := []string{
-		"sql_cache",
-		"cume_dist",
-		"last_value",
-		"percent_rank",
-		"lag",
-		"first_value",
-		"column",
-		"long",
-		"sql_no_cache",
-		"current_user",
-		"row",
-		"lead",
-		"full",
-		"nvarchar",
-		"_binary",
-		"dec",
-		"all",
-		"processlist",
-		"dense_rank",
-		"analyze",
-		"format",
-		"ntile",
-		"cast",
-		"follows",
-		"group_concat",
-		"nth_value",
-		"_utf8mb4",
-		"row_number",
-		"rank",
-		"infile",
-		"escaped",
-		"terminated",
-		"enclosed",
+		"comment",
 	}
 	nonsupported := map[string]bool{}
 	for _, x := range nonsupportedKeywords {
@@ -5311,6 +5768,7 @@ var correctlyDoParse = []string{
 	"no_wait",
 	"nulls",
 	"number",
+	"nvarchar",
 	"offset",
 	"oj",
 	"old",
@@ -5550,6 +6008,7 @@ var correctlyDoParse = []string{
 
 // reserved in mysql
 var correctlyDontParse = []string{
+	"accessible",
 	"add",
 	"all",
 	"alter",
@@ -5557,19 +6016,31 @@ var correctlyDontParse = []string{
 	"and",
 	"as",
 	"asc",
+	"asensitive",
+	"before",
 	"between",
+	"bigint",
 	"binary",
+	"blob",
 	"both",
 	"by",
 	"call",
+	"cascade",
 	"case",
+	"change",
+	"char",
+	"character",
+	"check",
 	"collate",
 	"column",
 	"condition",
+	"constraint",
 	"continue",
 	"convert",
 	"create",
 	"cross",
+	"cube",
+	"cume_dist",
 	"current_date",
 	"current_time",
 	"current_timestamp",
@@ -5577,32 +6048,58 @@ var correctlyDontParse = []string{
 	"cursor",
 	"database",
 	"databases",
+	"day_hour",
+	"day_microsecond",
+	"day_minute",
+	"day_second",
 	"dec",
+	"decimal",
+	"declare",
 	"default",
+	"delayed",
 	"delete",
+	"dense_rank",
 	"desc",
 	"describe",
 	"deterministic",
 	"distinct",
+	"distinctrow",
 	"div",
+	"double",
 	"drop",
+	"each",
 	"else",
 	"elseif",
+	"empty",
 	"enclosed",
 	"escaped",
+	"except",
 	"exists",
 	"exit",
 	"explain",
 	"false",
+	"fetch",
+	"first_value",
+	"float",
+	"float4",
+	"float8",
 	"for",
 	"force",
+	"foreign",
 	"from",
+	"fulltext",
 	"function",
+	"generated",
+	"get",
 	"grant",
 	"group",
 	"grouping",
 	"groups",
 	"having",
+	"high_priority",
+	"hour_microsecond",
+	"hour_minute",
+	"hour_second",
 	"if",
 	"ignore",
 	"in",
@@ -5610,62 +6107,135 @@ var correctlyDontParse = []string{
 	"infile",
 	"inner",
 	"inout",
+	"insensitive",
 	"insert",
+	"int",
+	"int1",
+	"int2",
+	"int3",
+	"int4",
+	"int8",
+	"integer",
 	"interval",
 	"into",
+	"io_after_gtids",
+	"io_before_gtids",
 	"is",
+	"iterate",
 	"join",
+	"json_table",
 	"key",
+	"keys",
 	"kill",
+	"lag",
+	"last_value",
+	"lateral",
+	"lead",
 	"leading",
+	"leave",
 	"left",
 	"like",
 	"limit",
+	"linear",
+	"lines",
+	"load",
 	"localtime",
 	"localtimestamp",
 	"lock",
 	"long",
+	"longblob",
+	"longtext",
+	"loop",
+	"low_priority",
+	"master_bind",
+	"master_ssl_verify_server_cert",
 	"match",
 	"maxvalue",
+	"mediumblob",
+	"mediumint",
+	"mediumtext",
+	"middleint",
+	"minute_microsecond",
 	"mod",
 	"modifies",
 	"natural",
 	"not",
 	"no_write_to_binlog",
+	"nth_value",
+	"ntile",
 	"null",
+	"numeric",
 	"of",
 	"on",
+	"optimize",
 	"optimizer_costs",
+	"option",
+	"optionally",
 	"or",
 	"order",
 	"out",
 	"outer",
+	"outfile",
 	"over",
+	"partition",
+	"percent_rank",
+	"precision",
+	"primary",
 	"procedure",
+	"purge",
+	"range",
+	"rank",
+	"read",
 	"reads",
+	"read_write",
+	"real",
 	"recursive",
 	"references",
 	"regexp",
+	"release",
 	"rename",
+	"repeat",
 	"replace",
 	"require",
+	"resignal",
+	"restrict",
+	"return",
 	"revoke",
 	"right",
 	"rlike",
 	"row",
+	"rows",
+	"row_number",
 	"schema",
+	"schemas",
+	"second_microsecond",
 	"select",
+	"sensitive",
 	"separator",
 	"set",
 	"show",
+	"signal",
+	"smallint",
+	"spatial",
+	"specific",
 	"sql",
 	"sqlexception",
+	"sqlstate",
 	"sqlwarning",
+	"sql_big_result",
 	"sql_calc_found_rows",
+	"sql_small_result",
+	"ssl",
+	"starting",
+	"stored",
 	"straight_join",
+	"system",
 	"table",
 	"terminated",
 	"then",
+	"tinyblob",
+	"tinyint",
+	"tinytext",
 	"to",
 	"trailing",
 	"trigger",
@@ -5674,6 +6244,7 @@ var correctlyDontParse = []string{
 	"union",
 	"unique",
 	"unlock",
+	"unsigned",
 	"update",
 	"usage",
 	"use",
@@ -5682,17 +6253,26 @@ var correctlyDontParse = []string{
 	"utc_time",
 	"utc_timestamp",
 	"values",
+	"varbinary",
+	"varchar",
+	"varcharacter",
+	"varying",
+	"virtual",
 	"when",
 	"where",
+	"while",
 	"window",
 	"with",
+	"write",
+	"xor",
+	"year_month",
+	"zerofill",
 }
 
 // not reserved in mysql
 var incorrectlyDontParse = []string{
 	"escape",
 	"next",
-	"nvarchar",
 	"off",
 	"sql_cache",
 	"sql_no_cache",
@@ -5700,154 +6280,8 @@ var incorrectlyDontParse = []string{
 
 // reserved in mysql
 var incorrectlyParse = []string{
-	"accessible",
-	"asensitive",
-	"character",
-	"cube",
-	"cume_dist",
-	"day_hour",
-	"day_microsecond",
-	"day_minute",
-	"day_second",
-	"delayed",
-	"dense_rank",
-	"distinctrow",
-	"double",
 	"dual",
-	"each",
-	"empty",
-	"except",
-	"fetch",
-	"first_value",
-	"float",
-	"float4",
-	"float8",
-	"generated",
-	"get",
-	"high_priority",
-	"hour_microsecond",
-	"hour_minute",
-	"hour_second",
-	"insensitive",
-	"int",
-	"int1",
-	"int2",
-	"int3",
-	"int4",
-	"int8",
-	"integer",
-	"io_after_gtids",
-	"io_before_gtids",
-	"iterate",
-	"json_table",
-	"percent_rank",
-	"lag",
-	"last_value",
-	"lateral",
-	"lead",
-	"leave",
-	"linear",
-	"lines",
-	"loop",
-	"low_priority",
-	"master_bind",
-	"master_ssl_verify_server_cert",
-	"middleint",
-	"minute_microsecond",
 	"minute_second",
-	"nth_value",
-	"ntile",
-	"outfile",
-	"percent_rank",
-	"purge",
-	"rank",
-	"read_write",
-	"repeat",
-	"return",
-	"row_number",
-	"second_microsecond",
-	"sensitive",
-	"specific",
-	"sqlstate",
-	"sql_big_result",
-	"sql_small_result",
-	"stored",
-	"system",
-	"varcharacter",
-	"virtual",
-	"while",
-	"write",
-	"xor",
-	"year_month",
-}
-
-// reserved in mysql
-// TODO: these parse in dolt but not in mysql (without backquotes)
-// removing them from non_reserved_keyword in sql.y fixes it (without causing any shift/reduce conflicts but might cause other other problems; need tests)
-var incorrectlyParse2 = []string{
-	"before",
-	"bigint",
-	"blob",
-	"cascade",
-	"change",
-	"char",
-	"check",
-	"constraint",
-	"decimal",
-	"declare",
-	"foreign",
-	"fulltext",
-	"keys",
-	"load",
-	"longblob",
-	"longtext",
-	"mediumblob",
-	"mediumint",
-	"mediumtext",
-	"numeric",
-	"optimize",
-	"option",
-	"optionally",
-	"partition",
-	"precision",
-	"primary",
-	"range",
-	"read",
-	"real",
-	"release",
-	"resignal",
-	"restrict",
-	"rows",
-	"schemas",
-	"signal",
-	"smallint",
-	"spatial",
-	"ssl",
-	"starting",
-	"tinyblob",
-	"tinyint",
-	"tinytext",
-	"unsigned",
-	"varbinary",
-	"varchar",
-	"varying",
-	"zerofill",
-}
-
-// not reserved in mysql
-var incorrectlyParseForNonSelect = []string{
-	"auto_increment", "add", "and", "alter", "mod", "asc", "as", "between", "binary", "by",
-	"call", "case", "collate", "convert", "connection", "create", "cross", "current", "current_date", "current_time", "current_timestamp", "database", "databases", "default", "delete",
-	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "event", "execute",
-	"exists", "explain", "failed_login_attempts", "false", "file", "first", "following", "for", "force", "from", "function",
-	"grant", "group", "grouping", "groups", "having", "identified", "if", "ignore", "in", "inout", "index", "inner", "insert",
-	"interval", "into", "is", "join", "key", "kill", "left",
-	"like", "limit", "localtime", "localtimestamp", "lock", "match", "maxvalue", "mod", "modifies",
-	"natural", "next", "none", "not", "null", "of", "off", "on", "or", "order", "out", "outer", "over", "password",
-	"password_lock_time", "procedure", "process", "reads", "recursive", "references", "regexp", "reload", "rename",
-	"replace", "require", "revoke", "right", "schema", "select", "separator", "set", "show", "shutdown", "sql", "straight_join", "substr", "substring", "super", "table", "then",
-	"timestampadd", "timestampdiff", "to", "trigger", "true", "union", "unique", "unlock", "update", "usage", "use", "using",
-	"utc_date", "utc_time", "utc_timestamp", "values", "when", "where", "window", "with",
 }
 
 // TestKeywordsCorrectlyParse ensures that certain keywords can be parsed by a series of edit queries.
@@ -5857,8 +6291,13 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
 	cTest := "CREATE TABLE t(%s int)"
+	tTest := "CREATE TABLE %s(i int)"
+	tcTest := "SELECT * FROM t ORDER BY t.%s"
+	sTest := "SELECT %s.c FROM t"
+	dropConstraintTest := "ALTER TABLE t DROP CONSTRAINT %s"
+	dropCheckTest := "ALTER TABLE t DROP CHECK %s"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest, sTest, dropConstraintTest, dropCheckTest}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {
@@ -5871,19 +6310,70 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	}
 }
 
-// TestKeywordsCorrectlyDontParse ensures certain keywords should not be parsed in certain queries.
-func TestKeywordsCorrectlyDontParse(t *testing.T) {
-	aliasTest := "SELECT 1 as %s"
-	// TODO: Want all of these passing eventually
-	// iTest := "INSERT INTO t (%s) VALUES (1)"
-	// dTest := "DELETE FROM t where %s=1"
-	// uTest := "UPDATE t SET %s=1"
-	// cTest := "CREATE TABLE t(%s int)"
+func TestReservedKeywordsParseWhenQualified(t *testing.T) {
+	tcTest := "SELECT * FROM t ORDER BY %s.%s"
+	sTest := "SELECT %s.%s FROM t"
 
-	tests := []string{aliasTest}
+	tests := []string{tcTest, sTest}
+
+	// these are reserved keywords that don't work even when qualified
+	badReservedKeywords := map[string]bool{
+		"all":                 true,
+		"distinct":            true,
+		"div":                 true,
+		"key":                 true,
+		"select":              true,
+		"sql_calc_found_rows": true,
+		"straight_join":       true,
+		"when":                true,
+	}
 
 	for _, kw := range correctlyDontParse {
 		for _, query := range tests {
+			test := fmt.Sprintf(query, kw, kw)
+			t.Run(test, func(t *testing.T) {
+				if badReservedKeywords[kw] {
+					t.Skip("this reserved word doesn't work when qualified")
+				}
+				_, err := Parse(test)
+				assert.NoError(t, err)
+			})
+		}
+	}
+}
+
+// TestKeywordsCorrectlyDontParse ensures certain keywords should not be parsed in certain queries.
+func TestKeywordsCorrectlyDontParse(t *testing.T) {
+	aliasTest := "SELECT 1 as %s"
+	iTest := "INSERT INTO t (%s) VALUES (1)"
+	dTest := "DELETE FROM t where %s=1"
+	uTest := "UPDATE t SET %s=1"
+	cTest := "CREATE TABLE t(%s int)"
+	tTest := "CREATE TABLE %s(i int)"
+
+	// these are reserved keywords that are also values, so they can be used in conditions
+	validConditionReservedKeywords := map[string]bool{
+		"current_date":      true,
+		"current_time":      true,
+		"current_timestamp": true,
+		"current_user":      true,
+		"false":             true,
+		"localtime":         true,
+		"localtimestamp":    true,
+		"null":              true,
+		"true":              true,
+		"utc_date":          true,
+		"utc_time":          true,
+		"utc_timestamp":     true,
+	}
+
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest}
+
+	for _, kw := range correctlyDontParse {
+		for _, query := range tests {
+			if query == dTest && validConditionReservedKeywords[kw] {
+				continue
+			}
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
 				_, err := Parse(test)
@@ -5913,18 +6403,6 @@ func TestKeywordsIncorrectlyDoParse(t *testing.T) {
 			})
 		}
 	}
-
-	tests = []string{iTest, dTest, uTest}
-	for _, kw := range incorrectlyParseForNonSelect {
-		for _, query := range tests {
-			test := fmt.Sprintf(query, kw)
-			t.Run(test, func(t *testing.T) {
-				t.Skip()
-				_, err := Parse(test)
-				assert.Error(t, err)
-			})
-		}
-	}
 }
 
 // TestKeywordsIncorrectlyDontParse documents behavior where the parser is incorrectly throwing an error for a valid keyword.
@@ -5941,12 +6419,186 @@ func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
-				t.Skip()
+				t.Skip("delete doesn't work for these words yet")
 				_, err := Parse(test)
 				assert.NoError(t, err)
 			})
 		}
 	}
+}
+
+func TestJSONTable(t *testing.T) {
+	validSQL := []parseTest{
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) as tt;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as tt`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1, "b":2},{"a":3, "b":4}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a",
+			y varchar(100) path "$.b"
+		)
+	) as tt;`,
+			output: `select * from JSON_TABLE('[{\"a\":1, \"b\":2},{\"a\":3, \"b\":4}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a",
+	y varchar(100) path "$.b"
+)) as tt`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		concat('[{},','{}]'),
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a",
+			y varchar(100) path "$.b"
+		)
+	) as t;
+	`,
+			output: `select * from JSON_TABLE(concat('[{},', '{}]'), "$[*]" COLUMNS(
+	x varchar(100) path "$.a",
+	y varchar(100) path "$.b"
+)) as t`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		123,
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a",
+			y varchar(100) path "$.b"
+		)
+	) as t;
+	`,
+			output: `select * from JSON_TABLE(123, "$[*]" COLUMNS(
+	x varchar(100) path "$.a",
+	y varchar(100) path "$.b"
+)) as t`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t1
+JOIN
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t2;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t1 join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t2`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t
+JOIN
+	tt;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t join tt`},
+		{
+			input: `
+SELECT *
+FROM
+	t
+JOIN
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) tt;`,
+			output: `select * from t join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as tt`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t1
+UNION
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"b":1},{"b":2}]',
+		"$[*]" COLUMNS(
+			y varchar(100) path "$.b"
+		)
+	) t2;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t1 union select * from JSON_TABLE('[{\"b\":1},{\"b\":2}]', "$[*]" COLUMNS(
+	y varchar(100) path "$.b"
+)) as t2`},
+		{
+			input: `SELECT * FROM t WHERE i in (SELECT x FROM JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(x VARCHAR(100) PATH "$.a")) AS tt);`,
+			output: `select * from t where i in (select x from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x VARCHAR(100) path "$.a"
+)) as tt)`,
+		},
+		{
+			input: `
+SELECT x, y
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t1,
+	JSON_TABLE(
+		'[{"b":3},{"b":4}]',
+		"$[*]" COLUMNS(
+			y varchar(100) path "$.b"
+		)
+	) t2;`,
+			output: `select x, y from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t1, JSON_TABLE('[{\"b\":3},{\"b\":4}]', "$[*]" COLUMNS(
+	y varchar(100) path "$.b"
+)) as t2`,
+		},
+	}
+
+	for _, tcase := range validSQL {
+		runParseTestCase(t, tcase)
+	}
+
 }
 
 // Benchmark run on 6/23/17, prior to improvements:

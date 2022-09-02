@@ -31,7 +31,7 @@ type AuthServerNone struct{}
 
 // AuthMethod is part of the AuthServer interface.
 // We always return MysqlNativePassword.
-func (a *AuthServerNone) AuthMethod(user string) (string, error) {
+func (a *AuthServerNone) AuthMethod(user, addr string) (string, error) {
 	return MysqlNativePassword, nil
 }
 

@@ -1297,6 +1297,7 @@ type Insert struct {
 	Comments   Comments
 	Ignore     string
 	Table      TableName
+	With       *With
 	Partitions Partitions
 	Columns    Columns
 	Rows       InsertRows
@@ -1309,7 +1310,8 @@ const (
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s %v%sinto %v%v%v %v%v",
+	buf.Myprintf("%v%s %v%sinto %v%v%v %v%v",
+		node.With,
 		node.Action,
 		node.Comments, node.Ignore,
 		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
@@ -1326,6 +1328,7 @@ func (node *Insert) walkSubtree(visit Visit) error {
 		node.Columns,
 		node.Rows,
 		node.OnDup,
+		node.With,
 	)
 }
 
@@ -1346,6 +1349,7 @@ type Update struct {
 	Comments   Comments
 	Ignore     string
 	TableExprs TableExprs
+	With       *With
 	Exprs      AssignmentExprs
 	Where      *Where
 	OrderBy    OrderBy
@@ -1354,8 +1358,8 @@ type Update struct {
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
-	buf.Myprintf("update %v%s%v set %v%v%v%v",
-		node.Comments, node.Ignore, node.TableExprs,
+	buf.Myprintf("%vupdate %v%s%v set %v%v%v%v",
+		node.With, node.Comments, node.Ignore, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
@@ -1371,6 +1375,7 @@ func (node *Update) walkSubtree(visit Visit) error {
 		node.Where,
 		node.OrderBy,
 		node.Limit,
+		node.With,
 	)
 }
 
@@ -1380,6 +1385,7 @@ type Delete struct {
 	Comments   Comments
 	Targets    TableNames
 	TableExprs TableExprs
+	With       *With
 	Partitions Partitions
 	Where      *Where
 	OrderBy    OrderBy
@@ -1388,7 +1394,7 @@ type Delete struct {
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
-	buf.Myprintf("delete %v", node.Comments)
+	buf.Myprintf("%vdelete %v", node.With, node.Comments)
 	if node.Targets != nil {
 		buf.Myprintf("%v ", node.Targets)
 	}
@@ -1407,6 +1413,7 @@ func (node *Delete) walkSubtree(visit Visit) error {
 		node.Where,
 		node.OrderBy,
 		node.Limit,
+		node.With,
 	)
 }
 
@@ -2121,8 +2128,9 @@ type ColumnType struct {
 	Scale    *SQLVal
 
 	// Text field options
-	Charset string
-	Collate string
+	Charset       string
+	Collate       string
+	BinaryCollate bool
 
 	// Enum values
 	EnumValues []string
@@ -2136,6 +2144,11 @@ type ColumnType struct {
 
 	// For spatial types
 	SRID *SQLVal
+
+	// For json_table
+	Path    string
+	Exists  bool
+	OnEmpty Expr
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -2203,6 +2216,13 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		ct.SRID = other.SRID
 	}
 
+	if other.Path != "" {
+		if ct.Path != "" {
+			return errors.New("cannot include PATH more than once")
+		}
+		ct.Path = other.Path
+	}
+
 	return nil
 }
 
@@ -2230,6 +2250,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Charset != "" {
 		opts = append(opts, keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
+	}
+	if ct.BinaryCollate {
+		opts = append(opts, keywordStrings[BINARY])
 	}
 	if ct.Collate != "" {
 		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
@@ -2277,6 +2300,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		} else {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
+	}
+	if ct.Path != "" {
+		opts = append(opts, keywordStrings[PATH], `"`+ct.Path+`"`)
 	}
 
 	if len(opts) != 0 {
@@ -3169,8 +3195,12 @@ type Over WindowDef
 
 // Format formats the node.
 func (node *Over) Format(buf *TrackedBuffer) {
-	if !node.Name.IsEmpty() {
-		buf.Myprintf("over %v", node.Name)
+	if node == nil {
+		return
+	}
+
+	if node.isSimpleRef() {
+		buf.Myprintf("over %v", node.NameRef)
 	} else {
 		buf.Myprintf("over (")
 		buf.Myprintf("%v", (*WindowDef)(node))
@@ -3183,6 +3213,10 @@ func (node *Over) walkSubtree(visit Visit) error {
 		return nil
 	}
 	return Walk(visit, node.PartitionBy, node.OrderBy, node.Name)
+}
+
+func (node *Over) isSimpleRef() bool {
+	return !node.NameRef.IsEmpty() && len(node.PartitionBy) == 0 && len(node.OrderBy) == 0 && node.Frame == nil
 }
 
 // Nextval defines the NEXT VALUE expression.
@@ -3315,6 +3349,7 @@ type TableExpr interface {
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*JSONTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
 func (TableFuncExpr) iTableExpr()     {}
@@ -3418,6 +3453,10 @@ func (w *With) Format(buf *TrackedBuffer) {
 }
 
 func (w *With) walkSubtree(visit Visit) error {
+	if w == nil {
+		return nil
+	}
+
 	for _, n := range w.Ctes {
 		if err := Walk(visit, n); err != nil {
 			return err
@@ -3746,6 +3785,27 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 		node.RightExpr,
 		node.Condition,
 	)
+}
+
+// JSONTableExpr represents a TableExpr that's a json_table operation.
+type JSONTableExpr struct {
+	Data  Expr
+	Path  string
+	Spec  *TableSpec
+	Alias TableIdent
+}
+
+// Format formats the node.
+func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf(`JSON_TABLE(%v, "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Spec, node.Alias)
+
+}
+
+func (node *JSONTableExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit)
 }
 
 // IndexHints represents a list of index hints.
@@ -4954,15 +5014,16 @@ func (node *TrimExpr) walkSubtree(visit Visit) error {
 }
 
 // ConvertExpr represents a call to CONVERT(expr, type)
-// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
+// or its equivalent CAST(expr AS type). Both are rewritten to the former.
 type ConvertExpr struct {
+	Name string
 	Expr Expr
 	Type *ConvertType
 }
 
 // Format formats the node.
 func (node *ConvertExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("convert(%v, %v)", node.Expr, node.Type)
+	buf.Myprintf("%s(%v, %v)", node.Name, node.Expr, node.Type)
 }
 
 func (node *ConvertExpr) walkSubtree(visit Visit) error {

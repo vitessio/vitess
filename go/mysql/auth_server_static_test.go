@@ -155,11 +155,11 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	*mysqlAuthServerStaticFile = tmpFile.Name()
+	mysqlAuthServerStaticFile = tmpFile.Name()
 
-	savedReloadInterval := *mysqlAuthServerStaticReloadInterval
-	defer func() { *mysqlAuthServerStaticReloadInterval = savedReloadInterval }()
-	*mysqlAuthServerStaticReloadInterval = 10 * time.Millisecond
+	savedReloadInterval := mysqlAuthServerStaticReloadInterval
+	defer func() { mysqlAuthServerStaticReloadInterval = savedReloadInterval }()
+	mysqlAuthServerStaticReloadInterval = 10 * time.Millisecond
 
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)

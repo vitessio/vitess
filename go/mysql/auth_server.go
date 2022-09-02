@@ -50,7 +50,7 @@ type AuthServer interface {
 	// expected. If anything else is returned, Negotiate()
 	// will be called on the connection, and the AuthServer
 	// needs to handle the packets.
-	AuthMethod(user string) (string, error)
+	AuthMethod(user, addr string) (string, error)
 
 	// Salt returns the salt to use for a connection.
 	// It should be 20 bytes of data.

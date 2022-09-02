@@ -206,15 +206,16 @@ func NewListener(protocol, address string, authServer AuthServer, handler Handle
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
 type ListenerConfig struct {
 	// Protocol-Address pair and Listener are mutually exclusive parameters
-	Protocol           string
-	Address            string
-	Listener           net.Listener
-	AuthServer         AuthServer
-	Handler            Handler
-	ConnReadTimeout    time.Duration
-	ConnWriteTimeout   time.Duration
-	ConnReadBufferSize int
-	MaxConns           uint64
+	Protocol                 string
+	Address                  string
+	Listener                 net.Listener
+	AuthServer               AuthServer
+	Handler                  Handler
+	ConnReadTimeout          time.Duration
+	ConnWriteTimeout         time.Duration
+	ConnReadBufferSize       int
+	MaxConns                 uint64
+	AllowClearTextWithoutTLS bool
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -232,15 +233,16 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 	}
 
 	return &Listener{
-		authServer:         cfg.AuthServer,
-		handler:            cfg.Handler,
-		listener:           l,
-		ServerVersion:      DefaultServerVersion,
-		connectionID:       1,
-		connReadTimeout:    cfg.ConnReadTimeout,
-		connWriteTimeout:   cfg.ConnWriteTimeout,
-		connReadBufferSize: cfg.ConnReadBufferSize,
-		maxConns:           cfg.MaxConns,
+		authServer:               cfg.AuthServer,
+		handler:                  cfg.Handler,
+		listener:                 l,
+		ServerVersion:            DefaultServerVersion,
+		connectionID:             1,
+		connReadTimeout:          cfg.ConnReadTimeout,
+		connWriteTimeout:         cfg.ConnWriteTimeout,
+		connReadBufferSize:       cfg.ConnReadBufferSize,
+		maxConns:                 cfg.MaxConns,
+		AllowClearTextWithoutTLS: sync2.NewAtomicBool(cfg.AllowClearTextWithoutTLS),
 	}, nil
 }
 
@@ -362,7 +364,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
-	authServerMethod, err := l.authServer.AuthMethod(user)
+	authServerMethod, err := l.authServer.AuthMethod(user, conn.RemoteAddr().String())
 	if err != nil {
 		c.writeErrorPacketFromError(err)
 		return

@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/log"
 )
 
-var clientcertAuthMethod = flag.String("mysql_clientcert_auth_method", MysqlClearPassword, "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
+var clientcertAuthMethod = MysqlClearPassword
 
 type AuthServerClientCert struct {
 	Method string
@@ -36,17 +36,17 @@ func InitAuthServerClientCert() {
 		log.Info("Not configuring AuthServerClientCert because mysql_server_ssl_ca is empty")
 		return
 	}
-	if *clientcertAuthMethod != MysqlClearPassword && *clientcertAuthMethod != MysqlDialog {
+	if clientcertAuthMethod != MysqlClearPassword && clientcertAuthMethod != MysqlDialog {
 		log.Fatalf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 	}
 	ascc := &AuthServerClientCert{
-		Method: *clientcertAuthMethod,
+		Method: clientcertAuthMethod,
 	}
 	RegisterAuthServerImpl("clientcert", ascc)
 }
 
 // AuthMethod is part of the AuthServer interface.
-func (ascc *AuthServerClientCert) AuthMethod(user string) (string, error) {
+func (ascc *AuthServerClientCert) AuthMethod(user, addr string) (string, error) {
 	return ascc.Method, nil
 }
 
