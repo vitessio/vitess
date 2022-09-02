@@ -21,8 +21,15 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/mysql"
 )
+
+func init() {
+	mySQLVersion := "5.7.9"
+	servenv.MySQLServerVersion = &mySQLVersion
+}
 
 func TestAggregateTypes(t *testing.T) {
 	ctx := context.Background()
@@ -52,6 +59,16 @@ func TestAggregateTypes(t *testing.T) {
 
 	qr = exec(t, conn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select count(distinct val1) k from aggr_test where id = 1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select count(distinct val1) k from aggr_test")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(5)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 }
