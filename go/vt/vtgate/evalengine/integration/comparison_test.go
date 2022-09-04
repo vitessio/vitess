@@ -686,7 +686,7 @@ func TestCaseExprWithValue(t *testing.T) {
 	}
 }
 
-func TestCeil(t *testing.T) {
+func TestCeilandCeiling(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
@@ -709,5 +709,6 @@ func TestCeil(t *testing.T) {
 
 	for _, num := range ceilInputs {
 		compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEILING(%s)", num))
 	}
 }

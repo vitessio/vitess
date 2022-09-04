@@ -37,7 +37,7 @@ var builtinFunctions = map[string]builtin{
 	"bit_count": builtinBitCount{},
 	"hex":       builtinHex{},
 	"ceil":      builtinCeil{},
-	"ceiling":   builtinCeil{},
+	"ceiling":   builtinCeiling{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
@@ -677,6 +677,47 @@ func (builtinCeil) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 func (builtinCeil) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
 		throwArgError("CEIL")
+	}
+	t, f := args[0].typeof(env)
+	if sqltypes.IsIntegral(t) {
+		return sqltypes.Int64, f
+	} else if sqltypes.Decimal == t {
+		return sqltypes.Decimal, f
+	} else {
+		return sqltypes.Float64, f
+	}
+}
+
+type builtinCeiling struct{}
+
+func (builtinCeiling) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	argtype := inarg.typeof()
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	if sqltypes.IsIntegral(argtype) {
+		result.setInt64(inarg.int64())
+	} else if sqltypes.Decimal == argtype {
+		num := inarg.decimal()
+		num = num.Ceil()
+		intnum, isfit := num.Int64()
+		if isfit {
+			result.setInt64(intnum)
+		} else {
+			result.setDecimal(num, 0)
+		}
+	} else {
+		inarg.makeFloat()
+		result.setFloat(math.Ceil(inarg.float64()))
+	}
+}
+
+func (builtinCeiling) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("CEILING")
 	}
 	t, f := args[0].typeof(env)
 	if sqltypes.IsIntegral(t) {
