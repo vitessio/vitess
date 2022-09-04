@@ -18,32 +18,42 @@ import (
 	"testing"
 )
 
-func TestBuiltinLower(t *testing.T) {
-	var cases = []string{
-		"NULL",
-		"\"\"",
-		"\"a\"",
-		"\"abc\"",
-		"1",
-		"-1",
-		"0123",
-		"0xAACC",
-		"3.1415926",
-		"\"中文测试\"",
-		"\"日本語テスト\"",
-		"\"한국어 시험\"",
-		"\"😊😂🤢\"",
-		"9223372036854775807",
-		"-9223372036854775808",
-		"999999999999999999999999",
-		"-999999999999999999999999",
-	}
+var cases = []string{
+	"NULL",
+	"\"\"",
+	"\"a\"",
+	"\"abc\"",
+	"1",
+	"-1",
+	"0123",
+	"0xAACC",
+	"3.1415926",
+	"\"中文测试\"",
+	"\"日本語テスト\"",
+	"\"한국어 시험\"",
+	"\"😊😂🤢\"",
+	"9223372036854775807",
+	"-9223372036854775808",
+	"999999999999999999999999",
+	"-999999999999999999999999",
+}
 
+func TestBuiltinLower(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
 	for _, str := range cases {
 		query := fmt.Sprintf("LOWER(%s)", str)
+		compareRemoteExpr(t, conn, query)
+	}
+}
+
+func TestBuiltinLcase(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, str := range cases {
+		query := fmt.Sprintf("LCASE(%s)", str)
 		compareRemoteExpr(t, conn, query)
 	}
 }
