@@ -38,6 +38,7 @@ var builtinFunctions = map[string]builtin{
 	"hex":       builtinHex{},
 	"ceil":      builtinCeil{},
 	"ceiling":   builtinCeiling{},
+	"lower":     builtinLower{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
