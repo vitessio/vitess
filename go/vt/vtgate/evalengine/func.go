@@ -36,6 +36,7 @@ var builtinFunctions = map[string]builtin{
 	"collation": builtinCollation{},
 	"bit_count": builtinBitCount{},
 	"hex":       builtinHex{},
+	"lower":     builtinLower{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
