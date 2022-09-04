@@ -25,6 +25,7 @@ import (
 
 type (
 	builtinLower struct{}
+	builtinLcase struct{}
 )
 
 func (builtinLower) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
@@ -48,6 +49,32 @@ func (builtinLower) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult
 func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
 		throwArgError("LOWER")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.VarChar, f
+}
+
+func (builtinLcase) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	t := inarg.typeof()
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	if sqltypes.IsText(t) {
+		tolower := strings.ToLower(inarg.value().RawStr())
+		result.setString(tolower, inarg.collation())
+	} else {
+		tolower := inarg.value().RawStr()
+		inarg.makeTextualAndConvert(collations.CollationUtf8mb4ID)
+		result.setString(tolower, inarg.collation())
+	}
+}
+
+func (builtinLcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("LCASE")
 	}
 	_, f := args[0].typeof(env)
 	return sqltypes.VarChar, f
