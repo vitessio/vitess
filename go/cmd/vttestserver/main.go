@@ -14,8 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vttestserver is a native Go implementation of `run_local_server.py`.
-// It allows users to spawn a self-contained Vitess server for local testing/CI
+// vttestserver allows users to spawn a self-contained Vitess server for local testing/CI.
 package main
 
 import (
