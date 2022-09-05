@@ -97,6 +97,8 @@ type RestoreParams struct {
 	// RestoreToPos hints that a point in time recovery is requested, to recover up to the specific given pos.
 	// When empty, the restore is a normal from full backup
 	RestoreToPos mysql.Position
+	// When DryRun is set, no restore actually takes place; but some of its steps are validated.
+	DryRun bool
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
@@ -275,6 +277,24 @@ func (p *RestorePath) IncrementalBackupHandles() []backupstorage.BackupHandle {
 		return nil
 	}
 	return p.manifestHandleMap.Handles(p.manifests[1:])
+}
+
+func (p *RestorePath) String() string {
+	var sb strings.Builder
+	sb.WriteString("RestorePath:")
+	for i, m := range p.manifests {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(" ")
+		if m.Incremental {
+			sb.WriteString("incremental:")
+		} else {
+			sb.WriteString("full:")
+		}
+		sb.WriteString(m.Position.String())
+	}
+	return sb.String()
 }
 
 // FindBackupToRestore returns a selected candidate backup to be restored.

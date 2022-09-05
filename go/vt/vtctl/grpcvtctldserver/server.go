@@ -2399,6 +2399,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
 		BackupTime:   req.BackupTime,
 		RestoreToPos: req.RestoreToPos,
+		DryRun:       req.DryRun,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {

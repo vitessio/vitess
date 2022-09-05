@@ -64,8 +64,8 @@ func init() {
 	addCommand("Tablets", command{
 		name:   "RestoreFromBackup",
 		method: commandRestoreFromBackup,
-		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] [--restore_to_pos=<pos>] <tablet alias>",
-		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time. If '--restore_to_pos' is given, then a point in time restore based on one full backup followed by zero or more incremental backups",
+		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] [--restore_to_pos=<pos>] [--dry_run] <tablet alias>",
+		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time. If '--restore_to_pos' is given, then a point in time restore based on one full backup followed by zero or more incremental backups. dry-run only validates restore steps without actually restoring data",
 	})
 }
 
@@ -202,6 +202,7 @@ func (b *backupRestoreEventStreamLogger) Send(resp *vtctldatapb.RestoreFromBacku
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	restoreToPos := subFlags.String("restore_to_pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
+	dryRun := subFlags.Bool("dry_run", false, "Only validate restore steps, do not actually restore data")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -229,6 +230,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	req := &vtctldatapb.RestoreFromBackupRequest{
 		TabletAlias:  tabletAlias,
 		RestoreToPos: *restoreToPos,
+		DryRun:       *dryRun,
 	}
 
 	if !backupTime.IsZero() {

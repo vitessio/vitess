@@ -211,6 +211,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		Keyspace:            keyspace,
 		Shard:               tablet.Shard,
 		StartTime:           logutil.ProtoToTime(request.BackupTime),
+		DryRun:              request.DryRun,
 	}
 	if request.RestoreToPos != "" {
 		pos, err := mysql.DecodePosition(request.RestoreToPos)
