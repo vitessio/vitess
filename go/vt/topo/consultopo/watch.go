@@ -18,18 +18,29 @@ package consultopo
 
 import (
 	"context"
-	"flag"
 	"path"
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	watchPollDuration = flag.Duration("topo_consul_watch_poll_duration", 30*time.Second, "time of the long poll for watch queries.")
+	watchPollDuration = 30 * time.Second
 )
+
+func init() {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
+		servenv.OnParseFor(cmd, registerWatchFlags)
+	}
+}
+
+func registerWatchFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&watchPollDuration, "topo_consul_watch_poll_duration", watchPollDuration, "time of the long poll for watch queries.")
+}
 
 // Watch is part of the topo.Conn interface.
 func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
@@ -75,7 +86,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			waitIndex := pair.ModifyIndex
 			opts := &api.QueryOptions{
 				WaitIndex: waitIndex,
-				WaitTime:  *watchPollDuration,
+				WaitTime:  watchPollDuration,
 			}
 
 			// Make a new Context for just this one Get() call.

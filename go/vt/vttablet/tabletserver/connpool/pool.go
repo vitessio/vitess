@@ -164,7 +164,7 @@ func (cp *Pool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
+func (cp *Pool) Get(ctx context.Context, settings []string) (*DBConn, error) {
 	span, ctx := trace.NewSpan(ctx, "Pool.Get")
 	defer span.Finish()
 
@@ -178,7 +178,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	}
 
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool)
+		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, nil)
 	}
 	p := cp.pool()
 	if p == nil {
@@ -194,7 +194,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
-	r, err := p.Get(ctx, nil)
+	r, err := p.Get(ctx, settings)
 	if err != nil {
 		return nil, err
 	}

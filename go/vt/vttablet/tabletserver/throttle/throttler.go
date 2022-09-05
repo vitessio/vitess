@@ -336,7 +336,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 		Err:         nil,
 	}
 	ctx := context.Background()
-	conn, err := throttler.pool.Get(ctx)
+	conn, err := throttler.pool.Get(ctx, nil)
 	if err != nil {
 		metric.Err = err
 		return metric

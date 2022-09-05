@@ -27,9 +27,9 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 	"vitess.io/vitess/go/vt/orchestrator/os"
+	math "vitess.io/vitess/go/vt/orchestrator/util"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
@@ -1831,7 +1831,9 @@ func RegroupReplicasGTID(
 
 		movedReplicas, unmovedReplicas, _, err = MoveReplicasViaGTID(replicasToMove, candidateReplica, postponedFunctionsContainer)
 		unmovedReplicas = append(unmovedReplicas, aheadReplicas...)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {

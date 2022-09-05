@@ -801,7 +801,9 @@ func emergentlyRestartReplicationOnTopologyInstanceReplicas(instanceKey *inst.In
 
 func emergentlyRecordStaleBinlogCoordinates(instanceKey *inst.InstanceKey, binlogCoordinates *inst.BinlogCoordinates) {
 	err := inst.RecordStaleInstanceBinlogCoordinates(instanceKey, binlogCoordinates)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 // checkAndExecuteFailureDetectionProcesses tries to register for failure detection and potentially executes
@@ -1071,14 +1073,18 @@ func CheckAndRecover(specificInstance *inst.InstanceKey, candidateInstanceKey *i
 			// force mode. Keep it synchronuous
 			var topologyRecovery *TopologyRecovery
 			recoveryAttempted, topologyRecovery, err = executeCheckAndRecoverFunction(analysisEntry, candidateInstanceKey, true, skipProcesses)
-			log.Error(err)
+			if err != nil {
+				log.Error(err)
+			}
 			if topologyRecovery != nil {
 				promotedReplicaKey = topologyRecovery.SuccessorKey
 			}
 		} else {
 			go func() {
 				_, _, err := executeCheckAndRecoverFunction(analysisEntry, candidateInstanceKey, false, skipProcesses)
-				log.Error(err)
+				if err != nil {
+					log.Error(err)
+				}
 			}()
 		}
 	}

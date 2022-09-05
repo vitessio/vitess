@@ -404,7 +404,9 @@ func RestartReplication(instanceKey *InstanceKey) (instance *Instance, err error
 		return instance, err
 	}
 	instance, err = StartReplication(instanceKey)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return instance, err
 }
 

@@ -76,6 +76,7 @@ func init() {
 	flags.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterGRPCServerAuthFlags()
 }
 
 func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {

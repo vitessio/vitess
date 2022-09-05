@@ -66,8 +66,6 @@ Usage of vtexplain:
       --gate_query_cache_lfu                                             gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries (default true)
       --gate_query_cache_memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --gate_query_cache_size int                                        gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache. (default 5000)
-      --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
-      --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
@@ -181,6 +179,7 @@ Usage of vtexplain:
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
       --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
+      --queryserver_enable_settings_pool                                 Enable pooling of connections with modified system settings
       --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
       --replication-mode string                                          The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)

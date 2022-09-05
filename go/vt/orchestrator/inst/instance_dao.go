@@ -29,30 +29,25 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	vitessmysql "vitess.io/vitess/go/mysql"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-
 	"github.com/go-sql-driver/mysql"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	math "vitess.io/vitess/go/vt/orchestrator/util"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
@@ -1884,7 +1879,9 @@ func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
 		instanceKeyInformativeClusterName.Set(instanceKey.StringCode(), clusterName, cache.DefaultExpiration)
 		return nil
 	})
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return clusterName, err
 }
 
@@ -2427,7 +2424,9 @@ func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) er
 			instanceKey.Hostname,
 			instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2454,7 +2453,9 @@ func UpdateInstanceLastAttemptedCheck(instanceKey *InstanceKey) error {
 			instanceKey.Hostname,
 			instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2635,7 +2636,9 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 					?, ?, ?, ?, NOW()
 				)`,
 		args...)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -2650,7 +2653,9 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 					where first_seen < NOW() - INTERVAL ? SECOND
 					`, expireSeconds,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2668,7 +2673,9 @@ func ResetInstanceRelaylogCoordinatesHistory(instanceKey *InstanceKey) error {
 				hostname=? and port=?
 				`, instanceKey.Hostname, instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)

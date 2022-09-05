@@ -46,7 +46,9 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 			`
 	writeFunc := func() error {
 		_, err := db.ExecOrchestrator(query, args...)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -60,7 +62,9 @@ func ExpireCandidateInstances() error {
 				where last_suggested < NOW() - INTERVAL ? MINUTE
 				`, config.Config.CandidateInstanceExpireMinutes,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)

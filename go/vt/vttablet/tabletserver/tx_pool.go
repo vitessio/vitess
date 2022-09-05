@@ -22,19 +22,16 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/pools"
-
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -222,7 +219,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, preQueries []string) (*StatefulConnection, string, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, savepointQueries []string, settings []string) (*StatefulConnection, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
@@ -239,7 +236,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		if !tp.limiter.Get(immediateCaller, effectiveCaller) {
 			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 		}
-		conn, err = tp.createConn(ctx, options)
+		conn, err = tp.createConn(ctx, options, settings)
 		defer func() {
 			if err != nil {
 				// The transaction limiter frees transactions on rollback or commit. If we fail to create the transaction,
@@ -251,7 +248,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	if err != nil {
 		return nil, "", "", err
 	}
-	sql, sessionStateChanges, err := tp.begin(ctx, options, readOnly, conn, preQueries)
+	sql, sessionStateChanges, err := tp.begin(ctx, options, readOnly, conn, savepointQueries)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
@@ -260,10 +257,10 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	return conn, sql, sessionStateChanges, nil
 }
 
-func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection, preQueries []string) (string, string, error) {
+func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection, savepointQueries []string) (string, string, error) {
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-	beginQueries, autocommit, sessionStateChanges, err := createTransaction(ctx, options, conn, readOnly, preQueries)
+	beginQueries, autocommit, sessionStateChanges, err := createTransaction(ctx, options, conn, readOnly, savepointQueries)
 	if err != nil {
 		return "", "", err
 	}
@@ -273,8 +270,8 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	return beginQueries, sessionStateChanges, nil
 }
 
-func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
-	conn, err := tp.scp.NewConn(ctx, options)
+func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions, settings []string) (*StatefulConnection, error) {
+	conn, err := tp.scp.NewConn(ctx, options, settings)
 	if err != nil {
 		errCode := vterrors.Code(err)
 		switch err {
@@ -290,7 +287,7 @@ func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOption
 	return conn, nil
 }
 
-func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool, preQueries []string) (string, bool, string, error) {
+func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool, savepointQueries []string) (string, bool, string, error) {
 	beginQueries := ""
 
 	autocommitTransaction := false
@@ -332,8 +329,8 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 		return "", false, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
-	for _, preQuery := range preQueries {
-		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
+	for _, savepoint := range savepointQueries {
+		if _, err := conn.Exec(ctx, savepoint, 1, false); err != nil {
 			return "", false, "", err
 		}
 	}

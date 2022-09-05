@@ -35,7 +35,9 @@ func WriteClusterDomainName(clusterName string, domainName string) error {
 					last_registered=values(last_registered)
 			`,
 			clusterName, domainName)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -49,7 +51,9 @@ func ExpireClusterDomainName() error {
 				where last_registered < NOW() - INTERVAL ? MINUTE
 				`, config.Config.ExpiryHostnameResolvesMinutes,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)

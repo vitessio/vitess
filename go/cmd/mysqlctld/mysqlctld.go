@@ -51,6 +51,7 @@ var (
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
+	servenv.RegisterGRPCServerAuthFlags()
 }
 
 func main() {

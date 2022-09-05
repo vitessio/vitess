@@ -125,7 +125,9 @@ func ReadInstanceTag(instanceKey *InstanceKey, tag *Tag) (tagExists bool, err er
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return tagExists, err
 }
 
@@ -151,7 +153,9 @@ func ReadInstanceTags(instanceKey *InstanceKey) (tags [](*Tag), err error) {
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return tags, err
 }
 
@@ -196,6 +200,8 @@ func GetInstanceKeysByTag(tag *Tag) (tagged *InstanceKeyMap, err error) {
 		tagged.AddKey(*key)
 		return nil
 	})
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return tagged, err
 }

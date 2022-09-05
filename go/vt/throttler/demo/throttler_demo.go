@@ -289,7 +289,7 @@ func (c *client) StatsUpdate(ts *discovery.TabletHealth) {
 }
 
 func main() {
-	flag.Parse()
+	servenv.ParseFlags("throttler_demo")
 
 	go servenv.RunDefault()
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -310,4 +310,5 @@ func main() {
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterGRPCServerAuthFlags()
 }

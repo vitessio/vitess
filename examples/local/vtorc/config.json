@@ -1,0 +1,9 @@
+{
+  "ListenAddress": ":16000",
+  "MySQLTopologyUser": "orc_client_user",
+  "MySQLTopologyPassword": "orc_client_user_password",
+  "MySQLReplicaUser": "vt_repl",
+  "MySQLReplicaPassword": "",
+  "RecoveryPeriodBlockSeconds": 1,
+  "InstancePollSeconds": 1
+}

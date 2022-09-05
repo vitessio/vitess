@@ -53,6 +53,7 @@ var resilientServer *srvtopo.ResilientServer
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterGRPCServerAuthFlags()
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
