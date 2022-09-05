@@ -18,6 +18,8 @@ package app
 
 import (
 	"flag"
+	"io/ioutil"
+	golog "log"
 	"net"
 	nethttp "net/http"
 	"path"
@@ -76,6 +78,8 @@ func promptForSSLPasswords() {
 // standardHTTP starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
 func standardHTTP(continuousDiscovery bool) {
 	m := martini.Classic()
+	// Make martini silent by setting its logger to a discard endpoint
+	m.Logger(golog.New(ioutil.Discard, "", 0))
 
 	switch strings.ToLower(config.Config.AuthenticationMethod) {
 	case "basic":
