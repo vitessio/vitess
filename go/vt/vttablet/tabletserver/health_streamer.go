@@ -393,13 +393,6 @@ func (hs *healthStreamer) reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
-	for _, query := range mysql.VTDatabaseInit {
-		_, err := conn.Exec(hs.ctx, query, 1, false)
-		if err != nil {
-			return false, err
-		}
-	}
-
 	return true, nil
 }
 
@@ -408,7 +401,7 @@ func init() {
 	// test case like vitess.io/vitess/go/test/endtoend/vtgate/schematracker/loadkeyspace -run TestBlockedLoadKeyspace
 	// fail. The reason is they expect schema-copy-table to present only if we have enabled schema tracking.
 	// TODO: @rameez, discuss with team
-	//InitSchema()
+	InitSchema()
 }
 
 func InitSchema() error {
@@ -416,11 +409,12 @@ func InitSchema() error {
 		for _, sql := range mysql.VTDatabaseInit {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 				log.Errorf("Error executing %v: %v", sql, err)
+				return err
 			}
 		}
 
 		return nil
 	}
-	mysql.SchemaInitializer.RegisterSchemaInitializer("Initial VT Schema", f, false)
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Initial VT Schema", f, false, true)
 	return nil
 }

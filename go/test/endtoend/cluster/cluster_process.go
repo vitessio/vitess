@@ -356,13 +356,40 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 
-		time.Sleep(10 * time.Second)
+		// wait for both tablet to get into replica state in topo
+		waitUntil := time.Now().Add(10 * time.Second)
+		for time.Now().Before(waitUntil) {
+			result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", cluster.Cell)
+			if err != nil {
+				return err
+			}
+
+			tabletsFromCMD := strings.Split(result, "\n")
+			tabletCountFromCMD := 0
+
+			for _, line := range tabletsFromCMD {
+				if len(line) > 0 {
+					if strings.Contains(line, "replica") {
+						tabletCountFromCMD = tabletCountFromCMD + 1
+					}
+				}
+			}
+
+			if tabletCountFromCMD == len(shard.Vttablets) {
+				break
+			}
+
+			time.Sleep(1 * time.Second)
+		}
 
 		// Make first tablet as primary
 		// We need to disable super-read-only explicitly here. If we don't do it then
 		// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
 		// have code to disable super-read-only during InitializeShard
-		_ = shard.Vttablets[0].VttabletProcess.UnsetSuperReadOnly("")
+		log.Infof("cluster.VtTabletMajorVersion: %d", cluster.VtTabletMajorVersion)
+		if cluster.VtTabletMajorVersion <= 15 {
+			_ = shard.Vttablets[0].VttabletProcess.UnsetSuperReadOnly("")
+		}
 		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return

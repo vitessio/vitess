@@ -837,9 +837,13 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		var metadataError error
 		schemaErrors, metadataError = tm.initSchema(ctx, tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet), tm.MetadataManager)
 		if schemaErrors != nil {
-			log.Infof("Error in executing following schema changes")
-			for err := range schemaErrors {
-				log.Infof("%v", err)
+			log.Errorf("Error in executing following schema changes during tablet setup")
+			// TODO: @rameez should we fail if we are not able to initialize schema
+			for _, err := range schemaErrors {
+				log.Errorf("%v\n", err)
+			}
+			if len(schemaErrors) > 0 {
+				return false, errSchemaInitialization
 			}
 		}
 		// (NOTE:@ajm188) the legacy behavior is to always populate the metadata
@@ -856,9 +860,13 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	var metadataError error
 	schemaErrors, metadataError = tm.initSchema(ctx, tm.MysqlDaemon, nil, topoproto.TabletDbName(tablet), nil)
 	if schemaErrors != nil {
-		log.Infof("Error in executing following schema changes")
+		log.Errorf("Error in executing following schema changes during tablet setup")
+		// TODO: @rameez should we fail if we are not able to initialize schema
 		for err := range schemaErrors {
-			log.Infof("%v", err)
+			log.Errorf("%v\n", err)
+		}
+		if len(schemaErrors) > 0 {
+			return false, errSchemaInitialization
 		}
 	}
 	if metadataError != nil {

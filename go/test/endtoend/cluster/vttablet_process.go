@@ -636,21 +636,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 	return vttablet
 }
 
-// InitSchema will initialize the schema as it is done during vttablet setup.
-// There are some test cases where we are expecting schema without calling initPrimary
-func (vttablet *VttabletProcess) InitSchema() []error {
-	// get a dba connection
-	conn, err := vttablet.defaultConn("")
-	if err != nil {
-		log.Infof("error in getting connection object %s", err)
-		return []error{err}
-	}
-	defer conn.Close()
-
-	errors := mysql.SchemaInitializer.InitializeSchema(conn, true, true)
-	return errors
-}
-
 // UnsetSuperReadOnly switch-off super-read-only flag in db
 func (vttablet *VttabletProcess) UnsetSuperReadOnly(dbname string) error {
 	conn, err := vttablet.defaultConn("")

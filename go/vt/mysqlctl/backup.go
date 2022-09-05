@@ -64,6 +64,9 @@ var (
 	// ErrNoBackup is returned when there is no backup.
 	ErrNoBackup = errors.New("no available backup")
 
+	// errSchemaInitialization is returned when there is error in creating schema during tablet startup
+	errSchemaInitialization = errors.New("error initializing schema during tablet setup")
+
 	// ErrNoCompleteBackup is returned when there is at least one backup,
 	// but none of them are complete.
 	ErrNoCompleteBackup = errors.New("backup(s) found but none are complete")
@@ -300,11 +303,14 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		var schemaErrors []error
 		var metadataError error
 		schemaErrors, metadataError = initSchema(ctx, params)
-		if schemaErrors != nil {
-			log.Infof("Error in executing following schema changes")
+		if schemaErrors != nil && len(schemaErrors) > 0 {
+			params.Logger.Errorf("Error in executing following schema changes during tablet setup")
 			// TODO: @rameez should we fail if we are not able to initialize schema
-			for err := range schemaErrors {
-				log.Infof("%v", err)
+			for _, err := range schemaErrors {
+				params.Logger.Errorf("%v", err)
+			}
+			if len(schemaErrors) > 0 {
+				return nil, errSchemaInitialization
 			}
 		}
 		if metadataError != nil {
@@ -375,9 +381,13 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	var metadataError error
 	schemaErrors, metadataError = initSchema(ctx, params)
 	if schemaErrors != nil {
-		log.Infof("Error in executing following schema changes")
-		for err := range schemaErrors {
-			log.Infof("%v", err)
+		params.Logger.Errorf("Error in executing following schema changes during tablet setup")
+		// TODO: @rameez should we fail if we are not able to initialize schema
+		for _, err := range schemaErrors {
+			params.Logger.Errorf("%v\n", err)
+		}
+		if len(schemaErrors) > 0 {
+			return nil, errSchemaInitialization
 		}
 	}
 	if metadataError != nil {

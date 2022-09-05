@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -51,6 +52,8 @@ var (
 	restoreFromBackupTsStr string
 	restoreConcurrency     = 4
 	waitForBackupInterval  time.Duration
+	// errSchemaInitialization is returned when there is error in creating schema during tablet startup
+	errSchemaInitialization = errors.New("error initializing schema during tablet setup")
 )
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
@@ -223,9 +226,13 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		var metadataError error
 		schemaErrors, metadataError = tm.initSchema(ctx, params.Mysqld, params.LocalMetadata, params.DbName, metadataManager)
 		if schemaErrors != nil {
-			log.Infof("Error in executing following schema changes")
-			for err := range schemaErrors {
-				log.Infof("%v", err)
+			params.Logger.Errorf("Error in executing following schema changes during tablet setup")
+			// TODO: @rameez should we fail if we are not able to initialize schema
+			for _, err := range schemaErrors {
+				params.Logger.Errorf("%v\n", err)
+			}
+			if len(schemaErrors) > 0 {
+				return errSchemaInitialization
 			}
 		}
 		return metadataError

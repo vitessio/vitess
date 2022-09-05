@@ -328,6 +328,12 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 		log.Warningf("Unable to resolve destination: %v", err)
 		return
 	}
+	if len(dest) <= 0 {
+		log.Infof("length of resolve destination is zero")
+	}
+	for _, tmp := range dest {
+		log.Infof("ResolveDestination: %s", tmp.Target.String())
+	}
 
 	timeout := time.After(5 * time.Second)
 	for {

@@ -256,7 +256,7 @@ func InitTabletMetadata() error {
 
 		return nil
 	}
-	mysql.SchemaInitializer.RegisterSchemaInitializer("Initial TM Schema", f1, true)
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Initial TM Schema", f1, false, true)
 	return nil
 }
 

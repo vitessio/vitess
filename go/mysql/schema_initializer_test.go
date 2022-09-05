@@ -30,10 +30,10 @@ func TestSchemaInitializerRegisterInitializer(t *testing.T) {
 	func1 := func(conn *Conn) error { return nil }
 	func2 := func(conn *Conn) error { return vterrors.Errorf(vtrpc.Code_ABORTED, "test aborted ...") }
 
-	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
-	SchemaInitializer.RegisterSchemaInitializer("func2", func2, false)
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false, true)
+	SchemaInitializer.RegisterSchemaInitializer("func2", func2, false, true)
 	// duplication of same name is ignored
-	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false, true)
 
 	require.EqualValues(t, len(SchemaInitializer.getAllRegisteredFunctions()), 2)
 }
@@ -43,10 +43,10 @@ func TestSchemaInitializerOrderInitializer(t *testing.T) {
 	func1 := func(conn *Conn) error { return nil }
 	func2 := func(conn *Conn) error { return vterrors.Errorf(vtrpc.Code_ABORTED, "test aborted ...") }
 
-	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
-	SchemaInitializer.RegisterSchemaInitializer("func2", func2, false)
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false, true)
+	SchemaInitializer.RegisterSchemaInitializer("func2", func2, false, true)
 	// duplication of same name is ignored
-	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false, true)
 
 	functions := SchemaInitializer.getAllRegisteredFunctions()
 	require.EqualValues(t, len(functions), 2)
@@ -54,7 +54,7 @@ func TestSchemaInitializerOrderInitializer(t *testing.T) {
 	require.EqualValues(t, functions[1], "func2")
 
 	// now add another one at head
-	SchemaInitializer.RegisterSchemaInitializer("func3", func1, true)
+	SchemaInitializer.RegisterSchemaInitializer("func3", func1, true, true)
 	functions = SchemaInitializer.getAllRegisteredFunctions()
 	require.EqualValues(t, len(functions), 3)
 	require.EqualValues(t, functions[0], "func3")

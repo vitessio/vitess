@@ -39,8 +39,9 @@ import (
 )
 
 var (
-	SetSuperReadOnly = true
-	reparentQueries  []string
+	SetSuperReadOnly      = true
+	createReparentQueries []string
+	alterReparentQueries  []string
 )
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
@@ -55,23 +56,35 @@ func init() {
 	servenv.OnParseFor("vttablet", registerReplicationFlags)
 
 	// combine all queires
-	reparentQueries = append([]string{}, mysqlctl.CreateReparentJournal()...)
-	reparentQueries = append(reparentQueries, mysqlctl.AlterReparentJournal()...)
+	createReparentQueries = append([]string{}, mysqlctl.CreateReparentJournal()...)
+	alterReparentQueries = append([]string{}, mysqlctl.AlterReparentJournal()...)
 
 	_ = InitReparentJournal()
 }
 
 func InitReparentJournal() error {
-	f := func(conn *mysql.Conn) error {
-		for _, sql := range reparentQueries {
+	createF := func(conn *mysql.Conn) error {
+		for _, sql := range createReparentQueries {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 				log.Errorf("Error executing %v: %v", sql, err)
-				// return err
+				return err
 			}
 		}
 		return nil
 	}
-	mysql.SchemaInitializer.RegisterSchemaInitializer("Alter Reparent Journal", f, false)
+	alterF := func(conn *mysql.Conn) error {
+		var lastError error
+		for _, sql := range alterReparentQueries {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				// TODO: @rohit should we ignore failures from alter queries
+				log.Warningf("Error executing %v: %v", sql, err)
+				lastError = err
+			}
+		}
+		return lastError
+	}
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Create Reparent Journal", createF, false, true)
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Alter Reparent Journal", alterF, false, false)
 	return nil
 }
 
@@ -383,14 +396,14 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
-	cmds := mysqlctl.CreateReparentJournal()
+	/*cmds := mysqlctl.CreateReparentJournal()
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return "", err
 	}
 
 	// Execute ALTER statement on reparent_journal table and ignore errors
 	cmds = mysqlctl.AlterReparentJournal()
-	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)*/
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition()

@@ -32,12 +32,12 @@ type schemaInitializerFunc struct {
 	name        string
 	initFunc    func(conn *Conn) error
 	initialized bool
+	failOnError bool
 }
 
 type schemaInitializer struct {
-	funcs       []*schemaInitializerFunc
-	initialized bool
-	mu          sync.Mutex
+	funcs []*schemaInitializerFunc
+	mu    sync.Mutex
 }
 
 var (
@@ -91,13 +91,13 @@ func (si *schemaInitializer) isRegistered(name string) bool {
 	return false
 }
 
-func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc func(conn *Conn) error, atHead bool) {
+func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc func(conn *Conn) error, atHead bool, failOnError bool) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	if si.isRegistered(name) {
 		return
 	}
-	schemaFunc := &schemaInitializerFunc{name: name, initFunc: initFunc}
+	schemaFunc := &schemaInitializerFunc{name: name, initFunc: initFunc, failOnError: failOnError}
 	if atHead {
 		si.funcs = append([]*schemaInitializerFunc{schemaFunc}, si.funcs...)
 	} else {
@@ -138,8 +138,11 @@ func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly b
 		}
 		log.Infof("SchemaInitializer: running init function: %s", f.name)
 		if err := f.initFunc(conn); err != nil {
-			log.Infof("error: %s", err)
-			errors = append(errors, err)
+			if f.failOnError {
+				errors = append(errors, err)
+			} else {
+				log.Warningf("Error during schema initialization %s, continuing : %s", f.name, err)
+			}
 		}
 		f.initialized = true
 	}

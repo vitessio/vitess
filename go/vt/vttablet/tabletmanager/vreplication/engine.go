@@ -66,7 +66,8 @@ const (
 
 var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
-var allDDLQueries []string
+var createVReplicationQueries []string
+var alterVReplicationQueries []string
 
 const (
 	throttlerVReplicationAppName = "vreplication"
@@ -83,11 +84,10 @@ func init() {
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
 
 	/* this should replace the above code eventually */
-	allDDLQueries = append([]string{}, binlogplayer.CreateVReplicationTable()...)
-	allDDLQueries = append(allDDLQueries, binlogplayer.AlterVReplicationTable...)
-	allDDLQueries = append(allDDLQueries, createReshardingJournalTable, createCopyState)
-	allDDLQueries = append(allDDLQueries, createVReplicationLogTable)
-	allDDLQueries = append(allDDLQueries, withDDLInitialQueries...)
+	createVReplicationQueries = append([]string{}, binlogplayer.CreateVReplicationTable()...)
+	createVReplicationQueries = append(createVReplicationQueries, createReshardingJournalTable, createCopyState)
+	createVReplicationQueries = append(createVReplicationQueries, createVReplicationLogTable)
+	alterVReplicationQueries = append([]string{}, binlogplayer.AlterVReplicationTable...)
 
 	InitVReplicationSchema()
 }
@@ -236,17 +236,28 @@ func (vre *Engine) openLocked(ctx context.Context) error {
 }
 
 func InitVReplicationSchema() error {
-	f := func(conn *mysql.Conn) error {
-		for _, sql := range allDDLQueries {
+	createF := func(conn *mysql.Conn) error {
+		for _, sql := range createVReplicationQueries {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 				log.Errorf("Error executing %v: %v", sql, err)
 				return err
 			}
 		}
-
 		return nil
 	}
-	mysql.SchemaInitializer.RegisterSchemaInitializer("Init VReplication Schema", f, false)
+	alterF := func(conn *mysql.Conn) error {
+		var lastError error
+		for _, sql := range alterVReplicationQueries {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				// TODO: @rohit should we ignore failures from alter queries
+				log.Warningf("Error executing %v: %v", sql, err)
+				lastError = err
+			}
+		}
+		return lastError
+	}
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Create VReplication Schema", createF, false, true)
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Alter VReplication Schema", alterF, false, false)
 	return nil
 }
 

@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -87,6 +88,9 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	res, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
 	if err != nil {
 		return err
+	}
+	if res != nil && len(res.Rows) <= 0 {
+		return fmt.Errorf("zero rows returned from _vt.schemacopy")
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -257,18 +257,20 @@ func InitDDLSchema() error {
 	f := func(conn *mysql.Conn) error {
 		for _, sql := range ApplyDDL {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-				log.Errorf("Error executing %v: %v", sql, err)
-				/*if mysql.IsSchemaApplyError(err) {
+				// TODO: @rohit can you confirm below check
+				if err == nil || mysql.IsSchemaApplyError(err) {
+					log.Warningf("DDL apply %v failed: %v", sql, err)
 					continue
 				}
+				log.Errorf("DDL apply %v failed: %v", sql, err)
 				if err != nil {
 					return err
-				}*/
+				}
 			}
 		}
 		return nil
 	}
-	mysql.SchemaInitializer.RegisterSchemaInitializer("Initial Schema For OnlineDDL", f, false)
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Initial Schema For OnlineDDL", f, false, true)
 	return nil
 }
 
