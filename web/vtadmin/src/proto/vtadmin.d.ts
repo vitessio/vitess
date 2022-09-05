@@ -21901,6 +21901,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest restore_to_pos */
         restore_to_pos?: (string|null);
+
+        /** RestoreFromBackupRequest dry_run */
+        dry_run?: (boolean|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -21917,6 +21920,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest restore_to_pos. */
         public restore_to_pos: string;
+
+        /** RestoreFromBackupRequest dry_run. */
+        public dry_run: boolean;
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -43368,6 +43374,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest restore_to_pos */
         restore_to_pos?: (string|null);
+
+        /** RestoreFromBackupRequest dry_run */
+        dry_run?: (boolean|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -43387,6 +43396,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest restore_to_pos. */
         public restore_to_pos: string;
+
+        /** RestoreFromBackupRequest dry_run. */
+        public dry_run: boolean;
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
