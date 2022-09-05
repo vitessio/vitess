@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>12.0.6-SNAPSHOT</version>
+    <version>12.0.7-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-jdbc</artifactId>
 
