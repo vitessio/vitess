@@ -317,7 +317,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 			switch {
 			case checkBackupTime:
 				// restore to specific time
-				if !params.StartTime.After(backupTime) {
+				if backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
 					params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
 					return index
 				}
