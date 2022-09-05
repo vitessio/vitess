@@ -297,6 +297,22 @@ func (p *RestorePath) String() string {
 	return sb.String()
 }
 
+// FindLatestSuccessfulBackup returns the handle and manifest for the last good backup,
+// which can be either full or increment
+func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, *BackupManifest, error) {
+	for index := len(bhs) - 1; index >= 0; index-- {
+		bh := bhs[index]
+		// Check that the backup MANIFEST exists and can be successfully decoded.
+		bm, err := GetBackupManifest(ctx, bh)
+		if err != nil {
+			logger.Warningf("Possibly incomplete backup %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), err)
+			continue
+		}
+		return bh, bm, nil
+	}
+	return nil, nil, ErrNoCompleteBackup
+}
+
 // FindBackupToRestore returns a selected candidate backup to be restored.
 // It returns the most recent backup that is complete, meaning it has a valid
 // MANIFEST file.

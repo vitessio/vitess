@@ -121,7 +121,7 @@ var (
 	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	concurrency        = flag.Int("concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
-	incrementalFromPos = flag.String("incremental_from_pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position.")
+	incrementalFromPos = flag.String("incremental_from_pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
 
 	// mysqlctld-like flags
 	mysqlPort     = flag.Int("mysql_port", 3306, "mysql port")

@@ -167,6 +167,29 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 // executeIncrementalBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+	if params.IncrementalFromPos == "auto" {
+		params.Logger.Infof("auto evaluating incremental_from_pos")
+		bs, err := backupstorage.GetBackupStorage()
+		if err != nil {
+			return false, err
+		}
+		defer bs.Close()
+
+		// Backups are stored in a directory structure that starts with
+		// <keyspace>/<shard>
+		backupDir := GetBackupDir(params.Keyspace, params.Shard)
+		bhs, err := bs.ListBackups(ctx, backupDir)
+		if err != nil {
+			return false, vterrors.Wrap(err, "ListBackups failed")
+		}
+		_, manifest, err := FindLatestSuccessfulBackup(ctx, params.Logger, bhs)
+		if err != nil {
+			return false, vterrors.Wrap(err, "FindLatestSuccessfulBackup failed")
+		}
+		params.IncrementalFromPos = mysql.EncodePosition(manifest.Position)
+		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
+	}
+
 	rp, err := mysql.DecodePosition(params.IncrementalFromPos)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", params.IncrementalFromPos)
