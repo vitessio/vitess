@@ -19,7 +19,6 @@ package evalengine
 import (
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -28,7 +27,7 @@ type (
 	builtinLcase struct{}
 )
 
-func (builtinLower) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
 	t := inarg.typeof()
 	if inarg.isNull() {
@@ -41,7 +40,7 @@ func (builtinLower) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult
 		result.setString(tolower, inarg.collation())
 	} else {
 		tolower := inarg.value().RawStr()
-		inarg.makeTextualAndConvert(collations.CollationUtf8mb4ID)
+		inarg.makeTextualAndConvert(env.DefaultCollation,)
 		result.setString(tolower, inarg.collation())
 	}
 }
@@ -54,7 +53,7 @@ func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 	return sqltypes.VarChar, f
 }
 
-func (builtinLcase) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+func (builtinLcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
 	t := inarg.typeof()
 	if inarg.isNull() {
@@ -67,7 +66,7 @@ func (builtinLcase) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult
 		result.setString(tolower, inarg.collation())
 	} else {
 		tolower := inarg.value().RawStr()
-		inarg.makeTextualAndConvert(collations.CollationUtf8mb4ID)
+		inarg.makeTextualAndConvert(env.DefaultCollation,)
 		result.setString(tolower, inarg.collation())
 	}
 }
