@@ -94,6 +94,10 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	env.Exporter().NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Get)
+	env.Exporter().NewCounterFunc(name+"Get", "Tablet server conn pool get count", cp.GetCount)
+	env.Exporter().NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", cp.GetSettingCount)
+	env.Exporter().NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", cp.DiffSettingCount)
+	env.Exporter().NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", cp.ResetSettingCount)
 	return cp
 }
 
@@ -341,6 +345,42 @@ func (cp *Pool) Exhausted() int64 {
 		return 0
 	}
 	return p.Exhausted()
+}
+
+// GetCount returns the number of times get was called
+func (cp *Pool) GetCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.GetCount()
+}
+
+// GetSettingCount returns the number of times getWithSettings was called
+func (cp *Pool) GetSettingCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.GetSettingCount()
+}
+
+// DiffSettingCount returns the number of times different settings were applied on the resource.
+func (cp *Pool) DiffSettingCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.DiffSettingCount()
+}
+
+// ResetSettingCount returns the number of times settings were reset on the resource.
+func (cp *Pool) ResetSettingCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.ResetSettingCount()
 }
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
