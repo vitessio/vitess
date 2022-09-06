@@ -68,6 +68,7 @@ func startEtcd(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
 	}
+	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
