@@ -1013,6 +1013,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vstream_with_keyspaces_to_watch": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamWithKeyspacesToWatch"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vstream_with_keyspaces_to_watch",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtorc": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc"],
