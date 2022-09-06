@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"vitess.io/vitess/go/test/utils"
@@ -118,7 +116,6 @@ func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
 func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	log.Infof("err: %+v", err)
 	require.NoError(t, err, "for query: "+query)
 	return qr
 }

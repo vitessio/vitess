@@ -110,10 +110,10 @@ var (
 		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
-		"vtgate_vindex_heavy", //p
+		"vtgate_vindex_heavy",
 		"vtgate_vschema",
-		"vtgate_queries",        //p
-		"vtgate_schema_tracker", //p
+		"vtgate_queries",
+		"vtgate_schema_tracker",
 		"xb_recovery",
 		"mysql80",
 		"vreplication_across_db_versions",
