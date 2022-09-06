@@ -385,7 +385,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
-%type <with> with_clause_opt with_opt
+%type <with> with_clause_opt with_clause
 %type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
@@ -643,13 +643,13 @@ with_select:
   {
     $$ = $1
   }
-| WITH with_opt base_select
+| WITH with_clause base_select
   {
     $3.SetWith($2)
     $$ = $3
   }
 
-with_opt:
+with_clause:
   RECURSIVE cte_list
   {
     $$ = &With{Ctes: $2, Recursive: true}
@@ -711,7 +711,7 @@ with_clause_opt:
   {
     $$ = nil
   }
-| WITH with_opt
+| WITH with_clause
   {
     $$ = $2
   }
