@@ -321,7 +321,7 @@ func GRPCCheckServiceMap(name string) bool {
 	}
 
 	// then check ServiceMap
-	return CheckServiceMap("grpc", name)
+	return checkServiceMap("grpc", name)
 }
 
 func authenticatingStreamInterceptor(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

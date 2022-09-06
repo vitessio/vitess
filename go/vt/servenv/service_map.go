@@ -57,9 +57,9 @@ func updateServiceMap() {
 	}
 }
 
-// CheckServiceMap returns if we should register a RPC service
+// checkServiceMap returns if we should register a RPC service
 // (and also logs how to enable / disable it)
-func CheckServiceMap(protocol, name string) bool {
+func checkServiceMap(protocol, name string) bool {
 	if serviceMap[protocol+"-"+name] {
 		log.Infof("Registering %v for %v, disable it with -%v-%v service_map parameter", name, protocol, protocol, name)
 		return true
