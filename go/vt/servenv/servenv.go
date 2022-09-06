@@ -29,7 +29,6 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
 	"net/url"
 	"os"
 	"os/signal"
@@ -321,7 +320,7 @@ func ParseFlags(cmd string) {
 
 	args := fs.Args()
 	if len(args) > 0 {
-		flag.Usage()
+		_flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 }
