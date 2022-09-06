@@ -385,7 +385,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
-%type <with> with_clause_opt with_clause
+%type <with> with_clause with_clause_opt
 %type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
