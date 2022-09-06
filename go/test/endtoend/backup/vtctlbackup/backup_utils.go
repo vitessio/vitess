@@ -935,8 +935,16 @@ func vtctlBackupReplicaNoDropTables(t *testing.T, tabletType string) (backups []
 	return backups, destroy
 }
 
+func GetReplicaGtidPurged(t *testing.T) string {
+	query := "select @@global.gtid_purged as gtid_purged"
+	rs, err := replica1.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	return row.AsString("gtid_purged", "")
+}
+
 func InsertRowOnPrimary(t *testing.T, hint string) {
-	// insert more data on replica2 (current primary)
 	if hint == "" {
 		hint = textutil.RandomHash()
 	}
@@ -967,7 +975,11 @@ func TestReplicaFullBackup(t *testing.T) (manifest *mysqlctl.BackupManifest) {
 }
 
 func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest) {
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", "--", "--incremental_from_pos", mysql.EncodePosition(incrementalFromPos), replica1.Alias)
+	incrementalFromPosArg := "auto"
+	if !incrementalFromPos.IsZero() {
+		incrementalFromPosArg = mysql.EncodePosition(incrementalFromPos)
+	}
+	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", "--", "--incremental_from_pos", incrementalFromPosArg, replica1.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)

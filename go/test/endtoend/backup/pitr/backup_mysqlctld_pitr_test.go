@@ -48,6 +48,7 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 		name              string
 		writeBeforeBackup bool
 		fromFullPosition  bool
+		autoPosition      bool
 		expectError       string
 	}{
 		{
@@ -66,6 +67,21 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 			writeBeforeBackup: true,
 		},
 		{
+			name:              "auto position, succeed",
+			writeBeforeBackup: true,
+			autoPosition:      true,
+		},
+		{
+			name:         "fail auto position, no binary logs to backup",
+			autoPosition: true,
+			expectError:  "no binary logs to backup",
+		},
+		{
+			name:              "auto position, make writes again, succeed",
+			writeBeforeBackup: true,
+			autoPosition:      true,
+		},
+		{
 			name:             "from full backup position",
 			fromFullPosition: true,
 		},
@@ -78,20 +94,38 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 			// we wait for 1 second because backups ar ewritten to a directory named after the current timestamp,
 			// in 1 second resolution. We want to aoid two backups that have the same pathname. Realistically this
 			// is only ever a problem in this endtoend test, not in production.
-			time.Sleep(time.Second)
-			incrementalFromPos := lastBackupPos
-			if tc.fromFullPosition {
-				incrementalFromPos = fullBackupPos
+			time.Sleep(1100 * time.Millisecond)
+			// configure --incremental-from-pos to either:
+			// - auto
+			// - explicit last backup pos
+			// - back in history to the original full backup
+			var incrementalFromPos mysql.Position
+			if !tc.autoPosition {
+				incrementalFromPos = lastBackupPos
+				if tc.fromFullPosition {
+					incrementalFromPos = fullBackupPos
+				}
 			}
 			manifest := backup.TestReplicaIncrementalBackup(t, incrementalFromPos, tc.expectError)
 			if tc.expectError != "" {
 				return
 			}
+			defer func() {
+				lastBackupPos = manifest.Position
+			}()
 			require.False(t, manifest.FromPosition.IsZero())
-
 			require.NotEqual(t, manifest.Position, manifest.FromPosition)
 			require.True(t, manifest.Position.GTIDSet.Contains(manifest.FromPosition.GTIDSet))
-			lastBackupPos = manifest.Position
+
+			gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, backup.GetReplicaGtidPurged(t))
+			require.NoError(t, err)
+			fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+
+			expectFromPosition := lastBackupPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+			if !incrementalFromPos.IsZero() {
+				expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+			}
+			require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v", expectFromPosition, fromPositionIncludingPurged)
 		})
 	}
 }
