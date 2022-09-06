@@ -212,7 +212,9 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 }
 
 func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
-	t.Skip("With partial keyspaces, kill might be an issue since it needs connection id: is this a test issue or a core one?")
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("With partial keyspaces, kill might be an issue since it needs connection id: is this a test issue or a core one?")
+	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

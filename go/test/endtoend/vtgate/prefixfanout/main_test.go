@@ -196,7 +196,6 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 }
 
 func TestCFCPrefixQueryWithHash(t *testing.T) {
-	//t.Skip("partial keyspace")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := clusterInstance.GetVTParams(sKsMD5)
@@ -240,7 +239,6 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 }
 
 func TestCFCInsert(t *testing.T) {
-	//t.Skip("partial keyspace")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
