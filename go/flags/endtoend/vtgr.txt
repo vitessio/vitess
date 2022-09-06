@@ -38,7 +38,6 @@ Usage of vtgr:
       --scan_interval duration                     Scan interval to diagnose and repair. (default 3s)
       --scan_repair_timeout duration               Time to wait for a Diagnose and repair operation. (default 3s)
       --security_policy string                     the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --service_map StringList                     comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --stats_backend string                       The name of the registered push-based monitoring/stats backend to use
       --stats_combine_dimensions string            List of dimensions to be combined into a single "all" value in exported stats vars
       --stats_common_tags string                   Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2

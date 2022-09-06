@@ -361,7 +361,7 @@ Usage of vttablet:
       --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --service_map StringList                                           comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state (default 0s)
       --shard_sync_retry_delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
       --shutdown_grace_period float                                      how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.

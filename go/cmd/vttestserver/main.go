@@ -205,6 +205,7 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 // Annoying, but in unit tests, parseFlags gets called multiple times per process
 // (anytime startCluster is called), so we need to guard against the second test
 // to run failing with, for example:
+//
 //	flag redefined: log_rotate_max_size
 var flagsOnce sync.Once
 
@@ -217,6 +218,7 @@ func parseFlags() (env vttest.Environment, err error) {
 		servenv.RegisterFlags()
 		servenv.RegisterGRPCServerFlags()
 		servenv.RegisterGRPCServerAuthFlags()
+		servenv.RegisterServiceMapFlag()
 		servenv.ParseFlags("vttestserver")
 
 		// Move all pflag flags back to the goflag CommandLine.
