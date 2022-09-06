@@ -118,36 +118,83 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 
 ## Release Cutover 
 
+In this section we describe what is our current release process. We begin with a short [**overview**](#overview).
+The release process is divided in three parts: [**Pre-Release**](#pre-release), [**Release**](#release), [**Post-Release**](#post-release), which are detailed after the overview.
+
 ### Overview
+
+#### Schedule
+
+A new major version of Vitess is released every four months. For each major version there is at least one release candidate, which we release three weeks before the GA version.
+We usually create the RC1 during the first week of the month, and the GA version three weeks later.
+
+#### Code Freeze
+
+Before creating RC1, there is a code freeze. Assuming the release of RC1 happens on a Tuesday, the release branch will be frozen Friday of the previous week.
+This allows us to test that the release branch can be released and avoid discovering unwanted events during the release day. Once the RC1 is released, there are three more weeks to backport bug fixes into the release branches. However, we also proceed to a code freeze the Friday before the GA release. (Assuming GA is on a Tuesday)
+Regarding patch releases, no code freeze is planned.
+
+#### Tracking Issue for each Release
 
 For each release, it is recommended to create an issue like [this one](https://github.com/vitessio/vitess/issues/10476) to track the current and past progress of a release.
 It also allows us to document what happened during a release.
-
-The release process can be divided in three parts: [**Pre-Release**](#pre-release), [**Release**](#release), [**Post-Release**](#post-release). The three following sections describe each part.
 
 ### Pre-Release
 
 This step happens a few weeks before the actual release (whether it is an RC, GA or a patch release).
 The main goal of this step is to make sure everything is ready to be released for the release day.
 That includes:
-- Making sure Pull Requests are being reviewed and merged.
-- Making sure the people doing the release have access to all the tools and infrastructure needed to do the release.
-- Preparing and cleaning the release notes summary.
-- Finishing the blog post, and coordinating with the different organisation on which we want to cross-post. Often with CNCF. This step applies only for GA releases.
+- **Making sure Pull Requests are being reviewed and merged.**
+  > - All the Pull Requests that needs to be in the release must be reviewed and merged before the code freeze.
+  > - The code freeze usually happens a few day before the release. Make sure everything is merged for that date.
+- **Making sure the people doing the release have access to all the tools and infrastructure needed to do the release.**
+  > - This includes write access to the Vitess repository and to the Maven repository. 
+- **Preparing and cleaning the release notes summary.**
+  > - One or more Pull Requests have to be submitted in advance to create and update the release summary.
+  > - The summary files are located in: `./doc/releasenotes/*_*_*_summary.md`.
+  > - The summary file for a release candidate is the same as the one for the GA release.
+- **Finishing the blog post, and coordinating with the different organisation on which we want to cross-post. Often with CNCF. This step applies only for GA releases.**
+  > - The blog post must be finished and reviewed.
+  > - A Pull Request on the website repository of Vitess has to be created so we can easily publish the blog during the release day.
+- **Code freeze.**
+  > - During the day of the code freeze, if we are doing an RC, create the release branch.
+  > - If we are doing a GA release, do not merge any new Pull Requests.
+- **Preparing the Vitess Operator release too.**
+  > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
+  > - The Operator follows the same cycle: RC1 -> GA -> Patches.
+
+[//]: # (  > - TODO: Add the link to the Vitess Operator Release documentation)
 
 ### Release
 
 During the release day, there are several things to do:
 
-- Create the Vitess release.
-  - A guide on how to create a Vitess release is available in the [How To Release Vitess](#how-to-release-vitess) section.
-- Create the corresponding Vitess operator release. _Applies only to versions greater or equal to `v14.0.0`._
-- Create the Java release. _Applies only to GA releases._
-  - This step is explained in the [Java Packages Deploy & Release](#java-packages-deploy--release) section.
-- Update the website documentation repository. _Applies only to GA and RC releases._
-- Publish the blog post on the Vitess website. _Only for GA releases._
-- Make sure _arewefastyet_ starts benchmarking the new release. This can be done by visiting [this link](https://benchmark.vitess.io/status).
-- Update the release notes on the release branch and on `main`.
+- **Create the Vitess release.**
+  > - A guide on how to create a Vitess release is available in the [How To Release Vitess](#how-to-release-vitess) section.
+- **Create the corresponding Vitess operator release.**
+  > - Applies only to versions greater or equal to `v14.0.0`.
+  > - If we are doing an RC release, then we will need to create the Vitess Operator RC too. If we are doing a GA release, we're also doing a GA release in the Operator.
+- **Create the Java release.**
+  > - Applies only to GA releases.
+  > - This step is explained in the [Java Packages Deploy & Release](#java-packages-deploy--release) section.
+- **Update the website documentation repository.**
+  > - Applies only to GA and RC releases.
+  > - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the documentations. The scripts automate:
+  >   - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
+  >   - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
+- **Publish the blog post on the Vitess website.**
+  > - Applies only to GA releases.
+  > - The corresponding Pull Request was created beforehand during the pre-release. Merge it.
+- **Make sure _arewefastyet_ starts benchmarking the new release.**
+  > - This can be done by visiting [arewefastyet status page](https://benchmark.vitess.io/status).
+  > - New elements should be added to the execution queue.
+  > - After a while, those elements will finish their execution and their status will be green.
+  > - This step is even more important for GA releases as we often include a link to _arewefastyet_ in the blog post.
+  > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
+- **Update the release notes on the release branch and on `main`.**
+  > - Two new Pull Requests have to be created.
+  > - One against `main`, it will contain only the new release notes.
+  > - And another against the release branch, this one contains the release notes and the release commit. (The commit on which we did `git tag`) 
 
 ### Post-Release
 
