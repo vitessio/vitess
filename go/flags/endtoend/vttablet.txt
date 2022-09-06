@@ -300,7 +300,7 @@ Usage of vttablet:
       --pitr_gtid_lookup_timeout duration                                PITR restore parameter: timeout for fetching gtid from timestamp. (default 1m0s)
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
       --port int                                                         port for the server
-      --pprof string                                                     enable profiling
+      --pprof strings                                                    enable profiling
       --pt-osc-path string                                               override default pt-online-schema-change binary full path
       --publish_retry_interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)

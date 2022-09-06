@@ -121,7 +121,7 @@ Usage of vtexplain:
       --planner-version string                                       Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4
       --planner_version string                                       Deprecated flag. Use planner-version instead
       --pool_hostname_resolve_interval duration                      if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
-      --pprof string                                                 enable profiling
+      --pprof strings                                                enable profiling
       --proxy_protocol                                               Enable HAProxy PROXY protocol on MySQL listener socket
       --purge_logs_interval duration                                 how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                              URL handler for streaming queries log (default "/debug/querylog")
