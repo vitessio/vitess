@@ -17,6 +17,8 @@
 
 ### Breaking Changes
 
+- The deprecated `--cpu_profile` flag has been removed. Please use the `--pprof` flag instead.
+
 #### Vindex Interface
 
 All the vindex interface methods are changed by adding `context.Context` as an input parameter.
