@@ -174,6 +174,8 @@ func CreateLogicalOperatorFromAST(selStmt sqlparser.Statement, semTable *semanti
 		op, err = createOperatorFromUnion(node, semTable)
 	case *sqlparser.Update:
 		op, err = createOperatorFromUpdate(node, semTable)
+	case *sqlparser.Delete:
+		op, err = createOperatorFromDelete(node, semTable)
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 	}
@@ -279,6 +281,56 @@ func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.Sem
 		Assignments: assignments,
 		AST:         updStmt,
 		TableInfo:   tableInfo,
+	}
+	if subq == nil {
+		return u, nil
+	}
+	subq.Outer = u
+	return subq, nil
+}
+
+func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.SemTable) (LogicalOperator, error) {
+	subq, err := createSubqueryFromStatement(deleteStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	alTbl, ok := deleteStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
+	}
+	tblName, ok := alTbl.Expr.(sqlparser.TableName)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
+	}
+
+	tableID := semTable.TableSetFor(alTbl)
+	tableInfo, err := semTable.TableInfoFor(tableID)
+	if err != nil {
+		return nil, err
+	}
+
+	if tableInfo.IsInfSchema() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
+	}
+
+	var predicates []sqlparser.Expr
+	if deleteStmt.Where != nil {
+		predicates = sqlparser.SplitAndExpression(nil, deleteStmt.Where.Expr)
+	}
+
+	qt := &QueryTable{
+		ID:          tableID,
+		Alias:       alTbl,
+		Table:       tblName,
+		Predicates:  predicates,
+		IsInfSchema: false,
+	}
+
+	u := &Delete{
+		Table:     qt,
+		AST:       deleteStmt,
+		TableInfo: tableInfo,
 	}
 	if subq == nil {
 		return u, nil

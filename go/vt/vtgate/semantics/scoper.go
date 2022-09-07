@@ -60,11 +60,11 @@ func newScoper() *scoper {
 func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
-	case *sqlparser.Update:
+	case *sqlparser.Update, *sqlparser.Delete:
 		currScope := newScope(s.currentScope())
 		s.push(currScope)
 
-		currScope.stmt = node
+		currScope.stmt = node.(sqlparser.Statement)
 	case *sqlparser.Select:
 		currScope := newScope(s.currentScope())
 		s.push(currScope)

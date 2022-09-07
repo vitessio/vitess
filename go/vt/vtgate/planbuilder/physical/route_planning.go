@@ -21,12 +21,8 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -36,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -162,9 +160,88 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		}
 
 		return r, nil
+	case *abstract.Delete:
+		var typ topodatapb.TabletType
+		var dest key.Destination
+		var ovq string
+
+		vindexTable := op.TableInfo.GetVindexTable()
+		opCode := engine.Unsharded
+		if vindexTable.Keyspace.Sharded {
+			opCode = engine.Scatter
+		}
+
+		tblName, ok := op.Table.Alias.Expr.(sqlparser.TableName)
+		if ok {
+			var err error
+			_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
+			if err != nil {
+				return nil, err
+			}
+			if dest != nil {
+				if typ != topodatapb.TabletType_PRIMARY {
+					return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: delete statement with a replica target")
+				}
+				// we are dealing with an explicitly targeted DELETE
+				opCode = engine.ByDestination
+			}
+		}
+		primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(vindexTable.Owned) > 0 {
+			tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: op.Table.Alias.As}
+			ovq = generateOwnedVindexQuery(tblExpr, op.AST, vindexTable, primaryVindex.Columns)
+		}
+
+		r := &Route{
+			Source: &Delete{
+				QTable:           op.Table,
+				VTable:           vindexTable,
+				OwnedVindexQuery: ovq,
+				AST:              op.AST,
+			},
+			RouteOpCode:       opCode,
+			Keyspace:          vindexTable.Keyspace,
+			VindexPreds:       vindexAndPredicates,
+			TargetDestination: dest,
+		}
+
+		for _, predicate := range op.Table.Predicates {
+			err := r.UpdateRoutingLogic(ctx, predicate)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
+			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
+		}
+		return r, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
+}
+
+func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	for idx, col := range ksidCols {
+		if idx == 0 {
+			buf.Myprintf("select %v", col)
+		} else {
+			buf.Myprintf(", %v", col)
+		}
+	}
+	for _, cv := range table.Owned {
+		for _, column := range cv.Columns {
+			buf.Myprintf(", %v", column)
+		}
+	}
+	buf.Myprintf(" from %v%v%v%v for update", tblExpr, del.Where, del.OrderBy, del.Limit)
+	return buf.String()
 }
 
 func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
