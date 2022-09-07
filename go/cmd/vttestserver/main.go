@@ -206,7 +206,6 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 // Annoying, but in unit tests, parseFlags gets called multiple times per process
 // (anytime startCluster is called), so we need to guard against the second test
 // to run failing with:
-//
 //	flag redefined: log_rotate_max_size
 var logFlagsOnce sync.Once
 
