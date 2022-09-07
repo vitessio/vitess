@@ -118,8 +118,8 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 
 ## Release Cutover 
 
-In this section we describe what is our current release process. We begin with a short [**overview**](#overview).
-The release process is divided in three parts: [**Pre-Release**](#pre-release), [**Release**](#release), [**Post-Release**](#post-release), which are detailed after the overview.
+In this section we describe our current release process. We begin with a short [**overview**](#overview).
+The release process is divided into three parts: [**Pre-Release**](#pre-release), [**Release**](#release), [**Post-Release**](#post-release), which are detailed after the overview.
 
 ### Overview
 
@@ -146,20 +146,20 @@ The main goal of this step is to make sure everything is ready to be released fo
 That includes:
 - **Making sure Pull Requests are being reviewed and merged.**
   > - All the Pull Requests that needs to be in the release must be reviewed and merged before the code freeze.
-  > - The code freeze usually happens a few day before the release. Make sure everything is merged for that date.
+  > - The code freeze usually happens a few days before the release. Make sure everything is merged by that date.
 - **Making sure the people doing the release have access to all the tools and infrastructure needed to do the release.**
   > - This includes write access to the Vitess repository and to the Maven repository. 
 - **Preparing and cleaning the release notes summary.**
   > - One or more Pull Requests have to be submitted in advance to create and update the release summary.
   > - The summary files are located in: `./doc/releasenotes/*_*_*_summary.md`.
   > - The summary file for a release candidate is the same as the one for the GA release.
-- **Finishing the blog post, and coordinating with the different organisation on which we want to cross-post. Often with CNCF. This step applies only for GA releases.**
+- **Finishing the blog post, and coordinating with the different organizations for cross-posting. Usually CNCF and PlanetScale. This step applies only for GA releases.**
   > - The blog post must be finished and reviewed.
   > - A Pull Request on the website repository of Vitess has to be created so we can easily publish the blog during the release day.
 - **Code freeze.**
-  > - During the day of the code freeze, if we are doing an RC, create the release branch.
+  > - As soon as we go into code freeze, if we are doing an RC, create the release branch.
   > - If we are doing a GA release, do not merge any new Pull Requests.
-- **Preparing the Vitess Operator release too.**
+- **Preparing the Vitess Operator release.**
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
 
@@ -167,7 +167,7 @@ That includes:
 
 ### Release
 
-During the release day, there are several things to do:
+On the release day, there are several things to do:
 
 - **Create the Vitess release.**
   > - A guide on how to create a Vitess release is available in the [How To Release Vitess](#how-to-release-vitess) section.
@@ -203,7 +203,7 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
 
 
 ### How To Release Vitess
-This section is divided in three parts:
+This section is divided into three parts:
 - How to release an RC: [Pre-Requisites for Release Candidates (`rc`)](#pre-requisites-for-release-candidates-rc).
 - How to release a GA or Patch release: [Pre-Requisites for Releases](#pre-requisites-for-releases).
 - Common to both, how to create the release on the GitHub UI: [#Creating Release or Release Candidate on the GitHub UI](#creating-release-or-release-candidate-on-the-github-ui)
@@ -233,7 +233,7 @@ This section is divided in three parts:
        ```shell
        make RELEASE_VERSION="12.0.0-rc1" DEV_VERSION="12.0.0-SNAPSHOT" VTOP_VERSION="2.7.0-rc1" do_release
        ```
-      The script will prompt you `Pausing so relase notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
+      The script will prompt you `Pausing so release notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
    
    2. Run the following command to generate the release notes:
        ```shell
@@ -244,7 +244,7 @@ This section is divided in three parts:
 
 
 
-4. As prompted in the `do_release` Makefile command's output, push the the `v12.0.0-rc1` tag.
+4. As prompted in the `do_release` Makefile command's output, push the `v12.0.0-rc1` tag.
     ```shell
     git push upstream v12.0.0-rc1
     ```
