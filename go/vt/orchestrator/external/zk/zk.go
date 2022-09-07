@@ -28,9 +28,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samuel/go-zookeeper/zk"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"github.com/samuel/go-zookeeper/zk"
 )
 
 type ZooKeeper struct {
@@ -59,12 +59,12 @@ func (zook *ZooKeeper) SetServers(serversArray []string) {
 }
 
 func (zook *ZooKeeper) SetAuth(scheme string, auth []byte) {
-	log.Debug("Setting Auth ")
+	log.Info("Setting Auth ")
 	zook.authScheme = scheme
 	zook.authExpression = auth
 }
 
-// Returns acls
+// BuildACL returns Acls
 func (zook *ZooKeeper) BuildACL(authScheme string, user string, pwd string, acls string) (perms []zk.ACL, err error) {
 	aclsList := strings.Split(acls, ",")
 	for _, elem := range aclsList {
@@ -80,7 +80,7 @@ func (zook *ZooKeeper) BuildACL(authScheme string, user string, pwd string, acls
 
 type infoLogger struct{}
 
-func (_ infoLogger) Printf(format string, a ...any) {
+func (infoLogger) Printf(format string, a ...any) {
 	log.Infof(format, a...)
 }
 
@@ -89,7 +89,7 @@ func (zook *ZooKeeper) connect() (*zk.Conn, error) {
 	zk.DefaultLogger = &infoLogger{}
 	conn, _, err := zk.Connect(zook.servers, time.Second)
 	if err == nil && zook.authScheme != "" {
-		log.Debugf("Add Auth %s %s", zook.authScheme, zook.authExpression)
+		log.Infof("Add Auth %s %s", zook.authScheme, zook.authExpression)
 		err = conn.AddAuth(zook.authScheme, zook.authExpression)
 	}
 
@@ -180,7 +180,7 @@ func (zook *ZooKeeper) childrenRecursiveInternal(connection *zk.Conn, path strin
 	for _, child := range children {
 		incrementalChild := gopath.Join(incrementalPath, child)
 		recursiveChildren = append(recursiveChildren, incrementalChild)
-		log.Debugf("incremental child: %+v", incrementalChild)
+		log.Infof("incremental child: %+v", incrementalChild)
 		incrementalChildren, err := zook.childrenRecursiveInternal(connection, gopath.Join(path, child), incrementalChild)
 		if err != nil {
 			return children, err
@@ -210,12 +210,12 @@ func (zook *ZooKeeper) createInternal(connection *zk.Conn, path string, data []b
 		return "/", nil
 	}
 
-	log.Debugf("creating: %s", path)
+	log.Infof("creating: %s", path)
 	attempts := 0
 	for {
-		attempts += 1
+		attempts++
 		returnValue, err := connection.Create(path, data, zook.flags, zook.acl)
-		log.Debugf("create status for %s: %s, %+v", path, returnValue, err)
+		log.Infof("create status for %s: %s, %+v", path, returnValue, err)
 
 		if err != nil && force && attempts < 2 {
 			parentPath := gopath.Dir(path)
@@ -234,12 +234,12 @@ func (zook *ZooKeeper) createInternalWithACL(connection *zk.Conn, path string, d
 	if path == "/" {
 		return "/", nil
 	}
-	log.Debugf("creating: %s with acl ", path)
+	log.Infof("creating: %s with acl ", path)
 	attempts := 0
 	for {
-		attempts += 1
+		attempts++
 		returnValue, err := connection.Create(path, data, zook.flags, perms)
-		log.Debugf("create status for %s: %s, %+v", path, returnValue, err)
+		log.Infof("create status for %s: %s, %+v", path, returnValue, err)
 		if err != nil && force && attempts < 2 {
 			_, _ = zook.createInternalWithACL(connection, gopath.Dir(path), []byte("zookeepercli auto-generated"), force, perms)
 		} else {
@@ -384,13 +384,13 @@ func (zook *ZooKeeper) Delete(path string) error {
 func (zook *ZooKeeper) DeleteRecursive(path string) error {
 	result, err := zook.ChildrenRecursive(path)
 	if err != nil {
-		log.Fatale(err)
+		log.Fatal(err)
 	}
 
 	for i := len(result) - 1; i >= 0; i-- {
 		znode := path + "/" + result[i]
 		if err = zook.Delete(znode); err != nil {
-			log.Fatale(err)
+			log.Fatal(err)
 		}
 	}
 

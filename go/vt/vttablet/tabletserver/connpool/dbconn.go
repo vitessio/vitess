@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,12 +47,13 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn    *dbconnpool.DBConnection
-	info    dbconfigs.Connector
-	pool    *Pool
-	dbaPool *dbconnpool.ConnectionPool
-	stats   *tabletenv.Stats
-	current sync2.AtomicString
+	conn     *dbconnpool.DBConnection
+	info     dbconfigs.Connector
+	pool     *Pool
+	dbaPool  *dbconnpool.ConnectionPool
+	stats    *tabletenv.Stats
+	current  sync2.AtomicString
+	settings []string
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
@@ -79,18 +81,26 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, settings []string) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	return &DBConn{
+	dbconn := &DBConn{
 		conn:    c,
 		info:    params,
 		dbaPool: dbaPool,
 		pool:    nil,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
-	}, nil
+	}
+	if len(settings) == 0 {
+		return dbconn, nil
+	}
+	if err = dbconn.ApplySettings(ctx, settings); err != nil {
+		dbconn.Close()
+		return nil, err
+	}
+	return dbconn, nil
 }
 
 // Err returns an error if there was a client initiated error
@@ -313,6 +323,38 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) error {
 func (dbc *DBConn) Close() {
 	dbc.conn.Close()
 }
+
+func (dbc *DBConn) ApplySettings(ctx context.Context, settings []string) error {
+	for _, q := range settings {
+		if _, err := dbc.execOnce(ctx, q, 1, false); err != nil {
+			return err
+		}
+	}
+	dbc.settings = settings
+	return nil
+}
+
+func (dbc *DBConn) IsSettingsApplied() bool {
+	return len(dbc.settings) > 0
+}
+
+func (dbc *DBConn) IsSameSetting(settings []string) bool {
+	return compareStringSlice(settings, dbc.settings)
+}
+
+func compareStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, aVal := range a {
+		if aVal != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+var _ pools.Resource = (*DBConn)(nil)
 
 // IsClosed returns true if DBConn is closed.
 func (dbc *DBConn) IsClosed() bool {

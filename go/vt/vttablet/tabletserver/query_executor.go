@@ -59,6 +59,7 @@ type QueryExecutor struct {
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
+	settings       []string
 }
 
 const (
@@ -126,7 +127,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
-	if err := qre.checkPermissions(); err != nil {
+	if err = qre.checkPermissions(); err != nil {
 		return nil, err
 	}
 
@@ -135,12 +136,18 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	if qre.connID != 0 {
+		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return nil, err
 		}
 		defer conn.Unlock()
+		if len(qre.settings) > 0 {
+			if err = conn.ApplySettings(qre.ctx, qre.settings); err != nil {
+				return nil, vterrors.Wrap(err, "failed to execute system settings on the connection")
+			}
+		}
 		return qre.txConnExec(conn)
 	}
 
@@ -159,9 +166,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, err
 		}
 		return qr, nil
-	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
-		return qre.execOther()
-	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execOther()
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
@@ -177,6 +182,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
 		return qre.execShowThrottledApps()
+	case p.PlanSet:
+		if len(qre.settings) == 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without settings connection", qre.query)
+		}
+		// The execution is not required as this setting will be applied when any other query type is executed.
+		return &sqltypes.Result{}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -187,7 +198,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
+	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.settings)
 
 	if err != nil {
 		return nil, err
@@ -198,7 +209,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
+	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.settings)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +249,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -316,6 +327,11 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 			return err
 		}
 		defer txConn.Unlock()
+		if len(qre.settings) > 0 {
+			if err = txConn.ApplySettings(qre.ctx, qre.settings); err != nil {
+				return vterrors.Wrap(err, "failed to execute system settings on the connection")
+			}
+		}
 		conn = txConn.UnderlyingDBConn()
 	} else {
 		dbConn, err := qre.getStreamConn()
@@ -696,7 +712,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.conns.Get(ctx)
+	conn, err := qre.tsv.qe.conns.Get(ctx, qre.settings)
 
 	switch err {
 	case nil:
@@ -713,7 +729,7 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.streamConns.Get(ctx)
+	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.settings)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)

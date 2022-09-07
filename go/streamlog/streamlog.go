@@ -18,7 +18,6 @@ limitations under the License.
 package streamlog
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,24 +28,15 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
-	RedactDebugUIQueries = flag.Bool("redact-debug-ui-queries", false, "redact full queries and bind variables from debug UI")
-
-	// QueryLogFormat controls the format of the query log (either text or json)
-	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
-
-	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
-	QueryLogFilterTag = flag.String("querylog-filter-tag", "", "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
-
-	// QueryLogRowThreshold only log queries returning or affecting this many rows
-	QueryLogRowThreshold = flag.Uint64("querylog-row-threshold", 0, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
-
 	sendCount      = stats.NewCountersWithSingleLabel("StreamlogSend", "stream log send count", "logger_names")
 	deliveredCount = stats.NewCountersWithMultiLabels(
 		"StreamlogDelivered",
@@ -57,6 +47,66 @@ var (
 		"Dropped messages by streamlog delivery",
 		[]string{"Log", "Subscriber"})
 )
+
+var (
+	redactDebugUIQueries bool
+	queryLogFilterTag    string
+	queryLogRowThreshold uint64
+	queryLogFormat       = "text"
+)
+
+func GetRedactDebugUIQueries() bool {
+	return redactDebugUIQueries
+}
+
+func SetRedactDebugUIQueries(newRedactDebugUIQueries bool) {
+	redactDebugUIQueries = newRedactDebugUIQueries
+}
+
+func GetQueryLogFilterTag() string {
+	return queryLogFilterTag
+}
+
+func SetQueryLogFilterTag(newQueryLogFilterTag string) {
+	queryLogFilterTag = newQueryLogFilterTag
+}
+
+func GetQueryLogRowThreshold() uint64 {
+	return queryLogRowThreshold
+}
+
+func SetQueryLogRowThreshold(newQueryLogRowThreshold uint64) {
+	queryLogRowThreshold = newQueryLogRowThreshold
+}
+
+func GetQueryLogFormat() string {
+	return queryLogFormat
+}
+
+func SetQueryLogFormat(newQueryLogFormat string) {
+	queryLogFormat = newQueryLogFormat
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerStreamLogFlags)
+	servenv.OnParseFor("vttablet", registerStreamLogFlags)
+	servenv.OnParseFor("vtgate", registerStreamLogFlags)
+}
+
+func registerStreamLogFlags(fs *pflag.FlagSet) {
+	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
+	fs.BoolVar(&redactDebugUIQueries, "redact-debug-ui-queries", redactDebugUIQueries, "redact full queries and bind variables from debug UI")
+
+	// QueryLogFormat controls the format of the query log (either text or json)
+	fs.StringVar(&queryLogFormat, "querylog-format", queryLogFormat, "format for query logs (\"text\" or \"json\")")
+
+	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
+	fs.StringVar(&queryLogFilterTag, "querylog-filter-tag", queryLogFilterTag, "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
+
+	// QueryLogRowThreshold only log queries returning or affecting this many rows
+	fs.Uint64Var(&queryLogRowThreshold, "querylog-row-threshold", queryLogRowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
+
+}
 
 const (
 	// QueryLogFormatText is the format specifier for text querylog output
@@ -212,11 +262,11 @@ func GetFormatter(logger *StreamLogger) LogFormatter {
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
 func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
-	if *QueryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && *QueryLogFilterTag == "" {
+	if queryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
 		return false
 	}
-	if *QueryLogFilterTag != "" {
-		return strings.Contains(sql, *QueryLogFilterTag)
+	if queryLogFilterTag != "" {
+		return strings.Contains(sql, queryLogFilterTag)
 	}
 	return true
 }

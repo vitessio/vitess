@@ -18,23 +18,22 @@ package grpctmclient
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/callerid"
-
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -47,13 +46,34 @@ import (
 )
 
 var (
-	concurrency = flag.Int("tablet_manager_grpc_concurrency", 8, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App})")
-	cert        = flag.String("tablet_manager_grpc_cert", "", "the cert to use to connect")
-	key         = flag.String("tablet_manager_grpc_key", "", "the key to use to connect")
-	ca          = flag.String("tablet_manager_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	crl         = flag.String("tablet_manager_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
-	name        = flag.String("tablet_manager_grpc_server_name", "", "the server name to use to validate server certificate")
+	concurrency = 8
+	cert        string
+	key         string
+	ca          string
+	crl         string
+	name        string
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&concurrency, "tablet_manager_grpc_concurrency", concurrency, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App})")
+	fs.StringVar(&cert, "tablet_manager_grpc_cert", cert, "the cert to use to connect")
+	fs.StringVar(&key, "tablet_manager_grpc_key", key, "the key to use to connect")
+	fs.StringVar(&ca, "tablet_manager_grpc_ca", ca, "the server ca to use to validate servers when connecting")
+	fs.StringVar(&crl, "tablet_manager_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
+	fs.StringVar(&name, "tablet_manager_grpc_server_name", name, "the server name to use to validate server certificate")
+}
+
+var _binaries = []string{ // binaries that require the flags in this package
+	"vtbackup",
+	"vtcombo",
+	"vtctl",
+	"vtctld",
+	"vtctldclient",
+	"vtgr",
+	"vtorc",
+	"vttablet",
+	"vttestserver",
+}
 
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
@@ -62,6 +82,10 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc-oneshot", func() tmclient.TabletManagerClient {
 		return NewClient()
 	})
+
+	for _, cmd := range _binaries {
+		servenv.OnParseFor(cmd, registerFlags)
+	}
 }
 
 type tmc struct {
@@ -117,7 +141,7 @@ func NewClient() *Client {
 // dial returns a client to use
 func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -131,7 +155,7 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 
 func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +166,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 	}
 	c, ok := client.rpcClientMap[addr]
 	if !ok {
-		c = make(chan *tmc, *concurrency)
+		c = make(chan *tmc, concurrency)
 		client.rpcClientMap[addr] = c
 		client.mu.Unlock()
 

@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/config"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/orchestrator/config"
 )
 
 // PoolInstancesMap lists instance keys per pool name
@@ -67,13 +67,14 @@ func ApplyPoolInstances(submission *PoolInstancesSubmission) error {
 				instanceKey = ReadFuzzyInstanceKeyIfPossible(instanceKey)
 			}
 			if err != nil {
-				return log.Errore(err)
+				log.Error(err)
+				return err
 			}
 
 			instanceKeys = append(instanceKeys, instanceKey)
 		}
 	}
-	log.Debugf("submitting %d instances in %+v pool", len(instanceKeys), submission.Pool)
-	writePoolInstances(submission.Pool, instanceKeys)
+	log.Infof("submitting %d instances in %+v pool", len(instanceKeys), submission.Pool)
+	_ = writePoolInstances(submission.Pool, instanceKeys)
 	return nil
 }

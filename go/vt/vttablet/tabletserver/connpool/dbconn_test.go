@@ -325,7 +325,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConnNoPool(context.Background(), db.ConnParams(), connPool.dbaPool)
+	dbConn, err := NewDBConnNoPool(context.Background(), db.ConnParams(), connPool.dbaPool, nil)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}

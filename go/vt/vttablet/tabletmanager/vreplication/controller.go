@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -39,16 +38,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-)
-
-var (
-	// deprecated flags (7.0)
-	_          = flag.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
-	_          = flag.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
-	_          = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
-	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed workflow event in the replication phase")
-
-	maxTimeToRetryError = flag.Duration("vreplication_max_time_to_retry_on_error", 0, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
 )
 
 // controller is created by Engine. Members are initialized upfront.
@@ -89,7 +78,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		blpStats:          blpStats,
 		done:              make(chan struct{}),
 		source:            &binlogdatapb.BinlogSource{},
-		lastWorkflowError: newLastError("VReplication Controller", *maxTimeToRetryError),
+		lastWorkflowError: newLastError("VReplication Controller", maxTimeToRetryError),
 	}
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
@@ -170,8 +159,8 @@ func (ct *controller) run(ctx context.Context) {
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
-		timer := time.NewTimer(*retryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, retryDelay), err)
+		timer := time.NewTimer(retryDelay)
 		select {
 		case <-ctx.Done():
 			log.Warningf("context canceled: %s", err.Error())

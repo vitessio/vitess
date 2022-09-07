@@ -24,9 +24,9 @@ import (
 	"regexp"
 	"strings"
 
-	"gopkg.in/gcfg.v1"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"gopkg.in/gcfg.v1"
 )
 
 var (
@@ -393,7 +393,7 @@ func (config *Configuration) postReadAdjustments() error {
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed orchestrator credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
+			log.Infof("Parsed orchestrator credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
 			config.MySQLOrchestratorUser = mySQLConfig.Client.User
 			config.MySQLOrchestratorPassword = mySQLConfig.Client.Password
 		}
@@ -417,7 +417,7 @@ func (config *Configuration) postReadAdjustments() error {
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed topology credentials from %s", config.MySQLTopologyCredentialsConfigFile)
+			log.Infof("Parsed topology credentials from %s", config.MySQLTopologyCredentialsConfigFile)
 			config.MySQLTopologyUser = mySQLConfig.Client.User
 			config.MySQLTopologyPassword = mySQLConfig.Client.Password
 		}
@@ -514,7 +514,7 @@ func read(fileName string) (*Configuration, error) {
 		log.Fatal("Cannot read config file:", fileName, err)
 	}
 	if err := Config.postReadAdjustments(); err != nil {
-		log.Fatale(err)
+		log.Fatal(err)
 	}
 	return Config, err
 }

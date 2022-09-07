@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -26,18 +27,14 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-
-	"vitess.io/vitess/go/trace"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 
-	"context"
-
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/grpcoptionaltls"
 	"vitess.io/vitess/go/vt/log"
@@ -78,8 +75,11 @@ var (
 	// GRPCServerCA if specified will combine server cert and server CA
 	GRPCServerCA = flag.String("grpc_server_ca", "", "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
 
-	// GRPCAuth which auth plugin to use (at the moment now only static is supported)
-	GRPCAuth = flag.String("grpc_auth_mode", "", "Which auth plugin implementation to use (eg: static)")
+	// GRPCAuth specifies which auth plugin to use. Currently only "static" and
+	// "mtls" are supported.
+	//
+	// To expose this flag, call RegisterGRPCAuthServerFlags before ParseFlags.
+	gRPCAuth string
 
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
@@ -159,9 +159,10 @@ func createGRPCServer() {
 	// grpc: received message length XXXXXXX exceeding the max size 4194304
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
-	log.Infof("Setting grpc max message size to %d", *grpccommon.MaxMessageSize)
-	opts = append(opts, grpc.MaxRecvMsgSize(*grpccommon.MaxMessageSize))
-	opts = append(opts, grpc.MaxSendMsgSize(*grpccommon.MaxMessageSize))
+	msgSize := grpccommon.MaxMessageSize()
+	log.Infof("Setting grpc max message size to %d", msgSize)
+	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
+	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
 
 	if *GRPCInitialConnWindowSize != 0 {
 		log.Infof("Setting grpc server initial conn window size to %d", int32(*GRPCInitialConnWindowSize))
@@ -198,9 +199,9 @@ func createGRPCServer() {
 func interceptors() []grpc.ServerOption {
 	interceptors := &serverInterceptorBuilder{}
 
-	if *GRPCAuth != "" {
-		log.Infof("enabling auth plugin %v", *GRPCAuth)
-		pluginInitializer := GetAuthenticator(*GRPCAuth)
+	if gRPCAuth != "" {
+		log.Infof("enabling auth plugin %v", gRPCAuth)
+		pluginInitializer := GetAuthenticator(gRPCAuth)
 		authPluginImpl, err := pluginInitializer()
 		if err != nil {
 			log.Fatalf("Failed to load auth plugin: %v", err)
@@ -209,7 +210,7 @@ func interceptors() []grpc.ServerOption {
 		interceptors.Add(authenticatingStreamInterceptor, authenticatingUnaryInterceptor)
 	}
 
-	if *grpccommon.EnableGRPCPrometheus {
+	if grpccommon.EnableGRPCPrometheus() {
 		interceptors.Add(grpc_prometheus.StreamServerInterceptor, grpc_prometheus.UnaryServerInterceptor)
 	}
 
@@ -219,7 +220,7 @@ func interceptors() []grpc.ServerOption {
 }
 
 func serveGRPC() {
-	if *grpccommon.EnableGRPCPrometheus {
+	if grpccommon.EnableGRPCPrometheus() {
 		grpc_prometheus.Register(GRPCServer)
 		grpc_prometheus.EnableHandlingTimeHistogram()
 	}

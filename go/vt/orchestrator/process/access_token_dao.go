@@ -17,9 +17,11 @@
 package process
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 )
@@ -40,7 +42,8 @@ func GenerateAccessToken(owner string) (publicToken string, err error) {
 		publicToken, secretToken, owner,
 	)
 	if err != nil {
-		return publicToken, log.Errore(err)
+		log.Error(err)
+		return publicToken, err
 	}
 	return publicToken, nil
 }
@@ -67,14 +70,18 @@ func AcquireAccessToken(publicToken string) (secretToken string, err error) {
 		publicToken, config.Config.AccessTokenUseExpirySeconds,
 	)
 	if err != nil {
-		return secretToken, log.Errore(err)
+		log.Error(err)
+		return secretToken, err
 	}
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		return secretToken, log.Errore(err)
+		log.Error(err)
+		return secretToken, err
 	}
 	if rows == 0 {
-		return secretToken, log.Errorf("Cannot acquire token %s", publicToken)
+		errMsg := fmt.Sprintf("Cannot acquire token %s", publicToken)
+		log.Errorf(errMsg)
+		return secretToken, fmt.Errorf(errMsg)
 	}
 	// Seems like we made it!
 	query := `
@@ -84,7 +91,10 @@ func AcquireAccessToken(publicToken string) (secretToken string, err error) {
 		secretToken = m.GetString("secret_token")
 		return nil
 	})
-	return secretToken, log.Errore(err)
+	if err != nil {
+		log.Error(err)
+	}
+	return secretToken, err
 }
 
 // TokenIsValid checks to see whether a given token exists and is not outdated.
@@ -106,7 +116,10 @@ func TokenIsValid(publicToken string, secretToken string) (result bool, err erro
 		result = m.GetInt("valid_token") > 0
 		return nil
 	})
-	return result, log.Errore(err)
+	if err != nil {
+		log.Error(err)
+	}
+	return result, err
 }
 
 // ExpireAccessTokens removes old, known to be uneligible tokens
@@ -120,5 +133,8 @@ func ExpireAccessTokens() error {
 			`,
 		config.Config.AccessTokenExpiryMinutes,
 	)
-	return log.Errore(err)
+	if err != nil {
+		log.Error(err)
+	}
+	return err
 }
