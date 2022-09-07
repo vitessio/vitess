@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/pools"
-	"vitess.io/vitess/go/sync2"
+
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -54,11 +54,10 @@ type (
 	// concern itself with a connections life cycle. The two exceptions are Begin, which creates a new StatefulConnection,
 	// and RollbackAndRelease, which does a Release after doing the rollback.
 	TxPool struct {
-		env                tabletenv.Env
-		scp                *StatefulConnectionPool
-		transactionTimeout sync2.AtomicDuration
-		ticks              *timer.Timer
-		limiter            txlimiter.TxLimiter
+		env     tabletenv.Env
+		scp     *StatefulConnectionPool
+		ticks   *timer.Timer
+		limiter txlimiter.TxLimiter
 
 		logMu   sync.Mutex
 		lastLog time.Time
@@ -73,18 +72,21 @@ type (
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
-	transactionTimeout := config.Oltp.TxTimeoutSeconds.Get()
 	axp := &TxPool{
-		env:                env,
-		scp:                NewStatefulConnPool(env),
-		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
-		ticks:              timer.NewTimer(transactionTimeout / 10),
-		limiter:            limiter,
-		txStats:            env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
+		env:     env,
+		scp:     NewStatefulConnPool(env),
+		ticks:   timer.NewTimer(txKillerTimeoutInterval(config)),
+		limiter: limiter,
+		txStats: env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
-	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", axp.transactionTimeout.Get)
+	env.Exporter().NewGaugeDurationFunc("OlapTransactionTimeout", "OLAP transaction timeout", func() time.Duration {
+		return config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
+	})
+	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", func() time.Duration {
+		return config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
+	})
 	return axp
 }
 
@@ -92,7 +94,9 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	tp.scp.Open(appParams, dbaParams, appDebugParams)
-	tp.ticks.Start(func() { tp.transactionKiller() })
+	if tp.ticks.Interval() > 0 {
+		tp.ticks.Start(func() { tp.transactionKiller() })
+	}
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
@@ -118,8 +122,8 @@ func (tp *TxPool) Shutdown(ctx context.Context) {
 
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
-	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), vterrors.TxKillerRollback) {
-		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String(tp.env.Config().SanitizeLogMessages))
+	for _, conn := range tp.scp.GetElapsedTimeout(vterrors.TxKillerRollback) {
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", conn.timeout, conn.String(tp.env.Config().SanitizeLogMessages))
 		switch {
 		case conn.IsTainted():
 			conn.Close()
@@ -138,7 +142,7 @@ func (tp *TxPool) transactionKiller() {
 		if conn.IsInTransaction() {
 			tp.txComplete(conn, tx.TxKill)
 		}
-		conn.Releasef("exceeded timeout: %v", tp.Timeout())
+		conn.Releasef("exceeded timeout: %v", conn.timeout)
 	}
 }
 
@@ -230,6 +234,9 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		if err != nil {
 			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
 		}
+		// Update conn timeout.
+		timeout := tp.env.Config().TxTimeoutForWorkload(options.GetWorkload())
+		conn.SetTimeout(timeout)
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
@@ -351,19 +358,15 @@ func (tp *TxPool) LogActive() {
 	})
 }
 
-// Timeout returns the transaction timeout.
-func (tp *TxPool) Timeout() time.Duration {
-	return tp.transactionTimeout.Get()
-}
-
-// SetTimeout sets the transaction timeout.
-func (tp *TxPool) SetTimeout(timeout time.Duration) {
-	tp.transactionTimeout.Set(timeout)
-	tp.ticks.SetInterval(timeout / 10)
-}
-
 func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
 	conn.LogTransaction(reason)
 	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
 	conn.CleanTxState()
+}
+
+func txKillerTimeoutInterval(config *tabletenv.TabletConfig) time.Duration {
+	return smallerTimeout(
+		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
+		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
+	) / 10
 }

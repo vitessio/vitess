@@ -472,8 +472,11 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 
 func TestShortTxTimeout(t *testing.T) {
 	client := framework.NewClient()
-	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
-	framework.Server.SetTxTimeout(10 * time.Millisecond)
+	defer framework.Server.Config().SetTxTimeoutForWorkload(
+		framework.Server.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
+		querypb.ExecuteOptions_OLTP,
+	)
+	framework.Server.Config().SetTxTimeoutForWorkload(10*time.Millisecond, querypb.ExecuteOptions_OLTP)
 
 	err := client.Begin(false)
 	require.NoError(t, err)

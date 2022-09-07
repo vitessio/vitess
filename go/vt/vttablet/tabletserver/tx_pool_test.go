@@ -350,8 +350,10 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	assertErrorMatch(id, "transaction committed")
 
-	txPool, _ = newTxPool()
-	txPool.SetTimeout(1 * time.Millisecond)
+	env := txPool.env
+	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLTP)
+	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLAP)
+	txPool, _ = newTxPoolWithEnv(env)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
@@ -407,7 +409,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	// Let it time out and get killed by the tx killer.
 	time.Sleep(1200 * time.Millisecond)
 
-	// Verify that the tx killer rand.
+	// Verify that the tx killer ran.
 	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
 
 	// Regression test for #6727: make sure the tx limiter is decremented when the tx killer closes
@@ -425,6 +427,192 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 				isRelease: true,
 			},
 		}, limiter.Actions())
+}
+
+func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().TxPool.MaxWaiters = 0
+	env.Config().Oltp.TxTimeoutSeconds = 1
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
+
+	im := &querypb.VTGateCallerID{
+		Username: "user",
+	}
+	ef := &vtrpcpb.CallerID{
+		Principal: "principle",
+	}
+
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+
+	// Start transaction.
+	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	require.NoError(t, err)
+	conn.Unlock()
+
+	// Sleep for less than the tx timeout
+	time.Sleep(800 * time.Millisecond)
+
+	// Verify that the tx killer did not run.
+	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
+}
+
+func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().TxPool.MaxWaiters = 0
+	env.Config().Oltp.TxTimeoutSeconds = 1
+	env.Config().Olap.TxTimeoutSeconds = 2
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
+
+	im := &querypb.VTGateCallerID{
+		Username: "user",
+	}
+	ef := &vtrpcpb.CallerID{
+		Principal: "principle",
+	}
+
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+
+	// Start transaction.
+	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
+		Workload: querypb.ExecuteOptions_OLAP,
+	}, false, 0, nil, nil)
+	require.NoError(t, err)
+	conn.Unlock()
+
+	// After the OLTP timeout elapses, the tx should not have been killed.
+	time.Sleep(1200 * time.Millisecond)
+	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
+
+	// After the OLAP timeout elapses, the tx should have been killed.
+	time.Sleep(1000 * time.Millisecond)
+	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
+}
+
+func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 2
+	env.Config().TxPool.MaxWaiters = 0
+	env.Config().Oltp.TxTimeoutSeconds = 0
+	env.Config().Olap.TxTimeoutSeconds = 0
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
+
+	im := &querypb.VTGateCallerID{
+		Username: "user",
+	}
+	ef := &vtrpcpb.CallerID{
+		Principal: "principle",
+	}
+
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+
+	// Start transactions.
+	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	require.NoError(t, err)
+	conn1, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
+		Workload: querypb.ExecuteOptions_OLAP,
+	}, false, 0, nil, nil)
+	require.NoError(t, err)
+	conn0.Unlock()
+	conn1.Unlock()
+
+	// Not really a great test, but we don't want to make unit tests take a
+	// long time by using a long sleep. Probably a better approach would be to
+	// either monkeypatch time.Now() or pass in a mock Clock to TxPool.
+	time.Sleep(2000 * time.Millisecond)
+
+	// OLTP tx is not killed.
+	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
+	// OLAP tx is not killed.
+	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
+}
+
+func TestTxTimeoutReservedConn(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().TxPool.MaxWaiters = 0
+	env.Config().Oltp.TxTimeoutSeconds = 1
+	env.Config().Olap.TxTimeoutSeconds = 2
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
+	startingTxKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
+
+	im := &querypb.VTGateCallerID{
+		Username: "user",
+	}
+	ef := &vtrpcpb.CallerID{
+		Principal: "principle",
+	}
+
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+
+	// Start OLAP transaction and return it to pool right away.
+	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
+		Workload: querypb.ExecuteOptions_OLAP,
+	}, false, 0, nil, nil)
+	require.NoError(t, err)
+	// Taint the connection.
+	conn0.Taint(ctxWithCallerID, nil)
+	conn0.Unlock()
+
+	// tx should not timeout after OLTP timeout.
+	time.Sleep(1200 * time.Millisecond)
+	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
+	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingTxKills)
+
+	// tx should timeout after OLAP timeout.
+	time.Sleep(1000 * time.Millisecond)
+	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
+	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingTxKills)
+}
+
+func TestTxTimeoutReusedReservedConn(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().TxPool.MaxWaiters = 0
+	env.Config().Oltp.TxTimeoutSeconds = 1
+	env.Config().Olap.TxTimeoutSeconds = 2
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
+	startingTxKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
+
+	im := &querypb.VTGateCallerID{
+		Username: "user",
+	}
+	ef := &vtrpcpb.CallerID{
+		Principal: "principle",
+	}
+
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+
+	// Start OLAP transaction and return it to pool right away.
+	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
+		Workload: querypb.ExecuteOptions_OLAP,
+	}, false, 0, nil, nil)
+	require.NoError(t, err)
+	// Taint the connection.
+	conn0.Taint(ctxWithCallerID, nil)
+	conn0.Unlock()
+
+	// Reuse underlying connection in an OLTP transaction.
+	conn1, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, conn0.ReservedID(), nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, conn1.ReservedID(), conn0.ReservedID())
+	conn1.Unlock()
+
+	// tx should timeout after OLTP timeout.
+	time.Sleep(1200 * time.Millisecond)
+	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
+	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingTxKills)
 }
 
 func newTxPool() (*TxPool, *fakeLimiter) {

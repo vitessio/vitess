@@ -74,6 +74,7 @@ func TestConfigParse(t *testing.T) {
 gracePeriods: {}
 healthcheck: {}
 hotRowProtection: {}
+olap: {}
 olapReadPool: {}
 oltp: {}
 oltpReadPool:
@@ -131,6 +132,8 @@ hotRowProtection:
   maxQueueSize: 20
   mode: disable
 messagePostponeParallelism: 4
+olap:
+  txTimeoutSeconds: 30
 olapReadPool:
   idleTimeoutSeconds: 1800
   size: 200
@@ -201,6 +204,9 @@ func TestFlags(t *testing.T) {
 			Size:           20,
 			TimeoutSeconds: 1,
 			MaxWaiters:     5000,
+		},
+		Olap: OlapConfig{
+			TxTimeoutSeconds: 30,
 		},
 		Oltp: OltpConfig{
 			QueryTimeoutSeconds: 30,
