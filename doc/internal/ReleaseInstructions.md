@@ -211,10 +211,10 @@ This section is divided into three parts:
 
 #### Pre-Requisites for Release Candidates (`rc`)
 
-> In this example our current version is `v11` and we release the version `v12.0.0-rc1`.
+> In this example our current version is `v14` and we release the version `v15.0.0-rc1`.
 > Alongside Vitess' release, we also release a new version of the operator.
 > Since we are releasing a release candidate here, the new version of the operator will also be a release candidate.
-> In this example, the new operator version is `2.7.0-rc1`.
+> In this example, the new operator version is `2.8.0-rc1`.
 
 1. Fetch `github.com/vitessio/vitess`'s remote.
     ```shell
@@ -222,37 +222,37 @@ This section is divided into three parts:
     ```
 
 
-2. Create a new release branch from `main`.
+2. Checkout to the corresponding release branch. It should have been created during the code freeze. 
     ```shell
-    git checkout -b release-12.0 upstream/main
+    git checkout release-15.0
     ```
 
 
 3. Creation of the release notes and tags.
    1. Run the release script using the Makefile:
        ```shell
-       make RELEASE_VERSION="12.0.0-rc1" DEV_VERSION="12.0.0-SNAPSHOT" VTOP_VERSION="2.7.0-rc1" do_release
+       make RELEASE_VERSION="15.0.0-rc1" DEV_VERSION="15.0.0-SNAPSHOT" VTOP_VERSION="2.8.0-rc1" do_release
        ```
       The script will prompt you `Pausing so release notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
    
    2. Run the following command to generate the release notes:
        ```shell
-       make VERSION="v12.0.0-rc1" FROM="v11.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/12_0_0_summary.md" release-notes  
+       make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
        ```
-      This command will generate the release notes by looking at all the commits between the tag `v11.0.0` and the reference `HEAD`.
-      It will also use the file located in `./doc/releasenotes/12_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
+      This command will generate the release notes by looking at all the commits between the tag `v14.0.0` and the reference `HEAD`.
+      It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
 
 
 
-4. As prompted in the `do_release` Makefile command's output, push the `v12.0.0-rc1` tag.
+4. As prompted in the `do_release` Makefile command's output, push the `v15.0.0-rc1` tag.
     ```shell
-    git push upstream v12.0.0-rc1
+    git push upstream v15.0.0-rc1
     ```
 
 
 5. Push the current dev branch to upstream. No pull request required. **To achieve this action, you need to be able to create new branches on `vitessio/vitess`**.
     ```shell
-    git push upstream release-12.0
+    git push upstream release-15.0
     ```
 
 6. Create a Pull Request against the `main` branch with the newly created release notes.
@@ -262,42 +262,42 @@ This section is divided into three parts:
 
 #### Pre-Requisites for Releases
 
-> In this example our current version is `v11` and we release the version `v12.0.0`. Before releasing `v12.0.0`, usually three weeks before, we released the release candidate for `v12.0.0`.
-> We are also going to make the latest version of the operator GA. In our example the operator version is `v2.7.0`.
+> In this example our current version is `v14` and we release the version `v15.0.0`. Before releasing `v15.0.0`, usually three weeks before, we released the release candidate for `v15.0.0`.
+> We are also going to make the latest version of the operator GA. In our example the operator version is `v2.8.0`.
 
 1. Fetch `github.com/vitessio/vitess`'s remote.
     ```shell
     git fetch <vitessio/vitess remote>
     ```
 
-2. Create a temporary release branch that will be based on our long-term release branch for `v12.0.0`. In our case, the release branch is `release-12.0`.
+2. Create a temporary release branch that will be based on our long-term release branch for `v15.0.0`. In our case, the release branch is `release-15.0`.
     ```shell
-    git checkout -b release-12.0.0 upstream/release-12.0
+    git checkout -b release-15.0.0 upstream/release-15.0
     ```
 
 3. Creation of the release notes and tags.
     1. Run the release script using the Makefile:
         ```shell
-        make RELEASE_VERSION="12.0.0" GODOC_RELEASE_VERSION="0.12.0" DEV_VERSION="12.0.1-SNAPSHOT" VTOP_VERSION="2.7.0" do_release
+        make RELEASE_VERSION="15.0.0" GODOC_RELEASE_VERSION="0.15.0" DEV_VERSION="15.0.1-SNAPSHOT" VTOP_VERSION="2.8.0" do_release
         ```
        The script will prompt you `Pausing so relase notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
 
     2. Run the following command to generate the release notes:
         ```shell
-        make VERSION="v12.0.0" FROM="v11.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/12_0_0_summary.md" release-notes  
+        make VERSION="v15.0.0" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
         ```
-       This command will generate the release notes by looking at all the commits between the tag `v11.0.0` and the reference `HEAD`.
-       It will also use the file located in `./doc/releasenotes/12_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
+       This command will generate the release notes by looking at all the commits between the tag `v14.0.0` and the reference `HEAD`.
+       It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
 
 
-4. As prompted in the `do_release` Makefile command's output, push the `v12.0.0` and `v0.12.0` tags.
+4. As prompted in the `do_release` Makefile command's output, push the `v15.0.0` and `v0.15.0` tags.
     ```shell
-    git push upstream v12.0.0 && git push upstream v0.12.0
+    git push upstream v15.0.0 && git push upstream v0.15.0
     ```
 
-5. Push your current branch and create a pull request against the existing `release-12.0` branch.
+5. Push your current branch and create a pull request against the existing `release-15.0` branch.
     ```shell
-    git push origin release-12.0.0
+    git push origin release-15.0.0
     ```
 
 6. Create a Pull Request against the `main` branch with the newly created release notes.
