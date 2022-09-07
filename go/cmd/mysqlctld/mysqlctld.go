@@ -20,11 +20,10 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -50,10 +49,11 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterDefaultSocketFileFlags()
 	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()
-	servenv.RegisterDefaultSocketFileFlags()
 	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 func main() {

@@ -121,7 +121,7 @@ Usage of vtexplain:
       --planner-version string                                       Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4
       --planner_version string                                       Deprecated flag. Use planner-version instead
       --pool_hostname_resolve_interval duration                      if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
-      --pprof string                                                 enable profiling
+      --pprof strings                                                enable profiling
       --proxy_protocol                                               Enable HAProxy PROXY protocol on MySQL listener socket
       --purge_logs_interval duration                                 how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                              URL handler for streaming queries log (default "/debug/querylog")
@@ -169,7 +169,6 @@ Usage of vtexplain:
       --schema_change_signal                                         Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --schema_change_signal_user string                             User to be used to send down query to vttablet to retrieve schema changes
       --security_policy string                                       the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --service_map StringList                                       comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving_state_grace_period duration                          how long to pause after broadcasting health to vtgate, before enforcing a new serving state (default 0s)
       --shards int                                                   Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
       --shutdown_grace_period float                                  how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.
