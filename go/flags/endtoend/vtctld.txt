@@ -125,7 +125,7 @@ Usage of vtctld:
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
       --port int                                                         port for the server
-      --pprof string                                                     enable profiling
+      --pprof strings                                                    enable profiling
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
@@ -181,7 +181,7 @@ Usage of vtctld:
       --schema_change_replicas_timeout duration                          how long to wait for replicas to receive the schema change (default 10s)
       --schema_change_user string                                        The user who submits this schema change.
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --service_map StringList                                           comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state (default 0s)
       --shutdown_grace_period float                                      how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)

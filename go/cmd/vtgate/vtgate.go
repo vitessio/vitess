@@ -54,6 +54,7 @@ func init() {
 	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
