@@ -2707,6 +2707,18 @@ BEGIN
 END`,
 			output: "create definer = `root`@`localhost` procedure film_not_in_stock (in p_film_id INT, in p_store_id INT, out p_film_count INT) reads sql data begin\nselect inventory_id from inventory where film_id = p_film_id and store_id = p_store_id;\nselect COUNT(*) from inventory where film_id = p_film_id and store_id = p_store_id into p_film_count;\nend",
 		},
+		{
+			input:  "with a(j) as (select 1), b(i) as (select 2) (select j from a union select i from b order by j desc limit 1) union select j from a;",
+			output: "with a (j) as (select 1 from dual), b (i) as (select 2 from dual) (select j from a union select i from b order by j desc limit 1) union select j from a",
+		},
+		{
+			input:  "with a(j) as (select 1) ( with c(k) as (select 3) select k from c union select 6) union select k from c;",
+			output: "with a (j) as (select 1 from dual) (with c (k) as (select 3 from dual) select k from c union select 6 from dual) union select k from c",
+		},
+		{
+			input:  "with a(j) as (select 1) ( with c(k) as (select 3) select (select k from c union select 6 limit 1) as b) union select k from c;",
+			output: "with a (j) as (select 1 from dual) (with c (k) as (select 3 from dual) select (select k from c union select 6 from dual limit 1) as b from dual) union select k from c",
+		},
 	}
 )
 

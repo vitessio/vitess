@@ -351,7 +351,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
+%type <selStmt>  create_query_expression select_statement base_select with_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -595,7 +595,7 @@ load_statement:
   }
 
 select_statement:
-  base_select order_by_opt limit_opt lock_opt into_opt
+  with_select order_by_opt limit_opt lock_opt into_opt
   {
     $1.SetOrderBy($2)
     $1.SetLimit($3)
@@ -633,17 +633,30 @@ base_select:
   {
     $$ = $1
   }
-| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt window_opt
-  {
-    $$ = &Select{With: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13}
-    if $6 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
-  }
 | union_lhs union_op union_rhs
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
+
+with_select:
+  base_select
+  {
+    $$ = $1
+  }
+| WITH with_clause base_select
+  {
+    $3.SetWith($2)
+    $$ = $3
+  }
+
+with_clause:
+  RECURSIVE cte_list
+  {
+    $$ = &With{Ctes: $2, Recursive: true}
+  }
+| cte_list {
+    $$ = &With{Ctes: $1, Recursive: false}
+}
 
 base_select_no_cte:
   SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
@@ -694,23 +707,13 @@ variable_list:
     $$ = append($$, $3)
   }
 
-with_clause:
-  WITH cte_list
-  {
-   $$ = &With{Ctes: $2, Recursive: false}
-  }
-| WITH RECURSIVE cte_list
-  {
-    $$ = &With{Ctes: $3, Recursive: true}
-  }
-
 with_clause_opt:
   {
     $$ = nil
   }
-| with_clause
+| WITH with_clause
   {
-    $$ = $1
+    $$ = $2
   }
 
 cte_list:
