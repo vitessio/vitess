@@ -688,7 +688,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 	if req.IncludeParent {
 		log.Infof("Creating empty keyspace for %s", req.Keyspace)
 		if err2 := s.ts.CreateKeyspace(ctx, req.Keyspace, &topodatapb.Keyspace{}); err2 != nil {
-			if req.Force && topo.IsErrType(err, topo.NodeExists) {
+			if req.Force && topo.IsErrType(err2, topo.NodeExists) {
 				log.Infof("keyspace %v already exists; ignoring error because Force = true", req.Keyspace)
 			} else {
 				err = err2
