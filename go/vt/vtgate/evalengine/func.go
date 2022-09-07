@@ -42,6 +42,8 @@ var builtinFunctions = map[string]builtin{
 	"lcase":     builtinLcase{},
 	"char_length":      builtinCharLength{},
 	"character_length": builtinCharacterLength{},
+	"length":           builtinLength{},
+	"octet_length":     builtinOctetLength{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{

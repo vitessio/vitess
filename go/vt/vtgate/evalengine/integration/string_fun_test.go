@@ -63,3 +63,16 @@ func TestBuiltinCharLength(t *testing.T) {
 		compareRemoteExpr(t, conn, query)
 	}
 }
+
+func TestBuiltinLength(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, str := range cases {
+		query := fmt.Sprintf("Length(%s)", str)
+		compareRemoteExpr(t, conn, query)
+
+		query = fmt.Sprintf("OCTET_LENGTH(%s)", str)
+		compareRemoteExpr(t, conn, query)
+	}
+}
