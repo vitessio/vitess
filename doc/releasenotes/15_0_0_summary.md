@@ -17,6 +17,12 @@
 
 ### Breaking Changes
 
+#### Flags
+
+- The deprecated `--cpu_profile` flag has been removed. Please use the `--pprof` flag instead.
+- The deprecated `--mem-profile-rate` flag has been removed. Please use `--pprof=mem` instead.
+- The deprecated `--mutex-profile-fraction` flag has been removed. Please use `--pprof=mutex` instead.
+
 #### Vindex Interface
 
 All the vindex interface methods are changed by adding `context.Context` as an input parameter.

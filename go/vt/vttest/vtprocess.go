@@ -251,7 +251,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
 	}
 	if servenv.GRPCAuth() == "mtls" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", *servenv.GRPCKey, "--grpc_cert", *servenv.GRPCCert, "--grpc_ca", *servenv.GRPCCA, "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", servenv.GRPCKey(), "--grpc_cert", servenv.GRPCCert(), "--grpc_ca", servenv.GRPCCertificateAuthority(), "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.InitWorkflowManager {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--workflow_manager_init"}...)

@@ -29,6 +29,9 @@ import (
 // Though not part of the interface, because the return type would be different
 // for each implementation, by convention, each implementation should define a
 // Get() method to access the underlying value.
+//
+// TODO (ajm188) - replace this interface with a generic type.
+// c.f. https://github.com/vitessio/vitess/issues/11154.
 type OptionalFlag interface {
 	pflag.Value
 	IsSet() bool
