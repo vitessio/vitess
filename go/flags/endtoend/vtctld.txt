@@ -26,7 +26,6 @@ Usage of vtctld:
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
-      --cpu_profile string                                               deprecated: use '-pprof=cpu' instead
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
@@ -88,7 +87,7 @@ Usage of vtctld:
       --grpc_max_connection_age duration                                 Maximum age of a client connection before GoAway is sent. (default 2562047h47m16.854775807s)
       --grpc_max_connection_age_grace duration                           Additional grace period after grpc_max_connection_age, after which connections are forcibly closed. (default 2562047h47m16.854775807s)
       --grpc_max_message_size int                                        Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
-      --grpc_port int                                                    Port to listen on for gRPC calls
+      --grpc_port int                                                    Port to listen on for gRPC calls. If zero, do not listen.
       --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus.
       --grpc_server_ca string                                            path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --grpc_server_initial_conn_window_size int                         gRPC server initial connection window size
@@ -114,8 +113,6 @@ Usage of vtctld:
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
       --master_connect_retry duration                                    Deprecated, use -replication_connect_retry (default 10s)
-      --mem-profile-rate int                                             deprecated: use '-pprof=mem' instead (default 524288)
-      --mutex-profile-fraction int                                       deprecated: use '-pprof=mutex' instead
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_version string                                      MySQL server version to advertise.
       --mysqlctl_client_protocol string                                  the protocol to use to talk to the mysqlctl server (default "grpc")

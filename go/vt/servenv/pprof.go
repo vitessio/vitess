@@ -35,7 +35,6 @@ import (
 )
 
 var (
-	_         = flag.String("cpu_profile", "", "deprecated: use '-pprof=cpu' instead")
 	pprofFlag = flag.String("pprof", "", "enable profiling")
 )
 
