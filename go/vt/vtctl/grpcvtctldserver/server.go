@@ -703,6 +703,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 		if req.Force && topo.IsErrType(err, topo.NodeExists) {
 			log.Infof("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName)
 			shardExists = true
+			err = nil
 		} else {
 			return nil, err
 		}
