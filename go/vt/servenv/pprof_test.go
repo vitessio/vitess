@@ -45,7 +45,11 @@ func TestParseProfileFlag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.arg, func(t *testing.T) {
-			got, err := parseProfileFlag(strings.Split(tt.arg, ","))
+			var profileFlag []string
+			if tt.arg != "" {
+				profileFlag = strings.Split(tt.arg, ",")
+			}
+			got, err := parseProfileFlag(profileFlag)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseProfileFlag() error = %v, wantErr %v", err, tt.wantErr)
 				return
