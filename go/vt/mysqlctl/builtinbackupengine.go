@@ -110,6 +110,10 @@ type FileEntry struct {
 	// Hash is the hash of the final data (transformed and
 	// compressed if specified) stored in the BackupStorage.
 	Hash string
+
+	// ParentPath is an optional prefix to the Base path. If empty, it is ignored. Useful
+	// for writing files in a temporary directory
+	ParentPath string
 }
 
 func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
@@ -129,7 +133,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	}
 
 	// and open the file
-	name := path.Join(root, fe.Name)
+	name := path.Join(fe.ParentPath, root, fe.Name)
 	var fd *os.File
 	var err error
 	if readOnly {
@@ -715,6 +719,37 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	return nil
 }
 
+func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+		return err
+	}
+
+	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
+
+	if _, err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
+		// don't delete the file here because that is how we detect an interrupted restore
+		return vterrors.Wrap(err, "failed to restore files")
+	}
+	return nil
+}
+
+func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+	params.Logger.Infof("Restoring incremental backup to: %v", bm.Position)
+
+	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
+	if err != nil {
+		// don't delete the file here because that is how we detect an interrupted restore
+		return vterrors.Wrap(err, "failed to restore files")
+	}
+	params.Logger.Infof("Restored incremental backup file to: %v", createdDir)
+
+	if err := createRestoreIncrementalScript(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ExecuteRestore restores from a backup. If the restore is successful
 // we return the position from which replication should start
 // otherwise an error is returned
@@ -731,24 +766,24 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 		return nil, err
 	}
 
-	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
-		return nil, err
+	if bm.Incremental {
+		be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
+	} else {
+		be.executeRestoreFullBackup(ctx, params, bh, bm)
 	}
-
-	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
-
-	if err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
-		// don't delete the file here because that is how we detect an interrupted restore
-		return nil, vterrors.Wrap(err, "failed to restore files")
-	}
-
 	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
 	return &bm.BackupManifest, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) (createdDir string, err error) {
+	if bm.Incremental {
+		createdDir, err = os.MkdirTemp("", "restore-incremental-*")
+		if err != nil {
+			return "", err
+		}
+	}
 	fes := bm.FileEntries
 	sema := sync2.NewSemaphore(params.Concurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
@@ -766,17 +801,19 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 				return
 			}
 
+			fe := &fes[i]
+			fe.ParentPath = createdDir
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			err := be.restoreFile(ctx, params, bh, &fes[i], bm, name)
+			params.Logger.Infof("Copying file %v: %v", name, fe.Name)
+			err := be.restoreFile(ctx, params, bh, fe, bm, name)
 			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
+				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fe.Name))
 			}
 		}(i)
 	}
 	wg.Wait()
-	return rec.Error()
+	return createdDir, rec.Error()
 }
 
 // restoreFile restores an individual file.

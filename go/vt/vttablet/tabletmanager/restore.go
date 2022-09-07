@@ -247,6 +247,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
+		params.Logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -267,8 +268,10 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	if backupManifest != nil {
 		pos = backupManifest.Position
 	}
+	params.Logger.Infof("Restore: pos=%v", mysql.EncodePosition(pos))
 	// If SnapshotTime is set , then apply the incremental change
 	if keyspaceInfo.SnapshotTime != nil {
+		params.Logger.Infof("Restore: Restoring to time %v from binlog", keyspaceInfo.SnapshotTime)
 		err = tm.restoreToTimeFromBinlog(ctx, pos, keyspaceInfo.SnapshotTime)
 		if err != nil {
 			log.Errorf("unable to restore to the specified time %s, error : %v", keyspaceInfo.SnapshotTime.String(), err)
@@ -281,6 +284,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// context. Thus we use the background context to get through to the finish.
 		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to primary only for "NORMAL" keyspaces
+			params.Logger.Infof("Restore: starting replication at position %v", pos)
 			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
 				return err
 			}
@@ -309,6 +313,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		}
 	}
 
+	params.Logger.Infof("Restore: changing tablet type to %v", originalType)
 	// Change type back to original type if we're ok to serve.
 	return tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone)
 }

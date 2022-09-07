@@ -362,19 +362,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
-	for _, bh := range restorePath.IncrementalBackupHandles() {
-		fmt.Printf("============== RESTORING an incremental backup: %v, %v\n", bh.Name(), bh.Directory())
-		// re, err := GetRestoreEngine(ctx, bh)
-		// if err != nil {
-		// 	return nil, vterrors.Wrap(err, "Failed to find restore engine")
-		// }
-
-		// manifest, err = re.ExecuteRestore(ctx, params, bh)
-		// if err != nil {
-		// 	return nil, err
-		// }
-	}
-
 	// Add backupTime and restorePosition to LocalMetadata
 	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
 	params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
@@ -399,10 +386,26 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
+	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
+		params.Logger.Infof("Restore: applying %v incremental backups", len(handles))
+		for _, bh := range handles {
+			manifest, err := re.ExecuteRestore(ctx, params, bh)
+			if err != nil {
+				return nil, err
+			}
+			// Add backupTime and restorePosition to LocalMetadata
+			params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
+			params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
+		}
+		params.Logger.Infof("Restore: done applying incremental backups")
+	}
+
+	params.Logger.Infof("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
 		return nil, err
 	}
 
 	restoreDuration.Set(int64(time.Since(startTs).Seconds()))
+	params.Logger.Infof("Restore: complete")
 	return manifest, nil
 }
