@@ -286,6 +286,13 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return err
 	}
 
+	switch qre.plan.PlanID {
+	case p.PlanSelectStream:
+		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+		}
+	}
+
 	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return err
