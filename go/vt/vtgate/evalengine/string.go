@@ -22,10 +22,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-type (
-	builtinLower struct{}
-	builtinLcase struct{}
-)
+type builtinLower struct{}
 
 func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
@@ -40,7 +37,7 @@ func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		result.setString(tolower, inarg.collation())
 	} else {
 		tolower := inarg.value().RawStr()
-		inarg.makeTextualAndConvert(env.DefaultCollation,)
+		inarg.makeTextualAndConvert(env.DefaultCollation)
 		result.setString(tolower, inarg.collation())
 	}
 }
@@ -52,6 +49,8 @@ func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 	_, f := args[0].typeof(env)
 	return sqltypes.VarChar, f
 }
+
+type builtinLcase struct{}
 
 func (builtinLcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
@@ -66,7 +65,7 @@ func (builtinLcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		result.setString(tolower, inarg.collation())
 	} else {
 		tolower := inarg.value().RawStr()
-		inarg.makeTextualAndConvert(env.DefaultCollation,)
+		inarg.makeTextualAndConvert(env.DefaultCollation)
 		result.setString(tolower, inarg.collation())
 	}
 }
@@ -77,4 +76,46 @@ func (builtinLcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 	}
 	_, f := args[0].typeof(env)
 	return sqltypes.VarChar, f
+}
+
+type builtinCharLength struct{}
+
+func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	cnt := strings.Count(inarg.value().RawStr(), "") - 1
+	result.setInt64(int64(cnt))
+}
+
+type builtinCharacterLength struct{}
+
+func (builtinCharLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("Char_Length")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
+}
+
+func (builtinCharacterLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	cnt := strings.Count(inarg.value().RawStr(), "") - 1
+	result.setInt64(int64(cnt))
+}
+
+func (builtinCharacterLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("CHARACTER_LENGTH")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
 }

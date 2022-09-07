@@ -40,6 +40,8 @@ var builtinFunctions = map[string]builtin{
 	"ceiling":   builtinCeiling{},
 	"lower":     builtinLower{},
 	"lcase":     builtinLcase{},
+	"char_length":      builtinCharLength{},
+	"character_length": builtinCharacterLength{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{

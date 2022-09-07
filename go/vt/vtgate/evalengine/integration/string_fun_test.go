@@ -50,3 +50,16 @@ func TestBuiltinLowerandLcase(t *testing.T) {
 		compareRemoteExpr(t, conn, query)
 	}
 }
+
+func TestBuiltinCharLength(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, str := range cases {
+		query := fmt.Sprintf("Char_Length(%s)", str)
+		compareRemoteExpr(t, conn, query)
+
+		query = fmt.Sprintf("CHARACTER_LENGTH(%s)", str)
+		compareRemoteExpr(t, conn, query)
+	}
+}
