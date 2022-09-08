@@ -17,13 +17,13 @@ limitations under the License.
 package sqlparser
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
