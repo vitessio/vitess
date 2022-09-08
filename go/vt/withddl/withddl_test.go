@@ -18,7 +18,6 @@ package withddl
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -275,17 +274,8 @@ func checkResult(t *testing.T, wantqr *sqltypes.Result, wanterr string, qr *sqlt
 	assert.Contains(t, goterr, wanterr)
 }
 
-//use this once pflag-tabletenv has been merged
-//func loadTabletEnvFlags() {
-//	_flag.ParseFlagsForTest()
-//	fs := pflag.NewFlagSet("TestFlags", pflag.ContinueOnError)
-//	tabletenv.RegisterTabletEnvFlags(fs)
-//	pflag.Parse()
-//}
-
 func TestMain(m *testing.M) {
 	tabletenvtest.LoadTabletEnvFlags()
-	flag.Parse()
 	tabletenv.Init()
 
 	exitCode := func() int {
