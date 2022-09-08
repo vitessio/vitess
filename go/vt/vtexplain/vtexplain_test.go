@@ -24,12 +24,13 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -132,6 +133,8 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 }
 
 func TestExplain(t *testing.T) {
+	tabletenvtest.LoadTabletEnvFlags()
+
 	type test struct {
 		name string
 		opts *Options
