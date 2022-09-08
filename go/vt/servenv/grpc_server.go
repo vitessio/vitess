@@ -166,7 +166,7 @@ func isGRPCEnabled() bool {
 		return true
 	}
 
-	if SocketFile != nil && *SocketFile != "" {
+	if socketFile != "" {
 		return true
 	}
 
