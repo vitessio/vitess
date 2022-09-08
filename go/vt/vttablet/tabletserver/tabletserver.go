@@ -490,7 +490,14 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			if tsv.txThrottler.Throttle() {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
-			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, settings, options)
+			var sPlan *SettingPlan
+			if len(settings) > 0 {
+				sPlan, err = tsv.qe.GetSettingsPlan(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, sPlan, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
@@ -752,6 +759,14 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
+
+			var sPlan *SettingPlan
+			if len(settings) > 0 {
+				sPlan, err = tsv.qe.GetSettingsPlan(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
@@ -763,7 +778,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				logStats:       logStats,
 				tsv:            tsv,
 				tabletType:     target.GetTabletType(),
-				settings:       settings,
+				setting:        sPlan,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -847,6 +862,14 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			if transactionID != 0 {
 				connID = transactionID
 			}
+
+			var sPlan *SettingPlan
+			if len(settings) > 0 {
+				sPlan, err = tsv.qe.GetSettingsPlan(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
@@ -857,7 +880,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				ctx:            ctx,
 				logStats:       logStats,
 				tsv:            tsv,
-				settings:       settings,
+				setting:        sPlan,
 			}
 			return qre.Stream(callback)
 		},

@@ -92,16 +92,16 @@ var rpc = &_rpc{}
 func (*_rpc) Close() {}
 
 // ApplySettings implements Resource for _rpc.
-func (r *_rpc) ApplySettings(_ context.Context, _ []string) error {
+func (r *_rpc) ApplySetting(ctx context.Context, setting string) error {
 	// should be unreachable
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ApplySettings")
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ApplySetting")
 }
 
-func (r *_rpc) IsSettingsApplied() bool {
+func (r *_rpc) IsSettingApplied() bool {
 	return false
 }
 
-func (r *_rpc) IsSameSetting(_ []string) bool {
+func (r *_rpc) IsSameSetting(setting string) bool {
 	return true
 }
 

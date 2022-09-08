@@ -317,3 +317,26 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 	}, sel.SelectExprs)
 	return found
 }
+
+// BuildSettingQuery builds a query for system settings.
+func BuildSettingQuery(settings []string) (query string, err error) {
+	if len(settings) == 0 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
+	}
+	if len(settings) == 1 {
+		return settings[0], nil
+	}
+	var setExprs sqlparser.SetExprs
+	for _, setting := range settings {
+		stmt, err := sqlparser.Parse(setting)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
+		}
+		set, ok := stmt.(*sqlparser.Set)
+		if !ok {
+			return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+		}
+		setExprs = append(setExprs, set.Exprs...)
+	}
+	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), nil
+}

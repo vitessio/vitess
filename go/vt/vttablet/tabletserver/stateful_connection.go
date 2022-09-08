@@ -310,11 +310,11 @@ func (sc *StatefulConnection) getUsername() string {
 	return callerid.GetUsername(sc.reservedProps.ImmediateCaller)
 }
 
-func (sc *StatefulConnection) ApplySettings(ctx context.Context, settings []string) error {
-	if sc.dbConn.IsSameSetting(settings) {
+func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *SettingPlan) error {
+	if sc.dbConn.IsSameSetting(setting.GetQuery()) {
 		return nil
 	}
-	return sc.dbConn.ApplySettings(ctx, settings)
+	return sc.dbConn.ApplySetting(ctx, setting.GetQuery())
 }
 
 func (sc *StatefulConnection) resetExpiryTime() {

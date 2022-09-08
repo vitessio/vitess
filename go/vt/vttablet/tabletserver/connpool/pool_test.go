@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/pools"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -278,7 +280,8 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 0, connPool.ResetSettingCount(), "pool reset settings count should be 0")
 
 	db.AddQuery("a", &sqltypes.Result{})
-	dbConn, err = connPool.Get(context.Background(), []string{"a"})
+	sa := &testSPlan{query: "a"}
+	dbConn, err = connPool.Get(context.Background(), sa)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 2, connPool.Active(), "pool active connections should be 2")
@@ -306,7 +309,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	// Step 1
 	var conns []*DBConn
 	for i := 0; i < capacity; i++ {
-		dbConn, err = connPool.Get(context.Background(), []string{"a"})
+		dbConn, err = connPool.Get(context.Background(), sa)
 		require.NoError(t, err)
 		conns = append(conns, dbConn)
 	}
@@ -344,7 +347,8 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 
 	// Step 4
 	db.AddQuery("b", &sqltypes.Result{})
-	dbConn, err = connPool.Get(context.Background(), []string{"b"})
+	sb := &testSPlan{query: "b"}
+	dbConn, err = connPool.Get(context.Background(), sb)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
@@ -366,3 +370,21 @@ func newPoolWithCapacity(capacity int) *Pool {
 		IdleTimeoutSeconds: 10,
 	})
 }
+
+type testSPlan struct {
+	query string
+}
+
+func (t *testSPlan) GetQuery() string {
+	return t.query
+}
+
+func (t *testSPlan) GetResetQuery() string {
+	panic("implement me")
+}
+
+func (t *testSPlan) IsNil() bool {
+	return t == nil
+}
+
+var _ pools.Setting = (*testSPlan)(nil)

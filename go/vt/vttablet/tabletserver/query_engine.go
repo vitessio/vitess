@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -111,6 +112,25 @@ func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) bool {
 		}
 	}
 	return false
+}
+
+// _______________________________________________
+
+// SettingPlan represents a plan for system settings.
+type SettingPlan struct {
+	Query string
+}
+
+func (s *SettingPlan) GetQuery() string {
+	return s.Query
+}
+
+func (s *SettingPlan) GetResetQuery() string {
+	panic("not implemented")
+}
+
+func (s *SettingPlan) IsNil() bool {
+	return s == nil
 }
 
 // _______________________________________________
@@ -370,6 +390,35 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	return plan, nil
 }
 
+// GetSettingsPlan returns a system settings plan.
+func (qe *QueryEngine) GetSettingsPlan(ctx context.Context, settings []string) (*SettingPlan, error) {
+	span, _ := trace.NewSpan(ctx, "QueryEngine.GetSettingsPlan")
+	defer span.Finish()
+
+	var keyBuilder strings.Builder
+	for _, q := range settings {
+		keyBuilder.WriteString(q)
+	}
+
+	// try to get the plan from the cache
+	cacheKey := keyBuilder.String()
+	if plan := qe.getSettingsPlan(cacheKey); plan != nil {
+		return plan, nil
+	}
+
+	// build the plan
+	query, err := planbuilder.BuildSettingQuery(settings)
+	if err != nil {
+		return nil, err
+	}
+	plan := &SettingPlan{Query: query}
+
+	// store the plan in the cache
+	qe.plans.Set(cacheKey, plan)
+
+	return plan, nil
+}
+
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
 func (qe *QueryEngine) ClearQueryPlanCache() {
 	qe.plans.Clear()
@@ -402,6 +451,13 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
 	if cacheResult, ok := qe.plans.Get(sql); ok {
 		return cacheResult.(*TabletPlan)
+	}
+	return nil
+}
+
+func (qe *QueryEngine) getSettingsPlan(key string) *SettingPlan {
+	if cacheResult, ok := qe.plans.Get(key); ok {
+		return cacheResult.(*SettingPlan)
 	}
 	return nil
 }

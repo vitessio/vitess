@@ -19,6 +19,18 @@ package tabletserver
 
 import hack "vitess.io/vitess/go/hack"
 
+func (cached *SettingPlan) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Query string
+	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	return size
+}
 func (cached *TabletPlan) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

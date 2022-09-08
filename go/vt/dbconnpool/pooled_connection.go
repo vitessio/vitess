@@ -24,16 +24,16 @@ type PooledDBConnection struct {
 	pool *ConnectionPool
 }
 
-func (pc *PooledDBConnection) ApplySettings(ctx context.Context, settings []string) error {
+func (pc *PooledDBConnection) ApplySetting(ctx context.Context, setting string) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (pc *PooledDBConnection) IsSettingsApplied() bool {
+func (pc *PooledDBConnection) IsSettingApplied() bool {
 	return false
 }
 
-func (pc *PooledDBConnection) IsSameSetting(_ []string) bool {
+func (pc *PooledDBConnection) IsSameSetting(setting string) bool {
 	return true
 }
 
