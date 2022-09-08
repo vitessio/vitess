@@ -34,8 +34,8 @@ var (
 	buildGitBranch        = ""
 	jenkinsBuildNumberStr = ""
 
-	// Version registers the command line flag to expose build info.
-	Version = flag.Bool("version", false, "print binary version")
+	// version registers the command line flag to expose build info.
+	version = flag.Bool("version", false, "print binary version")
 )
 
 // AppVersion is the struct to store build info.

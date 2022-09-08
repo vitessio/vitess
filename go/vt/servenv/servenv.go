@@ -313,7 +313,7 @@ func ParseFlags(cmd string) {
 
 	_flag.Parse(fs)
 
-	if *Version {
+	if *version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
@@ -334,7 +334,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	_flag.Parse(fs)
 
-	if *Version {
+	if *version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
