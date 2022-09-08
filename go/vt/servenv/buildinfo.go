@@ -91,8 +91,8 @@ func (v *versionInfo) String() string {
 }
 
 func (v *versionInfo) MySQLVersion() string {
-	if *MySQLServerVersion != "" {
-		return *MySQLServerVersion
+	if mySQLServerVersion != "" {
+		return mySQLServerVersion
 	}
 	return "5.7.9-vitess-" + v.version
 }

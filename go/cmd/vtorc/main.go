@@ -106,6 +106,7 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	servenv.RegisterMySQLServerFlags(fs)
 
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
