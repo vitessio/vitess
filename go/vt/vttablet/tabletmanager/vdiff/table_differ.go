@@ -198,8 +198,16 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	go func() {
 		defer wg.Done()
 		err1 = td.forEachSource(func(source *migrationSource) error {
-			// TODO: handle external sources to support Mount+Migrate
-			tablet, err := pickTablet(ctx, ct.ts, cell, ct.sourceKeyspace, source.shard, tabletTypes)
+			tabletTopoServer := ct.ts
+			// For mount+migrate
+			if ct.externalCluster != "" {
+				extTs, err := ct.ts.OpenExternalVitessClusterServer(ctx, ct.externalCluster)
+				if err != nil {
+					return err
+				}
+				tabletTopoServer = extTs
+			}
+			tablet, err := pickTablet(ctx, tabletTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
 			if err != nil {
 				return err
 			}
