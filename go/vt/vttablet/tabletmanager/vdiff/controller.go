@@ -73,7 +73,7 @@ type controller struct {
 
 	sourceTimeZone, targetTimeZone string // named time zones if conversions are necessary for datetime values
 
-	externalCluster string // for mount+migrate
+	externalCluster string // for Mount+Migrate
 }
 
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
