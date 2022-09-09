@@ -1008,6 +1008,7 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
     	ifnull(database_instance_downtime.end_timestamp, '') as downtime_end_timestamp
 		from
 			database_instance
+			left join vitess_tablet using (hostname, port)
 			left join candidate_database_instance using (hostname, port)
 			left join hostname_unresolve using (hostname)
 			left join database_instance_downtime using (hostname, port)
@@ -1082,8 +1083,9 @@ func ReadClusterWriteablePrimary(clusterName string) ([](*Instance), error) {
 		cluster_name = ?
 		and read_only = 0
 		and (replication_depth = 0 or is_co_primary)
+		and tablet_type = ?
 	`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "replication_depth asc")
+	return readInstancesByCondition(condition, sqlutils.Args(clusterName, topodatapb.TabletType_PRIMARY), "replication_depth asc")
 }
 
 // ReadClusterPrimary returns the primary of this cluster.
@@ -1093,8 +1095,9 @@ func ReadClusterPrimary(clusterName string) ([](*Instance), error) {
 	condition := `
 		cluster_name = ?
 		and (replication_depth = 0 or is_co_primary)
+		and tablet_type = ?
 	`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "read_only asc, replication_depth asc")
+	return readInstancesByCondition(condition, sqlutils.Args(clusterName, topodatapb.TabletType_PRIMARY), "read_only asc, replication_depth asc")
 }
 
 // ReadWriteableClustersPrimaries returns writeable primaries of all clusters, but only one
@@ -1103,8 +1106,9 @@ func ReadWriteableClustersPrimaries() (instances [](*Instance), err error) {
 	condition := `
 		read_only = 0
 		and (replication_depth = 0 or is_co_primary)
+		and tablet_type = ?
 	`
-	allPrimaries, err := readInstancesByCondition(condition, sqlutils.Args(), "cluster_name asc, replication_depth asc")
+	allPrimaries, err := readInstancesByCondition(condition, sqlutils.Args(topodatapb.TabletType_PRIMARY), "cluster_name asc, replication_depth asc")
 	if err != nil {
 		return instances, err
 	}
