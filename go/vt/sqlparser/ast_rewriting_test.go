@@ -366,15 +366,15 @@ func TestRewrites(in *testing.T) {
 
 type fakeViews struct{}
 
-func (*fakeViews) FindView(ks, tblName string) *CreateView {
+func (*fakeViews) FindView(_, tblName string) SelectStatement {
 	if tblName != "user_details" {
 		return nil
 	}
-	statement, err := Parse("CREATE VIEW user_details AS select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
+	statement, err := Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
 	if err != nil {
 		return nil
 	}
-	return statement.(*CreateView)
+	return statement.(SelectStatement)
 }
 
 func TestRewritesWithSetVarComment(in *testing.T) {

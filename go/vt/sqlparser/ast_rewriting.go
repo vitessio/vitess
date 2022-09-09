@@ -54,7 +54,7 @@ type ReservedVars struct {
 }
 
 type VSchemaViews interface {
-	FindView(keyspace, name string) *CreateView
+	FindView(keyspace, name string) SelectStatement
 }
 
 // ReserveAll tries to reserve all the given variable names. If they're all available,
@@ -423,7 +423,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		view := er.views.FindView(er.keyspace, tblName)
 		if view != nil {
 			node.Expr = &DerivedTable{
-				Select: CloneSelectStatement(view.Select),
+				Select: CloneSelectStatement(view),
 			}
 			if node.As.IsEmpty() {
 				node.As = NewIdentifierCS(tblName)
