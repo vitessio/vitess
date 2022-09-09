@@ -159,6 +159,7 @@ That includes:
 - **Code freeze.**
   > - As soon as we go into code freeze, if we are doing an RC, create the release branch.
   > - If we are doing a GA release, do not merge any new Pull Requests.
+  > - The guide on how to do a code freeze is available in the [How To Code Freeze](#how-to-code-freeze) section.
 - **Preparing the Vitess Operator release.**
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
@@ -203,107 +204,59 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
 
 
 ### How To Release Vitess
-This section is divided into three parts:
-- How to release an RC: [Pre-Requisites for Release Candidates (`rc`)](#pre-requisites-for-release-candidates-rc).
-- How to release a GA or Patch release: [Pre-Requisites for Releases](#pre-requisites-for-releases).
-- Common to both, how to create the release on the GitHub UI: [#Creating Release or Release Candidate on the GitHub UI](#creating-release-or-release-candidate-on-the-github-ui)
+This section is divided in two parts:
+- [Creation of the tags and release notes](#creation-of-the-tags-and-release-notes).
+- [Creating Release or Release Candidate on the GitHub UI](#creating-release-or-release-candidate-on-the-github-ui)
 
+#### Creation of the tags and release notes
 
-#### Pre-Requisites for Release Candidates (`rc`)
-
-> In this example our current version is `v14` and we release the version `v15.0.0-rc1`.
+> In this example our current version is `v14` and we release the version `v15.0.0`.
 > Alongside Vitess' release, we also release a new version of the operator.
 > Since we are releasing a release candidate here, the new version of the operator will also be a release candidate.
-> In this example, the new operator version is `2.8.0-rc1`.
+> In this example, the new operator version is `2.8.0`.
+> 
+> It is important to note that before the RC, there is a code freeze during which we create the release branch.
+>
+> The release branch in this example is `release-15.0`.
+> 
+> The example also assumes that `origin` is the `vitessio/vitess` remote.
 
 1. Fetch `github.com/vitessio/vitess`'s remote.
     ```shell
-    git fetch <vitessio/vitess remote>
+    git fetch origin
     ```
 
-
-2. Checkout to the corresponding release branch. It should have been created during the code freeze. 
-    ```shell
-    git checkout release-15.0
-    ```
-
-
-3. Creation of the release notes and tags.
+2. Creation of the release notes and tags.
    1. Run the release script using the Makefile:
-       ```shell
-       make RELEASE_VERSION="15.0.0-rc1" DEV_VERSION="15.0.0-SNAPSHOT" VTOP_VERSION="2.8.0-rc1" do_release
-       ```
+      1. Release Candidate:
+          ```shell
+          make BASE_BRANCH="release-15.0" BASE_REMOTE="origin" RELEASE_VERSION="15.0.0-rc1" DEV_VERSION="15.0.0-SNAPSHOT" VTOP_VERSION="2.8.0-rc1" do_release
+          ```
+      2. General Availability:
+         ```shell
+         make BASE_BRANCH="release-15.0" BASE_REMOTE="origin" RELEASE_VERSION="15.0.0" DEV_VERSION="15.0.1-SNAPSHOT" VTOP_VERSION="2.8.0" do_release
+         ```
+
       The script will prompt you `Pausing so release notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
-   
+
    2. Run the following command to generate the release notes:
-       ```shell
-       make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
-       ```
+      1. Release Candidate:
+          ```shell
+          make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+          ```
+      2. General Availability:
+          ```shell
+          make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+          ```
       This command will generate the release notes by looking at all the commits between the tag `v14.0.0` and the reference `HEAD`.
       It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
 
 
+3. Follow the instruction prompted by the `do_release` Makefile command's output in order to push the tags, branches and create the Pull Requests.
 
-4. As prompted in the `do_release` Makefile command's output, push the `v15.0.0-rc1` tag.
-    ```shell
-    git push upstream v15.0.0-rc1
-    ```
+4. Create a Pull Request against the `main` branch with the newly created release notes.
 
-
-5. Push the current dev branch to upstream. No pull request required. **To achieve this action, you need to be able to create new branches on `vitessio/vitess`**.
-    ```shell
-    git push upstream release-15.0
-    ```
-
-6. Create a Pull Request against the `main` branch with the newly created release notes.
-
-7. Release the tag on GitHub UI as explained in the following section.
-
-
-#### Pre-Requisites for Releases
-
-> In this example our current version is `v14` and we release the version `v15.0.0`. Before releasing `v15.0.0`, usually three weeks before, we released the release candidate for `v15.0.0`.
-> We are also going to make the latest version of the operator GA. In our example the operator version is `v2.8.0`.
-
-1. Fetch `github.com/vitessio/vitess`'s remote.
-    ```shell
-    git fetch <vitessio/vitess remote>
-    ```
-
-2. Create a temporary release branch that will be based on our long-term release branch for `v15.0.0`. In our case, the release branch is `release-15.0`.
-    ```shell
-    git checkout -b release-15.0.0 upstream/release-15.0
-    ```
-
-3. Creation of the release notes and tags.
-    1. Run the release script using the Makefile:
-        ```shell
-        make RELEASE_VERSION="15.0.0" GODOC_RELEASE_VERSION="0.15.0" DEV_VERSION="15.0.1-SNAPSHOT" VTOP_VERSION="2.8.0" do_release
-        ```
-       The script will prompt you `Pausing so relase notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
-
-    2. Run the following command to generate the release notes:
-        ```shell
-        make VERSION="v15.0.0" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
-        ```
-       This command will generate the release notes by looking at all the commits between the tag `v14.0.0` and the reference `HEAD`.
-       It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
-
-
-4. As prompted in the `do_release` Makefile command's output, push the `v15.0.0` and `v0.15.0` tags.
-    ```shell
-    git push upstream v15.0.0 && git push upstream v0.15.0
-    ```
-
-5. Push your current branch and create a pull request against the existing `release-15.0` branch.
-    ```shell
-    git push origin release-15.0.0
-    ```
-
-6. Create a Pull Request against the `main` branch with the newly created release notes.
-
-7. Release the tag on GitHub UI as explained in the following section.
-
+5. Release the tag on GitHub UI as explained in the following section.
 
 #### Creating Release or Release Candidate on the GitHub UI
 
@@ -339,6 +292,29 @@ And finally, click on `Publish release`.
 
 ![alt text](.images/release-04.png)
 
+### How To Code Freeze
+
+In this example we are going to do a code freeze on the `release-15.0` branch. If we are doing a release candidate, there won't be such branch, hence we need to create it.
+
+```
+git checkout -b release-15.0 origin/main
+```
+
+The new branch will be based on `origin/main`, here `origin` points to `vitessio/vitess`. If we are not doing a release candidate, then the branch already exists and we can checkout on it.
+
+Now, if we are doing a GA release, let's update the branch:
+
+```
+git pull origin release-15.0
+```
+
+Finally, let's run the code freeze script:
+
+```
+./tools/code_freeze.sh freeze release-15.0
+```
+
+The script will prompt the command that will allow you to push the code freeze change. Once pushed, open a PR that will be merged on `release-15.0`.
 
 ### Java Packages Deploy & Release
 
