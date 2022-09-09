@@ -1,27 +1,47 @@
 {
   "routing_rules": {
-    "rules": [{
-      "from_table": "route1",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "route2",
-      "to_tables": ["main.unsharded"]
-    }, {
-      "from_table": "second_user.user",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "second_user.foo",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "primary_redirect@primary",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "bad_table",
-      "to_tables": ["noks.noks"]
-    }, {
-      "from_table": "disabled",
-      "to_tables": []
-    }]
+    "rules": [
+      {
+        "from_table": "route1",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "route2",
+        "to_tables": [
+          "main.unsharded"
+        ]
+      },
+      {
+        "from_table": "second_user.user",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "second_user.foo",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "primary_redirect@primary",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "bad_table",
+        "to_tables": [
+          "noks.noks"
+        ]
+      },
+      {
+        "from_table": "disabled",
+        "to_tables": []
+      }
+    ]
   },
   "keyspaces": {
     "user": {
@@ -247,7 +267,10 @@
               "name": "cola_map"
             },
             {
-              "columns": ["column_b", "column_c"],
+              "columns": [
+                "column_b",
+                "column_c"
+              ],
               "name": "colb_colc_map"
             }
           ]
@@ -259,7 +282,10 @@
               "name": "kid_index"
             },
             {
-              "columns": ["column_a", "kid"],
+              "columns": [
+                "column_a",
+                "kid"
+              ],
               "name": "cola_kid_map"
             }
           ]
@@ -311,7 +337,10 @@
         "multicol_tbl": {
           "column_vindexes": [
             {
-              "columns": ["cola", "colb"],
+              "columns": [
+                "cola",
+                "colb"
+              ],
               "name": "multicolIdx"
             },
             {

@@ -157,6 +157,7 @@ type KeyspaceSchema struct {
 	Keyspace *Keyspace
 	Tables   map[string]*Table
 	Vindexes map[string]Vindex
+	Views    map[string]sqlparser.SelectStatement
 	Error    error
 }
 
@@ -242,7 +243,26 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema)
+		if ksvschema.Error == nil {
+			ksvschema.Views, ksvschema.Error = buildViews(ks)
+		}
 	}
+}
+
+func buildViews(protoKS *vschemapb.Keyspace) (map[string]sqlparser.SelectStatement, error) {
+	views := map[string]sqlparser.SelectStatement{}
+	for name, query := range protoKS.Views {
+		ast, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		selectStmt, ok := ast.(sqlparser.SelectStatement)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected SELECT or UNION query, got %T", ast)
+		}
+		views[name] = selectStmt
+	}
+	return views, nil
 }
 
 func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) error {

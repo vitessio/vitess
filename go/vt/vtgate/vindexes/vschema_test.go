@@ -364,6 +364,35 @@ func TestVSchemaColumns(t *testing.T) {
 	}
 }
 
+func TestVSchemaViews(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar,
+						}},
+					},
+				},
+				Views: map[string]string{
+					"v1": "SELECT c1+c2 AS added FROM t1",
+				},
+			},
+		},
+	}
+	got := BuildVSchema(&good)
+	require.NoError(t, got.Keyspaces["unsharded"].Error)
+
+	ks, ok := got.Keyspaces["unsharded"]
+	require.True(t, ok)
+
+	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(ks.Views["v1"]))
+}
+
 func TestVSchemaColumnListAuthoritative(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{

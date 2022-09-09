@@ -45,6 +45,7 @@ message Keyspace {
   map<string, Table> tables = 3;
   // If require_explicit_routing is true, vindexes and tables are not added to global routing
   bool require_explicit_routing = 4;
+  map<string, string> views = 5;
 }
 
 // Vindex is the vindex info for a Keyspace.

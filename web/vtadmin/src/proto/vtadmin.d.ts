@@ -30793,6 +30793,9 @@ export namespace vschema {
 
         /** Keyspace require_explicit_routing */
         require_explicit_routing?: (boolean|null);
+
+        /** Keyspace views */
+        views?: ({ [k: string]: string }|null);
     }
 
     /** Represents a Keyspace. */
@@ -30815,6 +30818,9 @@ export namespace vschema {
 
         /** Keyspace require_explicit_routing. */
         public require_explicit_routing: boolean;
+
+        /** Keyspace views. */
+        public views: { [k: string]: string };
 
         /**
          * Creates a new Keyspace instance using the specified properties.
