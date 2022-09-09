@@ -39,7 +39,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 		util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
-		analysisEntry.ClusterDetails.ClusterAlias,
 		analysisEntry.CountReplicas,
 		analysisEntry.Replicas.ToCommaDelimitedList(),
 		analysisEntry.IsActionableRecovery,
@@ -61,7 +60,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					processcing_node_token,
 					analysis,
 					cluster_name,
-					cluster_alias,
 					count_affected_replicas,
 					replica_hosts,
 					is_actionable,
@@ -71,7 +69,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					?,
 					1,
 					0,
-					?,
 					?,
 					?,
 					?,
@@ -149,7 +146,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					processcing_node_token,
 					analysis,
 					cluster_name,
-					cluster_alias,
 					count_affected_replicas,
 					replica_hosts,
 					last_detection_id
@@ -167,7 +163,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					?,
 					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
 				)
 			`,
@@ -177,7 +172,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		process.ThisHostname, util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
-		analysisEntry.ClusterDetails.ClusterAlias,
 		analysisEntry.CountReplicas, analysisEntry.Replicas.ToCommaDelimitedList(),
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 	)
@@ -433,18 +427,6 @@ func AcknowledgeClusterRecoveries(clusterName string, owner string, comment stri
 		}
 		countAcknowledgedEntries = countAcknowledgedEntries + count
 	}
-	{
-		clusterInfo, _ := inst.ReadClusterInfo(clusterName)
-		whereClause := `cluster_alias = ? and cluster_alias != ''`
-		args := sqlutils.Args(clusterInfo.ClusterAlias)
-		_ = clearAcknowledgedFailureDetections(whereClause, args)
-		count, err := acknowledgeRecoveries(owner, comment, false, whereClause, args)
-		if err != nil {
-			return count, err
-		}
-		countAcknowledgedEntries = countAcknowledgedEntries + count
-
-	}
 	return countAcknowledgedEntries, nil
 }
 
@@ -535,7 +517,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
       ifnull(successor_alias, '') as successor_alias,
       analysis,
       cluster_name,
-      cluster_alias,
       count_affected_replicas,
       replica_hosts,
       participating_instances,
@@ -569,7 +550,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceKey.Port = m.GetInt("port")
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
-		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
 		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
 		_ = topologyRecovery.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
 
@@ -664,7 +644,7 @@ func ReadRecoveryByUID(recoveryUID string) ([]*TopologyRecovery, error) {
 }
 
 // ReadRecentRecoveries reads latest recovery entries from topology_recovery
-func ReadRecentRecoveries(clusterName string, clusterAlias string, unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
+func ReadRecentRecoveries(clusterName string, unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
 	whereConditions := []string{}
 	whereClause := ""
 	args := sqlutils.Args()
@@ -674,9 +654,6 @@ func ReadRecentRecoveries(clusterName string, clusterAlias string, unacknowledge
 	if clusterName != "" {
 		whereConditions = append(whereConditions, `cluster_name=?`)
 		args = append(args, clusterName)
-	} else if clusterAlias != "" {
-		whereConditions = append(whereConditions, `cluster_alias=?`)
-		args = append(args, clusterAlias)
 	}
 	if len(whereConditions) > 0 {
 		whereClause = fmt.Sprintf("where %s", strings.Join(whereConditions, " and "))
@@ -703,7 +680,6 @@ func readFailureDetections(whereCondition string, limit string, args []any) ([]*
       processcing_node_token,
       analysis,
       cluster_name,
-      cluster_alias,
       count_affected_replicas,
       replica_hosts,
       (select max(recovery_id) from topology_recovery where topology_recovery.last_detection_id = detection_id) as related_recovery_id
@@ -727,7 +703,6 @@ func readFailureDetections(whereCondition string, limit string, args []any) ([]*
 		failureDetection.AnalysisEntry.AnalyzedInstanceKey.Port = m.GetInt("port")
 		failureDetection.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		failureDetection.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
-		failureDetection.AnalysisEntry.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
 		failureDetection.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
 		_ = failureDetection.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
 		failureDetection.AnalysisEntry.StartActivePeriod = m.GetString("start_active_period")
@@ -747,12 +722,12 @@ func readFailureDetections(whereCondition string, limit string, args []any) ([]*
 }
 
 // ReadRecentFailureDetections
-func ReadRecentFailureDetections(clusterAlias string, page int) ([]*TopologyRecovery, error) {
+func ReadRecentFailureDetections(clusterName string, page int) ([]*TopologyRecovery, error) {
 	whereClause := ""
 	args := sqlutils.Args()
-	if clusterAlias != "" {
-		whereClause = `where cluster_alias = ?`
-		args = append(args, clusterAlias)
+	if clusterName != "" {
+		whereClause = `where cluster_name = ?`
+		args = append(args, clusterName)
 	}
 	limit := `
 		limit ?
