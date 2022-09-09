@@ -224,6 +224,17 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	return table, destKeyspace, destTabletType, dest, err
 }
 
+func (vc *vcursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatement {
+	ks, _, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil
+	}
+	if ks == "" {
+		ks = vc.keyspace
+	}
+	return vc.vschema.FindView(ks, name.Name.String())
+}
+
 func (vc *vcursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, error) {
 	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {

@@ -366,8 +366,8 @@ func TestRewrites(in *testing.T) {
 
 type fakeViews struct{}
 
-func (*fakeViews) FindView(_, tblName string) SelectStatement {
-	if tblName != "user_details" {
+func (*fakeViews) FindView(name TableName) SelectStatement {
+	if name.Name.String() != "user_details" {
 		return nil
 	}
 	statement, err := Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")

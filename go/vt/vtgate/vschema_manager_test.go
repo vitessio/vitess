@@ -226,6 +226,7 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 		},
 		Tables:   tbls,
 		Vindexes: map[string]vindexes.Vindex{},
+		Views:    map[string]sqlparser.SelectStatement{},
 	}
 	vs := makeTestEmptyVSchema()
 	vs.Keyspaces[ks] = keyspaceSchema
@@ -243,6 +244,7 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 	keyspaceSchema := &vschemapb.Keyspace{
 		Sharded: sharded,
 		Tables:  tbls,
+		Views:   map[string]string{},
 	}
 	return &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{ks: keyspaceSchema},

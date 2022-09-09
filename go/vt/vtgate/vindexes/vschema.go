@@ -643,6 +643,20 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topo
 	return nil, nil, NotFoundError{TableName: name}
 }
 
+func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatement {
+	ks := vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return nil
+	}
+
+	view := ks.Views[name]
+	if view == nil {
+		return nil
+	}
+
+	return view
+}
+
 // NotFoundError represents the error where the table name was not found
 type NotFoundError struct {
 	TableName string

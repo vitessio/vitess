@@ -1002,7 +1002,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 			qo.getSelectLimit(),
 			setVarComment,
 			vcursor.safeSession.SystemVariables,
-			nil,
+			vcursor,
 		)
 		if err != nil {
 			return nil, err
