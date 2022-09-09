@@ -319,7 +319,7 @@ func (hs *healthStreamer) reload() error {
 	}
 
 	ctx := hs.ctx
-	conn, err := hs.conns.Get(ctx)
+	conn, err := hs.conns.Get(ctx, nil)
 	if err != nil {
 		return err
 	}

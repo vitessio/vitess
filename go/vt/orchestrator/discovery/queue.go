@@ -29,8 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 )
 
@@ -93,7 +93,7 @@ func CreateOrReturnQueue(name string) *Queue {
 
 // monitoring queue sizes until we are told to stop
 func (q *Queue) startMonitoring() {
-	log.Debugf("Queue.startMonitoring(%s)", q.name)
+	log.Infof("Queue.startMonitoring(%s)", q.name)
 	ticker := time.NewTicker(time.Second) // hard-coded at every second
 
 	for {

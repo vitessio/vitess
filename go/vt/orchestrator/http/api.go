@@ -29,7 +29,7 @@ import (
 	"github.com/martini-contrib/auth"
 	"github.com/martini-contrib/render"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 
 	"vitess.io/vitess/go/vt/orchestrator/collection"
@@ -1950,7 +1950,7 @@ func (httpAPI *API) DiscoveryMetricsRaw(params martini.Params, r render.Render, 
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to determine start time. Perhaps seconds value is wrong?"})
 		return
 	}
-	log.Debugf("DiscoveryMetricsRaw data: retrieved %d entries from discovery.MC", len(json))
+	log.Infof("DiscoveryMetricsRaw data: retrieved %d entries from discovery.MC", len(json))
 
 	r.JSON(http.StatusOK, json)
 }
@@ -1974,7 +1974,7 @@ func (httpAPI *API) DiscoveryMetricsAggregated(params martini.Params, r render.R
 // queued values), data taken secondly for the last N seconds.
 func (httpAPI *API) DiscoveryQueueMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("DiscoveryQueueMetricsRaw: seconds: %d", seconds)
+	log.Infof("DiscoveryQueueMetricsRaw: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue  aggregated metrics"})
 		return
@@ -1982,7 +1982,7 @@ func (httpAPI *API) DiscoveryQueueMetricsRaw(params martini.Params, r render.Ren
 
 	queue := discovery.CreateOrReturnQueue("DEFAULT")
 	metrics := queue.DiscoveryQueueMetrics(seconds)
-	log.Debugf("DiscoveryQueueMetricsRaw data: %+v", metrics)
+	log.Infof("DiscoveryQueueMetricsRaw data: %+v", metrics)
 
 	r.JSON(http.StatusOK, metrics)
 }
@@ -1992,7 +1992,7 @@ func (httpAPI *API) DiscoveryQueueMetricsRaw(params martini.Params, r render.Ren
 // See go/discovery/ for more information.
 func (httpAPI *API) DiscoveryQueueMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("DiscoveryQueueMetricsAggregated: seconds: %d", seconds)
+	log.Infof("DiscoveryQueueMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue aggregated metrics"})
 		return
@@ -2000,7 +2000,7 @@ func (httpAPI *API) DiscoveryQueueMetricsAggregated(params martini.Params, r ren
 
 	queue := discovery.CreateOrReturnQueue("DEFAULT")
 	aggregated := queue.AggregatedDiscoveryQueueMetrics(seconds)
-	log.Debugf("DiscoveryQueueMetricsAggregated data: %+v", aggregated)
+	log.Infof("DiscoveryQueueMetricsAggregated data: %+v", aggregated)
 
 	r.JSON(http.StatusOK, aggregated)
 }
@@ -2008,7 +2008,7 @@ func (httpAPI *API) DiscoveryQueueMetricsAggregated(params martini.Params, r ren
 // BackendQueryMetricsRaw returns the raw backend query metrics
 func (httpAPI *API) BackendQueryMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("BackendQueryMetricsRaw: seconds: %d", seconds)
+	log.Infof("BackendQueryMetricsRaw: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate raw backend query metrics"})
 		return
@@ -2021,14 +2021,14 @@ func (httpAPI *API) BackendQueryMetricsRaw(params martini.Params, r render.Rende
 		return
 	}
 
-	log.Debugf("BackendQueryMetricsRaw data: %+v", m)
+	log.Infof("BackendQueryMetricsRaw data: %+v", m)
 
 	r.JSON(http.StatusOK, m)
 }
 
 func (httpAPI *API) BackendQueryMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("BackendQueryMetricsAggregated: seconds: %d", seconds)
+	log.Infof("BackendQueryMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to aggregated generate backend query metrics"})
 		return
@@ -2036,7 +2036,7 @@ func (httpAPI *API) BackendQueryMetricsAggregated(params martini.Params, r rende
 
 	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
 	aggregated := query.AggregatedSince(queryMetrics, refTime)
-	log.Debugf("BackendQueryMetricsAggregated data: %+v", aggregated)
+	log.Infof("BackendQueryMetricsAggregated data: %+v", aggregated)
 
 	r.JSON(http.StatusOK, aggregated)
 }
@@ -2044,7 +2044,7 @@ func (httpAPI *API) BackendQueryMetricsAggregated(params martini.Params, r rende
 // WriteBufferMetricsRaw returns the raw instance write buffer metrics
 func (httpAPI *API) WriteBufferMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("WriteBufferMetricsRaw: seconds: %d", seconds)
+	log.Infof("WriteBufferMetricsRaw: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate raw instance write buffer metrics"})
 		return
@@ -2057,7 +2057,7 @@ func (httpAPI *API) WriteBufferMetricsRaw(params martini.Params, r render.Render
 		return
 	}
 
-	log.Debugf("WriteBufferMetricsRaw data: %+v", m)
+	log.Infof("WriteBufferMetricsRaw data: %+v", m)
 
 	r.JSON(http.StatusOK, m)
 }
@@ -2065,7 +2065,7 @@ func (httpAPI *API) WriteBufferMetricsRaw(params martini.Params, r render.Render
 // WriteBufferMetricsAggregated provides aggregate metrics of instance write buffer metrics
 func (httpAPI *API) WriteBufferMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("WriteBufferMetricsAggregated: seconds: %d", seconds)
+	log.Infof("WriteBufferMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to aggregated instance write buffer metrics"})
 		return
@@ -2073,7 +2073,7 @@ func (httpAPI *API) WriteBufferMetricsAggregated(params martini.Params, r render
 
 	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
 	aggregated := inst.AggregatedSince(writeBufferMetrics, refTime)
-	log.Debugf("WriteBufferMetricsAggregated data: %+v", aggregated)
+	log.Infof("WriteBufferMetricsAggregated data: %+v", aggregated)
 
 	r.JSON(http.StatusOK, aggregated)
 }

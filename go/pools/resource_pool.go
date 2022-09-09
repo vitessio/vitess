@@ -52,6 +52,10 @@ type (
 		IdleTimeout() time.Duration
 		IdleClosed() int64
 		Exhausted() int64
+		GetCount() int64
+		GetSettingCount() int64
+		DiffSettingCount() int64
+		ResetSettingCount() int64
 	}
 
 	// Resource defines the interface that every resource must provide.
@@ -91,7 +95,11 @@ type (
 		idleTimer *timer.Timer
 		logWait   func(time.Time)
 
-		settingResources chan resourceWrapper
+		settingResources  chan resourceWrapper
+		getCount          sync2.AtomicInt64
+		getSettingCount   sync2.AtomicInt64
+		diffSettingCount  sync2.AtomicInt64
+		resetSettingCount sync2.AtomicInt64
 
 		reopenMutex sync.Mutex
 		refresh     *poolRefresh
@@ -233,6 +241,7 @@ func (rp *ResourcePool) Get(ctx context.Context, settings []string) (resource Re
 }
 
 func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) {
+	rp.getCount.Add(1)
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
@@ -264,6 +273,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 
 	// if the resource has settings applied, we will close it and return a new one
 	if wrapper.resource != nil && wrapper.resource.IsSettingsApplied() {
+		rp.resetSettingCount.Add(1)
 		wrapper.resource.Close()
 		wrapper.resource = nil
 		rp.active.Add(-1)
@@ -286,6 +296,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 }
 
 func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) (Resource, error) {
+	rp.getSettingCount.Add(1)
 	var wrapper resourceWrapper
 	var ok bool
 	var err error
@@ -316,6 +327,7 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) 
 
 	// Checking setting hash id, if it is different, we will close the resource and return a new one later in unwrap
 	if wrapper.resource != nil && wrapper.resource.IsSettingsApplied() && !wrapper.resource.IsSameSetting(settings) {
+		rp.diffSettingCount.Add(1)
 		wrapper.resource.Close()
 		wrapper.resource = nil
 		rp.active.Add(-1)
@@ -535,4 +547,24 @@ func (rp *ResourcePool) IdleClosed() int64 {
 // Exhausted returns the number of times Available dropped below 1
 func (rp *ResourcePool) Exhausted() int64 {
 	return rp.exhausted.Get()
+}
+
+// GetCount returns the number of times get was called
+func (rp *ResourcePool) GetCount() int64 {
+	return rp.getCount.Get()
+}
+
+// GetSettingCount returns the number of times getWithSettings was called
+func (rp *ResourcePool) GetSettingCount() int64 {
+	return rp.getSettingCount.Get()
+}
+
+// DiffSettingCount returns the number of times different settings were applied on the resource.
+func (rp *ResourcePool) DiffSettingCount() int64 {
+	return rp.diffSettingCount.Get()
+}
+
+// ResetSettingCount returns the number of times settings were reset on the resource.
+func (rp *ResourcePool) ResetSettingCount() int64 {
+	return rp.resetSettingCount.Get()
 }

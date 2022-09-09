@@ -38,24 +38,24 @@ func (k *srvKeyspaceKey) String() string {
 }
 
 func NewSrvKeyspaceWatcher(topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvKeyspaceWatcher {
-	watch := func(ctx context.Context, entry *watchEntry) {
+	watch := func(entry *watchEntry) {
 		key := entry.key.(*srvKeyspaceKey)
-		watchCtx, watchCancel := context.WithCancel(ctx)
-		defer watchCancel()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-		current, changes, err := topoServer.WatchSrvKeyspace(watchCtx, key.cell, key.keyspace)
+		current, changes, err := topoServer.WatchSrvKeyspace(ctx, key.cell, key.keyspace)
 		if err != nil {
-			entry.update(ctx, nil, err, true)
+			entry.update(nil, err, true)
 			return
 		}
 
-		entry.update(ctx, current.Value, current.Err, true)
+		entry.update(current.Value, current.Err, true)
 		if current.Err != nil {
 			return
 		}
 
 		for c := range changes {
-			entry.update(ctx, c.Value, c.Err, false)
+			entry.update(c.Value, c.Err, false)
 			if c.Err != nil {
 				return
 			}
@@ -109,7 +109,6 @@ func (w *SrvKeyspaceWatcher) srvKeyspaceCacheStatus() (result []*SrvKeyspaceCach
 			ExpirationTime: expirationTime,
 			LastErrorTime:  entry.lastErrorTime,
 			LastError:      entry.lastError,
-			LastErrorCtx:   entry.lastErrorCtx,
 		})
 		entry.mutex.Unlock()
 	}

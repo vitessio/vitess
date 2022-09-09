@@ -17,7 +17,6 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -31,12 +30,13 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	_         = flag.String("cpu_profile", "", "deprecated: use '-pprof=cpu' instead")
-	pprofFlag = flag.String("pprof", "", "enable profiling")
+	pprofFlag []string
 )
 
 type profmode string
@@ -64,15 +64,14 @@ type profile struct {
 	waitSig bool
 }
 
-func parseProfileFlag(pf string) (*profile, error) {
-	if pf == "" {
+func parseProfileFlag(pf []string) (*profile, error) {
+	if len(pf) == 0 {
 		return nil, nil
 	}
 
 	var p profile
 
-	items := strings.Split(pf, ",")
-	switch items[0] {
+	switch pf[0] {
 	case "cpu":
 		p.mode = profileCPU
 	case "mem", "mem=heap":
@@ -94,10 +93,10 @@ func parseProfileFlag(pf string) (*profile, error) {
 	case "goroutine":
 		p.mode = profileGoroutine
 	default:
-		return nil, fmt.Errorf("unknown profile mode: %q", items[0])
+		return nil, fmt.Errorf("unknown profile mode: %q", pf[0])
 	}
 
-	for _, kv := range items[1:] {
+	for _, kv := range pf[1:] {
 		var err error
 		fields := strings.SplitN(kv, "=", 2)
 
@@ -301,7 +300,7 @@ func (prof *profile) init() (start func(), stop func()) {
 
 // nolint
 func pprofInit() {
-	prof, err := parseProfileFlag(*pprofFlag)
+	prof, err := parseProfileFlag(pprofFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -340,5 +339,8 @@ func pprofInit() {
 }
 
 func init() {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.StringSliceVar(&pprofFlag, "pprof", pprofFlag, "enable profiling")
+	})
 	OnInit(pprofInit)
 }

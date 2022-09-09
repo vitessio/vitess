@@ -23,7 +23,6 @@ package onlineddl
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -34,6 +33,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/withddl"
 
@@ -104,11 +105,27 @@ var vexecInsertTemplates = []string{
 var emptyResult = &sqltypes.Result{}
 var acceptableDropTableIfExistsErrorCodes = []int{mysql.ERCantFindFile, mysql.ERNoSuchTable}
 
-var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
-var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
-var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
-var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var maxConcurrentOnlineDDLs = flag.Int("max_concurrent_online_ddl", 256, "Maximum number of online DDL changes that may run concurrently")
+var (
+	ghostOverridePath       string
+	ptOSCOverridePath       string
+	migrationCheckInterval  = 1 * time.Minute
+	retainOnlineDDLTables   = 24 * time.Hour
+	maxConcurrentOnlineDDLs = 256
+)
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerOnlineDDLFlags)
+	servenv.OnParseFor("vttablet", registerOnlineDDLFlags)
+}
+
+func registerOnlineDDLFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&ghostOverridePath, "gh-ost-path", ghostOverridePath, "override default gh-ost binary full path")
+	fs.StringVar(&ptOSCOverridePath, "pt-osc-path", ptOSCOverridePath, "override default pt-online-schema-change binary full path")
+	fs.DurationVar(&migrationCheckInterval, "migration_check_interval", migrationCheckInterval, "Interval between migration checks")
+	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
+	fs.IntVar(&maxConcurrentOnlineDDLs, "max_concurrent_online_ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
+}
+
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 var maxConstraintNameLength = 64
 
@@ -187,8 +204,8 @@ func newCancellableMigration(uuid string, message string) *cancellableMigration 
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
 func GhostBinaryFileName() (fileName string, isOverride bool) {
-	if *ghostOverridePath != "" {
-		return *ghostOverridePath, true
+	if ghostOverridePath != "" {
+		return ghostOverridePath, true
 	}
 	return path.Join(os.TempDir(), "vt-gh-ost"), false
 }
@@ -196,15 +213,15 @@ func GhostBinaryFileName() (fileName string, isOverride bool) {
 // PTOSCFileName returns the full path+name of the pt-online-schema-change binary
 // Note that vttablet does not include pt-online-schema-change
 func PTOSCFileName() (fileName string, isOverride bool) {
-	if *ptOSCOverridePath != "" {
-		return *ptOSCOverridePath, true
+	if ptOSCOverridePath != "" {
+		return ptOSCOverridePath, true
 	}
 	return "/usr/bin/pt-online-schema-change", false
 }
 
 // newGCTableRetainTime returns the time until which a new GC table is to be retained
 func newGCTableRetainTime() time.Time {
-	return time.Now().UTC().Add(*retainOnlineDDLTables)
+	return time.Now().UTC().Add(retainOnlineDDLTables)
 }
 
 // NewExecutor creates a new gh-ost executor.
@@ -214,8 +231,8 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
 	// sanitize flags
-	if *maxConcurrentOnlineDDLs < 1 {
-		*maxConcurrentOnlineDDLs = 1 // or else nothing will ever run
+	if maxConcurrentOnlineDDLs < 1 {
+		maxConcurrentOnlineDDLs = 1 // or else nothing will ever run
 	}
 	return &Executor{
 		env:         env,
@@ -229,14 +246,14 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		ts:                    ts,
 		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
-		ticks:                 timer.NewTimer(*migrationCheckInterval),
+		ticks:                 timer.NewTimer(migrationCheckInterval),
 	}
 }
 
 func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltypes.Result, err error) {
 	defer e.env.LogError()
 
-	conn, err := e.pool.Get(ctx)
+	conn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return result, err
 	}
@@ -441,7 +458,7 @@ func (e *Executor) ptPidFileName(uuid string) string {
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
 func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVariables, err error) {
-	conn, err := e.pool.Get(ctx)
+	conn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -662,7 +679,9 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 		return err
 	}
 	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
-	_, _ = e.vreplicationExec(ctx, tablet.Tablet, query)
+	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
+		log.Errorf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err)
+	}
 
 	if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
 		return err
@@ -1313,7 +1332,7 @@ exit $exit_code
 	onHookContent := func(status schema.OnlineDDLStatus, hint string) string {
 		return fmt.Sprintf(`#!/bin/bash
 	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&hint=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"'&rowscopied='"$GH_OST_COPIED_ROWS"
-			`, *servenv.Port, onlineDDL.UUID, string(status), hint)
+			`, servenv.Port(), onlineDDL.UUID, string(status), hint)
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
@@ -1400,7 +1419,7 @@ exit $exit_code
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:gh-ost:%s&p=low`, *servenv.Port, throttlerOnlineDDLApp, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:gh-ost:%s&p=low`, servenv.Port(), throttlerOnlineDDLApp, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -1563,7 +1582,7 @@ export MYSQL_PWD
 
 	1;
 	`
-	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", *servenv.Port))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", servenv.Port()))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{MIGRATION_UUID}}", onlineDDL.UUID)
 	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerOnlineDDLApp)
 
@@ -2366,13 +2385,13 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 }
 
 // failMigration marks a migration as failed
-func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, err error) error {
+func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
-	if err != nil {
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+	if withError != nil {
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
-	return err
+	return withError
 }
 
 func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
@@ -2951,7 +2970,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 				return nil, err
 			}
 			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
-				if e.countOwnedRunningMigrations() < *maxConcurrentOnlineDDLs {
+				if e.countOwnedRunningMigrations() < maxConcurrentOnlineDDLs {
 					// This migration seems good to go
 					return onlineDDL, err
 				}
@@ -3521,7 +3540,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		return err
 	}
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
-		sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
+		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
 	if err != nil {
 		return err
@@ -3639,6 +3658,9 @@ func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid str
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationStartedTimestamp: uuid=%s, error=%v", uuid, err)
+	}
 	return err
 }
 
@@ -3654,6 +3676,9 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationStartedTimestamp: uuid=%s, timestampColumn=%v, error=%v", uuid, timestampColumn, err)
+	}
 	return err
 }
 
@@ -3759,6 +3784,9 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 		return err
 	}
 	_, err = e.execQuery(ctx, query)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationStatus: uuid=%s, query=%v, error=%v", uuid, query, err)
+	}
 	return err
 }
 
@@ -3784,6 +3812,9 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 		return err
 	}
 	_, err = e.execQuery(ctx, query)
+	if err != nil {
+		log.Errorf("FAIL updateMigrationMessage: uuid=%s, message=%s, error=%v", uuid, message, err)
+	}
 	return err
 }
 
@@ -4158,7 +4189,7 @@ func (e *Executor) SubmitMigration(
 	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
-	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
+	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),

@@ -33,6 +33,7 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/schema"
@@ -41,6 +42,12 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+)
+
+const (
+	defaultTick          = 1 * time.Second
+	defaultTimeout       = 30 * time.Second
+	workflowStartTimeout = 5 * time.Second
 )
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
@@ -92,22 +99,74 @@ func checkHealth(t *testing.T, url string) bool {
 	return true
 }
 
-func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
-	done := false
-	ticker := time.NewTicker(10 * time.Millisecond)
+func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	for {
+		qr := execVtgateQuery(t, conn, database, query)
+		require.NotNil(t, qr)
+		if want == fmt.Sprintf("%v", qr.Rows) {
+			return
+		}
 		select {
-		case <-ticker.C:
-			if done {
-				return
-			}
-			qr := execVtgateQuery(t, conn, database, query)
-			require.NotNil(t, qr)
-			if want == fmt.Sprintf("%v", qr.Rows) {
-				done = true
-			}
-		case <-time.After(5 * time.Second):
-			require.FailNow(t, "query %s.%s did not execute in time", database, query)
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("query %q on database %q did not return the expected result of %v before the timeout of %s; last seen result: %v",
+				query, database, want, defaultTimeout, qr.Rows))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+// waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
+// the provided app name in its self check.
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName string, wantCode int64) {
+	var gotCode int64
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		_, output, err := throttlerCheckSelf(tablet, appName)
+		require.NoError(t, err)
+		require.NotNil(t, output)
+		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
+		require.NoError(t, err)
+		if wantCode == gotCode {
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			time.Sleep(500 * time.Millisecond)
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("tablet %q did not return expected status of %d for application %q before the timeout of %s; last seen status: %d",
+				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+// waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag
+// value to be 0.
+func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow string) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, worfklow)
+	lag := int64(0)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", ksWorkflow, "show")
+		require.NoError(t, err)
+		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
+		require.NoError(t, err)
+		if lag == 0 {
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("workflow %q did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
+				ksWorkflow, defaultTimeout, lag))
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -120,28 +179,51 @@ func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string
 	require.NotNil(t, qr.Rows)
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
-		assert.False(t, schema.IsInternalOperationTableName(tableName), "found internal table %s in shard %s", tableName, keyspaceShard)
+		assert.False(t, schema.IsInternalOperationTableName(tableName), "found internal table %q in shard %q", tableName, keyspaceShard)
 	}
 }
 
-func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
-	qr := execVtgateQuery(t, conn, database, fmt.Sprintf("select count(*) from %s", table))
-	require.NotNil(t, qr)
-	require.NotNil(t, qr.Rows)
-	require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
-}
-
-func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
-	qr := execVtgateQuery(t, conn, database, query)
-	require.NotNil(t, qr)
-	require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
-}
-
-func validateCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
+func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
 	query := fmt.Sprintf("select count(*) from %s", table)
-	qr, err := vttablet.QueryTablet(query, database, true)
-	require.NoError(t, err)
-	require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
+	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		qr := execVtgateQuery(t, conn, database, query)
+		require.NotNil(t, qr)
+		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) before the timeout of %s; last seen result: %v",
+				table, want, defaultTimeout, qr.Rows))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
+	query := fmt.Sprintf("select count(*) from %s", table)
+	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		qr, err := vttablet.QueryTablet(query, database, true)
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
+				table, want, vttablet.Name, defaultTimeout, qr.Rows))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }
 
 func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) bool {
@@ -150,6 +232,45 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	require.NotNil(t, qr)
 	newCount := getQueryCount(tablet.QueryzURL, matchQuery)
 	return newCount == count+1
+}
+
+func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) {
+	done := false
+	timer := time.NewTimer(workflowStartTimeout)
+	log.Infof("Waiting for workflow %s to start", ksWorkflow)
+	for {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+		require.NoError(t, err)
+		done = true
+		state := ""
+		result := gjson.Get(output, "ShardStatuses")
+		result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each participating tablet
+			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+				if streamId.String() == "PrimaryReplicationStatuses" {
+					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+						state = attributeValue.Get("State").String()
+						if state != "Running" {
+							done = false // we need to wait for all streams to start
+						}
+						return true
+					})
+				}
+				return true
+			})
+			return true
+		})
+		if done {
+			log.Infof("Workflow %s has started", ksWorkflow)
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNowf(t, "workflow %q did not fully start before the timeout of %s",
+				ksWorkflow, workflowStartTimeout)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }
 
 func getHTTPBody(url string) string {
@@ -296,7 +417,7 @@ func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, tabl
 
 func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
 	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
-	validateQuery(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
+	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {

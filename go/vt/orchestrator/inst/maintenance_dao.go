@@ -19,9 +19,10 @@ package inst
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
@@ -63,7 +64,7 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 	})
 
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return res, err
 
@@ -95,7 +96,8 @@ func BeginBoundedMaintenance(instanceKey *InstanceKey, owner string, reason stri
 		explicitlyBounded,
 	)
 	if err != nil {
-		return maintenanceToken, log.Errore(err)
+		log.Error(err)
+		return maintenanceToken, err
 	}
 
 	if affected, _ := res.RowsAffected(); affected == 0 {
@@ -103,7 +105,7 @@ func BeginBoundedMaintenance(instanceKey *InstanceKey, owner string, reason stri
 	} else {
 		// success
 		maintenanceToken, _ = res.LastInsertId()
-		AuditOperation("begin-maintenance", instanceKey, fmt.Sprintf("maintenanceToken: %d, owner: %s, reason: %s", maintenanceToken, owner, reason))
+		_ = AuditOperation("begin-maintenance", instanceKey, fmt.Sprintf("maintenanceToken: %d, owner: %s, reason: %s", maintenanceToken, owner, reason))
 	}
 	return maintenanceToken, err
 }
@@ -130,13 +132,14 @@ func EndMaintenanceByInstanceKey(instanceKey *InstanceKey) (wasMaintenance bool,
 		instanceKey.Port,
 	)
 	if err != nil {
-		return wasMaintenance, log.Errore(err)
+		log.Error(err)
+		return wasMaintenance, err
 	}
 
 	if affected, _ := res.RowsAffected(); affected > 0 {
 		// success
 		wasMaintenance = true
-		AuditOperation("end-maintenance", instanceKey, "")
+		_ = AuditOperation("end-maintenance", instanceKey, "")
 	}
 	return wasMaintenance, err
 }
@@ -160,7 +163,10 @@ func InMaintenance(instanceKey *InstanceKey) (inMaintenance bool, err error) {
 		return nil
 	})
 
-	return inMaintenance, log.Errore(err)
+	if err != nil {
+		log.Error(err)
+	}
+	return inMaintenance, err
 }
 
 // ReadMaintenanceInstanceKey will return the instanceKey for active maintenance by maintenanceToken
@@ -185,7 +191,10 @@ func ReadMaintenanceInstanceKey(maintenanceToken int64) (*InstanceKey, error) {
 		return nil
 	})
 
-	return res, log.Errore(err)
+	if err != nil {
+		log.Error(err)
+	}
+	return res, err
 }
 
 // EndMaintenance will terminate an active maintenance via maintenanceToken
@@ -202,13 +211,14 @@ func EndMaintenance(maintenanceToken int64) (wasMaintenance bool, err error) {
 		maintenanceToken,
 	)
 	if err != nil {
-		return wasMaintenance, log.Errore(err)
+		log.Error(err)
+		return wasMaintenance, err
 	}
 	if affected, _ := res.RowsAffected(); affected > 0 {
 		// success
 		wasMaintenance = true
 		instanceKey, _ := ReadMaintenanceInstanceKey(maintenanceToken)
-		AuditOperation("end-maintenance", instanceKey, fmt.Sprintf("maintenanceToken: %d", maintenanceToken))
+		_ = AuditOperation("end-maintenance", instanceKey, fmt.Sprintf("maintenanceToken: %d", maintenanceToken))
 	}
 	return wasMaintenance, err
 }
@@ -226,10 +236,11 @@ func ExpireMaintenance() error {
 			config.MaintenancePurgeDays,
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-maintenance", nil, fmt.Sprintf("Purged historical entries: %d", rowsAffected))
+			_ = AuditOperation("expire-maintenance", nil, fmt.Sprintf("Purged historical entries: %d", rowsAffected))
 		}
 	}
 	{
@@ -242,10 +253,11 @@ func ExpireMaintenance() error {
 			`,
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-maintenance", nil, fmt.Sprintf("Expired bounded: %d", rowsAffected))
+			_ = AuditOperation("expire-maintenance", nil, fmt.Sprintf("Expired bounded: %d", rowsAffected))
 		}
 	}
 	{
@@ -260,10 +272,11 @@ func ExpireMaintenance() error {
 			`,
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-maintenance", nil, fmt.Sprintf("Expired dead: %d", rowsAffected))
+			_ = AuditOperation("expire-maintenance", nil, fmt.Sprintf("Expired dead: %d", rowsAffected))
 		}
 	}
 

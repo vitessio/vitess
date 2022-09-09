@@ -254,9 +254,9 @@ func TestControllerCanceledContext(t *testing.T) {
 }
 
 func TestControllerRetry(t *testing.T) {
-	savedDelay := *retryDelay
-	defer func() { *retryDelay = savedDelay }()
-	*retryDelay = 10 * time.Millisecond
+	savedDelay := retryDelay
+	defer func() { retryDelay = savedDelay }()
+	retryDelay = 10 * time.Millisecond
 
 	resetBinlogClient()
 	defer deleteTablet(addTablet(100))

@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
@@ -65,10 +66,26 @@ func init() {
 	// Tests that do care about the tmclient should use
 	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
 	// VtctldServer.
-	*tmclient.TabletManagerProtocol = "grpcvtctldserver.test"
+	tmclienttest.SetProtocol("go.vt.vtctl.grpcvtctldserver", "grpcvtctldserver.test")
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
+}
+
+func TestPanicHandler(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		err := recover()
+		assert.Nil(t, err, "bad request should catch panic")
+	}()
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, nil, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	_, err := vtctld.AddCellInfo(context.Background(), nil)
+	assert.Error(t, err)
 }
 
 func TestAddCellInfo(t *testing.T) {

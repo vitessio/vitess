@@ -20,7 +20,6 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,10 +29,10 @@ func TestNumberedGeneral(t *testing.T) {
 	id := int64(0)
 	p := NewNumbered()
 
-	err := p.Register(id, id, true)
+	err := p.Register(id, id)
 	require.NoError(t, err)
 
-	err = p.Register(id, id, true)
+	err = p.Register(id, id)
 	assert.Contains(t, "already present", err.Error())
 
 	var v any
@@ -44,7 +43,7 @@ func TestNumberedGeneral(t *testing.T) {
 	_, err = p.Get(id, "test1")
 	assert.Contains(t, "in use: test", err.Error())
 
-	p.Put(id, true)
+	p.Put(id)
 	_, err = p.Get(1, "test2")
 	assert.Contains(t, "not found", err.Error())
 	p.Unregister(1, "test") // Should not fail
@@ -55,61 +54,17 @@ func TestNumberedGeneral(t *testing.T) {
 		t.Errorf("want prefix 'ended at' and suffix '(test)', got '%v'", err)
 	}
 
-	id = 0
-	p.Register(id, id, true)
-	id = 1
-	p.Register(id, id, true)
-	id = 2
-	p.Register(id, id, false)
-	time.Sleep(300 * time.Millisecond)
-	id = 3
-	p.Register(id, id, true)
-	time.Sleep(100 * time.Millisecond)
-
-	// p has 0, 1, 2, 3 (0, 1, 2 are aged, but 2 is not enforced)
-	vals := p.GetOutdated(200*time.Millisecond, "by outdated")
-	if num := len(vals); num != 2 {
-		t.Errorf("want 2, got %v", num)
+	if p.Size() != 0 {
+		t.Errorf("want 0, got %v", p.Size())
 	}
-	if _, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by outdated" {
-		t.Errorf("want 'in use: by outdated', got '%v'", err)
-	}
-	for _, v := range vals {
-		p.Put(v.(int64), true)
-	}
-	p.Put(2, true) // put to 2 to ensure it's not idle
-	time.Sleep(100 * time.Millisecond)
-
-	// p has 0, 1, 2 (2 is idle)
-	vals = p.GetIdle(200*time.Millisecond, "by idle")
-	if len(vals) != 1 {
-		t.Errorf("want 1, got %v", len(vals))
-	}
-	if _, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by idle" {
-		t.Errorf("want 'in use: by idle', got '%v'", err)
-	}
-	if vals[0].(int64) != 3 {
-		t.Errorf("want 3, got %v", vals[0])
-	}
-	p.Unregister(vals[0].(int64), "test")
-
-	// p has 0, 1, and 2
-	if p.Size() != 3 {
-		t.Errorf("want 3, got %v", p.Size())
-	}
-	go func() {
-		p.Unregister(0, "test")
-		p.Unregister(1, "test")
-		p.Unregister(2, "test")
-	}()
 	p.WaitForEmpty()
 }
 
 func TestNumberedGetByFilter(t *testing.T) {
 	p := NewNumbered()
-	p.Register(1, 1, true)
-	p.Register(2, 2, true)
-	p.Register(3, 3, true)
+	p.Register(1, 1)
+	p.Register(2, 2)
+	p.Register(3, 3)
 	p.Get(1, "locked")
 
 	vals := p.GetByFilter("filtered", func(v any) bool {
@@ -133,7 +88,7 @@ func BenchmarkRegisterUnregister(b *testing.B) {
 	id := int64(1)
 	val := "foobarbazdummyval"
 	for i := 0; i < b.N; i++ {
-		p.Register(id, val, false)
+		p.Register(id, val)
 		p.Unregister(id, "some reason")
 	}
 }
@@ -145,7 +100,7 @@ func BenchmarkRegisterUnregisterParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			id := rand.Int63()
-			p.Register(id, val, false)
+			p.Register(id, val)
 			p.Unregister(id, "some reason")
 		}
 	})

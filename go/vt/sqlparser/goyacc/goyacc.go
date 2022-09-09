@@ -48,7 +48,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"flag"
 	"fmt"
 	"go/format"
 	"os"
@@ -57,6 +56,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/spf13/pflag"
 )
 
 // the following are adjustable
@@ -166,11 +167,11 @@ var prefix string // name prefix for identifiers, default yy
 var allowFastAppend bool
 
 func init() {
-	flag.StringVar(&oflag, "o", "y.go", "parser output")
-	flag.StringVar(&prefix, "p", "yy", "name prefix to use in generated code")
-	flag.StringVar(&vflag, "v", "y.output", "create parsing tables")
-	flag.BoolVar(&lflag, "l", false, "disable line directives")
-	flag.BoolVar(&allowFastAppend, "fast-append", false, "enable fast-append optimization")
+	pflag.StringVarP(&oflag, "output", "o", "y.go", "parser output")
+	pflag.StringVarP(&prefix, "prefix", "p", "yy", "name prefix to use in generated code")
+	pflag.StringVarP(&vflag, "verbose-output", "v", "y.output", "create parsing tables")
+	pflag.BoolVarP(&lflag, "disable-line-directives", "l", false, "disable line directives")
+	pflag.BoolVarP(&allowFastAppend, "fast-append", "f", false, "enable fast-append optimization")
 }
 
 var initialstacksize = 16
@@ -381,8 +382,8 @@ func setup() {
 	stderr = bufio.NewWriter(os.Stderr)
 	foutput = nil
 
-	flag.Parse()
-	if flag.NArg() != 1 {
+	pflag.Parse()
+	if pflag.NArg() != 1 {
 		usage()
 	}
 	if initialstacksize < 1 {
@@ -1599,7 +1600,7 @@ loop:
 }
 
 func openup() {
-	infile = flag.Arg(0)
+	infile = pflag.Arg(0)
 	finput = open(infile)
 	if finput == nil {
 		errorf("cannot open %v", infile)

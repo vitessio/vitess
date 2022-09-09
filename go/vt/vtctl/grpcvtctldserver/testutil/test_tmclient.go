@@ -19,17 +19,20 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -117,12 +120,54 @@ func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc t
 
 	// Be (mostly, we can't help concurrent goroutines not using this function)
 	// atomic with our mutation of the global TabletManagerProtocol pointer.
-	oldProto := *tmclient.TabletManagerProtocol
-	defer func() { *tmclient.TabletManagerProtocol = oldProto }()
-
-	*tmclient.TabletManagerProtocol = protocol
+	reset := setTMClientProtocol(protocol)
+	defer reset()
 
 	return newVtctldServerFn(ts)
+}
+
+const (
+	fsName                   = "go.vt.vtctl.grpcvtctldserver.testutil"
+	tmclientProtocolFlagName = "tablet_manager_protocol"
+)
+
+var fs *pflag.FlagSet
+
+// N.B. we cannot use tmclienttest.SetProtocol because it trips the race
+// detector because of how many grpcvtctldserver tests run in parallel.
+func setTMClientProtocol(protocol string) (reset func()) {
+	switch oldVal, err := fs.GetString(tmclientProtocolFlagName); err {
+	case nil:
+		reset = func() { setTMClientProtocol(oldVal) }
+	default:
+		log.Errorf("failed to get string value for flag %q: %v", tmclientProtocolFlagName, err)
+		reset = func() {}
+	}
+
+	if err := fs.Set(tmclientProtocolFlagName, protocol); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, tmclientProtocolFlagName, protocol, err)
+		reset = func() {}
+	}
+
+	return reset
+}
+
+func init() {
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{fsName}
+	defer func() { os.Args = tmp }()
+
+	// do this once at import-time before any tests run.
+	servenv.OnParseFor(fsName, func(_fs *pflag.FlagSet) {
+		fs = _fs
+		if fs.Lookup(tmclientProtocolFlagName) != nil {
+			return
+		}
+
+		tmclient.RegisterFlags(fs)
+	})
+	servenv.ParseFlags(fsName)
 }
 
 // TabletManagerClient implements the tmclient.TabletManagerClient interface

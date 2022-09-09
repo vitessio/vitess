@@ -21,31 +21,60 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
-	"flag"
 	"time"
-
-	"google.golang.org/grpc/credentials/insecure"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
 	"vitess.io/vitess/go/trace"
-
 	"vitess.io/vitess/go/vt/grpccommon"
-	"vitess.io/vitess/go/vt/vttls"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 var (
-	keepaliveTime         = flag.Duration("grpc_keepalive_time", 10*time.Second, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
-	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 10*time.Second, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
-	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "gRPC initial connection window size")
-	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "gRPC initial window size")
+	keepaliveTime         = 10 * time.Second
+	keepaliveTimeout      = 10 * time.Second
+	initialConnWindowSize int
+	initialWindowSize     int
+
+	// every vitess binary that makes grpc client-side calls.
+	grpcclientBinaries = []string{
+		"vtadmin",
+		"vtbackup",
+		"vtbench",
+		"vtclient",
+		"vtctl",
+		"vtctlclient",
+		"vtctld",
+		"vtctldclient",
+		"vtgate",
+		"vtgateclienttest",
+		"vtgr",
+		"vtorc",
+		"vttablet",
+		"vttestserver",
+	}
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&keepaliveTime, "grpc_keepalive_time", keepaliveTime, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
+	fs.DurationVar(&keepaliveTimeout, "grpc_keepalive_timeout", keepaliveTimeout, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
+	fs.IntVar(&initialConnWindowSize, "grpc_initial_conn_window_size", initialConnWindowSize, "gRPC initial connection window size")
+	fs.IntVar(&initialWindowSize, "grpc_initial_window_size", initialWindowSize, "gRPC initial window size")
+}
+
+func init() {
+	for _, cmd := range grpcclientBinaries {
+		servenv.OnParseFor(cmd, registerFlags)
+	}
+}
 
 // FailFast is a self-documenting type for the grpc.FailFast.
 type FailFast bool
@@ -73,32 +102,33 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 // what that should be.
 func DialContext(ctx context.Context, target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	grpccommon.EnableTracingOpt()
+	msgSize := grpccommon.MaxMessageSize()
 	newopts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
-			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
+			grpc.MaxCallRecvMsgSize(msgSize),
+			grpc.MaxCallSendMsgSize(msgSize),
 			grpc.WaitForReady(bool(!failFast)),
 		),
 	}
 
-	if *keepaliveTime != 0 || *keepaliveTimeout != 0 {
+	if keepaliveTime != 0 || keepaliveTimeout != 0 {
 		kp := keepalive.ClientParameters{
 			// After a duration of this time if the client doesn't see any activity it pings the server to see if the transport is still alive.
-			Time: *keepaliveTime,
+			Time: keepaliveTime,
 			// After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that
 			// the connection is closed. (This will eagerly fail inflight grpc requests even if they don't have timeouts.)
-			Timeout:             *keepaliveTimeout,
+			Timeout:             keepaliveTimeout,
 			PermitWithoutStream: true,
 		}
 		newopts = append(newopts, grpc.WithKeepaliveParams(kp))
 	}
 
-	if *initialConnWindowSize != 0 {
-		newopts = append(newopts, grpc.WithInitialConnWindowSize(int32(*initialConnWindowSize)))
+	if initialConnWindowSize != 0 {
+		newopts = append(newopts, grpc.WithInitialConnWindowSize(int32(initialConnWindowSize)))
 	}
 
-	if *initialWindowSize != 0 {
-		newopts = append(newopts, grpc.WithInitialWindowSize(int32(*initialWindowSize)))
+	if initialWindowSize != 0 {
+		newopts = append(newopts, grpc.WithInitialWindowSize(int32(initialWindowSize)))
 	}
 
 	newopts = append(newopts, opts...)
@@ -117,7 +147,7 @@ func DialContext(ctx context.Context, target string, failFast FailFast, opts ...
 
 func interceptors() []grpc.DialOption {
 	builder := &clientInterceptorBuilder{}
-	if *grpccommon.EnableGRPCPrometheus {
+	if grpccommon.EnableGRPCPrometheus() {
 		builder.Add(grpc_prometheus.StreamClientInterceptor, grpc_prometheus.UnaryClientInterceptor)
 	}
 	trace.AddGrpcClientOptions(builder.Add)

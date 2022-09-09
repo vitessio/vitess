@@ -17,6 +17,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -155,7 +156,7 @@ func TestGetSchema(t *testing.T) {
 	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
 		return &tmc
 	})
-	*tmclient.TabletManagerProtocol = t.Name()
+	tmclienttest.SetProtocol("go.vt.vtctl.endtoend", t.Name())
 
 	logger := logutil.NewMemoryLogger()
 

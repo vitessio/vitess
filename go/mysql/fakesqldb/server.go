@@ -225,6 +225,14 @@ func NewWithExpectedQueries(t testing.TB) *DB {
 	return newDb
 }
 
+// Name returns the name of the DB.
+func (db *DB) Name() string {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	return db.name
+}
+
 // SetName sets the name of the DB. to differentiate them in tests if needed.
 func (db *DB) SetName(name string) *DB {
 	db.mu.Lock()

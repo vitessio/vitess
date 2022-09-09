@@ -19,9 +19,10 @@ package inst
 import (
 	"github.com/rcrowley/go-metrics"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -32,11 +33,11 @@ var readUnresolvedHostnameCounter = metrics.NewCounter()
 var readAllResolvedHostnamesCounter = metrics.NewCounter()
 
 func init() {
-	metrics.Register("resolve.write_resolved", writeResolvedHostnameCounter)
-	metrics.Register("resolve.write_unresolved", writeUnresolvedHostnameCounter)
-	metrics.Register("resolve.read_resolved", readResolvedHostnameCounter)
-	metrics.Register("resolve.read_unresolved", readUnresolvedHostnameCounter)
-	metrics.Register("resolve.read_resolved_all", readAllResolvedHostnamesCounter)
+	_ = metrics.Register("resolve.write_resolved", writeResolvedHostnameCounter)
+	_ = metrics.Register("resolve.write_unresolved", writeUnresolvedHostnameCounter)
+	_ = metrics.Register("resolve.read_resolved", readResolvedHostnameCounter)
+	_ = metrics.Register("resolve.read_unresolved", readUnresolvedHostnameCounter)
+	_ = metrics.Register("resolve.read_resolved_all", readAllResolvedHostnamesCounter)
 }
 
 // WriteResolvedHostname stores a hostname and the resolved hostname to backend database
@@ -54,7 +55,8 @@ func WriteResolvedHostname(hostname string, resolvedHostname string) error {
 			hostname,
 			resolvedHostname)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		if hostname != resolvedHostname {
 			// history is only interesting when there's actually something to resolve...
@@ -96,7 +98,7 @@ func ReadResolvedHostname(hostname string) (string, error) {
 	readResolvedHostnameCounter.Inc(1)
 
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return resolvedHostname, err
 }
@@ -119,7 +121,7 @@ func ReadAllHostnameResolves() ([]HostnameResolve, error) {
 	readAllResolvedHostnamesCounter.Inc(1)
 
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return res, err
 }
@@ -141,20 +143,10 @@ func ReadAllHostnameUnresolves() ([]HostnameUnresolve, error) {
 		return nil
 	})
 
-	return unres, log.Errore(err)
-}
-
-// ReadAllHostnameUnresolves returns the content of the hostname_unresolve table
-func ReadAllHostnameUnresolvesRegistrations() (registrations []HostnameRegistration, err error) {
-	unresolves, err := ReadAllHostnameUnresolves()
 	if err != nil {
-		return registrations, err
+		log.Error(err)
 	}
-	for _, unresolve := range unresolves {
-		registration := NewHostnameRegistration(&InstanceKey{Hostname: unresolve.hostname}, unresolve.unresolvedHostname)
-		registrations = append(registrations, *registration)
-	}
-	return registrations, nil
+	return unres, err
 }
 
 // readUnresolvedHostname reverse-reads hostname resolve. It returns a hostname which matches given pattern and resovles to resolvedHostname,
@@ -178,7 +170,7 @@ func readUnresolvedHostname(hostname string) (string, error) {
 	readUnresolvedHostnameCounter.Inc(1)
 
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return unresolvedHostname, err
 }
@@ -198,7 +190,8 @@ func WriteHostnameUnresolve(instanceKey *InstanceKey, unresolvedHostname string)
 				`, instanceKey.Hostname, unresolvedHostname,
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		_, _ = db.ExecOrchestrator(`
         	replace into hostname_unresolve_history (
@@ -222,7 +215,10 @@ func DeleteHostnameUnresolve(instanceKey *InstanceKey) error {
 				where hostname=?
 				`, instanceKey.Hostname,
 		)
-		return log.Errore(err)
+		if err != nil {
+			log.Error(err)
+		}
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
@@ -235,7 +231,10 @@ func ExpireHostnameUnresolve() error {
 				where last_registered < NOW() - INTERVAL ? MINUTE
 				`, config.Config.ExpiryHostnameResolvesMinutes,
 		)
-		return log.Errore(err)
+		if err != nil {
+			log.Error(err)
+		}
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
@@ -284,7 +283,9 @@ func DeleteInvalidHostnameResolves() error {
 				hostname = ?`,
 			invalidHostname,
 		)
-		log.Errore(err)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 	return err
 }
@@ -315,7 +316,10 @@ func writeHostnameIPs(hostname string, ipv4String string, ipv6String string) err
 			ipv4String,
 			ipv6String,
 		)
-		return log.Errore(err)
+		if err != nil {
+			log.Error(err)
+		}
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }

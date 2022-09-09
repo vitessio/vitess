@@ -18,11 +18,15 @@ package app
 
 import (
 	"flag"
+	"io/ioutil"
+	golog "log"
 	"net"
 	nethttp "net/http"
 	"path"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
@@ -36,8 +40,6 @@ import (
 	"github.com/martini-contrib/auth"
 	"github.com/martini-contrib/gzip"
 	"github.com/martini-contrib/render"
-
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
 const discoveryMetricsName = "DISCOVERY_METRICS"
@@ -76,6 +78,8 @@ func promptForSSLPasswords() {
 // standardHTTP starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
 func standardHTTP(continuousDiscovery bool) {
 	m := martini.Classic()
+	// Make martini silent by setting its logger to a discard endpoint
+	m.Logger(golog.New(ioutil.Discard, "", 0))
 
 	switch strings.ToLower(config.Config.AuthenticationMethod) {
 	case "basic":
@@ -142,29 +146,29 @@ func standardHTTP(continuousDiscovery bool) {
 		log.Infof("Starting HTTP listener on unix socket %v", config.Config.ListenSocket)
 		unixListener, err := net.Listen("unix", config.Config.ListenSocket)
 		if err != nil {
-			log.Fatale(err)
+			log.Fatal(err)
 		}
 		defer unixListener.Close()
 		if err := nethttp.Serve(unixListener, m); err != nil {
-			log.Fatale(err)
+			log.Fatal(err)
 		}
 	} else if config.Config.UseSSL {
 		log.Info("Starting HTTPS listener")
 		tlsConfig, err := ssl.NewTLSConfig(config.Config.SSLCAFile, config.Config.UseMutualTLS)
 		if err != nil {
-			log.Fatale(err)
+			log.Fatal(err)
 		}
 		tlsConfig.InsecureSkipVerify = config.Config.SSLSkipVerify
 		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.SSLCertFile, config.Config.SSLPrivateKeyFile, sslPEMPassword); err != nil {
-			log.Fatale(err)
+			log.Fatal(err)
 		}
 		if err = ssl.ListenAndServeTLS(config.Config.ListenAddress, m, tlsConfig); err != nil {
-			log.Fatale(err)
+			log.Fatal(err)
 		}
 	} else {
 		log.Infof("Starting HTTP listener on %+v", config.Config.ListenAddress)
 		if err := nethttp.ListenAndServe(config.Config.ListenAddress, m); err != nil {
-			log.Fatale(err)
+			log.Fatal(err)
 		}
 	}
 	log.Info("Web server started")

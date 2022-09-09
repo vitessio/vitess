@@ -70,6 +70,8 @@ type controller struct {
 	targetShardStreamer *shardStreamer
 	filter              *binlogdatapb.Filter            // vreplication row filter
 	options             *tabletmanagerdata.VDiffOptions // options initially from vtctld command and later from _vt.vdiff
+
+	sourceTimeZone, targetTimeZone string // named time zones if conversions are necessary for datetime values
 }
 
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
@@ -197,6 +199,8 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		}
 		source.shard = bls.Shard
 		source.vrID, _ = row["id"].ToInt64()
+		ct.sourceTimeZone = bls.SourceTimeZone
+		ct.targetTimeZone = bls.TargetTimeZone
 
 		ct.sources[source.shard] = source
 		if i == 0 {

@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -29,6 +28,7 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch"
 	yamlpatch "github.com/krishicks/yaml-patch"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -46,23 +46,23 @@ const (
 	cellUsage             = "Vitess Cell name"
 	DefaultExternalDbData = ""
 	externalDbDataUsage   = "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'"
-	DefaultTopologyFlags  = "-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global"
+	DefaultTopologyFlags  = "--topo_implementation consul --topo_global_server_address consul1:8500 --topo_global_root vitess/global"
 	topologyFlagsUsage    = "Vitess Topology Flags config"
 )
 
 var (
 	tabletsUsed           = 0
 	tablesPath            = "tables/"
-	baseDockerComposeFile = flag.String("base_yaml", "vtcompose/docker-compose.base.yml", "Starting docker-compose yaml")
-	baseVschemaFile       = flag.String("base_vschema", "vtcompose/base_vschema.json", "Starting vschema json")
+	baseDockerComposeFile = pflag.String("base_yaml", "vtcompose/docker-compose.base.yml", "Starting docker-compose yaml")
+	baseVschemaFile       = pflag.String("base_vschema", "vtcompose/base_vschema.json", "Starting vschema json")
 
-	topologyFlags  = flag.String("topologyFlags", DefaultTopologyFlags, topologyFlagsUsage)
-	webPort        = flag.Int("webPort", DefaultWebPort, webPortUsage)
-	gRpcPort       = flag.Int("gRpcPort", DefaultGrpcPort, gRpcPortUsage)
-	mySqlPort      = flag.Int("mySqlPort", DefaultMysqlPort, mySqlPortUsage)
-	cell           = flag.String("cell", DefaultCell, cellUsage)
-	keyspaceData   = flag.String("keyspaceData", DefaultKeyspaceData, keyspaceDataUsage)
-	externalDbData = flag.String("externalDbData", DefaultExternalDbData, externalDbDataUsage)
+	topologyFlags  = pflag.String("topologyFlags", DefaultTopologyFlags, topologyFlagsUsage)
+	webPort        = pflag.Int("webPort", DefaultWebPort, webPortUsage)
+	gRpcPort       = pflag.Int("gRpcPort", DefaultGrpcPort, gRpcPortUsage)
+	mySqlPort      = pflag.Int("mySqlPort", DefaultMysqlPort, mySqlPortUsage)
+	cell           = pflag.String("cell", DefaultCell, cellUsage)
+	keyspaceData   = pflag.String("keyspaceData", DefaultKeyspaceData, keyspaceDataUsage)
+	externalDbData = pflag.String("externalDbData", DefaultExternalDbData, externalDbDataUsage)
 )
 
 type vtOptions struct {
@@ -167,7 +167,7 @@ func parseExternalDbData(externalDbData string) map[string]externalDbInfo {
 }
 
 func main() {
-	flag.Parse()
+	pflag.Parse()
 	keyspaceInfoMap := parseKeyspaceInfo(*keyspaceData)
 	externalDbInfoMap := parseExternalDbData(*externalDbData)
 	vtOpts := vtOptions{
@@ -671,15 +671,15 @@ func generateVtctld(opts vtOptions) string {
       - "%[2]d"
     command: ["sh", "-c", " /vt/bin/vtctld \
         %[3]s \
-        -cell %[4]s \
-        -workflow_manager_init \
-        -workflow_manager_use_election \
-        -service_map 'grpc-vtctl,grpc-vtctld' \
-        -backup_storage_implementation file \
-        -file_backup_storage_root /vt/vtdataroot/backups \
-        -logtostderr=true \
-        -port %[1]d \
-        -grpc_port %[2]d \
+        --cell %[4]s \
+        --workflow_manager_init \
+        --workflow_manager_use_election \
+        --service_map 'grpc-vtctl,grpc-vtctld' \
+        --backup_storage_implementation file \
+        --file_backup_storage_root /vt/vtdataroot/backups \
+        --logtostderr=true \
+        --port %[1]d \
+        --grpc_port %[2]d \
         "]
     volumes:
       - .:/script
@@ -705,16 +705,16 @@ func generateVtgate(opts vtOptions) string {
       - "15306:%[3]d"
     command: ["sh", "-c", "/script/run-forever.sh /vt/bin/vtgate \
         %[4]s \
-        -logtostderr=true \
-        -port %[1]d \
-        -grpc_port %[2]d \
-        -mysql_server_port %[3]d \
-        -mysql_auth_server_impl none \
-        -cell %[5]s \
-        -cells_to_watch %[5]s \
-        -tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
-        -service_map 'grpc-vtgateservice' \
-        -normalize_queries=true \
+        --logtostderr=true \
+        --port %[1]d \
+        --grpc_port %[2]d \
+        --mysql_server_port %[3]d \
+        --mysql_auth_server_impl none \
+        --cell %[5]s \
+        --cells_to_watch %[5]s \
+        --tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
+        --service_map 'grpc-vtgateservice' \
+        --normalize_queries=true \
         "]
     volumes:
       - .:/script

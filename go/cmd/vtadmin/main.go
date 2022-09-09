@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -68,6 +69,7 @@ var (
 		PostRun: func(cmd *cobra.Command, args []string) {
 			trace.LogErrorsWhenClosing(traceCloser)
 		},
+		Version: servenv.AppVersion.String(),
 	}
 )
 

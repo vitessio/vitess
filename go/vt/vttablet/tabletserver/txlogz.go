@@ -86,7 +86,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if *streamlog.RedactDebugUIQueries {
+	if streamlog.GetRedactDebugUIQueries() {
 		io.WriteString(w, `
 <!DOCTYPE html>
 <html>

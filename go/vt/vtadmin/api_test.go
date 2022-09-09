@@ -25,12 +25,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/topo"
@@ -45,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -55,6 +58,11 @@ import (
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
+}
 
 func TestFindSchema(t *testing.T) {
 	t.Parallel()
@@ -5131,7 +5139,7 @@ func init() {
 	// Tests that do care about the tmclient should use
 	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
 	// VtctldServer.
-	*tmclient.TabletManagerProtocol = "vtadmin.test"
+	tmclienttest.SetProtocol("go.vt.vtadmin", "vtadmin.test")
 	tmclient.RegisterTabletManagerClientFactory("vtadmin.test", func() tmclient.TabletManagerClient {
 		return nil
 	})

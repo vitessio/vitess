@@ -17,17 +17,25 @@ limitations under the License.
 package grpcclient
 
 import (
-	"flag"
 	"io"
 
 	"github.com/golang/snappy"
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	compression = flag.String("grpc_compression", "", "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
-)
+var compression string
+
+func init() {
+	for _, cmd := range grpcclientBinaries {
+		servenv.OnParseFor(cmd, func(fs *pflag.FlagSet) {
+			fs.StringVar(&compression, "grpc_compression", compression, "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
+		})
+	}
+}
 
 // SnappyCompressor is a gRPC compressor using the Snappy algorithm.
 type SnappyCompressor struct{}
@@ -48,7 +56,7 @@ func (s SnappyCompressor) Decompress(r io.Reader) (io.Reader, error) {
 }
 
 func appendCompression(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-	if *compression == "snappy" {
+	if compression == "snappy" {
 		compression := grpc.WithDefaultCallOptions(grpc.UseCompressor("snappy"))
 		opts = append(opts, compression)
 	}

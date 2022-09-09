@@ -18,16 +18,17 @@ package grpctabletconn
 
 import (
 	"context"
-	"flag"
 	"io"
 	"sync"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -40,15 +41,29 @@ import (
 const protocolName = "grpc"
 
 var (
-	cert = flag.String("tablet_grpc_cert", "", "the cert to use to connect")
-	key  = flag.String("tablet_grpc_key", "", "the key to use to connect")
-	ca   = flag.String("tablet_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	crl  = flag.String("tablet_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
-	name = flag.String("tablet_grpc_server_name", "", "the server name to use to validate server certificate")
+	cert string
+	key  string
+	ca   string
+	crl  string
+	name string
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&cert, "tablet_grpc_cert", cert, "the cert to use to connect")
+	fs.StringVar(&key, "tablet_grpc_key", key, "the key to use to connect")
+	fs.StringVar(&ca, "tablet_grpc_ca", ca, "the server ca to use to validate servers when connecting")
+	fs.StringVar(&crl, "tablet_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
+	fs.StringVar(&name, "tablet_grpc_server_name", name, "the server name to use to validate server certificate")
+}
 
 func init() {
 	tabletconn.RegisterDialer(protocolName, DialTablet)
+
+	servenv.OnParseFor("vtbench", registerFlags)
+	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
 }
 
 // gRPCQueryClient implements a gRPC implementation for QueryService
@@ -73,7 +88,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 	} else {
 		addr = tablet.Hostname
 	}
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return nil, err
 	}

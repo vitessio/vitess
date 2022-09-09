@@ -63,8 +63,8 @@ services:
       vttablet301:
         condition: service_healthy
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
@@ -89,8 +89,8 @@ services:
       vttablet201:
         condition: service_healthy
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
@@ -126,8 +126,8 @@ services:
     depends_on:
     - vtctld
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - EXTERNAL_DB=0
     image: vitess/lite:${VITESS_TAG:-latest}
     volumes:
@@ -136,10 +136,10 @@ services:
     command:
     - sh
     - -c
-    - ' /vt/bin/vtctld -topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global -cell test -workflow_manager_init -workflow_manager_use_election
-      -service_map ''grpc-vtctl,grpc-vtctld'' -backup_storage_implementation file -file_backup_storage_root
-      /vt/vtdataroot/backups -logtostderr=true -port 8080 -grpc_port 15999 '
+    - ' /vt/bin/vtctld --topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global --cell test --workflow_manager_init --workflow_manager_use_election
+      --service_map ''grpc-vtctl,grpc-vtctld'' --backup_storage_implementation file --file_backup_storage_root
+      /vt/vtdataroot/backups --logtostderr=true --port 8080 --grpc_port 15999 '
     depends_on:
       external_db_host:
         condition: service_healthy
@@ -153,11 +153,11 @@ services:
     command:
     - sh
     - -c
-    - '/script/run-forever.sh /vt/bin/vtgate -topo_implementation consul -topo_global_server_address
-      consul1:8500 -topo_global_root vitess/global -logtostderr=true -port 8080 -grpc_port
-      15999 -mysql_server_port 15306 -mysql_auth_server_impl none -cell test -cells_to_watch
-      test -tablet_types_to_wait PRIMARY,REPLICA,RDONLY -service_map ''grpc-vtgateservice''
-      -normalize_queries=true '
+    - '/script/run-forever.sh /vt/bin/vtgate --topo_implementation consul --topo_global_server_address
+      consul1:8500 --topo_global_root vitess/global --logtostderr=true --port 8080 --grpc_port
+      15999 --mysql_server_port 15306 --mysql_auth_server_impl none --cell test --cells_to_watch
+      test --tablet_types_to_wait PRIMARY,REPLICA,RDONLY --service_map ''grpc-vtgateservice''
+      --normalize_queries=true '
     depends_on:
     - vtctld
     image: vitess/lite:${VITESS_TAG:-latest}
@@ -176,8 +176,8 @@ services:
     - vtctld
     - set_keyspace_durability_policy
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - EXTERNAL_DB=0
     - DB_USER=
     - DB_PASS=
@@ -194,8 +194,8 @@ services:
     depends_on:
     - vtctld
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
@@ -231,8 +231,8 @@ services:
     depends_on:
     - vtctld
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
@@ -268,8 +268,8 @@ services:
     depends_on:
     - vtctld
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
@@ -305,8 +305,8 @@ services:
     depends_on:
     - vtctld
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
@@ -342,8 +342,8 @@ services:
     depends_on:
     - vtctld
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
@@ -379,8 +379,8 @@ services:
     depends_on:
     - vtctld
     environment:
-    - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-      -topo_global_root vitess/global
+    - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global
     - WEB_PORT=8080
     - GRPC_PORT=15999
     - CELL=test
