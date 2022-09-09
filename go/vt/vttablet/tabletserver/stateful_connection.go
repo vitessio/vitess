@@ -314,7 +314,7 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *Setting
 	if sc.dbConn.IsSameSetting(setting.GetQuery()) {
 		return nil
 	}
-	return sc.dbConn.ApplySetting(ctx, setting.GetQuery())
+	return sc.dbConn.ApplySetting(ctx, setting)
 }
 
 func (sc *StatefulConnection) resetExpiryTime() {

@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 )
 
-var lastID, count, closeCount sync2.AtomicInt64
+var lastID, count, closeCount, resetCount sync2.AtomicInt64
 var waitStarts []time.Time
 
 type TestResource struct {
@@ -40,11 +40,17 @@ type TestResource struct {
 	failApply bool
 }
 
-func (tr *TestResource) ApplySetting(ctx context.Context, setting string) error {
+func (tr *TestResource) ResetSetting(ctx context.Context) error {
+	resetCount.Add(1)
+	tr.setting = ""
+	return nil
+}
+
+func (tr *TestResource) ApplySetting(ctx context.Context, setting Setting) error {
 	if tr.failApply {
 		return fmt.Errorf("ApplySetting failed")
 	}
-	tr.setting = setting
+	tr.setting = setting.GetQuery()
 	return nil
 }
 
@@ -63,6 +69,8 @@ func (tr *TestResource) Close() {
 		tr.closed = true
 	}
 }
+
+var _ Resource = (*TestResource)(nil)
 
 func logWait(start time.Time) {
 	waitStarts = append(waitStarts, start)
@@ -731,11 +739,11 @@ func TestMultiSettings(t *testing.T) {
 	assert.EqualValues(t, 0, count.Get())
 }
 
-func TestMultiSettingsWithClosures(t *testing.T) {
+func TestMultiSettingsWithReset(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	closeCount.Set(0)
+	resetCount.Set(0)
 
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
 	var resources [10]Resource
@@ -765,9 +773,9 @@ func TestMultiSettingsWithClosures(t *testing.T) {
 		require.NoError(t, err)
 		p.Put(r)
 	}
-	assert.EqualValues(t, 2, closeCount.Get()) // when setting was {bar} and getting for {foo}
+	assert.EqualValues(t, 2, resetCount.Get()) // when setting was {bar} and getting for {foo}
 	assert.EqualValues(t, 5, p.Available())
-	assert.EqualValues(t, 7, lastID.Get())
+	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 5, count.Get())
 
 	// Close
@@ -844,7 +852,7 @@ func (t *testSPlan) GetQuery() string {
 }
 
 func (t *testSPlan) GetResetQuery() string {
-	panic("implement me")
+	return ""
 }
 
 func (t *testSPlan) IsNil() bool {

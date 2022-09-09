@@ -380,7 +380,7 @@ func (t *testSPlan) GetQuery() string {
 }
 
 func (t *testSPlan) GetResetQuery() string {
-	panic("implement me")
+	return ""
 }
 
 func (t *testSPlan) IsNil() bool {

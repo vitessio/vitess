@@ -47,13 +47,14 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn    *dbconnpool.DBConnection
-	info    dbconfigs.Connector
-	pool    *Pool
-	dbaPool *dbconnpool.ConnectionPool
-	stats   *tabletenv.Stats
-	current sync2.AtomicString
-	setting string
+	conn         *dbconnpool.DBConnection
+	info         dbconfigs.Connector
+	pool         *Pool
+	dbaPool      *dbconnpool.ConnectionPool
+	stats        *tabletenv.Stats
+	current      sync2.AtomicString
+	setting      string
+	resetSetting string
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
@@ -96,7 +97,7 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 	if setting == nil || setting.IsNil() {
 		return dbconn, nil
 	}
-	if err = dbconn.ApplySetting(ctx, setting.GetQuery()); err != nil {
+	if err = dbconn.ApplySetting(ctx, setting); err != nil {
 		dbconn.Close()
 		return nil, err
 	}
@@ -324,20 +325,35 @@ func (dbc *DBConn) Close() {
 	dbc.conn.Close()
 }
 
-func (dbc *DBConn) ApplySetting(ctx context.Context, setting string) error {
-	if _, err := dbc.execOnce(ctx, setting, 1, false); err != nil {
+// ApplySetting implements the pools.Resource interface.
+func (dbc *DBConn) ApplySetting(ctx context.Context, setting pools.Setting) error {
+	query := setting.GetQuery()
+	if _, err := dbc.execOnce(ctx, query, 1, false); err != nil {
 		return err
 	}
-	dbc.setting = setting
+	dbc.setting = query
+	dbc.resetSetting = setting.GetResetQuery()
 	return nil
 }
 
+// IsSettingApplied implements the pools.Resource interface.
 func (dbc *DBConn) IsSettingApplied() bool {
 	return dbc.setting != ""
 }
 
+// IsSameSetting implements the pools.Resource interface.
 func (dbc *DBConn) IsSameSetting(setting string) bool {
 	return strings.EqualFold(setting, dbc.setting)
+}
+
+// ResetSetting implements the pools.Resource interface.
+func (dbc *DBConn) ResetSetting(ctx context.Context) error {
+	if _, err := dbc.execOnce(ctx, dbc.resetSetting, 1, false); err != nil {
+		return err
+	}
+	dbc.setting = ""
+	dbc.resetSetting = ""
+	return nil
 }
 
 var _ pools.Resource = (*DBConn)(nil)

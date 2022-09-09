@@ -118,15 +118,16 @@ func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) bool {
 
 // SettingPlan represents a plan for system settings.
 type SettingPlan struct {
-	Query string
+	query      string
+	resetQuery string
 }
 
 func (s *SettingPlan) GetQuery() string {
-	return s.Query
+	return s.query
 }
 
 func (s *SettingPlan) GetResetQuery() string {
-	panic("not implemented")
+	return s.resetQuery
 }
 
 func (s *SettingPlan) IsNil() bool {
@@ -407,11 +408,11 @@ func (qe *QueryEngine) GetSettingsPlan(ctx context.Context, settings []string) (
 	}
 
 	// build the plan
-	query, err := planbuilder.BuildSettingQuery(settings)
+	query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
 	if err != nil {
 		return nil, err
 	}
-	plan := &SettingPlan{Query: query}
+	plan := &SettingPlan{query: query, resetQuery: resetQuery}
 
 	// store the plan in the cache
 	qe.plans.Set(cacheKey, plan)

@@ -25,10 +25,12 @@ func (cached *SettingPlan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(32)
 	}
-	// field Query string
-	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	// field query string
+	size += hack.RuntimeAllocSize(int64(len(cached.query)))
+	// field resetQuery string
+	size += hack.RuntimeAllocSize(int64(len(cached.resetQuery)))
 	return size
 }
 func (cached *TabletPlan) CachedSize(alloc bool) int64 {

@@ -91,8 +91,8 @@ var rpc = &_rpc{}
 // Close implements Resource for _rpc.
 func (*_rpc) Close() {}
 
-// ApplySettings implements Resource for _rpc.
-func (r *_rpc) ApplySetting(ctx context.Context, setting string) error {
+// ApplySetting implements Resource for _rpc.
+func (r *_rpc) ApplySetting(ctx context.Context, setting Setting) error {
 	// should be unreachable
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ApplySetting")
 }
@@ -103,6 +103,11 @@ func (r *_rpc) IsSettingApplied() bool {
 
 func (r *_rpc) IsSameSetting(setting string) bool {
 	return true
+}
+
+func (r *_rpc) ResetSetting(ctx context.Context) error {
+	// should be unreachable
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ResetSetting")
 }
 
 // we only ever return the same rpc pointer. it's used as a sentinel and is

@@ -63,9 +63,10 @@ type (
 	// is the responsibility of the caller.
 	Resource interface {
 		Close()
-		ApplySetting(ctx context.Context, setting string) error
+		ApplySetting(ctx context.Context, setting Setting) error
 		IsSettingApplied() bool
 		IsSameSetting(setting string) bool
+		ResetSetting(ctx context.Context) error
 	}
 
 	// Factory is a function that can be used to create a resource.
@@ -280,9 +281,13 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	// if the resource has setting applied, we will close it and return a new one
 	if wrapper.resource != nil && wrapper.resource.IsSettingApplied() {
 		rp.resetSettingCount.Add(1)
-		wrapper.resource.Close()
-		wrapper.resource = nil
-		rp.active.Add(-1)
+		err = wrapper.resource.ResetSetting(ctx)
+		if err != nil {
+			// as reset is unsuccessful, we will close this resource
+			wrapper.resource.Close()
+			wrapper.resource = nil
+			rp.active.Add(-1)
+		}
 	}
 
 	// Unwrap
@@ -334,9 +339,13 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, setting Setting) (R
 	// Checking setting hash id, if it is different, we will close the resource and return a new one later in unwrap
 	if wrapper.resource != nil && wrapper.resource.IsSettingApplied() && !wrapper.resource.IsSameSetting(setting.GetQuery()) {
 		rp.diffSettingCount.Add(1)
-		wrapper.resource.Close()
-		wrapper.resource = nil
-		rp.active.Add(-1)
+		err = wrapper.resource.ResetSetting(ctx)
+		if err != nil {
+			// as reset is unsuccessful, we will close this resource
+			wrapper.resource.Close()
+			wrapper.resource = nil
+			rp.active.Add(-1)
+		}
 	}
 
 	// Unwrap
@@ -350,7 +359,7 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, setting Setting) (R
 	}
 
 	if !wrapper.resource.IsSettingApplied() {
-		if err = wrapper.resource.ApplySetting(ctx, setting.GetQuery()); err != nil {
+		if err = wrapper.resource.ApplySetting(ctx, setting); err != nil {
 			// as we are not able to apply setting, we can return this connection to non-setting channel.
 			// TODO: may check the error code to see if it is recoverable or not.
 			rp.resources <- wrapper
