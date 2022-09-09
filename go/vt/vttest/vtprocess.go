@@ -259,8 +259,8 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
-	if *servenv.MySQLServerVersion != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", *servenv.MySQLServerVersion)
+	if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", mySQLVersion)
 	}
 
 	if socket != "" {
