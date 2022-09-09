@@ -131,3 +131,4 @@ else
 fi
 
 echo "The git branch has also been updated. You need to push it and get it merged"
+a
