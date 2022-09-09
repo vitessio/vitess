@@ -19,6 +19,16 @@ if [ "$VTROOT" != "" ]; then
     ROOT=$VTROOT
 fi
 
+if [ "$BASE_REMOTE" == "" ]; then
+  echo "Set the env var BASE_REMOTE with the name of the remote on which the release branch is located."
+  exit 1
+fi
+
+if [ "$BASE_BRANCH" == "" ]; then
+  echo "Set the env var BASE_BRANCH with the name of the branch on which the release will take place."
+  exit 1
+fi
+
 if [ "$RELEASE_VERSION" == "" ]; then
   echo "Set the env var RELEASE_VERSION with the release version"
   exit 1
