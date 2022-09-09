@@ -29,6 +29,33 @@ services:
       - "8600"
     hostname: consul3
     image: consul:latest
+  external_db_host:
+    build:
+      context: ./external_db/mysql
+      dockerfile: Dockerfile
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --gtid_mode=ON
+      - --enforce_gtid_consistency
+      - --general_log=1
+      - --slow_query_log=1
+    environment:
+      MYSQL_DATABASE: ${DB:-commerce}
+      MYSQL_PASSWORD: ${DB_PASS:-external_db_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
+      MYSQL_USER: ${DB_USER:-external_db_user}
+    healthcheck:
+      retries: 10
+      test: /usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute
+        "SHOW DATABASES;"
+      timeout: 10s
+    ports:
+      - "3306"
+    restart: always
+    volumes:
+      - ./external_db/mysql/:/docker-entrypoint-initdb.d/
+      - ./external_db/mysql/log:/var/log/mysql
   schemaload_test_keyspace:
     command:
       - sh
@@ -40,8 +67,8 @@ services:
       vttablet201:
         condition: service_healthy
     environment:
-      - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-        -topo_global_root vitess/global
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
       - WEB_PORT=8080
       - GRPC_PORT=15999
       - CELL=test
@@ -52,7 +79,7 @@ services:
       - SCHEMA_FILES=test_keyspace_schema_file.sql
       - POST_LOAD_FILE=
       - EXTERNAL_DB=0
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     volumes:
       - .:/script
   schemaload_unsharded_keyspace:
@@ -64,8 +91,8 @@ services:
       vttablet301:
         condition: service_healthy
     environment:
-      - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-        -topo_global_root vitess/global
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
       - WEB_PORT=8080
       - GRPC_PORT=15999
       - CELL=test
@@ -76,23 +103,63 @@ services:
       - SCHEMA_FILES=unsharded_keyspace_schema_file.sql
       - POST_LOAD_FILE=
       - EXTERNAL_DB=0
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
+    volumes:
+      - .:/script
+  set_keyspace_durability_policy_test_keyspace:
+    command:
+      - sh
+      - -c
+      - /script/set_keyspace_durability_policy.sh
+    depends_on:
+      - vttablet101
+      - vttablet201
+    environment:
+      - GRPC_PORT=15999
+      - KEYSPACES=test_keyspace
+    image: vitess/lite:${VITESS_TAG:-latest}
+    volumes:
+      - .:/script
+  set_keyspace_durability_policy_unsharded_keyspace:
+    command:
+      - sh
+      - -c
+      - /script/set_keyspace_durability_policy.sh
+    depends_on:
+      - vttablet301
+    environment:
+      - GRPC_PORT=15999
+      - KEYSPACES=unsharded_keyspace
+    image: vitess/lite:${VITESS_TAG:-latest}
+    volumes:
+      - .:/script
+  vreplication:
+    command:
+      - sh
+      - -c
+      - '[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0'
+    depends_on:
+      - vtctld
+    environment:
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
+      - EXTERNAL_DB=0
+    image: vitess/lite:${VITESS_TAG:-latest}
     volumes:
       - .:/script
   vtctld:
     command:
       - sh
       - -c
-      - ' $$VTROOT/bin/vtctld -topo_implementation consul -topo_global_server_address
-      consul1:8500 -topo_global_root vitess/global -cell test -workflow_manager_init
-      -workflow_manager_use_election -service_map ''grpc-vtctl'' -backup_storage_implementation
-      file -file_backup_storage_root $$VTDATAROOT/backups -logtostderr=true -port
-      8080 -grpc_port 15999 -pid_file $$VTDATAROOT/tmp/vtctld.pid '
+      - ' /vt/bin/vtctld --topo_implementation consul --topo_global_server_address consul1:8500
+      --topo_global_root vitess/global --cell test --workflow_manager_init --workflow_manager_use_election
+      --service_map ''grpc-vtctl,grpc-vtctld'' --backup_storage_implementation file
+      --file_backup_storage_root /vt/vtdataroot/backups --logtostderr=true --port
+      8080 --grpc_port 15999 '
     depends_on:
-      - consul1
-      - consul2
-      - consul3
-    image: vitess/base
+      external_db_host:
+        condition: service_healthy
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - 15000:8080
       - "15999"
@@ -102,18 +169,38 @@ services:
     command:
       - sh
       - -c
-      - '/script/run-forever.sh $$VTROOT/bin/vtgate -topo_implementation consul -topo_global_server_address
-      consul1:8500 -topo_global_root vitess/global -logtostderr=true -port 8080 -grpc_port
-      15999 -mysql_server_port 15306 -mysql_auth_server_impl none -cell test -cells_to_watch
-      test -tablet_types_to_wait PRIMARY,REPLICA,RDONLY -service_map ''grpc-vtgateservice''
-      -pid_file $$VTDATAROOT/tmp/vtgate.pid -normalize_queries=true '
+      - '/script/run-forever.sh /vt/bin/vtgate --topo_implementation consul --topo_global_server_address
+      consul1:8500 --topo_global_root vitess/global --logtostderr=true --port 8080
+      --grpc_port 15999 --mysql_server_port 15306 --mysql_auth_server_impl none --cell
+      test --cells_to_watch test --tablet_types_to_wait PRIMARY,REPLICA,RDONLY --service_map
+      ''grpc-vtgateservice'' --normalize_queries=true '
     depends_on:
       - vtctld
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - 15099:8080
       - "15999"
       - 15306:15306
+    volumes:
+      - .:/script
+  vtorc:
+    command:
+      - sh
+      - -c
+      - /script/vtorc-up.sh
+    depends_on:
+      - set_keyspace_durability_policy_unsharded_keyspace
+      - set_keyspace_durability_policy_test_keyspace
+      - vtctld
+    environment:
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
+      - EXTERNAL_DB=0
+      - DB_USER=
+      - DB_PASS=
+    image: vitess/lite:${VITESS_TAG:-latest}
+    ports:
+      - 13000:3000
     volumes:
       - .:/script
   vttablet101:
@@ -124,8 +211,8 @@ services:
     depends_on:
       - vtctld
     environment:
-      - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-        -topo_global_root vitess/global
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
       - WEB_PORT=8080
       - GRPC_PORT=15999
       - CELL=test
@@ -144,9 +231,9 @@ services:
       retries: 15
       test:
         - CMD-SHELL
-        - curl localhost:8080/debug/health
+        - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - 15101:8080
       - "15999"
@@ -161,8 +248,8 @@ services:
     depends_on:
       - vtctld
     environment:
-      - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-        -topo_global_root vitess/global
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
       - WEB_PORT=8080
       - GRPC_PORT=15999
       - CELL=test
@@ -181,9 +268,9 @@ services:
       retries: 15
       test:
         - CMD-SHELL
-        - curl localhost:8080/debug/health
+        - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - 15102:8080
       - "15999"
@@ -198,8 +285,8 @@ services:
     depends_on:
       - vtctld
     environment:
-      - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-        -topo_global_root vitess/global
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
       - WEB_PORT=8080
       - GRPC_PORT=15999
       - CELL=test
@@ -218,9 +305,9 @@ services:
       retries: 15
       test:
         - CMD-SHELL
-        - curl localhost:8080/debug/health
+        - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - 15201:8080
       - "15999"
@@ -235,8 +322,8 @@ services:
     depends_on:
       - vtctld
     environment:
-      - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-        -topo_global_root vitess/global
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
       - WEB_PORT=8080
       - GRPC_PORT=15999
       - CELL=test
@@ -255,9 +342,9 @@ services:
       retries: 15
       test:
         - CMD-SHELL
-        - curl localhost:8080/debug/health
+        - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - 15202:8080
       - "15999"
@@ -272,8 +359,8 @@ services:
     depends_on:
       - vtctld
     environment:
-      - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
-        -topo_global_root vitess/global
+      - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
+        --topo_global_root vitess/global
       - WEB_PORT=8080
       - GRPC_PORT=15999
       - CELL=test
@@ -292,9 +379,9 @@ services:
       retries: 15
       test:
         - CMD-SHELL
-        - curl localhost:8080/debug/health
+        - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - 15301:8080
       - "15999"
