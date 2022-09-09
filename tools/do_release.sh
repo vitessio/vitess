@@ -117,7 +117,11 @@ function updateVitessExamples () {
 function doRelease () {
   checkoutNewBranch "tag"
 
-  ## Wait for release notes to be injected in the code base
+  # Unfreeze the branch
+  sed -i.bak -E "s/exit (.*)/exit 0/g" ./.github/workflows/code_freeze.yml
+  rm -f ./.github/workflows/code_freeze.yml.bak
+
+  # Wait for release notes to be injected in the code base
   echo -n Pausing so relase notes can be added. Press enter to continue
   read line
 
