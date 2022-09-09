@@ -914,10 +914,6 @@ func (ins *Insert) processUnowned(ctx context.Context, vcursor VCursor, vindexCo
 		}
 
 		var mismatchVindexKeys []sqltypes.Row
-		fmt.Printf("Verified: %v\n", verified)
-		fmt.Printf("verifyIndexes: %v\n", verifyIndexes)
-		fmt.Printf("verifyKeys: %v\n", verifyIndexes)
-		fmt.Printf("verifyKsids: %v\n", verifyKsids)
 		for i, v := range verified {
 			rowNum := verifyIndexes[i]
 			if !v {
