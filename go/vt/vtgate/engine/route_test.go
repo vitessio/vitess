@@ -53,7 +53,7 @@ var defaultSelectResult = sqltypes.MakeTestResult(
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 }
 
