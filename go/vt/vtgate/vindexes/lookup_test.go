@@ -19,6 +19,7 @@ package vindexes
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -294,7 +295,7 @@ func TestLookupNonUniqueNoVerify(t *testing.T) {
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
-	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	_, err = lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
 	require.NoError(t, err)
 
 	var wantqueries []*querypb.BoundQuery
@@ -304,7 +305,7 @@ func TestLookupNonUniqueNoVerify(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	_, err = lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Errorf("lookupNonUnique(query fail) got err: %v, want %v", err, nil)
 	}
