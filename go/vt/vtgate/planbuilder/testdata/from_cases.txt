@@ -6103,3 +6103,40 @@ Gen4 plan same as above
     "user.user_extra"
   ]
 }
+
+# use a view without qualifying the keyspace
+"select * from user_details_view"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user_details_view",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1) as user_details_view where 1 != 1",
+    "Query": "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id) as user_details_view",
+    "Table": "`user`, user_extra"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user_details_view",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where 1 != 1) as user_details_view where 1 != 1",
+    "Query": "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
+    "Table": "`user`, user_extra"
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
