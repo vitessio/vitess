@@ -678,7 +678,21 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatemen
 		return nil
 	}
 
-	return ks.Views[name]
+	statement, ok := ks.Views[name]
+	if !ok {
+		return nil
+	}
+
+	// We do this to make sure there is no shared state between uses of this AST
+	statement = sqlparser.CloneSelectStatement(statement)
+	sqlparser.Rewrite(statement, func(cursor *sqlparser.Cursor) bool {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if ok {
+			cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), col.Qualifier))
+		}
+		return true
+	}, nil)
+	return statement
 }
 
 // NotFoundError represents the error where the table name was not found
