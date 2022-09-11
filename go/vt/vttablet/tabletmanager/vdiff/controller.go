@@ -72,6 +72,8 @@ type controller struct {
 	options             *tabletmanagerdata.VDiffOptions // options initially from vtctld command and later from _vt.vdiff
 
 	sourceTimeZone, targetTimeZone string // named time zones if conversions are necessary for datetime values
+
+	externalCluster string // for Mount+Migrate
 }
 
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
@@ -201,6 +203,10 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		source.vrID, _ = row["id"].ToInt64()
 		ct.sourceTimeZone = bls.SourceTimeZone
 		ct.targetTimeZone = bls.TargetTimeZone
+
+		if bls.ExternalCluster != "" {
+			ct.externalCluster = bls.ExternalCluster
+		}
 
 		ct.sources[source.shard] = source
 		if i == 0 {
