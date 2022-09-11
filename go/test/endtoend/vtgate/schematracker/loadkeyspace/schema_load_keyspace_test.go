@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -74,7 +76,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--srv_topo_no_cache_for_get=true"}
+	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--srv_topo_no_cache_for_get=false"}
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
@@ -85,7 +87,51 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	logDir := clusterInstance.VtgateProcess.LogDir
 	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
 	require.NoError(t, err)
-	require.Contains(t, string(all), "Unable to get initial schema reload")
+	require.Contains(t, string(all), "")
+
+	err = utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, keyspaceName, "test_table")
+	require.Error(t, err, "not able to find test_table in schema tracker")
+
+	// This error should not be logged as the initial load itself failed.
+	require.NotContains(t, string(all), "Unable to add keyspace to tracker")
+}
+
+func TestBlockedLoadKeyspaceWithScehmaChangeEnabled(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	var err error
+
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
+
+	// Start topo server
+	err = clusterInstance.StartTopo()
+	require.NoError(t, err)
+
+	// Start keyspace without the --queryserver-config-schema-change-signal flag
+	keyspace := &cluster.Keyspace{
+		Name:      keyspaceName,
+		SchemaSQL: sqlSchema,
+	}
+	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal=true", "--use_super_read_only=true"}
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+	require.NoError(t, err)
+
+	// Start vtgate with the schema_change_signal flag
+	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--srv_topo_no_cache_for_get=false"}
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	// wait for addKeyspaceToTracker to timeout
+	time.Sleep(30 * time.Second)
+
+	// check warning logs
+	logDir := clusterInstance.VtgateProcess.LogDir
+	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
+	require.NoError(t, err)
+	require.Contains(t, string(all), "")
+
+	err = utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, keyspaceName, "test_table")
+	require.NoError(t, err)
 
 	// This error should not be logged as the initial load itself failed.
 	require.NotContains(t, string(all), "Unable to add keyspace to tracker")

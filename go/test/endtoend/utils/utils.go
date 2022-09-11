@@ -193,6 +193,9 @@ func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks,
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
+			if t2Map == nil {
+				return fmt.Errorf("not able to find %s in schema tracker", tbl)
+			}
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
 			if !fieldPresent {
 				continue
@@ -208,9 +211,21 @@ func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks,
 
 func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 	step1 := convertToMap(*res)["keyspaces"]
+	if step1 == nil {
+		return nil
+	}
 	step2 := convertToMap(step1)[ks]
+	if step2 == nil {
+		return nil
+	}
 	step3 := convertToMap(step2)["tables"]
+	if step3 == nil {
+		return nil
+	}
 	tblMap := convertToMap(step3)[tbl]
+	if tblMap == nil {
+		return nil
+	}
 	return convertToMap(tblMap)
 }
 

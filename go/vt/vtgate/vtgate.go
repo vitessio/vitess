@@ -172,7 +172,7 @@ func Init(
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
-
+	//time.Sleep(10 * time.Second)
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
@@ -308,17 +308,25 @@ func Init(
 }
 
 func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
-	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
-	if err != nil {
-		log.Warningf("Unable to get all keyspaces: %v", err)
-		return
-	}
-	if len(keyspaces) == 0 {
-		log.Infof("No keyspace to load")
-	}
-
-	for _, keyspace := range keyspaces {
-		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
+	waitUntil := time.Now().Add(5 * time.Second)
+	for time.Now().Before(waitUntil) {
+		keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
+		if err != nil {
+			log.Warningf("Unable to get all keyspaces: %v", err)
+			return
+		}
+		if len(keyspaces) > 0 {
+			//log.Info("getCurrentValue: addKeyspaceToTracker")
+			for _, keyspace := range keyspaces {
+				resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
+			}
+			break
+		} else {
+			if len(keyspaces) == 0 {
+				log.Infof("No keyspace to load")
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

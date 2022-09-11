@@ -188,6 +188,7 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 			case <-bufferCtx.Done():
 				return
 			case result := <-hcChan:
+				//log.Info("getCurrentValue: kew.processHealthCheck(result)")
 				if result == nil {
 					return
 				}
@@ -198,6 +199,7 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 
 	go func() {
 		// Seed the keyspace statuses once at startup
+		//log.Info("getCurrentValue: kew.ts.GetSrvKeyspaceNames")
 		keyspaces, err := kew.ts.GetSrvKeyspaceNames(ctx, kew.localCell, true)
 		if err != nil {
 			log.Errorf("CEM: initialize failed for cell %q: %v", kew.localCell, err)
