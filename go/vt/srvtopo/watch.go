@@ -49,14 +49,13 @@ type watchEntry struct {
 	lastError error
 
 	lastValueTime time.Time
-	lastErrorCtx  context.Context
 	lastErrorTime time.Time
 
 	listeners []func(any, error) bool
 }
 
 type resilientWatcher struct {
-	watcher func(ctx context.Context, entry *watchEntry)
+	watcher func(entry *watchEntry)
 
 	counts               *stats.CountersWithSingleLabel
 	cacheRefreshInterval time.Duration
@@ -101,7 +100,7 @@ func (entry *watchEntry) addListener(ctx context.Context, callback func(any, err
 	callback(v, err)
 }
 
-func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
+func (entry *watchEntry) ensureWatchingLocked() {
 	switch entry.watchState {
 	case watchStateRunning, watchStateStarting:
 	case watchStateIdle:
@@ -110,7 +109,7 @@ func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
 		if shouldRefresh {
 			entry.watchState = watchStateStarting
 			entry.watchStartingChan = make(chan struct{})
-			go entry.rw.watcher(ctx, entry)
+			go entry.rw.watcher(entry)
 		}
 	}
 }
@@ -122,7 +121,7 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 		return entry.value, entry.lastError
 	}
 
-	entry.ensureWatchingLocked(ctx)
+	entry.ensureWatchingLocked()
 
 	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < entry.rw.cacheTTL
 	if cacheValid {
@@ -147,12 +146,12 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 	return nil, entry.lastError
 }
 
-func (entry *watchEntry) update(ctx context.Context, value any, err error, init bool) {
+func (entry *watchEntry) update(value any, err error, init bool) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
 	if err != nil {
-		entry.onErrorLocked(ctx, err, init)
+		entry.onErrorLocked(err, init)
 	} else {
 		entry.onValueLocked(value)
 	}
@@ -177,14 +176,12 @@ func (entry *watchEntry) onValueLocked(value any) {
 	entry.lastValueTime = time.Now()
 
 	entry.lastError = nil
-	entry.lastErrorCtx = nil
 	entry.lastErrorTime = time.Time{}
 }
 
-func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, init bool) {
+func (entry *watchEntry) onErrorLocked(err error, init bool) {
 	entry.rw.counts.Add(errorCategory, 1)
 
-	entry.lastErrorCtx = callerCtx
 	entry.lastErrorTime = time.Now()
 
 	// if the node disappears, delete the cached value
@@ -225,7 +222,7 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, ini
 			time.Sleep(entry.rw.cacheRefreshInterval)
 
 			entry.mutex.Lock()
-			entry.ensureWatchingLocked(context.Background())
+			entry.ensureWatchingLocked()
 			entry.mutex.Unlock()
 		}()
 	}

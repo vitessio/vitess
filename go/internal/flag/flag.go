@@ -57,7 +57,7 @@ func Parse(fs *flag.FlagSet) {
 
 		defer func() {
 			if help {
-				flag.Usage()
+				Usage()
 				os.Exit(0)
 			}
 		}()
@@ -67,9 +67,15 @@ func Parse(fs *flag.FlagSet) {
 	flag.Parse()
 }
 
+// Usage invokes the current CommandLine's Usage func, or if not overridden,
+// "prints a simple header and calls PrintDefaults".
+func Usage() {
+	flag.Usage()
+}
+
 // filterTestFlags returns two slices: the second one has just the flags for `go test` and the first one contains
 // the rest of the flags.
-const goTestFlagSuffix = "=test"
+const goTestFlagSuffix = "-test"
 
 func filterTestFlags() ([]string, []string) {
 	args := os.Args

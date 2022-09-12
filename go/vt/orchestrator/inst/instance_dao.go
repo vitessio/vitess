@@ -29,30 +29,25 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	vitessmysql "vitess.io/vitess/go/mysql"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-
 	"github.com/go-sql-driver/mysql"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	math "vitess.io/vitess/go/vt/orchestrator/util"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
@@ -302,6 +297,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	if err != nil {
 		goto Cleanup
 	}
+	instance.ClusterName = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
 
 	fullStatus, err = FullStatus(*instanceKey)
 	if err != nil {
@@ -639,9 +635,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
 	_ = logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 
-	// TODO(sougou): delete cluster_alias_override metadata
-	instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
-
 	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" {
 		// Only need to do on primary tablets
 		domainName := ""
@@ -781,7 +774,6 @@ func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 // instances.
 func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var primaryOrGroupPrimaryInstanceKey InstanceKey
-	var primaryOrGroupPrimaryClusterName string
 	var primaryOrGroupPrimaryReplicationDepth uint
 	var ancestryUUID string
 	var primaryOrGroupPrimaryExecutedGtidSet string
@@ -790,8 +782,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	// Read the cluster_name of the _primary_ or _group_primary_ of our instance, derive it from there.
 	query := `
 			select
-					cluster_name,
-					suggested_cluster_alias,
 					replication_depth,
 					source_host,
 					source_port,
@@ -810,7 +800,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	}
 	args := sqlutils.Args(primaryOrGroupPrimaryInstanceKey.Hostname, primaryOrGroupPrimaryInstanceKey.Port)
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		primaryOrGroupPrimaryClusterName = m.GetString("cluster_name")
 		primaryOrGroupPrimaryReplicationDepth = m.GetUint("replication_depth")
 		primaryOrGroupPrimaryInstanceKey.Hostname = m.GetString("source_host")
 		primaryOrGroupPrimaryInstanceKey.Port = m.GetInt("source_port")
@@ -825,34 +814,14 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	}
 
 	var replicationDepth uint
-	var clusterName string
 	if primaryOrGroupPrimaryDataFound {
 		replicationDepth = primaryOrGroupPrimaryReplicationDepth + 1
-		clusterName = primaryOrGroupPrimaryClusterName
 	}
-	clusterNameByInstanceKey := instance.Key.StringCode()
-	if clusterName == "" {
-		// Nothing from primary; we set it to be named after the instance itself
-		clusterName = clusterNameByInstanceKey
-	}
-
 	isCoPrimary := false
 	if primaryOrGroupPrimaryInstanceKey.Equals(&instance.Key) {
 		// co-primary calls for special case, in fear of the infinite loop
 		isCoPrimary = true
-		clusterNameByCoPrimaryKey := instance.SourceKey.StringCode()
-		if clusterName != clusterNameByInstanceKey && clusterName != clusterNameByCoPrimaryKey {
-			// Can be caused by a co-primary topology failover
-			log.Errorf("ReadInstanceClusterAttributes: in co-primary topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
-			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.SourceKey), clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
-		}
-		if clusterName == clusterNameByInstanceKey {
-			// circular replication. Avoid infinite ++ on replicationDepth
-			replicationDepth = 0
-			ancestryUUID = ""
-		} // While the other stays "1"
 	}
-	instance.ClusterName = clusterName
 	instance.ReplicationDepth = replicationDepth
 	instance.IsCoPrimary = isCoPrimary
 	instance.AncestryUUID = ancestryUUID
@@ -949,7 +918,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SQLDelay = m.GetUint("sql_delay")
 	replicasJSON := m.GetString("replica_hosts")
 	instance.ClusterName = m.GetString("cluster_name")
-	instance.SuggestedClusterAlias = m.GetString("suggested_cluster_alias")
 	instance.DataCenter = m.GetString("data_center")
 	instance.Region = m.GetString("region")
 	instance.PhysicalEnvironment = m.GetString("physical_environment")
@@ -1040,6 +1008,7 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
     	ifnull(database_instance_downtime.end_timestamp, '') as downtime_end_timestamp
 		from
 			database_instance
+			left join vitess_tablet using (hostname, port)
 			left join candidate_database_instance using (hostname, port)
 			left join hostname_unresolve using (hostname)
 			left join database_instance_downtime using (hostname, port)
@@ -1114,8 +1083,9 @@ func ReadClusterWriteablePrimary(clusterName string) ([](*Instance), error) {
 		cluster_name = ?
 		and read_only = 0
 		and (replication_depth = 0 or is_co_primary)
+		and tablet_type = ?
 	`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "replication_depth asc")
+	return readInstancesByCondition(condition, sqlutils.Args(clusterName, topodatapb.TabletType_PRIMARY), "replication_depth asc")
 }
 
 // ReadClusterPrimary returns the primary of this cluster.
@@ -1125,8 +1095,9 @@ func ReadClusterPrimary(clusterName string) ([](*Instance), error) {
 	condition := `
 		cluster_name = ?
 		and (replication_depth = 0 or is_co_primary)
+		and tablet_type = ?
 	`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "read_only asc, replication_depth asc")
+	return readInstancesByCondition(condition, sqlutils.Args(clusterName, topodatapb.TabletType_PRIMARY), "read_only asc, replication_depth asc")
 }
 
 // ReadWriteableClustersPrimaries returns writeable primaries of all clusters, but only one
@@ -1135,8 +1106,9 @@ func ReadWriteableClustersPrimaries() (instances [](*Instance), err error) {
 	condition := `
 		read_only = 0
 		and (replication_depth = 0 or is_co_primary)
+		and tablet_type = ?
 	`
-	allPrimaries, err := readInstancesByCondition(condition, sqlutils.Args(), "cluster_name asc, replication_depth asc")
+	allPrimaries, err := readInstancesByCondition(condition, sqlutils.Args(topodatapb.TabletType_PRIMARY), "cluster_name asc, replication_depth asc")
 	if err != nil {
 		return instances, err
 	}
@@ -1241,11 +1213,10 @@ func SearchInstances(searchString string) ([](*Instance), error) {
 			or instr(version, ?) > 0
 			or instr(version_comment, ?) > 0
 			or instr(concat(hostname, ':', port), ?) > 0
-			or instr(suggested_cluster_alias, ?) > 0
 			or concat(server_id, '') = ?
 			or concat(port, '') = ?
 		`
-	args := sqlutils.Args(searchString, searchString, searchString, searchString, searchString, searchString, searchString, searchString)
+	args := sqlutils.Args(searchString, searchString, searchString, searchString, searchString, searchString, searchString)
 	return readInstancesByCondition(condition, args, `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
 }
 
@@ -1574,59 +1545,6 @@ func GetHeuristicClusterPoolInstancesLag(clusterName string, pool string) (int64
 	return GetInstancesMaxLag(instances)
 }
 
-// updateInstanceClusterName
-func updateInstanceClusterName(instance *Instance) error {
-	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
-			update
-				database_instance
-			set
-				cluster_name=?
-			where
-				hostname=? and port=?
-        	`, instance.ClusterName, instance.Key.Hostname, instance.Key.Port,
-		)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-		_ = AuditOperation("update-cluster-name", &instance.Key, fmt.Sprintf("set to %s", instance.ClusterName))
-		return nil
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-// ReviewUnseenInstances reviews instances that have not been seen (suposedly dead) and updates some of their data
-func ReviewUnseenInstances() error {
-	instances, err := ReadUnseenInstances()
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	operations := 0
-	for _, instance := range instances {
-		instance := instance
-
-		primaryHostname, err := ResolveHostname(instance.SourceKey.Hostname)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-		instance.SourceKey.Hostname = primaryHostname
-		savedClusterName := instance.ClusterName
-
-		if err := ReadInstanceClusterAttributes(instance); err != nil {
-			log.Error(err)
-		} else if instance.ClusterName != savedClusterName {
-			_ = updateInstanceClusterName(instance)
-			operations++
-		}
-	}
-
-	_ = AuditOperation("review-unseen-instances", nil, fmt.Sprintf("Operations: %d", operations))
-	return err
-}
-
 // readUnseenPrimaryKeys will read list of primaries that have never been seen, and yet whose replicas
 // seem to be replicating.
 func readUnseenPrimaryKeys() ([]InstanceKey, error) {
@@ -1884,7 +1802,9 @@ func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
 		instanceKeyInformativeClusterName.Set(instanceKey.StringCode(), clusterName, cache.DefaultExpiration)
 		return nil
 	})
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return clusterName, err
 }
 
@@ -1926,11 +1846,9 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 		select
 			cluster_name,
 			count(*) as count_instances,
-			ifnull(min(alias), cluster_name) as alias,
 			ifnull(min(domain_name), '') as domain_name
 		from
 			database_instance
-			left join cluster_alias using (cluster_name)
 			left join cluster_domain_name using (cluster_name)
 		%s
 		group by
@@ -1940,10 +1858,8 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 		clusterInfo := ClusterInfo{
 			ClusterName:    m.GetString("cluster_name"),
 			CountInstances: m.GetUint("count_instances"),
-			ClusterAlias:   m.GetString("alias"),
 			ClusterDomain:  m.GetString("domain_name"),
 		}
-		clusterInfo.ApplyClusterAlias()
 		clusterInfo.ReadRecoveryInfo()
 
 		clusters = append(clusters, clusterInfo)
@@ -2152,7 +2068,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"num_replica_hosts",
 		"replica_hosts",
 		"cluster_name",
-		"suggested_cluster_alias",
 		"data_center",
 		"region",
 		"physical_environment",
@@ -2242,7 +2157,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, len(instance.Replicas))
 		args = append(args, instance.Replicas.ToJSONString())
 		args = append(args, instance.ClusterName)
-		args = append(args, instance.SuggestedClusterAlias)
 		args = append(args, instance.DataCenter)
 		args = append(args, instance.Region)
 		args = append(args, instance.PhysicalEnvironment)
@@ -2427,7 +2341,9 @@ func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) er
 			instanceKey.Hostname,
 			instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2454,7 +2370,9 @@ func UpdateInstanceLastAttemptedCheck(instanceKey *InstanceKey) error {
 			instanceKey.Hostname,
 			instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2635,7 +2553,9 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 					?, ?, ?, ?, NOW()
 				)`,
 		args...)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -2650,7 +2570,9 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 					where first_seen < NOW() - INTERVAL ? SECOND
 					`, expireSeconds,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2668,7 +2590,9 @@ func ResetInstanceRelaylogCoordinatesHistory(instanceKey *InstanceKey) error {
 				hostname=? and port=?
 				`, instanceKey.Hostname, instanceKey.Port,
 		)
-		log.Error(err)
+		if err != nil {
+			log.Error(err)
+		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -2684,14 +2608,6 @@ func FigureClusterName(clusterHint string, instanceKey *InstanceKey, thisInstanc
 		// Exact cluster name match:
 		if clusterInfo, err := ReadClusterInfo(clusterHint); err == nil && clusterInfo != nil {
 			return clusterInfo.ClusterName, nil
-		}
-		// Exact cluster alias match:
-		if clustersInfo, err := ReadClustersInfo(""); err == nil {
-			for _, clusterInfo := range clustersInfo {
-				if clusterInfo.ClusterAlias == clusterHint {
-					return clusterInfo.ClusterName, nil
-				}
-			}
 		}
 	}
 

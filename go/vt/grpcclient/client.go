@@ -102,10 +102,11 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 // what that should be.
 func DialContext(ctx context.Context, target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	grpccommon.EnableTracingOpt()
+	msgSize := grpccommon.MaxMessageSize()
 	newopts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
-			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
+			grpc.MaxCallRecvMsgSize(msgSize),
+			grpc.MaxCallSendMsgSize(msgSize),
 			grpc.WaitForReady(bool(!failFast)),
 		),
 	}
@@ -146,7 +147,7 @@ func DialContext(ctx context.Context, target string, failFast FailFast, opts ...
 
 func interceptors() []grpc.DialOption {
 	builder := &clientInterceptorBuilder{}
-	if *grpccommon.EnableGRPCPrometheus {
+	if grpccommon.EnableGRPCPrometheus() {
 		builder.Add(grpc_prometheus.StreamClientInterceptor, grpc_prometheus.UnaryClientInterceptor)
 	}
 	trace.AddGrpcClientOptions(builder.Add)

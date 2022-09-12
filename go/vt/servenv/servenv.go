@@ -29,7 +29,6 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
 	"net/url"
 	"os"
 	"os/signal"
@@ -47,6 +46,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -59,16 +59,8 @@ import (
 )
 
 var (
-	// Port is part of the flags used when calling RegisterDefaultFlags.
-	Port *int
-
-	// Flags to alter the behavior of the library.
-	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "keep running at least this long after SIGTERM before stopping")
-	onTermTimeout  = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
-	onCloseTimeout = flag.Duration("onclose_timeout", time.Nanosecond, "wait no more than this for OnClose handlers before stopping")
-	_              = flag.Int("mem-profile-rate", 512*1024, "deprecated: use '-pprof=mem' instead")
-	_              = flag.Int("mutex-profile-fraction", 0, "deprecated: use '-pprof=mutex' instead")
-	catchSigpipe   = flag.Bool("catch-sigpipe", false, "catch and ignore SIGPIPE on stdout and stderr if specified")
+	// port is part of the flags used when calling RegisterDefaultFlags.
+	port int
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -83,6 +75,30 @@ var (
 	ListeningURL url.URL
 )
 
+// Flags specific to Init, Run, and RunDefault functions.
+var (
+	lameduckPeriod = 50 * time.Millisecond
+	onTermTimeout  = 10 * time.Second
+	onCloseTimeout = time.Nanosecond
+	catchSigpipe   bool
+)
+
+// RegisterFlags installs the flags used by Init, Run, and RunDefault.
+//
+// This must be called before servenv.ParseFlags if using any of those
+// functions.
+func RegisterFlags() {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.DurationVar(&lameduckPeriod, "lameduck-period", lameduckPeriod, "keep running at least this long after SIGTERM before stopping")
+		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
+		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
+		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
+
+		// pid_file.go
+		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+	})
+}
+
 // Init is the first phase of the server startup.
 func Init() {
 	mu.Lock()
@@ -91,7 +107,7 @@ func Init() {
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr
 	// See https://golang.org/pkg/os/signal/#hdr-SIGPIPE
-	if *catchSigpipe {
+	if catchSigpipe {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGPIPE)
 		go func() {
@@ -226,12 +242,19 @@ func FireRunHooks() {
 // listening to a given port for standard connections.
 // If calling this, then call RunDefault()
 func RegisterDefaultFlags() {
-	Port = flag.Int("port", 0, "port for the server")
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.IntVar(&port, "port", port, "port for the server")
+	})
+}
+
+// Port returns the value of the `--port` flag.
+func Port() int {
+	return port
 }
 
 // RunDefault calls Run() with the parameters from the flags.
 func RunDefault() {
-	Run(*Port)
+	Run(port)
 }
 
 var (
@@ -290,14 +313,14 @@ func ParseFlags(cmd string) {
 
 	_flag.Parse(fs)
 
-	if *Version {
+	if version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
 	args := fs.Args()
 	if len(args) > 0 {
-		flag.Usage()
+		_flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 }
@@ -311,7 +334,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	_flag.Parse(fs)
 
-	if *Version {
+	if version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
@@ -341,6 +364,23 @@ func init() {
 		"vttablet",
 	} {
 		OnParseFor(cmd, trace.RegisterFlags)
+	}
+
+	// These are the binaries that make gRPC calls.
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctlclient",
+		"vtctld",
+		"vtctldclient",
+		"vtgate",
+		"vtgateclienttest",
+		"vtgr",
+		"vttablet",
+		"vttestserver",
+	} {
+		OnParseFor(cmd, grpccommon.RegisterFlags)
 	}
 
 	// Flags in package log are installed for all binaries.

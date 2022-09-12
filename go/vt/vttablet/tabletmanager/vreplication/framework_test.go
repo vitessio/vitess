@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -71,10 +72,10 @@ type LogExpectation struct {
 var heartbeatRe *regexp.Regexp
 
 // setFlag() sets a flag for a test in a non-racy way:
-//	* it registers the flag using a different flagset scope
-//	* clears other flags by passing a dummy os.Args() while parsing this flagset
-//	* sets the specific flag, if it has not already been defined
-//	* resets the os.Args() so that the remaining flagsets can be parsed correctly
+//   - it registers the flag using a different flagset scope
+//   - clears other flags by passing a dummy os.Args() while parsing this flagset
+//   - sets the specific flag, if it has not already been defined
+//   - resets the os.Args() so that the remaining flagsets can be parsed correctly
 func setFlag(flagName, flagValue string) {
 	flagSetName := "vreplication-unit-test"
 	var tmp []string
@@ -111,6 +112,7 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
 	exitCode := func() int {
 		var err error
 		env, err = testenv.Init()

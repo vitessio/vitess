@@ -142,10 +142,6 @@ func expireLostInRecoveryDowntime() error {
 	if len(instances) == 0 {
 		return nil
 	}
-	unambiguousAliases, err := ReadUnambiguousSuggestedClusterAliases()
-	if err != nil {
-		return err
-	}
 	for _, instance := range instances {
 		// We _may_ expire this downtime, but only after a minute
 		// This is a graceful period, during which other servers can claim ownership of the alias,
@@ -156,21 +152,8 @@ func expireLostInRecoveryDowntime() error {
 		if !instance.IsLastCheckValid {
 			continue
 		}
-		endDowntime := false
 		if instance.ReplicaRunning() {
 			// back, alive, replicating in some topology
-			endDowntime = true
-		} else if instance.ReplicationDepth == 0 {
-			// instance makes the appearance of a primary
-			if unambiguousKey, ok := unambiguousAliases[instance.SuggestedClusterAlias]; ok {
-				if unambiguousKey.Equals(&instance.Key) {
-					// This instance seems to be a primary, which is valid, and has a suggested alias,
-					// and is the _only_ one to have this suggested alias (i.e. no one took its place)
-					endDowntime = true
-				}
-			}
-		}
-		if endDowntime {
 			if _, err := EndDowntime(&instance.Key); err != nil {
 				return err
 			}

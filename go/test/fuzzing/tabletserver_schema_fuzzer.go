@@ -64,7 +64,7 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 		IdleTimeoutSeconds: 10,
 	})
 	connPool.Open(appParams, dbaParams, appParams)
-	conn, err := connPool.Get(ctx)
+	conn, err := connPool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

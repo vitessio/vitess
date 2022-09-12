@@ -36,7 +36,6 @@ Usage of vttablet:
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
-      --cpu_profile string                                               deprecated: use '-pprof=cpu' instead
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --db-config-allprivs-charset string                                deprecated: use db_charset (default "utf8mb4")
@@ -220,7 +219,7 @@ Usage of vttablet:
       --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
       --grpc_enable_optional_tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
-      --grpc_enable_tracing                                              Enable GRPC tracing
+      --grpc_enable_tracing                                              Enable gRPC tracing.
       --grpc_initial_conn_window_size int                                gRPC initial connection window size
       --grpc_initial_window_size int                                     gRPC initial window size
       --grpc_keepalive_time duration                                     After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
@@ -229,8 +228,8 @@ Usage of vttablet:
       --grpc_max_connection_age duration                                 Maximum age of a client connection before GoAway is sent. (default 2562047h47m16.854775807s)
       --grpc_max_connection_age_grace duration                           Additional grace period after grpc_max_connection_age, after which connections are forcibly closed. (default 2562047h47m16.854775807s)
       --grpc_max_message_size int                                        Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
-      --grpc_port int                                                    Port to listen on for gRPC calls
-      --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus
+      --grpc_port int                                                    Port to listen on for gRPC calls. If zero, do not listen.
+      --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus.
       --grpc_server_ca string                                            path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --grpc_server_initial_conn_window_size int                         gRPC server initial connection window size
       --grpc_server_initial_window_size int                              gRPC server initial window size
@@ -239,7 +238,7 @@ Usage of vttablet:
       --health_check_interval duration                                   Interval between health checks (default 20s)
       --heartbeat_enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.
       --heartbeat_interval duration                                      How frequently to read and write replication heartbeat. (default 1s)
-      --heartbeat_on_demand_duration duration                            If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests (default 0s)
+      --heartbeat_on_demand_duration duration                            If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
   -h, --help                                                             display usage and exit
       --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
@@ -265,9 +264,7 @@ Usage of vttablet:
       --logtostderr                                                      log to standard error instead of files
       --master_connect_retry duration                                    Deprecated, use -replication_connect_retry (default 10s)
       --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
-      --mem-profile-rate int                                             deprecated: use '-pprof=mem' instead (default 524288)
       --migration_check_interval duration                                Interval between migration checks (default 1m0s)
-      --mutex-profile-fraction int                                       deprecated: use '-pprof=mutex' instead
       --mycnf-file string                                                path to my.cnf, if reading all config params from there
       --mycnf_bin_log_path string                                        mysql binlog path
       --mycnf_data_dir string                                            data directory for mysql
@@ -303,7 +300,7 @@ Usage of vttablet:
       --pitr_gtid_lookup_timeout duration                                PITR restore parameter: timeout for fetching gtid from timestamp. (default 1m0s)
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
       --port int                                                         port for the server
-      --pprof string                                                     enable profiling
+      --pprof strings                                                    enable profiling
       --pt-osc-path string                                               override default pt-online-schema-change binary full path
       --publish_retry_interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
@@ -317,6 +314,7 @@ Usage of vttablet:
       --queryserver-config-idle-timeout float                            query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance. (default 1800)
       --queryserver-config-max-result-size int                           query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries. (default 10000)
       --queryserver-config-message-postpone-cap int                      query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem. (default 4)
+      --queryserver-config-olap-transaction-timeout float                query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed (default 30)
       --queryserver-config-passthrough-dmls                              query server pass through all dml statements without rewriting
       --queryserver-config-pool-prefill-parallelism int                  (DEPRECATED) query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.
       --queryserver-config-pool-size int                                 query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction) (default 16)
@@ -343,6 +341,7 @@ Usage of vttablet:
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
       --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
+      --queryserver_enable_settings_pool                                 Enable pooling of connections with modified system settings
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --relay_log_max_items int                                          Maximum number of rows for VReplication target buffering. (default 5000)
       --relay_log_max_size int                                           Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)
@@ -363,8 +362,8 @@ Usage of vttablet:
       --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --service_map StringList                                           comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
-      --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state (default 0s)
+      --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard_sync_retry_delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
       --shutdown_grace_period float                                      how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)

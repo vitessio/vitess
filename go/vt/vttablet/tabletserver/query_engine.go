@@ -96,6 +96,23 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
+func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) bool {
+	if !ep.NeedsReservedConn {
+		return true
+	}
+	switch ep.PlanID {
+	case planbuilder.PlanSelectLockFunc, planbuilder.PlanDDL:
+		if hasReservedCon {
+			return true
+		}
+	case planbuilder.PlanSet:
+		if hasReservedCon || hasSysSettings {
+			return true
+		}
+	}
+	return false
+}
+
 // _______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -248,7 +265,7 @@ func (qe *QueryEngine) Open() error {
 
 	qe.conns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 
-	conn, err := qe.conns.Get(tabletenv.LocalContext())
+	conn, err := qe.conns.Get(tabletenv.LocalContext(), nil)
 	if err != nil {
 		qe.conns.Close()
 		return err
@@ -287,7 +304,7 @@ func (qe *QueryEngine) Close() {
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, reservedConnID int64) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 	if !skipQueryPlanCache {
@@ -308,7 +325,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, qe.tables, reservedConnID != 0, qe.env.Config().DB.DBName)
+	splan, err := planbuilder.Build(statement, qe.tables, qe.env.Config().DB.DBName)
 	if err != nil {
 		return nil, err
 	}
@@ -326,10 +343,10 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (qe *QueryEngine) GetStreamPlan(sql string, isReservedConn bool) (*TabletPlan, error) {
+func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
-	splan, err := planbuilder.BuildStreaming(sql, qe.tables, isReservedConn)
+	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +565,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
 	for _, v := range items {
 		var query string
-		if *streamlog.RedactDebugUIQueries {
+		if streamlog.GetRedactDebugUIQueries() {
 			query, _ = sqlparser.RedactSQLQuery(v.Query)
 		} else {
 			query = v.Query

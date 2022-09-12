@@ -273,7 +273,6 @@ func prepareCommand(command string, topologyRecovery *TopologyRecovery) (result 
 	command = strings.Replace(command, "{failedHost}", analysisEntry.AnalyzedInstanceKey.Hostname, -1)
 	command = strings.Replace(command, "{failedPort}", fmt.Sprintf("%d", analysisEntry.AnalyzedInstanceKey.Port), -1)
 	command = strings.Replace(command, "{failureCluster}", analysisEntry.ClusterDetails.ClusterName, -1)
-	command = strings.Replace(command, "{failureClusterAlias}", analysisEntry.ClusterDetails.ClusterAlias, -1)
 	command = strings.Replace(command, "{failureClusterDomain}", analysisEntry.ClusterDetails.ClusterDomain, -1)
 	command = strings.Replace(command, "{countReplicas}", fmt.Sprintf("%d", analysisEntry.CountReplicas), -1)
 	command = strings.Replace(command, "{isDowntimed}", fmt.Sprint(analysisEntry.IsDowntimed), -1)
@@ -311,7 +310,6 @@ func applyEnvironmentVariables(topologyRecovery *TopologyRecovery) []string {
 	env = append(env, fmt.Sprintf("ORC_FAILED_HOST=%s", analysisEntry.AnalyzedInstanceKey.Hostname))
 	env = append(env, fmt.Sprintf("ORC_FAILED_PORT=%d", analysisEntry.AnalyzedInstanceKey.Port))
 	env = append(env, fmt.Sprintf("ORC_FAILURE_CLUSTER=%s", analysisEntry.ClusterDetails.ClusterName))
-	env = append(env, fmt.Sprintf("ORC_FAILURE_CLUSTER_ALIAS=%s", analysisEntry.ClusterDetails.ClusterAlias))
 	env = append(env, fmt.Sprintf("ORC_FAILURE_CLUSTER_DOMAIN=%s", analysisEntry.ClusterDetails.ClusterDomain))
 	env = append(env, fmt.Sprintf("ORC_COUNT_REPLICAS=%d", analysisEntry.CountReplicas))
 	env = append(env, fmt.Sprintf("ORC_IS_DOWNTIMED=%v", analysisEntry.IsDowntimed))
@@ -665,18 +663,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 			}
 			topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadPrimary, detaching promoted primary host %+v", promotedReplica.Key))
 		}
-		func() error {
-			before := analysisEntry.AnalyzedInstanceKey.StringCode()
-			after := promotedReplica.Key.StringCode()
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: updating cluster_alias: %v -> %v", before, after))
-			//~~~inst.ReplaceClusterName(before, after)
-			if alias := analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
-				inst.SetClusterAlias(promotedReplica.Key.StringCode(), alias)
-			} else {
-				inst.ReplaceAliasClusterName(before, after)
-			}
-			return nil
-		}()
 
 		attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 
@@ -801,7 +787,9 @@ func emergentlyRestartReplicationOnTopologyInstanceReplicas(instanceKey *inst.In
 
 func emergentlyRecordStaleBinlogCoordinates(instanceKey *inst.InstanceKey, binlogCoordinates *inst.BinlogCoordinates) {
 	err := inst.RecordStaleInstanceBinlogCoordinates(instanceKey, binlogCoordinates)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 // checkAndExecuteFailureDetectionProcesses tries to register for failure detection and potentially executes
@@ -1071,14 +1059,18 @@ func CheckAndRecover(specificInstance *inst.InstanceKey, candidateInstanceKey *i
 			// force mode. Keep it synchronuous
 			var topologyRecovery *TopologyRecovery
 			recoveryAttempted, topologyRecovery, err = executeCheckAndRecoverFunction(analysisEntry, candidateInstanceKey, true, skipProcesses)
-			log.Error(err)
+			if err != nil {
+				log.Error(err)
+			}
 			if topologyRecovery != nil {
 				promotedReplicaKey = topologyRecovery.SuccessorKey
 			}
 		} else {
 			go func() {
 				_, _, err := executeCheckAndRecoverFunction(analysisEntry, candidateInstanceKey, false, skipProcesses)
-				log.Error(err)
+				if err != nil {
+					log.Error(err)
+				}
 			}()
 		}
 	}
@@ -1298,20 +1290,6 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 	if promotedReplica != nil {
 		// Success!
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.Key))
-
-		func() error {
-			before := analysisEntry.AnalyzedInstanceKey.StringCode()
-			after := promotedReplica.Key.StringCode()
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- %+v: updating cluster_alias: %v -> %v", analysisEntry.Analysis, before, after))
-			//~~~inst.ReplaceClusterName(before, after)
-			if alias := analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
-				inst.SetClusterAlias(promotedReplica.Key.StringCode(), alias)
-			} else {
-				inst.ReplaceAliasClusterName(before, after)
-			}
-			return nil
-		}()
-
 		attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 	}
 }
@@ -1323,7 +1301,7 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
-	log.Infof("Analysis: %v, will elect a new primary: %v", analysisEntry.Analysis, analysisEntry.SuggestedClusterAlias)
+	log.Infof("Analysis: %v, will elect a new primary: %v", analysisEntry.Analysis, analysisEntry.ClusterDetails.ClusterName)
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.

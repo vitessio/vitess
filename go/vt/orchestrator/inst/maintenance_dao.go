@@ -163,7 +163,9 @@ func InMaintenance(instanceKey *InstanceKey) (inMaintenance bool, err error) {
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return inMaintenance, err
 }
 
@@ -189,7 +191,9 @@ func ReadMaintenanceInstanceKey(maintenanceToken int64) (*InstanceKey, error) {
 		return nil
 	})
 
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return res, err
 }
 

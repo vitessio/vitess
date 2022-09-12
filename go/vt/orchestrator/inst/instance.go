@@ -24,8 +24,9 @@ import (
 	"strings"
 	"time"
 
+	math "vitess.io/vitess/go/vt/orchestrator/util"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
@@ -80,7 +81,6 @@ type Instance struct {
 	ReplicationLagSeconds              sql.NullInt64
 	Replicas                           InstanceKeyMap
 	ClusterName                        string
-	SuggestedClusterAlias              string
 	DataCenter                         string
 	Region                             string
 	PhysicalEnvironment                string

@@ -54,8 +54,11 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		Version:  EtcdVersion(initial.Kvs[0].ModRevision),
 	}
 
+	// Create an outer context that will be canceled on return and will cancel all inner watches.
+	outerCtx, outerCancel := context.WithCancel(ctx)
+
 	// Create a context, will be used to cancel the watch on retry.
-	watchCtx, watchCancel := context.WithCancel(ctx)
+	watchCtx, watchCancel := context.WithCancel(outerCtx)
 
 	// Create the Watcher.  We start watching from the response we
 	// got, not from the file original version, as the server may
@@ -63,6 +66,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	watcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Header.Revision))
 	if watcher == nil {
 		watchCancel()
+		outerCancel()
 		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Watch failed")
 	}
 
@@ -70,7 +74,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	notifications := make(chan *topo.WatchData, 10)
 	go func() {
 		defer close(notifications)
-		defer watchCancel()
+		defer outerCancel()
 
 		var currVersion = initial.Header.Revision
 		var watchRetries int
@@ -87,11 +91,15 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			case wresp, ok := <-watcher:
 				if !ok {
 					if watchRetries > 10 {
+						t := time.NewTimer(time.Duration(watchRetries) * time.Second)
 						select {
-						case <-time.After(time.Duration(watchRetries) * time.Second):
+						case <-t.C:
+							t.Stop()
 						case <-s.running:
+							t.Stop()
 							continue
 						case <-watchCtx.Done():
+							t.Stop()
 							continue
 						}
 					}
@@ -170,8 +178,11 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		initialwd = append(initialwd, &wd)
 	}
 
+	// Create an outer context that will be canceled on return and will cancel all inner watches.
+	outerCtx, outerCancel := context.WithCancel(ctx)
+
 	// Create a context, will be used to cancel the watch on retry.
-	watchCtx, watchCancel := context.WithCancel(ctx)
+	watchCtx, watchCancel := context.WithCancel(outerCtx)
 
 	// Create the Watcher.  We start watching from the response we
 	// got, not from the file original version, as the server may
@@ -179,6 +190,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 	watcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Header.Revision), clientv3.WithPrefix())
 	if watcher == nil {
 		watchCancel()
+		outerCancel()
 		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Watch failed")
 	}
 
@@ -186,7 +198,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 	notifications := make(chan *topo.WatchDataRecursive, 10)
 	go func() {
 		defer close(notifications)
-		defer watchCancel()
+		defer outerCancel()
 
 		var currVersion = initial.Header.Revision
 		var watchRetries int
