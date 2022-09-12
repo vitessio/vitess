@@ -94,11 +94,6 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE
-			cluster_alias
-			ADD UNIQUE KEY alias_uidx (alias)
-	`,
-	`
-		ALTER TABLE
 			database_instance
 			ADD COLUMN is_co_primary TINYINT UNSIGNED NOT NULL AFTER replication_depth
 	`,
@@ -121,11 +116,6 @@ var generateSQLPatches = []string{
 		ALTER TABLE
 			topology_recovery
 			ADD COLUMN cluster_name          varchar(128) CHARACTER SET ascii NOT NULL
-	`,
-	`
-		ALTER TABLE
-			topology_recovery
-			ADD COLUMN cluster_alias         varchar(128) CHARACTER SET ascii NOT NULL
 	`,
 	`
 		ALTER TABLE
@@ -180,19 +170,6 @@ var generateSQLPatches = []string{
 		ALTER TABLE
 			database_instance
 			ADD COLUMN server_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER server_id
-	`,
-	`
-		ALTER TABLE
-			database_instance
-			ADD COLUMN suggested_cluster_alias varchar(128) CHARACTER SET ascii NOT NULL AFTER cluster_name
-	`,
-	`
-		ALTER TABLE cluster_alias
-			ADD COLUMN last_registered TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-	`,
-	`
-		ALTER TABLE cluster_alias
-			ADD KEY last_registered_idx (last_registered)
 	`,
 	`
 		ALTER TABLE
@@ -453,9 +430,6 @@ var generateSQLPatches = []string{
 	`,
 	`
 		CREATE INDEX end_timestamp_idx_database_instance_downtime ON database_instance_downtime(end_timestamp)
-	`,
-	`
-		CREATE INDEX suggested_cluster_alias_idx_database_instance ON database_instance(suggested_cluster_alias)
 	`,
 	`
 		ALTER TABLE

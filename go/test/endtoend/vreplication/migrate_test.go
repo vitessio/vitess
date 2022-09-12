@@ -48,15 +48,6 @@ func TestMigrate(t *testing.T) {
 	allCellNames = "zone1"
 	vc = NewVitessCluster(t, "TestMigrate", cells, mainClusterConfig)
 
-	// VDiff2 does not support this mount+migrate use case today
-	// TODO: add support for this in the tablet picker phase
-	if runVDiffsSideBySide {
-		runVDiffsSideBySide = false
-		defer func() {
-			runVDiffsSideBySide = true
-		}()
-	}
-
 	require.NotNil(t, vc)
 	defaultReplicas = 0
 	defaultRdonly = 0

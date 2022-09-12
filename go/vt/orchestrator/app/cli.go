@@ -504,15 +504,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		}
 	case registerCliCommand("reattach-replica-primary-host", "Replication, general", `Undo a detach-replica-primary-host operation`):
 		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
-			}
-			_, err := inst.ReattachReplicaPrimaryHost(instanceKey)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(instanceKey.DisplayString())
+			fmt.Println("Command deprecated")
 		}
 	case registerCliCommand("primary-pos-wait", "Replication, general", `Wait until replica reaches given replication coordinates (--binlog=file:pos)`):
 		{
@@ -671,7 +663,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal(err)
 			}
 			for _, clusterPoolInstance := range clusterPoolInstances {
-				fmt.Printf("%s\t%s\t%s\t%s:%d\n", clusterPoolInstance.ClusterName, clusterPoolInstance.ClusterAlias, clusterPoolInstance.Pool, clusterPoolInstance.Hostname, clusterPoolInstance.Port)
+				fmt.Printf("%s\t%s\t%s:%d\n", clusterPoolInstance.ClusterName, clusterPoolInstance.Pool, clusterPoolInstance.Hostname, clusterPoolInstance.Port)
 			}
 		}
 	case registerCliCommand("which-heuristic-cluster-pool-instances", "Pools", `List instances of a given cluster which are in either any pool or in a specific pool`):
@@ -731,7 +723,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal(err)
 			}
 			for _, cluster := range clusters {
-				fmt.Printf("%s\t%s\n", cluster.ClusterName, cluster.ClusterAlias)
+				fmt.Printf("%s\n", cluster.ClusterName)
 			}
 		}
 	case registerCliCommand("all-clusters-primaries", "Information", `List of writeable primaries, one per cluster`):
@@ -804,7 +796,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Println(clusterInfo.ClusterAlias)
+			fmt.Println(clusterInfo.ClusterName)
 		}
 	case registerCliCommand("which-cluster-domain", "Information", `Output the domain name of the cluster an instance belongs to, or error if unknown to orchestrator`):
 		{

@@ -17,13 +17,13 @@ limitations under the License.
 package sqlparser
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -108,8 +108,8 @@ func Parse2(sql string) (Statement, BindVars, error) {
 func checkParserVersionFlag() {
 	if flag.Parsed() {
 		versionFlagSync.Do(func() {
-			if *servenv.MySQLServerVersion != "" {
-				convVersion, err := convertMySQLVersionToCommentVersion(*servenv.MySQLServerVersion)
+			if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
+				convVersion, err := convertMySQLVersionToCommentVersion(mySQLVersion)
 				if err != nil {
 					log.Error(err)
 				} else {

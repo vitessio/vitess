@@ -102,9 +102,9 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 	}, nil
 }
 
-// PickForStreaming picks an available tablet
+// PickForStreaming picks an available tablet.
 // All tablets that belong to tp.cells are evaluated and one is
-// chosen at random
+// chosen at random.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
 	rand.Seed(time.Now().UnixNano())
 	// keep trying at intervals (tabletPickerRetryDelay) until a tablet is found

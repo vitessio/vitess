@@ -180,6 +180,7 @@ Usage of vttablet:
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
+      --disable-replication-manager                                      Disable replication manager to prevent replication repairs.
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
