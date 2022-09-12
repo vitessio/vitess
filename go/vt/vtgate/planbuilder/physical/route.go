@@ -606,6 +606,8 @@ func (r *Route) planCompositeInOpRecursive(
 	return foundVindex
 }
 
+// Reset all vindex predicates on this route and re-build their options from
+// the list of seen routing predicates.
 func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	switch r.RouteOpCode {
 	case engine.DBA, engine.Next, engine.Reference, engine.Unsharded:
