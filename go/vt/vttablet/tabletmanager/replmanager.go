@@ -115,8 +115,9 @@ func (rm *replManager) checkActionLocked() {
 			// Maybe the primary host-port changed, or something else happened. This could be an ephemeral error, so we should
 			// try and fix it.
 		} else if status.SQLHealthy() || status.IOHealthy() {
+			// If both threads are fine then there is no need to repair.
 			// If only one of the threads is stopped, it's probably
-			// intentional. So, we don't repair replication.
+			// intentional. So, we don't repair replication if either thread is healthy.
 			return
 		}
 	}
