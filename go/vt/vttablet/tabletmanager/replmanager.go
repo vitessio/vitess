@@ -109,17 +109,24 @@ func (rm *replManager) checkActionLocked() {
 			return
 		}
 	} else {
-		if status.SQLHealthy() && status.IOState == mysql.ReplicationStateConnecting && status.LastIOError != "" {
-			// SQL thread is healthy, but IO thread is in Connecting state with an IO Error,
-			// then we know that no Vitess operation stopped the IO thread and it is having trouble connecting to the primary
-			// Maybe the primary host-port changed, or something else happened. This could be an ephemeral error, so we should
-			// try and fix it.
-		} else if status.SQLHealthy() || status.IOHealthy() {
-			// If both threads are fine then there is no need to repair.
-			// If only one of the threads is stopped, it's probably
-			// intentional. So, we don't repair replication if either thread is healthy.
+		// Cases to consider for replication repair -
+		// 1. If both the threads are healthy, then there is nothing to repair.
+		// 2. If the IO thread is healthy but SQL thread isn't, then we assume it is intentional, and we don't repair replication.
+		// 3. If SQL thread is healthy but IO thread is in Connecting state with an IO Error, then we know that no Vitess operation stopped the IO thread
+		//	  and it is having trouble connecting to the primary Maybe the primary host-port changed, or something else happened.
+		//	  This could be an ephemeral error, so we should try and fix it.
+		// 4. If SQL thread is healthy but IO thread is stopped, then we assume it is intentional, and we don't repair replication.
+		// 5. Both the threads are unhealthy, then we need to repair replication
+		if status.IOHealthy() {
+			// This covers cases 1 and 2.
 			return
 		}
+		if status.SQLHealthy() && (status.IOState != mysql.ReplicationStateConnecting || status.LastIOError == "") {
+			// This covers case 4.
+			return
+		}
+		// We now attempt to repair replication.
+		// This covers cases 3 and 5.
 	}
 
 	if !rm.failed {
