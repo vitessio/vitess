@@ -43,6 +43,7 @@ type lookupInternal struct {
 	Upsert               bool     `json:"upsert,omitempty"`
 	IgnoreNulls          bool     `json:"ignore_nulls,omitempty"`
 	BatchLookup          bool     `json:"batch_lookup,omitempty"`
+	NoVerify             bool     `json:"no_verify,omitempty"`
 	sel, ver, del        string   // sel: map query, ver: verify query, del: delete query
 }
 
@@ -61,6 +62,10 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 		return err
 	}
 	lkp.BatchLookup, err = boolFromMap(lookupQueryParams, "batch_lookup")
+	if err != nil {
+		return err
+	}
+	lkp.NoVerify, err = boolFromMap(lookupQueryParams, "no_verify")
 	if err != nil {
 		return err
 	}
@@ -91,7 +96,7 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 		co = vtgatepb.CommitOrder_AUTOCOMMIT
 	}
 	sel := lkp.sel
-	if vcursor.InTransactionAndIsDML() {
+	if vcursor.InTransactionAndIsDML() && !lkp.NoVerify {
 		sel = sel + " for update"
 	}
 	if ids[0].IsIntegral() || lkp.BatchLookup {
