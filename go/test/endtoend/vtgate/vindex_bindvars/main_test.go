@@ -41,6 +41,7 @@ var (
     id BIGINT NOT NULL,
     field BIGINT NOT NULL,
     field2 BIGINT,
+    field3 BIGINT,
     PRIMARY KEY (id)
 ) ENGINE=Innodb;
 
@@ -54,6 +55,12 @@ CREATE TABLE lookup2 (
     field2 BIGINT NOT NULL,
     keyspace_id binary(8),
     UNIQUE KEY (field2)
+) ENGINE=Innodb;
+
+CREATE TABLE lookup3 (
+    field3 BIGINT NOT NULL,
+    keyspace_id binary(8),
+    UNIQUE KEY (field3)
 ) ENGINE=Innodb;
 
 CREATE TABLE thex (
@@ -88,7 +95,7 @@ CREATE TABLE thex (
                 "table": "lookup1",
                 "from": "field",
                 "to": "keyspace_id",
-		"ignore_nulls": "true"
+                "ignore_nulls": "true"
             },
             "owner": "t1"
         },
@@ -98,7 +105,17 @@ CREATE TABLE thex (
                 "table": "lookup2",
                 "from": "field2",
                 "to": "keyspace_id",
-		"ignore_nulls": "true"
+                "ignore_nulls": "true"
+            },
+            "owner": "t1"
+        },
+        "lookup3": {
+            "type": "lookup",
+            "params": {
+                "from": "field3",
+                "no_verify": "true",
+                "table": "lookup3",
+                "to": "keyspace_id"
             },
             "owner": "t1"
         }
@@ -117,6 +134,10 @@ CREATE TABLE thex (
                 {
                     "column": "field2",
                     "name": "lookup2"
+                },
+                {
+                    "column": "field3",
+                    "name": "lookup3"
                 }
             ]
         },
@@ -133,6 +154,14 @@ CREATE TABLE thex (
                 {
                     "column": "field2",
                     "name": "hash"
+                }
+            ]
+        },
+        "lookup3": {
+            "column_vindexes": [
+                {
+                    "column": "field3",
+                    "name": "binary_md5_vdx"
                 }
             ]
         },
@@ -216,51 +245,51 @@ func TestVindexBindVarOverlap(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "INSERT INTO t1 (id, field, field2) VALUES "+
-		"(0,1,2), "+
-		"(1,2,3), "+
-		"(2,3,4), "+
-		"(3,4,5), "+
-		"(4,5,6), "+
-		"(5,6,7), "+
-		"(6,7,8), "+
-		"(7,8,9), "+
-		"(8,9,10), "+
-		"(9,10,11), "+
-		"(10,11,12), "+
-		"(11,12,13), "+
-		"(12,13,14), "+
-		"(13,14,15), "+
-		"(14,15,16), "+
-		"(15,16,17), "+
-		"(16,17,18), "+
-		"(17,18,19), "+
-		"(18,19,20), "+
-		"(19,20,21), "+
-		"(20,21,22)")
-	result := utils.Exec(t, conn, "select id, field, field2 from t1 order by id")
+	utils.Exec(t, conn, "INSERT INTO t1 (id, field, field2, field3) VALUES "+
+		"(0,1,2,3), "+
+		"(1,2,3,4), "+
+		"(2,3,4,5), "+
+		"(3,4,5,6), "+
+		"(4,5,6,7), "+
+		"(5,6,7,8), "+
+		"(6,7,8,9), "+
+		"(7,8,9,10), "+
+		"(8,9,10,11), "+
+		"(9,10,11,12), "+
+		"(10,11,12,13), "+
+		"(11,12,13,14), "+
+		"(12,13,14,15), "+
+		"(13,14,15,16), "+
+		"(14,15,16,17), "+
+		"(15,16,17,18), "+
+		"(16,17,18,19), "+
+		"(17,18,19,20), "+
+		"(18,19,20,21), "+
+		"(19,20,21,22), "+
+		"(20,21,22,23)")
+	result := utils.Exec(t, conn, "select id, field, field2, field3 from t1 order by id")
 
 	expected :=
-		"[[INT64(0) INT64(1) INT64(2)] " +
-			"[INT64(1) INT64(2) INT64(3)] " +
-			"[INT64(2) INT64(3) INT64(4)] " +
-			"[INT64(3) INT64(4) INT64(5)] " +
-			"[INT64(4) INT64(5) INT64(6)] " +
-			"[INT64(5) INT64(6) INT64(7)] " +
-			"[INT64(6) INT64(7) INT64(8)] " +
-			"[INT64(7) INT64(8) INT64(9)] " +
-			"[INT64(8) INT64(9) INT64(10)] " +
-			"[INT64(9) INT64(10) INT64(11)] " +
-			"[INT64(10) INT64(11) INT64(12)] " +
-			"[INT64(11) INT64(12) INT64(13)] " +
-			"[INT64(12) INT64(13) INT64(14)] " +
-			"[INT64(13) INT64(14) INT64(15)] " +
-			"[INT64(14) INT64(15) INT64(16)] " +
-			"[INT64(15) INT64(16) INT64(17)] " +
-			"[INT64(16) INT64(17) INT64(18)] " +
-			"[INT64(17) INT64(18) INT64(19)] " +
-			"[INT64(18) INT64(19) INT64(20)] " +
-			"[INT64(19) INT64(20) INT64(21)] " +
-			"[INT64(20) INT64(21) INT64(22)]]"
+		"[[INT64(0) INT64(1) INT64(2) INT64(3)] " +
+			"[INT64(1) INT64(2) INT64(3) INT64(4)] " +
+			"[INT64(2) INT64(3) INT64(4) INT64(5)] " +
+			"[INT64(3) INT64(4) INT64(5) INT64(6)] " +
+			"[INT64(4) INT64(5) INT64(6) INT64(7)] " +
+			"[INT64(5) INT64(6) INT64(7) INT64(8)] " +
+			"[INT64(6) INT64(7) INT64(8) INT64(9)] " +
+			"[INT64(7) INT64(8) INT64(9) INT64(10)] " +
+			"[INT64(8) INT64(9) INT64(10) INT64(11)] " +
+			"[INT64(9) INT64(10) INT64(11) INT64(12)] " +
+			"[INT64(10) INT64(11) INT64(12) INT64(13)] " +
+			"[INT64(11) INT64(12) INT64(13) INT64(14)] " +
+			"[INT64(12) INT64(13) INT64(14) INT64(15)] " +
+			"[INT64(13) INT64(14) INT64(15) INT64(16)] " +
+			"[INT64(14) INT64(15) INT64(16) INT64(17)] " +
+			"[INT64(15) INT64(16) INT64(17) INT64(18)] " +
+			"[INT64(16) INT64(17) INT64(18) INT64(19)] " +
+			"[INT64(17) INT64(18) INT64(19) INT64(20)] " +
+			"[INT64(18) INT64(19) INT64(20) INT64(21)] " +
+			"[INT64(19) INT64(20) INT64(21) INT64(22)] " +
+			"[INT64(20) INT64(21) INT64(22) INT64(23)]]"
 	assert.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }

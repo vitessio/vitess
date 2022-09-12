@@ -43,6 +43,7 @@ func init() {
 type LookupNonUnique struct {
 	name      string
 	writeOnly bool
+	noVerify  bool
 	lkp       lookupInternal
 }
 
@@ -108,7 +109,7 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Des
 
 // Verify returns true if ids maps to ksids.
 func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	if ln.writeOnly {
+	if ln.writeOnly || ln.noVerify {
 		out := make([]bool, len(ids))
 		for i := range ids {
 			out[i] = true
@@ -140,13 +141,16 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 
 // NewLookup creates a LookupNonUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//	no_verify: in this mode, Verify will always succeed.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
 
@@ -155,6 +159,11 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 	lookup.writeOnly, err = boolFromMap(m, "write_only")
+	if err != nil {
+		return nil, err
+	}
+
+	lookup.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
 		return nil, err
 	}
@@ -183,18 +192,22 @@ func ksidsToValues(ksids [][]byte) []sqltypes.Value {
 type LookupUnique struct {
 	name      string
 	writeOnly bool
+	noVerify  bool
 	lkp       lookupInternal
 }
 
 // NewLookupUnique creates a LookupUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//	no_verify: in this mode, Verify will always succeed.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
 
@@ -203,6 +216,11 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 	lu.writeOnly, err = boolFromMap(m, "write_only")
+	if err != nil {
+		return nil, err
+	}
+
+	lu.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +284,7 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 
 // Verify returns true if ids maps to ksids.
 func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	if lu.writeOnly {
+	if lu.writeOnly || lu.noVerify {
 		out := make([]bool, len(ids))
 		for i := range ids {
 			out[i] = true

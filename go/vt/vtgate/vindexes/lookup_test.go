@@ -321,6 +321,52 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	}
 }
 
+func TestLookupNonUniqueNoVerify(t *testing.T) {
+	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":     "t",
+		"from":      "fromc",
+		"to":        "toc",
+		"no_verify": "true",
+	})
+	require.NoError(t, err)
+	lookupNonUnique := vindex.(SingleColumn)
+	vc := &vcursor{numRows: 1}
+
+	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	require.NoError(t, err)
+
+	var wantqueries []*querypb.BoundQuery
+	utils.MustMatch(t, vc.queries, wantqueries)
+
+	// Test query fail.
+	vc.mustFail = true
+	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	require.NoError(t, err)
+}
+
+func TestLookupUniqueNoVerify(t *testing.T) {
+	vindex, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+		"table":     "t",
+		"from":      "fromc",
+		"to":        "toc",
+		"no_verify": "true",
+	})
+	require.NoError(t, err)
+	lookupUnique := vindex.(SingleColumn)
+	vc := &vcursor{numRows: 1}
+
+	_, err = lookupUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	require.NoError(t, err)
+
+	var wantqueries []*querypb.BoundQuery
+	utils.MustMatch(t, vc.queries, wantqueries)
+
+	// Test query fail.
+	vc.mustFail = true
+	_, err = lookupUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	require.NoError(t, err)
+}
+
 func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
 	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
