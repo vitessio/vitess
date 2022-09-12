@@ -248,6 +248,15 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE not id not in (1,2,3)",
 		expected: "SELECT * FROM tbl WHERE id in (1,2,3)",
 	}, {
+		in:       "SELECT * FROM tbl WHERE id in (1,1,2,2)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id in (1,2,1,2)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id in (1,2,otherCol,1,2)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2,otherCol)",
+	}, {
 		in:       "SELECT * FROM tbl WHERE not id like '%foobar'",
 		expected: "SELECT * FROM tbl WHERE id not like '%foobar'",
 	}, {

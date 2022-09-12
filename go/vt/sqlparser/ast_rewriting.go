@@ -411,6 +411,29 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *ExistsExpr:
 		er.existsRewrite(cursor, node)
+	case *ComparisonExpr:
+		if node.Operator != InOp && node.Operator != NotInOp {
+			break
+		}
+		vals, ok := node.Right.(ValTuple)
+		if !ok {
+			break
+		}
+		var newVals = ValTuple{}
+		seen := map[Literal]any{}
+
+		for _, val := range vals {
+			lit, ok := val.(*Literal)
+			if ok {
+				if _, s := seen[*lit]; s {
+					continue
+				}
+				seen[*lit] = nil
+			}
+
+			newVals = append(newVals, val)
+		}
+		node.Right = newVals
 	}
 	return true
 }
