@@ -94,9 +94,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition)
 	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
@@ -243,9 +240,6 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 	newPrimary.StartActionLoop(t, wr)
