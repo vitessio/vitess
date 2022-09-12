@@ -118,7 +118,6 @@ type ReplicationAnalysis struct {
 	AnalyzedInstancePrimaryKey                InstanceKey
 	TabletType                                topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time
-	SuggestedClusterAlias                     string
 	ClusterDetails                            ClusterInfo
 	AnalyzedInstanceDataCenter                string
 	AnalyzedInstanceRegion                    string
