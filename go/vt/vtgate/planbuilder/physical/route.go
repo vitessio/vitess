@@ -498,6 +498,12 @@ func (r *Route) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparser.Compar
 	switch left := cmp.Left.(type) {
 	case *sqlparser.ColName:
 		vdValue := cmp.Right
+
+		valTuple, isTuple := vdValue.(sqlparser.ValTuple)
+		if isTuple && len(valTuple) == 1 {
+			return r.planEqualOp(ctx, &sqlparser.ComparisonExpr{Left: left, Right: valTuple[0], Operator: sqlparser.EqualOp})
+		}
+
 		value := r.makeEvalEngineExpr(ctx, vdValue)
 		if value == nil {
 			return false
