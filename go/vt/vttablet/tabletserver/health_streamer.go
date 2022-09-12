@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -405,12 +406,21 @@ func (hs *healthStreamer) reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	if sidecardb.InitVTSchemaOnTabletInit {
+		// calling it here only to fix vttestserver.TestForeignKeysAndDDLModes, todo: see if this can be removed
+		var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+			return conn.Exec(ctx, query, maxRows, wantFields)
+		}
+		if err := sidecardb.Init(hs.ctx, exec); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
 	for _, query := range mysql.VTDatabaseInit {
 		_, err := conn.Exec(hs.ctx, query, 1, false)
 		if err != nil {
 			return false, err
 		}
 	}
-
 	return true, nil
 }

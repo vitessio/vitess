@@ -22,6 +22,8 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -277,7 +279,9 @@ func checkResult(t *testing.T, wantqr *sqltypes.Result, wanterr string, qr *sqlt
 func TestMain(m *testing.M) {
 	tabletenvtest.LoadTabletEnvFlags()
 	tabletenv.Init()
-
+	if sidecardb.InitVTSchemaOnTabletInit {
+		enableWithDDLForTests = true
+	}
 	exitCode := func() int {
 		// Launch MySQL.
 		// We need a Keyspace in the topology, so the DbName is set.

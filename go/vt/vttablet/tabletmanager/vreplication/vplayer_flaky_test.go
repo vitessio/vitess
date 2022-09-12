@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/spyzhov/ajson"
 	"github.com/stretchr/testify/require"
 
@@ -197,6 +199,9 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 	require.Greater(t, timeUpdated2, transactionTimestamp1, "transaction_timestamp should not be < time_updated")
 	require.Greater(t, timeHeartbeat2, timeHeartbeat1, "time_heartbeat not updated")
 
+	if sidecardb.InitVTSchemaOnTabletInit {
+		return
+	}
 	// drop time_heartbeat column to test that heartbeat is updated using WithDDL and can self-heal by creating the column again
 	env.Mysqld.ExecuteSuperQuery(ctx, "alter table _vt.vreplication drop column time_heartbeat")
 	time.Sleep(2 * time.Second)

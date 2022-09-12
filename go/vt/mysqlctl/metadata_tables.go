@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -87,6 +89,20 @@ func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetada
 		return err
 	}
 	defer conn.Close()
+
+	if sidecardb.InitVTSchemaOnTabletInit {
+		var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+			_, err := conn.ExecuteFetch("use _vt", maxRows, wantFields)
+			if err != nil {
+				return nil, err
+			}
+			return conn.ExecuteFetch(query, maxRows, wantFields)
+		}
+		if err := sidecardb.Init(context.TODO(), exec); err != nil {
+			log.Error(err)
+			return err
+		}
+	}
 
 	// Disable replication on this session. We close the connection after using
 	// it, so there's no need to re-enable replication when we're done.

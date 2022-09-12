@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -468,6 +470,9 @@ func TestWaitForPosCancel(t *testing.T) {
 }
 
 func TestCreateDBAndTable(t *testing.T) {
+	if sidecardb.InitVTSchemaOnTabletInit {
+		t.Skip("InitVTSchemaOnTabletInit is true")
+	}
 	defer func() { globalStats = &vrStats{} }()
 
 	defer deleteTablet(addTablet(100))

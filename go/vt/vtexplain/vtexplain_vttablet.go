@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -387,7 +388,13 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 	for query, result := range schemaQueries {
 		tEnv.addResult(query, result)
 	}
-	for _, query := range onlineddl.ApplyDDL {
+
+	var ddlsToApply []string
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		ddlsToApply = append(ddlsToApply, onlineddl.CreateDDL...)
+	}
+	ddlsToApply = append(ddlsToApply, onlineddl.ApplyDDL...)
+	for _, query := range ddlsToApply {
 		tEnv.addResult(query, &sqltypes.Result{
 			Fields: []*querypb.Field{{Type: sqltypes.Uint64}},
 			Rows:   [][]sqltypes.Value{},

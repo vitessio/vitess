@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -49,13 +51,15 @@ func TestCreateSchema(t *testing.T) {
 	db.OrderMatters()
 	upsert := fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)",
 		"_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard)
-	failInsert := fakesqldb.ExpectedExecuteFetch{
-		Query: upsert,
-		Error: mysql.NewSQLError(mysql.ERBadDb, "", "bad db error"),
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		failInsert := fakesqldb.ExpectedExecuteFetch{
+			Query: upsert,
+			Error: mysql.NewSQLError(mysql.ERBadDb, "", "bad db error"),
+		}
+		db.AddExpectedExecuteFetch(failInsert)
+		db.AddExpectedQuery(fmt.Sprintf(sqlCreateSidecarDB, "_vt"), nil)
+		db.AddExpectedQuery(fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"), nil)
 	}
-	db.AddExpectedExecuteFetch(failInsert)
-	db.AddExpectedQuery(fmt.Sprintf(sqlCreateSidecarDB, "_vt"), nil)
-	db.AddExpectedQuery(fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"), nil)
 	db.AddExpectedQuery(upsert, nil)
 
 	err := tw.write()

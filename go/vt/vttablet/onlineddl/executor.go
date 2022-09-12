@@ -34,6 +34,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/withddl"
@@ -290,13 +292,18 @@ func (e *Executor) initSchema(ctx context.Context) error {
 	}
 	defer conn.Close()
 
-	for _, ddl := range ApplyDDL {
-		_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
-		if mysql.IsSchemaApplyError(err) {
-			continue
-		}
-		if err != nil {
-			return err
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		var ddls []string
+		ddls = append(ddls, CreateDDL...)
+		ddls = append(ddls, ApplyDDL...)
+		for _, ddl := range ddls {
+			_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
+			if mysql.IsSchemaApplyError(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
 		}
 	}
 	e.schemaInitialized = true

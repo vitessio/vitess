@@ -27,7 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -181,4 +183,19 @@ func TestAddInstantAlgorithm(t *testing.T) {
 			require.True(t, ok)
 		})
 	}
+}
+
+func TestSchemaDiff1(t *testing.T) {
+	current := `
+	create table t(id int primary key, i int, k varchar(20), j bool default false)
+`
+	desired := `
+	create table t(id int primary key, i int, j bool default false, INDEX abc (i, j))
+`
+	_ = desired
+	hints := &schemadiff.DiffHints{}
+	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints)
+	require.NoError(t, err)
+
+	log.Infof("%s;", diff.CanonicalStatementString())
 }

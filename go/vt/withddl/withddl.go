@@ -26,10 +26,13 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const QueryToTriggerWithDDL = "SELECT _vt_no_such_column__init_schema FROM _vt.vreplication LIMIT 1"
+
+var enableWithDDLForTests bool
 
 // WithDDL allows you to execute statements against
 // tables whose schema may not be up-to-date. If the tables
@@ -72,27 +75,30 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any)
 		return nil, err
 	}
 	qr, err := execQuery(query)
-	if err == nil {
-		return qr, nil
-	}
-	if !wd.isSchemaError(err) {
-		return nil, err
-	}
+	if !sidecardb.InitVTSchemaOnTabletInit || enableWithDDLForTests {
+		if err == nil {
+			return qr, nil
+		}
+		if !wd.isSchemaError(err) {
+			return nil, err
+		}
 
-	log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
-	for _, applyQuery := range wd.ddls {
-		_, merr := execDDL(applyQuery)
-		if merr == nil {
-			continue
+		log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
+		for _, applyQuery := range wd.ddls {
+			_, merr := execDDL(applyQuery)
+			if merr == nil {
+				continue
+			}
+			if mysql.IsSchemaApplyError(merr) {
+				continue
+			}
+			log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
+			// Return the original error.
+			return nil, err
 		}
-		if mysql.IsSchemaApplyError(merr) {
-			continue
-		}
-		log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
-		// Return the original error.
-		return nil, err
+		return execQuery(query)
 	}
-	return execQuery(query)
+	return qr, err
 }
 
 // ExecIgnore executes the query using the supplied function.

@@ -82,6 +82,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -299,15 +300,18 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
-		cmds := mysqlctl.CreateReparentJournal()
-		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
-		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		createDBQuery := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName))
+		if err := mysqld.ExecuteSuperQuery(ctx, createDBQuery); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
+		if !sidecardb.InitVTSchemaOnTabletInit {
+			if err := mysqld.ExecuteSuperQueryList(ctx, mysqlctl.CreateReparentJournal()); err != nil {
+				return fmt.Errorf("can't initialize _vt database/reparent_journal table: %v", err)
+			}
 
-		// Execute Alter commands on reparent_journal and ignore errors
-		cmds = mysqlctl.AlterReparentJournal()
-		_ = mysqld.ExecuteSuperQueryList(ctx, cmds)
+			// Execute Alter commands on reparent_journal and ignore errors
+			_ = mysqld.ExecuteSuperQueryList(ctx, mysqlctl.AlterReparentJournal())
+		}
 
 		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.

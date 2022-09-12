@@ -23,6 +23,9 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
@@ -362,14 +365,35 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
-	cmds := mysqlctl.CreateReparentJournal()
-	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return "", err
-	}
+	var cmds []string
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		cmds = mysqlctl.CreateReparentJournal()
+		if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+			return "", err
+		}
 
-	// Execute ALTER statement on reparent_journal table and ignore errors
-	cmds = mysqlctl.AlterReparentJournal()
-	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+		// Execute ALTER statement on reparent_journal table and ignore errors
+		cmds = mysqlctl.AlterReparentJournal()
+		_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	} else {
+		_, err := tm.MysqlDaemon.FetchSuperQuery(ctx, "create database if not exists _vt")
+		if err != nil {
+			return "", err
+		}
+		var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+			_, err := tm.MysqlDaemon.FetchSuperQuery(ctx, "use _vt")
+			if err != nil {
+				return nil, err
+			}
+			return tm.MysqlDaemon.FetchSuperQuery(ctx, query)
+		}
+
+		err = sidecardb.Init(ctx, exec)
+		if err != nil {
+			log.Error(err)
+			return "", err
+		}
+	}
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition()
@@ -400,7 +424,10 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 	if err != nil {
 		return err
 	}
-	cmds := mysqlctl.CreateReparentJournal()
+	var cmds []string
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		cmds = mysqlctl.CreateReparentJournal()
+	}
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return err
 	}
