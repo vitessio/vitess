@@ -60,7 +60,8 @@ const (
 )
 
 // recoveryFunction is the code of the recovery function to be used
-// this is returned from getCheckAndRecoverFunction to compare the functions returned
+// this is returned from getCheckAndRecoverFunctionCode to compare the functions returned
+// Each recoveryFunction is one to one mapped to a corresponding recovery.
 type recoveryFunction int
 
 const (
@@ -810,60 +811,104 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnal
 	return true, true, err
 }
 
-// getCheckAndRecoverFunction gets the recovery function to use for the given analysis.
-// It also returns a recoveryFunction which is supposed to be unique for each function that we return.
-// It is used for checking the equality of the returned function.
-func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstanceKey *inst.InstanceKey) (
-	checkAndRecoverFunction func(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
-	recoverFunctionCode recoveryFunction,
-	isActionableRecovery bool,
-) {
+// getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
+func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, analyzedInstanceKey *inst.InstanceKey) recoveryFunction {
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
-			return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+			return recoverGenericProblemFunc
 		}
-		return recoverDeadPrimary, recoverDeadPrimaryFunc, true
+		return recoverDeadPrimaryFunc
 	case inst.PrimaryHasPrimary:
-		return recoverPrimaryHasPrimary, recoverPrimaryHasPrimaryFunc, true
+		return recoverPrimaryHasPrimaryFunc
 	case inst.LockedSemiSyncPrimary:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
-			return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+			return recoverGenericProblemFunc
 		}
-		return checkAndRecoverLockedSemiSyncPrimary, recoverLockedSemiSyncPrimaryFunc, true
+		return recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
-		return electNewPrimary, electNewPrimaryFunc, true
+		return electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet:
-		return fixPrimary, fixPrimaryFunc, true
+		return fixPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet:
-		return fixReplica, fixReplicaFunc, true
+		return fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.UnreachablePrimary:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.UnreachablePrimaryWithLaggingReplicas:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicating:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
-	//   return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+	//   return recoverGenericProblemFunc
 
-	return nil, noRecoveryFunc, false
+	return noRecoveryFunc
+}
+
+// hasActionableRecovery tells if a recoveryFunction has an actionable recovery or not
+func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case noRecoveryFunc:
+		return false
+	case recoverGenericProblemFunc:
+		return false
+	case recoverDeadPrimaryFunc:
+		return true
+	case recoverPrimaryHasPrimaryFunc:
+		return true
+	case recoverLockedSemiSyncPrimaryFunc:
+		return true
+	case electNewPrimaryFunc:
+		return true
+	case fixPrimaryFunc:
+		return true
+	case fixReplicaFunc:
+		return true
+	default:
+		return false
+	}
+}
+
+// getCheckAndRecoverFunction gets the recovery function for the given code.
+func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
+	checkAndRecoverFunction func(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
+) {
+	switch recoveryFunctionCode {
+	case noRecoveryFunc:
+		return nil
+	case recoverGenericProblemFunc:
+		return checkAndRecoverGenericProblem
+	case recoverDeadPrimaryFunc:
+		return recoverDeadPrimary
+	case recoverPrimaryHasPrimaryFunc:
+		return recoverPrimaryHasPrimary
+	case recoverLockedSemiSyncPrimaryFunc:
+		return checkAndRecoverLockedSemiSyncPrimary
+	case electNewPrimaryFunc:
+		return electNewPrimary
+	case fixPrimaryFunc:
+		return fixPrimary
+	case fixReplicaFunc:
+		return fixReplica
+	default:
+		return nil
+	}
 }
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis inst.ReplicationAnalysis) bool {
-	_, prevRecoveryFunctionCode, _ := getCheckAndRecoverFunction(prevAnalysis.Analysis, &prevAnalysis.AnalyzedInstanceKey)
-	_, newRecoveryFunctionCode, _ := getCheckAndRecoverFunction(newAnalysis.Analysis, &newAnalysis.AnalyzedInstanceKey)
+	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis.Analysis, &prevAnalysis.AnalyzedInstanceKey)
+	newRecoveryFunctionCode := getCheckAndRecoverFunctionCode(newAnalysis.Analysis, &newAnalysis.AnalyzedInstanceKey)
 	return prevRecoveryFunctionCode == newRecoveryFunctionCode
 }
 
@@ -892,11 +937,12 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	atomic.AddInt64(&countPendingRecoveries, 1)
 	defer atomic.AddInt64(&countPendingRecoveries, -1)
 
-	checkAndRecoverFunction, _, isActionableRecovery := getCheckAndRecoverFunction(analysisEntry.Analysis, &analysisEntry.AnalyzedInstanceKey)
+	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, &analysisEntry.AnalyzedInstanceKey)
+	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 	runEmergentOperations(&analysisEntry)
 
-	if checkAndRecoverFunction == nil {
+	if checkAndRecoverFunctionCode == noRecoveryFunc {
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceKey.StringCode()) {
@@ -976,7 +1022,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: recovery", analysisEntry.AnalyzedInstanceKey.StringCode()) {
 		log.Infof("executeCheckAndRecoverFunction: proceeding with %+v recovery on %+v; isRecoverable?: %+v; skipProcesses: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, isActionableRecovery, skipProcesses)
 	}
-	recoveryAttempted, topologyRecovery, err = checkAndRecoverFunction(ctx, analysisEntry, candidateInstanceKey, forceInstanceRecovery, skipProcesses)
+	recoveryAttempted, topologyRecovery, err = getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry, candidateInstanceKey, forceInstanceRecovery, skipProcesses)
 	if !recoveryAttempted {
 		return recoveryAttempted, topologyRecovery, err
 	}
