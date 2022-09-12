@@ -145,7 +145,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// We update rows in a table not part of the MoveTables operation so that we're not blocking
 	// on the LOCK TABLE call but rather the InnoDB History List length.
 	trxConn := generateInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
-	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, targetKs, shard), maxSourceTrxHistory)
+	// History should have been generated on the source primary tablet
+	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
 	verifySourceTabletThrottling(t, targetKs, workflow)
