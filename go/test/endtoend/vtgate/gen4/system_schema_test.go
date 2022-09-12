@@ -37,7 +37,17 @@ func TestDbNameOverride(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
+
+	// Test query in OLTP workload (default).
 	qr, err := conn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
+
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+
+	// Test again in OLAP workload (default).
+	utils.Exec(t, conn, "SET workload=OLAP")
+	qr, err = conn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")

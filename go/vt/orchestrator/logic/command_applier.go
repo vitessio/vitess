@@ -77,7 +77,7 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) any {
 	case "delete-instance-tag":
 		return applier.deleteInstanceTag(value)
 	case "set-cluster-alias-manual-override":
-		return applier.setClusterAliasManualOverride(value)
+		return applier.noop(value)
 	}
 	errMsg := fmt.Sprintf("Unknown command op: %s", op)
 	log.Errorf(errMsg)
@@ -268,13 +268,6 @@ func (applier *CommandApplier) deleteInstanceTag(value []byte) any {
 	return err
 }
 
-func (applier *CommandApplier) setClusterAliasManualOverride(value []byte) any {
-	var params [2]string
-	if err := json.Unmarshal(value, &params); err != nil {
-		log.Error(err)
-		return err
-	}
-	clusterName, alias := params[0], params[1]
-	err := inst.SetClusterAliasManualOverride(clusterName, alias)
-	return err
+func (applier *CommandApplier) noop(value []byte) any {
+	return nil
 }

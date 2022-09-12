@@ -113,14 +113,7 @@ func (httpWeb *Web) Cluster(params martini.Params, r render.Render, req *http.Re
 }
 
 func (httpWeb *Web) ClusterByAlias(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
-	// Willing to accept the case of multiple clusters; we just present one
-	if clusterName == "" && err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	params["clusterName"] = clusterName
+	params["clusterName"] = params["clusterAlias"]
 	httpWeb.Cluster(params, r, req, user)
 }
 

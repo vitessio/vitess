@@ -118,14 +118,18 @@ func GrabElection() error {
 			`,
 		ThisHostname, util.ProcessToken.Hash,
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
 // Reelect clears the way for re-elections. Active node is immediately demoted.
 func Reelect() error {
 	_, err := db.ExecOrchestrator(`delete from active_node where anchor = 1`)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
 
@@ -153,6 +157,8 @@ func ElectedNode() (node *NodeHealth, isElected bool, err error) {
 	})
 
 	isElected = (node.Hostname == ThisHostname && node.Token == util.ProcessToken.Hash)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return node, isElected, err //nolint copylocks: return copies lock value
 }

@@ -45,8 +45,8 @@ import (
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
 	ts, factory := memorytopo.NewServerAndFactory("test_cell")
-	*srvTopoCacheTTL = time.Duration(100 * time.Millisecond)
-	*srvTopoCacheRefresh = time.Duration(40 * time.Millisecond)
+	*srvTopoCacheTTL = time.Duration(200 * time.Millisecond)
+	*srvTopoCacheRefresh = time.Duration(80 * time.Millisecond)
 	defer func() {
 		*srvTopoCacheTTL = 1 * time.Second
 		*srvTopoCacheRefresh = 1 * time.Second
@@ -70,9 +70,11 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// wait until we get the right value
 	var got *topodatapb.SrvKeyspace
-	expiry := time.Now().Add(5 * time.Second)
+	expiry := time.Now().Add(*srvTopoCacheRefresh - 20*time.Millisecond)
 	for {
-		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		ctx, cancel := context.WithCancel(context.Background())
+		got, err = rs.GetSrvKeyspace(ctx, "test_cell", "test_ks")
+		cancel()
 
 		if err != nil {
 			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
@@ -84,6 +86,23 @@ func TestGetSrvKeyspace(t *testing.T) {
 			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
 		}
 		time.Sleep(2 * time.Millisecond)
+	}
+
+	// Update the value and check it again to verify that the watcher
+	// is still up and running
+	want = &topodatapb.SrvKeyspace{Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{ServedType: topodatapb.TabletType_REPLICA}}}
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
+
+	// Wait a bit to give the watcher enough time to update the value.
+	time.Sleep(10 * time.Millisecond)
+	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
+	}
+	if !proto.Equal(want, got) {
+		t.Fatalf("GetSrvKeyspace() = %+v, want %+v", got, want)
 	}
 
 	// make sure the HTML template works
@@ -363,9 +382,6 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 	if err != entry.lastError {
 		t.Errorf("Error wasn't saved properly")
 	}
-	if ctx != entry.lastErrorCtx {
-		t.Errorf("Context wasn't saved properly")
-	}
 
 	time.Sleep(*srvTopoCacheTTL + 10*time.Millisecond)
 	// Ask again with a different context, should get an error and
@@ -378,9 +394,6 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 	}
 	if err2 != entry.lastError {
 		t.Errorf("Error wasn't saved properly")
-	}
-	if ctx != entry.lastErrorCtx {
-		t.Errorf("Context wasn't saved properly")
 	}
 }
 

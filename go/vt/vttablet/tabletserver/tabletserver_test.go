@@ -1728,11 +1728,11 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
-	tsv.SetTxTimeout(newDuration)
-	if val := tsv.TxTimeout(); val != newDuration {
+	tsv.Config().SetTxTimeoutForWorkload(newDuration, querypb.ExecuteOptions_OLTP)
+	if val := tsv.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
-	if val := tsv.te.txPool.Timeout(); val != newDuration {
+	if val := tsv.te.txPool.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
 		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 

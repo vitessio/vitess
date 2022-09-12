@@ -50,6 +50,8 @@ type StatefulConnection struct {
 	reservedProps  *Properties
 	tainted        bool
 	enforceTimeout bool
+	timeout        time.Duration
+	expiryTime     time.Time
 }
 
 // Properties contains meta information about the connection
@@ -75,6 +77,16 @@ func (sc *StatefulConnection) IsClosed() bool {
 // IsInTransaction returns true when the connection has tx state
 func (sc *StatefulConnection) IsInTransaction() bool {
 	return sc.txProps != nil
+}
+
+func (sc *StatefulConnection) ElapsedTimeout() bool {
+	if !sc.enforceTimeout {
+		return false
+	}
+	if sc.timeout <= 0 {
+		return false
+	}
+	return sc.expiryTime.Before(time.Now())
 }
 
 // Exec executes the statement in the dedicated connection
@@ -273,6 +285,11 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	tabletenv.TxLogger.Send(sc)
 }
 
+func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
+	sc.timeout = timeout
+	sc.resetExpiryTime()
+}
+
 // logReservedConn logs reserved connection related stats.
 func (sc *StatefulConnection) logReservedConn() {
 	if sc.reservedProps == nil {
@@ -291,4 +308,15 @@ func (sc *StatefulConnection) getUsername() string {
 		return username
 	}
 	return callerid.GetUsername(sc.reservedProps.ImmediateCaller)
+}
+
+func (sc *StatefulConnection) ApplySettings(ctx context.Context, settings []string) error {
+	if sc.dbConn.IsSameSetting(settings) {
+		return nil
+	}
+	return sc.dbConn.ApplySettings(ctx, settings)
+}
+
+func (sc *StatefulConnection) resetExpiryTime() {
+	sc.expiryTime = time.Now().Add(sc.timeout)
 }

@@ -954,3 +954,18 @@ options:PassthroughDMLs
   ],
   "FullQuery": "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)"
 }
+
+# temporary table
+"create temporary table temp(a int)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "temp",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create temporary table temp (\n\ta int\n)",
+  "NeedsReservedConn": true
+}

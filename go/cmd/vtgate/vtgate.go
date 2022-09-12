@@ -23,22 +23,20 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/env"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -53,6 +51,10 @@ var resilientServer *srvtopo.ResilientServer
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag

@@ -4114,6 +4114,51 @@ Gen4 plan same as above
 "unsupported: cross-shard correlated subquery"
 Gen4 error: exists sub-queries are only supported with AND clause
 
+# correlated subquery that is dependent on one side of a join, fully mergeable
+"SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music join `user` on music.user_id = `user`.id where 1 != 1",
+    "Query": "select music.id from music join `user` on music.user_id = `user`.id where music.user_id = 5 and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id)",
+    "Table": "music, `user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music, `user` where 1 != 1",
+    "Query": "select music.id from music, `user` where music.user_id = 5 and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id) and music.user_id = `user`.id",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
+
 # union as a derived table
 "select found from (select id as found from user union all (select id from unsharded)) as t"
 {
@@ -5540,5 +5585,74 @@ Gen4 plan same as above
   "TablesUsed": [
     "user.music",
     "user.user"
+  ]
+}
+
+# Treating single value tuples as `EqualUnique` routes
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in ::__vals",
+        "Table": "music",
+        "Values": [
+          "(INT64(5))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (5)) and music.user_id = 5",
+    "Table": "music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music"
   ]
 }

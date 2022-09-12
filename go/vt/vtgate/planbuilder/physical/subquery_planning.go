@@ -107,6 +107,22 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 		outer.SysTableTableName[k] = v
 	}
 
+	// When merging an inner query with its outer query, we can remove the
+	// inner query from the list of predicates that can influence routing of
+	// the outer query.
+	//
+	// Note that not all inner queries necessarily are part of the routing
+	// predicates list, so this might be a no-op.
+	for i, predicate := range outer.SeenPredicates {
+		if sqlparser.EqualsExpr(predicate, subq.ExtractedSubquery) {
+			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
+
+			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
+			// so we can stop after the first match.
+			break
+		}
+	}
+
 	err = outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err

@@ -91,7 +91,9 @@ func AcquireAccessToken(publicToken string) (secretToken string, err error) {
 		secretToken = m.GetString("secret_token")
 		return nil
 	})
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return secretToken, err
 }
 
@@ -114,7 +116,9 @@ func TokenIsValid(publicToken string, secretToken string) (result bool, err erro
 		result = m.GetInt("valid_token") > 0
 		return nil
 	})
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return result, err
 }
 
@@ -129,6 +133,8 @@ func ExpireAccessTokens() error {
 			`,
 		config.Config.AccessTokenExpiryMinutes,
 	)
-	log.Error(err)
+	if err != nil {
+		log.Error(err)
+	}
 	return err
 }
