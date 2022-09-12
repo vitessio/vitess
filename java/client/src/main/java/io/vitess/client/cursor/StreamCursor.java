@@ -51,6 +51,11 @@ public class StreamCursor extends Cursor {
   }
 
   @Override
+  public int getNumOfRows() throws SQLException {
+    throw new SQLFeatureNotSupportedException("getNumOfRows() is not supported on StreamCursor");
+  }
+
+  @Override
   public long getInsertId() throws SQLException {
     throw new SQLFeatureNotSupportedException("getInsertId() is not supported on StreamCursor");
   }

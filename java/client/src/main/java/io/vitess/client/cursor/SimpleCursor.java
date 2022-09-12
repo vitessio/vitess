@@ -46,6 +46,11 @@ public class SimpleCursor extends Cursor {
   }
 
   @Override
+  public int getNumOfRows() throws SQLException {
+    return queryResult.getRowsCount();
+  }
+
+  @Override
   public long getInsertId() throws SQLException {
     return queryResult.getInsertId();
   }

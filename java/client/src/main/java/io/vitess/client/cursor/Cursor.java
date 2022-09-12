@@ -67,6 +67,14 @@ public abstract class Cursor implements AutoCloseable {
   public abstract long getRowsAffected() throws SQLException;
 
   /**
+   * Returns the number of rows in the result.
+   *
+   * @throws SQLException if the server returns an error.
+   * @throws SQLFeatureNotSupportedException if the cursor type doesn't support this.
+   */
+  public abstract int getNumOfRows() throws SQLException;
+
+  /**
    * Returns the ID of the last insert.
    *
    * @throws SQLException if the server returns an error.
