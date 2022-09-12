@@ -51,7 +51,7 @@ func BenchmarkGetPutWithSettings(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-	setting := &testSPlan{query: "set a=1, b=2, c=3"}
+	setting := &Setting{query: "set a=1, b=2, c=3"}
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
@@ -80,7 +80,7 @@ func BenchmarkGetPutMixed(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-	settings := []Setting{nil, &testSPlan{query: "set a=1, b=2, c=3"}}
+	settings := []*Setting{nil, {query: "set a=1, b=2, c=3"}}
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
@@ -111,7 +111,7 @@ func BenchmarkGetPutMixedMulti(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-	settings := []Setting{nil, &testSPlan{query: "set a=1"}, &testSPlan{query: "set a=1, b=2"}, &testSPlan{query: "set c=1, d=2, e=3"}, &testSPlan{query: "set x=1, y=2, z=3"}}
+	settings := []*Setting{nil, {query: "set a=1"}, {query: "set a=1, b=2"}, {query: "set c=1, d=2, e=3"}, {query: "set x=1, y=2, z=3"}}
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)

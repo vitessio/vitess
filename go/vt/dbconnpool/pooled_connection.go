@@ -28,7 +28,7 @@ type PooledDBConnection struct {
 	pool *ConnectionPool
 }
 
-func (pc *PooledDBConnection) ApplySetting(ctx context.Context, setting pools.Setting) error {
+func (pc *PooledDBConnection) ApplySetting(context.Context, *pools.Setting) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -37,11 +37,11 @@ func (pc *PooledDBConnection) IsSettingApplied() bool {
 	return false
 }
 
-func (pc *PooledDBConnection) IsSameSetting(setting string) bool {
+func (pc *PooledDBConnection) IsSameSetting(string) bool {
 	return true
 }
 
-func (pc *PooledDBConnection) ResetSetting(ctx context.Context) error {
+func (pc *PooledDBConnection) ResetSetting(context.Context) error {
 	//TODO implement me
 	panic("implement me")
 }

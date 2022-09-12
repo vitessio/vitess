@@ -37,7 +37,7 @@ type (
 	IResourcePool interface {
 		Close()
 		Name() string
-		Get(ctx context.Context, setting Setting) (resource Resource, err error)
+		Get(ctx context.Context, setting *Setting) (resource Resource, err error)
 		Put(resource Resource)
 		SetCapacity(capacity int) error
 		SetIdleTimeout(idleTimeout time.Duration)
@@ -63,7 +63,7 @@ type (
 	// is the responsibility of the caller.
 	Resource interface {
 		Close()
-		ApplySetting(ctx context.Context, setting Setting) error
+		ApplySetting(ctx context.Context, setting *Setting) error
 		IsSettingApplied() bool
 		IsSameSetting(setting string) bool
 		ResetSetting(ctx context.Context) error
@@ -77,10 +77,10 @@ type (
 		timeUsed time.Time
 	}
 
-	Setting interface {
-		GetQuery() string
-		GetResetQuery() string
-		IsNil() bool
+	// Setting represents a set query and reset query for system settings.
+	Setting struct {
+		query      string
+		resetQuery string
 	}
 
 	// ResourcePool allows you to use a pool of resources.
@@ -123,6 +123,21 @@ var (
 	// ErrCtxTimeout is returned if a ctx is already expired by the time the resource pool is used
 	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")
 )
+
+func NewSetting(query, resetQuery string) *Setting {
+	return &Setting{
+		query:      query,
+		resetQuery: resetQuery,
+	}
+}
+
+func (s *Setting) GetQuery() string {
+	return s.query
+}
+
+func (s *Setting) GetResetQuery() string {
+	return s.resetQuery
+}
 
 // NewResourcePool creates a new ResourcePool pool.
 // capacity is the number of possible resources in the pool:
@@ -236,12 +251,12 @@ func (rp *ResourcePool) reopen() {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
-func (rp *ResourcePool) Get(ctx context.Context, setting Setting) (resource Resource, err error) {
+func (rp *ResourcePool) Get(ctx context.Context, setting *Setting) (resource Resource, err error) {
 	// If ctx has already expired, avoid racing with rp's resource channel.
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
 	}
-	if setting == nil || setting.IsNil() {
+	if setting == nil {
 		return rp.get(ctx)
 	}
 	return rp.getWithSettings(ctx, setting)
@@ -306,7 +321,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	return wrapper.resource, err
 }
 
-func (rp *ResourcePool) getWithSettings(ctx context.Context, setting Setting) (Resource, error) {
+func (rp *ResourcePool) getWithSettings(ctx context.Context, setting *Setting) (Resource, error) {
 	rp.getSettingCount.Add(1)
 	var wrapper resourceWrapper
 	var ok bool
@@ -337,7 +352,7 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, setting Setting) (R
 	}
 
 	// Checking setting hash id, if it is different, we will close the resource and return a new one later in unwrap
-	if wrapper.resource != nil && wrapper.resource.IsSettingApplied() && !wrapper.resource.IsSameSetting(setting.GetQuery()) {
+	if wrapper.resource != nil && wrapper.resource.IsSettingApplied() && !wrapper.resource.IsSameSetting(setting.query) {
 		rp.diffSettingCount.Add(1)
 		err = wrapper.resource.ResetSetting(ctx)
 		if err != nil {

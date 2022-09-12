@@ -168,7 +168,7 @@ func (cp *Pool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *Pool) Get(ctx context.Context, setting pools.Setting) (*DBConn, error) {
+func (cp *Pool) Get(ctx context.Context, setting *pools.Setting) (*DBConn, error) {
 	span, ctx := trace.NewSpan(ctx, "Pool.Get")
 	defer span.Finish()
 

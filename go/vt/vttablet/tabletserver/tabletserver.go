@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -490,14 +491,14 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			if tsv.txThrottler.Throttle() {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
-			var sPlan *SettingPlan
+			var connSetting *pools.Setting
 			if len(settings) > 0 {
-				sPlan, err = tsv.qe.GetSettingsPlan(ctx, settings)
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
 					return err
 				}
 			}
-			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, sPlan, options)
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, connSetting, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
@@ -760,9 +761,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
 
-			var sPlan *SettingPlan
+			var connSetting *pools.Setting
 			if len(settings) > 0 {
-				sPlan, err = tsv.qe.GetSettingsPlan(ctx, settings)
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
 					return err
 				}
@@ -778,7 +779,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				logStats:       logStats,
 				tsv:            tsv,
 				tabletType:     target.GetTabletType(),
-				setting:        sPlan,
+				setting:        connSetting,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -863,9 +864,9 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				connID = transactionID
 			}
 
-			var sPlan *SettingPlan
+			var connSetting *pools.Setting
 			if len(settings) > 0 {
-				sPlan, err = tsv.qe.GetSettingsPlan(ctx, settings)
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
 					return err
 				}
@@ -880,7 +881,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				ctx:            ctx,
 				logStats:       logStats,
 				tsv:            tsv,
-				setting:        sPlan,
+				setting:        connSetting,
 			}
 			return qre.Stream(callback)
 		},

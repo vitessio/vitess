@@ -30,8 +30,15 @@ import (
 	"vitess.io/vitess/go/sync2"
 )
 
-var lastID, count, closeCount, resetCount sync2.AtomicInt64
-var waitStarts []time.Time
+var (
+	lastID, count, closeCount, resetCount sync2.AtomicInt64
+
+	waitStarts []time.Time
+
+	sFoo    = &Setting{query: "set foo=1"}
+	sBar    = &Setting{query: "set bar=1"}
+	sFooBar = &Setting{query: "set foo=1, bar=2"}
+)
 
 type TestResource struct {
 	num       int64
@@ -46,11 +53,11 @@ func (tr *TestResource) ResetSetting(ctx context.Context) error {
 	return nil
 }
 
-func (tr *TestResource) ApplySetting(ctx context.Context, setting Setting) error {
+func (tr *TestResource) ApplySetting(ctx context.Context, setting *Setting) error {
 	if tr.failApply {
 		return fmt.Errorf("ApplySetting failed")
 	}
-	tr.setting = setting.GetQuery()
+	tr.setting = setting.query
 	return nil
 }
 
@@ -561,7 +568,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, logWait, nil, 0)
 	defer p.Close()
-	for _, setting := range []Setting{nil, sFoo} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		r, err := p.Get(ctx, setting)
 		require.NoError(t, err)
 		// Change the factory before putting back
@@ -584,7 +591,7 @@ func TestCreateFail(t *testing.T) {
 	p := NewResourcePool(FailFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	for _, setting := range []Setting{nil, sFoo} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		if _, err := p.Get(ctx, setting); err.Error() != "Failed" {
 			t.Errorf("Expecting Failed, received %v", err)
 		}
@@ -601,7 +608,7 @@ func TestCreateFailOnPut(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	for _, setting := range []Setting{nil, sFoo} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		_, err := p.Get(ctx, setting)
 		require.NoError(t, err)
 
@@ -622,7 +629,7 @@ func TestSlowCreateFail(t *testing.T) {
 	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, logWait, nil, 0)
 	defer p.Close()
 	ch := make(chan bool)
-	for _, setting := range []Setting{nil, sFoo} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		// The third Get should not wait indefinitely
 		for i := 0; i < 3; i++ {
 			go func() {
@@ -648,7 +655,7 @@ func TestTimeout(t *testing.T) {
 	r, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 
-	for _, setting := range []Setting{nil, sFoo} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		// trying to get the connection without a timeout.
 		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 		_, err = p.Get(newctx, setting)
@@ -667,7 +674,7 @@ func TestExpired(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	for _, setting := range []Setting{nil, sFoo} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		// expired context
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 		_, err := p.Get(ctx, setting)
@@ -687,7 +694,7 @@ func TestMultiSettings(t *testing.T) {
 	var r Resource
 	var err error
 
-	settings := []Setting{nil, sFoo, sBar, sBar, sFoo}
+	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 
 	// Test Get
 	for i := 0; i < 5; i++ {
@@ -750,7 +757,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	var r Resource
 	var err error
 
-	settings := []Setting{nil, sFoo, sBar, sBar, sFoo}
+	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 
 	// Test Get
 	for i := 0; i < 5; i++ {
@@ -794,7 +801,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	settings := []Setting{nil, sFoo, sBar, sBar, sFoo}
+	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 	// get the resource and mark for failure
 	for i := 0; i < 5; i++ {
 		r, err = p.Get(ctx, settings[i])
@@ -842,25 +849,3 @@ func TestApplySettingsFailure(t *testing.T) {
 		p.Put(r)
 	}
 }
-
-type testSPlan struct {
-	query string
-}
-
-func (t *testSPlan) GetQuery() string {
-	return t.query
-}
-
-func (t *testSPlan) GetResetQuery() string {
-	return ""
-}
-
-func (t *testSPlan) IsNil() bool {
-	return t == nil
-}
-
-var _ Setting = (*testSPlan)(nil)
-
-var sFoo = &testSPlan{query: "set foo=1"}
-var sBar = &testSPlan{query: "set bar=1"}
-var sFooBar = &testSPlan{query: "set foo=1, bar=2"}

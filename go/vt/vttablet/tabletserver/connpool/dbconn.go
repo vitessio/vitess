@@ -82,7 +82,7 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting pools.Setting) (*DBConn, error) {
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *pools.Setting) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 		pool:    nil,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
 	}
-	if setting == nil || setting.IsNil() {
+	if setting == nil {
 		return dbconn, nil
 	}
 	if err = dbconn.ApplySetting(ctx, setting); err != nil {
@@ -326,7 +326,7 @@ func (dbc *DBConn) Close() {
 }
 
 // ApplySetting implements the pools.Resource interface.
-func (dbc *DBConn) ApplySetting(ctx context.Context, setting pools.Setting) error {
+func (dbc *DBConn) ApplySetting(ctx context.Context, setting *pools.Setting) error {
 	query := setting.GetQuery()
 	if _, err := dbc.execOnce(ctx, query, 1, false); err != nil {
 		return err

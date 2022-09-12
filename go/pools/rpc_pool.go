@@ -20,8 +20,9 @@ import (
 	"context"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // RPCPool is a specialized version of the ResourcePool, for bounding concurrent
@@ -92,7 +93,7 @@ var rpc = &_rpc{}
 func (*_rpc) Close() {}
 
 // ApplySetting implements Resource for _rpc.
-func (r *_rpc) ApplySetting(ctx context.Context, setting Setting) error {
+func (r *_rpc) ApplySetting(context.Context, *Setting) error {
 	// should be unreachable
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ApplySetting")
 }
@@ -101,11 +102,11 @@ func (r *_rpc) IsSettingApplied() bool {
 	return false
 }
 
-func (r *_rpc) IsSameSetting(setting string) bool {
+func (r *_rpc) IsSameSetting(string) bool {
 	return true
 }
 
-func (r *_rpc) ResetSetting(ctx context.Context) error {
+func (r *_rpc) ResetSetting(context.Context) error {
 	// should be unreachable
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ResetSetting")
 }

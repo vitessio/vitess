@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -26,16 +27,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/trace"
-
-	"context"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -112,26 +111,6 @@ func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) bool {
 		}
 	}
 	return false
-}
-
-// _______________________________________________
-
-// SettingPlan represents a plan for system settings.
-type SettingPlan struct {
-	query      string
-	resetQuery string
-}
-
-func (s *SettingPlan) GetQuery() string {
-	return s.query
-}
-
-func (s *SettingPlan) GetResetQuery() string {
-	return s.resetQuery
-}
-
-func (s *SettingPlan) IsNil() bool {
-	return s == nil
 }
 
 // _______________________________________________
@@ -391,9 +370,9 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	return plan, nil
 }
 
-// GetSettingsPlan returns a system settings plan.
-func (qe *QueryEngine) GetSettingsPlan(ctx context.Context, settings []string) (*SettingPlan, error) {
-	span, _ := trace.NewSpan(ctx, "QueryEngine.GetSettingsPlan")
+// GetConnSetting returns system settings for the connection.
+func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*pools.Setting, error) {
+	span, _ := trace.NewSpan(ctx, "QueryEngine.GetConnSetting")
 	defer span.Finish()
 
 	var keyBuilder strings.Builder
@@ -401,23 +380,23 @@ func (qe *QueryEngine) GetSettingsPlan(ctx context.Context, settings []string) (
 		keyBuilder.WriteString(q)
 	}
 
-	// try to get the plan from the cache
+	// try to get the connSetting from the cache
 	cacheKey := keyBuilder.String()
-	if plan := qe.getSettingsPlan(cacheKey); plan != nil {
+	if plan := qe.getConnSetting(cacheKey); plan != nil {
 		return plan, nil
 	}
 
-	// build the plan
+	// build the setting queries
 	query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
 	if err != nil {
 		return nil, err
 	}
-	plan := &SettingPlan{query: query, resetQuery: resetQuery}
+	connSetting := pools.NewSetting(query, resetQuery)
 
-	// store the plan in the cache
-	qe.plans.Set(cacheKey, plan)
+	// store the connSetting in the cache
+	qe.plans.Set(cacheKey, connSetting)
 
-	return plan, nil
+	return connSetting, nil
 }
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
@@ -456,9 +435,9 @@ func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
 	return nil
 }
 
-func (qe *QueryEngine) getSettingsPlan(key string) *SettingPlan {
+func (qe *QueryEngine) getConnSetting(key string) *pools.Setting {
 	if cacheResult, ok := qe.plans.Get(key); ok {
-		return cacheResult.(*SettingPlan)
+		return cacheResult.(*pools.Setting)
 	}
 	return nil
 }
