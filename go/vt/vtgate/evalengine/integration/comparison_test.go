@@ -692,8 +692,6 @@ func TestCeilandCeiling(t *testing.T) {
 
 	var ceilInputs = []string{
 		"0",
-		"1.5",
-		"-1.5",
 		"1",
 		"-1",
 		"'1.5'",
@@ -701,8 +699,6 @@ func TestCeilandCeiling(t *testing.T) {
 		"'ABC'",
 		"1.5e0",
 		"-1.5e0",
-		"1.79769e309",
-		"-1.79769e309",
 		"9223372036854775810.4",
 		"-9223372036854775810.4",
 	}
