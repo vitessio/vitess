@@ -163,8 +163,7 @@ That includes:
 - **Preparing the Vitess Operator release.**
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
-
-[//]: # (  > - TODO: Add the link to the Vitess Operator Release documentation)
+  > - A documentation for the pre-release of the Vitess Operator is available [here](https://github.com/planetscale/vitess-operator/blob/main/docs/release-process.md#prepare-for-release).
 
 ### Release
 
@@ -175,6 +174,7 @@ On the release day, there are several things to do:
 - **Create the corresponding Vitess operator release.**
   > - Applies only to versions greater or equal to `v14.0.0`.
   > - If we are doing an RC release, then we will need to create the Vitess Operator RC too. If we are doing a GA release, we're also doing a GA release in the Operator.
+  > - The Vitess Operator release documentation is available [here](https://github.com/planetscale/vitess-operator/blob/main/docs/release-process.md#cut-release).
 - **Create the Java release.**
   > - Applies only to GA releases.
   > - This step is explained in the [Java Packages Deploy & Release](#java-packages-deploy--release) section.
