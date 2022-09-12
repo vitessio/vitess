@@ -466,6 +466,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <columnType> column_type  column_type_options json_table_column_options on_empty
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> length_opt column_comment ignore_number_opt
+%type <sqlVal> var_length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
 %type <boolean> default_keyword_opt
@@ -2573,51 +2574,51 @@ time_type:
   }
 
 char_type:
-  CHAR length_opt charset_opt collate_opt
+  CHAR var_length_opt charset_opt collate_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
   }
-| CHARACTER length_opt charset_opt collate_opt
+| CHARACTER var_length_opt charset_opt collate_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
   }
-| NATIONAL CHAR length_opt
+| NATIONAL CHAR var_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
-| NATIONAL CHARACTER length_opt
+| NATIONAL CHARACTER var_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
-| NCHAR length_opt
+| NCHAR var_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| VARCHAR length_opt charset_opt collate_opt
+| VARCHAR var_length_opt charset_opt collate_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
   }
-| CHARACTER VARYING length_opt charset_opt collate_opt
+| CHARACTER VARYING var_length_opt charset_opt collate_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3, Charset: $4, Collate: $5}
   }
-| NVARCHAR length_opt
+| NVARCHAR var_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| NATIONAL VARCHAR length_opt
+| NATIONAL VARCHAR var_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
-| NATIONAL CHARACTER VARYING length_opt
+| NATIONAL CHARACTER VARYING var_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
   }
-| BINARY length_opt
+| BINARY var_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| VARBINARY length_opt
+| VARBINARY var_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
@@ -2674,19 +2675,19 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
   }
-| CHAR length_opt charset_opt BINARY
+| CHAR var_length_opt charset_opt BINARY
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
   }
-| CHARACTER length_opt charset_opt BINARY
+| CHARACTER var_length_opt charset_opt BINARY
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
   }
-| VARCHAR length_opt charset_opt BINARY
+| VARCHAR var_length_opt charset_opt BINARY
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
   }
-| CHARACTER VARYING length_opt charset_opt BINARY
+| CHARACTER VARYING var_length_opt charset_opt BINARY
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3, Charset: $4, BinaryCollate: true}
   }
@@ -2776,6 +2777,20 @@ length_opt:
   {
     $$ = NewIntVal($2)
   }
+
+var_length_opt:
+  {
+    $$ = nil
+  }
+| '(' INTEGRAL ')'
+  {
+    $$ = NewIntVal($2)
+  }
+| '(' MAX ')'
+  {
+    $$ = $2
+  }
+
 
 float_length_opt:
   {
