@@ -1056,10 +1056,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
 func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
-	// TODO (@GuptaManan100): Use specific cluster name to filter the scope of replication analysis.
-	// Can't do this now since SuggestedClusterAlias, ClusterName, ClusterAlias aren't consistent
-	// and passing any one causes issues in some failures
-	analysisEntries, err := inst.GetReplicationAnalysis("", &inst.ReplicationAnalysisHints{})
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.ClusterName, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		return false, err
 	}
