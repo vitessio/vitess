@@ -39,9 +39,10 @@ import (
 )
 
 var (
-	SetSuperReadOnly      = true
-	createReparentQueries []string
-	alterReparentQueries  []string
+	SetSuperReadOnly          = true
+	createReparentQueries     []string
+	alterReparentQueries      []string
+	disableReplicationManager bool
 )
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
@@ -49,6 +50,7 @@ func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.MarkDeprecated("enable_semi_sync", "--enable_semi_sync is deprecated; please set the correct durability policy on the keyspace instead.")
 
 	fs.BoolVar(&SetSuperReadOnly, "use_super_read_only", SetSuperReadOnly, "Set super_read_only flag when performing planned failover.")
+	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 }
 
 func init() {
@@ -417,11 +419,13 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
+
 	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
+
 	return mysql.EncodePosition(pos), nil
 }
 

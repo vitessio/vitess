@@ -68,6 +68,8 @@ const (
 	openTxQuery       = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
 
+	historyLenQuery = "select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'"
+
 	merchantKeyspace            = "merchant-type"
 	maxWait                     = 60 * time.Second
 	BypassLagCheck              = true                         // temporary fix for flakiness seen only in CI when lag check is introduced
@@ -119,8 +121,11 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	defer vc.TearDown(t)
 	defaultCell = vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
-	maxSourceTrxHistory := 5
+	maxSourceTrxHistory := int64(5)
 	extraVTTabletArgs = []string{
+		// We rely on holding open transactions to generate innodb history so extend the timeout
+		// to avoid flakiness when the CI is very slow.
+		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
 	}
 
@@ -140,6 +145,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// We update rows in a table not part of the MoveTables operation so that we're not blocking
 	// on the LOCK TABLE call but rather the InnoDB History List length.
 	trxConn := generateInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
+	// History should have been generated on the source primary tablet
+	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
 	verifySourceTabletThrottling(t, targetKs, workflow)
@@ -1188,12 +1195,12 @@ func dropSources(t *testing.T, ksWorkflow string) {
 //
 // Returns a db connection used for the transaction which you can use for follow-up
 // work, such as rolling it back directly or using the releaseInnoDBRowHistory call.
-func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int) *mysql.Conn {
+func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int64) *mysql.Conn {
 	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	execQuery(t, dbConn1, "use "+sourceKS)
 	execQuery(t, dbConn2, "use "+sourceKS)
-	offset := 1000
+	offset := int64(1000)
 	insertStmt := strings.Builder{}
 	for i := offset; i <= (neededTrxHistory*10)+offset; i++ {
 		if i == offset {
@@ -1210,6 +1217,28 @@ func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory in
 	execQuery(t, dbConn2, "select count(*) from product")
 	execQuery(t, dbConn1, fmt.Sprintf("delete from product where pid >= %d and pid < %d", offset, offset+10000))
 	return dbConn2
+}
+
+func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, expectedLength int64) {
+	timer := time.NewTimer(defaultTimeout)
+	historyLen := int64(0)
+	for {
+		res, err := tablet.QueryTablet(historyLenQuery, tablet.Keyspace, false)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.Equal(t, 1, len(res.Rows))
+		historyLen, err = res.Rows[0][0].ToInt64()
+		require.NoError(t, err)
+		if historyLen >= expectedLength {
+			return
+		}
+		select {
+		case <-timer.C:
+			t.Fatalf("Did not reach the expected InnoDB history length of %d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }
 
 func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {

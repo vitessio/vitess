@@ -88,7 +88,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(primary_instance.cluster_name) AS cluster_name,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
-		MIN(primary_instance.suggested_cluster_alias) AS suggested_cluster_alias,
 		MIN(primary_tablet.info) AS primary_tablet_info,
 		MIN(
 			IFNULL(
@@ -98,12 +97,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				0
 			)
 		) AS is_stale_binlog_coordinates,
-		MIN(
-			IFNULL(
-				cluster_alias.alias,
-				primary_instance.cluster_name
-			)
-		) AS cluster_alias,
 		MIN(
 			IFNULL(
 				cluster_domain_name.domain_name,
@@ -129,13 +122,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			)
 		) AS is_primary,
 		MIN(primary_instance.is_co_primary) AS is_co_primary,
-		MIN(
-			CONCAT(
-				primary_instance.hostname,
-				':',
-				primary_instance.port
-			) = primary_instance.cluster_name
-		) AS is_cluster_primary,
 		MIN(primary_instance.gtid_mode) AS gtid_mode,
 		COUNT(replica_instance.server_id) AS count_replicas,
 		IFNULL(
@@ -353,9 +339,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			AND replica_instance.port = replica_downtime.port
 			AND replica_downtime.downtime_active = 1
 		)
-		LEFT JOIN cluster_alias ON (
-			cluster_alias.cluster_name = primary_instance.cluster_name
-		)
 		LEFT JOIN cluster_domain_name ON (
 			cluster_domain_name.cluster_name = primary_instance.cluster_name
 		)
@@ -415,9 +398,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			Type:    BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
-		a.SuggestedClusterAlias = m.GetString("suggested_cluster_alias")
 		a.ClusterDetails.ClusterName = m.GetString("cluster_name")
-		a.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
 		a.ClusterDetails.ClusterDomain = m.GetString("cluster_domain")
 		a.GTIDMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
@@ -476,11 +457,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				log.Infof(analysisMessage)
 			}
 		}
-		if clusters[a.SuggestedClusterAlias] == nil {
-			clusters[a.SuggestedClusterAlias] = &clusterAnalysis{}
+		if clusters[a.ClusterDetails.ClusterName] == nil {
+			clusters[a.ClusterDetails.ClusterName] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_PRIMARY {
 				a.IsClusterPrimary = true
-				clusters[a.SuggestedClusterAlias].primaryKey = &a.AnalyzedInstanceKey
+				clusters[a.ClusterDetails.ClusterName].primaryKey = &a.AnalyzedInstanceKey
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
@@ -492,10 +473,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
 				return nil
 			}
-			clusters[a.SuggestedClusterAlias].durability = durability
+			clusters[a.ClusterDetails.ClusterName].durability = durability
 		}
 		// ca has clusterwide info
-		ca := clusters[a.SuggestedClusterAlias]
+		ca := clusters[a.ClusterDetails.ClusterName]
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
 			return nil

@@ -45,11 +45,10 @@ func NewPoolInstancesSubmission(pool string, instances string) *PoolInstancesSub
 
 // ClusterPoolInstance is an instance mapping a cluster, pool & instance
 type ClusterPoolInstance struct {
-	ClusterName  string
-	ClusterAlias string
-	Pool         string
-	Hostname     string
-	Port         int
+	ClusterName string
+	Pool        string
+	Hostname    string
+	Port        int
 }
 
 func ApplyPoolInstances(submission *PoolInstancesSubmission) error {
