@@ -145,7 +145,7 @@ This step happens a few weeks before the actual release (whether it is an RC, GA
 The main goal of this step is to make sure everything is ready to be released for the release day.
 That includes:
 - **Making sure Pull Requests are being reviewed and merged.**
-  > - All the Pull Requests that needs to be in the release must be reviewed and merged before the code freeze.
+  > - All the Pull Requests that need to be in the release must be reviewed and merged before the code freeze.
   > - The code freeze usually happens a few days before the release. Make sure everything is merged by that date.
 - **Making sure the people doing the release have access to all the tools and infrastructure needed to do the release.**
   > - This includes write access to the Vitess repository and to the Maven repository. 
