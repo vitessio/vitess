@@ -204,7 +204,7 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
 
 
 ### How To Release Vitess
-This section is divided in two parts:
+This section is divided into two parts:
 - [Creation of the tags and release notes](#creation-of-the-tags-and-release-notes).
 - [Creating Release or Release Candidate on the GitHub UI](#creating-release-or-release-candidate-on-the-github-ui)
 
