@@ -146,7 +146,7 @@ The main goal of this step is to make sure everything is ready to be released fo
 That includes:
 - **Making sure Pull Requests are being reviewed and merged.**
   > - All the Pull Requests that need to be in the release must be reviewed and merged before the code freeze.
-  > - The code freeze usually happens a few days before the release. Make sure everything is merged by that date.
+  > - The code freeze usually happens a few days before the release.
 - **Making sure the people doing the release have access to all the tools and infrastructure needed to do the release.**
   > - This includes write access to the Vitess repository and to the Maven repository. 
 - **Preparing and cleaning the release notes summary.**
@@ -297,6 +297,7 @@ And finally, click on `Publish release`.
 In this example we are going to do a code freeze on the `release-15.0` branch. If we are doing a release candidate, there won't be a branch yet, hence we need to create it.
 
 ```
+git fetch --all
 git checkout -b release-15.0 origin/main
 ```
 
