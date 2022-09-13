@@ -366,19 +366,19 @@ func TestPoolGetConnTime(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	connPool.getConnTime.ResetAll()
+	connPool.getConnTime.Reset()
 
 	getTimeMap := connPool.getConnTime.Counts()
-	assert.Zero(t, getTimeMap["with"])
-	assert.Zero(t, getTimeMap["without"])
+	assert.Zero(t, getTimeMap["PoolTest.GetWithSettings"])
+	assert.Zero(t, getTimeMap["PoolTest.GetWithoutSettings"])
 
 	dbConn, err := connPool.Get(context.Background(), nil)
 	require.NoError(t, err)
 	defer dbConn.Recycle()
 
 	getTimeMap = connPool.getConnTime.Counts()
-	assert.Zero(t, getTimeMap["with"])
-	assert.NotZero(t, getTimeMap["without"])
+	assert.EqualValues(t, 1, getTimeMap["PoolTest.GetWithoutSettings"])
+	assert.Zero(t, getTimeMap["PoolTest.GetWithSettings"])
 
 	db.AddQuery("b", &sqltypes.Result{})
 	sb := pools.NewSetting("b", "")
@@ -387,7 +387,7 @@ func TestPoolGetConnTime(t *testing.T) {
 	defer dbConn.Recycle()
 
 	getTimeMap = connPool.getConnTime.Counts()
-	assert.NotZero(t, getTimeMap["with"])
+	assert.EqualValues(t, 1, getTimeMap["PoolTest.GetWithSettings"])
 }
 
 func newPool() *Pool {

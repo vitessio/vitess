@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/pools"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -42,6 +42,11 @@ import (
 
 // ErrConnPoolClosed is returned when the connection pool is closed.
 var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: unexpected: conn pool is closed")
+
+const (
+	getWithoutS = "GetWithoutSettings"
+	getWithS    = "GetWithSettings"
+)
 
 // Pool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
@@ -58,12 +63,12 @@ type Pool struct {
 	prefillParallelism int
 	timeout            time.Duration
 	idleTimeout        time.Duration
-	getConnTime        *stats.GaugesWithSingleLabel
 	waiterCap          int64
 	waiterCount        sync2.AtomicInt64
 	waiterQueueFull    sync2.AtomicInt64
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
+	getConnTime        *servenv.TimingsWrapper
 }
 
 // NewPool creates a new Pool. The name is used
@@ -98,7 +103,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", cp.GetSettingCount)
 	env.Exporter().NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", cp.DiffSettingCount)
 	env.Exporter().NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", cp.ResetSettingCount)
-	cp.getConnTime = env.Exporter().NewGaugesWithSingleLabel(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
+	cp.getConnTime = env.Exporter().NewTimings(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
 
 	return cp
 }
@@ -200,16 +205,18 @@ func (cp *Pool) Get(ctx context.Context, setting *pools.Setting) (*DBConn, error
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
+
 	start := time.Now()
 	r, err := p.Get(ctx, setting)
 	if err != nil {
 		return nil, err
 	}
-	timeElapsed := time.Since(start)
-	if setting == nil {
-		cp.getConnTime.Set("without", timeElapsed.Nanoseconds())
-	} else {
-		cp.getConnTime.Set("with", timeElapsed.Nanoseconds())
+	if cp.getConnTime != nil {
+		if setting == nil {
+			cp.getConnTime.Record(getWithoutS, start)
+		} else {
+			cp.getConnTime.Record(getWithS, start)
+		}
 	}
 	return r.(*DBConn), nil
 }
