@@ -316,7 +316,7 @@ Finally, let's run the code freeze script:
 
 The script will prompt the command that will allow you to push the code freeze change. Once pushed, open a PR that will be merged on `release-15.0`.
 
-### Java Packages Deploy & Release
+### Java Packages: Deploy & Release
 
 > **Warning:** This section's steps need to be executed only when releasing a new major version of Vitess,
 > or if the Java packages changed from one minor/patch version to another.
