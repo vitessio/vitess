@@ -180,7 +180,7 @@ On the release day, there are several things to do:
   > - This step is explained in the [Java Packages Deploy & Release](#java-packages-deploy--release) section.
 - **Update the website documentation repository.**
   > - Applies only to GA and RC releases.
-  > - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the documentations. The scripts automate:
+  > - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
   >   - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
   >   - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
 - **Publish the blog post on the Vitess website.**
