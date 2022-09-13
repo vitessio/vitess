@@ -16,7 +16,11 @@ limitations under the License.
 
 package dbconnpool
 
-import "context"
+import (
+	"context"
+
+	"vitess.io/vitess/go/pools"
+)
 
 // PooledDBConnection re-exposes DBConnection to be used by ConnectionPool.
 type PooledDBConnection struct {
@@ -24,17 +28,22 @@ type PooledDBConnection struct {
 	pool *ConnectionPool
 }
 
-func (pc *PooledDBConnection) ApplySettings(ctx context.Context, settings []string) error {
+func (pc *PooledDBConnection) ApplySetting(context.Context, *pools.Setting) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (pc *PooledDBConnection) IsSettingsApplied() bool {
+func (pc *PooledDBConnection) IsSettingApplied() bool {
 	return false
 }
 
-func (pc *PooledDBConnection) IsSameSetting(_ []string) bool {
+func (pc *PooledDBConnection) IsSameSetting(string) bool {
 	return true
+}
+
+func (pc *PooledDBConnection) ResetSetting(context.Context) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 // Recycle should be called to return the PooledDBConnection to the pool.

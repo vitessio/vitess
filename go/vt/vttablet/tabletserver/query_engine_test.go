@@ -159,15 +159,14 @@ func TestGetMessageStreamPlan(t *testing.T) {
 }
 
 func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
+	t.Helper()
 	var size int
 	qe.plans.Wait()
 	qe.plans.ForEach(func(_ any) bool {
 		size++
 		return true
 	})
-	if size != expected {
-		t.Fatalf("expected query plan cache to contain %d entries, found %d", expected, size)
-	}
+	require.Equal(t, expected, size, "expected query plan cache to contain %d entries, found %d", expected, size)
 }
 
 func TestQueryPlanCache(t *testing.T) {
@@ -189,25 +188,18 @@ func TestQueryPlanCache(t *testing.T) {
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	if cache.DefaultConfig.LFU {
 		// this cache capacity is in bytes
-		qe.SetQueryPlanCacheCap(512)
+		qe.SetQueryPlanCacheCap(528)
 	} else {
 		// this cache capacity is in number of elements
 		qe.SetQueryPlanCacheCap(1)
 	}
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan, "plan should not be nil")
 	secondPlan, err := qe.GetPlan(ctx, logStats, secondQuery, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if secondPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
+	fmt.Println(secondPlan.CachedSize(true))
+	require.NoError(t, err)
+	require.NotNil(t, secondPlan, "plan should not be nil")
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
 	})
