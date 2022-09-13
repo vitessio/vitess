@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -24,11 +25,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/stats"
-
-	"context"
-
 	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
