@@ -446,6 +446,8 @@ func insertInitialData(t *testing.T) {
 	})
 }
 
+// insertMoreCustomers creates additional customers.
+// Note: this will only work when the customer sequence is in place.
 func insertMoreCustomers(t *testing.T, numCustomers int) {
 	sql := "insert into customer (name) values "
 	i := 0
