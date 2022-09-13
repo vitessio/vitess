@@ -78,6 +78,62 @@ func (builtinLcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 	return sqltypes.VarChar, f
 }
 
+type builtinUpper struct{}
+
+func (builtinUpper) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	t := inarg.typeof()
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	if sqltypes.IsText(t) {
+		tolower := strings.ToUpper(inarg.value().RawStr())
+		result.setString(tolower, inarg.collation())
+	} else {
+		tolower := inarg.value().RawStr()
+		inarg.makeTextualAndConvert(env.DefaultCollation)
+		result.setString(tolower, inarg.collation())
+	}
+}
+
+func (builtinUpper) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("UPPER")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.VarChar, f
+}
+
+type builtinUcase struct{}
+
+func (builtinUcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	t := inarg.typeof()
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	if sqltypes.IsText(t) {
+		tolower := strings.ToUpper(inarg.value().RawStr())
+		result.setString(tolower, inarg.collation())
+	} else {
+		tolower := inarg.value().RawStr()
+		inarg.makeTextualAndConvert(env.DefaultCollation)
+		result.setString(tolower, inarg.collation())
+	}
+}
+
+func (builtinUcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("UCASE")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.VarChar, f
+}
+
 type builtinCharLength struct{}
 
 func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {

@@ -51,6 +51,19 @@ func TestBuiltinLowerandLcase(t *testing.T) {
 	}
 }
 
+func TestBuiltinUpperandUcase(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, str := range cases {
+		query := fmt.Sprintf("UPPER(%s)", str)
+		compareRemoteExpr(t, conn, query)
+
+		query = fmt.Sprintf("UCASE(%s)", str)
+		compareRemoteExpr(t, conn, query)
+	}
+}
+
 func TestBuiltinCharLength(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
