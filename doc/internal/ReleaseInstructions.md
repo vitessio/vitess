@@ -177,7 +177,7 @@ On the release day, there are several things to do:
   > - The Vitess Operator release documentation is available [here](https://github.com/planetscale/vitess-operator/blob/main/docs/release-process.md#cut-release).
 - **Create the Java release.**
   > - Applies only to GA releases.
-  > - This step is explained in the [Java Packages Deploy & Release](#java-packages-deploy--release) section.
+  > - This step is explained in the [Java Packages: Deploy & Release](#java-packages-deploy--release) section.
 - **Update the website documentation repository.**
   > - Applies only to GA and RC releases.
   > - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
