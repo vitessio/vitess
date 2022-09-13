@@ -448,6 +448,8 @@ func insertInitialData(t *testing.T) {
 	})
 }
 
+// insertMoreCustomers creates additional customers.
+// Note: this will only work when the customer sequence is in place.
 func insertMoreCustomers(t *testing.T, numCustomers int) {
 	sql := "insert into customer (name) values "
 	i := 0
@@ -503,8 +505,22 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 
+		// Wait to finish the copy phase for all tables
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
+
+		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
+		dec80Replicated := false
+		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
+		waitForNoWorkflowLag(t, vc, targetKs, workflow)
+		for _, shard := range []string{"-80", "80-"} {
+			shardTarget := fmt.Sprintf("%s:%s", targetKs, shard)
+			if res := execVtgateQuery(t, vtgateConn, shardTarget, "select cid from customer"); len(res.Rows) > 0 {
+				waitForQueryResult(t, vtgateConn, shardTarget, "select distinct dec80 from customer", `[[DECIMAL(0)]]`)
+				dec80Replicated = true
+			}
+		}
+		require.Equal(t, true, dec80Replicated)
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
