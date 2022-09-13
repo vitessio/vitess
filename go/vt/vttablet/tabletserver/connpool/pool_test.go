@@ -359,6 +359,33 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	dbConn.Recycle()
 }
 
+func TestConnPoolGetWaitTime(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	capacity := 5
+	connPool := newPoolWithCapacity(capacity)
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	getTimeMap := connPool.getConnTime.Counts()
+	assert.EqualValues(t, 0, getTimeMap["with"])
+	assert.EqualValues(t, 0, getTimeMap["without"])
+
+	dbConn, err := connPool.Get(context.Background(), nil)
+	require.NoError(t, err)
+	getTimeMap = connPool.getConnTime.Counts()
+	assert.EqualValues(t, 0, getTimeMap["with"])
+	assert.NotEqualValues(t, 0, getTimeMap["without"])
+	dbConn.Recycle()
+
+	db.AddQuery("b", &sqltypes.Result{})
+	sb := pools.NewSetting("b", "")
+	dbConn, err = connPool.Get(context.Background(), sb)
+	require.NoError(t, err)
+	dbConn.Recycle()
+	getTimeMap = connPool.getConnTime.Counts()
+	assert.NotEqualValues(t, 0, getTimeMap["with"])
+}
+
 func newPool() *Pool {
 	return newPoolWithCapacity(100)
 }

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/stats"
 
 	"context"
 
@@ -59,6 +60,7 @@ type Pool struct {
 	prefillParallelism int
 	timeout            time.Duration
 	idleTimeout        time.Duration
+	getConnTime        *stats.GaugesWithSingleLabel
 	waiterCap          int64
 	waiterCount        sync2.AtomicInt64
 	waiterQueueFull    sync2.AtomicInt64
@@ -98,6 +100,8 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", cp.GetSettingCount)
 	env.Exporter().NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", cp.DiffSettingCount)
 	env.Exporter().NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", cp.ResetSettingCount)
+	cp.getConnTime = env.Exporter().NewGaugesWithSingleLabel("GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
+
 	return cp
 }
 
@@ -198,9 +202,16 @@ func (cp *Pool) Get(ctx context.Context, setting *pools.Setting) (*DBConn, error
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
+	start := time.Now()
 	r, err := p.Get(ctx, setting)
 	if err != nil {
 		return nil, err
+	}
+	timeElapsed := time.Since(start)
+	if setting == nil {
+		cp.getConnTime.Set("without", timeElapsed.Nanoseconds())
+	} else {
+		cp.getConnTime.Set("with", timeElapsed.Nanoseconds())
 	}
 	return r.(*DBConn), nil
 }
