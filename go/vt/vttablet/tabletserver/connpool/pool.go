@@ -98,7 +98,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", cp.GetSettingCount)
 	env.Exporter().NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", cp.DiffSettingCount)
 	env.Exporter().NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", cp.ResetSettingCount)
-	cp.getConnTime = env.Exporter().NewGaugesWithSingleLabel("GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
+	cp.getConnTime = env.Exporter().NewGaugesWithSingleLabel(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
 
 	return cp
 }
