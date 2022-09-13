@@ -653,14 +653,14 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		frac0 := scale / 9              // number of 32 bits fractionals
 		frac0x := scale - frac0*9       // leftover fractionals
 
-		if scale == 0 && intg0 == 0 {
-			// When the field is a DECIMAL using a scale of 0, e.g.
-			// DECIMAL(5,0), a binlogged value of 0 is almost treated
-			// like the NULL byte and we get a 0 byte length value.
-			// In this case let's return a byte value of 0.
-			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-				[]byte{'0'}), 4, nil
-		}
+		//if scale == 0 && intg0 == 0 {
+		//	// When the field is a DECIMAL using a scale of 0, e.g.
+		//	// DECIMAL(5,0), a binlogged value of 0 is almost treated
+		//	// like the NULL byte and we get a 0 byte length value.
+		//	// In this case let's return a byte value of 0.
+		//	return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+		//		[]byte{'0'}), 4, nil
+		//}
 
 		l := intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x]
 
@@ -719,6 +719,14 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 
 		// now see if we have a fraction
 		if scale == 0 {
+			// When the field is a DECIMAL using a scale of 0, e.g.
+			// DECIMAL(5,0), a binlogged value of 0 is almost treated
+			// like the NULL byte and we get a 0 byte length value.
+			// In this case let's return a byte value of 0.
+			if txt.Len() == 0 {
+				txt.WriteRune('0')
+			}
+
 			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 				txt.Bytes()), l, nil
 		}
