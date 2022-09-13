@@ -294,7 +294,7 @@ And finally, click on `Publish release`.
 
 ### How To Code Freeze
 
-In this example we are going to do a code freeze on the `release-15.0` branch. If we are doing a release candidate, there won't be such branch, hence we need to create it.
+In this example we are going to do a code freeze on the `release-15.0` branch. If we are doing a release candidate, there won't be a branch yet, hence we need to create it.
 
 ```
 git checkout -b release-15.0 origin/main
