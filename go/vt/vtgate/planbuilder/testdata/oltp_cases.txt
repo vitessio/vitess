@@ -345,7 +345,29 @@
     "main.sbtest15"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "DELETE FROM sbtest15 WHERE id=7525",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from sbtest15 where id = 7525",
+    "Table": "sbtest15",
+    "Values": [
+      "INT64(7525)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.sbtest15"
+  ]
+}
 
 # OLTP insert
 "INSERT INTO sbtest16 (id, k, c, pad) VALUES (42, 1, 2, 50)"

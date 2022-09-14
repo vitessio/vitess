@@ -221,7 +221,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Delete:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildDeletePlan, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Union:
 		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
 		if err != nil {
