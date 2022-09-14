@@ -445,7 +445,7 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 	}
 	defer conn.Close()
 
-	if err := mysql.SchemaInitializer.UnsetSuperReadOnlyUser(conn.Conn); err != nil {
+	if err := mysql.SchemaInitializer.UnsetReadOnlyUser(conn.Conn); err != nil {
 		return nil, err
 	}
 

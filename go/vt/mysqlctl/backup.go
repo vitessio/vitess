@@ -422,7 +422,7 @@ func initSchema(ctx context.Context, params RestoreParams) ([]error, error) {
 	}
 	defer conn.Close()
 
-	if err := mysql.SchemaInitializer.UnsetSuperReadOnlyUser(conn.Conn); err != nil {
+	if err := mysql.SchemaInitializer.UnsetReadOnlyUser(conn.Conn); err != nil {
 		return nil, err
 	}
 

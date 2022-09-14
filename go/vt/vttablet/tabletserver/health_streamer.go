@@ -393,6 +393,13 @@ func (hs *healthStreamer) reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	for _, query := range mysql.VTDatabaseInit {
+		_, err := conn.Exec(hs.ctx, query, 1, false)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	return true, nil
 }
 

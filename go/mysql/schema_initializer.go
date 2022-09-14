@@ -25,6 +25,7 @@ import (
 const (
 	setSuperUser       = `SET GLOBAL super_read_only='ON'`
 	unSetSuperUser     = `SET GLOBAL super_read_only='OFF'`
+	unSetReadOnlyUser  = `SET GLOBAL read_only='OFF'`
 	replicationDisable = "SET @@session.sql_log_bin = 0"
 )
 
@@ -76,7 +77,22 @@ func (si *schemaInitializer) UnsetSuperReadOnlyUser(conn *Conn) error {
 	// setting super_read_only to true, given it was set during tm_init.start()
 	log.Infof("%s", unSetSuperUser)
 	if _, err = conn.ExecuteFetch(unSetSuperUser, 0, false); err != nil {
-		log.Warningf("SetSuperReadOnly(true) failed schema initialization: %v", err)
+		log.Warningf("UnSetSuperReadOnly failed schema initialization: %v", err)
+	}
+	return err
+}
+
+// UnsetReadOnlyUser sets read-only flag to 'OFF'
+func (si *schemaInitializer) UnsetReadOnlyUser(conn *Conn) error {
+	if conn.IsMariaDB() {
+		return nil
+	}
+
+	var err error
+	// setting super_read_only to true, given it was set during tm_init.start()
+	log.Infof("%s", unSetReadOnlyUser)
+	if _, err = conn.ExecuteFetch(unSetReadOnlyUser, 0, false); err != nil {
+		log.Warningf("UnSetReadOnly failed schema initialization: %v", err)
 	}
 	return err
 }
@@ -112,7 +128,7 @@ func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly b
 	defer si.mu.Unlock()
 
 	if disableSuperReadOnly && !conn.IsMariaDB() {
-		if err := si.UnsetSuperReadOnlyUser(conn); err != nil {
+		if err := si.UnsetReadOnlyUser(conn); err != nil {
 			log.Infof("error in setting super read-only user %s", err)
 			return []error{err}
 		}
