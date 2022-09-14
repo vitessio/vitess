@@ -130,7 +130,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Greater(t, len(replicaInstance.ServerUUID), 10)
 	assert.Contains(t, replicaInstance.Version, "5.7")
 	assert.NotEmpty(t, replicaInstance.VersionComment)
-	assert.True(t, replicaInstance.ReadOnly)
+	assert.False(t, replicaInstance.ReadOnly)
 	assert.True(t, replicaInstance.LogBinEnabled)
 	assert.True(t, replicaInstance.LogReplicationUpdatesEnabled)
 	assert.Equal(t, "ROW", replicaInstance.BinlogFormat)
