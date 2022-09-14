@@ -151,7 +151,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
 	// The initial copy phase should be blocking on the history list
-	confirmStreamHasCopiedNoData(t, targetKs, workflow)
+	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
 	trxConn.Close()
 }

@@ -468,7 +468,7 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	return string(val), nil
 }
 
-func confirmStreamHasCopiedNoData(t *testing.T, targetKS, workflow string) {
+func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
