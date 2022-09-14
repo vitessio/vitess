@@ -102,128 +102,124 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 
 		return filter, nil
 	case *abstract.Update:
-		var typ topodatapb.TabletType
-		var dest key.Destination
-
-		vindexTable := op.TableInfo.GetVindexTable()
-		opCode := engine.Unsharded
-		if vindexTable.Keyspace.Sharded {
-			opCode = engine.Scatter
-		}
-
-		tblName, ok := op.Table.Alias.Expr.(sqlparser.TableName)
-		if ok {
-			var err error
-			_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
-			if err != nil {
-				return nil, err
-			}
-			if dest != nil {
-				if typ != topodatapb.TabletType_PRIMARY {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: update statement with a replica target")
-				}
-				// we are dealing with an explicitly targeted UPDATE
-				opCode = engine.ByDestination
-			}
-		}
-
-		vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
-		if err != nil {
-			return nil, err
-		}
-
-		r := &Route{
-			Source: &Update{
-				QTable:              op.Table,
-				VTable:              vindexTable,
-				Assignments:         op.Assignments,
-				ChangedVindexValues: cvv,
-				OwnedVindexQuery:    ovq,
-				AST:                 op.AST,
-			},
-			RouteOpCode:       opCode,
-			Keyspace:          vindexTable.Keyspace,
-			VindexPreds:       vp,
-			TargetDestination: dest,
-		}
-
-		for _, predicate := range op.Table.Predicates {
-			err := r.UpdateRoutingLogic(ctx, predicate)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
-			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
-		}
-
-		return r, nil
+		return createPhysicalOperatorFromUpdate(ctx, op)
 	case *abstract.Delete:
-		var typ topodatapb.TabletType
-		var dest key.Destination
-		var ovq string
-
-		vindexTable := op.TableInfo.GetVindexTable()
-		opCode := engine.Unsharded
-		if vindexTable.Keyspace.Sharded {
-			opCode = engine.Scatter
-		}
-
-		tblName, ok := op.Table.Alias.Expr.(sqlparser.TableName)
-		if ok {
-			var err error
-			_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
-			if err != nil {
-				return nil, err
-			}
-			if dest != nil {
-				if typ != topodatapb.TabletType_PRIMARY {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: delete statement with a replica target")
-				}
-				// we are dealing with an explicitly targeted DELETE
-				opCode = engine.ByDestination
-			}
-		}
-		primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(vindexTable.Owned) > 0 {
-			tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: op.Table.Alias.As}
-			ovq = generateOwnedVindexQuery(tblExpr, op.AST, vindexTable, primaryVindex.Columns)
-		}
-
-		r := &Route{
-			Source: &Delete{
-				QTable:           op.Table,
-				VTable:           vindexTable,
-				OwnedVindexQuery: ovq,
-				AST:              op.AST,
-			},
-			RouteOpCode:       opCode,
-			Keyspace:          vindexTable.Keyspace,
-			VindexPreds:       vindexAndPredicates,
-			TargetDestination: dest,
-		}
-
-		for _, predicate := range op.Table.Predicates {
-			err := r.UpdateRoutingLogic(ctx, predicate)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
-			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
-		}
-		return r, nil
+		return createPhysicalOperatorFromDelete(ctx, op)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
+}
+
+func createPhysicalOperatorFromUpdate(ctx *plancontext.PlanningContext, op *abstract.Update) (abstract.PhysicalOperator, error) {
+	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, op.TableInfo, op.Table, "update")
+	if err != nil {
+		return nil, err
+	}
+
+	vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &Route{
+		Source: &Update{
+			QTable:              op.Table,
+			VTable:              vindexTable,
+			Assignments:         op.Assignments,
+			ChangedVindexValues: cvv,
+			OwnedVindexQuery:    ovq,
+			AST:                 op.AST,
+		},
+		RouteOpCode:       opCode,
+		Keyspace:          vindexTable.Keyspace,
+		VindexPreds:       vp,
+		TargetDestination: dest,
+	}
+
+	for _, predicate := range op.Table.Predicates {
+		err := r.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
+		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+	}
+
+	return r, nil
+}
+
+func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantics.TableInfo, table *abstract.QueryTable, dmlType string) (*vindexes.Table, engine.Opcode, key.Destination, error) {
+	vindexTable := tableInfo.GetVindexTable()
+	opCode := engine.Unsharded
+	if vindexTable.Keyspace.Sharded {
+		opCode = engine.Scatter
+	}
+
+	var dest key.Destination
+	var typ topodatapb.TabletType
+	var err error
+	tblName, ok := table.Alias.Expr.(sqlparser.TableName)
+	if ok {
+		_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		if dest != nil {
+			if typ != topodatapb.TabletType_PRIMARY {
+				return nil, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %v statement with a replica target", dmlType)
+			}
+			// we are dealing with an explicitly targeted UPDATE
+			opCode = engine.ByDestination
+		}
+	}
+	return vindexTable, opCode, dest, nil
+}
+
+func createPhysicalOperatorFromDelete(ctx *plancontext.PlanningContext, op *abstract.Delete) (*Route, error) {
+	var ovq string
+	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, op.TableInfo, op.Table, "delete")
+	if err != nil {
+		return nil, err
+	}
+
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(vindexTable.Owned) > 0 {
+		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: op.Table.Alias.As}
+		ovq = generateOwnedVindexQuery(tblExpr, op.AST, vindexTable, primaryVindex.Columns)
+	}
+
+	r := &Route{
+		Source: &Delete{
+			QTable:           op.Table,
+			VTable:           vindexTable,
+			OwnedVindexQuery: ovq,
+			AST:              op.AST,
+		},
+		RouteOpCode:       opCode,
+		Keyspace:          vindexTable.Keyspace,
+		VindexPreds:       vindexAndPredicates,
+		TargetDestination: dest,
+	}
+
+	for _, predicate := range op.Table.Predicates {
+		err := r.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
+		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
+	}
+	return r, nil
 }
 
 func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) string {

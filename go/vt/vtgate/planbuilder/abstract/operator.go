@@ -236,39 +236,9 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 }
 
 func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.SemTable) (LogicalOperator, error) {
-	subq, err := createSubqueryFromStatement(updStmt, semTable)
+	tableInfo, qt, err := createQueryTableForDML(updStmt.TableExprs[0], semTable, updStmt.Where)
 	if err != nil {
 		return nil, err
-	}
-	alTbl, ok := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
-	}
-	tblName, ok := alTbl.Expr.(sqlparser.TableName)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
-	}
-
-	tableID := semTable.TableSetFor(alTbl)
-	tableInfo, err := semTable.TableInfoFor(tableID)
-	if err != nil {
-		return nil, err
-	}
-
-	if tableInfo.IsInfSchema() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
-	}
-
-	var predicates []sqlparser.Expr
-	if updStmt.Where != nil {
-		predicates = sqlparser.SplitAndExpression(nil, updStmt.Where.Expr)
-	}
-	qt := &QueryTable{
-		ID:          tableID,
-		Alias:       alTbl,
-		Table:       tblName,
-		Predicates:  predicates,
-		IsInfSchema: false,
 	}
 
 	assignments := make(map[string]sqlparser.Expr)
@@ -282,6 +252,11 @@ func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.Sem
 		AST:         updStmt,
 		TableInfo:   tableInfo,
 	}
+
+	subq, err := createSubqueryFromStatement(updStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
 	if subq == nil {
 		return u, nil
 	}
@@ -289,36 +264,30 @@ func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.Sem
 	return subq, nil
 }
 
-func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.SemTable) (LogicalOperator, error) {
-	subq, err := createSubqueryFromStatement(deleteStmt, semTable)
-	if err != nil {
-		return nil, err
-	}
-
-	alTbl, ok := deleteStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
+func createQueryTableForDML(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
+	alTbl, ok := tableExpr.(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
 	}
 	tblName, ok := alTbl.Expr.(sqlparser.TableName)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
 	}
 
 	tableID := semTable.TableSetFor(alTbl)
 	tableInfo, err := semTable.TableInfoFor(tableID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if tableInfo.IsInfSchema() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
 	}
 
 	var predicates []sqlparser.Expr
-	if deleteStmt.Where != nil {
-		predicates = sqlparser.SplitAndExpression(nil, deleteStmt.Where.Expr)
+	if whereClause != nil {
+		predicates = sqlparser.SplitAndExpression(nil, whereClause.Expr)
 	}
-
 	qt := &QueryTable{
 		ID:          tableID,
 		Alias:       alTbl,
@@ -326,11 +295,24 @@ func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.
 		Predicates:  predicates,
 		IsInfSchema: false,
 	}
+	return tableInfo, qt, nil
+}
+
+func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.SemTable) (LogicalOperator, error) {
+	tableInfo, qt, err := createQueryTableForDML(deleteStmt.TableExprs[0], semTable, deleteStmt.Where)
+	if err != nil {
+		return nil, err
+	}
 
 	u := &Delete{
 		Table:     qt,
 		AST:       deleteStmt,
 		TableInfo: tableInfo,
+	}
+
+	subq, err := createSubqueryFromStatement(deleteStmt, semTable)
+	if err != nil {
+		return nil, err
 	}
 	if subq == nil {
 		return u, nil
