@@ -750,8 +750,8 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
+			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				return err
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
@@ -855,8 +855,8 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			if err != nil {
 				return err
 			}
-			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
+			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				return err
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
