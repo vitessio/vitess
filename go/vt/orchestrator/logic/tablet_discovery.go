@@ -47,6 +47,8 @@ var (
 	clustersToWatch   = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 	shutdownWaitTime  = flag.Duration("shutdown_wait_time", 30*time.Second, "maximum time to wait for vtorc to release all the locks that it is holding before shutting down on SIGTERM")
 	shardsLockCounter int32
+	// ErrNoPrimaryTablet is a fixed error message.
+	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
@@ -321,17 +323,20 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 		vitess_tablet
 	WHERE
 		keyspace = ? AND shard = ?
+		AND tablet_type = ?
 	ORDER BY
-		tablet_type ASC,
 		primary_timestamp DESC
 	LIMIT 1
 `
-	err = db.Db.QueryOrchestrator(query, sqlutils.Args(keyspace, shard), func(m sqlutils.RowMap) error {
+	err = db.Db.QueryOrchestrator(query, sqlutils.Args(keyspace, shard, topodatapb.TabletType_PRIMARY), func(m sqlutils.RowMap) error {
 		if primary == nil {
 			primary = &topodatapb.Tablet{}
 			return prototext.Unmarshal([]byte(m.GetString("info")), primary)
 		}
 		return nil
 	})
+	if primary == nil && err == nil {
+		err = ErrNoPrimaryTablet
+	}
 	return primary, err
 }

@@ -75,6 +75,22 @@ var (
 		MysqlHostname: hostname,
 		MysqlPort:     102,
 	}
+	tab103 = &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell1,
+			Uid:  103,
+		},
+		Hostname:      hostname,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: hostname,
+		MysqlPort:     103,
+		PrimaryTermStartTime: &vttime.Time{
+			// Higher time than tab100
+			Seconds: 3500,
+		},
+	}
 )
 
 func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
@@ -121,6 +137,10 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	})
 
 	t.Run("change a tablet and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
+		startTimeInitially := tab100.PrimaryTermStartTime.Seconds
+		defer func() {
+			tab100.PrimaryTermStartTime.Seconds = startTimeInitially
+		}()
 		tab100.PrimaryTermStartTime.Seconds = 1000
 		ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.PrimaryTermStartTime.Seconds = 1000
@@ -129,6 +149,73 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
 		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets)
 	})
+}
+
+func TestShardPrimary(t *testing.T) {
+	testcases := []*struct {
+		name            string
+		tablets         []*topodatapb.Tablet
+		expectedPrimary *topodatapb.Tablet
+		expectedErr     string
+	}{
+		{
+			name:            "One primary type tablet",
+			tablets:         []*topodatapb.Tablet{tab100, tab101, tab102},
+			expectedPrimary: tab100,
+		}, {
+			name:    "Two primary type tablets",
+			tablets: []*topodatapb.Tablet{tab100, tab101, tab102, tab103},
+			// In this case we expect the tablet with higher PrimaryTermStartTime to be the primary tablet
+			expectedPrimary: tab103,
+		}, {
+			name:        "No primary type tablets",
+			tablets:     []*topodatapb.Tablet{tab101, tab102},
+			expectedErr: "no primary tablet found",
+		},
+	}
+
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+	}()
+
+	// Open the orchestrator
+	// After the test completes delete everything from the vitess_tablet table
+	orcDb, err := db.OpenOrchestrator()
+	require.NoError(t, err)
+	defer func() {
+		_, err = orcDb.Exec("delete from vitess_tablet")
+		require.NoError(t, err)
+	}()
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			_, err = orcDb.Exec("delete from vitess_tablet")
+
+			// Create a memory topo-server and create the keyspace and shard records
+			ts = memorytopo.NewServer(cell1)
+			_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+			require.NoError(t, err)
+
+			// Add tablets to the topo-server
+			for _, tablet := range testcase.tablets {
+				err := ts.CreateTablet(context.Background(), tablet)
+				require.NoError(t, err)
+			}
+
+			// refresh the tablet info so that they are stored in the orch backend
+			verifyRefreshTabletsInKeyspaceShard(t, false, len(testcase.tablets), testcase.tablets)
+
+			primary, err := shardPrimary(keyspace, shard)
+			if testcase.expectedErr != "" {
+				assert.Contains(t, err.Error(), testcase.expectedErr)
+				assert.Nil(t, primary)
+			} else {
+				assert.NoError(t, err)
+				assert.True(t, topotools.TabletEquality(primary, testcase.expectedPrimary))
+			}
+		})
+	}
 }
 
 // verifyRefreshTabletsInKeyspaceShard calls refreshTabletsInKeyspaceShard with the forceRefresh parameter provided and verifies that
