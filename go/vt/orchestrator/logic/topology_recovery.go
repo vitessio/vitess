@@ -1026,7 +1026,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 			// For example, ConnectedToWrongPrimary analysis only cares for whom the current primary tablet is
 			// and the host-port set on the tablet in question.
 			// So, we only need to refresh the tablet info records (to know if the primary tablet has changed),
-			// and the repliation data of the new primary and this tablet.
+			// and the replication data of the new primary and this tablet.
 			refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 			DiscoverInstance(analysisEntry.AnalyzedInstanceKey, true)
 			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
