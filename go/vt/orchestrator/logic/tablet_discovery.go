@@ -161,7 +161,7 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 // change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
 func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string) {
 	log.Infof("force refresh of all tablets in shard - %v/%v", keyspace, shard)
-	if ctx == nil {
+	if ctx == context.Background() {
 		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer refreshCancel()
 		ctx = refreshCtx

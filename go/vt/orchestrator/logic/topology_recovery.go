@@ -1076,9 +1076,9 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// If we ran a cluster wide recovery and actually attemped it, then we know that the replication state for all the tablets in this cluster
 	// would have changed. So we can go ahead and pre-emptively refresh them.
 	// For this refresh we don't use the same context that we used for the recovery, since that context might have expired or could expire soon
-	// Instead we create a new context. The call forceRefreshAllTabletsInShard handles this for us.
+	// Instead we pass the background context. The call forceRefreshAllTabletsInShard handles adding a timeout to it for us.
 	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
-		forceRefreshAllTabletsInShard(nil, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	} else {
 		// For all other recoveries, we would have changed the replication status of the analyzed tablet
 		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery
@@ -1360,9 +1360,9 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		},
 	)
 
-	// here we need to forcefully refresh all the tablets because we know we have made a cluster wide operation
+	// here we need to forcefully refresh all the tablets because we know we have made a cluster wide operation,
 	// and it affects the replication information for all the tablets
-	forceRefreshAllTabletsInShard(nil, primaryTablet.Keyspace, primaryTablet.Shard)
+	forceRefreshAllTabletsInShard(context.Background(), primaryTablet.Keyspace, primaryTablet.Shard)
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
