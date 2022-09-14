@@ -122,6 +122,7 @@ type ReplicationAnalysis struct {
 	AnalyzedInstanceDataCenter                string
 	AnalyzedInstanceRegion                    string
 	AnalyzedKeyspace                          string
+	AnalyzedShard                             string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool

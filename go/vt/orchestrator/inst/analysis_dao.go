@@ -76,6 +76,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.port,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
+		vitess_tablet.shard AS shard,
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
@@ -377,6 +378,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 
 		a.TabletType = tablet.Type
 		a.AnalyzedKeyspace = m.GetString("keyspace")
+		a.AnalyzedShard = m.GetString("shard")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {

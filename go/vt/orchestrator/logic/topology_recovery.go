@@ -633,8 +633,6 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 		},
 	)
 
-	// We should refresh the tablet information again to update our information.
-	RefreshTablets(true /* forceRefresh */)
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -905,6 +903,16 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 	}
 }
 
+// isClusterWideRecovery returns whether the given recovery is a cluster-wide recovery or not
+func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case recoverDeadPrimaryFunc, electNewPrimaryFunc:
+		return true
+	default:
+		return false
+	}
+}
+
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis inst.ReplicationAnalysis) bool {
 	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis.Analysis, &prevAnalysis.AnalyzedInstanceKey)
@@ -1000,12 +1008,43 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
+		// The first step we have to do is refresh the keyspace information
+		// This is required to know if the durability policies have changed or not
+		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore
 		err := RefreshKeyspace(analysisEntry.AnalyzedKeyspace)
 		if err != nil {
 			return false, nil, err
 		}
-		// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
-		RefreshTablets(true /* forceRefresh */)
+		// If we are about to run a cluster-wide recovery, it is imperative to first refresh all the tablets
+		// of a shard because a new tablet could have been promoted, and we need to have this visibility before we
+		// run a cluster operation of our own.
+		if isClusterWideRecovery(checkAndRecoverFunctionCode) {
+			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		} else {
+			// If we are not running a cluster-wide recovery, then it is only concerned with the specific tablet
+			// on which the failure occurred and the primary instance of the shard.
+			// For example, ConnectedToWrongPrimary analysis only cares for whom the current primary tablet is
+			// and the host-port set on the tablet in question.
+			// So, we only need to refresh the tablet info records (to know if the primary tablet has changed),
+			// and the repliation data of the new primary and this tablet.
+			refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			DiscoverInstance(analysisEntry.AnalyzedInstanceKey, true)
+			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			if err != nil {
+				log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while finding the shard primary: %v",
+					analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
+				return false, nil, err
+			}
+			primaryInstanceKey := inst.InstanceKey{
+				Hostname: primaryTablet.MysqlHostname,
+				Port:     int(primaryTablet.MysqlPort),
+			}
+			// We can skip the refresh if we the tablet we are looking at is the primary tablet.
+			// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
+			if !analysisEntry.AnalyzedInstanceKey.Equals(&primaryInstanceKey) {
+				DiscoverInstance(primaryInstanceKey, true)
+			}
+		}
 		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
 			log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while trying to find if the problem is already fixed: %v",
@@ -1033,6 +1072,13 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 		log.Infof("Topology recovery: %+v", string(b))
 	} else {
 		log.Infof("Topology recovery: %+v", topologyRecovery)
+	}
+	// If we ran a cluster wide recovery and actually attemped it, then we know that the replication state for all the tablets in this cluster
+	// would have changed. So we can go ahead and pre-emptively refresh them.
+	// For this refresh we don't use the same context that we used for the recovery, since that context might have expired or could expire soon
+	// Instead we create a new context. The call forceRefreshAllTabletsInShard handles this for us.
+	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
+		forceRefreshAllTabletsInShard(nil, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	}
 	if !skipProcesses {
 		if topologyRecovery.SuccessorKey == nil {
@@ -1309,10 +1355,9 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		},
 	)
 
-	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
-	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
-	// PrimaryHasPrimary analysis which runs ERS
-	RefreshTablets(true /* forceRefresh */)
+	// here we need to forcefully refresh all the tablets because we know we have made a cluster wide operation
+	// and it affects the replication information for all the tablets
+	forceRefreshAllTabletsInShard(nil, primaryTablet.Keyspace, primaryTablet.Shard)
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -1378,10 +1423,6 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 		},
 	)
 
-	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
-	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
-	// PrimaryHasPrimary analysis which runs ERS
-	RefreshTablets(true /* forceRefresh */)
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -1442,7 +1483,7 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		return false, topologyRecovery, err
 	}
 
-	primaryTablet, err := shardPrimary(ctx, analyzedTablet.Keyspace, analyzedTablet.Shard)
+	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		log.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err

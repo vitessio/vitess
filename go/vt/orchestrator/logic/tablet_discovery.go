@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -69,11 +68,11 @@ func OpenTabletDiscovery() <-chan time.Time {
 	return time.Tick(15 * time.Second) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
-// RefreshTablets reloads the tablets from topo.
-func RefreshTablets(forceRefresh bool) {
+// refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
+func refreshAllTablets() {
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
-		DiscoverInstance(*instanceKey, forceRefresh)
-	}, forceRefresh)
+		DiscoverInstance(*instanceKey, false)
+	}, false)
 }
 
 func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
@@ -155,6 +154,31 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 	query := "select hostname, port, info from vitess_tablet where cell = ?"
 	args := sqlutils.Args(cell)
 	refreshTablets(tablets, query, args, loader, forceRefresh)
+}
+
+// forceRefreshAllTabletsInShard is used to refresh all the tablet's information (both MySQL information and topo records)
+// for a given shard. This function is meant to be called before or after a cluster-wide operation that we know will
+// change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
+func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string) {
+	log.Infof("force refresh of all tablets in shard - %v/%v", keyspace, shard)
+	if ctx == nil {
+		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		defer refreshCancel()
+		ctx = refreshCtx
+	}
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
+		DiscoverInstance(*instanceKey, true)
+	}, true)
+}
+
+// refreshTabletInfoOfShard only refreshes the tablet records from the topo-server for all the tablets
+// of the given keyspace-shard.
+func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
+	log.Infof("refresh of tablet records of shard - %v/%v", keyspace, shard)
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
+		// No-op
+		// We only want to refresh the tablet information for the given shard
+	}, false)
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
@@ -285,21 +309,29 @@ func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, prima
 	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
 }
 
-// shardPrimary finds the primary of the given keyspace-shard by reading the topo server
-func shardPrimary(ctx context.Context, keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
-	si, err := ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return nil, err
-	}
-	if !si.HasPrimary() {
-		return nil, fmt.Errorf("no primary tablet for shard %v/%v", keyspace, shard)
-	}
-	// TODO(GuptaManan100): Instead of another topo call, use the local information by calling
-	// ReadTablet. Currently this isn't possible since we only have the primary alias and not the source host and port
-	// This should be fixed once the tablet alias is changed to be the primary key of the table
-	primaryInfo, err := ts.GetTablet(ctx, si.PrimaryAlias)
-	if err != nil {
-		return nil, err
-	}
-	return primaryInfo.Tablet, nil
+// shardPrimary finds the primary of the given keyspace-shard by reading the orchestrator backend
+func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
+	query := `SELECT
+		info,
+		hostname,
+		port,
+		tablet_type,
+		primary_timestamp
+	FROM 
+		vitess_tablet
+	WHERE
+		keyspace = ? AND shard = ?
+	ORDER BY
+		tablet_type ASC,
+		primary_timestamp DESC
+	LIMIT 1
+`
+	err = db.Db.QueryOrchestrator(query, sqlutils.Args(keyspace, shard), func(m sqlutils.RowMap) error {
+		if primary == nil {
+			primary = &topodatapb.Tablet{}
+			return prototext.Unmarshal([]byte(m.GetString("info")), primary)
+		}
+		return nil
+	})
+	return primary, err
 }
