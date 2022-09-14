@@ -60,7 +60,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
 		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
-	waitForWorkflowToStart(t, vc, ksWorkflow)
+	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
 	vdiff1(t, ksWorkflow, "")
@@ -74,7 +74,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) error {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	waitForWorkflowToStart(t, vc, ksWorkflow)
+	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiff1(t, ksWorkflow, "")
@@ -267,7 +267,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
 
-	waitForWorkflowToStart(t, vc, "customer.wf2")
+	waitForWorkflowState(t, vc, "customer.wf2", workflowStateRunning)
 	waitForLowLag(t, "customer", "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
@@ -301,7 +301,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	waitForWorkflowToStart(t, vc, "product.wf3")
+	waitForWorkflowState(t, vc, "product.wf3", workflowStateRunning)
 
 	waitForLowLag(t, "product", "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,

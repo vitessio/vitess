@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/buger/jsonparser"
-	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -149,7 +148,10 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
-	verifySourceTabletThrottling(t, targetKs, workflow)
+	// Wait for the copy phase to start
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
+	// The initial copy phase should be blocking on the history list
+	confirmStreamHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
 	trxConn.Close()
 }
@@ -651,40 +653,6 @@ func validateRollupReplicates(t *testing.T) {
 		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
 	})
-}
-
-func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
-	timer := time.NewTimer(defaultTimeout)
-	defer timer.Stop()
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
-	for {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-		require.NoError(t, err)
-		result := gjson.Get(output, "ShardStatuses")
-		result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
-			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
-				if streamId.String() == "PrimaryReplicationStatuses" {
-					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
-						state := attributeValue.Get("State").String()
-						if state != "Copying" {
-							require.FailNowf(t, "Unexpected running workflow stream",
-								"Initial copy phase for the MoveTables workflow %s started in less than %s when it should have been waiting. Show output: %s",
-								ksWorkflow, defaultTimeout, output)
-						}
-						return true // end attribute loop
-					})
-				}
-				return true // end stream loop
-			})
-			return true // end tablet loop
-		})
-		select {
-		case <-timer.C:
-			return
-		default:
-			time.Sleep(defaultTick)
-		}
-	}
 }
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
