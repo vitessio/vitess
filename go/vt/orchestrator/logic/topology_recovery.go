@@ -1079,6 +1079,11 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// Instead we create a new context. The call forceRefreshAllTabletsInShard handles this for us.
 	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
 		forceRefreshAllTabletsInShard(nil, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	} else {
+		// For all other recoveries, we would have changed the replication status of the analyzed tablet
+		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery
+		// that we just completed because we would be using stale data.
+		DiscoverInstance(analysisEntry.AnalyzedInstanceKey, true)
 	}
 	if !skipProcesses {
 		if topologyRecovery.SuccessorKey == nil {
