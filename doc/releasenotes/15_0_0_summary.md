@@ -219,6 +219,18 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
 
 ### Mysql Compatibility
 
+#### System Settings
+Vitess supported system settings from release 7.0 onwards, but it was always with a pinch of salt.
+As soon as a client session changes a default system setting, the mysql connection gets blocked for it.
+This leads to clients running out of mysql connections. 
+The clients were instructed to use this to a minimum and try to set those changed system settings as default on the mysql.
+
+With this release, Vitess can handle system settings changes in a much better way and the clients can use it more freely.
+Vitess now pools those changed settings and does not reserve it for any particular session. 
+
+This feature can be enabled by setting `queryserver-enable-settings-pool` flag on the vttablet. It is disabled by default.
+In future releases, we will make this flag enabled by default.
+
 #### Lookup Vindexes
 
 Lookup vindexes now support a new parameter `multi_shard_autocommit`. If this is set to `true`, lookup vindex dml queries will be sent as autocommit to all shards instead of being wrapped in a transaction.
