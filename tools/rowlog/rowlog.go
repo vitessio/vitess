@@ -301,11 +301,17 @@ func processRowEvent(plan *TablePlan, gtid string, ev *binlogdatapb.VEvent) []*R
 			before = sqltypes.MakeRowTrusted(plan.fields, change.Before)
 		}
 		for _, val := range after {
-			bytes, _ := val.ToBytes()
+			bytes, err := val.ToBytes()
+			if err != nil {
+				panic(err)
+			}
 			afterVals = append(afterVals, string(bytes))
 		}
 		for _, val := range before {
-			bytes, _ := val.ToBytes()
+			bytes, err := val.ToBytes()
+			if err != nil {
+				panic(err)
+			}
 			beforeVals = append(beforeVals, string(bytes))
 		}
 		if !mustSend(plan, afterVals, beforeVals) {
