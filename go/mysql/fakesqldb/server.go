@@ -203,6 +203,7 @@ func NewWithExpectedQueries(t testing.TB) *DB {
 	newDb := New(t)
 	newDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 	newDb.AddQuery("SET GLOBAL super_read_only='OFF'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("SET GLOBAL read_only='OFF'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 	newDb.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 	newDb.AddQuery("SET GLOBAL super_read_only='ON'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 	newDb.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{InsertID: 0, RowsAffected: 0})

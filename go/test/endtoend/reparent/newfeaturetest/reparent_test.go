@@ -141,7 +141,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUser, "vt_repl")
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
 	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
-	assert.True(t, replicaStatus.ReadOnly)
+	assert.False(t, replicaStatus.ReadOnly)
 	assert.False(t, replicaStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, replicaStatus.SemiSyncReplicaEnabled)
 	assert.False(t, replicaStatus.SemiSyncPrimaryStatus)
