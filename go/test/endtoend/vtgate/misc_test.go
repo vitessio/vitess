@@ -58,11 +58,14 @@ func TestShowColumns(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	expected := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
-	utils.AssertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
+	expected80 := `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")] [VARCHAR("idx") BLOB("varchar(50)") VARCHAR("YES") BINARY("") NULL VARCHAR("")]]`
+	expected57 := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
+	utils.AssertMatchesAny(t, conn, "show columns from `t5_null_vindex` in `ks`", expected80, expected57)
+	utils.AssertMatchesAny(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected80, expected57)
+	utils.AssertMatchesAny(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected80, expected57)
+	utils.AssertMatchesAny(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'",
+		`[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")]]`,
+		`[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
 }
 
 func TestShowTables(t *testing.T) {
@@ -72,7 +75,6 @@ func TestShowTables(t *testing.T) {
 	query := "show tables;"
 	qr := utils.Exec(t, conn, query)
 
-	assert.Equal(t, "information_schema", qr.Fields[0].Database)
 	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
 }
 
@@ -228,9 +230,9 @@ func TestShowTablesWithWhereClause(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	utils.AssertMatches(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`)
+	utils.AssertMatchesAny(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARBINARY("t6")]]`, `[[VARCHAR("t6")]]`)
 	utils.Exec(t, conn, "begin")
-	utils.AssertMatches(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`)
+	utils.AssertMatchesAny(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARBINARY("t3")]]`, `[[VARCHAR("t3")]]`)
 }
 
 func TestOffsetAndLimitWithOLAP(t *testing.T) {
@@ -399,11 +401,11 @@ func TestFunctionInDefault(t *testing.T) {
 	// set the sql mode ALLOW_INVALID_DATES
 	utils.Exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
 
-	_, err := utils.ExecAllowError(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
-	// this query fails because mysql57 does not support functions in default clause
-	require.Error(t, err)
+	// test that default expression works for columns.
+	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
+	utils.Exec(t, conn, "drop table function_default")
 
-	// verify that currenet_timestamp and it's aliases work as default values
+	// verify that current_timestamp and it's aliases work as default values
 	utils.Exec(t, conn, `create table function_default (
 ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 dt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -426,9 +428,8 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 )`)
 	utils.Exec(t, conn, "drop table function_default")
 
-	_, err = utils.ExecAllowError(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
-	// this query fails because utc_timestamp is not supported in default clause
-	require.Error(t, err)
+	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
+	utils.Exec(t, conn, "drop table function_default")
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	utils.Exec(t, conn, "drop table function_default")

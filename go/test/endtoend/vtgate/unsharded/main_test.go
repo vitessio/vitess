@@ -147,47 +147,62 @@ END;
 `
 )
 
+var enableSettingsPool bool
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+	code := runAllTests(m)
+	if code != 0 {
+		os.Exit(code)
+	}
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
+	println("running with settings pool enabled")
+	// run again with settings pool enabled.
+	enableSettingsPool = true
+	code = runAllTests(m)
+	os.Exit(code)
+}
 
-		// Start keyspace
-		Keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3", "--queryserver-config-max-result-size", "30"}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
-			log.Fatal(err.Error())
-			return 1
-		}
+func runAllTests(m *testing.M) int {
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn_sharded_only=true"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Fatal(err.Error())
-			return 1
-		}
+	// Start topo server
+	if err := clusterInstance.StartTopo(); err != nil {
+		return 1
+	}
 
-		primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
-		if _, err := primaryTablet.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
-			log.Fatal(err.Error())
-			return 1
-		}
+	// Start keyspace
+	Keyspace := &cluster.Keyspace{
+		Name:      KeyspaceName,
+		SchemaSQL: SchemaSQL,
+		VSchema:   VSchema,
+	}
+	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3", "--queryserver-config-max-result-size", "30"}
+	if enableSettingsPool {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver_enable_settings_pool")
+	}
+	if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
+		log.Fatal(err.Error())
+		return 1
+	}
 
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	// Start vtgate
+	clusterInstance.VtGateExtraArgs = []string{"--warn_sharded_only=true"}
+	if err := clusterInstance.StartVtgate(); err != nil {
+		log.Fatal(err.Error())
+		return 1
+	}
+
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+	if _, err := primaryTablet.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
+		log.Fatal(err.Error())
+		return 1
+	}
+
+	return m.Run()
 }
 
 func TestSelectIntoAndLoadFrom(t *testing.T) {
@@ -297,7 +312,7 @@ func TestDDLUnsharded(t *testing.T) {
 	utils.AssertMatches(t, conn, "select * from v1", `[[INT64(3) INT64(0) INT64(3) VARCHAR("a")] [INT64(30) INT64(10) INT64(30) VARCHAR("ac")] [INT64(300) INT64(100) INT64(300) VARCHAR("abc")]]`)
 	utils.Exec(t, conn, `drop view v1`)
 	utils.Exec(t, conn, `drop table tempt1`)
-	utils.AssertMatches(t, conn, "show tables", `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+	utils.AssertMatchesAny(t, conn, "show tables", `[[VARBINARY("allDefaults")] [VARBINARY("t1")]]`, `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
 }
 
 func TestCallProcedure(t *testing.T) {
@@ -460,7 +475,9 @@ func TestFloatValueDefault(t *testing.T) {
 
 	utils.Exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1);`)
 	defer utils.Exec(t, conn, `drop table test_float_default`)
-	utils.AssertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_default desc", `[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
+	utils.AssertMatchesAny(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_default desc",
+		`[[VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")]]`,
+		`[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
 }
 
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {

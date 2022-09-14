@@ -102,6 +102,10 @@ func (ld *memoryTopoLockDescriptor) Unlock(ctx context.Context) error {
 }
 
 func (c *Conn) unlock(ctx context.Context, dirPath string) error {
+	if c.closed {
+		return ErrConnectionClosed
+	}
+
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 

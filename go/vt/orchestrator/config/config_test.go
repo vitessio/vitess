@@ -3,13 +3,11 @@ package config
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 )
 
 func init() {
 	Config.HostnameResolveMethod = "none"
-	log.SetLevel(log.ERROR)
 }
 
 func TestRecoveryPeriodBlock(t *testing.T) {

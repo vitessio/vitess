@@ -18,32 +18,39 @@ package grpctmclient
 
 import (
 	"context"
-	"flag"
 	"io"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	defaultPoolCapacity = flag.Int("tablet_manager_grpc_connpool_size", 100, "number of tablets to keep tmclient connections open to")
-)
+var defaultPoolCapacity = 100
+
+func registerCachedClientFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&defaultPoolCapacity, "tablet_manager_grpc_connpool_size", defaultPoolCapacity, "number of tablets to keep tmclient connections open to")
+}
 
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc-cached", func() tmclient.TabletManagerClient {
-		return NewCachedConnClient(*defaultPoolCapacity)
+		return NewCachedConnClient(defaultPoolCapacity)
 	})
+
+	for _, cmd := range _binaries {
+		servenv.OnParseFor(cmd, registerCachedClientFlags)
+	}
 }
 
 // closeFunc allows a standalone function to implement io.Closer, similar to
@@ -230,7 +237,7 @@ func (dialer *cachedConnDialer) pollOnce(ctx context.Context, addr string) (clie
 // It returns the three-tuple of client-interface, closer, and error that the
 // main dial func returns.
 func (dialer *cachedConnDialer) newdial(ctx context.Context, addr string) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		dialer.connWaitSema.Release()
 		return nil, nil, err

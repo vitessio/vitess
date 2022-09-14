@@ -25,6 +25,10 @@ import (
 
 // Watch is part of the topo.Conn interface.
 func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
+	if c.closed {
+		return nil, nil, ErrConnectionClosed
+	}
+
 	c.factory.Lock()
 	defer c.factory.Unlock()
 
@@ -55,10 +59,9 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 		// This function can be called at any point, so we first need
 		// to make sure the watch is still valid.
 		c.factory.Lock()
-		f := c.factory
-		defer f.Unlock()
+		defer c.factory.Unlock()
 
-		n := f.nodeByPath(c.cell, filePath)
+		n := c.factory.nodeByPath(c.cell, filePath)
 		if n == nil {
 			return
 		}
@@ -74,6 +77,10 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 // WatchRecursive is part of the topo.Conn interface.
 func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	if c.closed {
+		return nil, nil, ErrConnectionClosed
+	}
+
 	c.factory.Lock()
 	defer c.factory.Unlock()
 

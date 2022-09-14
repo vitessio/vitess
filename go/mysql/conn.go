@@ -1474,30 +1474,38 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			if length == 0 {
 				return packetOK, nil
 			}
-			sscType, ok := data.readByte()
-			if !ok {
-				return fail("invalid OK packet session state change type: %v", sscType)
-			}
-			// If it's not a GTID, we don't care about it so we can return.
-			if sscType != SessionTrackGtids {
-				return packetOK, nil
-			}
 
-			// Move past the total length of the changed entity: 1 byte
-			_, ok = data.readByte()
-			if !ok {
-				return fail("invalid OK packet gtids length: %v", data)
+			// Alright, now we need to read each sub packet from the session state change.
+			for {
+				sscType, ok := data.readByte()
+				if !ok {
+					// We're done, there's no more session state parts in the packet.
+					break
+				}
+				sessionLen, ok := data.readLenEncInt()
+				if !ok {
+					return fail("invalid OK packet session state change length for type %v", sscType)
+				}
+
+				if sscType != SessionTrackGtids {
+					// Still need to increase the pointer here to indicate we're consuming
+					// but otherwise ignoring the rest of this packet
+					data.pos = data.pos + int(sessionLen)
+					continue
+				}
+
+				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
+				_, ok = data.readByte()
+				if !ok {
+					return fail("invalid OK packet gtids type: %v", data)
+				}
+
+				gtids, ok := data.readLenEncString()
+				if !ok {
+					return fail("invalid OK packet gtids: %v", data)
+				}
+				packetOK.sessionStateData = gtids
 			}
-			// read (and ignore for now) the GTIDS encoding specification code: 1 byte
-			_, ok = data.readByte()
-			if !ok {
-				return fail("invalid OK packet gtids type: %v", data)
-			}
-			gtids, ok := data.readLenEncString()
-			if !ok {
-				return fail("invalid OK packet gtids: %v", data)
-			}
-			packetOK.sessionStateData = gtids
 		}
 	}
 

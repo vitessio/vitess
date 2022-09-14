@@ -27,8 +27,10 @@ import (
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vtbench"
 
 	// Import and register the gRPC vtgateconn client
@@ -107,8 +109,10 @@ func main() {
 
 	flag.Lookup("logtostderr").Value.Set("true")
 	fs := pflag.NewFlagSet("vtbench", pflag.ExitOnError)
+	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	servenv.RegisterMySQLServerFlags(fs)
 	_flag.Parse(fs)
 
 	clientProto := vtbench.MySQL

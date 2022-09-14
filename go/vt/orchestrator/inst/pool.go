@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/config"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/orchestrator/config"
 )
 
 // PoolInstancesMap lists instance keys per pool name
@@ -45,11 +45,10 @@ func NewPoolInstancesSubmission(pool string, instances string) *PoolInstancesSub
 
 // ClusterPoolInstance is an instance mapping a cluster, pool & instance
 type ClusterPoolInstance struct {
-	ClusterName  string
-	ClusterAlias string
-	Pool         string
-	Hostname     string
-	Port         int
+	ClusterName string
+	Pool        string
+	Hostname    string
+	Port        int
 }
 
 func ApplyPoolInstances(submission *PoolInstancesSubmission) error {
@@ -67,13 +66,14 @@ func ApplyPoolInstances(submission *PoolInstancesSubmission) error {
 				instanceKey = ReadFuzzyInstanceKeyIfPossible(instanceKey)
 			}
 			if err != nil {
-				return log.Errore(err)
+				log.Error(err)
+				return err
 			}
 
 			instanceKeys = append(instanceKeys, instanceKey)
 		}
 	}
-	log.Debugf("submitting %d instances in %+v pool", len(instanceKeys), submission.Pool)
-	writePoolInstances(submission.Pool, instanceKeys)
+	log.Infof("submitting %d instances in %+v pool", len(instanceKeys), submission.Pool)
+	_ = writePoolInstances(submission.Pool, instanceKeys)
 	return nil
 }

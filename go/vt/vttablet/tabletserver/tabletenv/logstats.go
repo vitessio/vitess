@@ -184,14 +184,14 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "\"[REDACTED]\""
 
-	if !*streamlog.RedactDebugUIQueries {
+	if !streamlog.GetRedactDebugUIQueries() {
 		rewrittenSQL = stats.RewrittenSQL()
 
 		_, fullBindParams := params["full"]
 		formattedBindVars = sqltypes.FormatBindVariables(
 			stats.BindVariables,
 			fullBindParams,
-			*streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON,
+			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
 		)
 	}
 
@@ -200,7 +200,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 
 	// Valid options for the QueryLogFormat are text or json
 	var fmtString string
-	switch *streamlog.QueryLogFormat {
+	switch streamlog.GetQueryLogFormat() {
 	case streamlog.QueryLogFormatText:
 		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%q\t\n"
 	case streamlog.QueryLogFormatJSON:

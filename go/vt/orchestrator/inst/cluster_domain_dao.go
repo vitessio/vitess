@@ -17,9 +17,9 @@
 package inst
 
 import (
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
 // WriteClusterDomainName will write (and override) the domain name of a cluster
@@ -35,7 +35,10 @@ func WriteClusterDomainName(clusterName string, domainName string) error {
 					last_registered=values(last_registered)
 			`,
 			clusterName, domainName)
-		return log.Errore(err)
+		if err != nil {
+			log.Error(err)
+		}
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
@@ -48,7 +51,10 @@ func ExpireClusterDomainName() error {
 				where last_registered < NOW() - INTERVAL ? MINUTE
 				`, config.Config.ExpiryHostnameResolvesMinutes,
 		)
-		return log.Errore(err)
+		if err != nil {
+			log.Error(err)
+		}
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }

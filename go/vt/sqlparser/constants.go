@@ -382,7 +382,7 @@ const (
 	GTIDSubsetStr                   = "gtid_subset"
 	GTIDSubtractStr                 = "gtid_subtract"
 	WaitForExecutedGTIDSetStr       = "wait_for_executed_gtid_set"
-	WaitUntilSQLThreadAfterGTIDSStr = "wati_until_sql_thread_after_gtids"
+	WaitUntilSQLThreadAfterGTIDSStr = "wait_until_sql_thread_after_gtids"
 
 	// LockOptionType strings
 	NoneTypeStr      = "none"

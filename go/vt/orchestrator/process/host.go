@@ -19,7 +19,7 @@ package process
 import (
 	"os"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var ThisHostname string

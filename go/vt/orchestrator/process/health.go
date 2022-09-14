@@ -21,12 +21,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 
 	"github.com/patrickmn/go-cache"
-
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
 var lastHealthCheckUnixNano int64
@@ -117,33 +117,19 @@ func HealthTest() (health *HealthStatus, err error) {
 	healthy, err := RegisterNode(ThisNodeHealth)
 	if err != nil {
 		health.Error = err
-		return health, log.Errore(err)
+		log.Error(err)
+		return health, err
 	}
 	health.Healthy = healthy
 
 	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
 		health.Error = err
-		return health, log.Errore(err)
+		log.Error(err)
+		return health, err
 	}
 	health.AvailableNodes, _ = ReadAvailableNodes(true)
 
 	return health, nil
-}
-
-func SinceLastHealthCheck() time.Duration {
-	timeNano := atomic.LoadInt64(&lastHealthCheckUnixNano)
-	if timeNano == 0 {
-		return 0
-	}
-	return time.Since(time.Unix(0, timeNano))
-}
-
-func SinceLastGoodHealthCheck() time.Duration {
-	timeNano := atomic.LoadInt64(&lastGoodHealthCheckUnixNano)
-	if timeNano == 0 {
-		return 0
-	}
-	return time.Since(time.Unix(0, timeNano))
 }
 
 // ContinuousRegistration will continuously update the node_health

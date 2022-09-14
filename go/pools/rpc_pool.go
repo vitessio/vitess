@@ -19,6 +19,10 @@ package pools
 import (
 	"context"
 	"time"
+
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // RPCPool is a specialized version of the ResourcePool, for bounding concurrent
@@ -67,7 +71,7 @@ func (pool *RPCPool) Acquire(ctx context.Context) error {
 		defer cancel()
 	}
 
-	_, err := pool.rp.Get(ctx)
+	_, err := pool.rp.Get(ctx, nil)
 	return err
 }
 
@@ -87,6 +91,25 @@ var rpc = &_rpc{}
 
 // Close implements Resource for _rpc.
 func (*_rpc) Close() {}
+
+// ApplySetting implements Resource for _rpc.
+func (r *_rpc) ApplySetting(context.Context, *Setting) error {
+	// should be unreachable
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ApplySetting")
+}
+
+func (r *_rpc) IsSettingApplied() bool {
+	return false
+}
+
+func (r *_rpc) IsSameSetting(string) bool {
+	return true
+}
+
+func (r *_rpc) ResetSetting(context.Context) error {
+	// should be unreachable
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ResetSetting")
+}
 
 // we only ever return the same rpc pointer. it's used as a sentinel and is
 // only used internally so using the same one over and over doesn't matter.

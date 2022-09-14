@@ -22,7 +22,7 @@ import (
 
 const (
 	// Truncate errors longer than this
-	maxErrorLength = 256
+	maxErrorLength = 384
 )
 
 var (
@@ -34,6 +34,9 @@ var (
 
 	// Keep Duplicate entry, but replace '...' with '<val>' using reReplaceSingleQuotesWithinDuplicate regexp
 	reTruncateErrorAfterDuplicate = regexp.MustCompile(`Duplicate entry '(.*)' for key`)
+
+	// Keep Incorrect <type> value: '...' but replace '...' with '<val>
+	reRemoveIncorrectValue = regexp.MustCompile(`Incorrect [\S]+ value: '(.*)' for column`)
 )
 
 /* Error messages often have PII in them. That can come from vttablet or from mysql, so by the time it gets to vtgate,
@@ -45,6 +48,7 @@ We remove five different sorts of strings:
 // * [,:] Sql: '.*/'
 // * Anything after /syntax error at position \d+/
 // * Anything after /Duplicate entry/ --> replace '...' with '<val>'
+// * Anything with /Incorrect ... value: '...'/ replace '...' with '<val>
 
 /* We also truncate the error message at a maximum length of 256 bytes, if it's somehow longer than that after normalizing.*/
 
@@ -57,6 +61,9 @@ func NormalizeError(str string) string {
 	}
 	if idx := reTruncateErrorAfterDuplicate.FindStringSubmatchIndex(str); len(idx) >= 4 {
 		// replace string '...' with '<val>' to mask real values
+		str = str[0:idx[2]] + "<val>" + str[idx[3]:]
+	}
+	if idx := reRemoveIncorrectValue.FindStringSubmatchIndex(str); len(idx) >= 4 {
 		str = str[0:idx[2]] + "<val>" + str[idx[3]:]
 	}
 

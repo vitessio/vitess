@@ -23,39 +23,117 @@ func BenchmarkGetPut(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-
-	tcases := []struct {
-		name string
-		pool func(int) IResourcePool
-	}{{
-		name: "static",
-		pool: func(cap int) IResourcePool {
-			return NewResourcePool(testResourceFactory, cap, cap, 0, nil, nil, 0)
-		},
-	}}
-
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
-			for _, tc := range tcases {
-				rName := fmt.Sprintf("%s/x%d-cap%d", tc.name, parallelism, size)
-				b.Run(rName, func(b *testing.B) {
-					pool := tc.pool(size)
-					defer pool.Close()
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
 
-					b.ReportAllocs()
-					b.SetParallelism(parallelism)
-					b.RunParallel(func(pb *testing.PB) {
-						var ctx = context.Background()
-						for pb.Next() {
-							if conn, err := pool.Get(ctx); err != nil {
-								b.Error(err)
-							} else {
-								pool.Put(conn)
-							}
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, nil); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn)
 						}
-					})
+					}
 				})
-			}
+			})
+		}
+	}
+}
+
+func BenchmarkGetPutWithSettings(b *testing.B) {
+	testResourceFactory := func(context.Context) (Resource, error) {
+		return &TestResource{}, nil
+	}
+	setting := &Setting{query: "set a=1, b=2, c=3"}
+	for _, size := range []int{64, 128, 512} {
+		for _, parallelism := range []int{1, 8, 32, 128} {
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
+
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, setting); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn)
+						}
+					}
+				})
+			})
+		}
+	}
+}
+
+func BenchmarkGetPutMixed(b *testing.B) {
+	testResourceFactory := func(context.Context) (Resource, error) {
+		return &TestResource{}, nil
+	}
+	settings := []*Setting{nil, {query: "set a=1, b=2, c=3"}}
+	for _, size := range []int{64, 128, 512} {
+		for _, parallelism := range []int{1, 8, 32, 128} {
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
+
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					i := 0
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, settings[i]); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn)
+						}
+						i = (i + 1) % 2
+					}
+				})
+			})
+		}
+	}
+}
+
+func BenchmarkGetPutMixedMulti(b *testing.B) {
+	testResourceFactory := func(context.Context) (Resource, error) {
+		return &TestResource{}, nil
+	}
+	settings := []*Setting{nil, {query: "set a=1"}, {query: "set a=1, b=2"}, {query: "set c=1, d=2, e=3"}, {query: "set x=1, y=2, z=3"}}
+	for _, size := range []int{64, 128, 512} {
+		for _, parallelism := range []int{1, 8, 32, 128} {
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
+
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					i := 0
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, settings[i]); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn)
+						}
+						i = (i + 1) % 5
+					}
+				})
+			})
 		}
 	}
 }

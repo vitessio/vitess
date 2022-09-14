@@ -24,9 +24,9 @@ import (
 	"regexp"
 	"strings"
 
-	"gopkg.in/gcfg.v1"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"gopkg.in/gcfg.v1"
 )
 
 var (
@@ -199,10 +199,10 @@ type Configuration struct {
 	RecoverPrimaryClusterFilters                []string          // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	RecoverIntermediatePrimaryClusterFilters    []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	ProcessesShellCommand                       string            // Shell that executes command scripts
-	OnFailureDetectionProcesses                 []string          // Processes to execute when detecting a failover scenario (before making a decision whether to failover or not). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {autoPrimaryRecovery}, {autoIntermediatePrimaryRecovery}
-	PreFailoverProcesses                        []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
-	PostFailoverProcesses                       []string          // Processes to execute after doing a failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
-	PostUnsuccessfulFailoverProcesses           []string          // Processes to execute after a not-completely-successful failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
+	OnFailureDetectionProcesses                 []string          // Processes to execute when detecting a failover scenario (before making a decision whether to failover or not). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {autoPrimaryRecovery}, {autoIntermediatePrimaryRecovery}
+	PreFailoverProcesses                        []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
+	PostFailoverProcesses                       []string          // Processes to execute after doing a failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
+	PostUnsuccessfulFailoverProcesses           []string          // Processes to execute after a not-completely-successful failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
 	PostPrimaryFailoverProcesses                []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
 	PostIntermediatePrimaryFailoverProcesses    []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
 	PostTakePrimaryProcesses                    []string          // Processes to execute after a successful Take-Primary event has taken place
@@ -393,7 +393,7 @@ func (config *Configuration) postReadAdjustments() error {
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed orchestrator credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
+			log.Infof("Parsed orchestrator credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
 			config.MySQLOrchestratorUser = mySQLConfig.Client.User
 			config.MySQLOrchestratorPassword = mySQLConfig.Client.Password
 		}
@@ -417,7 +417,7 @@ func (config *Configuration) postReadAdjustments() error {
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed topology credentials from %s", config.MySQLTopologyCredentialsConfigFile)
+			log.Infof("Parsed topology credentials from %s", config.MySQLTopologyCredentialsConfigFile)
 			config.MySQLTopologyUser = mySQLConfig.Client.User
 			config.MySQLTopologyPassword = mySQLConfig.Client.Password
 		}
@@ -514,7 +514,7 @@ func read(fileName string) (*Configuration, error) {
 		log.Fatal("Cannot read config file:", fileName, err)
 	}
 	if err := Config.postReadAdjustments(); err != nil {
-		log.Fatale(err)
+		log.Fatal(err)
 	}
 	return Config, err
 }

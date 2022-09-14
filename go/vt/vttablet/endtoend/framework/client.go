@@ -304,6 +304,27 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 	return qr, nil
 }
 
+// ReserveStreamExecute performs a ReserveStreamExecute.
+func (client *QueryClient) ReserveStreamExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.reservedID != 0 {
+		return nil, errors.New("already reserved a connection")
+	}
+	result := &sqltypes.Result{}
+	state, err := client.server.ReserveStreamExecute(client.ctx, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+		func(res *sqltypes.Result) error {
+			if result.Fields == nil {
+				result.Fields = res.Fields
+			}
+			result.Rows = append(result.Rows, res.Rows...)
+			return nil
+		})
+	client.reservedID = state.ReservedID
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // ReserveBeginExecute performs a ReserveBeginExecute.
 func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string, postBeginQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if client.reservedID != 0 {
@@ -320,6 +341,32 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 		return nil, err
 	}
 	return qr, nil
+}
+
+// ReserveBeginStreamExecute performs a ReserveBeginStreamExecute.
+func (client *QueryClient) ReserveBeginStreamExecute(query string, preQueries []string, postBeginQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.reservedID != 0 {
+		return nil, errors.New("already reserved a connection")
+	}
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	result := &sqltypes.Result{}
+	state, err := client.server.ReserveBeginStreamExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+		func(res *sqltypes.Result) error {
+			if result.Fields == nil {
+				result.Fields = res.Fields
+			}
+			result.Rows = append(result.Rows, res.Rows...)
+			return nil
+		})
+	client.transactionID = state.TransactionID
+	client.reservedID = state.ReservedID
+	client.sessionStateChanges = state.SessionStateChanges
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // Release performs a Release.

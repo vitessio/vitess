@@ -29,7 +29,7 @@ import (
 	"github.com/martini-contrib/auth"
 	"github.com/martini-contrib/render"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 
 	"vitess.io/vitess/go/vt/orchestrator/collection"
@@ -620,26 +620,8 @@ func (httpAPI *API) DetachReplicaPrimaryHost(params martini.Params, r render.Ren
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica detached: %+v", instance.Key), Details: instance})
 }
 
-// ReattachReplicaPrimaryHost reverts a detachReplicaPrimaryHost command
-// by resetting the original primary hostname in CHANGE MASTER TO
-func (httpAPI *API) ReattachReplicaPrimaryHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	instance, err := inst.ReattachReplicaPrimaryHost(&instanceKey)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reattached: %+v", instance.Key), Details: instance})
+func (httpAPI *API) NoOp(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	Respond(r, &APIResponse{Code: OK, Message: "API Deprecated"})
 }
 
 // EnableGTID attempts to enable GTID on a replica
@@ -1375,13 +1357,7 @@ func (httpAPI *API) Cluster(params martini.Params, r render.Render, req *http.Re
 
 // ClusterByAlias provides list of instances in given cluster
 func (httpAPI *API) ClusterByAlias(params martini.Params, r render.Render, req *http.Request) {
-	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	params["clusterName"] = clusterName
+	params["clusterName"] = params["clusterAlias"]
 	httpAPI.Cluster(params, r, req)
 }
 
@@ -1421,13 +1397,7 @@ func (httpAPI *API) ClusterInfo(params martini.Params, r render.Render, req *htt
 
 // Cluster provides list of instances in given cluster
 func (httpAPI *API) ClusterInfoByAlias(params martini.Params, r render.Render, req *http.Request) {
-	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	params["clusterName"] = clusterName
+	params["clusterName"] = params["clusterAlias"]
 	httpAPI.ClusterInfo(params, r, req)
 }
 
@@ -1446,29 +1416,6 @@ func (httpAPI *API) ClusterOSCReplicas(params martini.Params, r render.Render, r
 	}
 
 	r.JSON(http.StatusOK, instances)
-}
-
-// SetClusterAlias will change an alias for a given clustername
-func (httpAPI *API) SetClusterAliasManualOverride(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	clusterName := params["clusterName"]
-	alias := req.URL.Query().Get("alias")
-
-	var err error
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("set-cluster-alias-manual-override", []string{clusterName, alias})
-	} else {
-		err = inst.SetClusterAliasManualOverride(clusterName, alias)
-	}
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Cluster %s now has alias '%s'", clusterName, alias)})
 }
 
 // Clusters provides list of known clusters
@@ -1878,11 +1825,7 @@ func (httpAPI *API) GetHeuristicClusterPoolInstancesLag(params martini.Params, r
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	clusterName, err := inst.ReadClusterNameByAlias(params["clusterName"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
+	clusterName := params["clusterName"]
 	pool := params["pool"]
 
 	lag, err := inst.GetHeuristicClusterPoolInstancesLag(clusterName, pool)
@@ -1950,7 +1893,7 @@ func (httpAPI *API) DiscoveryMetricsRaw(params martini.Params, r render.Render, 
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to determine start time. Perhaps seconds value is wrong?"})
 		return
 	}
-	log.Debugf("DiscoveryMetricsRaw data: retrieved %d entries from discovery.MC", len(json))
+	log.Infof("DiscoveryMetricsRaw data: retrieved %d entries from discovery.MC", len(json))
 
 	r.JSON(http.StatusOK, json)
 }
@@ -1974,7 +1917,7 @@ func (httpAPI *API) DiscoveryMetricsAggregated(params martini.Params, r render.R
 // queued values), data taken secondly for the last N seconds.
 func (httpAPI *API) DiscoveryQueueMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("DiscoveryQueueMetricsRaw: seconds: %d", seconds)
+	log.Infof("DiscoveryQueueMetricsRaw: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue  aggregated metrics"})
 		return
@@ -1982,7 +1925,7 @@ func (httpAPI *API) DiscoveryQueueMetricsRaw(params martini.Params, r render.Ren
 
 	queue := discovery.CreateOrReturnQueue("DEFAULT")
 	metrics := queue.DiscoveryQueueMetrics(seconds)
-	log.Debugf("DiscoveryQueueMetricsRaw data: %+v", metrics)
+	log.Infof("DiscoveryQueueMetricsRaw data: %+v", metrics)
 
 	r.JSON(http.StatusOK, metrics)
 }
@@ -1992,7 +1935,7 @@ func (httpAPI *API) DiscoveryQueueMetricsRaw(params martini.Params, r render.Ren
 // See go/discovery/ for more information.
 func (httpAPI *API) DiscoveryQueueMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("DiscoveryQueueMetricsAggregated: seconds: %d", seconds)
+	log.Infof("DiscoveryQueueMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue aggregated metrics"})
 		return
@@ -2000,7 +1943,7 @@ func (httpAPI *API) DiscoveryQueueMetricsAggregated(params martini.Params, r ren
 
 	queue := discovery.CreateOrReturnQueue("DEFAULT")
 	aggregated := queue.AggregatedDiscoveryQueueMetrics(seconds)
-	log.Debugf("DiscoveryQueueMetricsAggregated data: %+v", aggregated)
+	log.Infof("DiscoveryQueueMetricsAggregated data: %+v", aggregated)
 
 	r.JSON(http.StatusOK, aggregated)
 }
@@ -2008,7 +1951,7 @@ func (httpAPI *API) DiscoveryQueueMetricsAggregated(params martini.Params, r ren
 // BackendQueryMetricsRaw returns the raw backend query metrics
 func (httpAPI *API) BackendQueryMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("BackendQueryMetricsRaw: seconds: %d", seconds)
+	log.Infof("BackendQueryMetricsRaw: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate raw backend query metrics"})
 		return
@@ -2021,14 +1964,14 @@ func (httpAPI *API) BackendQueryMetricsRaw(params martini.Params, r render.Rende
 		return
 	}
 
-	log.Debugf("BackendQueryMetricsRaw data: %+v", m)
+	log.Infof("BackendQueryMetricsRaw data: %+v", m)
 
 	r.JSON(http.StatusOK, m)
 }
 
 func (httpAPI *API) BackendQueryMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("BackendQueryMetricsAggregated: seconds: %d", seconds)
+	log.Infof("BackendQueryMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to aggregated generate backend query metrics"})
 		return
@@ -2036,7 +1979,7 @@ func (httpAPI *API) BackendQueryMetricsAggregated(params martini.Params, r rende
 
 	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
 	aggregated := query.AggregatedSince(queryMetrics, refTime)
-	log.Debugf("BackendQueryMetricsAggregated data: %+v", aggregated)
+	log.Infof("BackendQueryMetricsAggregated data: %+v", aggregated)
 
 	r.JSON(http.StatusOK, aggregated)
 }
@@ -2044,7 +1987,7 @@ func (httpAPI *API) BackendQueryMetricsAggregated(params martini.Params, r rende
 // WriteBufferMetricsRaw returns the raw instance write buffer metrics
 func (httpAPI *API) WriteBufferMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("WriteBufferMetricsRaw: seconds: %d", seconds)
+	log.Infof("WriteBufferMetricsRaw: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate raw instance write buffer metrics"})
 		return
@@ -2057,7 +2000,7 @@ func (httpAPI *API) WriteBufferMetricsRaw(params martini.Params, r render.Render
 		return
 	}
 
-	log.Debugf("WriteBufferMetricsRaw data: %+v", m)
+	log.Infof("WriteBufferMetricsRaw data: %+v", m)
 
 	r.JSON(http.StatusOK, m)
 }
@@ -2065,7 +2008,7 @@ func (httpAPI *API) WriteBufferMetricsRaw(params martini.Params, r render.Render
 // WriteBufferMetricsAggregated provides aggregate metrics of instance write buffer metrics
 func (httpAPI *API) WriteBufferMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("WriteBufferMetricsAggregated: seconds: %d", seconds)
+	log.Infof("WriteBufferMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to aggregated instance write buffer metrics"})
 		return
@@ -2073,7 +2016,7 @@ func (httpAPI *API) WriteBufferMetricsAggregated(params martini.Params, r render
 
 	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
 	aggregated := inst.AggregatedSince(writeBufferMetrics, refTime)
-	log.Debugf("WriteBufferMetricsAggregated data: %+v", aggregated)
+	log.Infof("WriteBufferMetricsAggregated data: %+v", aggregated)
 
 	r.JSON(http.StatusOK, aggregated)
 }
@@ -2199,12 +2142,7 @@ func (httpAPI *API) ReplicationAnalysis(params martini.Params, r render.Render, 
 
 // ReplicationAnalysis retuens list of issues
 func (httpAPI *API) ReplicationAnalysisForCluster(params martini.Params, r render.Render, req *http.Request) {
-	var clusterName string
-	var err error
-	if clusterName, err = inst.DeduceClusterName(params["clusterName"]); err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get analysis: %+v", err)})
-		return
-	}
+	clusterName := params["clusterName"]
 	if clusterName == "" {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get cluster name: %+v", params["clusterName"])})
 		return
@@ -2415,7 +2353,7 @@ func (httpAPI *API) AuditFailureDetection(params martini.Params, r render.Render
 		if derr != nil || page < 0 {
 			page = 0
 		}
-		audits, err = logic.ReadRecentFailureDetections(params["clusterAlias"], page)
+		audits, err = logic.ReadRecentFailureDetections(params["clusterName"], page)
 	}
 
 	if err != nil {
@@ -2467,7 +2405,7 @@ func (httpAPI *API) AuditRecovery(params martini.Params, r render.Render, req *h
 		}
 		unacknowledgedOnly := (req.URL.Query().Get("unacknowledged") == "true")
 
-		audits, err = logic.ReadRecentRecoveries(params["clusterName"], params["clusterAlias"], unacknowledgedOnly, page)
+		audits, err = logic.ReadRecentRecoveries(params["clusterName"], unacknowledgedOnly, page)
 	}
 
 	if err != nil {
@@ -2530,7 +2468,7 @@ func (httpAPI *API) AcknowledgeClusterRecoveries(params martini.Params, r render
 	var clusterName string
 	var err error
 	if params["clusterAlias"] != "" {
-		clusterName, err = inst.GetClusterByAlias(params["clusterAlias"])
+		clusterName = params["clusterAlias"]
 	} else {
 		clusterName, err = figureClusterName(getClusterHint(params))
 	}
@@ -2813,9 +2751,9 @@ func (httpAPI *API) RegisterRequests(m *martini.ClassicMartini) {
 	httpAPI.registerAPIRequest(m, "stop-replica-nice/:host/:port", httpAPI.StopReplicationNicely)
 	httpAPI.registerAPIRequest(m, "reset-replica/:host/:port", httpAPI.ResetReplication)
 	httpAPI.registerAPIRequest(m, "detach-replica/:host/:port", httpAPI.DetachReplicaPrimaryHost)
-	httpAPI.registerAPIRequest(m, "reattach-replica/:host/:port", httpAPI.ReattachReplicaPrimaryHost)
+	httpAPI.registerAPIRequest(m, "reattach-replica/:host/:port", httpAPI.NoOp)
 	httpAPI.registerAPIRequest(m, "detach-replica-primary-host/:host/:port", httpAPI.DetachReplicaPrimaryHost)
-	httpAPI.registerAPIRequest(m, "reattach-replica-primary-host/:host/:port", httpAPI.ReattachReplicaPrimaryHost)
+	httpAPI.registerAPIRequest(m, "reattach-replica-primary-host/:host/:port", httpAPI.NoOp)
 	httpAPI.registerAPIRequest(m, "flush-binary-logs/:host/:port", httpAPI.FlushBinaryLogs)
 	httpAPI.registerAPIRequest(m, "purge-binary-logs/:host/:port/:logFile", httpAPI.PurgeBinaryLogs)
 	httpAPI.registerAPIRequest(m, "restart-replica-statements/:host/:port", httpAPI.RestartReplicationStatements)
@@ -2849,7 +2787,7 @@ func (httpAPI *API) RegisterRequests(m *martini.ClassicMartini) {
 	httpAPI.registerAPIRequest(m, "cluster-info/:clusterHint", httpAPI.ClusterInfo)
 	httpAPI.registerAPIRequest(m, "cluster-info/alias/:clusterAlias", httpAPI.ClusterInfoByAlias)
 	httpAPI.registerAPIRequest(m, "cluster-osc-replicas/:clusterHint", httpAPI.ClusterOSCReplicas)
-	httpAPI.registerAPIRequest(m, "set-cluster-alias/:clusterName", httpAPI.SetClusterAliasManualOverride)
+	httpAPI.registerAPIRequest(m, "set-cluster-alias/:clusterName", httpAPI.NoOp)
 	httpAPI.registerAPIRequest(m, "clusters", httpAPI.Clusters)
 	httpAPI.registerAPIRequest(m, "clusters-info", httpAPI.ClustersInfo)
 

@@ -19,15 +19,16 @@ package process
 import (
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"fmt"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
-// RegisterNode writes down this node in the node_health table
+// WriteRegisterNode writes down this node in the node_health table
 func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	timeNow := time.Now()
 	reportedAgo := timeNow.Sub(nodeHealth.LastReported)
@@ -65,11 +66,13 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 			nodeHealth.Hostname, nodeHealth.Token,
 		)
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		if rows > 0 {
 			return true, nil
@@ -98,11 +101,13 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 			nodeHealth.AppVersion, dbBackend,
 		)
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		if rows > 0 {
 			return true, nil
@@ -138,7 +143,10 @@ func ExpireNodesHistory() error {
 			`,
 		config.Config.UnseenInstanceForgetHours,
 	)
-	return log.Errore(err)
+	if err != nil {
+		log.Error(err)
+	}
+	return err
 }
 
 func ReadAvailableNodes(onlyHTTPNodes bool) (nodes [](*NodeHealth), err error) {
@@ -170,26 +178,8 @@ func ReadAvailableNodes(onlyHTTPNodes bool) (nodes [](*NodeHealth), err error) {
 		nodes = append(nodes, nodeHealth)
 		return nil
 	})
-	return nodes, log.Errore(err)
-}
-
-func TokenBelongsToHealthyHTTPService(token string) (result bool, err error) {
-	extraInfo := string(OrchestratorExecutionHTTPMode)
-
-	query := `
-		select
-			token
-		from
-			node_health
-		where
-			and token = ?
-			and extra_info = ?
-		`
-
-	err = db.QueryOrchestrator(query, sqlutils.Args(token, extraInfo), func(m sqlutils.RowMap) error {
-		// Row exists? We're happy
-		result = true
-		return nil
-	})
-	return result, log.Errore(err)
+	if err != nil {
+		log.Error(err)
+	}
+	return nodes, err
 }

@@ -19,7 +19,7 @@ package inst
 import (
 	"sync"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 )
 
 type PostponedFunctionsContainer struct {
@@ -49,9 +49,9 @@ func (postponedFuncsContainer *PostponedFunctionsContainer) AddPostponedFunction
 }
 
 func (postponedFuncsContainer *PostponedFunctionsContainer) Wait() {
-	log.Debugf("PostponedFunctionsContainer: waiting on %+v postponed functions", postponedFuncsContainer.Len())
+	log.Infof("PostponedFunctionsContainer: waiting on %+v postponed functions", postponedFuncsContainer.Len())
 	postponedFuncsContainer.waitGroup.Wait()
-	log.Debugf("PostponedFunctionsContainer: done waiting")
+	log.Infof("PostponedFunctionsContainer: done waiting")
 }
 
 func (postponedFuncsContainer *PostponedFunctionsContainer) Len() int {

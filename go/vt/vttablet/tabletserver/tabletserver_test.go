@@ -1564,7 +1564,7 @@ func TestTruncateMessages(t *testing.T) {
 	tl := newTestLogger()
 	defer tl.Close()
 
-	*sqlparser.TruncateErrLen = 52
+	sqlparser.SetTruncateErrLen(52)
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
 	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
@@ -1588,7 +1588,7 @@ func TestTruncateMessages(t *testing.T) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
 
-	*sqlparser.TruncateErrLen = 140
+	sqlparser.SetTruncateErrLen(140)
 	err = tsv.convertAndLogError(
 		ctx,
 		sql,
@@ -1608,7 +1608,7 @@ func TestTruncateMessages(t *testing.T) {
 	if wantLog != tl.getLog(1) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
-	*sqlparser.TruncateErrLen = 0
+	sqlparser.SetTruncateErrLen(0)
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
@@ -1728,11 +1728,11 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
-	tsv.SetTxTimeout(newDuration)
-	if val := tsv.TxTimeout(); val != newDuration {
+	tsv.Config().SetTxTimeoutForWorkload(newDuration, querypb.ExecuteOptions_OLTP)
+	if val := tsv.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
-	if val := tsv.te.txPool.Timeout(); val != newDuration {
+	if val := tsv.te.txPool.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
 		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 

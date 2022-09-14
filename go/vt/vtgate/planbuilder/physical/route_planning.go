@@ -562,6 +562,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		Keyspace:            aRoute.Keyspace,
 		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
+		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
 		Source: &ApplyJoin{
 			LHS:       aRoute.Source,
@@ -659,7 +660,7 @@ func tryMerge(
 		// can merge via join predicates instead.
 		fallthrough
 
-	case engine.Scatter, engine.IN:
+	case engine.Scatter, engine.IN, engine.None:
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
@@ -678,7 +679,13 @@ func tryMerge(
 		if err != nil {
 			return nil, err
 		}
-		r.PickBestAvailableVindex()
+
+		// If we have a `None` route opcode, we want to keep it -
+		// we only try to find a better Vindex for other route opcodes
+		if aRoute.RouteOpCode != engine.None {
+			r.PickBestAvailableVindex()
+		}
+
 		return r, nil
 	}
 	return nil, nil

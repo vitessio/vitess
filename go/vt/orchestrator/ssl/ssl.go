@@ -10,11 +10,12 @@ import (
 	"os"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/go-martini/martini"
 	"github.com/howeyc/gopass"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
 // Determine if a string element is in a string array
@@ -75,11 +76,11 @@ func Verify(r *nethttp.Request, validOUs []string) error {
 	}
 	for _, chain := range r.TLS.VerifiedChains {
 		s := chain[0].Subject.OrganizationalUnit
-		log.Debug("All OUs:", strings.Join(s, " "))
+		log.Infof("All OUs:", strings.Join(s, " "))
 		for _, ou := range s {
-			log.Debug("Client presented OU:", ou)
+			log.Infof("Client presented OU:", ou)
 			if HasString(ou, validOUs) {
-				log.Debug("Found valid OU:", ou)
+				log.Infof("Found valid OU:", ou)
 				return nil
 			}
 		}
@@ -91,7 +92,7 @@ func Verify(r *nethttp.Request, validOUs []string) error {
 // TODO: make this testable?
 func VerifyOUs(validOUs []string) martini.Handler {
 	return func(res nethttp.ResponseWriter, req *nethttp.Request, c martini.Context) {
-		log.Debug("Verifying client OU")
+		log.Infof("Verifying client OU")
 		if err := Verify(req, validOUs); err != nil {
 			nethttp.Error(res, err.Error(), nethttp.StatusUnauthorized)
 		}
