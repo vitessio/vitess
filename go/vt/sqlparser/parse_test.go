@@ -40,6 +40,10 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "INSERT INTO test(pk, int, string, boolean, float, uint, uuid) values (1, 2, 'one', true, 5.0, 6, 100)",
+			output: "insert into test(pk, `int`, string, `boolean`, `float`, uint, uuid) values (1, 2, 'one', true, 5.0, 6, 100)",
+		},
+		{
 			input:  "select * from my_table_function()",
 			output: "select * from my_table_function()",
 		},

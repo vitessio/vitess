@@ -6231,7 +6231,7 @@ ins_column:
   {
     $$ = $3
   }
-| sql_id
+| reserved_sql_id
   {
     $$ = $1
   }
