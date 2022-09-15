@@ -536,6 +536,15 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_replication_manager": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/replication_manager"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "18",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"tabletmanager_consul": {
 			"File": "unused.go",
 			"Args": [

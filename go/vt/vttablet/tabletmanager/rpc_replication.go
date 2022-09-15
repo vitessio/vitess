@@ -39,8 +39,9 @@ import (
 )
 
 var (
-	_                = flag.Bool("enable_semi_sync", false, "DEPRECATED - Set the correct durability policy on the keyspace instead.")
-	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
+	_                         = flag.Bool("enable_semi_sync", false, "DEPRECATED - Set the correct durability policy on the keyspace instead.")
+	setSuperReadOnly          = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
+	disableReplicationManager = flag.Bool("disable-replication-manager", false, "Disable replication manager to prevent replication repairs.")
 )
 
 // ReplicationStatus returns the replication status

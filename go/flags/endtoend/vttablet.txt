@@ -365,6 +365,8 @@ Usage of vttablet:
 	Size of the connection pool for dba connections (default 20)
   --degraded_threshold duration
 	replication lag after which a replica is considered degraded (default 30s)
+  --disable-replication-manager
+	Disable replication manager to prevent replication repairs.
   --disable_active_reparents
 	if set, do not allow active reparents. Use this to protect a cluster using external reparents.
   --discovery_high_replication_lag_minimum_serving duration
