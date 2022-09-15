@@ -437,7 +437,7 @@ type internalTabletConn struct {
 var _ queryservice.QueryService = (*internalTabletConn)(nil)
 
 // Execute is part of queryservice.QueryService
-// We need to copy the bind variables and options as tablet server will change them.
+// We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(
 	ctx context.Context,
 	target *querypb.Target,
