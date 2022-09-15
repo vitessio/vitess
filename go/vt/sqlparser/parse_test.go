@@ -6290,19 +6290,23 @@ var incorrectlyParse = []string{
 }
 
 // TestKeywordsCorrectlyParse ensures that certain keywords can be parsed by a series of edit queries.
-func TestKeywordsCorrectlyDoParse(t *testing.T) {
+func TestKeywordsCorrectlyParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
-	iTest := "INSERT INTO t (%s) VALUES (1)"
+	iTest1 := "INSERT INTO t_t (%s) VALUES ('one')"
+	iTest2 := "INSERT INTO t_t (pk, %s) VALUES (1, 'one')"
+	iTest3 := "INSERT INTO t_t (pk, %s, c1) VALUES (1, 'one', 1)"
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
-	cTest := "CREATE TABLE t(%s int)"
+	cTest1 := "CREATE TABLE t(%s int)"
+	cTest2 := "CREATE TABLE t(foo int, %s int)"
+	cTest3 := "CREATE TABLE t(foo int, %s int, foo int)"
 	tTest := "CREATE TABLE %s(i int)"
 	tcTest := "SELECT * FROM t ORDER BY t.%s"
 	sTest := "SELECT %s.c FROM t"
 	dropConstraintTest := "ALTER TABLE t DROP CONSTRAINT %s"
 	dropCheckTest := "ALTER TABLE t DROP CHECK %s"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest, sTest, dropConstraintTest, dropCheckTest}
+	tests := []string{aliasTest, iTest1, iTest2, iTest3, dTest, uTest, cTest1, cTest2, cTest3, tTest, tcTest, sTest, dropConstraintTest, dropCheckTest}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {

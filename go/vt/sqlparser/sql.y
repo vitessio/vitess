@@ -433,6 +433,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
+%type <colIdent> ins_column
 %type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <variables> variable_list
@@ -455,7 +456,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2 non_reserved_keyword3
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword non_reserved_keyword2 non_reserved_keyword3
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -2298,7 +2299,7 @@ column_definition_for_create:
     }
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
-| column_name_safe_reserved_keyword column_type column_type_options
+| column_name_safe_keyword column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -3220,7 +3221,7 @@ index_column:
   {
       $$ = &IndexColumn{Column: $1, Length: $2, Order: $3}
   }
-| column_name_safe_reserved_keyword length_opt asc_desc_opt
+| column_name_safe_keyword length_opt asc_desc_opt
   {
       $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
   }
@@ -3230,7 +3231,7 @@ constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-|  CONSTRAINT column_name_safe_reserved_keyword constraint_info
+|  CONSTRAINT column_name_safe_keyword constraint_info
    {
      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
    }
@@ -3271,7 +3272,7 @@ check_constraint_definition:
     {
       $$ = &ConstraintDefinition{Name: string($2), Details: $3}
     }
-| CONSTRAINT column_name_safe_reserved_keyword check_constraint_info
+| CONSTRAINT column_name_safe_keyword check_constraint_info
     {
       $$ = &ConstraintDefinition{Name: string($2), Details: $3}
     }
@@ -3502,7 +3503,7 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
-| DROP CONSTRAINT column_name_safe_reserved_keyword
+| DROP CONSTRAINT column_name_safe_keyword
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
@@ -3527,7 +3528,7 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
   }
-| DROP CHECK column_name_safe_reserved_keyword
+| DROP CHECK column_name_safe_keyword
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
@@ -4463,7 +4464,7 @@ col_alias:
   {
     $$ = NewColIdent(string($1))
   }
-| column_name_safe_reserved_keyword
+| column_name_safe_keyword
   {
     $$ = NewColIdent(string($1))
   }
@@ -4677,7 +4678,7 @@ as_opt:
 
 table_alias:
   table_id
-| column_name_safe_reserved_keyword
+| column_name_safe_keyword
   {
     $$ = NewTableIdent(string($1))
   }
@@ -4854,7 +4855,7 @@ table_name:
   {
     $$ = TableName{Qualifier: $1, Name: $3}
   }
-| column_name_safe_reserved_keyword
+| column_name_safe_keyword
   {
     $$ = TableName{Name: NewTableIdent(string($1))}
   }
@@ -5148,7 +5149,7 @@ value_expression:
   {
     $$ = $1
   }
-| column_name_safe_reserved_keyword
+| column_name_safe_keyword
   {
     $$ = &ColName{Name: NewColIdent(string($1))}
   }
@@ -5964,6 +5965,10 @@ column_name:
   {
     $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
   }
+| table_id '.' column_name_safe_keyword
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
+  }
 | table_id '.' ACCOUNT
   {
     $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
@@ -5971,6 +5976,10 @@ column_name:
 | table_id '.' FORMAT
   {
     $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
+  }
+| column_name_safe_keyword '.' sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
   }
 | qualified_column_name_safe_reserved_keyword '.' reserved_sql_id
   {
@@ -6208,37 +6217,39 @@ ins_column_list_opt:
   }
 
 ins_column_list:
-  sql_id
+  ins_column
   {
     $$ = Columns{$1}
   }
-| reserved_sql_id '.' reserved_sql_id
-  {
-    $$ = Columns{$3}
-  }
-| ins_column_list ',' reserved_sql_id
+| ins_column_list ',' ins_column
   {
     $$ = append($$, $3)
   }
-| ins_column_list ',' reserved_sql_id '.' reserved_sql_id
+
+ins_column:
+ reserved_sql_id '.' reserved_sql_id // TODO: This throws away the qualifier, not a huge deal for insert into, but is incorrect
   {
-    $$ = append($$, $5)
+    $$ = $3
   }
-| column_name_safe_reserved_keyword
+| sql_id
   {
-    $$ = Columns{NewColIdent(string($1))}
+    $$ = $1
+  }
+| column_name_safe_keyword
+  {
+    $$ = NewColIdent(string($1))
   }
 | non_reserved_keyword2
   {
-    $$ = Columns{NewColIdent(string($1))}
+    $$ = NewColIdent(string($1))
   }
 | non_reserved_keyword3
   {
-    $$ = Columns{NewColIdent(string($1))}
+    $$ = NewColIdent(string($1))
   }
 | ESCAPE
   {
-    $$ = Columns{NewColIdent(string($1))}
+    $$ = NewColIdent(string($1))
   }
 
 on_dup_opt:
@@ -6301,7 +6312,7 @@ assignment_expression:
   {
     $$ = &AssignmentExpr{Name: $1, Expr: $3}
   }
-| column_name_safe_reserved_keyword '=' expression {
+| column_name_safe_keyword '=' expression {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
 | non_reserved_keyword3 '=' expression
@@ -6670,9 +6681,13 @@ kill_statement:
   }
 
 /*
-  These are not all necessarily reserved in MySQL, but some are.
+  Reserved keywords are keywords that MUST be backtick quoted to be used as an identifier. They cannot
+  parse correctly as an identifier otherwise. These are not all necessarily reserved keywords in MySQL, but some are.
+  These are reserved because they may cause parse conflicts in our grammar.
 
-  These are more importantly reserved because they may conflict with our grammar.
+  TODO: Would be helpful to annotate which are NOT reserved in MySQL. Each of those non-reserved keywords that
+        we require to be backtick quoted is a potential customer issue since there's a compatibility issue with MySQL.
+
   If you want to move one that is not reserved in MySQL (i.e. ESCAPE) to the
   non_reserved_keywords, you'll need to deal with any conflicts.
 
@@ -6688,7 +6703,6 @@ reserved_keyword:
 | AS
 | ASC
 | ASENSITIVE
-| AVG
 | BEFORE
 | BETWEEN
 | BIGINT
@@ -6712,7 +6726,6 @@ reserved_keyword:
 | CONDITION
 | CONTINUE
 | CONVERT
-| COUNT
 | CUME_DIST
 | CREATE
 | CROSS
@@ -6743,7 +6756,6 @@ reserved_keyword:
 | DIV
 | DOUBLE
 | DROP
-//| DUAL
 | EACH
 | ELSE
 | ELSEIF
@@ -6829,14 +6841,12 @@ reserved_keyword:
 | MASTER_BIND
 | MASTER_SSL_VERIFY_SERVER_CERT
 | MATCH
-| MAX
 | MAXVALUE
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
 | MEMBER
 | MIDDLEINT
-| MIN
 | MINUTE_MICROSECOND
 | MOD
 | MODIFIES
@@ -6919,7 +6929,6 @@ reserved_keyword:
 | STRAIGHT_JOIN
 | SUBSTR
 | SUBSTRING
-| SUM
 | SYSTEM
 | TABLE
 | TERMINATED
@@ -6962,6 +6971,7 @@ reserved_keyword:
 | YEAR_MONTH
 | ZEROFILL
 
+// These reserved keywords are safe to use, unquoted, as the qualifier on a column reference (e.g. 'accessible.myColumn')
 qualified_column_name_safe_reserved_keyword:
   ACCESSIBLE
 | ADD
@@ -6971,7 +6981,6 @@ qualified_column_name_safe_reserved_keyword:
 | AS
 | ASC
 | ASENSITIVE
-| AVG
 | BEFORE
 | BETWEEN
 | BIGINT
@@ -6995,7 +7004,6 @@ qualified_column_name_safe_reserved_keyword:
 | CONDITION
 | CONTINUE
 | CONVERT
-| COUNT
 | CUME_DIST
 | CREATE
 | CROSS
@@ -7108,14 +7116,12 @@ qualified_column_name_safe_reserved_keyword:
 | MASTER_BIND
 | MASTER_SSL_VERIFY_SERVER_CERT
 | MATCH
-| MAX
 | MAXVALUE
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
 | MEMBER
 | MIDDLEINT
-| MIN
 | MINUTE_MICROSECOND
 | MOD
 | MODIFIES
@@ -7195,7 +7201,6 @@ qualified_column_name_safe_reserved_keyword:
 | STORED
 | SUBSTR
 | SUBSTRING
-| SUM
 | SYSTEM
 | TABLE
 | TERMINATED
@@ -7238,9 +7243,9 @@ qualified_column_name_safe_reserved_keyword:
 | ZEROFILL
 
 /*
-  These are non-reserved Vitess, because they don't cause conflicts in the grammar.
-  Some of them may be reserved in MySQL. The good news is we backtick quote them
-  when we rewrite the query, so no issue should arise.
+  These are non-reserved keywords for Vitess – they don't cause conflicts in the grammar when used as identifiers.
+  They can be safely used as unquoted identifiers in queries. Some may be reserved in MySQL, so we backtick quote
+  them when we rewrite the query, to prevent any issues.
 
   Sorted alphabetically
 */
@@ -7481,10 +7486,8 @@ non_reserved_keyword3:
 | SQL_CACHE
 | SQL_NO_CACHE
 
-// Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
-// These keywords should also go in reserved_keyword.
-// TODO: These shouldn't be reserved, but they are
-column_name_safe_reserved_keyword:
+// Keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
+column_name_safe_keyword:
   AVG
 | COUNT
 | MAX
