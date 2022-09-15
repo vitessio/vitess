@@ -40,6 +40,13 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			// Technically, MySQL would require these reserved keywords to be backtick quoted, but it's convenient that
+			// we can support unquoted reserved keyword identifiers when we can, so adding this assertion to prevent
+			// this query from breaking. A similar query is used by sql-diff.bats runs.
+			input:  "INSERT INTO test(pk, int, string, boolean, float, uint, uuid) values (1, 2, 'one', true, 5.0, 6, 100)",
+			output: "insert into test(pk, `int`, string, `boolean`, `float`, uint, uuid) values (1, 2, 'one', true, 5.0, 6, 100)",
+		},
+		{
 			input:  "select * from my_table_function()",
 			output: "select * from my_table_function()",
 		},
@@ -6386,7 +6393,15 @@ func TestKeywordsCorrectlyDontParse(t *testing.T) {
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
 				_, err := Parse(test)
-				assert.Error(t, err)
+				if err == nil {
+					// If we can successfully parse a MySQL reserved keyword as an identifier without needing backtick
+					// quoting, just skip this test so we have a record of it, instead of failing the test. This allows
+					// us to track the difference, but we don't want to prevent being able to use reserved keywords
+					// without quotes if we can easily support them.
+					t.Skip()
+				} else {
+					assert.Error(t, err)
+				}
 			})
 		}
 	}
