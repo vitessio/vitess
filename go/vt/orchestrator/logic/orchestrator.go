@@ -256,6 +256,10 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		return
 	}
 
+	if forceDiscovery {
+		log.Infof("Force discovered - %+v", instance)
+	}
+
 	discoveryMetrics.Append(&discovery.Metric{
 		Timestamp:       time.Now(),
 		InstanceKey:     instanceKey,
@@ -452,7 +456,7 @@ func ContinuousDiscovery() {
 			}()
 		case <-tabletTopoTick:
 			go RefreshAllKeyspaces()
-			go RefreshTablets(false /* forceRefresh */)
+			go refreshAllTablets()
 		}
 	}
 }

@@ -60,7 +60,8 @@ const (
 )
 
 // recoveryFunction is the code of the recovery function to be used
-// this is returned from getCheckAndRecoverFunction to compare the functions returned
+// this is returned from getCheckAndRecoverFunctionCode to compare the functions returned
+// Each recoveryFunction is one to one mapped to a corresponding recovery.
 type recoveryFunction int
 
 const (
@@ -632,8 +633,6 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 		},
 	)
 
-	// We should refresh the tablet information again to update our information.
-	RefreshTablets(true /* forceRefresh */)
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -810,60 +809,114 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnal
 	return true, true, err
 }
 
-// getCheckAndRecoverFunction gets the recovery function to use for the given analysis.
-// It also returns a recoveryFunction which is supposed to be unique for each function that we return.
-// It is used for checking the equality of the returned function.
-func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstanceKey *inst.InstanceKey) (
-	checkAndRecoverFunction func(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
-	recoverFunctionCode recoveryFunction,
-	isActionableRecovery bool,
-) {
+// getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
+func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, analyzedInstanceKey *inst.InstanceKey) recoveryFunction {
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
-			return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+			return recoverGenericProblemFunc
 		}
-		return recoverDeadPrimary, recoverDeadPrimaryFunc, true
+		return recoverDeadPrimaryFunc
 	case inst.PrimaryHasPrimary:
-		return recoverPrimaryHasPrimary, recoverPrimaryHasPrimaryFunc, true
+		return recoverPrimaryHasPrimaryFunc
 	case inst.LockedSemiSyncPrimary:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
-			return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+			return recoverGenericProblemFunc
 		}
-		return checkAndRecoverLockedSemiSyncPrimary, recoverLockedSemiSyncPrimaryFunc, true
+		return recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
-		return electNewPrimary, electNewPrimaryFunc, true
+		return electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet:
-		return fixPrimary, fixPrimaryFunc, true
+		return fixPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet:
-		return fixReplica, fixReplicaFunc, true
+		return fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.UnreachablePrimary:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.UnreachablePrimaryWithLaggingReplicas:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicating:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
-		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+		return recoverGenericProblemFunc
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
-	//   return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
+	//   return recoverGenericProblemFunc
 
-	return nil, noRecoveryFunc, false
+	return noRecoveryFunc
+}
+
+// hasActionableRecovery tells if a recoveryFunction has an actionable recovery or not
+func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case noRecoveryFunc:
+		return false
+	case recoverGenericProblemFunc:
+		return false
+	case recoverDeadPrimaryFunc:
+		return true
+	case recoverPrimaryHasPrimaryFunc:
+		return true
+	case recoverLockedSemiSyncPrimaryFunc:
+		return true
+	case electNewPrimaryFunc:
+		return true
+	case fixPrimaryFunc:
+		return true
+	case fixReplicaFunc:
+		return true
+	default:
+		return false
+	}
+}
+
+// getCheckAndRecoverFunction gets the recovery function for the given code.
+func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
+	checkAndRecoverFunction func(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
+) {
+	switch recoveryFunctionCode {
+	case noRecoveryFunc:
+		return nil
+	case recoverGenericProblemFunc:
+		return checkAndRecoverGenericProblem
+	case recoverDeadPrimaryFunc:
+		return recoverDeadPrimary
+	case recoverPrimaryHasPrimaryFunc:
+		return recoverPrimaryHasPrimary
+	case recoverLockedSemiSyncPrimaryFunc:
+		return checkAndRecoverLockedSemiSyncPrimary
+	case electNewPrimaryFunc:
+		return electNewPrimary
+	case fixPrimaryFunc:
+		return fixPrimary
+	case fixReplicaFunc:
+		return fixReplica
+	default:
+		return nil
+	}
+}
+
+// isClusterWideRecovery returns whether the given recovery is a cluster-wide recovery or not
+func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case recoverDeadPrimaryFunc, electNewPrimaryFunc:
+		return true
+	default:
+		return false
+	}
 }
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis inst.ReplicationAnalysis) bool {
-	_, prevRecoveryFunctionCode, _ := getCheckAndRecoverFunction(prevAnalysis.Analysis, &prevAnalysis.AnalyzedInstanceKey)
-	_, newRecoveryFunctionCode, _ := getCheckAndRecoverFunction(newAnalysis.Analysis, &newAnalysis.AnalyzedInstanceKey)
+	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis.Analysis, &prevAnalysis.AnalyzedInstanceKey)
+	newRecoveryFunctionCode := getCheckAndRecoverFunctionCode(newAnalysis.Analysis, &newAnalysis.AnalyzedInstanceKey)
 	return prevRecoveryFunctionCode == newRecoveryFunctionCode
 }
 
@@ -892,11 +945,12 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	atomic.AddInt64(&countPendingRecoveries, 1)
 	defer atomic.AddInt64(&countPendingRecoveries, -1)
 
-	checkAndRecoverFunction, _, isActionableRecovery := getCheckAndRecoverFunction(analysisEntry.Analysis, &analysisEntry.AnalyzedInstanceKey)
+	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, &analysisEntry.AnalyzedInstanceKey)
+	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 	runEmergentOperations(&analysisEntry)
 
-	if checkAndRecoverFunction == nil {
+	if checkAndRecoverFunctionCode == noRecoveryFunc {
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceKey.StringCode()) {
@@ -954,12 +1008,43 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
+		// The first step we have to do is refresh the keyspace information
+		// This is required to know if the durability policies have changed or not
+		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore
 		err := RefreshKeyspace(analysisEntry.AnalyzedKeyspace)
 		if err != nil {
 			return false, nil, err
 		}
-		// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
-		RefreshTablets(true /* forceRefresh */)
+		// If we are about to run a cluster-wide recovery, it is imperative to first refresh all the tablets
+		// of a shard because a new tablet could have been promoted, and we need to have this visibility before we
+		// run a cluster operation of our own.
+		if isClusterWideRecovery(checkAndRecoverFunctionCode) {
+			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		} else {
+			// If we are not running a cluster-wide recovery, then it is only concerned with the specific tablet
+			// on which the failure occurred and the primary instance of the shard.
+			// For example, ConnectedToWrongPrimary analysis only cares for whom the current primary tablet is
+			// and the host-port set on the tablet in question.
+			// So, we only need to refresh the tablet info records (to know if the primary tablet has changed),
+			// and the replication data of the new primary and this tablet.
+			refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			DiscoverInstance(analysisEntry.AnalyzedInstanceKey, true)
+			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			if err != nil {
+				log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while finding the shard primary: %v",
+					analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
+				return false, nil, err
+			}
+			primaryInstanceKey := inst.InstanceKey{
+				Hostname: primaryTablet.MysqlHostname,
+				Port:     int(primaryTablet.MysqlPort),
+			}
+			// We can skip the refresh if we know the tablet we are looking at is the primary tablet.
+			// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
+			if !analysisEntry.AnalyzedInstanceKey.Equals(&primaryInstanceKey) {
+				DiscoverInstance(primaryInstanceKey, true)
+			}
+		}
 		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
 			log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while trying to find if the problem is already fixed: %v",
@@ -976,7 +1061,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: recovery", analysisEntry.AnalyzedInstanceKey.StringCode()) {
 		log.Infof("executeCheckAndRecoverFunction: proceeding with %+v recovery on %+v; isRecoverable?: %+v; skipProcesses: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, isActionableRecovery, skipProcesses)
 	}
-	recoveryAttempted, topologyRecovery, err = checkAndRecoverFunction(ctx, analysisEntry, candidateInstanceKey, forceInstanceRecovery, skipProcesses)
+	recoveryAttempted, topologyRecovery, err = getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry, candidateInstanceKey, forceInstanceRecovery, skipProcesses)
 	if !recoveryAttempted {
 		return recoveryAttempted, topologyRecovery, err
 	}
@@ -987,6 +1072,18 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 		log.Infof("Topology recovery: %+v", string(b))
 	} else {
 		log.Infof("Topology recovery: %+v", topologyRecovery)
+	}
+	// If we ran a cluster wide recovery and actually attemped it, then we know that the replication state for all the tablets in this cluster
+	// would have changed. So we can go ahead and pre-emptively refresh them.
+	// For this refresh we don't use the same context that we used for the recovery, since that context might have expired or could expire soon
+	// Instead we pass the background context. The call forceRefreshAllTabletsInShard handles adding a timeout to it for us.
+	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
+		forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	} else {
+		// For all other recoveries, we would have changed the replication status of the analyzed tablet
+		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery
+		// that we just completed because we would be using stale data.
+		DiscoverInstance(analysisEntry.AnalyzedInstanceKey, true)
 	}
 	if !skipProcesses {
 		if topologyRecovery.SuccessorKey == nil {
@@ -1010,10 +1107,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
 func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
-	// TODO (@GuptaManan100): Use specific cluster name to filter the scope of replication analysis.
-	// Can't do this now since SuggestedClusterAlias, ClusterName, ClusterAlias aren't consistent
-	// and passing any one causes issues in some failures
-	analysisEntries, err := inst.GetReplicationAnalysis("", &inst.ReplicationAnalysisHints{})
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.ClusterName, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		return false, err
 	}
@@ -1266,10 +1360,9 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		},
 	)
 
-	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
-	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
-	// PrimaryHasPrimary analysis which runs ERS
-	RefreshTablets(true /* forceRefresh */)
+	// here we need to forcefully refresh all the tablets because we know we have made a cluster wide operation,
+	// and it affects the replication information for all the tablets
+	forceRefreshAllTabletsInShard(context.Background(), primaryTablet.Keyspace, primaryTablet.Shard)
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -1335,10 +1428,6 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 		},
 	)
 
-	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
-	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
-	// PrimaryHasPrimary analysis which runs ERS
-	RefreshTablets(true /* forceRefresh */)
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -1399,7 +1488,7 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		return false, topologyRecovery, err
 	}
 
-	primaryTablet, err := shardPrimary(ctx, analyzedTablet.Keyspace, analyzedTablet.Shard)
+	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		log.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err

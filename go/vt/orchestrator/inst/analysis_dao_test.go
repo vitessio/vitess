@@ -29,10 +29,12 @@ import (
 
 func TestGetReplicationAnalysis(t *testing.T) {
 	tests := []struct {
-		name       string
-		info       []*test.InfoForRecoveryAnalysis
-		codeWanted AnalysisCode
-		wantErr    string
+		name           string
+		info           []*test.InfoForRecoveryAnalysis
+		codeWanted     AnalysisCode
+		shardWanted    string
+		keyspaceWanted string
+		wantErr        string
 	}{
 		{
 			name: "ClusterHasNoPrimary",
@@ -49,7 +51,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				DurabilityPolicy: "none",
 				LastCheckValid:   1,
 			}},
-			codeWanted: ClusterHasNoPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ClusterHasNoPrimary,
 		}, {
 			name: "DeadPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -69,7 +73,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
 			}},
-			codeWanted: DeadPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
 		}, {
 			name: "DeadPrimaryWithoutReplicas",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -87,7 +93,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountReplicas:    0,
 				IsPrimary:        1,
 			}},
-			codeWanted: DeadPrimaryWithoutReplicas,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimaryWithoutReplicas,
 		}, {
 			name: "DeadPrimaryAndReplicas",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -105,7 +113,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountReplicas:    3,
 				IsPrimary:        1,
 			}},
-			codeWanted: DeadPrimaryAndReplicas,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimaryAndReplicas,
 		}, {
 			name: "DeadPrimaryAndSomeReplicas",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -125,7 +135,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
 			}},
-			codeWanted: DeadPrimaryAndSomeReplicas,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimaryAndSomeReplicas,
 		}, {
 			name: "PrimaryHasPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -144,7 +156,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicas: 4,
 				IsPrimary:          0,
 			}},
-			codeWanted: PrimaryHasPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     PrimaryHasPrimary,
 		}, {
 			name: "PrimaryIsReadOnly",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -164,7 +178,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				IsPrimary:          1,
 				ReadOnly:           1,
 			}},
-			codeWanted: PrimaryIsReadOnly,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     PrimaryIsReadOnly,
 		}, {
 			name: "PrimarySemiSyncMustNotBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -184,7 +200,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				IsPrimary:              1,
 				SemiSyncPrimaryEnabled: 1,
 			}},
-			codeWanted: PrimarySemiSyncMustNotBeSet,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     PrimarySemiSyncMustNotBeSet,
 		}, {
 			name: "PrimarySemiSyncMustBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -204,7 +222,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				IsPrimary:              1,
 				SemiSyncPrimaryEnabled: 0,
 			}},
-			codeWanted: PrimarySemiSyncMustBeSet,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     PrimarySemiSyncMustBeSet,
 		}, {
 			name: "NotConnectedToPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -239,7 +259,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				ReadOnly:       1,
 				IsPrimary:      1,
 			}},
-			codeWanted: NotConnectedToPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     NotConnectedToPrimary,
 		}, {
 			name: "ReplicaIsWritable",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -276,7 +298,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				LastCheckValid:   1,
 				ReadOnly:         0,
 			}},
-			codeWanted: ReplicaIsWritable,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ReplicaIsWritable,
 		}, {
 			name: "ConnectedToWrongPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -313,7 +337,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				LastCheckValid:   1,
 				ReadOnly:         1,
 			}},
-			codeWanted: ConnectedToWrongPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ConnectedToWrongPrimary,
 		}, {
 			name: "ReplicationStopped",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -351,7 +377,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				ReadOnly:           1,
 				ReplicationStopped: 1,
 			}},
-			codeWanted: ReplicationStopped,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ReplicationStopped,
 		},
 		{
 			name: "ReplicaSemiSyncMustBeSet",
@@ -400,7 +428,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				ReadOnly:               1,
 				SemiSyncReplicaEnabled: 0,
 			}},
-			codeWanted: ReplicaSemiSyncMustBeSet,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ReplicaSemiSyncMustBeSet,
 		}, {
 			name: "ReplicaSemiSyncMustNotBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -447,7 +477,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				ReadOnly:               1,
 				SemiSyncReplicaEnabled: 1,
 			}},
-			codeWanted: ReplicaSemiSyncMustNotBeSet,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ReplicaSemiSyncMustNotBeSet,
 		}, {
 			name: "SnapshotKeyspace",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -465,7 +497,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				DurabilityPolicy: "none",
 				LastCheckValid:   1,
 			}},
-			codeWanted: NoProblem,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     NoProblem,
 		}, {
 			name: "EmptyDurabilityPolicy",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -481,7 +515,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				LastCheckValid: 1,
 			}},
 			// We will ignore these keyspaces too until the durability policy is set in the topo server
-			codeWanted: NoProblem,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     NoProblem,
 		},
 	}
 	for _, tt := range tests {
@@ -505,6 +541,8 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			}
 			require.Len(t, got, 1)
 			require.Equal(t, tt.codeWanted, got[0].Analysis)
+			require.Equal(t, tt.keyspaceWanted, got[0].AnalyzedKeyspace)
+			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
 		})
 	}
 }
