@@ -15754,7 +15754,7 @@ yydefault:
 		}
 	case 2113:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:7505
+//line sql.y:7485
 		{
 			if incNesting(yylex) {
 				yylex.Error("max nesting level reached")
@@ -15763,7 +15763,7 @@ yydefault:
 		}
 	case 2114:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:7514
+//line sql.y:7494
 		{
 			decNesting(yylex)
 		}
