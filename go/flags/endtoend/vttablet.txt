@@ -681,6 +681,8 @@ Usage of vttablet:
 	DEPRECATED
   --queryserver-config-message-postpone-cap int
 	query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem. (default 4)
+  --queryserver-config-olap-transaction-timeout float
+	query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed (default 30)
   --queryserver-config-passthrough-dmls
 	query server pass through all dml statements without rewriting
   --queryserver-config-pool-prefill-parallelism int
@@ -724,7 +726,7 @@ Usage of vttablet:
   --queryserver-config-transaction-prefill-parallelism int
 	query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.
   --queryserver-config-transaction-timeout float
-	query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value (default 30)
+	query server transaction timeout (in seconds), after which a transaction in an OLTP session will be killed (default 30)
   --queryserver-config-txpool-timeout float
 	query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1)
   --queryserver-config-txpool-waiter-cap int

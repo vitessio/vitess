@@ -88,6 +88,24 @@ The reason you cannot change all the values together is because the restore proc
 should be used to process the previous backup. Please make sure you have thought out all possible scenarios for restore before transitioning from one
 compression engine to another.
 
+#### Independent OLAP and OLTP transactional timeouts
+
+`--queryserver-config-olap-transaction-timeout` specifies the timeout applied
+to a transaction created within an OLAP workload. The default value is `30`
+seconds, but this can be raised, lowered, or set to zero to disable the timeout
+altogether.
+
+Until now, while OLAP queries would bypass the query timeout, transactions
+created within an OLAP session would be rolled back
+`--queryserver-config-transaction-timeout` seconds after the transaction was
+started.
+
+As of now, OLTP and OLAP transaction timeouts can be configured independently of each
+other.
+
+The main use case is to run queries spanning a long period of time which
+require transactional guarantees such as consistency or atomicity.
+
 ### Online DDL changes
 
 #### Concurrent vitess migrations

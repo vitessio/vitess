@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/throttler"
 )
 
@@ -94,7 +95,8 @@ func init() {
 	flag.IntVar(&currentConfig.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", defaultConfig.TxPool.PrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&deprecatedFoundRowsPoolSize, "client-found-rows-pool-size", 0, "DEPRECATED: queryserver-config-transaction-cap will be used instead.")
-	SecondsVar(&currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	SecondsVar(&currentConfig.Olap.TxTimeoutSeconds, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
+	SecondsVar(&currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLTP session will be killed")
 	SecondsVar(&currentConfig.GracePeriods.ShutdownSeconds, "shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
 	SecondsVar(&currentConfig.GracePeriods.ShutdownSeconds, "transaction_shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "DEPRECATED: use shutdown_grace_period instead.")
 	flag.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
@@ -248,6 +250,7 @@ type TabletConfig struct {
 	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
 	TxPool       ConnPoolConfig `json:"txPool,omitempty"`
 
+	Olap             OlapConfig             `json:"olap,omitempty"`
 	Oltp             OltpConfig             `json:"oltp,omitempty"`
 	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
 
@@ -307,6 +310,11 @@ type ConnPoolConfig struct {
 	IdleTimeoutSeconds Seconds `json:"idleTimeoutSeconds,omitempty"`
 	PrefillParallelism int     `json:"prefillParallelism,omitempty"`
 	MaxWaiters         int     `json:"maxWaiters,omitempty"`
+}
+
+// OlapConfig contains the config for olap settings.
+type OlapConfig struct {
+	TxTimeoutSeconds Seconds `json:"txTimeoutSeconds,omitempty"`
 }
 
 // OltpConfig contains the config for oltp settings.
@@ -386,6 +394,31 @@ func (c *TabletConfig) Clone() *TabletConfig {
 	return &tc
 }
 
+// SetTxTimeoutForWorkload updates workload transaction timeouts. Used in tests only.
+func (c *TabletConfig) SetTxTimeoutForWorkload(val time.Duration, workload querypb.ExecuteOptions_Workload) {
+	switch workload {
+	case querypb.ExecuteOptions_OLAP:
+		c.Olap.TxTimeoutSeconds.Set(val)
+	case querypb.ExecuteOptions_OLTP:
+		c.Oltp.TxTimeoutSeconds.Set(val)
+	default:
+		panic(fmt.Sprintf("unsupported workload type: %v", workload))
+	}
+}
+
+// TxTimeoutForWorkload returns the transaction timeout for the given workload
+// type. Defaults to returning OLTP timeout.
+func (c *TabletConfig) TxTimeoutForWorkload(workload querypb.ExecuteOptions_Workload) time.Duration {
+	switch workload {
+	case querypb.ExecuteOptions_DBA:
+		return 0
+	case querypb.ExecuteOptions_OLAP:
+		return c.Olap.TxTimeoutSeconds.Get()
+	default:
+		return c.Oltp.TxTimeoutSeconds.Get()
+	}
+}
+
 // Verify checks for contradicting flags.
 func (c *TabletConfig) Verify() error {
 	if err := c.verifyTransactionLimitConfig(); err != nil {
@@ -453,6 +486,9 @@ var defaultConfig = TabletConfig{
 		TimeoutSeconds:     1,
 		IdleTimeoutSeconds: 30 * 60,
 		MaxWaiters:         5000,
+	},
+	Olap: OlapConfig{
+		TxTimeoutSeconds: 30,
 	},
 	Oltp: OltpConfig{
 		QueryTimeoutSeconds: 30,

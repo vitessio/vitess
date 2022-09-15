@@ -34,12 +34,9 @@ type Numbered struct {
 }
 
 type numberedWrapper struct {
-	val            any
-	inUse          bool
-	purpose        string
-	timeCreated    time.Time
-	timeUsed       time.Time
-	enforceTimeout bool
+	val     any
+	inUse   bool
+	purpose string
 }
 
 type unregistered struct {
@@ -62,14 +59,10 @@ func NewNumbered() *Numbered {
 // Register starts tracking a resource by the supplied id.
 // It does not lock the object.
 // It returns an error if the id already exists.
-func (nu *Numbered) Register(id int64, val any, enforceTimeout bool) error {
+func (nu *Numbered) Register(id int64, val any) error {
 	// Optimistically assume we're not double registering.
-	now := time.Now()
 	resource := &numberedWrapper{
-		val:            val,
-		timeCreated:    now,
-		timeUsed:       now,
-		enforceTimeout: enforceTimeout,
+		val: val,
 	}
 
 	nu.mu.Lock()
@@ -129,16 +122,15 @@ func (nu *Numbered) Get(id int64, purpose string) (val any, err error) {
 }
 
 // Put unlocks a resource for someone else to use.
-func (nu *Numbered) Put(id int64, updateTime bool) {
+func (nu *Numbered) Put(id int64) bool {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	if nw, ok := nu.resources[id]; ok {
 		nw.inUse = false
 		nw.purpose = ""
-		if updateTime {
-			nw.timeUsed = time.Now()
-		}
+		return true
 	}
+	return false
 }
 
 // GetAll returns the list of all resources in the pool.
@@ -158,49 +150,10 @@ func (nu *Numbered) GetByFilter(purpose string, match func(val any) bool) (vals 
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	for _, nw := range nu.resources {
-		if nw.inUse || !nw.enforceTimeout {
-			continue
-		}
-		if match(nw.val) {
-			nw.inUse = true
-			nw.purpose = purpose
-			vals = append(vals, nw.val)
-		}
-	}
-	return vals
-}
-
-// GetOutdated returns a list of resources that are older than age, and locks them.
-// It does not return any resources that are already locked.
-func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []any) {
-	nu.mu.Lock()
-	defer nu.mu.Unlock()
-	now := time.Now()
-	for _, nw := range nu.resources {
-		if nw.inUse || !nw.enforceTimeout {
-			continue
-		}
-		if nw.timeUsed.Add(age).Sub(now) <= 0 {
-			nw.inUse = true
-			nw.purpose = purpose
-			vals = append(vals, nw.val)
-		}
-	}
-	return vals
-}
-
-// GetIdle returns a list of resurces that have been idle for longer
-// than timeout, and locks them. It does not return any resources that
-// are already locked.
-func (nu *Numbered) GetIdle(timeout time.Duration, purpose string) (vals []any) {
-	nu.mu.Lock()
-	defer nu.mu.Unlock()
-	now := time.Now()
-	for _, nw := range nu.resources {
 		if nw.inUse {
 			continue
 		}
-		if nw.timeUsed.Add(timeout).Sub(now) <= 0 {
+		if match(nw.val) {
 			nw.inUse = true
 			nw.purpose = purpose
 			vals = append(vals, nw.val)

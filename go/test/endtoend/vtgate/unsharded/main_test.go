@@ -166,7 +166,10 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3", "--queryserver-config-max-result-size", "30"}
+		clusterInstance.VtTabletExtraArgs = []string{
+			"--queryserver-config-transaction-timeout", "3",
+			"--queryserver-config-max-result-size", "30",
+		}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
 			log.Fatal(err.Error())
 			return 1
