@@ -1039,7 +1039,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 				Hostname: primaryTablet.MysqlHostname,
 				Port:     int(primaryTablet.MysqlPort),
 			}
-			// We can skip the refresh if we the tablet we are looking at is the primary tablet.
+			// We can skip the refresh if we know the tablet we are looking at is the primary tablet.
 			// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
 			if !analysisEntry.AnalyzedInstanceKey.Equals(&primaryInstanceKey) {
 				DiscoverInstance(primaryInstanceKey, true)

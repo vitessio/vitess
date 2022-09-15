@@ -22,13 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topotools"
 )
 
 var (
@@ -212,7 +212,7 @@ func TestShardPrimary(t *testing.T) {
 				assert.Nil(t, primary)
 			} else {
 				assert.NoError(t, err)
-				assert.True(t, topotools.TabletEquality(primary, testcase.expectedPrimary))
+				assert.True(t, proto.Equal(primary, testcase.expectedPrimary))
 			}
 		})
 	}
@@ -248,6 +248,6 @@ func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString s
 	} else {
 		assert.NoError(t, err)
 		assert.EqualValues(t, tabletKey.Port, tablet.MysqlPort)
-		assert.True(t, topotools.TabletEquality(tablet, tabletWanted))
+		assert.True(t, proto.Equal(tablet, tabletWanted))
 	}
 }

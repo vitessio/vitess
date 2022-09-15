@@ -73,8 +73,8 @@ func OpenTabletDiscovery() <-chan time.Time {
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
 func refreshAllTablets() {
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
-		DiscoverInstance(*instanceKey, false)
-	}, false)
+		DiscoverInstance(*instanceKey, false /* forceDiscovery */)
+	}, false /* forceRefresh */)
 }
 
 func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
@@ -163,12 +163,9 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 // change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
 func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string) {
 	log.Infof("force refresh of all tablets in shard - %v/%v", keyspace, shard)
-	if ctx == context.Background() {
-		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-		defer refreshCancel()
-		ctx = refreshCtx
-	}
-	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer refreshCancel()
+	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
 		DiscoverInstance(*instanceKey, true)
 	}, true)
 }
