@@ -60,7 +60,7 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	switch del.Opcode {
 	case Unsharded:
 		return del.execUnsharded(vcursor, bindVars, rss)
-	case Equal, IN, Scatter, ByDestination, SubShard:
+	case Equal, IN, Scatter, ByDestination, SubShard, EqualUnique:
 		return del.execMultiDestination(vcursor, bindVars, rss, del.deleteVindexEntries)
 	default:
 		// Unreachable.

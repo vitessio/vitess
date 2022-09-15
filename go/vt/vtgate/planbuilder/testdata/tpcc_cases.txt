@@ -1126,7 +1126,29 @@ Gen4 plan same as above
     "main.new_orders1"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "DELETE FROM new_orders1 WHERE no_o_id = 2218 AND no_d_id = 358 AND no_w_id = 98465",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from new_orders1 where no_o_id = 2218 and no_d_id = 358 and no_w_id = 98465",
+    "Table": "new_orders1",
+    "Values": [
+      "INT64(98465)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.new_orders1"
+  ]
+}
 
 # TPC-C select unique orders1
 "SELECT o_c_id FROM orders1 WHERE o_id = 6 AND o_d_id = 1983 AND o_w_id = 894605"
@@ -1639,7 +1661,29 @@ Gen4 plan same as above
     "main.order_line1"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "DELETE FROM order_line1 where ol_w_id=178 AND ol_d_id=1 AND ol_o_id=84",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from order_line1 where ol_w_id = 178 and ol_d_id = 1 and ol_o_id = 84",
+    "Table": "order_line1",
+    "Values": [
+      "INT64(178)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.order_line1"
+  ]
+}
 
 # TPC-C delete orders1
 "DELETE FROM orders1 where o_w_id=1 AND o_d_id=3 and o_id=384"
@@ -1666,7 +1710,29 @@ Gen4 plan same as above
     "main.orders1"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "DELETE FROM orders1 where o_w_id=1 AND o_d_id=3 and o_id=384",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from orders1 where o_w_id = 1 and o_d_id = 3 and o_id = 384",
+    "Table": "orders1",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.orders1"
+  ]
+}
 
 # TPC-C delete history1
 "DELETE FROM history1 where h_w_id=75 AND h_d_id=102 LIMIT 10"
@@ -1693,4 +1759,26 @@ Gen4 plan same as above
     "main.history1"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "DELETE FROM history1 where h_w_id=75 AND h_d_id=102 LIMIT 10",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from history1 where h_w_id = 75 and h_d_id = 102 limit 10",
+    "Table": "history1",
+    "Values": [
+      "INT64(75)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.history1"
+  ]
+}
