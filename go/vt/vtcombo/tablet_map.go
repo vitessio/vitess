@@ -447,20 +447,7 @@ func (itc *internalTabletConn) Execute(
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	optionsCopy := options
-	if options != nil {
-		optionsCopy = &querypb.ExecuteOptions{
-			IncludedFields:       options.IncludedFields,
-			ClientFoundRows:      options.ClientFoundRows,
-			Workload:             options.Workload,
-			SqlSelectLimit:       options.SqlSelectLimit,
-			TransactionIsolation: options.TransactionIsolation,
-			SkipQueryPlanCache:   options.SkipQueryPlanCache,
-			PlannerVersion:       options.PlannerVersion,
-			HasCreatedTempTables: options.HasCreatedTempTables,
-		}
-	}
-	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, reservedID, optionsCopy)
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
