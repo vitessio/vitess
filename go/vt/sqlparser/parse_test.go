@@ -6294,7 +6294,7 @@ func TestKeywordsCorrectlyParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
 	iTest1 := "INSERT INTO t_t (%s) VALUES ('one')"
 	iTest2 := "INSERT INTO t_t (pk, %s) VALUES (1, 'one')"
-	iTest3 := "INSERT INTO t_t (pk, %s, c1) VALUES ('one', 1)"
+	iTest3 := "INSERT INTO t_t (pk, %s, c1) VALUES (1, 'one', 1)"
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
 	cTest1 := "CREATE TABLE t(%s int)"
