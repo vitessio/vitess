@@ -406,20 +406,19 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 
 // isAnyConflictingMigrationRunning checks if there's any running migration that conflicts with the
 // given migration, such that they can't both run concurrently.
-func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) bool {
-	conflictFound := false
+func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) (conflictFound bool, conflictingMigration *schema.OnlineDDL) {
 	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
 		runningMigration, ok := val.(*schema.OnlineDDL)
 		if !ok {
 			return true // continue iteration
 		}
 		if e.proposedMigrationConflictsWithRunningMigration(runningMigration, onlineDDL) {
-			conflictFound = true
+			conflictingMigration = runningMigration
 			return false // stop iteration, no need to review other migrations
 		}
 		return true // continue iteration
 	})
-	return conflictFound
+	return (conflictingMigration != nil), conflictingMigration
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -1160,8 +1159,8 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	// make sure there's no vreplication workflow running under same name
 	_ = e.terminateVReplMigration(ctx, onlineDDL.UUID)
 
-	if e.isAnyConflictingMigrationRunning(onlineDDL) {
-		return ErrExecutorMigrationAlreadyRunning
+	if conflictFound, conflictingMigration := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+		return vterrors.Wrapf(ErrExecutorMigrationAlreadyRunning, "conflicting migration: %v over table: %v", conflictingMigration.UUID, conflictingMigration.Table)
 	}
 
 	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
@@ -1267,8 +1266,8 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 // Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	if e.isAnyConflictingMigrationRunning(onlineDDL) {
-		return ErrExecutorMigrationAlreadyRunning
+	if conflictFound, conflictingMigration := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+		return vterrors.Wrapf(ErrExecutorMigrationAlreadyRunning, "conflicting migration: %v over table: %v", conflictingMigration.UUID, conflictingMigration.Table)
 	}
 
 	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
@@ -1485,8 +1484,8 @@ exit $exit_code
 // Validation included testing the backend MySQL server and the pt-online-schema-change binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	if e.isAnyConflictingMigrationRunning(onlineDDL) {
-		return ErrExecutorMigrationAlreadyRunning
+	if conflictFound, conflictingMigration := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+		return vterrors.Wrapf(ErrExecutorMigrationAlreadyRunning, "conflicting migration: %v over table: %v", conflictingMigration.UUID, conflictingMigration.Table)
 	}
 
 	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
@@ -2964,7 +2963,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			if err != nil {
 				return nil, err
 			}
-			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
+			if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); !conflictFound {
 				if e.countOwnedRunningMigrations() < *maxConcurrentOnlineDDLs {
 					// This migration seems good to go
 					return onlineDDL, err
