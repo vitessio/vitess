@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+//go:generate goyacc -o sql.go sql.y
+
 import (
 	"encoding/hex"
 	"encoding/json"
@@ -421,6 +423,7 @@ type SelectStatement interface {
 	SetLimit(*Limit)
 	SetLock(string)
 	SetOrderBy(OrderBy)
+	SetWith(*With)
 	SetInto(*Into) error
 	GetInto() *Into
 	WalkableSQLNode
@@ -476,6 +479,10 @@ func (node *Select) AddOrder(order *Order) {
 
 func (node *Select) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
+}
+
+func (node *Select) SetWith(w *With) {
+	node.With = w
 }
 
 func (node *Select) SetLock(lock string) {
@@ -592,6 +599,10 @@ func (node *ParenSelect) SetOrderBy(orders OrderBy) {
 	panic("unreachable")
 }
 
+func (node *ParenSelect) SetWith(w *With) {
+	panic("unreachable")
+}
+
 func (node *ParenSelect) SetLock(lock string) {
 	panic("unreachable")
 }
@@ -650,6 +661,7 @@ type Union struct {
 	Type        string
 	Left, Right SelectStatement
 	OrderBy     OrderBy
+	With        *With
 	Limit       *Limit
 	Lock        string
 	Into        *Into
@@ -669,6 +681,10 @@ func (node *Union) AddOrder(order *Order) {
 
 func (node *Union) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
+}
+
+func (node *Union) SetWith(w *With) {
+	node.With = w
 }
 
 // SetLimit sets the limit clause
@@ -701,7 +717,7 @@ func (node *Union) GetInto() *Into {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v%v%v%s%v", node.Left, node.Type, node.Right,
+	buf.Myprintf("%v%v %s %v%v%v%s%v", node.With, node.Left, node.Type, node.Right,
 		node.OrderBy, node.Limit, node.Lock, node.Into)
 }
 
