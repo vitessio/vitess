@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -212,7 +213,8 @@ func TestShardPrimary(t *testing.T) {
 				assert.Nil(t, primary)
 			} else {
 				assert.NoError(t, err)
-				assert.True(t, proto.Equal(primary, testcase.expectedPrimary))
+				diff := cmp.Diff(primary, testcase.expectedPrimary, cmp.Comparer(proto.Equal))
+				assert.Empty(t, diff)
 			}
 		})
 	}
@@ -248,6 +250,7 @@ func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString s
 	} else {
 		assert.NoError(t, err)
 		assert.EqualValues(t, tabletKey.Port, tablet.MysqlPort)
-		assert.True(t, proto.Equal(tablet, tabletWanted))
+		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))
+		assert.Empty(t, diff)
 	}
 }
