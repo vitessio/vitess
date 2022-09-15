@@ -1116,7 +1116,7 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
-		"vtorc_general_8.0": {
+		"vtorc_general_5.7": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/general"],
 			"Command": [],
