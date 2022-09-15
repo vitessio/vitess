@@ -23,7 +23,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 
 	mysql "vitess.io/vitess/go/mysql"
-	inst "vitess.io/vitess/go/vt/orchestrator/inst"
+	inst "vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // MockAgent is a mock of Agent interface
