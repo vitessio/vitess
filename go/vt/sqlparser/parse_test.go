@@ -4368,6 +4368,7 @@ func TestCreateTable(t *testing.T) {
 			"	col_varchar3 varchar(3) character set ascii,\n" +
 			"	col_varchar4 varchar(4) character set ascii collate ascii_bin,\n" +
 			"	col_varchar5 varchar(5) character set ascii binary,\n" +
+			"	col_varcharMax varchar(MAX),\n" +
 			"	col_character_varying character varying,\n" +
 			"	col_character_varying2 character varying(2),\n" +
 			"	col_character_varying3 character varying(3) character set ascii,\n" +
@@ -4572,6 +4573,10 @@ func TestCreateTable(t *testing.T) {
 		input  string
 		output string
 	}{{
+		// Tet varchar (MAX) syntax
+		input:  "create table t (username varchar(MAX))",
+		output: "create table t (\n\tusername varchar(MAX)\n)",
+	}, {
 		// Test the signed keyword – as the default for numeric types, it is a no-op
 		input:  "create table t (pk int signed primary key)",
 		output: "create table t (\n\tpk int primary key\n)",
