@@ -60,7 +60,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 		clustersToWatch = oldClustersToWatch
 	}()
 
-	// Open the orchestrator
+	// Open the vtorc
 	// After the test completes delete everything from the vitess_keyspace table
 	orcDb, err := db.OpenOrchestrator()
 	require.NoError(t, err)
@@ -111,7 +111,7 @@ func TestRefreshKeyspace(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the orchestrator
+	// Open the vtorc
 	// After the test completes delete everything from the vitess_keyspace table
 	orcDb, err := db.OpenOrchestrator()
 	require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestRefreshKeyspace(t *testing.T) {
 	}
 }
 
-// verifyKeyspaceInfo verifies that the keyspace information read from the orchestrator database
+// verifyKeyspaceInfo verifies that the keyspace information read from the vtorc database
 // is the same as the one provided or reading it gives the same error as expected
 func verifyKeyspaceInfo(t *testing.T, keyspaceName string, keyspace *topodatapb.Keyspace, errString string) {
 	t.Helper()

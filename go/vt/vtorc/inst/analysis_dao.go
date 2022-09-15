@@ -489,22 +489,22 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
-			a.Description = "Primary cannot be reached by orchestrator and has no replica"
+			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimary
-			a.Description = "Primary cannot be reached by orchestrator and none of its replicas is replicating"
+			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimaryAndReplicas
-			a.Description = "Primary cannot be reached by orchestrator and none of its replicas is replicating"
+			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimaryAndSomeReplicas
-			a.Description = "Primary cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
+			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.IsPrimary {
@@ -555,17 +555,17 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			// TODO(sougou): Events below here are either ignored or not possible.
 		} else if a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
-			a.Description = "Primary cannot be reached by orchestrator and all of its replicas are lagging"
+			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
 			//
 		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
 			// partial success is here to redice noise
 			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsPrimary && !a.LastCheckValid && a.LastCheckPartialSuccess && a.CountReplicasFailingToConnectToPrimary > 0 && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
 			// there's partial success, but also at least one replica is failing to connect to primary
 			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
 			if isStaleBinlogCoordinates {
@@ -697,7 +697,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 		}
 	}
 	// Passed the cache; but does database agree that there's a change? Here's a persistent cache; this comes here
-	// to verify no two orchestrator services are doing this without coordinating (namely, one dies, the other taking its place
+	// to verify no two vtorc services are doing this without coordinating (namely, one dies, the other taking its place
 	// and has no familiarity of the former's cache)
 	analysisChangeWriteAttemptCounter.Inc(1)
 

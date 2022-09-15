@@ -139,13 +139,13 @@ func IsSQLite() bool {
 	return config.Config.IsSQLite()
 }
 
-// OpenTopology returns the DB instance for the orchestrator backed database
+// OpenTopology returns the DB instance for the vtorc backed database
 func OpenOrchestrator() (db *sql.DB, err error) {
 	var fromCache bool
 	if IsSQLite() {
 		db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
 		if err == nil && !fromCache {
-			log.Infof("Connected to orchestrator backend: sqlite on %v", config.Config.SQLite3DataFile)
+			log.Infof("Connected to vtorc backend: sqlite on %v", config.Config.SQLite3DataFile)
 		}
 		if db != nil {
 			db.SetMaxOpenConns(1)
@@ -168,7 +168,7 @@ func OpenOrchestrator() (db *sql.DB, err error) {
 			// do not show the password but do show what we connect to.
 			safeMySQLURI := fmt.Sprintf("%s:?@tcp(%s:%d)/%s?timeout=%ds", config.Config.MySQLOrchestratorUser,
 				config.Config.MySQLOrchestratorHost, config.Config.MySQLOrchestratorPort, config.Config.MySQLOrchestratorDatabase, config.Config.MySQLConnectTimeoutSeconds)
-			log.Infof("Connected to orchestrator backend: %v", safeMySQLURI)
+			log.Infof("Connected to vtorc backend: %v", safeMySQLURI)
 			if config.Config.MySQLOrchestratorMaxPoolConnections > 0 {
 				log.Infof("Orchestrator pool SetMaxOpenConns: %d", config.Config.MySQLOrchestratorMaxPoolConnections)
 				db.SetMaxOpenConns(config.Config.MySQLOrchestratorMaxPoolConnections)
@@ -255,7 +255,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 	// Ugly workaround ahead.
 	// Origin of this workaround is the existence of some "timestamp NOT NULL," column definitions,
 	// where in NO_ZERO_IN_DATE,NO_ZERO_DATE sql_mode are invalid (since default is implicitly "0")
-	// This means installation of orchestrator fails on such configured servers, and in particular on 5.7
+	// This means installation of vtorc fails on such configured servers, and in particular on 5.7
 	// where this setting is the dfault.
 	// For purpose of backwards compatability, what we do is force sql_mode to be more relaxed, create the schemas
 	// along with the "invalid" definition, and then go ahead and fix those definitions via following ALTER statements.
@@ -273,16 +273,16 @@ func deployStatements(db *sql.DB, queries []string) error {
 	for _, query := range queries {
 		query, err := translateStatement(query)
 		if err != nil {
-			log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+			log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
 			return err
 		}
 		if _, err := tx.Exec(query); err != nil {
 			if strings.Contains(err.Error(), "syntax error") {
-				log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+				log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
 				return err
 			}
 			if !sqlutils.IsAlterTable(query) && !sqlutils.IsCreateIndex(query) && !sqlutils.IsDropIndex(query) {
-				log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+				log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
 				return err
 			}
 			if !strings.Contains(err.Error(), "duplicate column name") &&
@@ -290,7 +290,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 				!strings.Contains(err.Error(), "check that column/key exists") &&
 				!strings.Contains(err.Error(), "already exists") &&
 				!strings.Contains(err.Error(), "Duplicate key name") {
-				log.Errorf("Error initiating orchestrator: %+v; query=%+v", err, query)
+				log.Errorf("Error initiating vtorc: %+v; query=%+v", err, query)
 			}
 		}
 	}
@@ -305,10 +305,10 @@ func deployStatements(db *sql.DB, queries []string) error {
 	return nil
 }
 
-// initOrchestratorDB attempts to create/upgrade the orchestrator backend database. It is created once in the
+// initOrchestratorDB attempts to create/upgrade the vtorc backend database. It is created once in the
 // application's lifetime.
 func initOrchestratorDB(db *sql.DB) error {
-	log.Info("Initializing orchestrator")
+	log.Info("Initializing vtorc")
 
 	versionAlreadyDeployed, err := versionIsDeployed(db)
 	if versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
@@ -342,7 +342,7 @@ func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
 	return res, err
 }
 
-// ExecOrchestrator will execute given query on the orchestrator backend database.
+// ExecOrchestrator will execute given query on the vtorc backend database.
 func ExecOrchestrator(query string, args ...any) (sql.Result, error) {
 	var err error
 	query, err = translateStatement(query)
@@ -361,7 +361,7 @@ func ExecOrchestrator(query string, args ...any) (sql.Result, error) {
 func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
 	db, err := OpenOrchestrator()
@@ -376,7 +376,7 @@ func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) e
 func QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
 	db, err := OpenOrchestrator()
@@ -395,7 +395,7 @@ func QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap
 func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
 	db, err := OpenOrchestrator()
@@ -410,7 +410,7 @@ func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) 
 func QueryOrchestratorBuffered(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
 	db, err := OpenOrchestrator()

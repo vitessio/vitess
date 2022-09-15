@@ -788,7 +788,7 @@ func Repoint(instanceKey *InstanceKey, primaryKey *InstanceKey, gtidHint Operati
 	// If accessible, we wish to do hostname-unresolve. If inaccessible, we can skip the test and not fail the
 	// ChangePrimaryTo operation. This is why we pass "!primaryIsAccessible" below.
 	if instance.ExecBinlogCoordinates.IsEmpty() {
-		instance.ExecBinlogCoordinates.LogFile = "orchestrator-unknown-log-file"
+		instance.ExecBinlogCoordinates.LogFile = "vtorc-unknown-log-file"
 	}
 	_, err = ChangePrimaryTo(instanceKey, primaryKey, &instance.ExecBinlogCoordinates, !primaryIsAccessible, gtidHint)
 	if err != nil {
@@ -1487,7 +1487,7 @@ Cleanup:
 	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took primary: %+v", primaryInstance.Key))
 
 	// Created this to enable a custom hook to be called after a TakePrimary success.
-	// This only runs if there is a hook configured in orchestrator.conf.json
+	// This only runs if there is a hook configured in vtorc.conf.json
 	demoted := primaryInstance
 	successor := instance
 	if config.Config.PostTakePrimaryProcesses != nil {

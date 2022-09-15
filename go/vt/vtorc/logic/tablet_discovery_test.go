@@ -101,7 +101,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the orchestrator
+	// Open the vtorc
 	// After the test completes delete everything from the vitess_tablet table
 	orcDb, err := db.OpenOrchestrator()
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestShardPrimary(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the orchestrator
+	// Open the vtorc
 	// After the test completes delete everything from the vitess_tablet table
 	orcDb, err := db.OpenOrchestrator()
 	require.NoError(t, err)
@@ -236,7 +236,7 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 	assert.EqualValues(t, instanceRefreshRequired, instancesRefreshed)
 }
 
-// verifyTabletInfo verifies that the tablet information read from the orchestrator database
+// verifyTabletInfo verifies that the tablet information read from the vtorc database
 // is the same as the one provided or reading it gives the same error as expected
 func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString string) {
 	t.Helper()

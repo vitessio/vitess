@@ -46,7 +46,7 @@ const (
 	RecoveryPollSeconds                   = 1
 	ActiveNodeExpireSeconds               = 5
 	BinlogFileHistoryDays                 = 1
-	MaintenanceOwner                      = "orchestrator"
+	MaintenanceOwner                      = "vtorc"
 	AuditPageSize                         = 20
 	MaintenancePurgeDays                  = 7
 	MySQLTopologyMaxPoolConnections       = 3
@@ -57,17 +57,17 @@ const (
 	SelectTrueQuery                       = "select 1"
 )
 
-// Configuration makes for orchestrator configuration input, which can be provided by user via JSON formatted file.
+// Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
 // Some of the parameteres have reasonable default values, and some (like database credentials) are
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
 	Debug                                       bool   // set debug mode (similar to --debug option)
 	EnableSyslog                                bool   // Should logs be directed (in addition) to syslog daemon?
-	ListenAddress                               string // Where orchestrator HTTP should listen for TCP
-	ListenSocket                                string // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
+	ListenAddress                               string // Where vtorc HTTP should listen for TCP
+	ListenSocket                                string // Where vtorc HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	HTTPAdvertise                               string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
-	AgentsServerPort                            string // port orchestrator agents talk back to
+	AgentsServerPort                            string // port vtorc agents talk back to
 	MySQLTopologyUser                           string // The user VTOrc will use to connect to MySQL instances
 	MySQLTopologyPassword                       string // The password VTOrc will use to connect to MySQL instances
 	MySQLReplicaUser                            string // User to set on replica MySQL instances while configuring replication settings on them. If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
@@ -82,9 +82,9 @@ type Configuration struct {
 	TLSCacheTTLFactor                           uint   // Factor of InstancePollSeconds that we set as TLS info cache expiry
 	BackendDB                                   string // EXPERIMENTAL: type of backend db; either "mysql" or "sqlite3"
 	SQLite3DataFile                             string // when BackendDB == "sqlite3", full path to sqlite3 datafile
-	SkipOrchestratorDatabaseUpdate              bool   // When true, do not check backend database schema nor attempt to update it. Useful when you may be running multiple versions of orchestrator, and you only wish certain boxes to dictate the db structure (or else any time a different orchestrator version runs it will rebuild database schema)
-	PanicIfDifferentDatabaseDeploy              bool   // When true, and this process finds the orchestrator backend DB was provisioned by a different version, panic
-	RaftEnabled                                 bool   // When true, setup orchestrator in a raft consensus layout. When false (default) all Raft* variables are ignored
+	SkipOrchestratorDatabaseUpdate              bool   // When true, do not check backend database schema nor attempt to update it. Useful when you may be running multiple versions of vtorc, and you only wish certain boxes to dictate the db structure (or else any time a different vtorc version runs it will rebuild database schema)
+	PanicIfDifferentDatabaseDeploy              bool   // When true, and this process finds the vtorc backend DB was provisioned by a different version, panic
+	RaftEnabled                                 bool   // When true, setup vtorc in a raft consensus layout. When false (default) all Raft* variables are ignored
 	RaftBind                                    string
 	RaftAdvertise                               string
 	RaftDataDir                                 string
@@ -111,9 +111,9 @@ type Configuration struct {
 	MySQLConnectionLifetimeSeconds              int      // Number of seconds the mysql driver will keep database connection alive before recycling it
 	DefaultInstancePort                         int      // In case port was not specified on command line
 	ReplicationLagQuery                         string   // custom query to check on replica lg (e.g. heartbeat table). Must return a single row with a single numeric column, which is the lag.
-	ReplicationCredentialsQuery                 string   // custom query to get replication credentials. Must return a single row, with two text columns: 1st is username, 2nd is password. This is optional, and can be used by orchestrator to configure replication after primary takeover or setup of co-primary. You need to ensure the orchestrator user has the privileges to run this query
+	ReplicationCredentialsQuery                 string   // custom query to get replication credentials. Must return a single row, with two text columns: 1st is username, 2nd is password. This is optional, and can be used by vtorc to configure replication after primary takeover or setup of co-primary. You need to ensure the vtorc user has the privileges to run this query
 	DiscoverByShowSlaveHosts                    bool     // Attempt SHOW SLAVE HOSTS before PROCESSLIST
-	UseSuperReadOnly                            bool     // Should orchestrator super_read_only any time it sets read_only
+	UseSuperReadOnly                            bool     // Should vtorc super_read_only any time it sets read_only
 	InstancePollSeconds                         uint     // Number of seconds between instance reads
 	InstanceWriteBufferSize                     int      // Instance write buffer size (max number of instances to flush in one INSERT ODKU)
 	BufferInstanceWrites                        bool     // Set to 'true' for write-optimization on backend table (compromise: writes can be stale and overwrite non stale data)
@@ -124,7 +124,7 @@ type Configuration struct {
 	DiscoveryQueueCapacity                      uint     // Buffer size of the discovery queue. Should be greater than the number of DB instances being discovered
 	DiscoveryQueueMaxStatisticsSize             int      // The maximum number of individual secondly statistics taken of the discovery queue
 	DiscoveryCollectionRetentionSeconds         uint     // Number of seconds to retain the discovery collection information
-	DiscoverySeeds                              []string // Hard coded array of hostname:port, ensuring orchestrator discovers these hosts upon startup, assuming not already known to orchestrator
+	DiscoverySeeds                              []string // Hard coded array of hostname:port, ensuring vtorc discovers these hosts upon startup, assuming not already known to vtorc
 	InstanceBulkOperationsWaitTimeoutSeconds    uint     // Time to wait on a single instance when doing bulk (many instances) operation
 	HostnameResolveMethod                       string   // Method by which to "normalize" hostname ("none"/"default"/"cname")
 	MySQLHostnameResolveMethod                  string   // Method by which to "normalize" hostname via MySQL server. ("none"/"@@hostname"/"@@report_host"; default "@@hostname")
@@ -168,8 +168,8 @@ type Configuration struct {
 	SupportFuzzyPoolHostnames                   bool              // Should "submit-pool-instances" command be able to pass list of fuzzy instances (fuzzy means non-fqdn, but unique enough to recognize). Defaults 'true', implies more queries on backend db
 	InstancePoolExpiryMinutes                   uint              // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
 	PromotionIgnoreHostnameFilters              []string          // Orchestrator will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
-	ServeAgentsHTTP                             bool              // Spawn another HTTP interface dedicated for orchestrator-agent
-	AgentsUseSSL                                bool              // When "true" orchestrator will listen on agents port with SSL as well as connect to agents via SSL
+	ServeAgentsHTTP                             bool              // Spawn another HTTP interface dedicated for vtorc-agent
+	AgentsUseSSL                                bool              // When "true" vtorc will listen on agents port with SSL as well as connect to agents via SSL
 	AgentsUseMutualTLS                          bool              // When "true" Use mutual TLS for the server to agent communication
 	AgentSSLSkipVerify                          bool              // When using SSL for the Agent, should we ignore SSL certification error
 	AgentSSLPrivateKeyFile                      string            // Name of Agent SSL private key file, applies only when AgentsUseSSL = true
@@ -206,19 +206,19 @@ type Configuration struct {
 	PostPrimaryFailoverProcesses                []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
 	PostIntermediatePrimaryFailoverProcesses    []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
 	PostTakePrimaryProcesses                    []string          // Processes to execute after a successful Take-Primary event has taken place
-	CoPrimaryRecoveryMustPromoteOtherCoPrimary  bool              // When 'false', anything can get promoted (and candidates are prefered over others). When 'true', orchestrator will promote the other co-primary or else fail
+	CoPrimaryRecoveryMustPromoteOtherCoPrimary  bool              // When 'false', anything can get promoted (and candidates are prefered over others). When 'true', vtorc will promote the other co-primary or else fail
 	DetachLostReplicasAfterPrimaryFailover      bool              // Should replicas that are not to be lost in primary recovery (i.e. were more up-to-date than promoted replica) be forcibly detached
-	ApplyMySQLPromotionAfterPrimaryFailover     bool              // Should orchestrator take upon itself to apply MySQL primary promotion: set read_only=0, detach replication, etc.
-	PreventCrossDataCenterPrimaryFailover       bool              // When true (default: false), cross-DC primary failover are not allowed, orchestrator will do all it can to only fail over within same DC, or else not fail over at all.
-	PreventCrossRegionPrimaryFailover           bool              // When true (default: false), cross-region primary failover are not allowed, orchestrator will do all it can to only fail over within same region, or else not fail over at all.
+	ApplyMySQLPromotionAfterPrimaryFailover     bool              // Should vtorc take upon itself to apply MySQL primary promotion: set read_only=0, detach replication, etc.
+	PreventCrossDataCenterPrimaryFailover       bool              // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
+	PreventCrossRegionPrimaryFailover           bool              // When true (default: false), cross-region primary failover are not allowed, vtorc will do all it can to only fail over within same region, or else not fail over at all.
 	PrimaryFailoverLostInstancesDowntimeMinutes uint              // Number of minutes to downtime any server that was lost after a primary failover (including failed primary & lost replicas). 0 to disable
-	PrimaryFailoverDetachReplicaPrimaryHost     bool              // Should orchestrator issue a detach-replica-primary-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterPrimaryFailover is 'true'.
+	PrimaryFailoverDetachReplicaPrimaryHost     bool              // Should vtorc issue a detach-replica-primary-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterPrimaryFailover is 'true'.
 	FailPrimaryPromotionOnLagMinutes            uint              // when > 0, fail a primary promotion if the candidate replica is lagging >= configured number of minutes.
 	FailPrimaryPromotionIfSQLThreadNotUpToDate  bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, promotion is aborted with error
 	DelayPrimaryPromotionIfSQLThreadNotUpToDate bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, delay promotion until the sql thread has caught up
 	PostponeReplicaRecoveryOnLagMinutes         uint              // On crash recovery, replicas that are lagging more than given minutes are only resurrected late in the recovery process, after primary/IM has been elected and processes executed. Value of 0 disables this feature
 	OSCIgnoreHostnameFilters                    []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
-	URLPrefix                                   string            // URL prefix to run orchestrator on non-root web path, e.g. /orchestrator to put it behind nginx.
+	URLPrefix                                   string            // URL prefix to run vtorc on non-root web path, e.g. /vtorc to put it behind nginx.
 	DiscoveryIgnoreReplicaHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
 	DiscoveryIgnorePrimaryHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering a primary. Usage: pointing your primary temporarily to replicate seom data from external host
 	DiscoveryIgnoreHostnameFilters              []string          // Regexp filters to apply to prevent discovering instances of any kind
@@ -393,7 +393,7 @@ func (config *Configuration) postReadAdjustments() error {
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Infof("Parsed orchestrator credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
+			log.Infof("Parsed vtorc credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
 			config.MySQLOrchestratorUser = mySQLConfig.Client.User
 			config.MySQLOrchestratorPassword = mySQLConfig.Client.Password
 		}

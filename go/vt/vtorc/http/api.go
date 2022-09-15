@@ -844,7 +844,7 @@ func (httpAPI *API) TakePrimary(params martini.Params, r render.Render, req *htt
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%+v took its primary", instanceKey), Details: instance})
 }
 
-// RelocateBelow attempts to move an instance below another, orchestrator choosing the best (potentially multi-step)
+// RelocateBelow attempts to move an instance below another, vtorc choosing the best (potentially multi-step)
 // relocation method
 func (httpAPI *API) RelocateBelow(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
@@ -1127,7 +1127,7 @@ func (httpAPI *API) PurgeBinaryLogs(params martini.Params, r render.Render, req 
 }
 
 // RestartReplicationStatements receives a query to execute that requires a replication restart to apply.
-// As an example, this may be `set global rpl_semi_sync_slave_enabled=1`. orchestrator will check
+// As an example, this may be `set global rpl_semi_sync_slave_enabled=1`. vtorc will check
 // replication status on given host and will wrap with appropriate stop/start statements, if need be.
 func (httpAPI *API) RestartReplicationStatements(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
@@ -1311,7 +1311,7 @@ func (httpAPI *API) asciiTopology(params martini.Params, r render.Render, req *h
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Topology for cluster %s", clusterName), Details: asciiOutput})
 }
 
-// SnapshotTopologies triggers orchestrator to record a snapshot of host/primary for all known hosts.
+// SnapshotTopologies triggers vtorc to record a snapshot of host/primary for all known hosts.
 func (httpAPI *API) SnapshotTopologies(params martini.Params, r render.Render, req *http.Request) {
 	start := time.Now()
 	if err := inst.SnapshotTopologies(); err != nil {
@@ -2235,7 +2235,7 @@ func (httpAPI *API) GracefulPrimaryTakeover(params martini.Params, r render.Rend
 	httpAPI.gracefulPrimaryTakeover(params, r, req, user)
 }
 
-// GracefulPrimaryTakeoverAuto gracefully fails over a primary onto a replica of orchestrator's choosing
+// GracefulPrimaryTakeoverAuto gracefully fails over a primary onto a replica of vtorc's choosing
 func (httpAPI *API) GracefulPrimaryTakeoverAuto(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	httpAPI.gracefulPrimaryTakeover(params, r, req, user)
 }

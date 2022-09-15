@@ -74,7 +74,7 @@ func generateShellScript(commandText string, env []string, arguments ...string) 
 	shell := config.Config.ProcessesShellCommand
 
 	commandBytes := []byte(commandText)
-	tmpFile, err := os.CreateTemp("", "orchestrator-process-cmd-")
+	tmpFile, err := os.CreateTemp("", "vtorc-process-cmd-")
 	if err != nil {
 		errMsg := fmt.Sprintf("generateShellScript() failed to create TempFile: %v", err.Error())
 		log.Errorf(errMsg)

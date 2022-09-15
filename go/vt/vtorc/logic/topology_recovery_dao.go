@@ -227,7 +227,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 	}
 	if !failIfFailedInstanceInActiveRecovery {
 		// Implicitly acknowledge this instance's possibly existing active recovery, provided they are completed.
-		_, _ = AcknowledgeInstanceCompletedRecoveries(&analysisEntry.AnalyzedInstanceKey, "orchestrator", fmt.Sprintf("implicit acknowledge due to user invocation of recovery on same instance: %+v", analysisEntry.AnalyzedInstanceKey))
+		_, _ = AcknowledgeInstanceCompletedRecoveries(&analysisEntry.AnalyzedInstanceKey, "vtorc", fmt.Sprintf("implicit acknowledge due to user invocation of recovery on same instance: %+v", analysisEntry.AnalyzedInstanceKey))
 		// The fact we only acknowledge a completed recovery solves the possible case of two DBAs simultaneously
 		// trying to recover the same instance at the same time
 	}
@@ -462,7 +462,7 @@ func AcknowledgeCrashedRecoveries() (countAcknowledgedEntries int64, err error) 
 				select concat(hostname, ':', token) from node_health
 			)
 		`
-	return acknowledgeRecoveries("orchestrator", "detected crashed recovery", true, whereClause, sqlutils.Args())
+	return acknowledgeRecoveries("vtorc", "detected crashed recovery", true, whereClause, sqlutils.Args())
 }
 
 // ResolveRecovery is called on completion of a recovery process and updates the recovery status.

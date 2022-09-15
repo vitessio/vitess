@@ -141,7 +141,7 @@ func acceptSignals() {
 						}
 					}
 				}()
-				log.Infof("Shutting down orchestrator")
+				log.Infof("Shutting down vtorc")
 				os.Exit(0)
 			}
 		}

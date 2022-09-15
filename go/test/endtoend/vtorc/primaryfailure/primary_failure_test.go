@@ -100,7 +100,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	crossCellReplica := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
-	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	// newly started tablet does not replicate from anyone yet, we will allow vtorc to fix this too
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell, rdonly}, 25*time.Second)
 
 	// Make the current primary database unavailable.
@@ -141,7 +141,7 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 
 	crossCellReplica1 := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
 	crossCellReplica2 := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
-	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	// newly started tablet does not replicate from anyone yet, we will allow vtorc to fix this too
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{crossCellReplica1, crossCellReplica2, rdonly}, 25*time.Second)
 
 	// Make the current primary database unavailable.
@@ -373,7 +373,7 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	crossCellReplica := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
-	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	// newly started tablet does not replicate from anyone yet, we will allow vtorc to fix this too
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{crossCellReplica, rdonly, replica}, 25*time.Second)
 
 	// Make the current primary database unavailable.
@@ -421,7 +421,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	crossCellReplica := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
-	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	// newly started tablet does not replicate from anyone yet, we will allow vtorc to fix this too
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{crossCellReplica, replica, rdonly}, 25*time.Second)
 
 	// revoke super privileges from vtorc on crossCellReplica so that it is unable to repair the replication
@@ -501,7 +501,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	crossCellReplica := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
-	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	// newly started tablet does not replicate from anyone yet, we will allow vtorc to fix this too
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{crossCellReplica, replica, rdonly}, 25*time.Second)
 
 	// revoke super privileges from vtorc on replica so that it is unable to repair the replication

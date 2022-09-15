@@ -124,7 +124,7 @@ func SetupMySQLTopologyTLS(uri string) (string, error) {
 }
 
 // Create a TLS configuration from the config supplied CA, Certificate, and Private key.
-// Register the TLS config with the mysql drivers as the "orchestrator" config
+// Register the TLS config with the mysql drivers as the "vtorc" config
 // Modify the supplied URI to call the TLS config
 func SetupMySQLOrchestratorTLS(uri string) (string, error) {
 	if !orchestratorTLSConfigured {
@@ -144,11 +144,11 @@ func SetupMySQLOrchestratorTLS(uri string) (string, error) {
 				return "", err
 			}
 		}
-		if err = mysql.RegisterTLSConfig("orchestrator", tlsConfig); err != nil {
-			log.Fatalf("Can't register mysql TLS config for orchestrator: %s", err)
+		if err = mysql.RegisterTLSConfig("vtorc", tlsConfig); err != nil {
+			log.Fatalf("Can't register mysql TLS config for vtorc: %s", err)
 			return "", err
 		}
 		orchestratorTLSConfigured = true
 	}
-	return fmt.Sprintf("%s&tls=orchestrator", uri), nil
+	return fmt.Sprintf("%s&tls=vtorc", uri), nil
 }

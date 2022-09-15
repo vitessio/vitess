@@ -175,7 +175,7 @@ Please update your scripts before the next version, when this will begin to brea
 		*destination = *sibling
 	}
 
-	startText := "starting orchestrator"
+	startText := "starting vtorc"
 	if AppVersion != "" {
 		startText += ", version: " + AppVersion
 	}
@@ -187,7 +187,7 @@ Please update your scripts before the next version, when this will begin to brea
 	if len(*configFile) > 0 {
 		config.ForceRead(*configFile)
 	} else {
-		config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
+		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false

@@ -99,7 +99,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 
 	/* minimal command line arguments:
 	$ vtorc -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
-	-config config/orchestrator/default.json -alsologtostderr http
+	-config config/vtorc/default.json -alsologtostderr http
 	*/
 	orc.proc = exec.Command(
 		orc.Binary,
@@ -107,7 +107,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
-		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
+		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))

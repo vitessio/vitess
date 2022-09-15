@@ -186,7 +186,7 @@ func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	crossCellReplica1 := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
-	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	// newly started tablet does not replicate from anyone yet, we will allow vtorc to fix this too
 	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{crossCellReplica1, rdonly}, 25*time.Second)
 
 	status, response := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VtorcProcesses[0].WebPort, primary.MySQLPort, crossCellReplica1.MySQLPort))

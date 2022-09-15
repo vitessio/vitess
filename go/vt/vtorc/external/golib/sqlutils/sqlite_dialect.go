@@ -17,7 +17,7 @@
 // What's this about?
 // This is a brute-force regular-expression based conversion from MySQL syntax to sqlite3 syntax.
 // It is NOT meant to be a general purpose solution and is only expected & confirmed to run on
-// queries issued by orchestrator. There are known limitations to this design.
+// queries issued by vtorc. There are known limitations to this design.
 // It's not even pretty.
 // In fact...
 // Well, it gets the job done at this time. Call it debt.

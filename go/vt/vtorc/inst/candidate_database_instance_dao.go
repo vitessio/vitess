@@ -73,7 +73,7 @@ func ExpireCandidateInstances() error {
 // BulkReadCandidateDatabaseInstance returns a slice of
 // CandidateDatabaseInstance converted to JSON.
 /*
-root@myorchestrator [orchestrator]> select * from candidate_database_instance;
+root@myorchestrator [vtorc]> select * from candidate_database_instance;
 +-------------------+------+---------------------+----------+----------------+
 | hostname          | port | last_suggested      | priority | promotion_rule |
 +-------------------+------+---------------------+----------+----------------+

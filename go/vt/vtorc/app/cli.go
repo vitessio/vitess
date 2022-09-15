@@ -81,10 +81,10 @@ func commandsListing() string {
 func availableCommandsUsage() string {
 	return fmt.Sprintf(`Available commands (-c):
 %+v
-Run 'orchestrator help <command>' for detailed help on given command, e.g. 'orchestrator help relocate'
+Run 'vtorc help <command>' for detailed help on given command, e.g. 'vtorc help relocate'
 
 Usage for most commands:
-	orchestrator -c <command> [-i <instance.fqdn>[,<instance.fqdn>]* ] [-d <destination.fqdn>] [--verbose|--debug]
+	vtorc -c <command> [-i <instance.fqdn>[,<instance.fqdn>]* ] [-d <destination.fqdn>] [--verbose|--debug]
 `, commandsListing())
 }
 
@@ -708,7 +708,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				}
 			}
 		}
-	case registerCliCommand("clusters", "Information", `List all clusters known to orchestrator`):
+	case registerCliCommand("clusters", "Information", `List all clusters known to vtorc`):
 		{
 			clusters, err := inst.ReadClusters()
 			if err != nil {
@@ -716,7 +716,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(strings.Join(clusters, "\n"))
 		}
-	case registerCliCommand("clusters-alias", "Information", `List all clusters known to orchestrator`):
+	case registerCliCommand("clusters-alias", "Information", `List all clusters known to vtorc`):
 		{
 			clusters, err := inst.ReadClustersInfo("")
 			if err != nil {
@@ -784,12 +784,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instance := validateInstanceIsFound(instanceKey)
 			fmt.Println(instance.Key.DisplayString())
 		}
-	case registerCliCommand("which-cluster", "Information", `Output the name of the cluster an instance belongs to, or error if unknown to orchestrator`):
+	case registerCliCommand("which-cluster", "Information", `Output the name of the cluster an instance belongs to, or error if unknown to vtorc`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			fmt.Println(clusterName)
 		}
-	case registerCliCommand("which-cluster-alias", "Information", `Output the alias of the cluster an instance belongs to, or error if unknown to orchestrator`):
+	case registerCliCommand("which-cluster-alias", "Information", `Output the alias of the cluster an instance belongs to, or error if unknown to vtorc`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			clusterInfo, err := inst.ReadClusterInfo(clusterName)
@@ -798,7 +798,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(clusterInfo.ClusterName)
 		}
-	case registerCliCommand("which-cluster-domain", "Information", `Output the domain name of the cluster an instance belongs to, or error if unknown to orchestrator`):
+	case registerCliCommand("which-cluster-domain", "Information", `Output the domain name of the cluster an instance belongs to, or error if unknown to vtorc`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			clusterInfo, err := inst.ReadClusterInfo(clusterName)
@@ -1134,7 +1134,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				fmt.Println(promotedInstanceKey.DisplayString())
 			}
 		}
-	case registerCliCommand("force-primary-failover", "Recovery", `Forcibly discard primary and initiate a failover, even if orchestrator doesn't see a problem. This command lets orchestrator choose the replacement primary`):
+	case registerCliCommand("force-primary-failover", "Recovery", `Forcibly discard primary and initiate a failover, even if vtorc doesn't see a problem. This command lets vtorc choose the replacement primary`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			topologyRecovery, err := logic.ForcePrimaryFailover(clusterName)
@@ -1169,10 +1169,10 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 			log.Infof("Promoted %+v as new primary.", topologyRecovery.SuccessorKey)
 		}
-	case registerCliCommand("graceful-primary-takeover-auto", "Recovery", `Gracefully promote a new primary. orchestrator will attempt to pick the promoted replica automatically`):
+	case registerCliCommand("graceful-primary-takeover-auto", "Recovery", `Gracefully promote a new primary. vtorc will attempt to pick the promoted replica automatically`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
-			// destinationKey doesn't _have_ to be specified: if unspecified, orchestrator will auto-deduce a replica.
+			// destinationKey doesn't _have_ to be specified: if unspecified, vtorc will auto-deduce a replica.
 			// but if specified, then that's the replica to promote, and it must be valid.
 			if destinationKey != nil {
 				validateInstanceIsFound(destinationKey)
@@ -1284,7 +1284,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			logic.ContinuousDiscovery()
 		}
-	case registerCliCommand("active-nodes", "Meta", `List currently active orchestrator nodes`):
+	case registerCliCommand("active-nodes", "Meta", `List currently active vtorc nodes`):
 		{
 			nodes, err := process.ReadAvailableNodes(false)
 			if err != nil {
@@ -1372,14 +1372,14 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(replacement.Key.DisplayString())
 		}
-	case registerCliCommand("disable-global-recoveries", "", `Disallow orchestrator from performing recoveries globally`):
+	case registerCliCommand("disable-global-recoveries", "", `Disallow vtorc from performing recoveries globally`):
 		{
 			if err := logic.DisableRecovery(); err != nil {
 				log.Fatalf("ERROR: Failed to disable recoveries globally: %v\n", err)
 			}
 			fmt.Println("OK: Orchestrator recoveries DISABLED globally")
 		}
-	case registerCliCommand("enable-global-recoveries", "", `Allow orchestrator to perform recoveries globally`):
+	case registerCliCommand("enable-global-recoveries", "", `Allow vtorc to perform recoveries globally`):
 		{
 			if err := logic.EnableRecovery(); err != nil {
 				log.Fatalf("ERROR: Failed to enable recoveries globally: %v\n", err)
@@ -1394,7 +1394,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Printf("OK: Global recoveries disabled: %v\n", isDisabled)
 		}
-	case registerCliCommand("bulk-instances", "", `Return a list of sorted instance names known to orchestrator`):
+	case registerCliCommand("bulk-instances", "", `Return a list of sorted instance names known to vtorc`):
 		{
 			instances, err := inst.BulkReadInstance()
 			if err != nil {
@@ -1408,7 +1408,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			sort.Sort(asciiInstances)
 			fmt.Printf("%s\n", strings.Join(asciiInstances, "\n"))
 		}
-	case registerCliCommand("bulk-promotion-rules", "", `Return a list of promotion rules known to orchestrator`):
+	case registerCliCommand("bulk-promotion-rules", "", `Return a list of promotion rules known to vtorc`):
 		{
 			promotionRules, err := inst.BulkReadCandidateDatabaseInstance()
 			if err != nil {

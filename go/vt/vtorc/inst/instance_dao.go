@@ -204,7 +204,7 @@ func logReadTopologyInstanceError(instanceKey *InstanceKey, hint string, err err
 }
 
 // ReadTopologyInstance collects information on the state of a MySQL
-// server and writes the result synchronously to the orchestrator
+// server and writes the result synchronously to the vtorc
 // backend.
 func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
 	return ReadTopologyInstanceBufferable(instanceKey, false, nil)
@@ -240,7 +240,7 @@ func expectReplicationThreadsState(instanceKey *InstanceKey, expectedState Repli
 
 // ReadTopologyInstanceBufferable connects to a topology MySQL instance
 // and collects information on the server and its replication state.
-// It writes the information retrieved into orchestrator's backend.
+// It writes the information retrieved into vtorc's backend.
 // - writes are optionally buffered.
 // - timing information can be collected for the stages performed.
 func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
@@ -679,7 +679,7 @@ Cleanup:
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
 		if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
 			// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
-			// This is because orchestrator may pool primary and replica at an inconvenient timing,
+			// This is because vtorc may pool primary and replica at an inconvenient timing,
 			// such that the replica may _seems_ to have more entries than the primary, when in fact
 			// it's just that the primary's probing is stale.
 			redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
@@ -862,14 +862,14 @@ func BulkReadInstance() ([](*InstanceKey), error) {
 		for _, instance := range instances {
 			instanceKeys = append(instanceKeys, &instance.Key)
 		}
-		// sort on orchestrator and not the backend (should be redundant)
+		// sort on vtorc and not the backend (should be redundant)
 		sort.Sort(byNamePort(instanceKeys))
 	}
 
 	return instanceKeys, nil
 }
 
-// readInstanceRow reads a single instance row from the orchestrator backend database.
+// readInstanceRow reads a single instance row from the vtorc backend database.
 func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance := NewInstance()
 
@@ -1048,7 +1048,7 @@ func readInstancesByExactKey(instanceKey *InstanceKey) ([](*Instance), error) {
 	return readInstancesByCondition(condition, sqlutils.Args(instanceKey.Hostname, instanceKey.Port), "")
 }
 
-// ReadInstance reads an instance from the orchestrator backend database
+// ReadInstance reads an instance from the vtorc backend database
 func ReadInstance(instanceKey *InstanceKey) (*Instance, bool, error) {
 	instances, err := readInstancesByExactKey(instanceKey)
 	// We know there will be at most one (hostname & port are PK)
@@ -1583,7 +1583,7 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 	return res, nil
 }
 
-// InjectSeed: intented to be used to inject an instance upon startup, assuming it's not already known to orchestrator.
+// InjectSeed: intented to be used to inject an instance upon startup, assuming it's not already known to vtorc.
 func InjectSeed(instanceKey *InstanceKey) error {
 	if instanceKey == nil {
 		return fmt.Errorf("InjectSeed: nil instanceKey")
@@ -2193,7 +2193,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	return sql, args, nil
 }
 
-// writeManyInstances stores instances in the orchestrator backend
+// writeManyInstances stores instances in the vtorc backend
 func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) error {
 	writeInstances := [](*Instance){}
 	for _, instance := range instances {
@@ -2315,7 +2315,7 @@ func flushInstanceWriteBuffer() {
 	})
 }
 
-// WriteInstance stores an instance in the orchestrator backend
+// WriteInstance stores an instance in the vtorc backend
 func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError error) error {
 	if lastError != nil {
 		log.Infof("writeInstance: will not update database_instance due to error: %+v", lastError)
@@ -2324,7 +2324,7 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 	return writeManyInstances([]*Instance{instance}, instanceWasActuallyFound, true)
 }
 
-// UpdateInstanceLastChecked updates the last_check timestamp in the orchestrator backed database
+// UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
 // for a given instance
 func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) error {
 	writeFunc := func() error {
@@ -2349,7 +2349,7 @@ func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) er
 	return ExecDBWriteFunc(writeFunc)
 }
 
-// UpdateInstanceLastAttemptedCheck updates the last_attempted_check timestamp in the orchestrator backed database
+// UpdateInstanceLastAttemptedCheck updates the last_attempted_check timestamp in the vtorc backed database
 // for a given instance.
 // This is used as a failsafe mechanism in case access to the instance gets hung (it happens), in which case
 // the entire ReadTopology gets stuck (and no, connection timeout nor driver timeouts don't help. Don't look at me,
@@ -2383,7 +2383,7 @@ func InstanceIsForgotten(instanceKey *InstanceKey) bool {
 	return found
 }
 
-// ForgetInstance removes an instance entry from the orchestrator backed database.
+// ForgetInstance removes an instance entry from the vtorc backed database.
 // It may be auto-rediscovered through topology or requested for discovery by multiple means.
 func ForgetInstance(instanceKey *InstanceKey) error {
 	if instanceKey == nil {
@@ -2418,7 +2418,7 @@ func ForgetInstance(instanceKey *InstanceKey) error {
 	return nil
 }
 
-// ForgetInstance removes an instance entry from the orchestrator backed database.
+// ForgetInstance removes an instance entry from the vtorc backed database.
 // It may be auto-rediscovered through topology or requested for discovery by multiple means.
 func ForgetCluster(clusterName string) error {
 	clusterInstances, err := ReadClusterInstances(clusterName)

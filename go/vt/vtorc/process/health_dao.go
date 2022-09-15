@@ -133,7 +133,7 @@ func ExpireAvailableNodes() {
 }
 
 // ExpireNodesHistory cleans up the nodes history and is run by
-// the orchestrator active node.
+// the vtorc active node.
 func ExpireNodesHistory() error {
 	_, err := db.ExecOrchestrator(`
 			delete

@@ -42,7 +42,7 @@ func init() {
 
 // EnableSyslogWriter enables, if possible, writes to syslog. These will execute _in addition_ to normal logging
 func EnableAuditSyslog() (err error) {
-	syslogWriter, err = syslog.New(syslog.LOG_ERR, "orchestrator")
+	syslogWriter, err = syslog.New(syslog.LOG_ERR, "vtorc")
 	if err != nil {
 		syslogWriter = nil
 	}

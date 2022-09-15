@@ -18,10 +18,10 @@
 Package collection holds routines for collecting "high frequency"
 metrics and handling their auto-expiry based on a configured retention
 time. This becomes more interesting as the number of MySQL servers
-monitored by orchestrator increases.
+monitored by vtorc increases.
 
 Most monitoring systems look at different metrics over a period
-like 1, 10, 30 or 60 seconds but even at second resolution orchestrator
+like 1, 10, 30 or 60 seconds but even at second resolution vtorc
 may have polled a number of servers.
 
 It can be helpful to collect the raw values, and then allow external
@@ -52,7 +52,7 @@ period with SetExpirePeriod().
 This will trigger periodic calls (every second) to ensure the removal
 of metrics which have passed the time specified. Not enabling expiry
 will mean data is collected but never freed which will make
-orchestrator run out of memory eventually.
+vtorc run out of memory eventually.
 
 Current code uses DiscoveryCollectionRetentionSeconds as the
 time to keep metric data.

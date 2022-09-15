@@ -440,7 +440,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 					candidateReplica.PhysicalEnvironment == deadInstance.PhysicalEnvironment {
 					// This would make a great candidate
 					candidateInstanceKey = &candidateReplica.Key
-					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as failed instance", *deadInstanceKey, candidateReplica.Key))
+					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but vtorc picks %+v as candidate replacement, based on being in same DC & env as failed instance", *deadInstanceKey, candidateReplica.Key))
 				}
 			}
 		}
@@ -471,7 +471,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 				promotedReplica.PhysicalEnvironment == candidateReplica.PhysicalEnvironment {
 				// OK, better than nothing
 				candidateInstanceKey = &candidateReplica.Key
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as promoted instance", promotedReplica.Key, candidateReplica.Key))
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but vtorc picks %+v as candidate replacement, based on being in same DC & env as promoted instance", promotedReplica.Key, candidateReplica.Key))
 			}
 		}
 	}
@@ -484,7 +484,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 				if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, candidateReplica); satisfied {
 					// OK, better than nothing
 					candidateInstanceKey = &candidateReplica.Key
-					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement", promotedReplica.Key, candidateReplica.Key))
+					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but vtorc picks %+v as candidate replacement", promotedReplica.Key, candidateReplica.Key))
 				} else {
 					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", candidateReplica.Key, reason))
 				}
@@ -511,7 +511,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 					deadInstance.DataCenter == neutralReplica.DataCenter &&
 					deadInstance.PhysicalEnvironment == neutralReplica.PhysicalEnvironment {
 					candidateInstanceKey = &neutralReplica.Key
-					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as dead primary", promotedReplica.Key, neutralReplica.Key))
+					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but vtorc picks %+v as candidate replacement, based on being in same DC & env as dead primary", promotedReplica.Key, neutralReplica.Key))
 				}
 			}
 		}
@@ -523,7 +523,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 					promotedReplica.DataCenter == neutralReplica.DataCenter &&
 					promotedReplica.PhysicalEnvironment == neutralReplica.PhysicalEnvironment {
 					candidateInstanceKey = &neutralReplica.Key
-					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as promoted instance", promotedReplica.Key, neutralReplica.Key))
+					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but vtorc picks %+v as candidate replacement, based on being in same DC & env as promoted instance", promotedReplica.Key, neutralReplica.Key))
 				}
 			}
 		}
@@ -534,7 +534,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 					if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, neutralReplica); satisfied {
 						// OK, better than nothing
 						candidateInstanceKey = &neutralReplica.Key
-						AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on promoted instance having prefer_not promotion rule", promotedReplica.Key, neutralReplica.Key))
+						AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but vtorc picks %+v as candidate replacement, based on promoted instance having prefer_not promotion rule", promotedReplica.Key, neutralReplica.Key))
 					} else {
 						AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", neutralReplica.Key, reason))
 					}

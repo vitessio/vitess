@@ -666,7 +666,7 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	// MySQL's RESET SLAVE is done correctly; however SHOW SLAVE STATUS still returns old hostnames etc
-	// and only resets till after next restart. This leads to orchestrator still thinking the instance replicates
+	// and only resets till after next restart. This leads to vtorc still thinking the instance replicates
 	// from old host. We therefore forcibly modify the hostname.
 	// RESET SLAVE ALL command solves this, but only as of 5.6.3
 	_, err = ExecInstance(instanceKey, `change master to master_host='_'`)
@@ -863,7 +863,7 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 		if _, err := ExecInstance(instanceKey, "set global super_read_only = ?", readOnly); err != nil {
 			// We don't bail out here. super_read_only is only available on
 			// MySQL 5.7.8 and Percona Server 5.6.21-70
-			// At this time orchestrator does not verify whether a server supports super_read_only or not.
+			// At this time vtorc does not verify whether a server supports super_read_only or not.
 			// It makes a best effort to set it.
 			log.Error(err)
 		}

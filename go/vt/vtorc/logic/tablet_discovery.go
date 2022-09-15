@@ -308,7 +308,7 @@ func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, prima
 	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
 }
 
-// shardPrimary finds the primary of the given keyspace-shard by reading the orchestrator backend
+// shardPrimary finds the primary of the given keyspace-shard by reading the vtorc backend
 func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
 	query := `SELECT
 		info,

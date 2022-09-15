@@ -16,7 +16,7 @@
 
 package db
 
-// generateSQLBase & generateSQLPatches are lists of SQL statements required to build the orchestrator backend
+// generateSQLBase & generateSQLPatches are lists of SQL statements required to build the vtorc backend
 var generateSQLBase = []string{
 	`
         CREATE TABLE IF NOT EXISTS database_instance (

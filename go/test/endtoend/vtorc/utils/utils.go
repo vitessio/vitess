@@ -244,7 +244,7 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 	return
 }
 
-// StartVtorcs is used to start the orchestrator with the given extra arguments
+// StartVtorcs is used to start the vtorcs with the given extra arguments
 func StartVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, config cluster.VtorcConfiguration, count int) {
 	t.Helper()
 	// Start vtorc
@@ -257,7 +257,7 @@ func StartVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []str
 	}
 }
 
-// StopVtorcs is used to stop the orchestrator
+// StopVtorcs is used to stop the vtorcs
 func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	t.Helper()
 	// Stop vtorc
@@ -269,7 +269,7 @@ func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	clusterInfo.ClusterInstance.VtorcProcesses = nil
 }
 
-// SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
+// SetupVttabletsAndVtorc is used to setup the vttablets and start the vtorcs
 func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int, durability string) {
 	// stop vtorc if it is running
 	StopVtorcs(t, clusterInfo)
