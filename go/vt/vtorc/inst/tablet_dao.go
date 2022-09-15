@@ -159,7 +159,7 @@ func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
 		`
 	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
 	tablet := &topodatapb.Tablet{}
-	err := db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		return prototext.Unmarshal([]byte(row.GetString("info")), tablet)
 	})
 	if err != nil {
@@ -177,7 +177,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecOrchestrator(`
+	_, err = db.ExecVTOrc(`
 		replace
 			into vitess_tablet (
 				hostname, port, cell, keyspace, shard, tablet_type, primary_timestamp, info

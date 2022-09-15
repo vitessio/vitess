@@ -174,7 +174,7 @@ func ExecDBWriteFunc(f func() error) error {
 func ExpireTableData(tableName string, timestampColumn string) error {
 	query := fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn)
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(query, config.Config.AuditPurgeDays)
+		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -755,7 +755,7 @@ func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 		AND replication_group_member_role = 'PRIMARY'
 `
 	queryArgs := sqlutils.Args(instance.ReplicationGroupName)
-	err = db.QueryOrchestrator(query, queryArgs, func(row sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, queryArgs, func(row sqlutils.RowMap) error {
 		groupPrimaryHost := row.GetString("replication_group_primary_host")
 		groupPrimaryPort := row.GetInt("replication_group_primary_port")
 		resolvedGroupPrimary, err := NewResolveInstanceKey(groupPrimaryHost, groupPrimaryPort)
@@ -799,7 +799,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		primaryOrGroupPrimaryInstanceKey = instance.SourceKey
 	}
 	args := sqlutils.Args(primaryOrGroupPrimaryInstanceKey.Hostname, primaryOrGroupPrimaryInstanceKey.Port)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		primaryOrGroupPrimaryReplicationDepth = m.GetUint("replication_depth")
 		primaryOrGroupPrimaryInstanceKey.Hostname = m.GetString("source_host")
 		primaryOrGroupPrimaryInstanceKey.Port = m.GetInt("source_port")
@@ -1018,7 +1018,7 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			%s
 			`, condition, sort)
 
-		err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+		err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 			instance := readInstanceRow(m)
 			instances = append(instances, instance)
 			return nil
@@ -1550,7 +1550,7 @@ func GetHeuristicClusterPoolInstancesLag(clusterName string, pool string) (int64
 func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 	res := []InstanceKey{}
 
-	err := db.QueryOrchestratorRowsMap(`
+	err := db.QueryVTOrcRowsMap(`
 			SELECT DISTINCT
 			    replica_instance.source_host, replica_instance.source_port
 			FROM
@@ -1648,7 +1648,7 @@ func ForgetUnseenInstancesDifferentlyResolved() error {
 					AND ifnull(last_checked <= last_seen, 0) = 0
 	`
 	keys := NewInstanceKeyMap()
-	err := db.QueryOrchestrator(query, nil, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, nil, func(m sqlutils.RowMap) error {
 		key := InstanceKey{
 			Hostname: m.GetString("hostname"),
 			Port:     m.GetInt("port"),
@@ -1658,7 +1658,7 @@ func ForgetUnseenInstancesDifferentlyResolved() error {
 	})
 	var rowsAffected int64
 	for _, key := range keys.GetInstanceKeys() {
-		sqlResult, err := db.ExecOrchestrator(`
+		sqlResult, err := db.ExecVTOrc(`
 			delete from
 				database_instance
 			where
@@ -1685,7 +1685,7 @@ func ForgetUnseenInstancesDifferentlyResolved() error {
 // last time we saw this hostname and it resolves into THAT")
 func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
 	res := make(map[string]string)
-	err := db.QueryOrchestratorRowsMap(`
+	err := db.QueryVTOrcRowsMap(`
 			SELECT DISTINCT
 			    replica_instance.source_host, hostname_resolve_history.resolved_hostname
 			FROM
@@ -1747,7 +1747,7 @@ func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
 			hostname
 		`, sqlutils.InClauseStringValues(hostnames))
 
-	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
 		res[m.GetString("hostname")] = m.GetInt("count_mysql_snapshots")
 		return nil
 	})
@@ -1797,7 +1797,7 @@ func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
 			hostname = ?
 			and port = ?
 			`
-	err = db.QueryOrchestrator(query, sqlutils.Args(instanceKey.Hostname, instanceKey.Port), func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, sqlutils.Args(instanceKey.Hostname, instanceKey.Port), func(m sqlutils.RowMap) error {
 		clusterName = m.GetString("cluster_name")
 		instanceKeyInformativeClusterName.Set(instanceKey.StringCode(), clusterName, cache.DefaultExpiration)
 		return nil
@@ -1854,7 +1854,7 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 		group by
 			cluster_name`, whereClause)
 
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		clusterInfo := ClusterInfo{
 			ClusterName:    m.GetString("cluster_name"),
 			CountInstances: m.GetUint("count_instances"),
@@ -1946,7 +1946,7 @@ func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
 			`
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		instanceKey, merr := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
 		if merr != nil {
 			log.Error(merr)
@@ -2209,7 +2209,7 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 	if err != nil {
 		return err
 	}
-	if _, err := db.ExecOrchestrator(sql, args...); err != nil {
+	if _, err := db.ExecVTOrc(sql, args...); err != nil {
 		return err
 	}
 	return nil
@@ -2328,7 +2328,7 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 // for a given instance
 func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) error {
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
         	update
         		database_instance
         	set
@@ -2359,7 +2359,7 @@ func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) er
 // we have a "hanging" issue.
 func UpdateInstanceLastAttemptedCheck(instanceKey *InstanceKey) error {
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
     	update
     		database_instance
     	set
@@ -2392,7 +2392,7 @@ func ForgetInstance(instanceKey *InstanceKey) error {
 		return fmt.Errorf(errMsg)
 	}
 	forgetInstanceKeys.Set(instanceKey.StringCode(), true, cache.DefaultExpiration)
-	sqlResult, err := db.ExecOrchestrator(`
+	sqlResult, err := db.ExecVTOrc(`
 			delete
 				from database_instance
 			where
@@ -2432,7 +2432,7 @@ func ForgetCluster(clusterName string) error {
 		forgetInstanceKeys.Set(instance.Key.StringCode(), true, cache.DefaultExpiration)
 		_ = AuditOperation("forget", &instance.Key, "")
 	}
-	_, err = db.ExecOrchestrator(`
+	_, err = db.ExecVTOrc(`
 			delete
 				from database_instance
 			where
@@ -2444,7 +2444,7 @@ func ForgetCluster(clusterName string) error {
 
 // ForgetLongUnseenInstances will remove entries of all instacnes that have long since been last seen.
 func ForgetLongUnseenInstances() error {
-	sqlResult, err := db.ExecOrchestrator(`
+	sqlResult, err := db.ExecVTOrc(`
 			delete
 				from database_instance
 			where
@@ -2467,7 +2467,7 @@ func ForgetLongUnseenInstances() error {
 // SnapshotTopologies records topology graph for all existing topologies
 func SnapshotTopologies() error {
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
         	insert ignore into
         		database_instance_topology_history (snapshot_unix_timestamp,
         			hostname, port, source_host, source_port, cluster_name, version)
@@ -2503,7 +2503,7 @@ func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern str
 		order by
 			hostname, port`
 
-	err := db.QueryOrchestrator(query, sqlutils.Args(historyTimestampPattern, clusterName), func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, sqlutils.Args(historyTimestampPattern, clusterName), func(m sqlutils.RowMap) error {
 		instance := NewInstance()
 
 		instance.Key.Hostname = m.GetString("hostname")
@@ -2528,7 +2528,7 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 		instanceKey.Hostname, instanceKey.Port,
 		binlogCoordinates.LogFile, binlogCoordinates.LogPos,
 	)
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			delete from
 				database_instance_stale_binlog_coordinates
 			where
@@ -2544,7 +2544,7 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 		log.Error(err)
 		return err
 	}
-	_, err = db.ExecOrchestrator(`
+	_, err = db.ExecVTOrc(`
 			insert ignore into
 				database_instance_stale_binlog_coordinates (
 					hostname, port,	binary_log_file, binary_log_pos, first_seen
@@ -2565,7 +2565,7 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
 	}
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 					delete from database_instance_stale_binlog_coordinates
 					where first_seen < NOW() - INTERVAL ? SECOND
 					`, expireSeconds,
@@ -2583,7 +2583,7 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 // new relay logs.
 func ResetInstanceRelaylogCoordinatesHistory(instanceKey *InstanceKey) error {
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 			update database_instance_coordinates_history
 				set relay_log_file='', relay_log_pos=0
 			where

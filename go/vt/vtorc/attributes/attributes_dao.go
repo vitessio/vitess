@@ -27,7 +27,7 @@ import (
 
 // SetHostAttributes is used to set host attributes
 func SetHostAttributes(hostname string, attributeName string, attributeValue string) error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			replace
 				into host_attributes (
 					hostname, attribute_name, attribute_value, submit_timestamp, expire_timestamp
@@ -63,7 +63,7 @@ func getHostAttributesByClause(whereClause string, args []any) ([]HostAttributes
 			hostname, attribute_name
 		`, whereClause)
 
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		hostAttributes := HostAttributes{}
 		hostAttributes.Hostname = m.GetString("hostname")
 		hostAttributes.AttributeName = m.GetString("attribute_name")

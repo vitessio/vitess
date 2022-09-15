@@ -47,7 +47,7 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 		WHERE
 			disable_recovery=?
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(1), func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, sqlutils.Args(1), func(m sqlutils.RowMap) error {
 		mycount := m.GetInt("mycount")
 		disabled = (mycount > 0)
 		return nil
@@ -62,7 +62,7 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 
 // DisableRecovery ensures recoveries are disabled globally
 func DisableRecovery() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 		INSERT IGNORE INTO global_recovery_disable
 			(disable_recovery)
 		VALUES  (1)
@@ -74,7 +74,7 @@ func DisableRecovery() error {
 // EnableRecovery ensures recoveries are enabled globally
 func EnableRecovery() error {
 	// The "WHERE" clause is just to avoid full-scan reports by monitoring tools
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 		DELETE FROM global_recovery_disable WHERE disable_recovery >= 0
 	`,
 	)

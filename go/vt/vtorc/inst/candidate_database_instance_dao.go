@@ -45,7 +45,7 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 					promotion_rule=values(promotion_rule)
 			`
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(query, args...)
+		_, err := db.ExecVTOrc(query, args...)
 		if err != nil {
 			log.Error(err)
 		}
@@ -57,7 +57,7 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 // ExpireCandidateInstances removes stale primary candidate suggestions.
 func ExpireCandidateInstances() error {
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 				delete from candidate_database_instance
 				where last_suggested < NOW() - INTERVAL ? MINUTE
 				`, config.Config.CandidateInstanceExpireMinutes,
@@ -73,7 +73,7 @@ func ExpireCandidateInstances() error {
 // BulkReadCandidateDatabaseInstance returns a slice of
 // CandidateDatabaseInstance converted to JSON.
 /*
-root@myorchestrator [vtorc]> select * from candidate_database_instance;
+root@myVTOrc [vtorc]> select * from candidate_database_instance;
 +-------------------+------+---------------------+----------+----------------+
 | hostname          | port | last_suggested      | priority | promotion_rule |
 +-------------------+------+---------------------+----------+----------------+
@@ -96,7 +96,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 		FROM
 			candidate_database_instance
 	`
-	err := db.QueryOrchestrator(query, sqlutils.Args(config.Config.CandidateInstanceExpireMinutes), func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, sqlutils.Args(config.Config.CandidateInstanceExpireMinutes), func(m sqlutils.RowMap) error {
 		cdi := CandidateDatabaseInstance{
 			Hostname:            m.GetString("hostname"),
 			Port:                m.GetInt("port"),

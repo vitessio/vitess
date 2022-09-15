@@ -60,7 +60,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	inst.TopoServ = ts
 	tmc = tmclient.NewTabletManagerClient()
 	// Clear existing cache and perform a new refresh.
-	if _, err := db.ExecOrchestrator("delete from vitess_tablet"); err != nil {
+	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
 	}
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
@@ -227,7 +227,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 
 	// Forget tablets that were removed.
 	toForget := make(map[inst.InstanceKey]*topodatapb.Tablet)
-	err := db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		curKey := inst.InstanceKey{
 			Hostname: row.GetString("hostname"),
 			Port:     row.GetInt("port"),
@@ -247,7 +247,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 	}
 	for instanceKey, tablet := range toForget {
 		log.Infof("Forgetting: %v", tablet)
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 					delete
 						from vitess_tablet
 					where
@@ -325,7 +325,7 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 		primary_timestamp DESC
 	LIMIT 1
 `
-	err = db.Db.QueryOrchestrator(query, sqlutils.Args(keyspace, shard, topodatapb.TabletType_PRIMARY), func(m sqlutils.RowMap) error {
+	err = db.Db.QueryVTOrc(query, sqlutils.Args(keyspace, shard, topodatapb.TabletType_PRIMARY), func(m sqlutils.RowMap) error {
 		if primary == nil {
 			primary = &topodatapb.Tablet{}
 			return prototext.Unmarshal([]byte(m.GetString("info")), primary)

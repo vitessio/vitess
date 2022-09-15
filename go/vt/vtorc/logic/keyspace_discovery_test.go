@@ -62,7 +62,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 
 	// Open the vtorc
 	// After the test completes delete everything from the vitess_keyspace table
-	orcDb, err := db.OpenOrchestrator()
+	orcDb, err := db.OpenVTOrc()
 	require.NoError(t, err)
 	defer func() {
 		_, err = orcDb.Exec("delete from vitess_keyspace")
@@ -113,7 +113,7 @@ func TestRefreshKeyspace(t *testing.T) {
 
 	// Open the vtorc
 	// After the test completes delete everything from the vitess_keyspace table
-	orcDb, err := db.OpenOrchestrator()
+	orcDb, err := db.OpenVTOrc()
 	require.NoError(t, err)
 	defer func() {
 		_, err = orcDb.Exec("delete from vitess_keyspace")

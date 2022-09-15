@@ -80,7 +80,7 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 				)
 			`, startActivePeriodHint)
 
-	sqlResult, err := db.ExecOrchestrator(query, args...)
+	sqlResult, err := db.ExecVTOrc(query, args...)
 	if err != nil {
 		log.Error(err)
 		return false, err
@@ -96,7 +96,7 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 // ClearActiveFailureDetections clears the "in_active_period" flag for old-enough detections, thereby allowing for
 // further detections on cleared instances.
 func ClearActiveFailureDetections() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			update topology_failure_detection set
 				in_active_period = 0,
 				end_active_period_unixtime = UNIX_TIMESTAMP()
@@ -123,7 +123,7 @@ func clearAcknowledgedFailureDetections(whereClause string, args []any) error {
 				in_active_period = 1
 				and %s
 			`, whereClause)
-	_, err := db.ExecOrchestrator(query, args...)
+	_, err := db.ExecVTOrc(query, args...)
 	if err != nil {
 		log.Error(err)
 	}
@@ -132,7 +132,7 @@ func clearAcknowledgedFailureDetections(whereClause string, args []any) error {
 
 func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecovery, error) {
 	analysisEntry := topologyRecovery.AnalysisEntry
-	sqlResult, err := db.ExecOrchestrator(`
+	sqlResult, err := db.ExecVTOrc(`
 			insert ignore
 				into topology_recovery (
 					recovery_id,
@@ -245,7 +245,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 // ClearActiveRecoveries clears the "in_active_period" flag for old-enough recoveries, thereby allowing for
 // further recoveries on cleared instances.
 func ClearActiveRecoveries() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			update topology_recovery set
 				in_active_period = 0,
 				end_active_period_unixtime = UNIX_TIMESTAMP()
@@ -265,7 +265,7 @@ func ClearActiveRecoveries() error {
 // Recoveries are blocked thru the in_active_period flag, which comes to avoid flapping.
 func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blockingRecoveries []*TopologyRecovery) error {
 	for _, recovery := range blockingRecoveries {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 			insert
 				into blocked_topology_recovery (
 					hostname,
@@ -317,14 +317,14 @@ func ExpireBlockedRecoveries() error {
 				acknowledged is null
 		`
 	expiredKeys := inst.NewInstanceKeyMap()
-	err := db.QueryOrchestrator(query, sqlutils.Args(), func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, sqlutils.Args(), func(m sqlutils.RowMap) error {
 		key := inst.InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
 		expiredKeys.AddKey(key)
 		return nil
 	})
 
 	for _, expiredKey := range expiredKeys.GetInstanceKeys() {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 				delete
 					from blocked_topology_recovery
 				where
@@ -346,7 +346,7 @@ func ExpireBlockedRecoveries() error {
 	// Some oversampling, if a problem has not been noticed for some time (e.g. the server came up alive
 	// before action was taken), expire it.
 	// Recall that RegisterBlockedRecoveries continuously updates the last_blocked_timestamp column.
-	_, err = db.ExecOrchestrator(`
+	_, err = db.ExecVTOrc(`
 			delete
 				from blocked_topology_recovery
 				where
@@ -382,7 +382,7 @@ func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, w
 				%s
 		`, additionalSet, whereClause)
 	args = append(sqlutils.Args(owner, comment), args...)
-	sqlResult, err := db.ExecOrchestrator(query, args...)
+	sqlResult, err := db.ExecVTOrc(query, args...)
 	if err != nil {
 		log.Error(err)
 		return 0, err
@@ -472,7 +472,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 	if topologyRecovery.IsSuccessful {
 		successorKeyToWrite = *topologyRecovery.SuccessorKey
 	}
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			update topology_recovery set
 				is_successful = ?,
 				successor_hostname = ?,
@@ -534,7 +534,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 			recovery_id desc
 		%s
 		`, whereCondition, limit)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		topologyRecovery := *NewTopologyRecovery(inst.ReplicationAnalysis{})
 		topologyRecovery.ID = m.GetInt64("recovery_id")
 		topologyRecovery.UID = m.GetString("uid")
@@ -690,7 +690,7 @@ func readFailureDetections(whereCondition string, limit string, args []any) ([]*
 			detection_id desc
 		%s
 		`, whereCondition, limit)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		failureDetection := TopologyRecovery{}
 		failureDetection.ID = m.GetInt64("detection_id")
 
@@ -765,7 +765,7 @@ func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error
 			order by
 				last_blocked_timestamp desc
 		`, whereClause)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		blockedTopologyRecovery := BlockedTopologyRecovery{}
 		blockedTopologyRecovery.FailedInstanceKey.Hostname = m.GetString("hostname")
 		blockedTopologyRecovery.FailedInstanceKey.Port = m.GetInt("port")
@@ -786,7 +786,7 @@ func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error
 
 // writeTopologyRecoveryStep writes down a single step in a recovery process
 func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error {
-	sqlResult, err := db.ExecOrchestrator(`
+	sqlResult, err := db.ExecVTOrc(`
 			insert ignore
 				into topology_recovery_steps (
 					recovery_step_id, recovery_uid, audit_at, message
@@ -817,7 +817,7 @@ func ReadTopologyRecoverySteps(recoveryUID string) ([]TopologyRecoveryStep, erro
 		order by
 			recovery_step_id asc
 		`
-	err := db.QueryOrchestrator(query, sqlutils.Args(recoveryUID), func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, sqlutils.Args(recoveryUID), func(m sqlutils.RowMap) error {
 		recoveryStep := TopologyRecoveryStep{}
 		recoveryStep.RecoveryUID = recoveryUID
 		recoveryStep.ID = m.GetInt64("recovery_step_id")

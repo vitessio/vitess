@@ -27,7 +27,7 @@ import (
 // AttemptElection tries to grab leadership (become active node)
 func AttemptElection() (bool, error) {
 	{
-		sqlResult, err := db.ExecOrchestrator(`
+		sqlResult, err := db.ExecVTOrc(`
 		insert ignore into active_node (
 				anchor, hostname, token, first_seen_active, last_seen_active
 			) values (
@@ -52,7 +52,7 @@ func AttemptElection() (bool, error) {
 	}
 	{
 		// takeover from a node that has been inactive
-		sqlResult, err := db.ExecOrchestrator(`
+		sqlResult, err := db.ExecVTOrc(`
 			update active_node set
 				hostname = ?,
 				token = ?,
@@ -80,7 +80,7 @@ func AttemptElection() (bool, error) {
 	}
 	{
 		// Update last_seen_active is this very node is already the active node
-		sqlResult, err := db.ExecOrchestrator(`
+		sqlResult, err := db.ExecVTOrc(`
 			update active_node set
 				last_seen_active=now()
 			where
@@ -109,7 +109,7 @@ func AttemptElection() (bool, error) {
 
 // GrabElection forcibly grabs leadership. Use with care!!
 func GrabElection() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			replace into active_node (
 					anchor, hostname, token, first_seen_active, last_seen_active
 				) values (
@@ -126,7 +126,7 @@ func GrabElection() error {
 
 // Reelect clears the way for re-elections. Active node is immediately demoted.
 func Reelect() error {
-	_, err := db.ExecOrchestrator(`delete from active_node where anchor = 1`)
+	_, err := db.ExecVTOrc(`delete from active_node where anchor = 1`)
 	if err != nil {
 		log.Error(err)
 	}
@@ -147,7 +147,7 @@ func ElectedNode() (node *NodeHealth, isElected bool, err error) {
 		where
 			anchor = 1
 		`
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
 		node.Hostname = m.GetString("hostname")
 		node.Token = m.GetString("token")
 		node.FirstSeenActive = m.GetString("first_seen_active")

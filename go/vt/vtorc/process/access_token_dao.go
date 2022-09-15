@@ -32,7 +32,7 @@ func GenerateAccessToken(owner string) (publicToken string, err error) {
 	publicToken = util.NewToken().Hash
 	secretToken := util.NewToken().Hash
 
-	_, err = db.ExecOrchestrator(`
+	_, err = db.ExecVTOrc(`
 			insert into access_token (
 					public_token, secret_token, generated_at, generated_by, is_acquired, is_reentrant
 				) values (
@@ -52,7 +52,7 @@ func GenerateAccessToken(owner string) (publicToken string, err error) {
 // the secretToken as proof of ownership.
 func AcquireAccessToken(publicToken string) (secretToken string, err error) {
 	secretToken = ""
-	sqlResult, err := db.ExecOrchestrator(`
+	sqlResult, err := db.ExecVTOrc(`
 			update access_token
 				set
 					is_acquired=1,
@@ -87,7 +87,7 @@ func AcquireAccessToken(publicToken string) (secretToken string, err error) {
 	query := `
 		select secret_token from access_token where public_token=?
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(publicToken), func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, sqlutils.Args(publicToken), func(m sqlutils.RowMap) error {
 		secretToken = m.GetString("secret_token")
 		return nil
 	})
@@ -112,7 +112,7 @@ func TokenIsValid(publicToken string, secretToken string) (result bool, err erro
 					or is_reentrant = 1
 				)
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(publicToken, secretToken, config.Config.AccessTokenExpiryMinutes), func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, sqlutils.Args(publicToken, secretToken, config.Config.AccessTokenExpiryMinutes), func(m sqlutils.RowMap) error {
 		result = m.GetInt("valid_token") > 0
 		return nil
 	})
@@ -124,7 +124,7 @@ func TokenIsValid(publicToken string, secretToken string) (result bool, err erro
 
 // ExpireAccessTokens removes old, known to be uneligible tokens
 func ExpireAccessTokens() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			delete
 				from access_token
 			where

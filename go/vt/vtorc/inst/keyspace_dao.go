@@ -42,7 +42,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	keyspace := &topo.KeyspaceInfo{
 		Keyspace: &topodatapb.Keyspace{},
 	}
-	err := db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
 		keyspace.SetKeyspaceName(keyspaceName)
@@ -59,7 +59,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 
 // SaveKeyspace saves the keyspace record against the keyspace name.
 func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 		replace
 			into vitess_keyspace (
 				keyspace, keyspace_type, durability_policy

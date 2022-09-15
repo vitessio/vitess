@@ -79,7 +79,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 		}()
 	}
 	if config.Config.AuditToBackendDB {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 			insert
 				into audit (
 					audit_timestamp, audit_type, hostname, port, cluster_name, message
@@ -139,7 +139,7 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 		offset ?
 		`, whereCondition)
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		audit := Audit{}
 		audit.AuditID = m.GetInt64("audit_id")
 		audit.AuditTimestamp = m.GetString("audit_timestamp")

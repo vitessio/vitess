@@ -85,11 +85,11 @@ type HealthStatus struct {
 	RaftHealthyMembers []string
 }
 
-type OrchestratorExecutionMode string
+type VTOrcExecutionMode string
 
 const (
-	OrchestratorExecutionCliMode  OrchestratorExecutionMode = "CLIMode"
-	OrchestratorExecutionHTTPMode OrchestratorExecutionMode = "HttpMode"
+	VTOrcExecutionCliMode  VTOrcExecutionMode = "CLIMode"
+	VTOrcExecutionHTTPMode VTOrcExecutionMode = "HttpMode"
 )
 
 var continuousRegistrationOnce sync.Once

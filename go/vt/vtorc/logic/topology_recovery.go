@@ -280,6 +280,7 @@ func prepareCommand(command string, topologyRecovery *TopologyRecovery) (result 
 	command = strings.Replace(command, "{autoPrimaryRecovery}", fmt.Sprint(analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery), -1)
 	command = strings.Replace(command, "{autoIntermediatePrimaryRecovery}", fmt.Sprint(analysisEntry.ClusterDetails.HasAutomatedIntermediatePrimaryRecovery), -1)
 	command = strings.Replace(command, "{orchestratorHost}", process.ThisHostname, -1)
+	command = strings.Replace(command, "{vtorcHost}", process.ThisHostname, -1)
 	command = strings.Replace(command, "{recoveryUID}", topologyRecovery.UID, -1)
 
 	command = strings.Replace(command, "{isSuccessful}", fmt.Sprint(topologyRecovery.SuccessorKey != nil), -1)
@@ -317,6 +318,7 @@ func applyEnvironmentVariables(topologyRecovery *TopologyRecovery) []string {
 	env = append(env, fmt.Sprintf("ORC_AUTO_PRIMARY_RECOVERY=%v", analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery))
 	env = append(env, fmt.Sprintf("ORC_AUTO_INTERMEDIATE_PRIMARY_RECOVERY=%v", analysisEntry.ClusterDetails.HasAutomatedIntermediatePrimaryRecovery))
 	env = append(env, fmt.Sprintf("ORC_ORCHESTRATOR_HOST=%s", process.ThisHostname))
+	env = append(env, fmt.Sprintf("ORC_VTORC_HOST=%s", process.ThisHostname))
 	env = append(env, fmt.Sprintf("ORC_IS_SUCCESSFUL=%v", (topologyRecovery.SuccessorKey != nil)))
 	env = append(env, fmt.Sprintf("ORC_LOST_REPLICAS=%s", topologyRecovery.LostReplicas.ToCommaDelimitedList()))
 	env = append(env, fmt.Sprintf("ORC_REPLICA_HOSTS=%s", analysisEntry.Replicas.ToCommaDelimitedList()))

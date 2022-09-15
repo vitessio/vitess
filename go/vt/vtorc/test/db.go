@@ -37,7 +37,7 @@ func NewTestDB(rowMaps [][]sqlutils.RowMap) *DB {
 	}
 }
 
-func (t *DB) QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
+func (t *DB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	log.Info("test")
 	rowMaps, err := t.getRowMapsForQuery()
 	if err != nil {

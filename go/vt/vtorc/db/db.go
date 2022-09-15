@@ -37,7 +37,7 @@ var mysqlURI string
 var dbMutex sync.Mutex
 
 type DB interface {
-	QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
+	QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
 }
 
 type vtorcDB struct {
@@ -45,8 +45,8 @@ type vtorcDB struct {
 
 var _ DB = (*vtorcDB)(nil)
 
-func (m *vtorcDB) QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
-	return QueryOrchestrator(query, argsArray, onRow)
+func (m *vtorcDB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
+	return QueryVTOrc(query, argsArray, onRow)
 }
 
 type DummySQLResult struct {
@@ -77,7 +77,7 @@ func getMySQLURI() string {
 		config.Config.MySQLOrchestratorRejectReadOnly,
 	)
 	if config.Config.MySQLOrchestratorUseMutualTLS {
-		mysqlURI, _ = SetupMySQLOrchestratorTLS(mysqlURI)
+		mysqlURI, _ = SetupMySQLVTOrcTLS(mysqlURI)
 	}
 	return mysqlURI
 }
@@ -130,7 +130,7 @@ func openOrchestratorMySQLGeneric() (db *sql.DB, fromCache bool, err error) {
 		config.Config.MySQLOrchestratorReadTimeoutSeconds,
 	)
 	if config.Config.MySQLOrchestratorUseMutualTLS {
-		uri, _ = SetupMySQLOrchestratorTLS(uri)
+		uri, _ = SetupMySQLVTOrcTLS(uri)
 	}
 	return sqlutils.GetDB(uri)
 }
@@ -140,7 +140,7 @@ func IsSQLite() bool {
 }
 
 // OpenTopology returns the DB instance for the vtorc backed database
-func OpenOrchestrator() (db *sql.DB, err error) {
+func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
 	if IsSQLite() {
 		db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
@@ -180,7 +180,7 @@ func OpenOrchestrator() (db *sql.DB, err error) {
 	}
 	if err == nil && !fromCache {
 		if !config.Config.SkipOrchestratorDatabaseUpdate {
-			initOrchestratorDB(db)
+			initVTOrcDB(db)
 		}
 		// A low value here will trigger reconnects which could
 		// make the number of backend connections hit the tcp
@@ -218,28 +218,28 @@ func versionIsDeployed(db *sql.DB) (result bool, err error) {
 		select
 			count(*) as is_deployed
 		from
-			orchestrator_db_deployments
+			vtorc_db_deployments
 		where
 			deployed_version = ?
 		`
 	err = db.QueryRow(query, config.RuntimeCLIFlags.ConfiguredVersion).Scan(&result)
-	// err means the table 'orchestrator_db_deployments' does not even exist, in which case we proceed
+	// err means the table 'vtorc_db_deployments' does not even exist, in which case we proceed
 	// to deploy.
 	// If there's another error to this, like DB gone bad, then we're about to find out anyway.
 	return result, err
 }
 
-// registerOrchestratorDeployment updates the orchestrator_metadata table upon successful deployment
-func registerOrchestratorDeployment(db *sql.DB) error {
+// registerVTOrcDeployment updates the vtorc_metadata table upon successful deployment
+func registerVTOrcDeployment(db *sql.DB) error {
 	query := `
-    	replace into orchestrator_db_deployments (
+    	replace into vtorc_db_deployments (
 				deployed_version, deployed_timestamp
 			) values (
 				?, NOW()
 			)
 				`
 	if _, err := execInternal(db, query, config.RuntimeCLIFlags.ConfiguredVersion); err != nil {
-		log.Fatalf("Unable to write to orchestrator_metadata: %+v", err)
+		log.Fatalf("Unable to write to vtorc_metadata: %+v", err)
 	}
 	log.Infof("Migrated database schema to version [%+v]", config.RuntimeCLIFlags.ConfiguredVersion)
 	return nil
@@ -305,9 +305,9 @@ func deployStatements(db *sql.DB, queries []string) error {
 	return nil
 }
 
-// initOrchestratorDB attempts to create/upgrade the vtorc backend database. It is created once in the
+// initVTOrcDB attempts to create/upgrade the vtorc backend database. It is created once in the
 // application's lifetime.
-func initOrchestratorDB(db *sql.DB) error {
+func initVTOrcDB(db *sql.DB) error {
 	log.Info("Initializing vtorc")
 
 	versionAlreadyDeployed, err := versionIsDeployed(db)
@@ -321,11 +321,11 @@ func initOrchestratorDB(db *sql.DB) error {
 	log.Info("Migrating database schema")
 	deployStatements(db, generateSQLBase)
 	deployStatements(db, generateSQLPatches)
-	registerOrchestratorDeployment(db)
+	registerVTOrcDeployment(db)
 
 	if IsSQLite() {
-		ExecOrchestrator(`PRAGMA journal_mode = WAL`)
-		ExecOrchestrator(`PRAGMA synchronous = NORMAL`)
+		ExecVTOrc(`PRAGMA journal_mode = WAL`)
+		ExecVTOrc(`PRAGMA synchronous = NORMAL`)
 	}
 
 	return nil
@@ -342,14 +342,14 @@ func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
 	return res, err
 }
 
-// ExecOrchestrator will execute given query on the vtorc backend database.
-func ExecOrchestrator(query string, args ...any) (sql.Result, error) {
+// ExecVTOrc will execute given query on the vtorc backend database.
+func ExecVTOrc(query string, args ...any) (sql.Result, error) {
 	var err error
 	query, err = translateStatement(query)
 	if err != nil {
 		return nil, err
 	}
-	db, err := OpenOrchestrator()
+	db, err := OpenVTOrc()
 	if err != nil {
 		return nil, err
 	}
@@ -357,14 +357,14 @@ func ExecOrchestrator(query string, args ...any) (sql.Result, error) {
 	return res, err
 }
 
-// QueryRowsMapOrchestrator
-func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
+// QueryVTOrcRowsMap
+func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
-	db, err := OpenOrchestrator()
+	db, err := OpenVTOrc()
 	if err != nil {
 		return err
 	}
@@ -372,14 +372,14 @@ func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) e
 	return sqlutils.QueryRowsMap(db, query, onRow)
 }
 
-// QueryOrchestrator
-func QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
+// QueryVTOrc
+func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
-	db, err := OpenOrchestrator()
+	db, err := OpenVTOrc()
 	if err != nil {
 		return err
 	}
@@ -391,14 +391,14 @@ func QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap
 	return err
 }
 
-// QueryOrchestratorRowsMapBuffered
-func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) error) error {
+// QueryVTOrcRowsMapBuffered
+func QueryVTOrcRowsMapBuffered(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
-	db, err := OpenOrchestrator()
+	db, err := OpenVTOrc()
 	if err != nil {
 		return err
 	}
@@ -406,14 +406,14 @@ func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) 
 	return sqlutils.QueryRowsMapBuffered(db, query, onRow)
 }
 
-// QueryOrchestratorBuffered
-func QueryOrchestratorBuffered(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
+// QueryVTOrcBuffered
+func QueryVTOrcBuffered(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
 		return err
 	}
-	db, err := OpenOrchestrator()
+	db, err := OpenVTOrc()
 	if err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ func QueryOrchestratorBuffered(query string, argsArray []any, onRow func(sqlutil
 // timezone support. By reading the time as string we get the database's de-facto notion of the time,
 // which we can then feed back to it.
 func ReadTimeNow() (timeNow string, err error) {
-	err = QueryOrchestrator(`select now() as time_now`, nil, func(m sqlutils.RowMap) error {
+	err = QueryVTOrc(`select now() as time_now`, nil, func(m sqlutils.RowMap) error {
 		timeNow = m.GetString("time_now")
 		return nil
 	})

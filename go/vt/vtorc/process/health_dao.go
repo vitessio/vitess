@@ -39,7 +39,7 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	}
 
 	nodeHealth.onceHistory.Do(func() {
-		db.ExecOrchestrator(`
+		db.ExecVTOrc(`
 			insert ignore into node_health_history
 				(hostname, token, first_seen_active, extra_info, command, app_version)
 			values
@@ -50,7 +50,7 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 		)
 	})
 	{
-		sqlResult, err := db.ExecOrchestrator(`
+		sqlResult, err := db.ExecVTOrc(`
 			update node_health set
 				last_seen_active = now() - interval ? second,
 				extra_info = case when ? != '' then ? else extra_info end,
@@ -87,7 +87,7 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 			dbBackend = fmt.Sprintf("%s:%d", config.Config.MySQLOrchestratorHost,
 				config.Config.MySQLOrchestratorPort)
 		}
-		sqlResult, err := db.ExecOrchestrator(`
+		sqlResult, err := db.ExecVTOrc(`
 			insert ignore into node_health
 				(hostname, token, first_seen_active, last_seen_active, extra_info, command, app_version, db_backend)
 			values (
@@ -119,7 +119,7 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 // ExpireAvailableNodes is an aggressive purging method to remove
 // node entries who have skipped their keepalive for two times.
 func ExpireAvailableNodes() {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			delete
 				from node_health
 			where
@@ -135,7 +135,7 @@ func ExpireAvailableNodes() {
 // ExpireNodesHistory cleans up the nodes history and is run by
 // the vtorc active node.
 func ExpireNodesHistory() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			delete
 				from node_health_history
 			where
@@ -152,7 +152,7 @@ func ExpireNodesHistory() error {
 func ReadAvailableNodes(onlyHTTPNodes bool) (nodes [](*NodeHealth), err error) {
 	extraInfo := ""
 	if onlyHTTPNodes {
-		extraInfo = string(OrchestratorExecutionHTTPMode)
+		extraInfo = string(VTOrcExecutionHTTPMode)
 	}
 	query := `
 		select
@@ -166,7 +166,7 @@ func ReadAvailableNodes(onlyHTTPNodes bool) (nodes [](*NodeHealth), err error) {
 			hostname
 		`
 
-	err = db.QueryOrchestrator(query, sqlutils.Args(config.HealthPollSeconds*2, extraInfo), func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, sqlutils.Args(config.HealthPollSeconds*2, extraInfo), func(m sqlutils.RowMap) error {
 		nodeHealth := &NodeHealth{
 			Hostname:        m.GetString("hostname"),
 			Token:           m.GetString("token"),

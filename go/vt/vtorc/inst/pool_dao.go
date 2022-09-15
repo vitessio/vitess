@@ -29,7 +29,7 @@ import (
 // writePoolInstances will write (and override) a single cluster name mapping
 func writePoolInstances(pool string, instanceKeys [](*InstanceKey)) error {
 	writeFunc := func() error {
-		dbh, err := db.OpenOrchestrator()
+		dbh, err := db.OpenVTOrc()
 		if err != nil {
 			log.Error(err)
 			return err
@@ -76,7 +76,7 @@ func ReadClusterPoolInstances(clusterName string, pool string) (result [](*Clust
 			join database_instance_pool using (hostname, port)
 		%s
 		`, whereClause)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		clusterPoolInstance := ClusterPoolInstance{
 			ClusterName: m.GetString("cluster_name"),
 			Pool:        m.GetString("pool"),
@@ -120,7 +120,7 @@ func ReadClusterPoolInstancesMap(clusterName string, pool string) (*PoolInstance
 
 // ExpirePoolInstances cleans up the database_instance_pool table from expired items
 func ExpirePoolInstances() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			delete
 				from database_instance_pool
 			where

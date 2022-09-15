@@ -25,7 +25,7 @@ import (
 // WriteClusterDomainName will write (and override) the domain name of a cluster
 func WriteClusterDomainName(clusterName string, domainName string) error {
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 			insert into
 					cluster_domain_name (cluster_name, domain_name, last_registered)
 				values
@@ -46,7 +46,7 @@ func WriteClusterDomainName(clusterName string, domainName string) error {
 // ExpireClusterDomainName expires cluster_domain_name entries that haven't been updated recently.
 func ExpireClusterDomainName() error {
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
     	delete from cluster_domain_name
 				where last_registered < NOW() - INTERVAL ? MINUTE
 				`, config.Config.ExpiryHostnameResolvesMinutes,

@@ -355,7 +355,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
-	err := db.Db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		a := ReplicationAnalysis{
 			Analysis:               NoProblem,
 			ProcessingNodeHostname: process.ThisHostname,
@@ -703,7 +703,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 
 	lastAnalysisChanged := false
 	{
-		sqlResult, err := db.ExecOrchestrator(`
+		sqlResult, err := db.ExecVTOrc(`
 			update database_instance_last_analysis set
 				analysis = ?,
 				analysis_timestamp = now()
@@ -726,7 +726,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 		lastAnalysisChanged = (rows > 0)
 	}
 	if !lastAnalysisChanged {
-		_, err := db.ExecOrchestrator(`
+		_, err := db.ExecVTOrc(`
 			insert ignore into database_instance_last_analysis (
 					hostname, port, analysis_timestamp, analysis
 				) values (
@@ -745,7 +745,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 		return nil
 	}
 
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			insert into database_instance_analysis_changelog (
 					hostname, port, analysis_timestamp, analysis
 				) values (
@@ -764,7 +764,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 
 // ExpireInstanceAnalysisChangelog removes old-enough analysis entries from the changelog
 func ExpireInstanceAnalysisChangelog() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			delete
 				from database_instance_analysis_changelog
 			where
@@ -792,7 +792,7 @@ func ReadReplicationAnalysisChangelog() (res [](*ReplicationAnalysisChangelog), 
 			hostname, port, changelog_id
 		`
 	analysisChangelog := &ReplicationAnalysisChangelog{}
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
 		key := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
 
 		if !analysisChangelog.AnalyzedInstanceKey.Equals(&key) {

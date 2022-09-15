@@ -32,7 +32,7 @@ func BeginDowntime(downtime *Downtime) (err error) {
 		downtime.Duration = config.MaintenanceExpireMinutes * time.Minute
 	}
 	if downtime.EndsAtString != "" {
-		_, err = db.ExecOrchestrator(`
+		_, err = db.ExecVTOrc(`
 				insert
 					into database_instance_downtime (
 						hostname, port, downtime_active, begin_timestamp, end_timestamp, owner, reason
@@ -59,7 +59,7 @@ func BeginDowntime(downtime *Downtime) (err error) {
 			return nil
 		}
 
-		_, err = db.ExecOrchestrator(`
+		_, err = db.ExecVTOrc(`
 			insert
 				into database_instance_downtime (
 					hostname, port, downtime_active, begin_timestamp, end_timestamp, owner, reason
@@ -91,7 +91,7 @@ func BeginDowntime(downtime *Downtime) (err error) {
 
 // EndDowntime will remove downtime flag from an instance
 func EndDowntime(instanceKey *InstanceKey) (wasDowntimed bool, err error) {
-	res, err := db.ExecOrchestrator(`
+	res, err := db.ExecVTOrc(`
 			delete from
 				database_instance_downtime
 			where
@@ -116,7 +116,7 @@ func EndDowntime(instanceKey *InstanceKey) (wasDowntimed bool, err error) {
 // renewLostInRecoveryDowntime renews hosts who are downtimed due to being lost in recovery, such that
 // their downtime never expires.
 func renewLostInRecoveryDowntime() error {
-	_, err := db.ExecOrchestrator(`
+	_, err := db.ExecVTOrc(`
 			update
 				database_instance_downtime
 			set
@@ -173,7 +173,7 @@ func ExpireDowntime() error {
 		return err
 	}
 	{
-		res, err := db.ExecOrchestrator(`
+		res, err := db.ExecVTOrc(`
 			delete from
 				database_instance_downtime
 			where

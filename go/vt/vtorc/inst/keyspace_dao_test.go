@@ -29,7 +29,7 @@ import (
 )
 
 func TestSaveAndReadKeyspace(t *testing.T) {
-	orcDb, err := db.OpenOrchestrator()
+	orcDb, err := db.OpenVTOrc()
 	require.NoError(t, err)
 	defer func() {
 		_, err = orcDb.Exec("delete from vitess_keyspace")

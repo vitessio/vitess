@@ -708,7 +708,7 @@ var generateSQLBase = []string{
 		CREATE INDEX current_seen_idx_database_instance_recent_relaylog_history ON database_instance_recent_relaylog_history (current_seen)
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS orchestrator_metadata (
+		CREATE TABLE IF NOT EXISTS vtorc_metadata (
 			anchor tinyint unsigned NOT NULL,
 			last_deployed_version varchar(128) CHARACTER SET ascii NOT NULL,
 			last_deployed_timestamp timestamp NOT NULL,
@@ -716,7 +716,7 @@ var generateSQLBase = []string{
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS orchestrator_db_deployments (
+		CREATE TABLE IF NOT EXISTS vtorc_db_deployments (
 			deployed_version varchar(128) CHARACTER SET ascii NOT NULL,
 			deployed_timestamp timestamp NOT NULL,
 			PRIMARY KEY (deployed_version)

@@ -48,7 +48,7 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 		order by
 			database_instance_maintenance_id
 		`
-	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
 		maintenance := Maintenance{}
 		maintenance.MaintenanceID = m.GetUint("database_instance_maintenance_id")
 		maintenance.Key.Hostname = m.GetString("hostname")
@@ -76,7 +76,7 @@ func BeginBoundedMaintenance(instanceKey *InstanceKey, owner string, reason stri
 	if durationSeconds == 0 {
 		durationSeconds = config.MaintenanceExpireMinutes * 60
 	}
-	res, err := db.ExecOrchestrator(`
+	res, err := db.ExecVTOrc(`
 			insert ignore
 				into database_instance_maintenance (
 					hostname, port, maintenance_active, begin_timestamp, end_timestamp, owner, reason,
@@ -117,7 +117,7 @@ func BeginMaintenance(instanceKey *InstanceKey, owner string, reason string) (in
 
 // EndMaintenanceByInstanceKey will terminate an active maintenance using given instanceKey as hint
 func EndMaintenanceByInstanceKey(instanceKey *InstanceKey) (wasMaintenance bool, err error) {
-	res, err := db.ExecOrchestrator(`
+	res, err := db.ExecVTOrc(`
 			update
 				database_instance_maintenance
 			set
@@ -158,7 +158,7 @@ func InMaintenance(instanceKey *InstanceKey) (inMaintenance bool, err error) {
 			and end_timestamp > NOW()
 			`
 	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		inMaintenance = m.GetBool("in_maintenance")
 		return nil
 	})
@@ -181,7 +181,7 @@ func ReadMaintenanceInstanceKey(maintenanceToken int64) (*InstanceKey, error) {
 			database_instance_maintenance_id = ?
 			`
 
-	err := db.QueryOrchestrator(query, sqlutils.Args(maintenanceToken), func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, sqlutils.Args(maintenanceToken), func(m sqlutils.RowMap) error {
 		instanceKey, merr := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
 		if merr != nil {
 			return merr
@@ -199,7 +199,7 @@ func ReadMaintenanceInstanceKey(maintenanceToken int64) (*InstanceKey, error) {
 
 // EndMaintenance will terminate an active maintenance via maintenanceToken
 func EndMaintenance(maintenanceToken int64) (wasMaintenance bool, err error) {
-	res, err := db.ExecOrchestrator(`
+	res, err := db.ExecVTOrc(`
 			update
 				database_instance_maintenance
 			set
@@ -226,7 +226,7 @@ func EndMaintenance(maintenanceToken int64) (wasMaintenance bool, err error) {
 // ExpireMaintenance will remove the maintenance flag on old maintenances and on bounded maintenances
 func ExpireMaintenance() error {
 	{
-		res, err := db.ExecOrchestrator(`
+		res, err := db.ExecVTOrc(`
 			delete from
 				database_instance_maintenance
 			where
@@ -244,7 +244,7 @@ func ExpireMaintenance() error {
 		}
 	}
 	{
-		res, err := db.ExecOrchestrator(`
+		res, err := db.ExecVTOrc(`
 			delete from
 				database_instance_maintenance
 			where
@@ -261,7 +261,7 @@ func ExpireMaintenance() error {
 		}
 	}
 	{
-		res, err := db.ExecOrchestrator(`
+		res, err := db.ExecVTOrc(`
 			delete from
 				database_instance_maintenance
 			where

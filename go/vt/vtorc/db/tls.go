@@ -41,7 +41,7 @@ const Error1045 = "Access denied for user"
 var topologyTLSConfigured = false
 
 // Track if a TLS has already been configured for VTOrc
-var orchestratorTLSConfigured = false
+var vtorcTLSConfigured = false
 
 var requireTLSCache *cache.Cache = cache.New(time.Duration(config.Config.TLSCacheTTLFactor*config.Config.InstancePollSeconds)*time.Second, time.Second)
 
@@ -81,7 +81,7 @@ func requiresTLS(host string, port int, uri string) bool {
 				on duplicate key update
 					required=values(required)
 				`
-	if _, err := ExecOrchestrator(query, host, port, required); err != nil {
+	if _, err := ExecVTOrc(query, host, port, required); err != nil {
 		log.Error(err)
 	}
 	writeInstanceTLSCounter.Inc(1)
@@ -126,8 +126,8 @@ func SetupMySQLTopologyTLS(uri string) (string, error) {
 // Create a TLS configuration from the config supplied CA, Certificate, and Private key.
 // Register the TLS config with the mysql drivers as the "vtorc" config
 // Modify the supplied URI to call the TLS config
-func SetupMySQLOrchestratorTLS(uri string) (string, error) {
-	if !orchestratorTLSConfigured {
+func SetupMySQLVTOrcTLS(uri string) (string, error) {
+	if !vtorcTLSConfigured {
 		tlsConfig, err := ssl.NewTLSConfig(config.Config.MySQLOrchestratorSSLCAFile, !config.Config.MySQLOrchestratorSSLSkipVerify)
 		// Drop to TLS 1.0 for talking to MySQL
 		tlsConfig.MinVersion = tls.VersionTLS10
@@ -148,7 +148,7 @@ func SetupMySQLOrchestratorTLS(uri string) (string, error) {
 			log.Fatalf("Can't register mysql TLS config for vtorc: %s", err)
 			return "", err
 		}
-		orchestratorTLSConfigured = true
+		vtorcTLSConfigured = true
 	}
 	return fmt.Sprintf("%s&tls=vtorc", uri), nil
 }

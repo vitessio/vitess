@@ -136,7 +136,7 @@ func main() {
 	config.RuntimeCLIFlags.GrabElection = fs.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
 	config.RuntimeCLIFlags.PromotionRule = fs.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
 	config.RuntimeCLIFlags.SkipContinuousRegistration = fs.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = fs.Bool("enable-database-update", false, "Enable database update, overrides SkipOrchestratorDatabaseUpdate")
+	config.RuntimeCLIFlags.EnableDatabaseUpdate = fs.Bool("enable-database-update", false, "Enable database update, overrides SkipVTOrcDatabaseUpdate")
 	config.RuntimeCLIFlags.IgnoreRaftSetup = fs.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
 	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 

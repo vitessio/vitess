@@ -54,7 +54,7 @@ var discoveryMetrics *collection.Collection
 // HTTP starts serving
 func HTTP(continuousDiscovery bool) {
 	promptForSSLPasswords()
-	process.ContinuousRegistration(string(process.OrchestratorExecutionHTTPMode), "")
+	process.ContinuousRegistration(string(process.VTOrcExecutionHTTPMode), "")
 
 	martini.Env = martini.Prod
 	standardHTTP(continuousDiscovery)

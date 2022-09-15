@@ -26,7 +26,7 @@ import (
 )
 
 func PutInstanceTag(instanceKey *InstanceKey, tag *Tag) (err error) {
-	_, err = db.ExecOrchestrator(`
+	_, err = db.ExecVTOrc(`
 			insert
 				into database_instance_tags (
 					hostname, port, tag_name, tag_value, last_updated
@@ -86,7 +86,7 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 		order by hostname, port
 		`, clause,
 	)
-	_ = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	_ = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		key, _ := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
 		tagged.AddKey(*key)
 		return nil
@@ -99,7 +99,7 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 				%s
 			`, clause,
 	)
-	if _, err = db.ExecOrchestrator(query, args...); err != nil {
+	if _, err = db.ExecVTOrc(query, args...); err != nil {
 		log.Error(err)
 		return tagged, err
 	}
@@ -119,7 +119,7 @@ func ReadInstanceTag(instanceKey *InstanceKey, tag *Tag) (tagExists bool, err er
 			and tag_name = ?
 			`
 	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port, tag.TagName)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		tag.TagValue = m.GetString("tag_value")
 		tagExists = true
 		return nil
@@ -144,7 +144,7 @@ func ReadInstanceTags(instanceKey *InstanceKey) (tags [](*Tag), err error) {
 		order by tag_name
 			`
 	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		tag := &Tag{
 			TagName:  m.GetString("tag_name"),
 			TagValue: m.GetString("tag_value"),
@@ -195,7 +195,7 @@ func GetInstanceKeysByTag(tag *Tag) (tagged *InstanceKeyMap, err error) {
 			%s
 		order by hostname, port
 		`, clause)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		key, _ := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
 		tagged.AddKey(*key)
 		return nil
