@@ -225,6 +225,14 @@ func (c *Collation_utf8mb4_uca_0900) Wildcard(pat []byte, matchOne rune, matchMa
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
 }
 
+func (c *Collation_utf8mb4_uca_0900) GetLowerTable() *[256]byte {
+	return nil
+}
+
+func (c *Collation_utf8mb4_uca_0900) GetUpperTable() *[256]byte {
+	return nil
+}
+
 type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) Init() {}
@@ -272,6 +280,14 @@ func (c *Collation_utf8mb4_0900_bin) Wildcard(pat []byte, matchOne rune, matchMa
 		return a == b
 	}
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_utf8mb4_0900_bin) GetLowerTable() *[256]byte {
+	return nil
+}
+
+func (c *Collation_utf8mb4_0900_bin) GetUpperTable() *[256]byte {
+	return nil
 }
 
 type Collation_uca_legacy struct {
@@ -404,4 +420,12 @@ func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {
 
 func (c *Collation_uca_legacy) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newUnicodeWildcardMatcher(c.charset, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_uca_legacy) GetLowerTable() *[256]byte {
+	return nil
+}
+
+func (c *Collation_uca_legacy) GetUpperTable() *[256]byte {
+	return nil
 }

@@ -17,6 +17,8 @@ limitations under the License.
 package collations
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
@@ -36,10 +38,10 @@ type simpletables struct {
 	// take up a lot of binary space.
 	// Uncomment these fields and pass `-full8bit` to `makemysqldata` to generate
 	// these tables.
-	// tolower   *[256]byte
-	// toupper   *[256]byte
-	// ctype     *[256]byte
-	sort *[256]byte
+	tolower *[256]byte
+	toupper *[256]byte
+	ctype   *[256]byte
+	sort    *[256]byte
 }
 
 type Collation_8bit_bin struct {
@@ -111,6 +113,17 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 
 func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_8bit_bin) GetLowerTable() *[256]byte {
+	for _, c := range c.simpletables.tolower {
+		fmt.Println(c)
+	}
+	return c.simpletables.tolower
+}
+
+func (c *Collation_8bit_bin) GetUpperTable() *[256]byte {
+	return c.simpletables.toupper
 }
 
 type Collation_8bit_simple_ci struct {
@@ -224,6 +237,14 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 	return dst
 }
 
+func (c *Collation_8bit_simple_ci) GetLowerTable() *[256]byte {
+	return c.simpletables.tolower
+}
+
+func (c *Collation_8bit_simple_ci) GetUpperTable() *[256]byte {
+	return c.simpletables.toupper
+}
+
 type Collation_binary struct{}
 
 func (c *Collation_binary) Init() {}
@@ -282,4 +303,12 @@ func (c *Collation_binary) WeightStringLen(numBytes int) int {
 
 func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_binary) GetLowerTable() *[256]byte {
+	return nil
+}
+
+func (c *Collation_binary) GetUpperTable() *[256]byte {
+	return nil
 }

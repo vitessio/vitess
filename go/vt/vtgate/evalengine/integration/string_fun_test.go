@@ -19,6 +19,7 @@ import (
 )
 
 var cases = []string{
+	"\"Å å\"",
 	"NULL",
 	"\"\"",
 	"\"a\"",

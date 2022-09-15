@@ -19,6 +19,7 @@ package evalengine
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -32,14 +33,30 @@ func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		return
 	}
 
-	if sqltypes.IsText(t) {
-		tolower := strings.ToLower(inarg.value().RawStr())
-		result.setString(tolower, inarg.collation())
+	lowerTable := collations.GetLowerTable(env.DefaultCollation)
+	upperTable := collations.GetUpperTable(env.DefaultCollation)
+
+	if lowerTable == nil {
+		if sqltypes.IsText(t) {
+			tolower := strings.ToLower(inarg.value().RawStr())
+			result.setString(tolower, inarg.collation())
+		} else {
+			tolower := inarg.value().RawStr()
+			inarg.makeTextualAndConvert(env.DefaultCollation)
+			result.setString(tolower, inarg.collation())
+		}
 	} else {
-		tolower := inarg.value().RawStr()
-		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setString(tolower, inarg.collation())
+		tolower := inarg.value().Raw()
+		for index, c := range tolower {
+			for i, v := range lowerTable {
+				if c == v {
+					tolower[index] = upperTable[i]
+				}
+			}
+		}
+		result.setRaw(sqltypes.VarChar, tolower, inarg.collation())
 	}
+
 }
 
 func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
