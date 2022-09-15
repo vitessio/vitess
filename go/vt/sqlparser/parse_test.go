@@ -40,6 +40,9 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			// Technically, MySQL would require these reserved keywords to be backtick quoted, but it's convenient that
+			// we can support unquoted reserved keyword identifiers when we can, so adding this assertion to prevent
+			// this query from breaking. A similar query is used by sql-diff.bats runs.
 			input:  "INSERT INTO test(pk, int, string, boolean, float, uint, uuid) values (1, 2, 'one', true, 5.0, 6, 100)",
 			output: "insert into test(pk, `int`, string, `boolean`, `float`, uint, uuid) values (1, 2, 'one', true, 5.0, 6, 100)",
 		},
