@@ -685,3 +685,26 @@ func TestCaseExprWithValue(t *testing.T) {
 		}
 	}
 }
+
+func TestCeilandCeiling(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var ceilInputs = []string{
+		"0",
+		"1",
+		"-1",
+		"'1.5'",
+		"NULL",
+		"'ABC'",
+		"1.5e0",
+		"-1.5e0",
+		"9223372036854775810.4",
+		"-9223372036854775810.4",
+	}
+
+	for _, num := range ceilInputs {
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEILING(%s)", num))
+	}
+}

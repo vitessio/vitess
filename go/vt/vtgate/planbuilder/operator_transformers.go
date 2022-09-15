@@ -134,9 +134,11 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
-	upd, isUpdate := op.Source.(*physical.Update)
-	if isUpdate {
-		return transformUpdatePlan(ctx, op, upd)
+	switch src := op.Source.(type) {
+	case *physical.Update:
+		return transformUpdatePlan(ctx, op, src)
+	case *physical.Delete:
+		return transformDeletePlan(ctx, op, src)
 	}
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
@@ -207,6 +209,48 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, u
 
 	if op.RouteOpCode != engine.Unsharded && len(upd.ChangedVindexValues) > 0 {
 		primary := upd.VTable.ColumnVindexes[0]
+		e.DML.KsidVindex = primary.Vindex
+		e.DML.KsidLength = len(primary.Columns)
+	}
+
+	return &primitiveWrapper{prim: e}, nil
+}
+
+func transformDeletePlan(ctx *plancontext.PlanningContext, op *physical.Route, del *physical.Delete) (logicalPlan, error) {
+	var vindex vindexes.Vindex
+	var values []evalengine.Expr
+	if op.Selected != nil {
+		vindex = op.Selected.FoundVindex
+		values = op.Selected.Values
+	}
+	ast := del.AST
+	replaceSubQuery(ctx, ast)
+	edml := &engine.DML{
+		Query: generateQuery(ast),
+		Table: []*vindexes.Table{
+			del.VTable,
+		},
+		OwnedVindexQuery: del.OwnedVindexQuery,
+		RoutingParameters: &engine.RoutingParameters{
+			Opcode:            op.RouteOpCode,
+			Keyspace:          op.Keyspace,
+			Vindex:            vindex,
+			Values:            values,
+			TargetDestination: op.TargetDestination,
+		},
+	}
+
+	directives := del.AST.GetParsedComments().Directives()
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
+		edml.MultiShardAutocommit = true
+	}
+	edml.QueryTimeout = queryTimeout(directives)
+
+	e := &engine.Delete{}
+	e.DML = edml
+
+	if op.RouteOpCode != engine.Unsharded && del.OwnedVindexQuery != "" {
+		primary := del.VTable.ColumnVindexes[0]
 		e.DML.KsidVindex = primary.Vindex
 		e.DML.KsidLength = len(primary.Columns)
 	}

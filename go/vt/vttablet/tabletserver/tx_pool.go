@@ -223,7 +223,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, savepointQueries []string, settings []string) (*StatefulConnection, string, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, savepointQueries []string, setting *pools.Setting) (*StatefulConnection, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
@@ -243,7 +243,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		if !tp.limiter.Get(immediateCaller, effectiveCaller) {
 			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 		}
-		conn, err = tp.createConn(ctx, options, settings)
+		conn, err = tp.createConn(ctx, options, setting)
 		defer func() {
 			if err != nil {
 				// The transaction limiter frees transactions on rollback or commit. If we fail to create the transaction,
@@ -277,8 +277,8 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	return beginQueries, sessionStateChanges, nil
 }
 
-func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions, settings []string) (*StatefulConnection, error) {
-	conn, err := tp.scp.NewConn(ctx, options, settings)
+func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions, setting *pools.Setting) (*StatefulConnection, error) {
+	conn, err := tp.scp.NewConn(ctx, options, setting)
 	if err != nil {
 		errCode := vterrors.Code(err)
 		switch err {

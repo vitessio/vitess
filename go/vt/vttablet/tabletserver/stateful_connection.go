@@ -21,21 +21,19 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/callerid"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // StatefulConnection is used in the situations where we need a dedicated connection for a vtgate session.
@@ -310,11 +308,11 @@ func (sc *StatefulConnection) getUsername() string {
 	return callerid.GetUsername(sc.reservedProps.ImmediateCaller)
 }
 
-func (sc *StatefulConnection) ApplySettings(ctx context.Context, settings []string) error {
-	if sc.dbConn.IsSameSetting(settings) {
+func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *pools.Setting) error {
+	if sc.dbConn.IsSameSetting(setting.GetQuery()) {
 		return nil
 	}
-	return sc.dbConn.ApplySettings(ctx, settings)
+	return sc.dbConn.ApplySetting(ctx, setting)
 }
 
 func (sc *StatefulConnection) resetExpiryTime() {
