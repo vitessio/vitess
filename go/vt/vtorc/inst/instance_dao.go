@@ -673,7 +673,7 @@ Cleanup:
 		} else {
 			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ServerUUID)
 		}
-		// Add replication group ancestry UUID as well. Otherwise, Orchestrator thinks there are errant GTIDs in group
+		// Add replication group ancestry UUID as well. Otherwise, VTOrc thinks there are errant GTIDs in group
 		// members and its replicas, even though they are not.
 		instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ReplicationGroupName)
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
@@ -2245,7 +2245,7 @@ func enqueueInstanceWrite(instance *Instance, instanceWasActuallyFound bool, las
 	instanceWriteBuffer <- instanceUpdateObject{instance, instanceWasActuallyFound, lastError}
 }
 
-// flushInstanceWriteBuffer saves enqueued instances to Orchestrator Db
+// flushInstanceWriteBuffer saves enqueued instances to VTOrc Db
 func flushInstanceWriteBuffer() {
 	var instances []*Instance
 	var lastseen []*Instance // instances to update with last_seen field

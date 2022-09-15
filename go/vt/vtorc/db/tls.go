@@ -40,7 +40,7 @@ const Error1045 = "Access denied for user"
 // Track if a TLS has already been configured for topology
 var topologyTLSConfigured = false
 
-// Track if a TLS has already been configured for Orchestrator
+// Track if a TLS has already been configured for VTOrc
 var orchestratorTLSConfigured = false
 
 var requireTLSCache *cache.Cache = cache.New(time.Duration(config.Config.TLSCacheTTLFactor*config.Config.InstancePollSeconds)*time.Second, time.Second)
@@ -132,7 +132,7 @@ func SetupMySQLOrchestratorTLS(uri string) (string, error) {
 		// Drop to TLS 1.0 for talking to MySQL
 		tlsConfig.MinVersion = tls.VersionTLS10
 		if err != nil {
-			log.Fatalf("Can't create TLS configuration for Orchestrator connection %s: %s", uri, err)
+			log.Fatalf("Can't create TLS configuration for VTOrc connection %s: %s", uri, err)
 			return "", err
 		}
 		tlsConfig.InsecureSkipVerify = config.Config.MySQLOrchestratorSSLSkipVerify

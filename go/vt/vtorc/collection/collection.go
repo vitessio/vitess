@@ -35,7 +35,7 @@ This is expected to be used for the following types of metric:
   - query metrics (statistics on the number of queries made to the
     backend MySQL database)
 
-Orchestrator code can just add a new metric without worrying about
+VTOrc code can just add a new metric without worrying about
 removing it later, and other code which serves API requests can
 pull out the data when needed for the requested time period.
 

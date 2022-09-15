@@ -1116,7 +1116,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			fmt.Println(instanceKey.DisplayString())
 		}
 		// Recovery & analysis
-	case registerCliCommand("recover", "Recovery", `Do auto-recovery given a dead instance`), registerCliCommand("recover-lite", "Recovery", `Do auto-recovery given a dead instance. Orchestrator chooses the best course of actionwithout executing external processes`):
+	case registerCliCommand("recover", "Recovery", `Do auto-recovery given a dead instance`), registerCliCommand("recover-lite", "Recovery", `Do auto-recovery given a dead instance. VTOrc chooses the best course of actionwithout executing external processes`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
@@ -1377,14 +1377,14 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err := logic.DisableRecovery(); err != nil {
 				log.Fatalf("ERROR: Failed to disable recoveries globally: %v\n", err)
 			}
-			fmt.Println("OK: Orchestrator recoveries DISABLED globally")
+			fmt.Println("OK: VTOrc recoveries DISABLED globally")
 		}
 	case registerCliCommand("enable-global-recoveries", "", `Allow vtorc to perform recoveries globally`):
 		{
 			if err := logic.EnableRecovery(); err != nil {
 				log.Fatalf("ERROR: Failed to enable recoveries globally: %v\n", err)
 			}
-			fmt.Println("OK: Orchestrator recoveries ENABLED globally")
+			fmt.Println("OK: VTOrc recoveries ENABLED globally")
 		}
 	case registerCliCommand("check-global-recoveries", "", `Show the global recovery configuration`):
 		{

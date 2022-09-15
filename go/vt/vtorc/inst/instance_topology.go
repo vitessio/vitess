@@ -1972,7 +1972,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 }
 
 // RelocateBelow will attempt moving instance indicated by instanceKey below another instance.
-// Orchestrator will try and figure out the best way to relocate the server. This could span normal
+// VTOrc will try and figure out the best way to relocate the server. This could span normal
 // binlog-position, repointing, binlog servers...
 func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 	instance, found, err := ReadInstance(instanceKey)
@@ -2070,7 +2070,7 @@ func relocateReplicasInternal(replicas []*Instance, instance, other *Instance) (
 }
 
 // RelocateReplicas will attempt moving replicas of an instance indicated by instanceKey below another instance.
-// Orchestrator will try and figure out the best way to relocate the servers. This could span normal
+// VTOrc will try and figure out the best way to relocate the servers. This could span normal
 // binlog-position, repointing, binlog servers...
 func RelocateReplicas(instanceKey, otherKey *InstanceKey, pattern string) (replicas []*Instance, other *Instance, errs []error, err error) {
 

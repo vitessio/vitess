@@ -92,17 +92,17 @@ type Configuration struct {
 	RaftNodes                                   []string // Raft nodes to make initial connection with
 	ExpectFailureAnalysisConcensus              bool
 	MySQLOrchestratorHost                       string
-	MySQLOrchestratorMaxPoolConnections         int // The maximum size of the connection pool to the Orchestrator backend.
+	MySQLOrchestratorMaxPoolConnections         int // The maximum size of the connection pool to the VTOrc backend.
 	MySQLOrchestratorPort                       uint
 	MySQLOrchestratorDatabase                   string
 	MySQLOrchestratorUser                       string
 	MySQLOrchestratorPassword                   string
 	MySQLOrchestratorCredentialsConfigFile      string   // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
-	MySQLOrchestratorSSLPrivateKeyFile          string   // Private key file used to authenticate with the Orchestrator mysql instance with TLS
-	MySQLOrchestratorSSLCertFile                string   // Certificate PEM file used to authenticate with the Orchestrator mysql instance with TLS
-	MySQLOrchestratorSSLCAFile                  string   // Certificate Authority PEM file used to authenticate with the Orchestrator mysql instance with TLS
-	MySQLOrchestratorSSLSkipVerify              bool     // If true, do not strictly validate mutual TLS certs for the Orchestrator mysql instances
-	MySQLOrchestratorUseMutualTLS               bool     // Turn on TLS authentication with the Orchestrator MySQL instance
+	MySQLOrchestratorSSLPrivateKeyFile          string   // Private key file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLOrchestratorSSLCertFile                string   // Certificate PEM file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLOrchestratorSSLCAFile                  string   // Certificate Authority PEM file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLOrchestratorSSLSkipVerify              bool     // If true, do not strictly validate mutual TLS certs for the VTOrc mysql instances
+	MySQLOrchestratorUseMutualTLS               bool     // Turn on TLS authentication with the VTOrc MySQL instance
 	MySQLOrchestratorReadTimeoutSeconds         int      // Number of seconds before backend mysql read operation is aborted (driver-side)
 	MySQLOrchestratorRejectReadOnly             bool     // Reject read only connections https://github.com/go-sql-driver/mysql#rejectreadonly
 	MySQLConnectTimeoutSeconds                  int      // Number of seconds before connection is aborted (driver-side)
@@ -167,7 +167,7 @@ type Configuration struct {
 	DetectSemiSyncEnforcedQuery                 string            // Optional query (executed on topology instance) to determine whether semi-sync is fully enforced for primary writes (async fallback is not allowed under any circumstance). If provided, must return one row, one column, value 0 or 1.
 	SupportFuzzyPoolHostnames                   bool              // Should "submit-pool-instances" command be able to pass list of fuzzy instances (fuzzy means non-fqdn, but unique enough to recognize). Defaults 'true', implies more queries on backend db
 	InstancePoolExpiryMinutes                   uint              // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
-	PromotionIgnoreHostnameFilters              []string          // Orchestrator will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
+	PromotionIgnoreHostnameFilters              []string          // VTOrc will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
 	ServeAgentsHTTP                             bool              // Spawn another HTTP interface dedicated for vtorc-agent
 	AgentsUseSSL                                bool              // When "true" vtorc will listen on agents port with SSL as well as connect to agents via SSL
 	AgentsUseMutualTLS                          bool              // When "true" Use mutual TLS for the server to agent communication

@@ -170,7 +170,7 @@ func OpenOrchestrator() (db *sql.DB, err error) {
 				config.Config.MySQLOrchestratorHost, config.Config.MySQLOrchestratorPort, config.Config.MySQLOrchestratorDatabase, config.Config.MySQLConnectTimeoutSeconds)
 			log.Infof("Connected to vtorc backend: %v", safeMySQLURI)
 			if config.Config.MySQLOrchestratorMaxPoolConnections > 0 {
-				log.Infof("Orchestrator pool SetMaxOpenConns: %d", config.Config.MySQLOrchestratorMaxPoolConnections)
+				log.Infof("VTOrc pool SetMaxOpenConns: %d", config.Config.MySQLOrchestratorMaxPoolConnections)
 				db.SetMaxOpenConns(config.Config.MySQLOrchestratorMaxPoolConnections)
 			}
 			if config.Config.MySQLConnectionLifetimeSeconds > 0 {

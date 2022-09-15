@@ -45,7 +45,7 @@ var ErrTabletAliasNil = errors.New("tablet alias is nil")
 // SwitchPrimary makes the new tablet the primary and proactively performs
 // the necessary propagation to the old primary. The propagation is best
 // effort. If it fails, the tablet's shard sync will eventually converge.
-// The proactive propagation allows a competing Orchestrator from discovering
+// The proactive propagation allows a competing VTOrc from discovering
 // the successful action of a previous one, which reduces churn.
 func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 	durability, err := GetDurabilityPolicy(newPrimaryKey)
