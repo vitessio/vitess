@@ -47,7 +47,11 @@ import (
 const (
 	defaultTick          = 1 * time.Second
 	defaultTimeout       = 30 * time.Second
-	workflowStartTimeout = 5 * time.Second
+	workflowStateTimeout = 90 * time.Second
+	workflowStateCopying = "Copying" // nolint
+	workflowStateRunning = "Running" // nolint
+	workflowStateStopped = "Stopped" // nolint
+	workflowStateError   = "Error"   // nolint
 )
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
@@ -234,10 +238,10 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	return newCount == count+1
 }
 
-func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) {
+func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string) {
 	done := false
-	timer := time.NewTimer(workflowStartTimeout)
-	log.Infof("Waiting for workflow %s to start", ksWorkflow)
+	timer := time.NewTimer(workflowStateTimeout)
+	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
 	for {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
 		require.NoError(t, err)
@@ -249,8 +253,8 @@ func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) 
 				if streamId.String() == "PrimaryReplicationStatuses" {
 					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
 						state = attributeValue.Get("State").String()
-						if state != "Running" {
-							done = false // we need to wait for all streams to start
+						if state != wantState {
+							done = false // we need to wait for all streams to have the desired state
 						}
 						return true
 					})
@@ -260,13 +264,13 @@ func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) 
 			return true
 		})
 		if done {
-			log.Infof("Workflow %s has started", ksWorkflow)
+			log.Infof("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState)
 			return
 		}
 		select {
 		case <-timer.C:
-			require.FailNowf(t, "workflow %q did not fully start before the timeout of %s",
-				ksWorkflow, workflowStartTimeout)
+			require.FailNowf(t, "workflow %q did not fully reach the expected state of %q before the timeout of %s; last seen output: %s",
+				ksWorkflow, wantState, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -462,4 +466,40 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
 	require.NoError(t, err)
 	return string(val), nil
+}
+
+func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
+	for {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+		require.NoError(t, err)
+		result := gjson.Get(output, "ShardStatuses")
+		result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
+			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+				if streamId.String() == "PrimaryReplicationStatuses" {
+					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+						state := attributeValue.Get("State").String()
+						pos := attributeValue.Get("Pos").String()
+						// If we've actually copied anything then we'll have a position in the stream
+						if (state == workflowStateRunning || state == workflowStateCopying) && pos != "" {
+							require.FailNowf(t, "Unexpected data copied in workflow",
+								"The MoveTables workflow %q copied data in less than %s when it should have been waiting. Show output: %s",
+								ksWorkflow, defaultTimeout, output)
+						}
+						return true // end attribute loop
+					})
+				}
+				return true // end stream loop
+			})
+			return true // end tablet loop
+		})
+		select {
+		case <-timer.C:
+			return
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }
