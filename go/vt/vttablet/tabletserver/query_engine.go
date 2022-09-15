@@ -27,6 +27,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql"
@@ -96,21 +99,25 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
-func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) bool {
+func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) error {
 	if !ep.NeedsReservedConn {
-		return true
+		return nil
 	}
-	switch ep.PlanID {
+	return isValid(ep.PlanID, hasReservedCon, hasSysSettings)
+}
+
+func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings bool) error {
+	switch planType {
 	case planbuilder.PlanSelectLockFunc, planbuilder.PlanDDL:
 		if hasReservedCon {
-			return true
+			return nil
 		}
 	case planbuilder.PlanSet:
 		if hasReservedCon || hasSysSettings {
-			return true
+			return nil
 		}
 	}
-	return false
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", planType.String())
 }
 
 // _______________________________________________
