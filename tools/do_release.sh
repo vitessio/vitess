@@ -19,6 +19,16 @@ if [ "$VTROOT" != "" ]; then
     ROOT=$VTROOT
 fi
 
+if [ "$BASE_REMOTE" == "" ]; then
+  echo "Set the env var BASE_REMOTE with the name of the remote on which the release branch is located."
+  exit 1
+fi
+
+if [ "$BASE_BRANCH" == "" ]; then
+  echo "Set the env var BASE_BRANCH with the name of the branch on which the release will take place."
+  exit 1
+fi
+
 if [ "$RELEASE_VERSION" == "" ]; then
   echo "Set the env var RELEASE_VERSION with the release version"
   exit 1
@@ -40,6 +50,17 @@ if [ "$GODOC_RELEASE_VERSION" == "" ]; then
   echo -n "If you wish to continue anyhow press enter, otherwise CTRL+C to cancel."
   read line
 fi
+
+function checkoutNewBranch () {
+  branch_name=$1
+
+  current_branch=$BASE_BRANCH-$branch_name-1
+  git checkout -b $current_branch $BASE_REMOTE/$BASE_BRANCH
+  for (( i = 2; $? != 0; i++ )); do
+   current_branch=$BASE_BRANCH-$branch_name-$i
+   git checkout -b $current_branch $BASE_REMOTE/$BASE_BRANCH
+  done
+}
 
 function updateVersionGo () {
 
@@ -92,6 +113,53 @@ function updateVitessExamples () {
   rm -f $(find -E $ROOT/examples/compose/**/* -regex ".*.(go|yml).bak")
 }
 
+# Preparing and tagging the release
+function doRelease () {
+  checkoutNewBranch "tag"
+
+  # Unfreeze the branch
+  sed -i.bak -E "s/exit (.*)/exit 0/g" ./.github/workflows/code_freeze.yml
+  rm -f ./.github/workflows/code_freeze.yml.bak
+
+  # Wait for release notes to be injected in the code base
+  echo -n Pausing so relase notes can be added. Press enter to continue
+  read line
+
+  git add --all
+  git commit -n -s -m "Release notes for $RELEASE_VERSION"
+
+  # Preparing the release commit
+  updateVitessExamples $RELEASE_VERSION $VTOP_VERSION
+  updateJava $RELEASE_VERSION
+  updateVersionGo $RELEASE_VERSION
+
+  ## Create the commit for this release and tag it
+  git add --all
+  git commit -n -s -m "Release commit for $RELEASE_VERSION"
+  git tag -m Version\ $RELEASE_VERSION v$RELEASE_VERSION
+
+  ## Also tag the commit with the GoDoc tag if needed
+  if [ "$GODOC_RELEASE_VERSION" != "" ]; then
+      git tag -a v$GODOC_RELEASE_VERSION -m "Tagging $RELEASE_VERSION also as $GODOC_RELEASE_VERSION for godoc/go modules"
+  fi
+
+  push_branches+=($current_branch)
+}
+
+# Putting the branch back into dev mode
+function doBackToDevMode () {
+  checkoutNewBranch "back-to-dev"
+
+  # Preparing the "dev mode" commit
+  updateJava $DEV_VERSION
+  updateVersionGo $DEV_VERSION
+
+  git add --all
+  git commit -n -s -m "Back to dev mode"
+
+  push_branches+=($current_branch)
+}
+
 git_status_output=$(git status --porcelain)
 if [ "$git_status_output" == "" ]; then
   	echo so much clean
@@ -100,39 +168,37 @@ else
     exit 1
 fi
 
-# Preparing the release commit
-updateVitessExamples $RELEASE_VERSION $VTOP_VERSION
-updateJava $RELEASE_VERSION
-updateVersionGo $RELEASE_VERSION
+push_branches=()
+current_branch=""
 
-## Wait for release notes to be injected in the code base
-echo -n Pausing so relase notes can be added. Press enter to continue
-read line
+doRelease
+doBackToDevMode
 
-## Create the commit for this release and tag it
-git add --all
-git commit -n -s -m "Release commit for $RELEASE_VERSION"
-git tag -m Version\ $RELEASE_VERSION v$RELEASE_VERSION
+echo " "
+echo " "
+echo "----------------"
+echo "Release preparations successful. Two branches were created. Please push them and create a PR for them."
+echo "Make sure to replace upstream by your own fork's remote."
+echo "Do not forget to also update the release notes on main."
+echo " "
+for i in ${!push_branches[@]}; do
+  echo "   git push upstream ${push_branches[$i]}"
+done
 
-## Also tag the commit with the GoDoc tag if needed
-if [ "$GODOC_RELEASE_VERSION" != "" ]; then
-    git tag -a v$GODOC_RELEASE_VERSION -m "Tagging $RELEASE_VERSION also as $GODOC_RELEASE_VERSION for godoc/go modules"
-fi
+echo " "
+echo "Once pushed, please execute the following gh commands to create the Pull Requests. Please replace 'USER_ON_WHICH_YOU_PUSHED' with the user/org on which you pushed the two branches."
+echo "    gh pr create -w --title 'Release of v$RELEASE_VERSION' --base $BASE_BRANCH --head USER_ON_WHICH_YOU_PUSHED:${push_branches[0]} --label 'Type: Release','Component: General' --body 'Includes the release notes and tag commit for the v$RELEASE_VERSION release.'"
+echo "    gh pr create -w --title 'Back to dev mode after v$RELEASE_VERSION' --base $BASE_BRANCH --head USER_ON_WHICH_YOU_PUSHED:${push_branches[1]} --label 'Type: Release','Component: General' --body 'Includes the changes required to go back into dev mode (v$DEV_VERSION) after the release of v$RELEASE_VERSION.'"
 
-# Preparing the "dev mode" commit
-updateJava $DEV_VERSION
-updateVersionGo $DEV_VERSION
-
-git add --all
-git commit -n -s -m "Back to dev mode"
-echo "Release preparations successful"
+echo " "
+echo "----------------"
 
 if [ "$GODOC_RELEASE_VERSION" != "" ]; then
   echo "Two git tags were created, you can push them with:"
+  echo " "
   echo "   git push upstream v$RELEASE_VERSION && git push upstream v$GODOC_RELEASE_VERSION"
 else
   echo "One git tag was created, you can push it with:"
+  echo " "
   echo "   git push upstream v$RELEASE_VERSION"
 fi
-
-echo "The git branch has also been updated. You need to push it and get it merged"
