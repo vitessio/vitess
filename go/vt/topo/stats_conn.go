@@ -160,6 +160,26 @@ func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDe
 	return res, err
 }
 
+// TryLock is part of the topo.Conn interface.
+// TryLock provides exactly same functionality as 'Lock', the only difference is
+// it tires its best to be unblocking call. Unblocking is the best effort though.
+// If there is already lock exists for dirPath then TryLock
+// unlike Lock will return immediately with error 'lock already exists'.
+func (st *StatsConn) TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
+	statsKey := []string{"Lock", st.cell}
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
+	}
+	startTime := time.Now()
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	res, err := st.conn.TryLock(ctx, dirPath, contents)
+	if err != nil {
+		topoStatsConnErrors.Add(statsKey, int64(1))
+		return res, err
+	}
+	return res, err
+}
+
 // Watch is part of the Conn interface
 func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error) {
 	startTime := time.Now()

@@ -81,6 +81,11 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	checkLock(t, ts)
 	ts.Close()
 
+	t.Log("=== checkLock")
+	ts = factory()
+	checkTryLock(t, ts)
+	ts.Close()
+
 	t.Log("=== checkVSchema")
 	ts = factory()
 	checkVSchema(t, ts)

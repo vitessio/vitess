@@ -17,7 +17,9 @@ limitations under the License.
 package consultopo
 
 import (
+	"fmt"
 	"path"
+	"regexp"
 
 	"context"
 
@@ -29,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
+
+var nodeUnderLockPath = regexp.MustCompile(fmt.Sprintf("%s/.+", locksFilename))
 
 // consulLockDescriptor implements topo.LockDescriptor.
 type consulLockDescriptor struct {
@@ -49,6 +53,44 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
+	return s.lock(ctx, dirPath, contents)
+}
+
+// TryLock is part of the topo.Conn interface.
+// TryLock provides exactly same functionality as 'Lock', the only difference is
+// it tires its best to be unblocking call. Unblocking is the best effort though.
+// If there is already lock exists for dirPath then TryLock
+// unlike Lock will return immediately with error 'lock already exists'.
+func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	// We list all the entries under dirPath
+	entries, err := s.List(ctx, dirPath)
+	if err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err, dirPath)
+	}
+
+	// if there is a folder '/locks' with some entries in it then we can assume that keyspace already have a lock
+	// throw error in this case
+	for _, e := range entries {
+		path := string(e.Key[:])
+		if nodeUnderLockPath.MatchString(path) {
+			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
+		}
+
+		// TODO: instead of list should I call listDir and assume /locks directory only exists if there is a lock
+		// TODO: Should we check if all the children under lock is ephemeral
+	}
+
+	// everything is good lets acquire lock.
+	return s.lock(ctx, dirPath, contents)
+}
+
+// Lock is part of the topo.Conn interface.
+func (s *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	lockPath := path.Join(s.root, dirPath, locksFilename)
 
 	lockOpts := &api.LockOptions{

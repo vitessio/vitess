@@ -348,6 +348,81 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 	}, nil
 }
 
+// TryLockShard will lock the shard, and return:
+// - a context with a locksInfo structure for future reference.
+// - an unlock method
+// - an error if anything failed.
+
+// TryLockShard is different then LockShard. It is unblocking which means
+// if there is already a lock at globalcell level for a given shard then instead
+// of waiting (block) on that shard it returns immediately with error Lock already acquired.
+//
+// We are currently only using this method to lock actions that would
+// impact each-other. Most changes of the Shard object are done by
+// UpdateShardFields, which is not locking the shard object. The
+// current list of actions that lock a shard are:
+// * all Vitess-controlled re-parenting operations:
+//   - InitShardPrimary
+//   - PlannedReparentShard
+//   - EmergencyReparentShard
+//
+// * operations that we don't want to conflict with re-parenting:
+//   - DeleteTablet when it's the shard's current primary
+func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+	i, ok := ctx.Value(locksKey).(*locksInfo)
+	if !ok {
+		i = &locksInfo{
+			info: make(map[string]*lockInfo),
+		}
+		ctx = context.WithValue(ctx, locksKey, i)
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	// check that we're not already locked
+	mapKey := keyspace + "/" + shard
+	if _, ok = i.info[mapKey]; ok {
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for shard %v/%v is already held", keyspace, shard)
+	}
+
+	// lock
+	l := newLock(action)
+	lockDescriptor, err := l.tryLockShard(ctx, ts, keyspace, shard)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// and update our structure
+	i.info[mapKey] = &lockInfo{
+		lockDescriptor: lockDescriptor,
+		actionNode:     l,
+	}
+	return ctx, func(finalErr *error) {
+		i.mu.Lock()
+		defer i.mu.Unlock()
+
+		if _, ok := i.info[mapKey]; !ok {
+			if *finalErr != nil {
+				log.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
+			} else {
+				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock shard %v/%v multiple times", keyspace, shard)
+			}
+			return
+		}
+
+		err := l.unlockShard(ctx, ts, keyspace, shard, lockDescriptor, *finalErr)
+		if *finalErr != nil {
+			if err != nil {
+				// both error are set, just log the unlock error
+				log.Warningf("unlockShard(%s/%s) failed: %v", keyspace, shard, err)
+			}
+		} else {
+			*finalErr = err
+		}
+		delete(i.info, mapKey)
+	}, nil
+}
+
 // CheckShardLocked can be called on a context to make sure we have the lock
 // for a given shard.
 func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
@@ -390,6 +465,29 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 		return nil, err
 	}
 	return ts.globalCell.Lock(ctx, shardPath, j)
+}
+
+// tryLockShard will lock the shard in the topology server.
+// It is unblocking call for blocking call lockshard instead.
+// UnlockShard should be called if this returns no error.
+func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
+	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
+
+	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+	defer cancel()
+
+	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
+	span.Annotate("action", l.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	defer span.Finish()
+
+	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard)
+	j, err := l.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return ts.globalCell.TryLock(ctx, shardPath, j)
 }
 
 // unlockShard unlocks a previously locked shard.
