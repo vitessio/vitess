@@ -1203,6 +1203,64 @@ func TestQueryExecutorDenyListQRRetry(t *testing.T) {
 	}
 }
 
+func TestReplaceSchemaName(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	queryFmt := "select * from information_schema.schema_name where schema_name = %s"
+	inQuery := fmt.Sprintf(queryFmt, ":"+sqltypes.BvSchemaName)
+	wantQuery := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s' limit %d",
+		db.Name(),
+		10001,
+	))
+	wantQueryStream := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s'",
+		db.Name(),
+	))
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQuery(wantQuery, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	db.AddQuery(wantQueryStream, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	// Test non streaming execute.
+	{
+		qre := newTestQueryExecutor(ctx, tsv, inQuery, 0)
+		assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
+		// Any value other than nil should cause QueryExecutor to replace the
+		// schema name.
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		_, ok := qre.bindVars[sqltypes.BvSchemaName]
+		require.True(t, ok)
+	}
+
+	// Test streaming execute.
+	{
+		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, 0)
+		// Stream only replaces schema name when plan is PlanSelectStream.
+		assert.Equal(t, planbuilder.PlanSelectStream, qre.plan.PlanID)
+		// Any value other than nil should cause QueryExecutor to replace the
+		// schema name.
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		err := qre.Stream(func(_ *sqltypes.Result) error {
+			_, ok := qre.bindVars[sqltypes.BvSchemaName]
+			require.True(t, ok)
+			return nil
+		})
+		require.NoError(t, err)
+	}
+}
+
 type executorFlags int64
 
 const (
@@ -1274,6 +1332,23 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, 0)
+	if err != nil {
+		panic(err)
+	}
+	return &QueryExecutor{
+		ctx:      ctx,
+		query:    sql,
+		bindVars: make(map[string]*querypb.BindVariable),
+		connID:   txID,
+		plan:     plan,
+		logStats: logStats,
+		tsv:      tsv,
+	}
+}
+
+func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming")
+	plan, err := tsv.qe.GetStreamPlan(sql, false)
 	if err != nil {
 		panic(err)
 	}
