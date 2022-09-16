@@ -560,3 +560,21 @@ export const reloadSchema = async (params: ReloadSchemaParams) => {
 
     return pb.ReloadSchemasResponse.create(result);
 };
+
+export interface RebuildKeyspaceGraphParams {
+  clusterID?: (string | null | undefined)[];
+  keyspace?: (string | null | undefined)[];
+
+  // A comma-separated list of cells, eg. "zone1,zone2"
+  cells?: string
+
+  allowPartial?: boolean
+}
+
+export const rebuildKeyspaceGraph = async (params: RebuildKeyspaceGraphParams) => {
+  const { result } = await vtfetch(`/api/keyspaces/${params.clusterID}/${params.keyspace}`, { method: 'put', body: JSON.stringify({ cells: params.cells, allowPartial: params.allowPartial }) })
+  const err = pb.RebuildKeyspaceGraphRequest.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RebuildKeyspaceGraphResponse.create(result);
+}

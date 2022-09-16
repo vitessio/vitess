@@ -19,6 +19,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/gorilla/mux"
 
@@ -84,6 +85,33 @@ func GetKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {
 	})
 
 	return NewJSONResponse(keyspaces, err)
+}
+
+// RebuildKeyspace graph implements the http wrapper for /keyspaces/{cluster_id}/{name}/rebuild_keyspace_graph
+func RebuildKeyspaceGraph(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := mux.Vars(r.Request)
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var params struct {
+		Cells        string `json:"cells"`
+		AllowPartial bool   `json:"allowPartial"`
+	}
+
+	if err := decoder.Decode(&params); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.RebuildKeyspaceGraph(ctx, &vtadminpb.RebuildKeyspaceGraphRequest{
+		ClusterId:    vars["cluster_id"],
+		Keyspace:     vars["name"],
+		Cells:        strings.Split(params.Cells, ","),
+		AllowPartial: params.AllowPartial,
+	})
+
+	return NewJSONResponse(res, err)
 }
 
 // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.

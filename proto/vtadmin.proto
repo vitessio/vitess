@@ -111,6 +111,8 @@ service VTAdmin {
     // shard primary's cell as promotion candidates unless NewPrimary is
     // explicitly provided in the request.
     rpc PlannedFailoverShard(PlannedFailoverShardRequest) returns (PlannedFailoverShardResponse) {};
+    // RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+    rpc RebuildKeyspaceGraph(RebuildKeyspaceGraphRequest) returns (RebuildKeyspaceGraphResponse) {};
     // RefreshState reloads the tablet record on the specified tablet.
     rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
     // RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -582,6 +584,17 @@ message PlannedFailoverShardResponse {
     // to be most up-to-date in the shard.
     topodata.TabletAlias promoted_primary = 4;
     repeated logutil.Event events = 5;
+}
+
+message RebuildKeyspaceGraphRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  repeated string cells = 3;
+  bool allow_partial = 4;
+}
+
+message RebuildKeyspaceGraphResponse {
+  string status = 1;
 }
 
 message RefreshStateRequest {

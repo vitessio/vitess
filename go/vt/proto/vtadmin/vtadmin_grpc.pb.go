@@ -101,6 +101,8 @@ type VTAdminClient interface {
 	// shard primary's cell as promotion candidates unless NewPrimary is
 	// explicitly provided in the request.
 	PlannedFailoverShard(ctx context.Context, in *PlannedFailoverShardRequest, opts ...grpc.CallOption) (*PlannedFailoverShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	RebuildKeyspaceGraph(ctx context.Context, in *RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*RebuildKeyspaceGraphResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -407,6 +409,15 @@ func (c *vTAdminClient) PlannedFailoverShard(ctx context.Context, in *PlannedFai
 	return out, nil
 }
 
+func (c *vTAdminClient) RebuildKeyspaceGraph(ctx context.Context, in *RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*RebuildKeyspaceGraphResponse, error) {
+	out := new(RebuildKeyspaceGraphResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RebuildKeyspaceGraph", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error) {
 	out := new(RefreshStateResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RefreshState", in, out, opts...)
@@ -606,6 +617,8 @@ type VTAdminServer interface {
 	// shard primary's cell as promotion candidates unless NewPrimary is
 	// explicitly provided in the request.
 	PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	RebuildKeyspaceGraph(context.Context, *RebuildKeyspaceGraphRequest) (*RebuildKeyspaceGraphResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -740,6 +753,9 @@ func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest
 }
 func (UnimplementedVTAdminServer) PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PlannedFailoverShard not implemented")
+}
+func (UnimplementedVTAdminServer) RebuildKeyspaceGraph(context.Context, *RebuildKeyspaceGraphRequest) (*RebuildKeyspaceGraphResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RebuildKeyspaceGraph not implemented")
 }
 func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshState not implemented")
@@ -1297,6 +1313,24 @@ func _VTAdmin_PlannedFailoverShard_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_RebuildKeyspaceGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebuildKeyspaceGraphRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RebuildKeyspaceGraph(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RebuildKeyspaceGraph",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RebuildKeyspaceGraph(ctx, req.(*RebuildKeyspaceGraphRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RefreshStateRequest)
 	if err := dec(in); err != nil {
@@ -1649,6 +1683,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PlannedFailoverShard",
 			Handler:    _VTAdmin_PlannedFailoverShard_Handler,
+		},
+		{
+			MethodName: "RebuildKeyspaceGraph",
+			Handler:    _VTAdmin_RebuildKeyspaceGraph_Handler,
 		},
 		{
 			MethodName: "RefreshState",
