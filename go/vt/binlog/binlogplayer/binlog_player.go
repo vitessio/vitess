@@ -595,8 +595,8 @@ type VRSettings struct {
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
-	WorkflowType      int64
-	WorkflowSubType   int64
+	WorkflowType      int32
+	WorkflowSubType   int32
 	WorkflowName      string
 }
 
@@ -630,11 +630,13 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
-	workflowType, err := vrRow.ToInt64("workflow_type")
+	workflowTypeTmp, err := vrRow.ToInt64("workflow_type")
+	workflowType := int32(workflowTypeTmp)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_type column: %v", err)
 	}
-	workflowSubType, err := vrRow.ToInt64("workflow_sub_type")
+	workflowSubTypeTmp, err := vrRow.ToInt64("workflow_sub_type")
+	workflowSubType := int32(workflowSubTypeTmp)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_sub_type column: %v", err)
 	}

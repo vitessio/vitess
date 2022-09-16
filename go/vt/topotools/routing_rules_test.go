@@ -77,10 +77,10 @@ func TestShardRoutingRulesRoundTrip(t *testing.T) {
 	}
 
 	err := SaveShardRoutingRules(ctx, ts, srr)
-	require.NoError(t, err, "could not save shard routing rules to topo %v", srr)
+	require.NoError(t, err, "could not save shard routing rules to topo %v", err)
 
 	roundtripRules, err := GetShardRoutingRules(ctx, ts)
-	require.NoError(t, err, "could not fetch shard routing rules from topo")
+	require.NoError(t, err, "could not fetch shard routing rules from topo: %v", err)
 
 	assert.Equal(t, srr, roundtripRules)
 }

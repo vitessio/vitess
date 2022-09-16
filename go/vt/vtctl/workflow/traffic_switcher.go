@@ -29,8 +29,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -291,12 +289,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 }
 
 func getVReplicationWorkflowType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowType {
-	i, _ := evalengine.ToInt64(row["workflow_type"])
+	i, _ := row["workflow_type"].ToInt64()
 	return binlogdatapb.VReplicationWorkflowType(i)
 }
 
 func getVReplicationWorkflowSubType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowSubType {
-	i, _ := evalengine.ToInt64(row["workflow_sub_type"])
+	i, _ := row["workflow_sub_type"].ToInt64()
 	return binlogdatapb.VReplicationWorkflowSubType(i)
 }
 

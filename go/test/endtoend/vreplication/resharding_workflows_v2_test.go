@@ -18,7 +18,9 @@ package vreplication
 
 import (
 	"fmt"
+	"net"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -403,15 +405,19 @@ func TestPartialMoveTables(t *testing.T) {
 
 }
 
+func getVtctldGRPCURL() string {
+	return net.JoinHostPort("localhost", strconv.Itoa(vc.Vtctld.GrpcPort))
+}
+
 func applyShardRoutingRules(t *testing.T, rules string) {
-	output, err := osExec(t, "vtctldclient", []string{"--server", fmt.Sprintf("localhost:%d", vc.Vtctld.GrpcPort), "ApplyShardRoutingRules", "--rules", rules})
+	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "ApplyShardRoutingRules", "--rules", rules})
 	log.Infof("ApplyShardRoutingRules err: %+v, output: %+v", err, output)
 	require.Nilf(t, err, output)
 	require.NotNil(t, output)
 }
 
 func getShardRoutingRules(t *testing.T) string {
-	output, err := osExec(t, "vtctldclient", []string{"--server", fmt.Sprintf("localhost:%d", vc.Vtctld.GrpcPort), "GetShardRoutingRules"})
+	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
 	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
 	require.Nilf(t, err, output)
 	require.NotNil(t, output)

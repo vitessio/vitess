@@ -1040,6 +1040,6 @@ func (vc *vcursorImpl) VtExplainLogging() {
 func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
-func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (string, error) {
+func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
 }

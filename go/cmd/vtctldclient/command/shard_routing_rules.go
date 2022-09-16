@@ -64,7 +64,7 @@ func commandApplyShardRoutingRules(cmd *cobra.Command, args []string) error {
 	}
 
 	if applyShardRoutingRulesOptions.Rules == "" && applyShardRoutingRulesOptions.RulesFilePath == "" {
-		return errors.New("must pass exactly one of --rules and --rules-file")
+		return errors.New("must pass exactly one of --rules or --rules-file")
 	}
 
 	cli.FinishedParsing(cmd)
@@ -120,7 +120,7 @@ func commandApplyShardRoutingRules(cmd *cobra.Command, args []string) error {
 	fmt.Printf("New ShardRoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", data)
 
 	if applyRoutingRulesOptions.SkipRebuild {
-		fmt.Println("Skipping rebuild of VSchema graph, will need to run RebuildVSchemaGraph for changes to take effect.")
+		fmt.Println("Skipping rebuild of VSchema graph as requested, you will need to run RebuildVSchemaGraph for the changes to take effect.")
 	}
 
 	return nil
@@ -149,7 +149,7 @@ func init() {
 	ApplyShardRoutingRules.Flags().StringVarP(&applyShardRoutingRulesOptions.RulesFilePath, "rules-file", "f", "", "Path to a file containing shard routing rules specified as JSON")
 	ApplyShardRoutingRules.Flags().StringSliceVarP(&applyShardRoutingRulesOptions.Cells, "cells", "c", nil, "Limit the VSchema graph rebuilding to the specified cells. Ignored if --skip-rebuild is specified.")
 	ApplyShardRoutingRules.Flags().BoolVar(&applyShardRoutingRulesOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvVSchema objects.")
-	ApplyShardRoutingRules.Flags().BoolVarP(&applyShardRoutingRulesOptions.DryRun, "dry-run", "d", false, "Load the specified shard routing rules as a validation step, but do not actually apply the rules to the topo.")
+	ApplyShardRoutingRules.Flags().BoolVarP(&applyShardRoutingRulesOptions.DryRun, "dry-run", "d", false, "Validate the specified shard routing rules and note actions that would be taken, but do not actually apply the rules to the topo.")
 	Root.AddCommand(ApplyShardRoutingRules)
 
 	Root.AddCommand(GetShardRoutingRules)

@@ -959,6 +959,10 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		}
 		sourceShards = sourceShards2
 	}
+	if len(sourceShards) == 0 {
+		return nil, fmt.Errorf("no source shards specified for workflow %s ", ms.Workflow)
+	}
+
 	targetShards, err := wr.ts.GetServingShards(ctx, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
@@ -975,9 +979,10 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		}
 		targetShards = targetShards2
 	}
-	if len(sourceShards) == 0 || len(targetShards) == 0 {
-		return nil, fmt.Errorf("no source and/or target shards specified for workflow %s ", ms.Workflow)
+	if len(targetShards) == 0 {
+		return nil, fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
+
 	return &materializer{
 		wr:            wr,
 		ms:            ms,

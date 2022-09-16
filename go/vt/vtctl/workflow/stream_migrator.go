@@ -574,7 +574,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 			}
 
 			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "",
-				int64(int(vrs.WorkflowType)), int64(int(vrs.WorkflowSubType)))
+				int64(vrs.WorkflowType), int64(vrs.WorkflowSubType))
 		}
 
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())

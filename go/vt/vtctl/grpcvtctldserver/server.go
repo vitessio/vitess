@@ -193,7 +193,7 @@ func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldat
 	resp := &vtctldatapb.ApplyShardRoutingRulesResponse{}
 
 	if req.SkipRebuild {
-		log.Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		log.Warningf("Skipping rebuild of SrvVSchema as requested, you will need to run RebuildVSchemaGraph for changes to take effect")
 		return resp, nil
 	}
 

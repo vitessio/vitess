@@ -272,7 +272,7 @@ func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shar
 	shardRoutingRulesTemplate := `{"rules":[{"from_keyspace":"%s","to_keyspace":"%s","shards":"%s"}]}`
 	shardRoutingRules := fmt.Sprintf(shardRoutingRulesTemplate, keyspace.Name, routedKeyspace.Name, movedShard)
 	cmd := exec.Command("vtctldclient", "--server",
-		fmt.Sprintf("localhost:%d", cluster.VtctldProcess.GrpcPort),
+		net.JoinHostPort("localhost", strconv.Itoa(cluster.VtctldProcess.GrpcPort)),
 		"ApplyShardRoutingRules", "--rules", shardRoutingRules)
 	_, err = cmd.Output()
 	if err != nil {
