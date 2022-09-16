@@ -386,7 +386,6 @@ func ContinuousDiscovery() {
 				// But rather should invoke such routinely operations that need to be as (or roughly as) frequent
 				// as instance poll
 				if IsLeaderOrActive() {
-					go inst.UpdateClusterAliases()
 					go inst.ExpireDowntime()
 					go injectSeeds(&seedOnce)
 				}
@@ -395,7 +394,6 @@ func ContinuousDiscovery() {
 			// Various periodic internal maintenance tasks
 			go func() {
 				if IsLeaderOrActive() {
-					go inst.ReviewUnseenInstances()
 					go inst.InjectUnseenPrimaries()
 
 					go inst.ForgetLongUnseenInstances()

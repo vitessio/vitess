@@ -273,13 +273,6 @@ var generateSQLBase = []string{
 		CREATE INDEX resolved_timestamp_idx_hostname_resolve ON hostname_resolve (resolved_timestamp)
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS cluster_alias (
-		  cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
-		  alias varchar(128) NOT NULL,
-		  PRIMARY KEY (cluster_name)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
 		CREATE TABLE IF NOT EXISTS active_node (
 		  anchor tinyint unsigned NOT NULL,
 		  hostname varchar(128) CHARACTER SET ascii NOT NULL,
@@ -425,7 +418,6 @@ var generateSQLBase = []string{
 			processcing_node_token varchar(128) NOT NULL,
 			analysis varchar(128) NOT NULL,
 			cluster_name varchar(128) NOT NULL,
-			cluster_alias varchar(128) NOT NULL,
 			count_affected_replicas int unsigned NOT NULL,
 			replica_hosts text NOT NULL,
 			PRIMARY KEY (detection_id)
@@ -734,13 +726,6 @@ var generateSQLBase = []string{
 		CREATE TABLE IF NOT EXISTS global_recovery_disable (
 			disable_recovery tinyint unsigned NOT NULL COMMENT 'Insert 1 to disable recovery globally',
 			PRIMARY KEY (disable_recovery)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
-		CREATE TABLE IF NOT EXISTS cluster_alias_override (
-			cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
-			alias varchar(128) NOT NULL,
-			PRIMARY KEY (cluster_name)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`

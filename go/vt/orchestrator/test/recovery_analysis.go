@@ -46,9 +46,7 @@ type InfoForRecoveryAnalysis struct {
 	LogFile                                   string
 	LogPos                                    int64
 	IsStaleBinlogCoordinates                  int
-	SuggestedClusterAlias                     string
 	ClusterName                               string
-	ClusterAlias                              string
 	ClusterDomain                             string
 	GTIDMode                                  string
 	LastCheckValid                            int
@@ -92,7 +90,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap := make(sqlutils.RowMap)
 	rowMap["binary_log_file"] = sqlutils.CellData{String: info.LogFile, Valid: true}
 	rowMap["binary_log_pos"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LogPos), Valid: true}
-	rowMap["cluster_alias"] = sqlutils.CellData{String: info.ClusterAlias, Valid: true}
 	rowMap["cluster_domain"] = sqlutils.CellData{String: info.ClusterDomain, Valid: true}
 	rowMap["cluster_name"] = sqlutils.CellData{String: info.ClusterName, Valid: true}
 	rowMap["count_binlog_server_replicas"] = sqlutils.CellData{Valid: false}
@@ -154,7 +151,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["semi_sync_replica_enabled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncReplicaEnabled), Valid: true}
 	rowMap["source_host"] = sqlutils.CellData{String: info.SourceHost, Valid: true}
 	rowMap["source_port"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SourcePort), Valid: true}
-	rowMap["suggested_cluster_alias"] = sqlutils.CellData{String: info.SuggestedClusterAlias, Valid: true}
 	res, _ := prototext.Marshal(info.TabletInfo)
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	return rowMap
@@ -165,7 +161,6 @@ func (info *InfoForRecoveryAnalysis) SetValuesFromTabletInfo() {
 	info.Port = int(info.TabletInfo.MysqlPort)
 	info.DataCenter = info.TabletInfo.Alias.Cell
 	info.Keyspace = info.TabletInfo.Keyspace
-	info.ClusterName = fmt.Sprintf("%v:%d", info.TabletInfo.MysqlHostname, info.TabletInfo.MysqlPort)
-	info.ClusterAlias = fmt.Sprintf("%v:%d", info.TabletInfo.MysqlHostname, info.TabletInfo.MysqlPort)
+	info.ClusterName = fmt.Sprintf("%v:%v", info.TabletInfo.Keyspace, info.TabletInfo.Shard)
 	info.ClusterDomain = fmt.Sprintf("%v:%d", info.TabletInfo.MysqlHostname, info.TabletInfo.MysqlPort)
 }

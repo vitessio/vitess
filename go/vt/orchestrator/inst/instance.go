@@ -80,7 +80,6 @@ type Instance struct {
 	ReplicationLagSeconds              sql.NullInt64
 	Replicas                           InstanceKeyMap
 	ClusterName                        string
-	SuggestedClusterAlias              string
 	DataCenter                         string
 	Region                             string
 	PhysicalEnvironment                string

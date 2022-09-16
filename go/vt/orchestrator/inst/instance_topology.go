@@ -1087,54 +1087,6 @@ Cleanup:
 	return instance, err
 }
 
-// ReattachReplicaPrimaryHost reattaches a replica back onto its primary by undoing a DetachReplicaPrimaryHost operation
-func ReattachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, err
-	}
-	if !instance.IsReplica() {
-		return instance, fmt.Errorf("instance is not a replica: %+v", *instanceKey)
-	}
-	if !instance.SourceKey.IsDetached() {
-		return instance, fmt.Errorf("instance does not seem to be detached: %+v", *instanceKey)
-	}
-
-	reattachedPrimaryKey := instance.SourceKey.ReattachedKey()
-
-	log.Infof("Will reattach primary host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
-
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reattach-replica-primary-host"); merr != nil {
-		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
-		goto Cleanup
-	} else {
-		defer EndMaintenance(maintenanceToken)
-	}
-
-	instance, err = StopReplication(instanceKey)
-	if err != nil {
-		goto Cleanup
-	}
-
-	_, err = ChangePrimaryTo(instanceKey, reattachedPrimaryKey, &instance.ExecBinlogCoordinates, true, GTIDHintNeutral)
-	if err != nil {
-		goto Cleanup
-	}
-	// Just in case this instance used to be a primary:
-	_ = ReplaceAliasClusterName(instanceKey.StringCode(), reattachedPrimaryKey.StringCode())
-
-Cleanup:
-	instance, _ = StartReplication(instanceKey)
-	if err != nil {
-		log.Error(err)
-		return instance, err
-	}
-	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v reattached to primary %+v", *instanceKey, *reattachedPrimaryKey))
-
-	return instance, err
-}
-
 // EnableGTID will attempt to enable GTID-mode (either Oracle or MariaDB)
 func EnableGTID(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
