@@ -264,8 +264,6 @@ func (t *Test) logf(format string, v ...any) {
 	}
 }
 
-
-
 func loadOneConfig(fileName string) (*Config, error) {
 	config2 := &Config{}
 	configData, err := os.ReadFile(fileName)
