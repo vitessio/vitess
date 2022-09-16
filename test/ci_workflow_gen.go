@@ -121,11 +121,11 @@ var (
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
-		"vreplication_partialmovetables",
 		"vtorc",
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
+		"vtgate_partial_keyspace",
 	}
 
 	clusterSelfHostedList = []string{
@@ -142,11 +142,6 @@ var (
 		"mysql_server_vault",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
-	}
-	clustersTestingPartialKeyspace = []string{
-		"vtgate_general_heavy",
-		"vtgate_transaction",
-		"vtgate_queries",
 	}
 )
 
@@ -193,6 +188,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "vtctlbackup_sharded_clustertest_heavy":
 		return []mysqlVersion{mysql80}
 	case clusterName == "vtbackup_transform":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vtgate_partial_keyspace":
 		return []mysqlVersion{mysql80}
 	default:
 		return defaultMySQLVersions
@@ -370,11 +367,11 @@ func generateClusterWorkflows(list []string, tpl string) {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
 				test.Name = test.Name + " " + string(mysqlVersion)
 			}
-			var partialKeyspace bool
-			for _, cluster1 := range canonnizeList(clustersTestingPartialKeyspace) {
-				if cluster1 == cluster {
-					partialKeyspace = true
-				}
+			fmt.Printf(">>>>>>>>>>> %s\n", test.Shard)
+			if strings.Contains(test.Shard, "partial_keyspace") {
+				fmt.Printf("~~~~~~~~~~~~~~~~~~~~ %s", test.Shard)
+
+				test.PartialKeyspace = true
 			}
 
 			workflowPath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
@@ -384,18 +381,10 @@ func generateClusterWorkflows(list []string, tpl string) {
 			} else if strings.Contains(templateFileName, "%s") {
 				templateFileName = fmt.Sprintf(tpl, "")
 			}
+			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
 			err := writeFileFromTemplate(templateFileName, workflowPath, test)
 			if err != nil {
 				log.Print(err)
-			}
-			if partialKeyspace {
-				test.PartialKeyspace = partialKeyspace
-				test.Name = test.Name + " (partial keyspace)"
-				workflowPath = strings.Replace(workflowPath, ".yml", "_partial_keyspace.yml", 1)
-				err := writeFileFromTemplate(templateFileName, workflowPath, test)
-				if err != nil {
-					log.Print(err)
-				}
 			}
 		}
 	}

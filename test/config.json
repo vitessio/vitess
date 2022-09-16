@@ -1013,7 +1013,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTables"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_partialmovetables",
+			"Shard": "vreplication_cellalias",
 			"RetryMax": 0,
 			"Tags": []
 		},
