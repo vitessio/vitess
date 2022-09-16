@@ -28,14 +28,22 @@ type builtinLower struct{}
 func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
 	raw := inarg.value().Raw()
+	t := inarg.typeof()
 
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	raw = collations.ToLower(inarg.Collation(), raw)
-	result.setRaw(sqltypes.VarChar, raw, inarg.collation())
+	if sqltypes.IsNumber(t) {
+		inarg.makeTextualAndConvert(env.DefaultCollation)
+		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
+	} else {
+
+		var dst []byte
+		dst = collations.ToLower(inarg.Collation(), raw, dst)
+		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
+	}
 }
 
 func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {

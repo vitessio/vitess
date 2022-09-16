@@ -144,10 +144,10 @@ type Collation interface {
 	IsBinary() bool
 
 	// GetUpperTable returns the upper table about related encoding
-	ToUpper([]byte) []byte
+	ToUpper([]byte, []byte) []byte
 
 	// GetLowerTable returns the lower table about related encoding
-	ToLower([]byte) []byte
+	ToLower([]byte, []byte) []byte
 }
 
 type HashCode = uintptr
@@ -176,14 +176,14 @@ func register(c Collation) {
 	globalAllCollations[c.ID()] = c
 }
 
-func ToUpper(id ID, raw []byte) []byte {
+func ToUpper(id ID, raw []byte, dst []byte) []byte {
 	c := globalAllCollations[id]
-	return c.ToUpper(raw)
+	return c.ToUpper(raw, dst)
 }
 
-func ToLower(id ID, raw []byte) []byte {
+func ToLower(id ID, raw []byte, dst []byte) []byte {
 	c := globalAllCollations[id]
-	return c.ToLower(raw)
+	return c.ToLower(raw, dst)
 }
 
 // Slice returns the substring in `input[from:to]`, where `from` and `to`
