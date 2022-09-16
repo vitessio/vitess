@@ -927,7 +927,8 @@ func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) 
 	return sourceShards, targetShards
 }
 
-// has to be a move tables, same number of shards, not covering entire shard range, one-to-one shards in source and target
+// isPartialMoveTables returns true if whe workflow is MoveTables,
+// has the same number of shards, is not covering the entire shard range, and has one-to-one shards in source and target
 func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []string) (bool, error) {
 
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
@@ -939,13 +940,12 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 		return false, err
 	}
 
-	if !key.KeyRangeIsPartial(skr) || !key.KeyRangeIsPartial(tkr) { // both cover full range
+	if !key.KeyRangeIsPartial(skr) || !key.KeyRangeIsPartial(tkr) || // both cover full range
+		len(sourceShards) != len(targetShards) {
+
 		return false, nil
 	}
 
-	if len(sourceShards) != len(targetShards) {
-		return false, nil
-	}
 	if key.KeyRangeEqual(skr, tkr) {
 		return true, nil
 	}
@@ -1453,9 +1453,9 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		}
 		for _, si := range ts.SourceShards() {
 			delete(srr, fmt.Sprintf("%s.%s", ts.TargetKeyspaceName(), si.ShardName()))
-			ts.Logger().Infof("Delete shard routing: %v:%v", ts.TargetKeyspaceName(), si.ShardName())
+			ts.Logger().Infof("Deleted shard routing: %v:%v", ts.TargetKeyspaceName(), si.ShardName())
 			srr[fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), si.ShardName())] = ts.TargetKeyspaceName()
-			ts.Logger().Infof("Add shard routing: %v:%v", ts.SourceKeyspaceName(), si.ShardName())
+			ts.Logger().Infof("Added shard routing: %v:%v", ts.SourceKeyspaceName(), si.ShardName())
 		}
 		if err := topotools.SaveShardRoutingRules(ctx, ts.TopoServer(), srr); err != nil {
 			return err
@@ -1469,10 +1469,10 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 			targetKsTable := fmt.Sprintf("%s.%s", ts.TargetKeyspaceName(), table)
 			sourceKsTable := fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table)
 			delete(rules, targetKsTable)
-			ts.Logger().Infof("Delete routing: %s", targetKsTable)
+			ts.Logger().Infof("Deleted routing: %s", targetKsTable)
 			rules[table] = []string{targetKsTable}
 			rules[sourceKsTable] = []string{targetKsTable}
-			ts.Logger().Infof("Add routing: %v %v", table, sourceKsTable)
+			ts.Logger().Infof("Added routing: %v %v", table, sourceKsTable)
 		}
 		if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 			return err
