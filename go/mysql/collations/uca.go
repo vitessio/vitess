@@ -17,6 +17,7 @@ limitations under the License.
 package collations
 
 import (
+	"bytes"
 	"math/bits"
 	"sync"
 	"unsafe"
@@ -225,12 +226,12 @@ func (c *Collation_utf8mb4_uca_0900) Wildcard(pat []byte, matchOne rune, matchMa
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_utf8mb4_uca_0900) GetLowerTable() *[256]byte {
-	return nil
+func (c *Collation_utf8mb4_uca_0900) ToLower(raw []byte) []byte {
+	return bytes.ToLower(raw)
 }
 
-func (c *Collation_utf8mb4_uca_0900) GetUpperTable() *[256]byte {
-	return nil
+func (c *Collation_utf8mb4_uca_0900) ToUpper(raw []byte) []byte {
+	return bytes.ToUpper(raw)
 }
 
 type Collation_utf8mb4_0900_bin struct{}
@@ -282,12 +283,12 @@ func (c *Collation_utf8mb4_0900_bin) Wildcard(pat []byte, matchOne rune, matchMa
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_utf8mb4_0900_bin) GetLowerTable() *[256]byte {
-	return nil
+func (c *Collation_utf8mb4_0900_bin) ToLower(raw []byte) []byte {
+	return bytes.ToLower(raw)
 }
 
-func (c *Collation_utf8mb4_0900_bin) GetUpperTable() *[256]byte {
-	return nil
+func (c *Collation_utf8mb4_0900_bin) ToUpper(raw []byte) []byte {
+	return bytes.ToUpper(raw)
 }
 
 type Collation_uca_legacy struct {
@@ -422,10 +423,10 @@ func (c *Collation_uca_legacy) Wildcard(pat []byte, matchOne rune, matchMany run
 	return newUnicodeWildcardMatcher(c.charset, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_uca_legacy) GetLowerTable() *[256]byte {
-	return nil
+func (c *Collation_uca_legacy) ToLower(raw []byte) []byte {
+	return bytes.ToLower(raw)
 }
 
-func (c *Collation_uca_legacy) GetUpperTable() *[256]byte {
-	return nil
+func (c *Collation_uca_legacy) ToUpper(raw []byte) []byte {
+	return bytes.ToUpper(raw)
 }

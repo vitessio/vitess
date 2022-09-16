@@ -27,36 +27,15 @@ type builtinLower struct{}
 
 func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
-	t := inarg.typeof()
+	raw := inarg.value().Raw()
+
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	lowerTable := collations.GetLowerTable(env.DefaultCollation)
-	upperTable := collations.GetUpperTable(env.DefaultCollation)
-
-	if lowerTable == nil {
-		if sqltypes.IsText(t) {
-			tolower := strings.ToLower(inarg.value().RawStr())
-			result.setString(tolower, inarg.collation())
-		} else {
-			tolower := inarg.value().RawStr()
-			inarg.makeTextualAndConvert(env.DefaultCollation)
-			result.setString(tolower, inarg.collation())
-		}
-	} else {
-		tolower := inarg.value().Raw()
-		for index, c := range tolower {
-			for i, v := range lowerTable {
-				if c == v {
-					tolower[index] = upperTable[i]
-				}
-			}
-		}
-		result.setRaw(sqltypes.VarChar, tolower, inarg.collation())
-	}
-
+	raw = collations.ToLower(inarg.Collation(), raw)
+	result.setRaw(sqltypes.VarChar, raw, inarg.collation())
 }
 
 func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {

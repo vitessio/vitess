@@ -17,8 +17,6 @@ limitations under the License.
 package collations
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
@@ -115,15 +113,32 @@ func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune,
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_8bit_bin) GetLowerTable() *[256]byte {
-	for _, c := range c.simpletables.tolower {
-		fmt.Println(c)
+func (c *Collation_8bit_bin) ToLower(raw []byte) []byte {
+	lowerTable := c.simpletables.tolower
+	upperTable := c.simpletables.toupper
+
+	for index, c := range raw {
+		for i, v := range upperTable {
+			if c == v {
+				raw[index] = lowerTable[i]
+			}
+		}
 	}
-	return c.simpletables.tolower
+	return raw
 }
 
-func (c *Collation_8bit_bin) GetUpperTable() *[256]byte {
-	return c.simpletables.toupper
+func (c *Collation_8bit_bin) ToUpper(raw []byte) []byte {
+	lowerTable := c.simpletables.tolower
+	upperTable := c.simpletables.toupper
+
+	for index, c := range raw {
+		for i, v := range lowerTable {
+			if c == v {
+				raw[index] = upperTable[i]
+			}
+		}
+	}
+	return raw
 }
 
 type Collation_8bit_simple_ci struct {
@@ -237,12 +252,32 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 	return dst
 }
 
-func (c *Collation_8bit_simple_ci) GetLowerTable() *[256]byte {
-	return c.simpletables.tolower
+func (c *Collation_8bit_simple_ci) ToLower(raw []byte) []byte {
+	lowerTable := c.simpletables.tolower
+	upperTable := c.simpletables.toupper
+
+	for index, c := range raw {
+		for i, v := range upperTable {
+			if c == v {
+				raw[index] = lowerTable[i]
+			}
+		}
+	}
+	return raw
 }
 
-func (c *Collation_8bit_simple_ci) GetUpperTable() *[256]byte {
-	return c.simpletables.toupper
+func (c *Collation_8bit_simple_ci) ToUpper(raw []byte) []byte {
+	lowerTable := c.simpletables.tolower
+	upperTable := c.simpletables.toupper
+
+	for index, c := range raw {
+		for i, v := range lowerTable {
+			if c == v {
+				raw[index] = upperTable[i]
+			}
+		}
+	}
+	return raw
 }
 
 type Collation_binary struct{}
@@ -305,10 +340,10 @@ func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, e
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_binary) GetLowerTable() *[256]byte {
-	return nil
+func (c *Collation_binary) ToLower(raw []byte) []byte {
+	return raw
 }
 
-func (c *Collation_binary) GetUpperTable() *[256]byte {
-	return nil
+func (c *Collation_binary) ToUpper(raw []byte) []byte {
+	return raw
 }

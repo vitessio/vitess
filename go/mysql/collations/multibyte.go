@@ -204,10 +204,10 @@ func (c *Collation_multibyte) Wildcard(pat []byte, matchOne rune, matchMany rune
 	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_multibyte) GetLowerTable() *[256]byte {
-	return nil
+func (c *Collation_multibyte) ToLower(raw []byte) []byte {
+	return raw
 }
 
-func (c *Collation_multibyte) GetUpperTable() *[256]byte {
-	return nil
+func (c *Collation_multibyte) ToUpper(raw []byte) []byte {
+	return raw
 }
