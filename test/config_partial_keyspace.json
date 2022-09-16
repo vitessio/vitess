@@ -18,15 +18,6 @@
       "RetryMax": 1,
       "Tags": []
     },
-    "vtgate_dbddlplugin_partial_keyspace": {
-      "File": "unused.go",
-      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/createdb_plugin"],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_partial_keyspace",
-      "RetryMax": 1,
-      "Tags": []
-    },
     "errs_as_warns_partial_keyspace": {
       "File": "unused.go",
       "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings"],
