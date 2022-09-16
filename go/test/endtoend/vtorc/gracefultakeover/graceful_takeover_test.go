@@ -32,7 +32,7 @@ import (
 // covers the test case graceful-master-takeover from orchestrator
 func TestGracefulPrimaryTakeover(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 		RecoveryPeriodBlockSeconds:            5,
 	}, 1, "")
@@ -85,7 +85,7 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 // orchestrator used to fail in this case, but for VtOrc, specifying no target makes it choose one on its own
 func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -120,7 +120,7 @@ func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 // covers the test case graceful-master-takeover-auto from orchestrator
 func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -166,7 +166,7 @@ func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 // covers the test case graceful-master-takeover-fail-cross-region from orchestrator
 func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]

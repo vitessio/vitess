@@ -269,8 +269,8 @@ func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	clusterInfo.ClusterInstance.VtorcProcesses = nil
 }
 
-// SetupVttabletsAndVtorc is used to setup the vttablets and start the vtorcs
-func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int, durability string) {
+// SetupVttabletsAndVTOrcs is used to setup the vttablets and start the vtorcs
+func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int, durability string) {
 	// stop vtorc if it is running
 	StopVtorcs(t, clusterInfo)
 
