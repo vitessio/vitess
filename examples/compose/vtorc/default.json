@@ -7,7 +7,7 @@
   "MySQLReplicaUser": "vt_repl",
   "MySQLReplicaPassword": "",
   "BackendDB": "sqlite",
-  "SQLite3DataFile": "/tmp/orchestrator.sqlite3",
+  "SQLite3DataFile": "/tmp/vtorc.sqlite3",
   "RecoverMasterClusterFilters": ["*"],
   "RecoveryPeriodBlockSeconds": 5,
   "DelayMasterPromotionIfSQLThreadNotUpToDate": true
