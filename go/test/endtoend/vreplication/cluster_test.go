@@ -516,7 +516,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			time.Sleep(10 * time.Second)*/
 		}
 
-		if err := cluster.WaitForTabletSetup(vc.VtctlClient, tabletIndex-1, "replica"); err != nil {
+		if err := cluster.WaitForTabletSetup(vc.VtctlClient, tabletIndex-1, []string{"replica", "rdonly", "primary"}); err != nil {
 			require.NoError(t, err)
 		}
 

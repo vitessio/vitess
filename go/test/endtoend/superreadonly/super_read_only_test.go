@@ -214,6 +214,9 @@ func TestTabletRestartAfterERS(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", replica1.Alias)
 	require.Nil(t, err)
 
+	/*err = localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, replica1.TabletUID)
+	require.Nil(t, err)*/
+
 	time.Sleep(5 * time.Second)
 
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)

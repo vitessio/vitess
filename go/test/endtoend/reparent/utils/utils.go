@@ -177,7 +177,7 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	}
 
 	//time.Sleep(10 * time.Second)
-	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, len(tablets), "replica"); err != nil {
+	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, len(tablets), []string{"replica", "rdonly", "primary"}); err != nil {
 		require.NoError(t, err)
 	}
 	// Initialize shard

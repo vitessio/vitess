@@ -180,7 +180,7 @@ func initializeCluster(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, 5, "replica"); err != nil {
+	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, 5, []string{"replica", "rdonly", "primary"}); err != nil {
 		require.NoError(t, err)
 	}
 

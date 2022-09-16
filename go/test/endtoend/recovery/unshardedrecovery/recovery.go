@@ -164,7 +164,7 @@ SET GLOBAL old_alter_table = ON;
 			}
 		}
 
-		if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, "replica"); err != nil {
+		if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, []string{"replica", "rdonly", "primary"}); err != nil {
 			return 1, err
 		}
 

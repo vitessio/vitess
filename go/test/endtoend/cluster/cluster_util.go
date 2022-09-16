@@ -359,7 +359,7 @@ func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, e
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
 
-func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets int, expectedStatus string) error {
+func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets int, expectedStatus []string) error {
 	// wait for both tablet to get into replica state in topo
 	waitUntil := time.Now().Add(10 * time.Second)
 	for time.Now().Before(waitUntil) {
@@ -373,8 +373,11 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 
 		for _, line := range tabletsFromCMD {
 			if len(line) > 0 {
-				if strings.Contains(line, expectedStatus) {
-					tabletCountFromCMD = tabletCountFromCMD + 1
+				for _, status := range expectedStatus {
+					if strings.Contains(line, status) {
+						tabletCountFromCMD = tabletCountFromCMD + 1
+						break
+					}
 				}
 			}
 		}

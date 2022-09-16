@@ -104,7 +104,7 @@ func TestMain(m *testing.M) {
 		// in real world should it be done by calling init-primary??
 		_ = tablet.VttabletProcess.UnsetReadOnly("")
 
-		if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, 1, "primary"); err != nil {
+		if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, 1, []string{"replica", "rdonly", "primary"}); err != nil {
 			return 1
 		}
 		//time.Sleep(10 * time.Second)

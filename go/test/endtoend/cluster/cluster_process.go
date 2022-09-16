@@ -357,7 +357,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		}
 
 		// wait for few seconds before all the tablets turn up as replica
-		if err := WaitForTabletSetup(&cluster.VtctlclientProcess, len(shard.Vttablets), "replica"); err != nil {
+		if err := WaitForTabletSetup(&cluster.VtctlclientProcess, len(shard.Vttablets), []string{"replica", "rdonly", "primary"}); err != nil {
 			return err
 		}
 

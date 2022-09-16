@@ -262,7 +262,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	}
 
 	// wait for few seconds before all the tablets turn up as replica
-	if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, "replica"); err != nil {
+	if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, []string{"replica", "rdonly", "primary"}); err != nil {
 		require.Nil(t, err)
 	}
 

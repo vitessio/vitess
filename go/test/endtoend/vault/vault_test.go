@@ -308,7 +308,7 @@ func initializeClusterLate(t *testing.T) {
 	// wait for addKeyspaceToTracker to timeout
 	//time.Sleep(10 * time.Second)
 
-	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, len(shard.Vttablets), "replica"); err != nil {
+	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, len(shard.Vttablets), []string{"replica", "rdonly", "primary"}); err != nil {
 		require.NoError(t, err)
 	}
 
