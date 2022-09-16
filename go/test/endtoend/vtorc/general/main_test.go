@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 	if clusterInfo != nil {
 		// stop vtorc first otherwise its logs get polluted
 		// with instances being unreachable triggering unnecessary operations
-		for _, vtorcProcess := range clusterInfo.ClusterInstance.VtorcProcesses {
+		for _, vtorcProcess := range clusterInfo.ClusterInstance.VTOrcProcesses {
 			_ = vtorcProcess.TearDown()
 		}
 

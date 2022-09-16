@@ -30,20 +30,20 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// VtorcProcess is a test struct for running
+// VTOrcProcess is a test struct for running
 // vtorc as a separate process for testing
-type VtorcProcess struct {
+type VTOrcProcess struct {
 	VtctlProcess
 	LogDir     string
 	ExtraArgs  []string
 	ConfigPath string
-	Config     VtorcConfiguration
+	Config     VTOrcConfiguration
 	WebPort    int
 	proc       *exec.Cmd
 	exit       chan error
 }
 
-type VtorcConfiguration struct {
+type VTOrcConfiguration struct {
 	Debug                                 bool
 	ListenAddress                         string
 	MySQLTopologyUser                     string
@@ -59,12 +59,12 @@ type VtorcConfiguration struct {
 }
 
 // ToJSONString will marshal this configuration as JSON
-func (config *VtorcConfiguration) ToJSONString() string {
+func (config *VTOrcConfiguration) ToJSONString() string {
 	b, _ := json.MarshalIndent(config, "", "\t")
 	return string(b)
 }
 
-func (config *VtorcConfiguration) AddDefaults(webPort int) {
+func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	config.Debug = true
 	config.MySQLTopologyUser = "orc_client_user"
 	config.MySQLTopologyPassword = "orc_client_user_password"
@@ -78,7 +78,7 @@ func (config *VtorcConfiguration) AddDefaults(webPort int) {
 }
 
 // Setup starts orc process with required arguements
-func (orc *VtorcProcess) Setup() (err error) {
+func (orc *VTOrcProcess) Setup() (err error) {
 
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
@@ -139,7 +139,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 }
 
 // TearDown shuts down the running vtorc service
-func (orc *VtorcProcess) TearDown() error {
+func (orc *VTOrcProcess) TearDown() error {
 	if orc.proc == nil || orc.exit == nil {
 		return nil
 	}
