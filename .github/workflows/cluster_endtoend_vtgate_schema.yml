@@ -6,11 +6,6 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_schema)')
   cancel-in-progress: true
 
-env:
-  LAUNCHABLE_ORGANIZATION: "vitess"
-  LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
-
 jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_schema)
@@ -66,18 +61,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      run: |
-        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        pip3 install --user launchable~=1.0 > /dev/null
-
-        # verify that launchable setup is all correct.
-        launchable verify || true
-
-        # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
-
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 30
@@ -87,13 +70,4 @@ jobs:
         set -x
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vtgate_schema | tee -a output.txt | go-junit-report -set-exit-code > report.xml
-
-    - name: Print test output and Record test result in launchable
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
-      run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-
-        # print test output
-        cat output.txt
+        eatmydata -- go run test.go -docker=false -follow -shard vtgate_schema
