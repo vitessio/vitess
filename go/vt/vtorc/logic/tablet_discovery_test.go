@@ -143,10 +143,11 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 			tab100.PrimaryTermStartTime.Seconds = startTimeInitially
 		}()
 		tab100.PrimaryTermStartTime.Seconds = 1000
-		ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.PrimaryTermStartTime.Seconds = 1000
 			return nil
 		})
+		require.NoError(t, err)
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
 		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets)
 	})

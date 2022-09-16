@@ -51,10 +51,10 @@ var readInstanceTLSCacheCounter = metrics.NewCounter()
 var writeInstanceTLSCacheCounter = metrics.NewCounter()
 
 func init() {
-	metrics.Register("instance_tls.read", readInstanceTLSCounter)
-	metrics.Register("instance_tls.write", writeInstanceTLSCounter)
-	metrics.Register("instance_tls.read_cache", readInstanceTLSCacheCounter)
-	metrics.Register("instance_tls.write_cache", writeInstanceTLSCacheCounter)
+	_ = metrics.Register("instance_tls.read", readInstanceTLSCounter)
+	_ = metrics.Register("instance_tls.write", writeInstanceTLSCounter)
+	_ = metrics.Register("instance_tls.read_cache", readInstanceTLSCacheCounter)
+	_ = metrics.Register("instance_tls.write_cache", writeInstanceTLSCacheCounter)
 }
 
 func requiresTLS(host string, port int, uri string) bool {

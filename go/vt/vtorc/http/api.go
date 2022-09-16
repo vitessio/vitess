@@ -215,7 +215,7 @@ func (httpAPI *API) Discover(params martini.Params, r render.Render, req *http.R
 	}
 
 	if orcraft.IsRaftEnabled() {
-		orcraft.PublishCommand("discover", instanceKey)
+		_, _ = orcraft.PublishCommand("discover", instanceKey)
 	} else {
 		logic.DiscoverInstance(instanceKey, false /* forceDiscovery */)
 	}
@@ -282,9 +282,9 @@ func (httpAPI *API) ForgetCluster(params martini.Params, r render.Render, req *h
 	}
 
 	if orcraft.IsRaftEnabled() {
-		orcraft.PublishCommand("forget-cluster", clusterName)
+		_, _ = orcraft.PublishCommand("forget-cluster", clusterName)
 	} else {
-		inst.ForgetCluster(clusterName)
+		_ = inst.ForgetCluster(clusterName)
 	}
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Cluster forgotten: %+v", clusterName)})
 }
@@ -2109,7 +2109,7 @@ func (httpAPI *API) ReloadConfiguration(params martini.Params, r render.Render, 
 	}
 	extraConfigFile := req.URL.Query().Get("config")
 	config.Reload(extraConfigFile)
-	inst.AuditOperation("reload-configuration", nil, "Triggered via API")
+	_ = inst.AuditOperation("reload-configuration", nil, "Triggered via API")
 
 	Respond(r, &APIResponse{Code: OK, Message: "Config reloaded", Details: extraConfigFile})
 }

@@ -180,7 +180,7 @@ func (c *Collection) StartAutoExpiration() {
 	for {
 		select {
 		case <-ticker.C: // do the periodic expiry
-			c.removeBefore(time.Now().Add(-c.expirePeriod))
+			_ = c.removeBefore(time.Now().Add(-c.expirePeriod))
 		case <-c.done: // stop the ticker and return
 			ticker.Stop()
 			return

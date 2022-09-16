@@ -96,7 +96,7 @@ func TestAppend(t *testing.T) {
 	}
 	for _, v := range []int{1, 2, 3} {
 		tm := &testMetric{}
-		c.Append(tm)
+		_ = c.Append(tm)
 		if len(c.Metrics()) != v {
 			t.Errorf("TestExpirePeriod: len(Metrics) = %d, expecting %d", len(c.Metrics()), v)
 		}

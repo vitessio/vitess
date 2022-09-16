@@ -523,7 +523,7 @@ func read(fileName string) (*Configuration, error) {
 // A file can override configuration provided in previous file.
 func Read(fileNames ...string) *Configuration {
 	for _, fileName := range fileNames {
-		read(fileName)
+		_, _ = read(fileName)
 	}
 	readFileNames = fileNames
 	return Config
@@ -542,10 +542,10 @@ func ForceRead(fileName string) *Configuration {
 // Reload re-reads configuration from last used files
 func Reload(extraFileNames ...string) *Configuration {
 	for _, fileName := range readFileNames {
-		read(fileName)
+		_, _ = read(fileName)
 	}
 	for _, fileName := range extraFileNames {
-		read(fileName)
+		_, _ = read(fileName)
 	}
 	return Config
 }

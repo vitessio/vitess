@@ -67,13 +67,13 @@ var recentDiscoveryOperationKeys *cache.Cache
 func init() {
 	snapshotDiscoveryKeys = make(chan inst.InstanceKey, 10)
 
-	metrics.Register("discoveries.attempt", discoveriesCounter)
-	metrics.Register("discoveries.fail", failedDiscoveriesCounter)
-	metrics.Register("discoveries.instance_poll_seconds_exceeded", instancePollSecondsExceededCounter)
-	metrics.Register("discoveries.queue_length", discoveryQueueLengthGauge)
-	metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
-	metrics.Register("elect.is_elected", isElectedGauge)
-	metrics.Register("health.is_healthy", isHealthyGauge)
+	_ = metrics.Register("discoveries.attempt", discoveriesCounter)
+	_ = metrics.Register("discoveries.fail", failedDiscoveriesCounter)
+	_ = metrics.Register("discoveries.instance_poll_seconds_exceeded", instancePollSecondsExceededCounter)
+	_ = metrics.Register("discoveries.queue_length", discoveryQueueLengthGauge)
+	_ = metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
+	_ = metrics.Register("elect.is_elected", isElectedGauge)
+	_ = metrics.Register("health.is_healthy", isHealthyGauge)
 
 	ometrics.OnMetricsTick(func() {
 		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
@@ -116,7 +116,7 @@ func acceptSignals() {
 			switch sig {
 			case syscall.SIGHUP:
 				log.Infof("Received SIGHUP. Reloading configuration")
-				inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
+				_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
 				config.Reload()
 				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
@@ -124,7 +124,7 @@ func acceptSignals() {
 				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
-				inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+				_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
 				timeout := time.After(*shutdownWaitTime)
 				func() {
 					for {
@@ -189,7 +189,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 
 	// create stopwatch entries
 	latency := stopwatch.NewNamedStopwatch()
-	latency.AddMany([]string{
+	_ = latency.AddMany([]string{
 		"backend",
 		"instance",
 		"total"})
@@ -204,7 +204,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		}
 	}()
 
-	instanceKey.ResolveHostname()
+	_, _ = instanceKey.ResolveHostname()
 	if !instanceKey.IsValid() {
 		return
 	}
@@ -237,7 +237,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 
 	if instance == nil {
 		failedDiscoveriesCounter.Inc(1)
-		discoveryMetrics.Append(&discovery.Metric{
+		_ = discoveryMetrics.Append(&discovery.Metric{
 			Timestamp:       time.Now(),
 			InstanceKey:     instanceKey,
 			TotalLatency:    totalLatency,
@@ -260,7 +260,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		log.Infof("Force discovered - %+v", instance)
 	}
 
-	discoveryMetrics.Append(&discovery.Metric{
+	_ = discoveryMetrics.Append(&discovery.Metric{
 		Timestamp:       time.Now(),
 		InstanceKey:     instanceKey,
 		TotalLatency:    totalLatency,
@@ -302,8 +302,12 @@ func onHealthTick() {
 
 	if !wasAlreadyElected {
 		// Just turned to be leader!
-		go process.RegisterNode(process.ThisNodeHealth)
-		go inst.ExpireMaintenance()
+		go func() {
+			_, _ = process.RegisterNode(process.ThisNodeHealth)
+		}()
+		go func() {
+			_ = inst.ExpireMaintenance()
+		}()
 	}
 
 	func() {
@@ -332,7 +336,7 @@ func injectSeeds(seedOnce *sync.Once) {
 		for _, seed := range config.Config.DiscoverySeeds {
 			instanceKey, err := inst.ParseRawInstanceKey(seed)
 			if err == nil {
-				inst.InjectSeed(instanceKey)
+				_ = inst.InjectSeed(instanceKey)
 			} else {
 				log.Errorf("Error parsing seed %s: %+v", seed, err)
 			}
@@ -350,7 +354,7 @@ func ContinuousDiscovery() {
 	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
 
-	inst.LoadHostnameResolveCache()
+	_ = inst.LoadHostnameResolveCache()
 	go handleDiscoveryRequests()
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
@@ -370,11 +374,13 @@ func ContinuousDiscovery() {
 
 	var seedOnce sync.Once
 
-	go ometrics.InitMetrics()
+	go func() {
+		_ = ometrics.InitMetrics()
+	}()
 	go acceptSignals()
 
 	if *config.RuntimeCLIFlags.GrabElection {
-		process.GrabElection()
+		_ = process.GrabElection()
 	}
 
 	log.Infof("continuous discovery: starting")

@@ -210,7 +210,7 @@ func RowToArray(rows *sql.Rows, columns []string) []CellData {
 	for i := range buff {
 		buff[i] = data[i].NullString()
 	}
-	rows.Scan(buff...)
+	_ = rows.Scan(buff...)
 	return data
 }
 

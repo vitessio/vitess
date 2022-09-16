@@ -44,7 +44,7 @@ func (postponedFuncsContainer *PostponedFunctionsContainer) AddPostponedFunction
 	postponedFuncsContainer.waitGroup.Add(1)
 	go func() {
 		defer postponedFuncsContainer.waitGroup.Done()
-		postponedFunction()
+		_ = postponedFunction()
 	}()
 }
 

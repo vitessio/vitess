@@ -59,7 +59,7 @@ func ExecInstance(instanceKey *InstanceKey, query string, args ...any) (sql.Resu
 // on topology servers. It is safe in the sense that we will not leak tokens.
 func ExecuteOnTopology(f func()) {
 	topologyConcurrencyChan <- true
-	defer func() { recover(); <-topologyConcurrencyChan }()
+	defer func() { _ = recover(); <-topologyConcurrencyChan }()
 	f()
 }
 
@@ -310,7 +310,7 @@ func StopReplicas(replicas [](*Instance), stopReplicationMethod StopReplicationM
 			// Wait your turn to read a replica
 			ExecuteOnTopology(func() {
 				if stopReplicationMethod == StopReplicationNice {
-					StopReplicationNicely(&replica.Key, timeout)
+					_, _ = StopReplicationNicely(&replica.Key, timeout)
 				}
 				replica, _ = StopReplication(&replica.Key)
 				updatedReplica = &replica
@@ -383,7 +383,7 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	log.Infof("Started replication on %+v", instanceKey)
 
-	waitForReplicationState(instanceKey, ReplicationThreadStateRunning)
+	_, _ = waitForReplicationState(instanceKey, ReplicationThreadStateRunning)
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	if err != nil {
@@ -739,7 +739,9 @@ func injectEmptyGTIDTransaction(instanceKey *InstanceKey, gtidEntry *OracleGtidS
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	if _, err := conn.ExecContext(ctx, fmt.Sprintf(`SET GTID_NEXT="%s"`, gtidEntry.String())); err != nil {
 		return err

@@ -81,7 +81,7 @@ func generateShellScript(commandText string, env []string, arguments ...string) 
 		return nil, "", fmt.Errorf(errMsg)
 	}
 	// write commandText to temporary file
-	os.WriteFile(tmpFile.Name(), commandBytes, 0640)
+	_ = os.WriteFile(tmpFile.Name(), commandBytes, 0640)
 	shellArguments := append([]string{}, tmpFile.Name())
 	shellArguments = append(shellArguments, arguments...)
 

@@ -180,7 +180,7 @@ func OpenVTOrc() (db *sql.DB, err error) {
 	}
 	if err == nil && !fromCache {
 		if !config.Config.SkipOrchestratorDatabaseUpdate {
-			initVTOrcDB(db)
+			_ = initVTOrcDB(db)
 		}
 		// A low value here will trigger reconnects which could
 		// make the number of backend connections hit the tcp
@@ -319,13 +319,13 @@ func initVTOrcDB(db *sql.DB) error {
 		log.Fatalf("PanicIfDifferentDatabaseDeploy is set. Configured version %s is not the version found in the database", config.RuntimeCLIFlags.ConfiguredVersion)
 	}
 	log.Info("Migrating database schema")
-	deployStatements(db, generateSQLBase)
-	deployStatements(db, generateSQLPatches)
-	registerVTOrcDeployment(db)
+	_ = deployStatements(db, generateSQLBase)
+	_ = deployStatements(db, generateSQLPatches)
+	_ = registerVTOrcDeployment(db)
 
 	if IsSQLite() {
-		ExecVTOrc(`PRAGMA journal_mode = WAL`)
-		ExecVTOrc(`PRAGMA synchronous = NORMAL`)
+		_, _ = ExecVTOrc(`PRAGMA journal_mode = WAL`)
+		_, _ = ExecVTOrc(`PRAGMA synchronous = NORMAL`)
 	}
 
 	return nil

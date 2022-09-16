@@ -252,13 +252,17 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 	if maintenanceToken, merr := BeginMaintenance(&primary.Key, GetMaintenanceOwner(), fmt.Sprintf("child %+v moves up", *instanceKey)); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", primary.Key, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	if !instance.UsingMariaDBGTID {
@@ -344,14 +348,18 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, *Ins
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 	for _, replica := range replicas {
 		if maintenanceToken, merr := BeginMaintenance(&replica.Key, GetMaintenanceOwner(), fmt.Sprintf("%+v moves up", replica.Key)); merr != nil {
 			err = fmt.Errorf("Cannot begin maintenance on %+v: %v", replica.Key, merr)
 			goto Cleanup
 		} else {
-			defer EndMaintenance(maintenanceToken)
+			defer func() {
+				_, _ = EndMaintenance(maintenanceToken)
+			}()
 		}
 	}
 
@@ -366,7 +374,7 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, *Ins
 		go func() {
 			defer func() {
 				defer func() { barrier <- &replica.Key }()
-				StartReplication(&replica.Key)
+				_, _ = StartReplication(&replica.Key)
 			}()
 
 			var replicaErr error
@@ -483,13 +491,17 @@ func MoveBelow(instanceKey, siblingKey *InstanceKey) (*Instance, error) {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 	if maintenanceToken, merr := BeginMaintenance(siblingKey, GetMaintenanceOwner(), fmt.Sprintf("%+v moves below this", *instanceKey)); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *siblingKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	instance, err = StopReplication(instanceKey)
@@ -588,7 +600,9 @@ func moveInstanceBelowViaGTID(instance, otherInstance *Instance) (*Instance, err
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	_, err = StopReplication(instanceKey)
@@ -662,7 +676,7 @@ func MoveReplicasViaGTID(replicas []*Instance, other *Instance, postponedFunctio
 			moveFunc := func() error {
 
 				concurrencyChan <- true
-				defer func() { recover(); <-concurrencyChan }()
+				defer func() { _ = recover(); <-concurrencyChan }()
 
 				movedReplica, replicaErr := moveInstanceBelowViaGTID(replica, other)
 				if replicaErr != nil && movedReplica != nil {
@@ -685,7 +699,7 @@ func MoveReplicasViaGTID(replicas []*Instance, other *Instance, postponedFunctio
 				postponedFunctionsContainer.AddPostponedFunction(moveFunc, fmt.Sprintf("move-replicas-gtid %+v", replica.Key))
 				// We bail out and trust our invoker to later call upon this postponed function
 			} else {
-				ExecuteOnTopology(func() { moveFunc() })
+				ExecuteOnTopology(func() { _ = moveFunc() })
 			}
 		}()
 	}
@@ -776,7 +790,9 @@ func Repoint(instanceKey *InstanceKey, primaryKey *InstanceKey, gtidHint Operati
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	instance, err = StopReplication(instanceKey)
@@ -802,7 +818,7 @@ Cleanup:
 		return instance, err
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v repointed to primary: %+v", *instanceKey, *primaryKey))
+	_ = AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v repointed to primary: %+v", *instanceKey, *primaryKey))
 
 	return instance, err
 
@@ -952,13 +968,17 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 	if maintenanceToken, merr := BeginMaintenance(&primary.Key, GetMaintenanceOwner(), fmt.Sprintf("%+v turns into co-primary of this", *instanceKey)); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", primary.Key, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	// the coPrimary used to be merely a replica. Just point primary into *some* position
@@ -1013,7 +1033,9 @@ func ResetReplicationOperation(instanceKey *InstanceKey) (*Instance, error) {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	if instance.IsReplica() {
@@ -1062,7 +1084,9 @@ func DetachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	instance, err = StopReplication(instanceKey)
@@ -1225,7 +1249,9 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
-		defer EndMaintenance(maintenanceToken)
+		defer func() {
+			_, _ = EndMaintenance(maintenanceToken)
+		}()
 	}
 
 	if instance.IsReplica() {
@@ -1301,7 +1327,7 @@ Cleanup:
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("gtid-errant-reset-primary", instanceKey, fmt.Sprintf("%+v primary reset", *instanceKey))
+	_ = AuditOperation("gtid-errant-reset-primary", instanceKey, fmt.Sprintf("%+v primary reset", *instanceKey))
 
 	return instance, err
 }
@@ -1355,7 +1381,7 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("gtid-errant-inject-empty", instanceKey, fmt.Sprintf("injected %+v empty transactions on %+v", countInjectedTransactions, clusterPrimary.Key))
+	_ = AuditOperation("gtid-errant-inject-empty", instanceKey, fmt.Sprintf("injected %+v empty transactions on %+v", countInjectedTransactions, clusterPrimary.Key))
 
 	return instance, clusterPrimary, countInjectedTransactions, err
 }
@@ -1484,7 +1510,7 @@ Cleanup:
 	if err != nil {
 		return instance, err
 	}
-	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took primary: %+v", primaryInstance.Key))
+	_ = AuditOperation("take-primary", instanceKey, fmt.Sprintf("took primary: %+v", primaryInstance.Key))
 
 	// Created this to enable a custom hook to be called after a TakePrimary success.
 	// This only runs if there is a hook configured in vtorc.conf.json
@@ -1794,10 +1820,10 @@ func RegroupReplicasGTID(
 		err = moveGTIDFunc()
 	}
 
-	StartReplication(&candidateReplica.Key)
+	_, _ = StartReplication(&candidateReplica.Key)
 
 	log.Infof("RegroupReplicasGTID: done")
-	AuditOperation("regroup-replicas-gtid", primaryKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *primaryKey, candidateReplica.Key))
+	_ = AuditOperation("regroup-replicas-gtid", primaryKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *primaryKey, candidateReplica.Key))
 	return unmovedReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err
 }
 
@@ -1823,7 +1849,7 @@ func RegroupReplicasBinlogServers(primaryKey *InstanceKey, returnReplicaEvenOnFa
 	if err != nil {
 		return resultOnError(err)
 	}
-	AuditOperation("regroup-replicas-bls", primaryKey, fmt.Sprintf("regrouped binlog server replicas of %+v; promoted %+v", *primaryKey, promotedBinlogServer.Key))
+	_ = AuditOperation("regroup-replicas-bls", primaryKey, fmt.Sprintf("regrouped binlog server replicas of %+v; promoted %+v", *primaryKey, promotedBinlogServer.Key))
 	return repointedBinlogServers, promotedBinlogServer, nil
 }
 
@@ -2007,7 +2033,7 @@ func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 	}
 	instance, err = relocateBelowInternal(instance, other)
 	if err == nil {
-		AuditOperation("relocate-below", instanceKey, fmt.Sprintf("relocated %+v below %+v", *instanceKey, *otherKey))
+		_ = AuditOperation("relocate-below", instanceKey, fmt.Sprintf("relocated %+v below %+v", *instanceKey, *otherKey))
 	}
 	return instance, err
 }
@@ -2107,7 +2133,7 @@ func RelocateReplicas(instanceKey, otherKey *InstanceKey, pattern string) (repli
 	replicas, errs, err = relocateReplicasInternal(replicas, instance, other)
 
 	if err == nil {
-		AuditOperation("relocate-replicas", instanceKey, fmt.Sprintf("relocated %+v replicas of %+v below %+v", len(replicas), *instanceKey, *otherKey))
+		_ = AuditOperation("relocate-replicas", instanceKey, fmt.Sprintf("relocated %+v replicas of %+v below %+v", len(replicas), *instanceKey, *otherKey))
 	}
 	return replicas, other, errs, err
 }

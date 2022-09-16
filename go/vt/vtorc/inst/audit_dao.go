@@ -37,7 +37,7 @@ var syslogWriter *syslog.Writer
 var auditOperationCounter = metrics.NewCounter()
 
 func init() {
-	metrics.Register("audit.write", auditOperationCounter)
+	_ = metrics.Register("audit.write", auditOperationCounter)
 }
 
 // EnableSyslogWriter enables, if possible, writes to syslog. These will execute _in addition_ to normal logging
@@ -62,20 +62,20 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 	auditWrittenToFile := false
 	if config.Config.AuditLogFile != "" {
 		auditWrittenToFile = true
-		go func() error {
+		go func() {
 			f, err := os.OpenFile(config.Config.AuditLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
 			if err != nil {
 				log.Error(err)
-				return err
+				return
 			}
 
 			defer f.Close()
 			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
 			if _, err = f.WriteString(text); err != nil {
 				log.Error(err)
-				return err
+				return
 			}
-			return nil
+			return
 		}()
 	}
 	if config.Config.AuditToBackendDB {
@@ -102,7 +102,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 	if syslogWriter != nil {
 		auditWrittenToFile = true
 		go func() {
-			syslogWriter.Info(logMessage)
+			_ = syslogWriter.Info(logMessage)
 		}()
 	}
 	if !auditWrittenToFile {

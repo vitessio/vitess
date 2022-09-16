@@ -672,7 +672,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 
 		if a.CountReplicas > 0 && hints.AuditAnalysis {
 			// Interesting enough for analysis
-			go auditInstanceAnalysisInChangelog(&a.AnalyzedInstanceKey, a.Analysis)
+			go func() {
+				_ = auditInstanceAnalysisInChangelog(&a.AnalyzedInstanceKey, a.Analysis)
+			}()
 		}
 		return nil
 	})

@@ -273,7 +273,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}
 
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {
-		go UpdateInstanceLastAttemptedCheck(instanceKey)
+		go func() {
+			_ = UpdateInstanceLastAttemptedCheck(instanceKey)
+		}()
 	})
 
 	latency.Start("instance")
@@ -367,7 +369,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		err = fmt.Errorf("ReadTopologyInstance: empty hostname (%+v). Bailing out", *instanceKey)
 		goto Cleanup
 	}
-	go ResolveHostnameIPs(instance.Key.Hostname)
+	go func() {
+		_ = ResolveHostnameIPs(instance.Key.Hostname)
+	}()
 
 	// TODO(sougou) delete DataCenterPattern
 	if config.Config.DataCenterPattern != "" {

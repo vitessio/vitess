@@ -39,7 +39,7 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	}
 
 	nodeHealth.onceHistory.Do(func() {
-		db.ExecVTOrc(`
+		_, _ = db.ExecVTOrc(`
 			insert ignore into node_health_history
 				(hostname, token, first_seen_active, extra_info, command, app_version)
 			values
