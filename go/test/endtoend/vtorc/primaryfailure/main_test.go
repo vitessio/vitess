@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-var clusterInfo *utils.VtOrcClusterInfo
+var clusterInfo *utils.VTOrcClusterInfo
 
 func TestMain(m *testing.M) {
 	// setup cellInfos before creating the cluster
