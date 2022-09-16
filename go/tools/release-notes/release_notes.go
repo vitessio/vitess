@@ -116,7 +116,7 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 {{- range $component := $type.Components }} 
 #### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
- * {{ $prInfo.Title }} #{{ $prInfo.Number }}
+ * {{ $prInfo.Title }} [#{{ $prInfo.Number }}](https://github.com/vitessio/vitess/pull/{{ $prInfo.Number }})
 {{- end }}
 {{- end }}
 {{- end }}
