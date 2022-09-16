@@ -73,9 +73,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
 			if _, err = f.WriteString(text); err != nil {
 				log.Error(err)
-				return
 			}
-			return
 		}()
 	}
 	if config.Config.AuditToBackendDB {
