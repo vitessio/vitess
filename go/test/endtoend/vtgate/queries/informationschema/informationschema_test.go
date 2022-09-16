@@ -58,7 +58,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 func TestDbNameOverride(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("partial keyspace detected, skipping test")
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
 	}
 	mcmp, closer := start(t)
 	defer closer()
@@ -72,7 +72,7 @@ func TestDbNameOverride(t *testing.T) {
 
 func TestInformationSchemaQuery(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("partial keyspace detected, skipping test")
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
 	}
 	mcmp, closer := start(t)
 	defer closer()
@@ -183,7 +183,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 
 func TestMultipleSchemaPredicates(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("partial keyspace detected, skipping test")
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
 	}
 	mcmp, closer := start(t)
 	defer closer()

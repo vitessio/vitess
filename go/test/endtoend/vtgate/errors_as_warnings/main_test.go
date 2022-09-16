@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 
 func TestScatterErrsAsWarns(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("partial keyspace found: this test kills primary on source shard, but query will be on target shard so it will be skipped")
+		t.Skip("test kills primary on source shard, but query will be on target shard so it will be skipped")
 	}
 	oltp, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)

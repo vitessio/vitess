@@ -59,7 +59,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 func TestSimpleInsertSelect(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("don't run on partial keyspaces")
+		t.Skip("test uses multiple keyspaces, test framework only supports partial keyspace testing for a single keyspace")
 	}
 	mcmp, closer := start(t)
 	defer closer()
@@ -111,7 +111,7 @@ func TestFailureInsertSelect(t *testing.T) {
 
 func TestAutoIncInsertSelect(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("don't run on partial keyspaces")
+		t.Skip("test uses multiple keyspaces, test framework only supports partial keyspace testing for a single keyspace")
 	}
 	mcmp, closer := start(t)
 	defer closer()
@@ -211,7 +211,7 @@ func TestAutoIncInsertSelectOlapMode(t *testing.T) {
 
 func TestUnownedVindexInsertSelect(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("don't run on partial keyspaces")
+		t.Skip("test uses multiple keyspaces, test framework only supports partial keyspace testing for a single keyspace")
 	}
 	mcmp, closer := start(t)
 	defer closer()
@@ -397,7 +397,7 @@ func TestIgnoreInsertSelectOlapMode(t *testing.T) {
 
 func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("don't run on partial keyspaces")
+		t.Skip("test uses multiple keyspaces, test framework only supports partial keyspace testing for a single keyspace")
 	}
 	mcmp, closer := start(t)
 	defer closer()
