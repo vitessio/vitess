@@ -428,7 +428,12 @@ func TestERSForInitialization(t *testing.T) {
 		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		require.NoError(t, err)
 	}
-	time.Sleep(10 * time.Second)
+
+	//time.Sleep(10 * time.Second)
+	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, len(tablets), "replica"); err != nil {
+		require.NoError(t, err)
+	}
+
 	// Force the replica to reparent assuming that all the datasets are identical.
 	res, err := utils.Ers(clusterInstance, tablets[0], "60s", "30s")
 	require.NoError(t, err, res)

@@ -38,10 +38,9 @@ var (
 	// setting the watch fails, we will use the last known value until
 	// srv_topo_cache_ttl elapses and we only try to re-establish the watch
 	// once every srv_topo_cache_refresh interval.
-	srvTopoTimeout       = flag.Duration("srv_topo_timeout", 5*time.Second, "topo server timeout")
-	srvTopoCacheTTL      = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
-	srvTopoCacheRefresh  = flag.Duration("srv_topo_cache_refresh", 1*time.Second, "how frequently to refresh the topology for cached entries")
-	srvTopoNoCacheForGet = flag.Bool("srv_topo_no_cache_for_get", false, "Always query topo when getting current value of the key")
+	srvTopoTimeout      = flag.Duration("srv_topo_timeout", 5*time.Second, "topo server timeout")
+	srvTopoCacheTTL     = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
+	srvTopoCacheRefresh = flag.Duration("srv_topo_cache_refresh", 1*time.Second, "how frequently to refresh the topology for cached entries")
 )
 
 const (

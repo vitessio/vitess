@@ -88,9 +88,6 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	if err != nil {
 		return err
 	}
-	/*if res != nil && len(res.Rows) <= 0 {
-		return fmt.Errorf("zero rows returned from _vt.schemacopy") // TODO change messaging
-	}*/
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// We must clear out any previous schema before loading it here as this is called

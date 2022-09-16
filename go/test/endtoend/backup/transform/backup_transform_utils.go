@@ -178,9 +178,16 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		// We need to disable super-read-only for each tablet. If we don't do it then
 		// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
 		// have code to disable super-read-only during InitPrimary
-		for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-			if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
-				return 1, err
+		vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+		if err != nil {
+			return 1, err
+		}
+		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+		if vtTabletVersion < 15 {
+			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
+				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+					return 1, err
+				}
 			}
 		}
 		return m.Run(), nil

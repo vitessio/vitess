@@ -261,28 +261,9 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 		}
 	}
 
-	// wait for both tablet to get into replica state in topo
-	waitUntil := time.Now().Add(10 * time.Second)
-	for time.Now().Before(waitUntil) {
-		result, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", cell)
+	// wait for few seconds before all the tablets turn up as replica
+	if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, "replica"); err != nil {
 		require.Nil(t, err)
-
-		tabletsFromCMD := strings.Split(result, "\n")
-		tabletCountFromCMD := 0
-
-		for _, line := range tabletsFromCMD {
-			if len(line) > 0 {
-				if strings.Contains(line, "replica") {
-					tabletCountFromCMD = tabletCountFromCMD + 1
-				}
-			}
-		}
-
-		if tabletCountFromCMD == 2 {
-			break
-		}
-
-		time.Sleep(1 * time.Second)
 	}
 
 	if initShardPrimary {

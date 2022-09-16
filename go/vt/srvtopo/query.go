@@ -60,28 +60,13 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	// find the entry in the cache, add it if not there
 	key := wkey.String()
 
-	// if cache is disable then serve value from topo directly
-	if *srvTopoNoCacheForGet {
-		entry := &queryEntry{
-			key: wkey,
-		}
-		result, err := q.query(ctx, entry)
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
-	}
-
 	q.mutex.Lock()
 	entry, ok := q.entries[key]
 	if !ok {
-		//log.Info("getCurrentValue: value not ok")
 		entry = &queryEntry{
 			key: wkey,
 		}
 		q.entries[key] = entry
-	} else {
-		//log.Info("getCurrentValue: value ok")
 	}
 	q.mutex.Unlock()
 
@@ -123,7 +108,6 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 					log.Errorf("ResilientQuery uncaught panic, cell :%v, err :%v)", key, err)
 				}
 			}()
-			//log.Info("getCurrentValue: refreshing cache...")
 			newCtx, cancel := context.WithTimeout(ctx, *srvTopoTimeout)
 			defer cancel()
 

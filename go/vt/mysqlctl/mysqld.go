@@ -59,8 +59,9 @@ var (
 	// 2. in vtctld so it can be exported to the UI (different
 	// package, that's why it's exported). That way we can disable
 	// menu items there, using features.
-	DisableActiveReparents                = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
-	SetSuperReadOnlyAfterSchmaInitializer = flag.Bool("set_super_read_only_after_schema_initializer", true, "Set super_read_only in mysql to true after we are done with all schema initialization during vttablet initialization.")
+	DisableActiveReparents = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	//SetSuperReadOnlyAfterSchmaInitializer = flag.Bool("set_super_read_only_after_schema_initializer", true, "Set super_read_only in mysql to true after we are done with all schema initialization during vttablet initialization.")
+	SetSuperReadOnly = flag.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
 
 	dbaPoolSize = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
 	// DbaIdleTimeout is how often we will refresh the DBA connpool connections

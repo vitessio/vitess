@@ -180,7 +180,9 @@ func initializeCluster(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	time.Sleep(10 * time.Second)
+	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, 5, "replica"); err != nil {
+		require.NoError(t, err)
+	}
 
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)

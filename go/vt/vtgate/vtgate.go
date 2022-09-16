@@ -172,7 +172,6 @@ func Init(
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
-	//time.Sleep(10 * time.Second)
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
@@ -335,12 +334,6 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 	if err != nil {
 		log.Warningf("Unable to resolve destination: %v", err)
 		return
-	}
-	if len(dest) <= 0 {
-		log.Infof("length of resolve destination is zero")
-	}
-	for _, tmp := range dest {
-		log.Infof("ResolveDestination: %s", tmp.Target.String())
 	}
 
 	timeout := time.After(5 * time.Second)

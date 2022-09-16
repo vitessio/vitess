@@ -55,6 +55,12 @@ var (
 `
 )
 
+// 1. Create cluster with vttablet, having schema change signal set to true
+// 2. Create vtgate with schema change tracker to false
+// 3. vtgate during its initialization will not be able to get schema changes from vttablet. Even though it
+// initializes without any error.
+// 4. But when you check for authoritative column list it will be empty. Indicating that vtgate didn't received
+// any schema changes.
 func TestBlockedLoadKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	var err error
@@ -76,7 +82,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--srv_topo_no_cache_for_get=false"}
+	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
@@ -96,6 +102,9 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	require.NotContains(t, string(all), "Unable to add keyspace to tracker")
 }
 
+// 1. Create cluster with vttablet, having schema change signal set to true
+// 2. Create vtgate with schema change tracker to true
+// 3. vtgate during its initialization should be able to learn about schema changes in vttablet successfully
 func TestBlockedLoadKeyspaceWithScehmaChangeEnabled(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	var err error
@@ -117,7 +126,7 @@ func TestBlockedLoadKeyspaceWithScehmaChangeEnabled(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--srv_topo_no_cache_for_get=false"}
+	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 

@@ -426,7 +426,7 @@ func initSchema(ctx context.Context, params RestoreParams) ([]error, error) {
 		return nil, err
 	}
 
-	if !*DisableActiveReparents && *SetSuperReadOnlyAfterSchmaInitializer {
+	if !*DisableActiveReparents && *SetSuperReadOnly {
 		log.Info("setting up super read only...")
 		defer func() {
 			if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {

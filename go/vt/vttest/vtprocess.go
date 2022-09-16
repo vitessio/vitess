@@ -231,7 +231,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--foreign_key_mode", args.ForeignKeyMode,
 		"--planner-version", verStr,
 		fmt.Sprintf("--use_super_read_only=%t", true),
-		fmt.Sprintf("--set_super_read_only_after_schema_initializer=%t", false),
+		//fmt.Sprintf("--set_super_read_only_after_schema_initializer=%t", false),
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),

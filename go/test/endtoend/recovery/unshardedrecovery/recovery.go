@@ -25,7 +25,6 @@ import (
 	"path"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,7 +163,11 @@ SET GLOBAL old_alter_table = ON;
 				return 1, err
 			}
 		}
-		time.Sleep(10 * time.Second)
+
+		if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, "replica"); err != nil {
+			return 1, err
+		}
+
 		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
 		_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 		if err != nil {

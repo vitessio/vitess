@@ -228,6 +228,7 @@ func TestMain(m *testing.M) {
 			cluster.TearDown()
 			return 1
 		}
+
 		defer cluster.TearDown()
 		vtParams = mysql.ConnParams{
 			Host: "localhost",
@@ -238,6 +239,7 @@ func TestMain(m *testing.M) {
 
 		cluster.UnsetReadOnly("")
 		insertStartValue()
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)

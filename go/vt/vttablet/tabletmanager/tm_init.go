@@ -386,19 +386,23 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
 	tm.QueryServiceControl.RegisterQueryRuleSource(denyListQueryList)
+
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.InitDBConfig(tm.DBConfigs)
 		servenv.OnRun(tm.UpdateStream.RegisterService)
 		servenv.OnTerm(tm.UpdateStream.Disable)
 	}
+
 	if tm.VREngine != nil {
 		tm.VREngine.InitDBConfig(tm.DBConfigs)
 		servenv.OnTerm(tm.VREngine.Close)
 	}
+
 	if tm.VDiffEngine != nil {
 		tm.VDiffEngine.InitDBConfig(tm.DBConfigs)
 		servenv.OnTerm(tm.VDiffEngine.Close)
 	}
+
 	// The following initializations don't need to be done
 	// in any specific order.
 	tm.startShardSync()
@@ -449,7 +453,7 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 		return nil, err
 	}
 
-	if !*mysqlctl.DisableActiveReparents && *mysqlctl.SetSuperReadOnlyAfterSchmaInitializer {
+	if !*mysqlctl.DisableActiveReparents && *mysqlctl.SetSuperReadOnly {
 		log.Info("setting up super read only1...")
 		defer func() {
 			if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
@@ -796,7 +800,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 
 	// Restore in the background
 	if restoreFromBackup {
-		log.Info("start restore from backup thread")
 		go func() {
 			// Open the state manager after restore is done.
 			defer tm.tmState.Open()

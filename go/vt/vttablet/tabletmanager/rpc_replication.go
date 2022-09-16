@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	SetSuperReadOnly          = true
+	//SetSuperReadOnly          = true
 	createReparentQueries     []string
 	alterReparentQueries      []string
 	disableReplicationManager bool
@@ -49,7 +49,7 @@ func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable_semi_sync", false, "")
 	fs.MarkDeprecated("enable_semi_sync", "--enable_semi_sync is deprecated; please set the correct durability policy on the keyspace instead.")
 
-	fs.BoolVar(&SetSuperReadOnly, "use_super_read_only", SetSuperReadOnly, "Set super_read_only flag when performing planned failover.")
+	//fs.BoolVar(&SetSuperReadOnly, "use_super_read_only", SetSuperReadOnly, "Set super_read_only flag when performing planned failover.")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 }
 
@@ -385,7 +385,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	// Initializing as primary implies undoing any previous "do not replicate".
 	tm.replManager.reset()
 
-	if SetSuperReadOnly {
+	if *mysqlctl.SetSuperReadOnly {
 		// Setting super_read_only off so that we can run the DDL commands
 		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
 			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
@@ -578,7 +578,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// set MySQL to read-only mode. If we are already read-only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
-	if SetSuperReadOnly {
+	if *mysqlctl.SetSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
 			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
