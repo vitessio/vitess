@@ -8,8 +8,32 @@ on:
         description: 'Source Branch'
         required: true
         default: 'latest'
+      # This is kinda sad. It's a hack that makes it possible for us to tie a
+      # workflow dispatch event we created back to the workflow run it creates.
+      #
+      # - Dispatch event: https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
+      # - Workflow run: https://docs.github.com/en/rest/actions/workflow-runs
+      #
+      # The POST request to trigger a workflow run doesn't return any kind of
+      # handle that you can use to retrieve the run once it's started. The
+      # closest we can do is have an input to the workflow, set it as a step
+      # name in the first job, and search for it by polling the list API.
+      #
+      # - List API: https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs
+      user_supplied_id:
+        description: "Identifier provided by workflow dispatch event to look up workflow run later"
+        required: false
+        default: "unset"
 
 jobs:
+  id:
+    name: user-supplied-workflow-id
+    runs-on: ubuntu-latest
+    steps:
+      - name: ${{github.event.inputs.user_supplied_id}}
+        run: |
+          echo "User-supplied Workflow ID is: ${{inputs.user_supplied_id}}"
+
   copyToMain:
     runs-on: ubuntu-latest
     steps:
