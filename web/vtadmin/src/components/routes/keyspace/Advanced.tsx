@@ -17,7 +17,7 @@
 import { useState } from 'react';
 import { UseMutationResult } from 'react-query';
 
-import { useKeyspace, useReloadSchema } from '../../../hooks/api';
+import { useKeyspace, useRebuildKeyspaceGraph, useReloadSchema } from '../../../hooks/api';
 import ActionPanel from '../../ActionPanel';
 import { Label } from '../../inputs/Label';
 import { QueryLoadingPlaceholder } from '../../placeholders/QueryLoadingPlaceholder';
@@ -48,6 +48,22 @@ export const Advanced: React.FC<Props> = ({ clusterID, name }) => {
             onError: (error) => warn(`There was an error reloading the schemas in the ${name} keyspace: ${error}`),
             onSuccess: () => {
                 success(`Successfully reloaded schemas in the ${name} keyspace.`, { autoClose: 1600 });
+            },
+        }
+    );
+
+    const rebuildKeyspaceGraphMutation = useRebuildKeyspaceGraph(
+        {
+            keyspace: name,
+            clusterID,
+            allowPartial,
+            cells,
+        },
+        {
+            onError: (error) =>
+                warn(`There was an error rebuilding the keyspace graph in the ${name} keyspace: ${error}`),
+            onSuccess: () => {
+                success(`Successfully rebuilt the keyspace graph in the ${name} keyspace.`, { autoClose: 1600 });
             },
         }
     );
@@ -84,7 +100,7 @@ export const Advanced: React.FC<Props> = ({ clusterID, name }) => {
                             documentationLink="https://vitess.io/docs/14.0/reference/programs/vtctl/keyspaces/#rebuildkeyspacegraph"
                             loadedText="Rebuild Keyspace Graph"
                             loadingText="Rebuilding keyspace graph..."
-                            mutation={reloadSchemaMutation as UseMutationResult}
+                            mutation={rebuildKeyspaceGraphMutation as UseMutationResult}
                             title="Rebuild Keyspace Graph"
                             body={
                                 <>

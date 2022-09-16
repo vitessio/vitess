@@ -562,8 +562,8 @@ export const reloadSchema = async (params: ReloadSchemaParams) => {
 };
 
 export interface RebuildKeyspaceGraphParams {
-    clusterID?: (string | null | undefined)[];
-    keyspace?: (string | null | undefined)[];
+    clusterID: string;
+    keyspace: string;
 
     // A comma-separated list of cells, eg. "zone1,zone2"
     cells?: string;
@@ -572,7 +572,7 @@ export interface RebuildKeyspaceGraphParams {
 }
 
 export const rebuildKeyspaceGraph = async (params: RebuildKeyspaceGraphParams) => {
-    const { result } = await vtfetch(`/api/keyspaces/${params.clusterID}/${params.keyspace}`, {
+    const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/rebuild_keyspace_graph`, {
         method: 'put',
         body: JSON.stringify({ cells: params.cells, allowPartial: params.allowPartial }),
     });
