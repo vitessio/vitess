@@ -39,7 +39,6 @@ func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		inarg.makeTextualAndConvert(env.DefaultCollation)
 		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
 	} else {
-
 		var dst []byte
 		dst = collations.ToLower(inarg.Collation(), raw, dst)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
@@ -58,19 +57,21 @@ type builtinLcase struct{}
 
 func (builtinLcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
+	raw := inarg.value().Raw()
 	t := inarg.typeof()
+
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	if sqltypes.IsText(t) {
-		tolower := strings.ToLower(inarg.value().RawStr())
-		result.setString(tolower, inarg.collation())
-	} else {
-		tolower := inarg.value().RawStr()
+	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setString(tolower, inarg.collation())
+		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
+	} else {
+		var dst []byte
+		dst = collations.ToLower(inarg.Collation(), raw, dst)
+		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
 	}
 }
 
@@ -86,19 +87,21 @@ type builtinUpper struct{}
 
 func (builtinUpper) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
+	raw := inarg.value().Raw()
 	t := inarg.typeof()
+
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	if sqltypes.IsText(t) {
-		tolower := strings.ToUpper(inarg.value().RawStr())
-		result.setString(tolower, inarg.collation())
-	} else {
-		tolower := inarg.value().RawStr()
+	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setString(tolower, inarg.collation())
+		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
+	} else {
+		var dst []byte
+		dst = collations.ToUpper(inarg.Collation(), raw, dst)
+		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
 	}
 }
 
@@ -114,19 +117,21 @@ type builtinUcase struct{}
 
 func (builtinUcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
+	raw := inarg.value().Raw()
 	t := inarg.typeof()
+
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	if sqltypes.IsText(t) {
-		tolower := strings.ToUpper(inarg.value().RawStr())
-		result.setString(tolower, inarg.collation())
-	} else {
-		tolower := inarg.value().RawStr()
+	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setString(tolower, inarg.collation())
+		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
+	} else {
+		var dst []byte
+		dst = collations.ToUpper(inarg.Collation(), raw, dst)
+		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
 	}
 }
 

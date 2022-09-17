@@ -56,14 +56,23 @@ func TestBuiltinLowerandLcase(t *testing.T) {
 		query := fmt.Sprintf("LOWER (%s)", str)
 		compareRemoteExpr(t, conn, query)
 
-		// query = fmt.Sprintf("LCASE(%s)", str)
-		// compareRemoteExpr(t, conn, query)
+		query = fmt.Sprintf("LCASE(%s)", str)
+		compareRemoteExpr(t, conn, query)
 	}
 }
 
 func TestBuiltinUpperandUcase(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
+
+	cases := []string{
+		"_latin1 X'ÂÄÌ'",
+		"_dec8 X'ÒòÅå'",
+		"_binary 'Müller' ",
+		"_utf8 X'abcABCÅå'",
+		"_gbk X'天气不错'",
+		"123",
+	}
 
 	for _, str := range cases {
 		query := fmt.Sprintf("UPPER(%s)", str)
