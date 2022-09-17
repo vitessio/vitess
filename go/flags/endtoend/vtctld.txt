@@ -120,12 +120,10 @@ Usage of vtctld:
       --schema_change_user string                                        The user who submits this schema change.
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
-      --set_super_read_only_after_schema_initializer                     Set super_read_only in mysql to true after we are done with all schema initialization during vttablet initialization. (default true)
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
-      --srv_topo_no_cache_for_get                                        Always query topo when getting current value of the key
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
       --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
@@ -178,6 +176,7 @@ Usage of vtctld:
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+      --use_super_read_only                                              Set super_read_only flag when performing planned failover. (default true)
   -v, --v Level                                                          log level for V logs
       --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging

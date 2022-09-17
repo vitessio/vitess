@@ -106,7 +106,6 @@ Usage of vtexplain:
       --schema_change_signal                            Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --schema_change_signal_user string                User to be used to send down query to vttablet to retrieve schema changes
       --security_policy string                          the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --set_super_read_only_after_schema_initializer    Set super_read_only in mysql to true after we are done with all schema initialization during vttablet initialization. (default true)
       --shards int                                      Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
       --sql string                                      A list of semicolon-delimited SQL commands to analyze
       --sql-file string                                 Identifies the file that contains the SQL commands to analyze
@@ -114,7 +113,6 @@ Usage of vtexplain:
       --sql-max-length-ui int                           truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv_topo_cache_refresh duration                 how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                     how long to use cached entries for topology (default 1s)
-      --srv_topo_no_cache_for_get                       Always query topo when getting current value of the key
       --srv_topo_timeout duration                       topo server timeout (default 5s)
       --stats_backend string                            The name of the registered push-based monitoring/stats backend to use
       --stats_combine_dimensions string                 List of dimensions to be combined into a single "all" value in exported stats vars
@@ -129,6 +127,7 @@ Usage of vtexplain:
       --topo_global_server_address string               the address of the global topology server
       --topo_implementation string                      the topology implementation to use
       --transaction_mode string                         SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
+      --use_super_read_only                             Set super_read_only flag when performing planned failover. (default true)
   -v, --v Level                                         log level for V logs
       --version                                         print binary version
       --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging

@@ -328,7 +328,7 @@ func (hs *healthStreamer) reload() error {
 	if !hs.initSuccess {
 		hs.initSuccess, err = hs.InitSchemaLocked(conn)
 		if err != nil {
-			//return err
+			return err
 		}
 	}
 
