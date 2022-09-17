@@ -195,6 +195,21 @@ func New(t testing.TB) *DB {
 	}()
 
 	db.AddQuery("use `fakesqldb`", &sqltypes.Result{})
+
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "dummy", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar("_vt"),
+		}}}
+	db.AddQuery("SHOW DATABASES LIKE '_vt'", result)
+	db.AddQuery("select database()", result)
+	db.AddQuery("use _vt", &sqltypes.Result{})
+	db.AddQuery("show tables from _vt", &sqltypes.Result{})
+	db.AddQueryPattern("CREATE TABLE"+".*", &sqltypes.Result{})
+	db.AddQueryPattern("show create table"+".*", &sqltypes.Result{})
+
 	// Return the db.
 	return db
 }

@@ -77,10 +77,10 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 		if err != nil {
 			return err
 		}
-		log.Infof("Created _vt database", rs)
+		log.Infof("Created _vt database")
 		break
 	case 1:
-		log.Infof("_vt database already exists, not an error", rs)
+		log.Infof("_vt database already exists, not an error")
 		break
 	default:
 		return fmt.Errorf("found too many rows for _vt: %d", len(rs.Rows))
@@ -152,7 +152,7 @@ func (si *VTSchemaInit) createOrUpgradeTable(table *VTTable) error {
 	}
 
 	if strings.TrimSpace(tableAlterSQL) != "" {
-		log.Infof("tableAlterSQL is %s", tableAlterSQL)
+		//log.Infof("tableAlterSQL is %s", tableAlterSQL)
 		_, err = si.exec(ctx, tableAlterSQL, 1, false)
 		if err != nil {
 			log.Errorf("Error altering _vt table %s: %+v", table, err)
@@ -169,7 +169,7 @@ func (si *VTSchemaInit) createOrUpgradeTable(table *VTTable) error {
 		if tableAlterSQL != "" {
 			err = fmt.Errorf("table alter did not work, desired schema is %s but current schema is %s: %s",
 				desiredTableSchema, newTableSchema, tableAlterSQL)
-			log.Error(err)
+			//log.Error(err)
 		}
 		log.Infof("Created or upgraded _vt table %s", table)
 		return nil
