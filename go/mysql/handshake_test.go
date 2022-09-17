@@ -24,6 +24,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/tlstest"
@@ -43,9 +46,7 @@ func TestClearTextClientAuth(t *testing.T) {
 
 	// Create the listener.
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -72,16 +73,14 @@ func TestClearTextClientAuth(t *testing.T) {
 	// Change server side to allow clear text without auth.
 	l.AllowClearTextWithoutTLS.Set(true)
 	conn, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("unexpected connection error: %v", err)
-	}
+	require.NoError(t, err, "unexpected connection error: %v", err)
+
 	defer conn.Close()
 
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)
-	if err != nil {
-		t.Fatalf("ExecuteFetch failed: %v", err)
-	}
+	require.NoError(t, err, "ExecuteFetch failed: %v", err)
+
 	utils.MustMatch(t, result, selectRowsResult)
 
 	// Send a ComQuit to avoid the error message on the server side.
@@ -101,9 +100,7 @@ func TestSSLConnection(t *testing.T) {
 
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -122,9 +119,8 @@ func TestSSLConnection(t *testing.T) {
 		"",
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err, "TLSServerConfig failed: %v", err)
+
 	l.TLSConfig.Store(serverConfig)
 	go func() {
 		l.Accept()
@@ -158,22 +154,15 @@ func testSSLConnectionClearText(t *testing.T, params *ConnParams) {
 	// Create a client connection, connect.
 	ctx := context.Background()
 	conn, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("Connect failed: %v", err)
-	}
+	require.NoError(t, err, "Connect failed: %v", err)
+
 	defer conn.Close()
-	if conn.User != "user1" {
-		t.Errorf("Invalid conn.User, got %v was expecting user1", conn.User)
-	}
+	assert.Equal(t, "user1", conn.User, "Invalid conn.User, got %v was expecting user1", conn.User)
 
 	// Make sure this went through SSL.
 	result, err := conn.ExecuteFetch("ssl echo", 10000, true)
-	if err != nil {
-		t.Fatalf("ExecuteFetch failed: %v", err)
-	}
-	if result.Rows[0][0].ToString() != "ON" {
-		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
-	}
+	require.NoError(t, err, "ExecuteFetch failed: %v", err)
+	assert.Equal(t, "ON", result.Rows[0][0].ToString(), "Got wrong result from ExecuteFetch(ssl echo): %v", result)
 
 	// Send a ComQuit to avoid the error message on the server side.
 	conn.writeComQuit()
@@ -183,29 +172,21 @@ func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
 	// Create a client connection, connect.
 	ctx := context.Background()
 	conn, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("Connect failed: %v", err)
-	}
+	require.NoError(t, err, "Connect failed: %v", err)
+
 	defer conn.Close()
-	if conn.User != "user1" {
-		t.Errorf("Invalid conn.User, got %v was expecting user1", conn.User)
-	}
+	assert.Equal(t, "user1", conn.User, "Invalid conn.User, got %v was expecting user1", conn.User)
 
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)
-	if err != nil {
-		t.Fatalf("ExecuteFetch failed: %v", err)
-	}
+	require.NoError(t, err, "ExecuteFetch failed: %v", err)
+
 	utils.MustMatch(t, result, selectRowsResult)
 
 	// Make sure this went through SSL.
 	result, err = conn.ExecuteFetch("ssl echo", 10000, true)
-	if err != nil {
-		t.Fatalf("ExecuteFetch failed: %v", err)
-	}
-	if result.Rows[0][0].ToString() != "ON" {
-		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
-	}
+	require.NoError(t, err, "ExecuteFetch failed: %v", err)
+	assert.Equal(t, "ON", result.Rows[0][0].ToString(), "Got wrong result from ExecuteFetch(ssl echo): %v", result)
 
 	// Send a ComQuit to avoid the error message on the server side.
 	conn.writeComQuit()

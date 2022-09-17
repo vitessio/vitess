@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -64,18 +65,15 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 
 	// First we get the current binlog position.
 	result, err := conn.ExecuteFetch("SHOW MASTER STATUS", 1, true)
-	if err != nil {
-		t.Fatalf("SHOW MASTER STATUS failed: %v", err)
-	}
+	require.NoError(t, err, "SHOW MASTER STATUS failed: %v", err)
+
 	if len(result.Fields) < 2 || result.Fields[0].Name != "File" || result.Fields[1].Name != "Position" ||
 		len(result.Rows) != 1 {
 		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
 	}
 	file := result.Rows[0][0].ToString()
 	position, err := evalengine.ToUint64(result.Rows[0][1])
-	if err != nil {
-		t.Fatalf("SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
-	}
+	require.NoError(t, err, "SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
 
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
@@ -92,28 +90,23 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 	var f mysql.BinlogFormat
 	for {
 		be, err := conn.ReadBinlogEvent()
-		if err != nil {
-			t.Fatalf("ReadPacket failed: %v", err)
-		}
-		if !be.IsValid() {
-			t.Fatalf("NewMysql56BinlogEvent has an invalid packet: %v", be)
-		}
+		require.NoError(t, err, "ReadPacket failed: %v", err)
+		require.True(t, be.IsValid(), "NewMysql56BinlogEvent has an invalid packet: %v", be)
 
 		// Skip rotate packets. These are normal as first packets.
 		if be.IsRotate() {
 			t.Logf("Got a rotate packet: %v", be)
 			continue
 		}
+		require.
 
-		// And we want a FORMAT_DESCRIPTION_EVENT.
-		// Print a few things about the event for sanity checks.
-		if !be.IsFormatDescription() {
-			t.Fatalf("Unexpected packet: %v", be)
-		}
+			// And we want a FORMAT_DESCRIPTION_EVENT.
+			// Print a few things about the event for sanity checks.
+			True(t, be.IsFormatDescription(), "Unexpected packet: %v", be)
+
 		f, err = be.Format()
-		if err != nil {
-			t.Fatalf("Format() returned error: %v", err)
-		}
+		require.NoError(t, err, "Format() returned error: %v", err)
+
 		t.Logf("Got a FORMAT_DESCRIPTION_EVENT packet: %v\nWith format: %v", be, f)
 		break
 	}
@@ -138,12 +131,9 @@ func TestReplicationConnectionClosing(t *testing.T) {
 			data, err := conn.ReadPacket()
 			if err != nil {
 				serr, ok := err.(*mysql.SQLError)
-				if !ok {
-					t.Errorf("Got a non mysql.SQLError error: %v", err)
-				}
-				if serr.Num != mysql.CRServerLost {
-					t.Errorf("Got an unexpected mysql.SQLError error: %v", serr)
-				}
+				assert.True(t, ok, "Got a non mysql.SQLError error: %v", err)
+				assert.Equal(t, mysql.CRServerLost, serr.Num, "Got an unexpected mysql.SQLError error: %v", serr)
+
 				// we got the right error, all good.
 				return
 			}
@@ -174,9 +164,8 @@ func TestReplicationConnectionClosing(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := dConn.ExecuteFetch("insert into replicationError(id, name) values(10, 'nice name')", 0, false)
-	if err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
+	require.NoError(t, err, "insert failed: %v", err)
+
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for insert: %v", result)
 	}
@@ -211,23 +200,20 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := dConn.ExecuteFetch("insert into replication(id, name) values(10, 'nice name')", 0, false)
-	if err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
+	require.NoError(t, err, "insert failed: %v", err)
+
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for insert: %v", result)
 	}
 	result, err = dConn.ExecuteFetch("update replication set name='nicer name' where id=10", 0, false)
-	if err != nil {
-		t.Fatalf("update failed: %v", err)
-	}
+	require.NoError(t, err, "update failed: %v", err)
+
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for update: %v", result)
 	}
 	result, err = dConn.ExecuteFetch("delete from replication where id=10", 0, false)
-	if err != nil {
-		t.Fatalf("delete failed: %v", err)
-	}
+	require.NoError(t, err, "delete failed: %v", err)
+
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for delete: %v", result)
 	}
@@ -250,16 +236,12 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 	//	for i := 0; i < 6 && (gtidCount < 2 || !gotCreateTable || !gotTableMapEvent || !gotBegin || !gotInsert || !gotCommit); i++ {
 	for gtidCount < 4 || !gotCreateTable || !gotTableMapEvent || !gotInsert || !gotUpdate || !gotDelete || beginCount != 3 || commitCount != 3 {
 		be, err := conn.ReadBinlogEvent()
-		if err != nil {
-			t.Fatalf("ReadPacket failed: %v", err)
-		}
-		if !be.IsValid() {
-			t.Fatalf("read an invalid packet: %v", be)
-		}
+		require.NoError(t, err, "ReadPacket failed: %v", err)
+		require.True(t, be.IsValid(), "read an invalid packet: %v", be)
+
 		be, _, err = be.StripChecksum(f)
-		if err != nil {
-			t.Fatalf("StripChecksum failed: %v", err)
-		}
+		require.NoError(t, err, "StripChecksum failed: %v", err)
+
 		switch {
 		case be.IsGTID():
 			// We expect one of these at least.
@@ -956,9 +938,8 @@ func TestRowReplicationTypes(t *testing.T) {
 	}
 
 	result, err := dConn.ExecuteFetch(insert, 0, false)
-	if err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
+	require.NoError(t, err, "insert failed: %v", err)
+
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for insert: %v", result)
 	}
@@ -971,16 +952,12 @@ func TestRowReplicationTypes(t *testing.T) {
 
 	for values == nil {
 		be, err := conn.ReadBinlogEvent()
-		if err != nil {
-			t.Fatalf("ReadPacket failed: %v", err)
-		}
-		if !be.IsValid() {
-			t.Fatalf("read an invalid packet: %v", be)
-		}
+		require.NoError(t, err, "ReadPacket failed: %v", err)
+		require.True(t, be.IsValid(), "read an invalid packet: %v", be)
+
 		be, _, err = be.StripChecksum(f)
-		if err != nil {
-			t.Fatalf("StripChecksum failed: %v", err)
-		}
+		require.NoError(t, err, "StripChecksum failed: %v", err)
+
 		switch {
 		case be.IsTableMap():
 			tableID = be.TableID(f) // This would be 0x00ffffff for an event to clear all table map entries.
@@ -1048,9 +1025,8 @@ func TestRowReplicationTypes(t *testing.T) {
 		}
 	}
 	result, err = dConn.ExecuteFetch(sql.String(), 0, false)
-	if err != nil {
-		t.Fatalf("insert '%v' failed: %v", sql.String(), err)
-	}
+	require.NoError(t, err, "insert '%v' failed: %v", sql.String(), err)
+
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for insert: %v", result)
 	}
@@ -1063,16 +1039,12 @@ func TestRowReplicationTypes(t *testing.T) {
 	}
 	stmt += " from replicationtypes"
 	result, err = dConn.ExecuteFetch(stmt, 2, false)
-	if err != nil {
-		t.Fatalf("select failed: %v", err)
-	}
-	if len(result.Rows) != 2 {
-		t.Fatalf("unexpected result for select: %v", result)
-	}
+	require.NoError(t, err, "select failed: %v", err)
+	require.Equal(t, 2, len(result.Rows), "unexpected result for select: %v", result)
+
 	for i, tcase := range testcases {
-		if !reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]) {
-			t.Errorf("Field %v is not the same, got %v and %v", tcase.name, result.Rows[0][i+1], result.Rows[1][i+1])
-		}
+		assert.True(t, reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]), "Field %v is not the same, got %v and %v", tcase.name, result.Rows[0][i+1], result.Rows[1][i+1])
+
 	}
 
 	// Drop the table, we're done.

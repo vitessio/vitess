@@ -116,9 +116,7 @@ func parseWeightString(b []byte) []byte {
 
 func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
 	coll := collationEnv.LookupByName(u.collation)
-	if coll == nil {
-		t.Fatalf("unknown collation %q", u.collation)
-	}
+	require.NotNil(t, coll, "unknown collation %q", u.collation)
 
 	var checked, errors int
 	for _, row := range result.Rows {
@@ -231,10 +229,8 @@ func TestCollationWithSpace(t *testing.T) {
 			for _, size := range []int{0, codepoints, codepoints + 1, codepoints + 2, 20, 32} {
 				localWeight := local.WeightString(nil, []byte(ExampleString), size)
 				remoteWeight := remote.WeightString(nil, []byte(ExampleString), size)
-				if !bytes.Equal(localWeight, remoteWeight) {
-					t.Fatalf("mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v",
-						size, []byte(ExampleString), remoteWeight, localWeight)
-				}
+				require.True(t, bytes.Equal(localWeight, remoteWeight), "mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v", size, []byte(ExampleString), remoteWeight, localWeight)
+
 			}
 		})
 	}

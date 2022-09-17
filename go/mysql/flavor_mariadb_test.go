@@ -42,9 +42,8 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
@@ -75,9 +74,8 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMariadbRetrieveSourceServerId(t *testing.T) {

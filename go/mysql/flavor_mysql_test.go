@@ -41,9 +41,8 @@ func TestMysql56SetReplicationSourceCommand(t *testing.T) {
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
@@ -74,9 +73,8 @@ func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMysqlRetrieveSourceServerId(t *testing.T) {
