@@ -444,9 +444,9 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	log.Infof("Addshards got %d shards with %+v", len(arrNames), arrNames)
 	isSharded := len(arrNames) > 1
 	primaryTabletUID := 0
-	tabletIndex := 0
 	for ind, shardName := range arrNames {
 		tabletID := tabletIDBase + ind*100
+		tabletIndex := 0
 		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
 		if _, ok := keyspace.Shards[shardName]; ok {
 			log.Infof("Shard %s already exists, not adding", shardName)
@@ -512,13 +512,13 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					log.Errorf("tablet status no reached. %d err: %v", tablets[ind].Name, err)
 					t.Fatalf(err.Error())
 				}
-			}
-			time.Sleep(10 * time.Second)*/
+			}*/
+			time.Sleep(10 * time.Second)
 		}
 
-		if err := cluster.WaitForTabletSetup(vc.VtctlClient, tabletIndex-1, []string{"replica", "rdonly", "primary"}); err != nil {
+		/*if err := cluster.WaitForTabletSetup(vc.VtctlClient, tabletIndex-1, []string{"replica", "rdonly", "primary"}); err != nil {
 			require.NoError(t, err)
-		}
+		}*/
 
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
