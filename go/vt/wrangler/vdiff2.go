@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -58,6 +59,10 @@ func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, a
 	ts, err := wr.buildTrafficSwitcher(ctx, keyspace, workflowName)
 	if err != nil {
 		return nil, err
+	}
+	if action == vdiff2.CreateAction && ts.frozen {
+		return nil, fmt.Errorf("invalid VDiff run: writes have been already been switched for workflow %s.%s",
+			keyspace, workflowName)
 	}
 
 	output.Err = ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
