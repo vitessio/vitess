@@ -764,8 +764,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
 			toggleBuffering(false)
+			go log.Infof("cutOverVReplMigration %v: unbuffered queries", s.workflow)
 		})
 	}
+	go log.Infof("cutOverVReplMigration %v: buffering queries", s.workflow)
 	// stop writes on source:
 	err = toggleBuffering(true)
 	defer reenableWritesOnce()
@@ -791,6 +793,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	} else {
 		// real production
+		go log.Infof("cutOverVReplMigration %v: renaming table %v to %v", s.workflow, onlineDDL.Table, stowawayTableName)
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, stowawayTableName)
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
@@ -804,6 +807,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err := e.renameTableIfApplicable(ctx, stowawayTableName, onlineDDL.Table); err != nil {
 			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot rename back swapped table: %v into %v: %v", stowawayTableName, onlineDDL.Table, err)
 		}
+		go log.Infof("cutOverVReplMigration %v: restored table %v back to %v", s.workflow, stowawayTableName, onlineDDL.Table)
 	}()
 	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
 	// that some leftover query finds the table is not actually there anymore...
@@ -831,14 +835,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// Target is now in sync with source!
 		return nil
 	}
-	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
+	go log.Infof("cutOverVReplMigration %v: waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	if err := waitForPos(); err != nil {
 		return err
 	}
+	go log.Infof("cutOverVReplMigration %v: done waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	// Stop vreplication
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
 		return err
 	}
+	go log.Infof("cutOverVReplMigration %v: stopped vreplication", s.workflow)
 
 	// rename tables atomically (remember, writes on source tables are stopped)
 	{
@@ -861,6 +867,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				vreplTable, onlineDDL.Table,
 				stowawayTableName, vreplTable,
 			)
+			go log.Infof("cutOverVReplMigration %v: switch of tables %v, %v, %v", s.workflow, vreplTable, onlineDDL.Table, stowawayTableName)
 			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
@@ -881,6 +888,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// Tables are now swapped! Migration is successful
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
+	go log.Infof("cutOverVReplMigration %v: marking as complete", s.workflow)
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied, emptyHint)
 	return nil
 
