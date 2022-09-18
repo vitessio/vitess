@@ -59,7 +59,7 @@ Flags available:
 
 
 ### Start the cluster
-To start Consul(which saves the topology config), vtctld, vtgate, orchestrator and a few vttablets with MySQL running on them.
+To start Consul(which saves the topology config), vtctld, vtgate, vtorc and a few vttablets with MySQL running on them.
 ```
 vitess/examples/compose$ docker-compose up -d
 ```
@@ -150,7 +150,7 @@ vitess/examples/compose$ ./lvtctl.sh Help
 - vtgate web ui:
   http://localhost:15099/debug/status
 
-- orchestrator web ui:
+- vtorc web ui:
   http://localhost:13000
   
 - Stream querylog

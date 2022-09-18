@@ -30,20 +30,20 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// VtorcProcess is a test struct for running
+// VTOrcProcess is a test struct for running
 // vtorc as a separate process for testing
-type VtorcProcess struct {
+type VTOrcProcess struct {
 	VtctlProcess
 	LogDir     string
 	ExtraArgs  []string
 	ConfigPath string
-	Config     VtorcConfiguration
+	Config     VTOrcConfiguration
 	WebPort    int
 	proc       *exec.Cmd
 	exit       chan error
 }
 
-type VtorcConfiguration struct {
+type VTOrcConfiguration struct {
 	Debug                                 bool
 	ListenAddress                         string
 	MySQLTopologyUser                     string
@@ -59,12 +59,12 @@ type VtorcConfiguration struct {
 }
 
 // ToJSONString will marshal this configuration as JSON
-func (config *VtorcConfiguration) ToJSONString() string {
+func (config *VTOrcConfiguration) ToJSONString() string {
 	b, _ := json.MarshalIndent(config, "", "\t")
 	return string(b)
 }
 
-func (config *VtorcConfiguration) AddDefaults(webPort int) {
+func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	config.Debug = true
 	config.MySQLTopologyUser = "orc_client_user"
 	config.MySQLTopologyPassword = "orc_client_user_password"
@@ -78,7 +78,7 @@ func (config *VtorcConfiguration) AddDefaults(webPort int) {
 }
 
 // Setup starts orc process with required arguements
-func (orc *VtorcProcess) Setup() (err error) {
+func (orc *VTOrcProcess) Setup() (err error) {
 
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
@@ -99,7 +99,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 
 	/* minimal command line arguments:
 	$ vtorc -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
-	-config config/orchestrator/default.json -alsologtostderr http
+	-config config/vtorc/default.json -alsologtostderr http
 	*/
 	orc.proc = exec.Command(
 		orc.Binary,
@@ -107,7 +107,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
-		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
+		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
@@ -139,7 +139,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 }
 
 // TearDown shuts down the running vtorc service
-func (orc *VtorcProcess) TearDown() error {
+func (orc *VTOrcProcess) TearDown() error {
 	if orc.proc == nil || orc.exit == nil {
 		return nil
 	}

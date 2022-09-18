@@ -29,12 +29,12 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/db"
 	"vitess.io/vitess/go/vt/vtgr/log"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (
