@@ -976,3 +976,59 @@ func BenchmarkPreQueries(b *testing.B) {
 		})
 	}
 }
+
+func TestFailInfiniteSessions(t *testing.T) {
+	client := framework.NewClient()
+	qr, err := client.Execute("select @@max_connections", nil)
+	require.NoError(t, err)
+	maxConn, err := qr.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+
+	// twice the number of sessions than the pool size.
+	numOfSessions := int(maxConn * 2)
+
+	var clients []*framework.QueryClient
+
+	// read session
+	var failed bool
+	for i := 0; i < numOfSessions; i++ {
+		client := framework.NewClient()
+		_, err := client.ReserveExecute("select 1", []string{"set sql_mode = ''"}, nil)
+		if err != nil {
+			failed = true
+			require.Contains(t, err.Error(), "immediate error from server errorCode=1040 errorMsg=Too many connections")
+			break
+		}
+		clients = append(clients, client)
+	}
+	require.True(t, failed, "should have failed to create more sessions than the max mysql connection")
+
+	// Release all the sessions.
+	for _, client := range clients {
+		require.NoError(t,
+			client.Release())
+	}
+	clients = nil
+
+	// write session
+	failed = false
+	for i := 0; i < numOfSessions; i++ {
+		client := framework.NewClient()
+		_, err := client.ReserveBeginExecute("select 1", []string{"set sql_mode = ''"}, nil, nil)
+		if err != nil {
+			failed = true
+			require.Contains(t, err.Error(), "immediate error from server errorCode=1040 errorMsg=Too many connections")
+			break
+		}
+		require.NoError(t,
+			client.Commit())
+		clients = append(clients, client)
+	}
+	require.True(t, failed, "should have failed to create more sessions than the max mysql connection")
+
+	// Release all the sessions.
+	for _, client := range clients {
+		require.NoError(t,
+			client.Release())
+	}
+}

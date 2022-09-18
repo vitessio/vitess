@@ -51,7 +51,7 @@ func BenchmarkGetPutWithSettings(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-	settings := []string{"a", "b", "c"}
+	setting := &Setting{query: "set a=1, b=2, c=3"}
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
@@ -64,7 +64,7 @@ func BenchmarkGetPutWithSettings(b *testing.B) {
 				b.RunParallel(func(pb *testing.PB) {
 					var ctx = context.Background()
 					for pb.Next() {
-						if conn, err := pool.Get(ctx, settings); err != nil {
+						if conn, err := pool.Get(ctx, setting); err != nil {
 							b.Error(err)
 						} else {
 							pool.Put(conn)
@@ -80,7 +80,7 @@ func BenchmarkGetPutMixed(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-	settings := [][]string{nil, {"a", "b", "c"}}
+	settings := []*Setting{nil, {query: "set a=1, b=2, c=3"}}
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
@@ -111,7 +111,7 @@ func BenchmarkGetPutMixedMulti(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-	settings := [][]string{nil, {"a"}, {"a", "b"}, {"c", "d", "e"}, {"x", "y", "z"}}
+	settings := []*Setting{nil, {query: "set a=1"}, {query: "set a=1, b=2"}, {query: "set c=1, d=2, e=3"}, {query: "set x=1, y=2, z=3"}}
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
@@ -135,37 +135,5 @@ func BenchmarkGetPutMixedMulti(b *testing.B) {
 				})
 			})
 		}
-	}
-}
-
-func BenchmarkApplySettings(b *testing.B) {
-	b.ReportAllocs()
-	ctx := context.Background()
-	tcases := []struct {
-		name     string
-		settings []string
-	}{{
-		name:     "small",
-		settings: []string{"a", "b", "c"},
-	}, {
-		name:     "split",
-		settings: []string{"set @@sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'", "set @@sql_safe_updates = false", "set @@read_buffer_size = 9191181919"},
-	}, {
-		name:     "combined",
-		settings: []string{"set @@sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION', @@sql_safe_updates = false, @@read_buffer_size = 9191181919"},
-	}}
-	for _, tcase := range tcases {
-		b.Run(tcase.name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				resource := &TestResource{}
-				if err := resource.ApplySettings(ctx, tcase.settings); err != nil {
-					b.Error(err)
-				}
-				if !resource.IsSettingsApplied() {
-					b.Error("setting should have been applied")
-				}
-			}
-		})
 	}
 }

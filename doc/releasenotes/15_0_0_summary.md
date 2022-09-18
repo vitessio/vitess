@@ -17,6 +17,12 @@
 
 ### Breaking Changes
 
+#### Flags
+
+- The deprecated `--cpu_profile` flag has been removed. Please use the `--pprof` flag instead.
+- The deprecated `--mem-profile-rate` flag has been removed. Please use `--pprof=mem` instead.
+- The deprecated `--mutex-profile-fraction` flag has been removed. Please use `--pprof=mutex` instead.
+
 #### Vindex Interface
 
 All the vindex interface methods are changed by adding `context.Context` as an input parameter.
@@ -142,6 +148,24 @@ The reason you cannot change all the values together is because the restore proc
 should be used to process the previous backup. Please make sure you have thought out all possible scenarios for restore before transitioning from one
 compression engine to another.
 
+#### Independent OLAP and OLTP transactional timeouts
+
+`--queryserver-config-olap-transaction-timeout` specifies the timeout applied
+to a transaction created within an OLAP workload. The default value is `30`
+seconds, but this can be raised, lowered, or set to zero to disable the timeout
+altogether.
+
+Until now, while OLAP queries would bypass the query timeout, transactions
+created within an OLAP session would be rolled back
+`--queryserver-config-transaction-timeout` seconds after the transaction was
+started.
+
+As of now, OLTP and OLAP transaction timeouts can be configured independently of each
+other.
+
+The main use case is to run queries spanning a long period of time which
+require transactional guarantees such as consistency or atomicity.
+
 ### Online DDL changes
 
 #### Concurrent vitess migrations
@@ -194,6 +218,18 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
 ```
 
 ### Mysql Compatibility
+
+#### System Settings
+Vitess supported system settings from release 7.0 onwards, but it was always with a pinch of salt.
+As soon as a client session changes a default system setting, the mysql connection gets blocked for it.
+This leads to clients running out of mysql connections. 
+The clients were instructed to use this to a minimum and try to set those changed system settings as default on the mysql.
+
+With this release, Vitess can handle system settings changes in a much better way and the clients can use it more freely.
+Vitess now pools those changed settings and does not reserve it for any particular session. 
+
+This feature can be enabled by setting `queryserver-enable-settings-pool` flag on the vttablet. It is disabled by default.
+In future releases, we will make this flag enabled by default.
 
 #### Lookup Vindexes
 

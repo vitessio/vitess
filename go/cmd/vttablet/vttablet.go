@@ -23,9 +23,6 @@ import (
 	"flag"
 	"os"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
-	"vitess.io/vitess/resources"
-
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -37,10 +34,12 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
+	"vitess.io/vitess/resources"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -57,7 +56,10 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 func main() {
@@ -90,10 +92,10 @@ func main() {
 
 	// Initialize and start tm.
 	gRPCPort := int32(0)
-	if servenv.GRPCPort != nil {
-		gRPCPort = int32(*servenv.GRPCPort)
+	if servenv.GRPCPort() != 0 {
+		gRPCPort = int32(servenv.GRPCPort())
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort, mysqld.GetVersionString(), config.DB)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, mysqld.GetVersionString(), config.DB)
 	if err != nil {
 		log.Exitf("failed to parse --tablet-path: %v", err)
 	}

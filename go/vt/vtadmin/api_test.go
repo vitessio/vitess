@@ -25,12 +25,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/topo"
@@ -56,6 +58,11 @@ import (
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
+}
 
 func TestFindSchema(t *testing.T) {
 	t.Parallel()

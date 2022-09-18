@@ -498,6 +498,12 @@ func (r *Route) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparser.Compar
 	switch left := cmp.Left.(type) {
 	case *sqlparser.ColName:
 		vdValue := cmp.Right
+
+		valTuple, isTuple := vdValue.(sqlparser.ValTuple)
+		if isTuple && len(valTuple) == 1 {
+			return r.planEqualOp(ctx, &sqlparser.ComparisonExpr{Left: left, Right: valTuple[0], Operator: sqlparser.EqualOp})
+		}
+
 		value := r.makeEvalEngineExpr(ctx, vdValue)
 		if value == nil {
 			return false
@@ -600,6 +606,8 @@ func (r *Route) planCompositeInOpRecursive(
 	return foundVindex
 }
 
+// Reset all vindex predicates on this route and re-build their options from
+// the list of seen routing predicates.
 func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	switch r.RouteOpCode {
 	case engine.DBA, engine.Next, engine.Reference, engine.Unsharded:

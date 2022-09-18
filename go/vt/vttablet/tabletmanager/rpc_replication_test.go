@@ -74,3 +74,19 @@ func TestPromoteReplicaReplicationManagerFailure(t *testing.T) {
 	// At the end we expect the replication manager to be stopped.
 	require.True(t, tm.replManager.ticks.Running())
 }
+
+// TestDisableReplicationManager checks that the replication manager doesn't start if it is disabled
+func TestDisableReplicationManager(t *testing.T) {
+	ts := memorytopo.NewServer("cell1")
+	statsTabletTypeCount.ResetAll()
+	prevDisableReplicationManager := disableReplicationManager
+	disableReplicationManager = true
+	defer func() {
+		disableReplicationManager = prevDisableReplicationManager
+	}()
+
+	tm := newTestTM(t, ts, 100, keyspace, shard)
+	defer tm.Stop()
+
+	require.False(t, tm.replManager.ticks.Running())
+}

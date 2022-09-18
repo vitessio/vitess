@@ -188,6 +188,7 @@ asthelpergen:
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
 		-in ./go/... \
+	  	-gen vitess.io/vitess/go/pools.Setting \
 	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
 	  	-gen vitess.io/vitess/go/sqltypes.Result
