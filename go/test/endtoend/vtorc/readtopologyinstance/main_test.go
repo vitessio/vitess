@@ -24,9 +24,9 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	"vitess.io/vitess/go/vt/orchestrator/app"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/vt/vtorc/app"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
