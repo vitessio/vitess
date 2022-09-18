@@ -17,6 +17,7 @@ limitations under the License.
 package workflow
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -25,8 +26,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
