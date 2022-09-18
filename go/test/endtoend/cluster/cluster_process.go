@@ -366,7 +366,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
 		// have code to disable super-read-only during InitializeShard
 		log.Infof("cluster.VtTabletMajorVersion: %d", cluster.VtTabletMajorVersion)
-		if cluster.VtTabletMajorVersion < 15 {
+		if cluster.VtTabletMajorVersion <= 15 {
 			_ = shard.Vttablets[0].VttabletProcess.UnsetSuperReadOnly("")
 		}
 		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {

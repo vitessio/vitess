@@ -65,11 +65,17 @@ func TestTabletInitialBackup(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// insert should not work for any of the replicas and primary
-	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-	_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.NoError(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion > 15 {
+		_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+		_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	}
 	// Restore the Tablets
 	restore(t, primary, "replica", "NOT_SERVING", true)
 	err = localCluster.VtctlclientProcess.ExecuteCommand(
@@ -105,11 +111,17 @@ func TestTabletBackupOnly(t *testing.T) {
 	// insert should only work for primary
 	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
-	_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.NoError(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion > 15 {
+		_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	}
 
 	firstBackupTest(t, "replica")
-
 	tearDown(t, false)
 }
 
@@ -166,9 +178,16 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	time.Sleep(5 * time.Second)
 	//check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
-	// insert in replica2 won't work because of super-read-only
-	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.NoError(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion > 15 {
+		// insert in replica2 won't work because of super-read-only
+		_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	}
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
 	// check that the restored replica has the right local_metadata
@@ -297,7 +316,20 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
 
-	err := tablet.VttabletProcess.CreateDB(keyspaceName)
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.Nil(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion <= 15 {
+		for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
+			if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+				require.Nil(t, err)
+			}
+		}
+	}
+
+	err = tablet.VttabletProcess.CreateDB(keyspaceName)
 	require.Nil(t, err)
 
 	// Start tablets

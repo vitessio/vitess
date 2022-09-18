@@ -160,6 +160,22 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			return 1, err
 		}
 
+		// We need to disable super-read-only for each tablet. If we don't do it then
+		// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
+		// have code to disable super-read-only during InitPrimary
+		vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+		if err != nil {
+			return 1, err
+		}
+		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+		if vtTabletVersion <= 15 {
+			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
+				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+					return 1, err
+				}
+			}
+		}
+
 		// create database for primary and replica
 		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
@@ -175,21 +191,18 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			return 1, err
 		}
 
-		// We need to disable super-read-only for each tablet. If we don't do it then
-		// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
-		// have code to disable super-read-only during InitPrimary
-		vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+		/*vtTabletVersion, err = cluster.GetMajorVersion("vttablet")
 		if err != nil {
 			return 1, err
 		}
 		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
-		if vtTabletVersion < 15 {
+		if vtTabletVersion <= 15 {
 			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
 				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
 					return 1, err
 				}
 			}
-		}
+		}*/
 		return m.Run(), nil
 	}()
 
@@ -265,6 +278,17 @@ func TestBackupTransformImpl(t *testing.T) {
 		require.Nil(t, err)
 	}
 
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.Nil(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion <= 15 {
+		if err := replica2.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+			require.Nil(t, err)
+		}
+	}
+
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
@@ -319,7 +343,19 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot,
 		fmt.Sprintf("--use_super_read_only=%t", true)}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
-	_ = replica1.VttabletProcess.UnsetSuperReadOnly("")
+
+	//_ = replica1.VttabletProcess.UnsetSuperReadOnly("")
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.Nil(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion <= 15 {
+		if err := replica1.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+			require.Nil(t, err)
+		}
+	}
+
 	err = replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
 
