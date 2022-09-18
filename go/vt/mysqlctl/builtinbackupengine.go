@@ -116,7 +116,7 @@ type FileEntry struct {
 	ParentPath string
 }
 
-func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
+func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	// find the root to use
 	var root string
 	switch fe.Base {
@@ -129,13 +129,18 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	case backupBinlogDir:
 		root = filepath.Dir(cnf.BinLogPath)
 	default:
-		return nil, vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
+		return "", vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
-	// and open the file
-	name := path.Join(fe.ParentPath, root, fe.Name)
+	return path.Join(fe.ParentPath, root, fe.Name), nil
+}
+
+func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
+	name, err := fe.fullPath(cnf)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot evaluate full name for %v", fe.Name)
+	}
 	var fd *os.File
-	var err error
 	if readOnly {
 		if fd, err = os.Open(name); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot open source file %v", name)
@@ -734,18 +739,31 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 }
 
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
-	params.Logger.Infof("Restoring incremental backup to: %v", bm.Position)
+	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
 
 	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
+	defer os.RemoveAll(createdDir)
+	mysqld, ok := params.Mysqld.(*Mysqld)
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "expected: Mysqld")
+	}
+	for _, fe := range bm.FileEntries {
+		fe.ParentPath = createdDir
+		binlogFile, err := fe.fullPath(params.Cnf)
+		if err != nil {
+			return vterrors.Wrap(err, "failed to restore file")
+		}
+		if err := mysqld.applyBinlogFile(binlogFile, params.RestoreToPos.GTIDSet); err != nil {
+			return vterrors.Wrap(err, "failed to extract binlog file")
+		}
+		defer os.Remove(binlogFile)
+		params.Logger.Infof("Applied binlog file: %v", binlogFile)
+	}
 	if err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return vterrors.Wrap(err, "failed to restore files")
 	}
-	params.Logger.Infof("Restored incremental backup file to: %v", createdDir)
-
-	if err := createRestoreIncrementalScript(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
-		return err
-	}
+	params.Logger.Infof("Restored incremental backup files to: %v", createdDir)
 
 	return nil
 }
@@ -766,10 +784,14 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 		return nil, err
 	}
 
+	var err error
 	if bm.Incremental {
-		be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
+		err = be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
 	} else {
-		be.executeRestoreFullBackup(ctx, params, bh, bm)
+		err = be.executeRestoreFullBackup(ctx, params, bh, bm)
+	}
+	if err != nil {
+		return nil, err
 	}
 	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
 	return &bm.BackupManifest, nil

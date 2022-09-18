@@ -101,6 +101,10 @@ type RestoreParams struct {
 	DryRun bool
 }
 
+func (p *RestoreParams) IsIncrementalRecovery() bool {
+	return !p.RestoreToPos.IsZero()
+}
+
 // RestoreEngine is the interface to restore a backup with a given engine.
 // Returns the manifest of a backup if successful, otherwise returns an error
 type RestoreEngine interface {
@@ -629,13 +633,4 @@ func binlogFilesToBackup(cnf *Mycnf, binlogFiles []string) (result []FileEntry, 
 		totalSize = totalSize + fi.Size()
 	}
 	return result, totalSize, nil
-}
-
-func createRestoreIncrementalScript(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
-	var sb strings.Builder
-	sb.WriteString("echo 'select current_user()' | mysql")
-	sb.WriteString(" --socket ")
-	sb.WriteString(cnf.SocketFile)
-	logger.Infof("Restore script: %v", sb.String())
-	return nil
 }

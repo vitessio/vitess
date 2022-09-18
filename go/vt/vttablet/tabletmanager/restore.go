@@ -282,7 +282,12 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
-		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+		if params.IsIncrementalRecovery() {
+			params.Logger.Infof("Restore: disabling replication")
+			if err := tm.disableReplication(context.Background()); err != nil {
+				return err
+			}
+		} else if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to primary only for "NORMAL" keyspaces
 			params.Logger.Infof("Restore: starting replication at position %v", pos)
 			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
@@ -536,6 +541,22 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		log.Warningf("Could not copy up to GTID.")
 		return vterrors.Wrapf(err, "context timeout while restoring up to specified GTID - %s", beforeGTIDPos)
 	}
+}
+
+func (tm *TabletManager) disableReplication(ctx context.Context) error {
+	cmds := []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
+		"RESET MASTER",
+	}
+	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return vterrors.Wrap(err, "failed to reset replication")
+	}
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, "//", 0, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+		return vterrors.Wrap(err, "failed to disable replication")
+	}
+
+	return nil
 }
 
 func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
