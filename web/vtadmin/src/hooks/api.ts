@@ -61,6 +61,7 @@ import {
     createKeyspace,
     reloadSchema,
     rebuildKeyspaceGraph,
+    removeKeyspaceCell,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -456,4 +457,16 @@ export const useRebuildKeyspaceGraph = (
     return useMutation<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>(() => {
         return rebuildKeyspaceGraph(params);
     }, options);
+};
+
+/**
+ * useRemoveKeyspaceCell is a mutate hook that removes a keyspace cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+ */
+export const useRemoveKeyspaceCell = (
+  params: Parameters<typeof removeKeyspaceCell>[0],
+  options?: UseMutationOptions<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>
+) => {
+  return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>(() => {
+      return removeKeyspaceCell(params);
+  }, options);
 };

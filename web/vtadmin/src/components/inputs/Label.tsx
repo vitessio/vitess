@@ -20,14 +20,15 @@ import style from './Label.module.scss';
 type NativeLabelProps = React.DetailedHTMLProps<React.LabelHTMLAttributes<HTMLLabelElement>, HTMLLabelElement>;
 
 interface Props extends NativeLabelProps {
-    label: string;
+  label: string;
+  required?: boolean;
 }
 
-export const Label: React.FunctionComponent<Props> = ({ children, label, ...props }) => {
-    return (
-        <label {...props}>
-            <span className={style.label}>{label}</span>
-            {children}
-        </label>
-    );
+export const Label: React.FunctionComponent<Props> = ({ children, required, label, ...props }) => {
+  return (
+    <label {...props}>
+      <span className={style.label}>{label}</span>{required && <span className="text-danger"> *</span>}
+      {children}
+    </label>
+  );
 };
