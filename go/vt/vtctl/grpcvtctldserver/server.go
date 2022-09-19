@@ -2620,6 +2620,10 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 			if *mysqlctl.DisableActiveReparents {
 				return nil
 			}
+			if req.RestoreToPos != "" && !req.DryRun {
+				// point in time recovery. Do not restore replication
+				return nil
+			}
 
 			// Otherwise, we find the correct primary tablet and set the
 			// replication source on the freshly-restored tablet, since the

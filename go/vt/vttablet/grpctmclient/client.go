@@ -855,6 +855,7 @@ func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodata
 		return err
 	}
 	defer closer.Close()
+
 	_, err = c.SetReplicationSource(ctx, &tabletmanagerdatapb.SetReplicationSourceRequest{
 		Parent:                parent,
 		TimeCreatedNs:         timeCreatedNS,

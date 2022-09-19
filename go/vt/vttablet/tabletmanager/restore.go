@@ -220,6 +220,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		}
 		params.RestoreToPos = pos
 	}
+	params.Logger.Infof("Restore: original tablet type=%v", originalType)
 
 	// Check whether we're going to restore before changing to RESTORE type,
 	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
@@ -317,7 +318,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			originalType = initType
 		}
 	}
-
+	if params.IsIncrementalRecovery() {
+		// override
+		params.Logger.Infof("Restore: will set tablet type to DRAINED as this is a point in time recovery")
+		originalType = topodatapb.TabletType_DRAINED
+	}
 	params.Logger.Infof("Restore: changing tablet type to %v", originalType)
 	// Change type back to original type if we're ok to serve.
 	return tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone)
@@ -547,7 +552,6 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 	cmds := []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
-		"RESET MASTER",
 	}
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
