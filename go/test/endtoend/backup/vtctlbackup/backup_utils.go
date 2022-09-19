@@ -795,11 +795,17 @@ func vtctlBackup(t *testing.T, tabletType string) {
 
 }
 
+func InitTestTable(t *testing.T) {
+	_, err := primary.VttabletProcess.QueryTablet("DROP TABLE IF EXISTS vt_insert_test", keyspaceName, true)
+	require.Nil(t, err)
+	_, err = primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.Nil(t, err)
+}
+
 // This will create schema in primary, insert some data to primary and verify the same data in replica
 func verifyInitialReplication(t *testing.T) {
-	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	require.Nil(t, err)
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	InitTestTable(t)
+	_, err := primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }
@@ -935,6 +941,11 @@ func vtctlBackupReplicaNoDropTables(t *testing.T, tabletType string) (backups []
 	return backups, destroy
 }
 
+func GetReplicaPosition(t *testing.T) string {
+	pos, _ := cluster.GetPrimaryPosition(t, *replica1, hostname)
+	return pos
+}
+
 func GetReplicaGtidPurged(t *testing.T) string {
 	query := "select @@global.gtid_purged as gtid_purged"
 	rs, err := replica1.VttabletProcess.QueryTablet(query, keyspaceName, true)
@@ -952,6 +963,18 @@ func InsertRowOnPrimary(t *testing.T, hint string) {
 	require.NoError(t, err)
 	_, err = primary.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
+}
+
+func ReadRowsFromReplica(t *testing.T) (msgs []string) {
+	query := "select msg from vt_insert_test"
+	rs, err := primary.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
+	for _, row := range rs.Named().Rows {
+		msg, err := row.ToString("msg")
+		require.NoError(t, err)
+		msgs = append(msgs, msg)
+	}
+	return msgs
 }
 
 func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.BackupManifest) {
@@ -991,4 +1014,16 @@ func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Positio
 	require.NoError(t, err)
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[len(backups)-1]
 	return readManifestFile(t, backupLocation)
+}
+
+func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectError string) {
+	require.False(t, restoreToPos.IsZero())
+	restoreToPosArg := mysql.EncodePosition(restoreToPos)
+	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--", "--restore_to_pos", restoreToPosArg, replica1.Alias)
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return
+	}
+	require.NoErrorf(t, err, "output: %v", output)
 }

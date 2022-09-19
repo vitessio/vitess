@@ -17,15 +17,28 @@ limitations under the License.
 package mysqlctld
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/magiconair/properties/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
+
+var (
+	rowsPerPosition = map[string]int{}
+)
+
+func recordRowsPerPosition(t *testing.T) {
+	pos := backup.GetReplicaPosition(t)
+	msgs := backup.ReadRowsFromReplica(t)
+	rowsPerPosition[pos] = len(msgs)
+	t.Logf("============ ZZZ pos=%v, rows=%v\n", pos, len(msgs))
+}
 
 // TestIncrementalBackupMysqlctld - tests incremental backups using myslctld
 func TestIncrementalBackupMysqlctld(t *testing.T) {
@@ -35,15 +48,19 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 	require.NoError(t, err, "setup failed with status code %d", code)
 	defer backup.TearDownCluster()
 
+	backup.InitTestTable(t)
+
 	var fullBackupPos mysql.Position
 	t.Run("full backup", func(t *testing.T) {
+		backup.InsertRowOnPrimary(t, "")
+		time.Sleep(1100 * time.Millisecond)
+		recordRowsPerPosition(t)
 		manifest := backup.TestReplicaFullBackup(t)
 		fullBackupPos = manifest.Position
 		require.False(t, fullBackupPos.IsZero())
 	})
 	lastBackupPos := fullBackupPos
 
-	// backup.ReadGTIDExecuted(t)
 	tt := []struct {
 		name              string
 		writeBeforeBackup bool
@@ -94,7 +111,9 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 			// we wait for 1 second because backups ar ewritten to a directory named after the current timestamp,
 			// in 1 second resolution. We want to aoid two backups that have the same pathname. Realistically this
 			// is only ever a problem in this endtoend test, not in production.
+			// Also, we gie the replica a chance to catch up.
 			time.Sleep(1100 * time.Millisecond)
+			recordRowsPerPosition(t)
 			// configure --incremental-from-pos to either:
 			// - auto
 			// - explicit last backup pos
@@ -126,6 +145,17 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 				expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 			}
 			require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v", expectFromPosition, fromPositionIncludingPurged)
+		})
+	}
+
+	for pos, count := range rowsPerPosition {
+		testName := fmt.Sprintf("PITR %s", pos)
+		t.Run(testName, func(t *testing.T) {
+			restoreToPos, err := mysql.DecodePosition(pos)
+			require.NoError(t, err)
+			backup.TestReplicaRestoreToPos(t, restoreToPos, "")
+			msgs := backup.ReadRowsFromReplica(t)
+			assert.Equal(t, count, len(msgs))
 		})
 	}
 }
