@@ -98,8 +98,18 @@ var sequenceFields = []*querypb.Field{
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
-	cm := qre.tsv.qe.consolidatorMode.Get()
-	return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
+	co := qre.options.GetConsolidator()
+	switch co {
+	case querypb.ExecuteOptions_CONSOLIDATOR_DISABLED:
+		return false
+	case querypb.ExecuteOptions_CONSOLIDATOR_ENABLED:
+		return true
+	case querypb.ExecuteOptions_CONSOLIDATOR_ENABLED_REPLICAS:
+		return qre.tabletType != topodatapb.TabletType_PRIMARY
+	default:
+		cm := qre.tsv.qe.consolidatorMode.Get()
+		return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
+	}
 }
 
 // Execute performs a non-streaming query execution.

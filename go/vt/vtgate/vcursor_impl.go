@@ -794,6 +794,11 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
+// SetConsolidator implements the SessionActions interface
+func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
+	vc.safeSession.GetOrCreateOptions().Consolidator = consolidator
+}
+
 // SetFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.FoundRows = foundRows

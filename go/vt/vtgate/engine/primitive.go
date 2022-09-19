@@ -141,6 +141,7 @@ type (
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
+		SetConsolidator(querypb.ExecuteOptions_Consolidator)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)
