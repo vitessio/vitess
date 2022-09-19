@@ -507,18 +507,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					t.Fatalf(err.Error())
 				}
 			}
-			/*for ind, tablet := range tablets {
-				if err := tablet.Vttablet.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}); err != nil {
-					log.Errorf("tablet status no reached. %d err: %v", tablets[ind].Name, err)
-					t.Fatalf(err.Error())
-				}
-			}*/
 			time.Sleep(10 * time.Second)
 		}
-
-		/*if err := cluster.WaitForTabletSetup(vc.VtctlClient, tabletIndex-1, []string{"replica", "rdonly", "primary"}); err != nil {
-			require.NoError(t, err)
-		}*/
 
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)

@@ -107,7 +107,6 @@ func TestMain(m *testing.M) {
 		if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, 1, []string{"replica", "rdonly", "primary"}); err != nil {
 			return 1
 		}
-		//time.Sleep(10 * time.Second)
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
 			clusterInstance.VtgateProcess = cluster.VtgateProcess{}

@@ -306,6 +306,8 @@ func Init(
 	return rpcVTGate
 }
 
+// Get all keyspaces, load and resolve it. Sometime due to cache issue we don't get value for GetAllKeyspaces. In order
+// to avoid stale result we wrap it around for loop.
 func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	waitUntil := time.Now().Add(5 * time.Second)
 	for time.Now().Before(waitUntil) {
@@ -315,7 +317,6 @@ func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st
 			return
 		}
 		if len(keyspaces) > 0 {
-			//log.Info("getCurrentValue: addKeyspaceToTracker")
 			for _, keyspace := range keyspaces {
 				resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
 			}

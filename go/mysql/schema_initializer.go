@@ -22,6 +22,10 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+// This file provides methods to register schema initialization functions (any query which change schema) using RegisterSchemaInitializer.
+// These modules/functions can be call any time using InitializeSchema. It assumes mysql instance is in super-read-only mode.
+// Therefore, it sets it off before execution and turn it on after all modules are executed.
+
 const (
 	setSuperUser       = `SET GLOBAL super_read_only='ON'`
 	unSetSuperUser     = `SET GLOBAL super_read_only='OFF'`

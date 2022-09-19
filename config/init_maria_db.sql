@@ -1,5 +1,7 @@
 # This file is executed immediately after mysql_install_db,
-# to initialize a fresh data directory.
+# to initialize a fresh data directory. It is mariaDB equivalent of init_db.sql.
+# Since init_db.sql is for mysql which has super_read_only related stuff, and mariaDB
+# does not recognize super_read_only, therefore we end up creating this file
 
 ###############################################################################
 # WARNING: This sql is *NOT* safe for production use,

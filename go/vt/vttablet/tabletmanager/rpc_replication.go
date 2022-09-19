@@ -39,7 +39,6 @@ import (
 )
 
 var (
-	//SetSuperReadOnly          = true
 	createReparentQueries     []string
 	alterReparentQueries      []string
 	disableReplicationManager bool
@@ -49,7 +48,6 @@ func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable_semi_sync", false, "")
 	fs.MarkDeprecated("enable_semi_sync", "--enable_semi_sync is deprecated; please set the correct durability policy on the keyspace instead.")
 
-	//fs.BoolVar(&SetSuperReadOnly, "use_super_read_only", SetSuperReadOnly, "Set super_read_only flag when performing planned failover.")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 }
 
@@ -436,6 +434,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 	if err != nil {
 		return err
 	}
+	// TODO: delete this later
 	/*cmds := mysqlctl.CreateReparentJournal()
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return err

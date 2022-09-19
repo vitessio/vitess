@@ -429,7 +429,6 @@ func TestERSForInitialization(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	//time.Sleep(10 * time.Second)
 	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, len(tablets), []string{"replica", "rdonly", "primary"}); err != nil {
 		require.NoError(t, err)
 	}

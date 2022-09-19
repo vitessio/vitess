@@ -131,7 +131,6 @@ func CreateTablet(
 			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
-
 	controller.AddStatusHeader()
 	controller.AddStatusPart()
 	tabletMap[uid] = &comboTablet{

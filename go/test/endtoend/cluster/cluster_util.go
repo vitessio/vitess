@@ -359,6 +359,7 @@ func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, e
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
 
+// WaitForTabletSetup polls for 10 seconds until all tablet shows up under ListAllTablets call
 func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets int, expectedStatus []string) error {
 	// wait for both tablet to get into replica state in topo
 	waitUntil := time.Now().Add(10 * time.Second)

@@ -752,7 +752,7 @@ func (db *LocalCluster) UnsetReadOnly(dbname string) error {
 }
 
 // InitSchema will initialize the schema as it is done during vttablet setup.
-// There are some test cases where we are expecting schema without calling initPrimary
+// There are some test cases where we are expecting schema without calling tablet.setup
 func (db *LocalCluster) InitSchema() []error {
 	// get a dba connection
 	params := db.mysql.Params("")

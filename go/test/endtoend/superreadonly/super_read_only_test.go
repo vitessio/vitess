@@ -31,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+// This will test all different scenarios of super-read-only flag.
+
 var (
 	vtInsertTest = `
 		create table if not exists vt_insert_test (

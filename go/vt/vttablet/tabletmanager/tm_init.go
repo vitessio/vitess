@@ -467,7 +467,6 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false, true)
 
 	log.Infof("Restore: populating local_metadata")
-	// TODO: @rameez. Should I do change of introducing flag for InitPopulateMetadata in this PR.
 	// Populate local_metadata before starting without --skip-networking,
 	// so it's there before we start announcing ourselves.
 	if metadataManager != nil {

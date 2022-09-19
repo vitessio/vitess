@@ -93,9 +93,9 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		sql := string(initDb)
 		// Since password update is DML we need to insert it before we disable
 		// super-read-only therefore doing the split below.
-		spilltedString := strings.Split(sql, "# add custom sql here")
-		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
-		sql = firstPart + spilltedString[1]
+		splitString := strings.Split(sql, "# add custom sql here")
+		firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+		sql = firstPart + splitString[1]
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
@@ -190,19 +190,6 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
-
-		/*vtTabletVersion, err = cluster.GetMajorVersion("vttablet")
-		if err != nil {
-			return 1, err
-		}
-		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
-		if vtTabletVersion <= 15 {
-			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
-					return 1, err
-				}
-			}
-		}*/
 		return m.Run(), nil
 	}()
 
@@ -344,7 +331,6 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 		fmt.Sprintf("--use_super_read_only=%t", true)}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 
-	//_ = replica1.VttabletProcess.UnsetSuperReadOnly("")
 	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
 	if err != nil {
 		require.Nil(t, err)

@@ -68,7 +68,6 @@ var (
 		"--queryserver-config-schema-reload-time", "5",
 		"--serving_state_grace_period", "1s",
 		fmt.Sprintf("--use_super_read_only=%t", true),
-		//fmt.Sprintf("--set_super_read_only_after_schema_initializer=%t", false),
 	}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",
@@ -297,16 +296,6 @@ func initializeClusterLate(t *testing.T) {
 		// Modify mysqlctl password too, or teardown will be locked out
 		tablet.MysqlctlProcess.ExtraArgs = append(tablet.MysqlctlProcess.ExtraArgs, mysqlctlArg...)
 	}
-
-	/*for _, tablet := range shard.Vttablets {
-		if err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}); err != nil {
-			log.Errorf("tablet status no reached. %d err: %v", tablet.TabletUID, err)
-			return
-		}
-	}*/
-
-	// wait for addKeyspaceToTracker to timeout
-	//time.Sleep(10 * time.Second)
 
 	if err := cluster.WaitForTabletSetup(&clusterInstance.VtctlclientProcess, len(shard.Vttablets), []string{"replica", "rdonly", "primary"}); err != nil {
 		require.NoError(t, err)

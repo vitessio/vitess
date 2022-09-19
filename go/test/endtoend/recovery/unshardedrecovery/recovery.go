@@ -97,15 +97,15 @@ func TestMainImpl(m *testing.M) {
 		sql := string(initDb)
 		// Since password update is DML we need to insert it before we disable
 		// super-read-only therefore doing the split below.
-		spilltedString := strings.Split(sql, "# add custom sql here")
-		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+		splitString := strings.Split(sql, "# add custom sql here")
+		firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
 
 		// https://github.com/vitessio/vitess/issues/8315
 		oldAlterTableMode := `
 SET GLOBAL old_alter_table = ON;
 `
 		sql = firstPart + oldAlterTableMode
-		sql = sql + spilltedString[1]
+		sql = sql + splitString[1]
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 

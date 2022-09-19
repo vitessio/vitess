@@ -305,7 +305,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		schemaErrors, metadataError = initSchema(ctx, params)
 		if len(schemaErrors) > 0 {
 			params.Logger.Errorf("Error in executing following schema changes during tablet setup")
-			// TODO: @rameez should we fail if we are not able to initialize schema
+			// TODO: @rameez should we fail if we are not able to initialize schema?
 			for _, err := range schemaErrors {
 				params.Logger.Errorf("%v", err)
 			}

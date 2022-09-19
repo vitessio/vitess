@@ -59,7 +59,6 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 
 	// find the entry in the cache, add it if not there
 	key := wkey.String()
-
 	q.mutex.Lock()
 	entry, ok := q.entries[key]
 	if !ok {
@@ -108,6 +107,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 					log.Errorf("ResilientQuery uncaught panic, cell :%v, err :%v)", key, err)
 				}
 			}()
+
 			newCtx, cancel := context.WithTimeout(ctx, *srvTopoTimeout)
 			defer cancel()
 

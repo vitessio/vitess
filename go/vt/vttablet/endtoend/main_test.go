@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
 			return 1
 		}
-		err := cluster.Execute(procSQL, "vttest")
+		err := cluster.ExecuteWithReadOnlyHandling(procSQL, "vttest")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

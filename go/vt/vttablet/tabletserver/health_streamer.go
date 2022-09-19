@@ -404,10 +404,6 @@ func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) 
 }
 
 func init() {
-	// Disabling it because if we create schema-copy-table before hand then
-	// test case like vitess.io/vitess/go/test/endtoend/vtgate/schematracker/loadkeyspace -run TestBlockedLoadKeyspace
-	// fail. The reason is they expect schema-copy-table to present only if we have enabled schema tracking.
-	// TODO: @rameez, discuss with team
 	InitSchema()
 }
 
