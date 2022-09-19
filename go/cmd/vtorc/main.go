@@ -25,7 +25,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	vtlog "vitess.io/vitess/go/vt/log"
@@ -106,12 +105,12 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
-	servenv.RegisterDefaultFlagsForFlagSet(fs)
-	servenv.RegisterFlagsForFlagSet(fs)
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
 
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
-	servenv.ParseFlags("vtorc")
 
 	// N.B. This code has to be duplicated from go/internal/flag in order to
 	// correctly transform `-help` => `--help`. Otherwise passing `-help` would
@@ -153,7 +152,7 @@ Please update your scripts before the next version, when this will begin to brea
 		log.Warningf(warning, args, os.Args)
 	}
 
-	_flag.Parse(fs)
+	servenv.ParseFlags("vtorc")
 	// N.B. Also duplicated from go/internal/flag, for the same reason as above.
 	if help || fs.Arg(0) == "help" {
 		pflag.Usage()

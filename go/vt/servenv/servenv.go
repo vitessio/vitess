@@ -88,18 +88,15 @@ var (
 // This must be called before servenv.ParseFlags if using any of those
 // functions.
 func RegisterFlags() {
-	OnParse(RegisterFlagsForFlagSet)
-}
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.DurationVar(&lameduckPeriod, "lameduck-period", lameduckPeriod, "keep running at least this long after SIGTERM before stopping")
+		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
+		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
+		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
 
-// RegisterFlagsForFlagSet registers the servenv flags for the given flag set
-func RegisterFlagsForFlagSet(fs *pflag.FlagSet) {
-	fs.DurationVar(&lameduckPeriod, "lameduck-period", lameduckPeriod, "keep running at least this long after SIGTERM before stopping")
-	fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
-	fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
-	fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
-
-	// pid_file.go
-	fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+		// pid_file.go
+		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+	})
 }
 
 // Init is the first phase of the server startup.
@@ -245,12 +242,9 @@ func FireRunHooks() {
 // listening to a given port for standard connections.
 // If calling this, then call RunDefault()
 func RegisterDefaultFlags() {
-	OnParse(RegisterDefaultFlagsForFlagSet)
-}
-
-// RegisterDefaultFlagsForFlagSet registers the default flags for the given flag set
-func RegisterDefaultFlagsForFlagSet(fs *pflag.FlagSet) {
-	fs.IntVar(&port, "port", port, "port for the server")
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.IntVar(&port, "port", port, "port for the server")
+	})
 }
 
 // Port returns the value of the `--port` flag.
