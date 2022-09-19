@@ -425,16 +425,16 @@ func (config *Configuration) postReadAdjustments() error {
 	if config.MySQLOrchestratorSSLCAFile != "" {
 		config.MySQLVTOrcSSLCAFile = config.MySQLOrchestratorSSLCAFile
 	}
-	if config.MySQLOrchestratorSSLSkipVerify != false {
+	if config.MySQLOrchestratorSSLSkipVerify {
 		config.MySQLVTOrcSSLSkipVerify = config.MySQLOrchestratorSSLSkipVerify
 	}
-	if config.MySQLOrchestratorUseMutualTLS != false {
+	if config.MySQLOrchestratorUseMutualTLS {
 		config.MySQLVTOrcUseMutualTLS = config.MySQLOrchestratorUseMutualTLS
 	}
 	if config.MySQLOrchestratorReadTimeoutSeconds != 0 {
 		config.MySQLVTOrcReadTimeoutSeconds = config.MySQLOrchestratorReadTimeoutSeconds
 	}
-	if config.MySQLOrchestratorRejectReadOnly != false {
+	if config.MySQLOrchestratorRejectReadOnly {
 		config.MySQLVTOrcRejectReadOnly = config.MySQLOrchestratorRejectReadOnly
 	}
 
