@@ -476,10 +476,10 @@ export const useRemoveKeyspaceCell = (
  * useCreateShard is a mutate hook that creates a shard in a keyspace
  */
 export const useCreateShard = (
-  params: Parameters<typeof createShard>[0],
-  options?: UseMutationOptions<Awaited<ReturnType<typeof createShard>>, Error>
+    params: Parameters<typeof createShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createShard>>, Error>
 ) => {
-  return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
-      return createShard(params);
-  }, options);
+    return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
+        return createShard(params);
+    }, options);
 };
