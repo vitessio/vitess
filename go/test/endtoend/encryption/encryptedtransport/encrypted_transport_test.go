@@ -276,7 +276,7 @@ func useEffectiveGroups(t *testing.T, err error, grpcAddress string, vc vtgatese
 	// 'vtgate client 1' is authorized to access vt_insert_test
 	callerID := &vtrpc.CallerID{
 		Principal: "my-caller",
-		Groups: []string{"vtgate client 1"},
+		Groups:    []string{"vtgate client 1"},
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
@@ -287,7 +287,7 @@ func useEffectiveGroups(t *testing.T, err error, grpcAddress string, vc vtgatese
 	// 'vtgate client 2' is not authorized to access vt_insert_test
 	callerID = &vtrpc.CallerID{
 		Principal: "my-caller",
-		Groups: []string{"vtgate client 2"},
+		Groups:    []string{"vtgate client 2"},
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
