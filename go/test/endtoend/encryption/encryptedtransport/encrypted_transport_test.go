@@ -192,6 +192,13 @@ func TestSecureTransport(t *testing.T) {
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 
+	useEffectiveCallerID(t, err, grpcAddress, vc, request, qr, ctx)
+	useEffectiveGroups(t, err, grpcAddress, vc, request, qr, ctx)
+
+	clusterInstance.Teardown()
+}
+
+func useEffectiveCallerID(t *testing.T, err error, grpcAddress string, vc vtgateservicepb.VitessClient, request *vtgatepb.ExecuteRequest, qr *vtgatepb.ExecuteResponse, ctx context.Context) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
@@ -238,8 +245,57 @@ func TestSecureTransport(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
+}
 
-	clusterInstance.Teardown()
+func useEffectiveGroups(t *testing.T, err error, grpcAddress string, vc vtgateservicepb.VitessClient, request *vtgatepb.ExecuteRequest, qr *vtgatepb.ExecuteResponse, ctx context.Context) {
+	// now restart vtgate in the mode where we don't use SSL
+	// for client connections, but we copy effective caller's groups
+	// into immediate caller id.
+	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid", "--grpc_use_effective_groups"}
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
+	err = clusterInstance.RestartVtgate()
+	require.NoError(t, err)
+
+	grpcAddress = fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
+
+	setSSLInfoEmpty()
+
+	// get vitess client
+	vc, err = getVitessClient(grpcAddress)
+	require.NoError(t, err)
+
+	// test with empty effective caller Id
+	request = getRequest("select * from vt_insert_test")
+	qr, err = vc.Execute(ctx, request)
+	require.NoError(t, err)
+	err = vterrors.FromVTRPC(qr.Error)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
+
+	// 'vtgate client 1' is authorized to access vt_insert_test
+	callerID := &vtrpc.CallerID{
+		Principal: "my-caller",
+		Groups: []string{"vtgate client 1"},
+	}
+	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
+	qr, err = vc.Execute(ctx, request)
+	require.NoError(t, err)
+	err = vterrors.FromVTRPC(qr.Error)
+	require.NoError(t, err)
+
+	// 'vtgate client 2' is not authorized to access vt_insert_test
+	callerID = &vtrpc.CallerID{
+		Principal: "my-caller",
+		Groups: []string{"vtgate client 2"},
+	}
+	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
+	qr, err = vc.Execute(ctx, request)
+	require.NoError(t, err)
+	err = vterrors.FromVTRPC(qr.Error)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 }
 
 func clusterSetUp(t *testing.T) (int, error) {
