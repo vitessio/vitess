@@ -22,6 +22,12 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
+type CaseAwareCollation interface {
+	Collation
+	ToUpper(dst []byte, src []byte) []byte
+	ToLower(dst []byte, src []byte) []byte
+}
+
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
@@ -174,16 +180,6 @@ func register(c Collation) {
 		panic("duplicated collation registered")
 	}
 	globalAllCollations[c.ID()] = c
-}
-
-func ToUpper(id ID, raw []byte, dst []byte) []byte {
-	c := globalAllCollations[id]
-	return c.ToUpper(raw, dst)
-}
-
-func ToLower(id ID, raw []byte, dst []byte) []byte {
-	c := globalAllCollations[id]
-	return c.ToLower(raw, dst)
 }
 
 // Slice returns the substring in `input[from:to]`, where `from` and `to`

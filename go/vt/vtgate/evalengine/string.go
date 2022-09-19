@@ -35,14 +35,17 @@ func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		return
 	}
 
+	coll := collations.Local().LookupByID(inarg.Collation())
+
 	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
 		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else {
+	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
 		var dst []byte
-		dst = collations.ToLower(inarg.Collation(), raw, dst)
+		dst = csa.ToLower(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
 	}
+
 }
 
 func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -65,12 +68,14 @@ func (builtinLcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		return
 	}
 
+	coll := collations.Local().LookupByID(inarg.Collation())
+
 	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
 		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else {
+	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
 		var dst []byte
-		dst = collations.ToLower(inarg.Collation(), raw, dst)
+		dst = csa.ToLower(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
 	}
 }
@@ -95,12 +100,14 @@ func (builtinUpper) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		return
 	}
 
+	coll := collations.Local().LookupByID(inarg.Collation())
+
 	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
 		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else {
+	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
 		var dst []byte
-		dst = collations.ToUpper(inarg.Collation(), raw, dst)
+		dst = csa.ToUpper(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
 	}
 }
@@ -125,12 +132,14 @@ func (builtinUcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		return
 	}
 
+	coll := collations.Local().LookupByID(inarg.Collation())
+
 	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
 		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else {
+	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
 		var dst []byte
-		dst = collations.ToUpper(inarg.Collation(), raw, dst)
+		dst = csa.ToUpper(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
 	}
 }

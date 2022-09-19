@@ -113,22 +113,22 @@ func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune,
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_8bit_bin) ToLower(raw, dst []byte) []byte {
+func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
 	lowerTable := c.simpletables.tolower
 
-	for _, c := range raw {
+	for _, c := range src {
 		dst = append(dst, lowerTable[c])
 	}
-	return raw
+	return dst
 }
 
-func (c *Collation_8bit_bin) ToUpper(raw, dst []byte) []byte {
+func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
 	upperTable := c.simpletables.toupper
 
-	for _, c := range raw {
+	for _, c := range src {
 		dst = append(dst, upperTable[c])
 	}
-	return raw
+	return dst
 }
 
 type Collation_8bit_simple_ci struct {
@@ -320,12 +320,12 @@ func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, e
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_binary) ToLower(raw, dst []byte) []byte {
+func (c *Collation_binary) ToLower(dst, raw []byte) []byte {
 	dst = append(dst, raw...)
 	return dst
 }
 
-func (c *Collation_binary) ToUpper(raw, dst []byte) []byte {
+func (c *Collation_binary) ToUpper(dst, raw []byte) []byte {
 	dst = append(dst, raw...)
 	return dst
 }

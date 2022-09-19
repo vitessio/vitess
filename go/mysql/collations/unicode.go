@@ -165,14 +165,14 @@ func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, match
 	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_unicode_general_ci) ToLower(raw, dst []byte) []byte {
-	dst = append(dst, bytes.ToLower(raw)...)
-	return dst
+func (c *Collation_unicode_general_ci) ToLower(dst, src []byte) []byte {
+	panic("This collation is not supported.")
+
 }
 
-func (c *Collation_unicode_general_ci) ToUpper(raw, dst []byte) []byte {
-	dst = append(dst, bytes.ToUpper(raw)...)
-	return dst
+func (c *Collation_unicode_general_ci) ToUpper(dst, src []byte) []byte {
+	panic("This collation is not supported.")
+
 }
 
 type Collation_unicode_bin struct {
@@ -377,12 +377,11 @@ func collationBinary(left, right []byte, rightPrefix bool) int {
 	return len(left) - len(right)
 }
 
-func (c *Collation_unicode_bin) ToLower(raw, dst []byte) []byte {
-	dst = append(dst, bytes.ToLower(raw)...)
-	return dst
+func (c *Collation_unicode_bin) ToLower(dst, src []byte) []byte {
+	panic("This collation is not supported.")
+
 }
 
-func (c *Collation_unicode_bin) ToUpper(raw, dst []byte) []byte {
-	dst = append(dst, bytes.ToUpper(raw)...)
-	return dst
+func (c *Collation_unicode_bin) ToUpper(dst, src []byte) []byte {
+	panic("This collation is not supported.")
 }
