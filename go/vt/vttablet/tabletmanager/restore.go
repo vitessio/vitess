@@ -283,7 +283,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
-		if params.IsIncrementalRecovery() {
+		if params.IsIncrementalRecovery() && !params.DryRun {
 			params.Logger.Infof("Restore: disabling replication")
 			if err := tm.disableReplication(context.Background()); err != nil {
 				return err
@@ -318,7 +318,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			originalType = initType
 		}
 	}
-	if params.IsIncrementalRecovery() {
+	if params.IsIncrementalRecovery() && !params.DryRun {
 		// override
 		params.Logger.Infof("Restore: will set tablet type to DRAINED as this is a point in time recovery")
 		originalType = topodatapb.TabletType_DRAINED
