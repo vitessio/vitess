@@ -106,6 +106,8 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	servenv.RegisterDefaultFlagsForFlagSet(fs)
+	servenv.RegisterFlagsForFlagSet(fs)
 
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
@@ -198,5 +200,11 @@ Please update your scripts before the next version, when this will begin to brea
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	app.HTTP(*discovery)
+	go app.HTTP(*discovery)
+
+	// For backward compatability, we require that VTOrc functions even when the --port flag is not provided.
+	// In this case, it should function like before but without the servenv pages.
+	// Therefore, currently we don't check for the --port flag to be necessary, but release 16+ that check
+	// can be added to always have the serenv page running in VTOrc.
+	servenv.RunDefault()
 }
