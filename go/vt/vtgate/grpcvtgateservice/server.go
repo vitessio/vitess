@@ -46,7 +46,7 @@ const (
 )
 
 var (
-	useEffective bool
+	useEffective       bool
 	useEffectiveGroups bool
 )
 
