@@ -19,11 +19,12 @@ package tabletserver
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
