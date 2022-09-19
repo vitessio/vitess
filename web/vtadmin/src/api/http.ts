@@ -600,3 +600,31 @@ export const removeKeyspaceCell = async (params: RemoveKeyspaceCellParams) => {
 
     return pb.RemoveKeyspaceCellResponse.create(result);
 };
+
+export interface CreateShardParams {
+  keyspace: string;
+  clusterID: string;
+
+  // shardName is the name of the shard to create. E.g. "-" or "-80".
+  shard_name: string;
+
+  // force treats an attempt to create a shard that already exists as a
+  // non-error.
+  force?: boolean;
+
+  // IncludeParent creates the parent keyspace as an empty BASE keyspace, if it
+  // doesn't already exist.
+  include_parent?: boolean;
+}
+
+
+export const createShard = async (params: CreateShardParams) => {
+  const { result } = await vtfetch(`/api/shards/${params.clusterID}`, {
+      method: 'put',
+      body: JSON.stringify(params),
+  });
+  const err = pb.CreateShardRequest.verify(result);
+  if (err) throw Error(err);
+
+  return vtctldata.CreateShardResponse.create(result);
+};

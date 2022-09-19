@@ -62,6 +62,7 @@ import {
     reloadSchema,
     rebuildKeyspaceGraph,
     removeKeyspaceCell,
+    createShard,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -469,4 +470,16 @@ export const useRemoveKeyspaceCell = (
     return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>(() => {
         return removeKeyspaceCell(params);
     }, options);
+};
+
+/**
+ * useCreateShard is a mutate hook that creates a shard in a keyspace
+ */
+export const useCreateShard = (
+  params: Parameters<typeof createShard>[0],
+  options?: UseMutationOptions<Awaited<ReturnType<typeof createShard>>, Error>
+) => {
+  return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
+      return createShard(params);
+  }, options);
 };
