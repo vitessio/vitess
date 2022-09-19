@@ -166,6 +166,12 @@ other.
 The main use case is to run queries spanning a long period of time which
 require transactional guarantees such as consistency or atomicity.
 
+#### Support for specifying group information in calls to VTGate
+
+`--grpc_use_effective_groups` allows non-SSL callers to specify groups information for a caller.
+Until now, you could only specify the caller-id for the security context used to authorize queries.
+As of now, you can specify the principal of the caller, and any groups they belong to.
+
 ### Online DDL changes
 
 #### Concurrent vitess migrations
