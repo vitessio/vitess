@@ -57,6 +57,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"os"
 	"os/exec"
@@ -247,7 +248,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {
-		return 1, err
+		return 1, errors.Wrap(err, "unable to start topo")
 	}
 
 	// create all certs
@@ -330,7 +331,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 	for _, proc := range mysqlProcesses {
 		err := proc.Wait()
 		if err != nil {
-			return 1, err
+			return 1, errors.Wrap(err, "unable to wait on mysql process")
 		}
 	}
 	return 0, nil
