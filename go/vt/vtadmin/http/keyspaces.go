@@ -87,7 +87,7 @@ func GetKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(keyspaces, err)
 }
 
-// RebuildKeyspace graph implements the http wrapper for /keyspaces/{cluster_id}/{name}/rebuild_keyspace_graph
+// RebuildKeyspaceGraph implements the http wrapper for /keyspaces/{cluster_id}/{name}/rebuild_keyspace_graph
 func RebuildKeyspaceGraph(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)
 	decoder := json.NewDecoder(r.Body)
@@ -109,6 +109,35 @@ func RebuildKeyspaceGraph(ctx context.Context, r Request, api *API) *JSONRespons
 		Keyspace:     vars["name"],
 		Cells:        strings.Split(params.Cells, ","),
 		AllowPartial: params.AllowPartial,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// RemoveKeyspaceCell implements the http wrapper for /keyspaces/{cluster_id}/{name}/remove_keyspace_cell
+func RemoveKeyspaceCell(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := mux.Vars(r.Request)
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var params struct {
+		Cell      string `json:"cell"`
+		Force     bool   `json:"force"`
+		Recursive bool   `json:"recursive"`
+	}
+
+	if err := decoder.Decode(&params); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.RemoveKeyspaceCell(ctx, &vtadminpb.RemoveKeyspaceCellRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["name"],
+		Cell:      params.Cell,
+		Force:     params.Force,
+		Recursive: params.Recursive,
 	})
 
 	return NewJSONResponse(res, err)

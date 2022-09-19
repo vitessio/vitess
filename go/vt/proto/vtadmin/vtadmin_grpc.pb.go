@@ -112,6 +112,8 @@ type VTAdminClient interface {
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
 	ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error)
+	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+	RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -445,6 +447,15 @@ func (c *vTAdminClient) ReloadSchemas(ctx context.Context, in *ReloadSchemasRequ
 	return out, nil
 }
 
+func (c *vTAdminClient) RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error) {
+	out := new(RemoveKeyspaceCellResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RemoveKeyspaceCell", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error) {
 	out := new(RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RunHealthCheck", in, out, opts...)
@@ -628,6 +639,8 @@ type VTAdminServer interface {
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
 	ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error)
+	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+	RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -765,6 +778,9 @@ func (UnimplementedVTAdminServer) RefreshTabletReplicationSource(context.Context
 }
 func (UnimplementedVTAdminServer) ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemas not implemented")
+}
+func (UnimplementedVTAdminServer) RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -1385,6 +1401,24 @@ func _VTAdmin_ReloadSchemas_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveKeyspaceCellRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RemoveKeyspaceCell(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RemoveKeyspaceCell",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RemoveKeyspaceCell(ctx, req.(*RemoveKeyspaceCellRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RunHealthCheckRequest)
 	if err := dec(in); err != nil {
@@ -1699,6 +1733,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReloadSchemas",
 			Handler:    _VTAdmin_ReloadSchemas_Handler,
+		},
+		{
+			MethodName: "RemoveKeyspaceCell",
+			Handler:    _VTAdmin_RemoveKeyspaceCell_Handler,
 		},
 		{
 			MethodName: "RunHealthCheck",

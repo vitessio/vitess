@@ -122,6 +122,8 @@ service VTAdmin {
     // tablets in one or more clusters, depending on the request fields (see
     // ReloadSchemasRequest for details).
     rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
+    // RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+    rpc RemoveKeyspaceCell(RemoveKeyspaceCellRequest) returns (RemoveKeyspaceCellResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
     // SetReadOnly sets the tablet to read-only mode.
@@ -710,6 +712,18 @@ message RefreshTabletReplicationSourceResponse {
     string shard = 2;
     topodata.TabletAlias primary = 3;
     Cluster cluster = 4;
+}
+
+message RemoveKeyspaceCellRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string cell = 3;
+  bool force = 4;
+  bool recursive = 5;
+}
+
+message RemoveKeyspaceCellResponse {
+  string status = 1;
 }
 
 message RunHealthCheckRequest {
