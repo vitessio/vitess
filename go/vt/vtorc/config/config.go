@@ -42,19 +42,14 @@ var configurationLoaded = make(chan bool)
 
 const (
 	HealthPollSeconds                     = 1
-	RaftHealthPollSeconds                 = 10
-	RecoveryPollSeconds                   = 1
 	ActiveNodeExpireSeconds               = 5
-	BinlogFileHistoryDays                 = 1
 	MaintenanceOwner                      = "vtorc"
 	AuditPageSize                         = 20
 	MaintenancePurgeDays                  = 7
 	MySQLTopologyMaxPoolConnections       = 3
 	MaintenanceExpireMinutes              = 10
-	AgentHTTPTimeoutSeconds               = 60
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
-	SelectTrueQuery                       = "select 1"
 )
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -227,6 +222,8 @@ type Configuration struct {
 	InstanceDBExecContextTimeoutSeconds         int               // Timeout on context used while calling ExecContext on instance database
 	LockShardTimeoutSeconds                     int               // Timeout on context used to lock shard. Should be a small value because we should fail-fast
 	WaitReplicasTimeoutSeconds                  int               // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
+	TopoInformationRefreshSeconds               int               // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds                         int               // Timer duration on which VTOrc recovery analysis runs
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -378,6 +375,8 @@ func newConfiguration() *Configuration {
 		InstanceDBExecContextTimeoutSeconds:         30,
 		LockShardTimeoutSeconds:                     30,
 		WaitReplicasTimeoutSeconds:                  30,
+		TopoInformationRefreshSeconds:               15,
+		RecoveryPollSeconds:                         1,
 	}
 }
 
