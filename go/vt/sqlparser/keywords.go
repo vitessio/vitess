@@ -384,6 +384,7 @@ var keywords = []keyword{
 	{"last_value", LAST_VALUE},
 	{"last_insert_id", LAST_INSERT_ID},
 	{"lateral", LATERAL},
+	{"launch", LAUNCH},
 	{"lead", LEAD},
 	{"leading", LEADING},
 	{"leave", UNUSED},

@@ -186,6 +186,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		wr.Logger().Errorf("buildTrafficSwitcher: %v", err)
 		return nil, err
 	}
+	if ts.frozen {
+		return nil, fmt.Errorf("invalid VDiff run: writes have been already been switched for workflow %s.%s",
+			targetKeyspace, workflowName)
+	}
 	if err := ts.validate(ctx); err != nil {
 		ts.Logger().Errorf("validate: %v", err)
 		return nil, err

@@ -436,10 +436,16 @@ func (dbc *DBConn) reconnect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	dbc.conn = newConn
+	if dbc.IsSettingApplied() {
+		err = dbc.applySameSetting(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	dbc.errmu.Lock()
 	dbc.err = nil
 	dbc.errmu.Unlock()
-	dbc.conn = newConn
 	return nil
 }
 
@@ -493,4 +499,9 @@ func (dbc *DBConn) CurrentForLogging() string {
 		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
 	}
 	return sqlparser.TruncateForLog(queryToLog)
+}
+
+func (dbc *DBConn) applySameSetting(ctx context.Context) (err error) {
+	_, err = dbc.execOnce(ctx, dbc.setting, 1, false)
+	return
 }

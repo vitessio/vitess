@@ -32,6 +32,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/assert"
@@ -666,6 +668,43 @@ func TestAddQueryStats(t *testing.T) {
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
 			assert.Equal(t, testcase.expectedQueryRowCounts, qe.queryRowCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
+		})
+	}
+}
+
+func TestPlanPoolUnsafe(t *testing.T) {
+	tcases := []struct {
+		name, query, err string
+	}{
+		{
+			"get_lock named locks are unsafe with server-side connection pooling",
+			"select get_lock('foo', 10) from dual",
+			"SelectLockFunc not allowed without reserved connection",
+		}, {
+			"setting system variables must happen inside reserved connections",
+			"set sql_safe_updates = false",
+			"Set not allowed without reserved connection",
+		}, {
+			"setting system variables must happen inside reserved connections",
+			"set @@sql_safe_updates = false",
+			"Set not allowed without reserved connection",
+		}, {
+			"setting system variables must happen inside reserved connections",
+			"set @udv = false",
+			"Set not allowed without reserved connection",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			statement, err := sqlparser.Parse(tcase.query)
+			require.NoError(t, err)
+			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName")
+			// Plan building will not fail, but it will mark that reserved connection is needed.
+			// checking plan is valid will fail.
+			require.NoError(t, err)
+			require.True(t, plan.NeedsReservedConn)
+			err = isValid(plan.PlanID, false, false)
+			require.EqualError(t, err, tcase.err)
 		})
 	}
 }

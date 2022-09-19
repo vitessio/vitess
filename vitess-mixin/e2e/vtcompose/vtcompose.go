@@ -479,7 +479,7 @@ func applyDefaultDockerPatches(
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVTOrc(dbInfo, opts))
 	return dockerComposeFile
 }
 
@@ -720,7 +720,7 @@ func generateVtgate(opts vtOptions) string {
 `, opts.webPort, opts.gRpcPort, opts.mySqlPort, opts.topologyFlags, opts.cell)
 }
 
-func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
+func generateVTOrc(dbInfo externalDbInfo, opts vtOptions) string {
 	externalDb := "0"
 	if dbInfo.dbName != "" {
 		externalDb = "1"
