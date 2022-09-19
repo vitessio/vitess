@@ -581,3 +581,23 @@ export const rebuildKeyspaceGraph = async (params: RebuildKeyspaceGraphParams) =
 
     return pb.RebuildKeyspaceGraphResponse.create(result);
 };
+
+
+export interface RemoveKeyspaceCellParams {
+  clusterID: string;
+  keyspace: string;
+  cell: string;
+  force: boolean;
+  recursive: boolean;
+}
+
+export const removeKeyspaceCell = async (params: RemoveKeyspaceCellParams) => {
+  const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/remove_keyspace_cell`, {
+      method: 'put',
+      body: JSON.stringify({ cell: params.cell, force: params.force, recursive: params.recursive }),
+  });
+  const err = pb.RemoveKeyspaceCellRequest.verify(result);
+  if (err) throw Error(err);
+
+  return pb.RemoveKeyspaceCellResponse.create(result);
+};
