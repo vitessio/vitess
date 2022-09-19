@@ -57,12 +57,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
 	"os"
 	"os/exec"
 	"path"
 	"testing"
+
+	"github.com/pkg/errors"
 
 	"vitess.io/vitess/go/test/endtoend/encryption"
 
