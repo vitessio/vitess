@@ -248,3 +248,27 @@ send semi-sync ACKs. This ensures that any committed write exists in at least 2 
 #### FORMAT=vtexplain
 
 With this new `explain` format, you can get an output that is very similar to the command line `vtexplain` app, but from a running `vtgate`, through a MySQL query.
+
+### VTOrc
+
+#### Configuration
+
+VTOrc configurations that had `Orchestrator` as a substring have been renamed to have `VTOrc` instead. The older configuration will
+still work in this release, but won't in the next. So after upgrading, it is suggested to start using the new configurations.
+
+|           Old Configuration            |        New Configuration        |
+|:--------------------------------------:|:-------------------------------:|
+|         MySQLOrchestratorHost          |         MySQLVTOrcHost          |
+|  MySQLOrchestratorMaxPoolConnections   |  MySQLVTOrcMaxPoolConnections   |
+|         MySQLOrchestratorPort          |         MySQLVTOrcPort          |
+|       MySQLOrchestratorDatabase        |       MySQLVTOrcDatabase        |
+|         MySQLOrchestratorUser          |         MySQLVTOrcUser          |
+|       MySQLOrchestratorPassword        |       MySQLVTOrcPassword        |
+| MySQLOrchestratorCredentialsConfigFile | MySQLVTOrcCredentialsConfigFile |
+|   MySQLOrchestratorSSLPrivateKeyFile   |   MySQLVTOrcSSLPrivateKeyFile   |
+|      MySQLOrchestratorSSLCertFile      |      MySQLVTOrcSSLCertFile      |
+|       MySQLOrchestratorSSLCAFile       |       MySQLVTOrcSSLCAFile       |
+|     MySQLOrchestratorSSLSkipVerify     |     MySQLVTOrcSSLSkipVerify     |
+|     MySQLOrchestratorUseMutualTLS      |     MySQLVTOrcUseMutualTLS      |
+|  MySQLOrchestratorReadTimeoutSeconds   |  MySQLVTOrcReadTimeoutSeconds   |
+|    MySQLOrchestratorRejectReadOnly     |    MySQLVTOrcRejectReadOnly     |
