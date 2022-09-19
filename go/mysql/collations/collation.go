@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
+// CaseAwareCollation implements lowercase and uppercase conventions for collations.
 type CaseAwareCollation interface {
 	Collation
 	ToUpper(dst []byte, src []byte) []byte
@@ -148,12 +149,6 @@ type Collation interface {
 
 	// IsBinary returns whether this collation is a binary collation
 	IsBinary() bool
-
-	// GetUpperTable returns the upper table about related encoding
-	ToUpper([]byte, []byte) []byte
-
-	// GetLowerTable returns the lower table about related encoding
-	ToLower([]byte, []byte) []byte
 }
 
 type HashCode = uintptr

@@ -21,6 +21,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type builtinLower struct{}
@@ -44,6 +46,8 @@ func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		var dst []byte
 		dst = csa.ToLower(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
+	} else {
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}
 
 }
@@ -77,6 +81,8 @@ func (builtinLcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		var dst []byte
 		dst = csa.ToLower(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
+	} else {
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}
 }
 
@@ -109,6 +115,8 @@ func (builtinUpper) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		var dst []byte
 		dst = csa.ToUpper(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
+	} else {
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}
 }
 
@@ -141,6 +149,8 @@ func (builtinUcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 		var dst []byte
 		dst = csa.ToUpper(dst, raw)
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
+	} else {
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}
 }
 

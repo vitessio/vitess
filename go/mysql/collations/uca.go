@@ -426,12 +426,3 @@ func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {
 func (c *Collation_uca_legacy) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newUnicodeWildcardMatcher(c.charset, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
 }
-
-func (c *Collation_uca_legacy) ToLower(dst, src []byte) []byte {
-	panic("This collation is not supported.")
-
-}
-
-func (c *Collation_uca_legacy) ToUpper(dst, src []byte) []byte {
-	panic("This collation is not supported.")
-}
