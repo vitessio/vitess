@@ -2177,24 +2177,37 @@ func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 }
 
 // ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
-// pre-configured time has passed since they were last checked)
-// But we also check for the case where an attempt at instance checking has been made, that hasn't
+// pre-configured time has passed since they were last checked) or the ones whose tablet information was read
+// but not the mysql information. This could happen if the durability policy of the keyspace wasn't
+// available at the time it was discovered. This would lead to not having the record of the tablet in the
+// database_instance table.
+// We also check for the case where an attempt at instance checking has been made, that hasn't
 // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
 // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
 // the instance.
 func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
 	res := []InstanceKey{}
 	query := `
-		select
+		SELECT
 			hostname, port
-		from
+		FROM
 			database_instance
-		where
-			case
-				when last_attempted_check <= last_checked
-				then last_checked < now() - interval ? second
-				else last_checked < now() - interval ? second
-			end
+		WHERE
+			CASE
+				WHEN last_attempted_check <= last_checked
+				THEN last_checked < now() - interval ? second
+				ELSE last_checked < now() - interval ? second
+			END
+		UNION
+		SELECT
+			vitess_tablet.hostname, vitess_tablet.port
+		FROM
+			vitess_tablet LEFT JOIN database_instance ON (
+			vitess_tablet.hostname = database_instance.hostname
+			AND vitess_tablet.port = database_instance.port
+		)
+		WHERE
+			database_instance.hostname IS NULL
 			`
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 
