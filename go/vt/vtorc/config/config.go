@@ -86,20 +86,34 @@ type Configuration struct {
 	DefaultRaftPort                             int      // if a RaftNodes entry does not specify port, use this one
 	RaftNodes                                   []string // Raft nodes to make initial connection with
 	ExpectFailureAnalysisConcensus              bool
-	MySQLOrchestratorHost                       string
-	MySQLOrchestratorMaxPoolConnections         int // The maximum size of the connection pool to the VTOrc backend.
-	MySQLOrchestratorPort                       uint
-	MySQLOrchestratorDatabase                   string
-	MySQLOrchestratorUser                       string
-	MySQLOrchestratorPassword                   string
-	MySQLOrchestratorCredentialsConfigFile      string   // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
-	MySQLOrchestratorSSLPrivateKeyFile          string   // Private key file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLOrchestratorSSLCertFile                string   // Certificate PEM file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLOrchestratorSSLCAFile                  string   // Certificate Authority PEM file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLOrchestratorSSLSkipVerify              bool     // If true, do not strictly validate mutual TLS certs for the VTOrc mysql instances
-	MySQLOrchestratorUseMutualTLS               bool     // Turn on TLS authentication with the VTOrc MySQL instance
-	MySQLOrchestratorReadTimeoutSeconds         int      // Number of seconds before backend mysql read operation is aborted (driver-side)
-	MySQLOrchestratorRejectReadOnly             bool     // Reject read only connections https://github.com/go-sql-driver/mysql#rejectreadonly
+	MySQLVTOrcHost                              string
+	MySQLOrchestratorHost                       string // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcMaxPoolConnections                int    // The maximum size of the connection pool to the VTOrc backend.
+	MySQLOrchestratorMaxPoolConnections         int    // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcPort                              uint
+	MySQLOrchestratorPort                       uint // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcDatabase                          string
+	MySQLOrchestratorDatabase                   string // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcUser                              string
+	MySQLOrchestratorUser                       string // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcPassword                          string
+	MySQLOrchestratorPassword                   string   // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcCredentialsConfigFile             string   // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
+	MySQLOrchestratorCredentialsConfigFile      string   // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcSSLPrivateKeyFile                 string   // Private key file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLOrchestratorSSLPrivateKeyFile          string   // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcSSLCertFile                       string   // Certificate PEM file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLOrchestratorSSLCertFile                string   // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcSSLCAFile                         string   // Certificate Authority PEM file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLOrchestratorSSLCAFile                  string   // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcSSLSkipVerify                     bool     // If true, do not strictly validate mutual TLS certs for the VTOrc mysql instances
+	MySQLOrchestratorSSLSkipVerify              bool     // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcUseMutualTLS                      bool     // Turn on TLS authentication with the VTOrc MySQL instance
+	MySQLOrchestratorUseMutualTLS               bool     // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcReadTimeoutSeconds                int      // Number of seconds before backend mysql read operation is aborted (driver-side)
+	MySQLOrchestratorReadTimeoutSeconds         int      // This field is present for backward compatibility, liable to be removed in v16+
+	MySQLVTOrcRejectReadOnly                    bool     // Reject read only connections https://github.com/go-sql-driver/mysql#rejectreadonly
+	MySQLOrchestratorRejectReadOnly             bool     // This field is present for backward compatibility, liable to be removed in v16+
 	MySQLConnectTimeoutSeconds                  int      // Number of seconds before connection is aborted (driver-side)
 	MySQLDiscoveryReadTimeoutSeconds            int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for discovery queries.
 	MySQLTopologyReadTimeoutSeconds             int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for all but discovery queries.
@@ -256,14 +270,14 @@ func newConfiguration() *Configuration {
 		DefaultRaftPort:                             10008,
 		RaftNodes:                                   []string{},
 		ExpectFailureAnalysisConcensus:              true,
-		MySQLOrchestratorMaxPoolConnections:         128, // limit concurrent conns to backend DB
-		MySQLOrchestratorPort:                       3306,
+		MySQLVTOrcMaxPoolConnections:                128, // limit concurrent conns to backend DB
+		MySQLVTOrcPort:                              3306,
 		MySQLTopologyUseMutualTLS:                   false,
 		MySQLTopologyUseMixedTLS:                    true,
-		MySQLOrchestratorUseMutualTLS:               false,
+		MySQLVTOrcUseMutualTLS:                      false,
 		MySQLConnectTimeoutSeconds:                  2,
-		MySQLOrchestratorReadTimeoutSeconds:         30,
-		MySQLOrchestratorRejectReadOnly:             false,
+		MySQLVTOrcReadTimeoutSeconds:                30,
+		MySQLVTOrcRejectReadOnly:                    false,
 		MySQLDiscoveryReadTimeoutSeconds:            10,
 		MySQLTopologyReadTimeoutSeconds:             600,
 		MySQLConnectionLifetimeSeconds:              0,
@@ -381,28 +395,71 @@ func newConfiguration() *Configuration {
 }
 
 func (config *Configuration) postReadAdjustments() error {
+	if config.MySQLOrchestratorHost != "" {
+		config.MySQLVTOrcHost = config.MySQLOrchestratorHost
+	}
+	if config.MySQLOrchestratorMaxPoolConnections != 0 {
+		config.MySQLVTOrcMaxPoolConnections = config.MySQLOrchestratorMaxPoolConnections
+	}
+	if config.MySQLOrchestratorPort != 0 {
+		config.MySQLVTOrcPort = config.MySQLOrchestratorPort
+	}
+	if config.MySQLOrchestratorDatabase != "" {
+		config.MySQLVTOrcDatabase = config.MySQLOrchestratorDatabase
+	}
+	if config.MySQLOrchestratorUser != "" {
+		config.MySQLVTOrcUser = config.MySQLOrchestratorUser
+	}
+	if config.MySQLOrchestratorPassword != "" {
+		config.MySQLVTOrcPassword = config.MySQLOrchestratorPassword
+	}
 	if config.MySQLOrchestratorCredentialsConfigFile != "" {
+		config.MySQLVTOrcCredentialsConfigFile = config.MySQLOrchestratorCredentialsConfigFile
+	}
+	if config.MySQLOrchestratorSSLPrivateKeyFile != "" {
+		config.MySQLVTOrcSSLPrivateKeyFile = config.MySQLOrchestratorSSLPrivateKeyFile
+	}
+	if config.MySQLOrchestratorSSLCertFile != "" {
+		config.MySQLVTOrcSSLCertFile = config.MySQLOrchestratorSSLCertFile
+	}
+	if config.MySQLOrchestratorSSLCAFile != "" {
+		config.MySQLVTOrcSSLCAFile = config.MySQLOrchestratorSSLCAFile
+	}
+	if config.MySQLOrchestratorSSLSkipVerify != false {
+		config.MySQLVTOrcSSLSkipVerify = config.MySQLOrchestratorSSLSkipVerify
+	}
+	if config.MySQLOrchestratorUseMutualTLS != false {
+		config.MySQLVTOrcUseMutualTLS = config.MySQLOrchestratorUseMutualTLS
+	}
+	if config.MySQLOrchestratorReadTimeoutSeconds != 0 {
+		config.MySQLVTOrcReadTimeoutSeconds = config.MySQLOrchestratorReadTimeoutSeconds
+	}
+	if config.MySQLOrchestratorRejectReadOnly != false {
+		config.MySQLVTOrcRejectReadOnly = config.MySQLOrchestratorRejectReadOnly
+	}
+
+	if config.MySQLVTOrcCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLOrchestratorCredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLVTOrcCredentialsConfigFile)
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Infof("Parsed vtorc credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
-			config.MySQLOrchestratorUser = mySQLConfig.Client.User
-			config.MySQLOrchestratorPassword = mySQLConfig.Client.Password
+			log.Infof("Parsed vtorc credentials from %s", config.MySQLVTOrcCredentialsConfigFile)
+			config.MySQLVTOrcUser = mySQLConfig.Client.User
+			config.MySQLVTOrcPassword = mySQLConfig.Client.Password
 		}
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLOrchestratorPassword)
+		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLVTOrcPassword)
 		if len(submatch) > 1 {
-			config.MySQLOrchestratorPassword = os.Getenv(submatch[1])
+			config.MySQLVTOrcPassword = os.Getenv(submatch[1])
 		}
 	}
 	if config.MySQLTopologyCredentialsConfigFile != "" {

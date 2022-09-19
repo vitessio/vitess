@@ -67,16 +67,16 @@ func getMySQLURI() string {
 		return mysqlURI
 	}
 	mysqlURI := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=%ds&readTimeout=%ds&rejectReadOnly=%t&interpolateParams=true",
-		config.Config.MySQLOrchestratorUser,
-		config.Config.MySQLOrchestratorPassword,
-		config.Config.MySQLOrchestratorHost,
-		config.Config.MySQLOrchestratorPort,
-		config.Config.MySQLOrchestratorDatabase,
+		config.Config.MySQLVTOrcUser,
+		config.Config.MySQLVTOrcPassword,
+		config.Config.MySQLVTOrcHost,
+		config.Config.MySQLVTOrcPort,
+		config.Config.MySQLVTOrcDatabase,
 		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLOrchestratorReadTimeoutSeconds,
-		config.Config.MySQLOrchestratorRejectReadOnly,
+		config.Config.MySQLVTOrcReadTimeoutSeconds,
+		config.Config.MySQLVTOrcRejectReadOnly,
 	)
-	if config.Config.MySQLOrchestratorUseMutualTLS {
+	if config.Config.MySQLVTOrcUseMutualTLS {
 		mysqlURI, _ = SetupMySQLVTOrcTLS(mysqlURI)
 	}
 	return mysqlURI
@@ -122,14 +122,14 @@ func openTopology(host string, port int, readTimeout int) (db *sql.DB, err error
 
 func openOrchestratorMySQLGeneric() (db *sql.DB, fromCache bool, err error) {
 	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
-		config.Config.MySQLOrchestratorUser,
-		config.Config.MySQLOrchestratorPassword,
-		config.Config.MySQLOrchestratorHost,
-		config.Config.MySQLOrchestratorPort,
+		config.Config.MySQLVTOrcUser,
+		config.Config.MySQLVTOrcPassword,
+		config.Config.MySQLVTOrcHost,
+		config.Config.MySQLVTOrcPort,
 		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLOrchestratorReadTimeoutSeconds,
+		config.Config.MySQLVTOrcReadTimeoutSeconds,
 	)
-	if config.Config.MySQLOrchestratorUseMutualTLS {
+	if config.Config.MySQLVTOrcUseMutualTLS {
 		uri, _ = SetupMySQLVTOrcTLS(uri)
 	}
 	return sqlutils.GetDB(uri)
@@ -157,7 +157,7 @@ func OpenVTOrc() (db *sql.DB, err error) {
 			return db, err
 		} else if !fromCache {
 			// first time ever we talk to MySQL
-			query := fmt.Sprintf("create database if not exists %s", config.Config.MySQLOrchestratorDatabase)
+			query := fmt.Sprintf("create database if not exists %s", config.Config.MySQLVTOrcDatabase)
 			if _, err := db.Exec(query); err != nil {
 				log.Errorf(err.Error())
 				return db, err
@@ -166,12 +166,12 @@ func OpenVTOrc() (db *sql.DB, err error) {
 		db, fromCache, err = sqlutils.GetDB(getMySQLURI())
 		if err == nil && !fromCache {
 			// do not show the password but do show what we connect to.
-			safeMySQLURI := fmt.Sprintf("%s:?@tcp(%s:%d)/%s?timeout=%ds", config.Config.MySQLOrchestratorUser,
-				config.Config.MySQLOrchestratorHost, config.Config.MySQLOrchestratorPort, config.Config.MySQLOrchestratorDatabase, config.Config.MySQLConnectTimeoutSeconds)
+			safeMySQLURI := fmt.Sprintf("%s:?@tcp(%s:%d)/%s?timeout=%ds", config.Config.MySQLVTOrcUser,
+				config.Config.MySQLVTOrcHost, config.Config.MySQLVTOrcPort, config.Config.MySQLVTOrcDatabase, config.Config.MySQLConnectTimeoutSeconds)
 			log.Infof("Connected to vtorc backend: %v", safeMySQLURI)
-			if config.Config.MySQLOrchestratorMaxPoolConnections > 0 {
-				log.Infof("VTOrc pool SetMaxOpenConns: %d", config.Config.MySQLOrchestratorMaxPoolConnections)
-				db.SetMaxOpenConns(config.Config.MySQLOrchestratorMaxPoolConnections)
+			if config.Config.MySQLVTOrcMaxPoolConnections > 0 {
+				log.Infof("VTOrc pool SetMaxOpenConns: %d", config.Config.MySQLVTOrcMaxPoolConnections)
+				db.SetMaxOpenConns(config.Config.MySQLVTOrcMaxPoolConnections)
 			}
 			if config.Config.MySQLConnectionLifetimeSeconds > 0 {
 				db.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
@@ -186,19 +186,19 @@ func OpenVTOrc() (db *sql.DB, err error) {
 		// make the number of backend connections hit the tcp
 		// limit. That's bad.  I could make this setting dynamic
 		// but then people need to know which value to use. For now
-		// allow up to 25% of MySQLOrchestratorMaxPoolConnections
+		// allow up to 25% of MySQLVTOrcMaxPoolConnections
 		// to be idle.  That should provide a good number which
 		// does not keep the maximum number of connections open but
 		// at the same time does not trigger disconnections and
 		// reconnections too frequently.
-		maxIdleConns := int(config.Config.MySQLOrchestratorMaxPoolConnections * 25 / 100)
+		maxIdleConns := int(config.Config.MySQLVTOrcMaxPoolConnections * 25 / 100)
 		if maxIdleConns < 10 {
 			maxIdleConns = 10
 		}
 		log.Infof("Connecting to backend %s:%d: maxConnections: %d, maxIdleConns: %d",
-			config.Config.MySQLOrchestratorHost,
-			config.Config.MySQLOrchestratorPort,
-			config.Config.MySQLOrchestratorMaxPoolConnections,
+			config.Config.MySQLVTOrcHost,
+			config.Config.MySQLVTOrcPort,
+			config.Config.MySQLVTOrcMaxPoolConnections,
 			maxIdleConns)
 		db.SetMaxIdleConns(maxIdleConns)
 	}
