@@ -131,6 +131,19 @@ func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
 	return dst
 }
 
+func (c *Collation_8bit_bin) CharLen(src []byte) int {
+	cnt := 0
+
+	for _, c1 := range src {
+		for _, c2 := range c.simpletables.sort {
+			if c1 == c2 {
+				cnt++
+			}
+		}
+	}
+	return cnt
+}
+
 type Collation_8bit_simple_ci struct {
 	id   ID
 	name string
@@ -260,6 +273,19 @@ func (c *Collation_8bit_simple_ci) ToUpper(raw, dst []byte) []byte {
 	return dst
 }
 
+func (c *Collation_8bit_simple_ci) CharLen(src []byte) int {
+	cnt := 0
+
+	for _, c1 := range src {
+		for _, c2 := range c.simpletables.sort {
+			if c1 == c2 {
+				cnt++
+			}
+		}
+	}
+	return cnt
+}
+
 type Collation_binary struct{}
 
 func (c *Collation_binary) Init() {}
@@ -328,4 +354,8 @@ func (c *Collation_binary) ToLower(dst, raw []byte) []byte {
 func (c *Collation_binary) ToUpper(dst, raw []byte) []byte {
 	dst = append(dst, raw...)
 	return dst
+}
+
+func (c *Collation_binary) CharLen(src []byte) int {
+	return len(src)
 }

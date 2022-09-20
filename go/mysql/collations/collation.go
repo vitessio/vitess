@@ -22,6 +22,11 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
+type CharLengthAwareCollation interface {
+	Collation
+	CharLen(src []byte) int
+}
+
 // CaseAwareCollation implements lowercase and uppercase conventions for collations.
 type CaseAwareCollation interface {
 	Collation

@@ -165,25 +165,39 @@ func (builtinUcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 type builtinCharLength struct{}
 
 func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	var cnt int64
 	inarg := &args[0]
+	t := inarg.typeof()
+
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	cnt := strings.Count(inarg.value().RawStr(), "") - 1
-	result.setInt64(int64(cnt))
-}
+	coll := collations.Local().LookupByID(inarg.Collation())
 
-type builtinCharacterLength struct{}
+	if sqltypes.IsNumber(t) {
+		inarg.makeTextualAndConvert(env.DefaultCollation)
+		cnt = int64(len(inarg.value().Raw()))
+	} else if cla, ok := coll.(collations.CharLengthAwareCollation); ok {
+		raw := inarg.value().Raw()
+		cnt = int64(cla.CharLen(raw))
+	} else {
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
+	}
+
+	result.setInt64(cnt)
+}
 
 func (builtinCharLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
-		throwArgError("Char_Length")
+		throwArgError("CHAR_LENGTH")
 	}
 	_, f := args[0].typeof(env)
 	return sqltypes.Int64, f
 }
+
+type builtinCharacterLength struct{}
 
 func (builtinCharacterLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
