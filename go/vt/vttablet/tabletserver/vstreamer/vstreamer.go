@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/timer"
 	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,6 +41,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -284,13 +286,18 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 	injectHeartbeat := func(throttled bool) error {
 		now := time.Now().UnixNano()
-		err := bufferAndTransmit(&binlogdatapb.VEvent{
-			Type:        binlogdatapb.VEventType_HEARTBEAT,
-			Timestamp:   now / 1e9,
-			CurrentTime: now,
-			Throttled:   throttled,
-		})
-		return err
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+			err := bufferAndTransmit(&binlogdatapb.VEvent{
+				Type:        binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:   now / 1e9,
+				CurrentTime: now,
+				Throttled:   throttled,
+			})
+			return err
+		}
 	}
 
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
@@ -367,11 +374,16 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 			}
 		case vs.vschema = <-vs.vevents:
-			if err := vs.rebuildPlans(); err != nil {
-				return err
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				if err := vs.rebuildPlans(); err != nil {
+					return err
+				}
+				// Increment this counter for testing.
+				vschemaUpdateCount.Add(1)
 			}
-			// Increment this counter for testing.
-			vschemaUpdateCount.Add(1)
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:
