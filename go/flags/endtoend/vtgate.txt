@@ -102,6 +102,7 @@ Usage of vtgate:
       --mysql_ldap_auth_method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
+      --mysql_server_pool_conn_read_buffers                              If set, the server will pool incoming connection read buffers
       --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
       --mysql_server_query_timeout duration                              mysql query timeout (default 0s)
       --mysql_server_read_timeout duration                               connection read timeout (default 0s)
