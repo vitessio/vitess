@@ -302,10 +302,11 @@ func (c *Conn) endWriterBuffering() error {
 }
 
 func (c *Conn) returnReader() {
-	if c.bufferedReader != nil {
-		c.bufferedReader.Reset(nil)
-		readersPool.Put(c.bufferedReader)
+	if c.bufferedReader == nil {
+		return
 	}
+	c.bufferedReader.Reset(nil)
+	readersPool.Put(c.bufferedReader)
 }
 
 // getWriter returns the current writer. It may be either
