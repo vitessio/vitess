@@ -63,7 +63,26 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+
+		if op.LeftJoin {
+			return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		}
+
+		optionA, err := mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		if err != nil {
+			return nil, err
+		}
+
+		optionB, err := mergeOrJoin(ctx, opOuter, opInner, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		if err != nil {
+			return nil, err
+		}
+
+		if optionA.Cost() <= optionB.Cost() {
+			return optionA, nil
+		}
+
+		return optionB, nil
 	case *abstract.Derived:
 		opInner, err := CreatePhysicalOperator(ctx, op.Inner)
 		if err != nil {
