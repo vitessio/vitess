@@ -95,7 +95,7 @@ func RebuildKeyspaceGraph(ctx context.Context, r Request, api *API) *JSONRespons
 
 	var params struct {
 		Cells        string `json:"cells"`
-		AllowPartial bool   `json:"allowPartial"`
+		AllowPartial bool   `json:"allow_partial"`
 	}
 
 	if err := decoder.Decode(&params); err != nil {

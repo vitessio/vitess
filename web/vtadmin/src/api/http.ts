@@ -574,7 +574,7 @@ export interface RebuildKeyspaceGraphParams {
 export const rebuildKeyspaceGraph = async (params: RebuildKeyspaceGraphParams) => {
     const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/rebuild_keyspace_graph`, {
         method: 'put',
-        body: JSON.stringify({ cells: params.cells, allowPartial: params.allowPartial }),
+        body: JSON.stringify({ cells: params.cells, allow_partial: params.allowPartial }),
     });
     const err = pb.RebuildKeyspaceGraphRequest.verify(result);
     if (err) throw Error(err);
