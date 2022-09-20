@@ -272,7 +272,7 @@ func TestPartialMoveTables(t *testing.T) {
 	// tracking is enabled then vtgate will produce an error about the
 	// unknown symbol before attempting to route the query.
 	extraVTGateArgs = append(extraVTGateArgs, []string{
-		"--enable_shard_routing",
+		"--enable_partial_keyspace_migration",
 		"--schema_change_signal=false",
 	}...)
 	defer func() {
@@ -412,7 +412,7 @@ func getVtctldGRPCURL() string {
 func applyShardRoutingRules(t *testing.T, rules string) {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "ApplyShardRoutingRules", "--rules", rules})
 	log.Infof("ApplyShardRoutingRules err: %+v, output: %+v", err, output)
-	require.Nilf(t, err, output)
+	require.NoError(t, err, output)
 	require.NotNil(t, output)
 }
 

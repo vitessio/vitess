@@ -139,7 +139,6 @@ func (ts *Server) SaveShardRoutingRules(ctx context.Context, shardRoutingRules *
 	}
 
 	if len(data) == 0 {
-		// No vschema, remove it. So we can remove the keyspace.
 		if err := ts.globalCell.Delete(ctx, ShardRoutingRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
 			return err
 		}

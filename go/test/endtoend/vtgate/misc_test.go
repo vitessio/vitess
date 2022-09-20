@@ -395,8 +395,9 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestFunctionInDefault(t *testing.T) {
+	//todo: this test is failing even without partial keyspaces, need to understand from @query-serving why before merging
 	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("TODO: why is this failing?")
+		t.Skip("TODO: check with @query-serving before merge")
 	}
 	conn, closer := start(t)
 	defer closer()

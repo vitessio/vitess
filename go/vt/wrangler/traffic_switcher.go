@@ -946,10 +946,7 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 		return false, nil
 	}
 
-	if key.KeyRangeEqual(skr, tkr) {
-		return true, nil
-	}
-	return false, nil
+	return key.KeyRangeEqual(skr, tkr), nil
 }
 
 func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodatapb.KeyRange, *topodatapb.KeyRange, error) {

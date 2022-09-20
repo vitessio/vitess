@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 
 		_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("RebuildVSchemaGraph")
 		if err != nil {
-			return 0
+			return 1
 		}
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")

@@ -212,6 +212,7 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 }
 
 func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
+	//todo: need to clarify with @query-serving before merging
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("With partial keyspaces, kill might be an issue since it needs connection id: is this a test issue or a core one?")
 	}

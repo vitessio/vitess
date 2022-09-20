@@ -55,7 +55,7 @@ vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce
 CELL=zone1 ./scripts/vtgate-up.sh
 
 # start vtadmin
-#./scripts/vtadmin-up.sh
+./scripts/vtadmin-up.sh
 
 # start vtorc
 ./scripts/vtorc-up.sh
