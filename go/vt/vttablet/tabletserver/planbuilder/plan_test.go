@@ -102,33 +102,6 @@ func TestPlan(t *testing.T) {
 	}
 }
 
-func TestPlanPoolUnsafe(t *testing.T) {
-	testSchema := loadSchema("schema_test.json")
-	for tcase := range iterateExecFile("pool_unsafe_cases.txt") {
-		t.Run(tcase.input, func(t *testing.T) {
-			var plan *Plan
-			var err error
-			statement, err := sqlparser.Parse(tcase.input)
-			require.NoError(t, err)
-			// Plan building will not fail, but it will mark that reserved connection is needed.
-			plan, err = Build(statement, testSchema, "dbName")
-			require.NoError(t, err)
-			require.True(t, plan.NeedsReservedConn)
-			out := fmt.Sprintf("%s not allowed without reserved connection", plan.PlanID.String())
-			if out != tcase.output {
-				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
-				if err != nil {
-					out = fmt.Sprintf("\"%s\"", out)
-				} else {
-					bout, _ := json.MarshalIndent(plan, "", "  ")
-					out = string(bout)
-				}
-				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
-			}
-		})
-	}
-}
-
 func TestPlanInReservedConn(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {

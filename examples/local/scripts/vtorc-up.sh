@@ -3,7 +3,7 @@
 source ./env.sh
 
 log_dir="${VTDATAROOT}/tmp"
-web_dir="../../web/orchestrator"
+web_dir="../../web/vtorc"
 vtorc_web_port=16000
 
 vtorc \

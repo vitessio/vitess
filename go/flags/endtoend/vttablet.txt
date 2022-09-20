@@ -341,8 +341,8 @@ Usage of vttablet:
       --queryserver-config-txpool-timeout float                          query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1)
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
+      --queryserver-enable-settings-pool                                 Enable pooling of connections with modified system settings
       --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
-      --queryserver_enable_settings_pool                                 Enable pooling of connections with modified system settings
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --relay_log_max_items int                                          Maximum number of rows for VReplication target buffering. (default 5000)
       --relay_log_max_size int                                           Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)
