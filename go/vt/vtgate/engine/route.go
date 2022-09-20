@@ -434,7 +434,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		return true
 	})
 
-	return out, err
+	return out.Truncate(route.TruncateColumnCount), err
 }
 
 func (route *Route) description() PrimitiveDescription {
