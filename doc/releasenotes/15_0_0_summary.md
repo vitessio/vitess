@@ -253,8 +253,12 @@ With this new `explain` format, you can get an output that is very similar to th
 
 #### Configuration
 
-VTOrc configurations that had `Orchestrator` as a substring have been renamed to have `VTOrc` instead. The older configuration will
-still work in this release, but won't in the next. So after upgrading, it is suggested to start using the new configurations.
+VTOrc configurations that had `Orchestrator` as a substring have been renamed to have `VTOrc` instead. The old configuration won't 
+work in this release. So if backward compatibility is desired, then before upgrading it is suggested to copy the old configurations
+and also set them for the new configurations.
+
+VTOrc ignores the configurations that it doesn't understand. So new configurations can be added while running the previous release.
+After the upgrade, the old configurations can be dropped.
 
 |           Old Configuration            |        New Configuration        |
 |:--------------------------------------:|:-------------------------------:|
@@ -272,3 +276,6 @@ still work in this release, but won't in the next. So after upgrading, it is sug
 |     MySQLOrchestratorUseMutualTLS      |     MySQLVTOrcUseMutualTLS      |
 |  MySQLOrchestratorReadTimeoutSeconds   |  MySQLVTOrcReadTimeoutSeconds   |
 |    MySQLOrchestratorRejectReadOnly     |    MySQLVTOrcRejectReadOnly     |
+
+The default files that VTOrc searches for configurations in have also changed from `"/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json"` to
+`"/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json"`.
