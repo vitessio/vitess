@@ -80,7 +80,7 @@ func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 			// In the latter case, we don't need to do any transformations, but
 			// in the former, we do.
 			name := strings.SplitN(arg[1:], "=", 2)[0] // discard any potential value (`-myflag` and `-myflag=10` both have the name of `myflag`)
-			if fs.Lookup(name) != nil {
+			if fs.Lookup(name) != nil || name == "help" {
 				// Case 1: We have a long opt with this name, so we need to
 				// prepend an additional hyphen.
 				result = append(result, "-"+arg)
@@ -112,19 +112,6 @@ func main() {
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
 
-	// N.B. This code has to be duplicated from go/internal/flag in order to
-	// correctly transform `-help` => `--help`. Otherwise passing `-help` would
-	// produce:
-	//	unknown shorthand flag: 'e' in -elp
-	var help bool
-	if fs.Lookup("help") == nil {
-		if fs.ShorthandLookup("h") == nil {
-			fs.BoolVarP(&help, "help", "h", false, "display usage and exit")
-		} else {
-			fs.BoolVar(&help, "help", false, "display usage and exit")
-		}
-	}
-
 	configFile := fs.String("config", "", "config file name")
 	sibling := fs.StringP("sibling", "s", "", "sibling instance, host_fqdn[:port]")
 	destination := fs.StringP("destination", "d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
@@ -153,11 +140,6 @@ Please update your scripts before the next version, when this will begin to brea
 	}
 
 	servenv.ParseFlags("vtorc")
-	// N.B. Also duplicated from go/internal/flag, for the same reason as above.
-	if help {
-		pflag.Usage()
-		os.Exit(0)
-	}
 
 	if *destination != "" && *sibling != "" {
 		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
