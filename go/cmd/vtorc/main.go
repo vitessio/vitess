@@ -201,6 +201,10 @@ Please update your scripts before the next version, when this will begin to brea
 
 	go app.HTTP(*discovery)
 
+	servenv.OnRun(func() {
+		addStatusParts()
+	})
+
 	// For backward compatability, we require that VTOrc functions even when the --port flag is not provided.
 	// In this case, it should function like before but without the servenv pages.
 	// Therefore, currently we don't check for the --port flag to be necessary, but release 16+ that check
