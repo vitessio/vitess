@@ -154,7 +154,7 @@ Please update your scripts before the next version, when this will begin to brea
 
 	servenv.ParseFlags("vtorc")
 	// N.B. Also duplicated from go/internal/flag, for the same reason as above.
-	if help || fs.Arg(0) == "help" {
+	if help {
 		pflag.Usage()
 		os.Exit(0)
 	}
