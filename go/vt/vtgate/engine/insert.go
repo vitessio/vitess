@@ -272,6 +272,12 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 			return nil
 		}
 
+		// should process only one chunk at a time.
+		// as parallel chunk insert will try to use the same transaction in the vttablet
+		// this will cause transaction in use error.
+		mu.Lock()
+		defer mu.Unlock()
+
 		var insertID int64
 		var qr *sqltypes.Result
 		var err error
@@ -284,8 +290,6 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 			return err
 		}
 
-		mu.Lock()
-		defer mu.Unlock()
 		output.RowsAffected += qr.RowsAffected
 		// InsertID needs to be updated to the least insertID value in sqltypes.Result
 		if output.InsertID == 0 || output.InsertID > uint64(insertID) {
