@@ -285,10 +285,12 @@ services:
       - vtctld
       - set_keyspace_durability_policy
     ports:
+      - "13200:8080"
       - "13000:3000"
     volumes:
       - ".:/script"
     environment:
+      - WEB_PORT=8080
       - TOPOLOGY_FLAGS
       - WEB_PORT
       - GRPC_PORT
