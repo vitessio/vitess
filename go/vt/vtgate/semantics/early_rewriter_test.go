@@ -305,6 +305,35 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}
 }
 
+func TestHavingByColumnName(t *testing.T) {
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+		expErr string
+	}{{
+		sql:    "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
+		expSQL: "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement := ast.(*sqlparser.Select)
+			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+}
+
 func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 	schemaInfo := &FakeSI{Tables: map[string]*vindexes.Table{
 		"t1": {
