@@ -159,6 +159,22 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		require.NoError(t, err, out)
 	}
 
+	// We need to disable super-read-only for each tablet. If we don't do it then
+	// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
+	// have code to disable super-read-only during InitPrimary
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.Error(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion <= 15 {
+		for _, tablet := range tablets {
+			if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+				require.Error(t, err)
+			}
+		}
+	}
+
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
 	return clusterInstance
 }
@@ -506,6 +522,19 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
 	require.NoError(t, err)
+
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		require.NoError(t, err)
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	if vtTabletVersion <= 15 {
+		if err := tab.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+			require.NoError(t, err)
+		}
+
+	}
+
 	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, KeyspaceName, Hostname, ShardName)
 	require.NoError(t, err)
 
