@@ -66,8 +66,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
 		_ = inst.InjectSeed(instanceKey)
 	}, false /* forceRefresh */)
-	// TODO(sougou): parameterize poll interval.
-	return time.Tick(15 * time.Second) //nolint SA1015: using time.Tick leaks the underlying ticker
+	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
