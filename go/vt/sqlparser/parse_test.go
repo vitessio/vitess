@@ -6108,7 +6108,6 @@ var correctlyDontParse = []string{
 	"force",
 	"foreign",
 	"from",
-	"full",
 	"fulltext",
 	"function",
 	"generated",
