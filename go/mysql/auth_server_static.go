@@ -41,6 +41,7 @@ var (
 	mysqlAuthServerStaticFile           string
 	mysqlAuthServerStaticString         string
 	mysqlAuthServerStaticReloadInterval time.Duration
+	mysqlServerFlushDelay               time.Duration
 )
 
 func init() {
@@ -48,6 +49,7 @@ func init() {
 		fs.StringVar(&mysqlAuthServerStaticFile, "mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
 		fs.StringVar(&mysqlAuthServerStaticString, "mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
 		fs.DurationVar(&mysqlAuthServerStaticReloadInterval, "mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
+		fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to the client.")
 	})
 }
 
