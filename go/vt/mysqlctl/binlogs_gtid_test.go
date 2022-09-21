@@ -329,6 +329,19 @@ func TestFindPITRPath(t *testing.T) {
 				incrementalManifest("1-99", "1-5"),
 			},
 		},
+		{
+			name:        "incomplete binlog previous GTIDs",
+			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-92",
+			incrementalBackups: []*BackupManifest{
+				incrementalManifest("3-90", "3-75"),
+				incrementalManifest("3-95", "3-90"),
+			},
+			expectFullManifest: fullManifest("1-80"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("3-90", "3-75"),
+				incrementalManifest("3-95", "3-90"),
+			},
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
