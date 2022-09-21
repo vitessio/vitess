@@ -216,6 +216,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
 %nonassoc  UNBOUNDED // ideally should have same precedence as IDENT
 %nonassoc ID NULL PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING
+%nonassoc <bytes> FULL
 %left <bytes> '|'
 %left <bytes> '&'
 %left <bytes> SHIFT_LEFT SHIFT_RIGHT
@@ -285,7 +286,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL SRID
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -4724,6 +4725,10 @@ outer_join:
   {
     $$ = RightJoinStr
   }
+| FULL OUTER JOIN
+  {
+    $$ = FullOuterJoinStr
+  }
 
 natural_join:
  NATURAL JOIN
@@ -5987,7 +5992,11 @@ column_name:
   }
 | non_reserved_keyword2 '.' reserved_sql_id
   {
-    $$ = &ColName{Name: NewColIdent(string($1))}
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| non_reserved_keyword2 '.' FULL
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: NewColIdent(string($3))}
   }
 | ACCOUNT '.' reserved_sql_id
   {
@@ -7314,7 +7323,6 @@ non_reserved_keyword:
 | FOLLOWING
 | FOLLOWS
 | FOUND
-| FULL
 | GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
@@ -7465,6 +7473,7 @@ non_reserved_keyword2:
 | FAILED_LOGIN_ATTEMPTS
 | FILE
 | FIRST
+| FULL
 | IDENTIFIED
 | NONE
 | PASSWORD

@@ -202,6 +202,10 @@ var (
 			// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
 			input: "select * from t1 join t2 on a = b join t3",
 		}, {
+			input: "select * from a where exists (select * from b where a.x = b.x)",
+		}, {
+			input: "select * from a where not exists (select * from b where a.x = b.x)",
+		}, {
 			input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 		}, {
 			input: "select * from t1 where exists (select a from t2 union select b from t3)",
@@ -380,6 +384,8 @@ var (
 		}, {
 			input:  "select /* natural right outer join */ 1 from t1 natural right join t2",
 			output: "select /* natural right outer join */ 1 from t1 natural right join t2",
+		}, {
+			input: "select /* full outer join */ * from a full outer join b on a.x = b.x",
 		}, {
 			input: "select /* join on */ 1 from t1 join t2 on a = b",
 		}, {
@@ -6099,6 +6105,7 @@ var correctlyDontParse = []string{
 	"force",
 	"foreign",
 	"from",
+	"full",
 	"fulltext",
 	"function",
 	"generated",
