@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,13 +16,16 @@ limitations under the License.
 
 package main
 
+// This plugin imports Prometheus to allow for instrumentation
+// with the Prometheus client library
+
 import (
-	"net/http"
+	"vitess.io/vitess/go/stats/prometheusbackend"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 func init() {
-	// Anything unrecognized gets redirected to the status page.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/debug/status", http.StatusFound)
+	servenv.OnRun(func() {
+		prometheusbackend.Init("vtorc")
 	})
 }
