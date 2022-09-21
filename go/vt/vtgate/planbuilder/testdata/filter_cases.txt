@@ -5938,6 +5938,33 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# conditions following a null safe comparison operator can be used for routing
+"SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE user.id <=> NULL AND music.user_id = 10"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE user.id \u003c=\u003e NULL AND music.user_id = 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
+    "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 10 and `user`.id \u003c=\u003e null",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(10)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
 # optimize ORs to IN route op codes #1
 "select col from user where id = 1 or id = 2"
 {
