@@ -182,7 +182,7 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 		})
 	}
 
-	testRestores := func() {
+	testRestores := func(t *testing.T) {
 		for _, r := range rand.Perm(len(backupPositions)) {
 			pos := backupPositions[r]
 			testName := fmt.Sprintf("%s, %d records", pos, rowsPerPosition[pos])
@@ -198,7 +198,7 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 		}
 	}
 	t.Run("PITR", func(t *testing.T) {
-		testRestores()
+		testRestores(t)
 	})
 	t.Run("remove full position backups", func(t *testing.T) {
 		// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
@@ -207,6 +207,6 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 		}
 	})
 	t.Run("PITR-2", func(t *testing.T) {
-		testRestores()
+		testRestores(t)
 	})
 }
