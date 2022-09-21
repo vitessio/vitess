@@ -3416,6 +3416,10 @@ table_opt_value:
   {
     $$ = string($1)
   }
+| PARTITION
+  {
+    $$ = "partition"
+  }
 
 
 constraint_symbol_opt:
