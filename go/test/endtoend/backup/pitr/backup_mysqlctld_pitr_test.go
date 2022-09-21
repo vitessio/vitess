@@ -17,11 +17,12 @@ limitations under the License.
 package mysqlctld
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -29,15 +30,24 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-var (
-	rowsPerPosition = map[string]int{}
-)
-
-func recordRowsPerPosition(t *testing.T) {
-	pos := backup.GetReplicaPosition(t)
-	msgs := backup.ReadRowsFromReplica(t)
-	rowsPerPosition[pos] = len(msgs)
-	t.Logf("============ ZZZ pos=%v, rows=%v\n", pos, len(msgs))
+func waitForReplica(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pMsgs := backup.ReadRowsFromPrimary(t)
+	for {
+		rMsgs := backup.ReadRowsFromReplica(t)
+		if len(pMsgs) == len(rMsgs) {
+			// success
+			return
+		}
+		select {
+		case <-ctx.Done():
+			assert.FailNow(t, "timeout waiting for replica to catch up")
+			return
+		case <-time.After(time.Second):
+			//
+		}
+	}
 }
 
 // TestIncrementalBackupMysqlctld - tests incremental backups using myslctld
@@ -50,16 +60,34 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 
 	backup.InitTestTable(t)
 
+	rowsPerPosition := map[string]int{}
+	backupPositions := []string{}
+
+	recordRowsPerPosition := func(t *testing.T) {
+		pos := backup.GetReplicaPosition(t)
+		msgs := backup.ReadRowsFromReplica(t)
+		if _, ok := rowsPerPosition[pos]; !ok {
+			backupPositions = append(backupPositions, pos)
+			rowsPerPosition[pos] = len(msgs)
+		}
+	}
+
 	var fullBackupPos mysql.Position
 	t.Run("full backup", func(t *testing.T) {
-		backup.InsertRowOnPrimary(t, "")
-		time.Sleep(1100 * time.Millisecond)
-		recordRowsPerPosition(t)
-		manifest := backup.TestReplicaFullBackup(t)
+		backup.InsertRowOnPrimary(t, "before-full-backup")
+		waitForReplica(t)
+		manifest, _ := backup.TestReplicaFullBackup(t)
 		fullBackupPos = manifest.Position
 		require.False(t, fullBackupPos.IsZero())
+		//
+		msgs := backup.ReadRowsFromReplica(t)
+		pos := mysql.EncodePosition(fullBackupPos)
+		backupPositions = append(backupPositions, pos)
+		rowsPerPosition[pos] = len(msgs)
 	})
+
 	lastBackupPos := fullBackupPos
+	backup.InsertRowOnPrimary(t, "before-incremental-backups")
 
 	tt := []struct {
 		name              string
@@ -113,6 +141,7 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 			// is only ever a problem in this endtoend test, not in production.
 			// Also, we gie the replica a chance to catch up.
 			time.Sleep(1100 * time.Millisecond)
+			waitForReplica(t)
 			recordRowsPerPosition(t)
 			// configure --incremental-from-pos to either:
 			// - auto
@@ -148,14 +177,21 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 		})
 	}
 
-	for pos, count := range rowsPerPosition {
-		testName := fmt.Sprintf("PITR %s", pos)
-		t.Run(testName, func(t *testing.T) {
-			restoreToPos, err := mysql.DecodePosition(pos)
-			require.NoError(t, err)
-			backup.TestReplicaRestoreToPos(t, restoreToPos, "")
-			msgs := backup.ReadRowsFromReplica(t)
-			assert.Equal(t, count, len(msgs))
-		})
+	testRestores := func() {
+		for _, pos := range backupPositions {
+			testName := fmt.Sprintf("PITR %s", pos)
+			t.Run(testName, func(t *testing.T) {
+				restoreToPos, err := mysql.DecodePosition(pos)
+				require.NoError(t, err)
+				backup.TestReplicaRestoreToPos(t, restoreToPos, "")
+				msgs := backup.ReadRowsFromReplica(t)
+				count, ok := rowsPerPosition[pos]
+				require.True(t, ok)
+				assert.Equalf(t, count, len(msgs), "messages: %v", msgs)
+			})
+		}
 	}
+	testRestores()
+	// Delete the last incremental backup, which was fromFullPosition, and run the restores again:
+	// testRestores()
 }

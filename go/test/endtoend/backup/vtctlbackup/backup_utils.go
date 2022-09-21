@@ -912,7 +912,7 @@ func terminateRestore(t *testing.T) {
 	assert.True(t, found, "Restore message not found")
 }
 
-func vtctlBackupReplicaNoDropTables(t *testing.T, tabletType string) (backups []string, destroy func(t *testing.T)) {
+func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, tabletType string) (backups []string, destroy func(t *testing.T)) {
 	restoreWaitForBackup(t, tabletType, nil, true)
 	verifyInitialReplication(t)
 
@@ -920,23 +920,20 @@ func vtctlBackupReplicaNoDropTables(t *testing.T, tabletType string) (backups []
 	require.Nil(t, err)
 
 	backups = localCluster.VerifyBackupCount(t, shardKsName, 1)
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.Nil(t, err)
 
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 
+	err = replica2.VttabletProcess.TearDown()
+	require.Nil(t, err)
+
+	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
+	require.Nil(t, err)
+
 	destroy = func(t *testing.T) {
 		verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-
-		err = replica2.VttabletProcess.TearDown()
-		require.Nil(t, err)
-
-		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
-		require.Nil(t, err)
 	}
 	return backups, destroy
 }
@@ -957,7 +954,7 @@ func GetReplicaGtidPurged(t *testing.T) string {
 
 func InsertRowOnPrimary(t *testing.T, hint string) {
 	if hint == "" {
-		hint = textutil.RandomHash()
+		hint = textutil.RandomHash()[:12]
 	}
 	query, err := sqlparser.ParseAndBind("insert into vt_insert_test (msg) values (%a)", sqltypes.StringBindVariable(hint))
 	require.NoError(t, err)
@@ -965,9 +962,9 @@ func InsertRowOnPrimary(t *testing.T, hint string) {
 	require.NoError(t, err)
 }
 
-func ReadRowsFromReplica(t *testing.T) (msgs []string) {
+func ReadRowsFromTablet(t *testing.T, tablet *cluster.Vttablet) (msgs []string) {
 	query := "select msg from vt_insert_test"
-	rs, err := primary.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	rs, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
 	for _, row := range rs.Named().Rows {
 		msg, err := row.ToString("msg")
@@ -975,6 +972,14 @@ func ReadRowsFromReplica(t *testing.T) (msgs []string) {
 		msgs = append(msgs, msg)
 	}
 	return msgs
+}
+
+func ReadRowsFromPrimary(t *testing.T) (msgs []string) {
+	return ReadRowsFromTablet(t, primary)
+}
+
+func ReadRowsFromReplica(t *testing.T) (msgs []string) {
+	return ReadRowsFromTablet(t, replica1)
 }
 
 func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.BackupManifest) {
@@ -989,12 +994,11 @@ func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.B
 	return manifest
 }
 
-func TestReplicaFullBackup(t *testing.T) (manifest *mysqlctl.BackupManifest) {
-	backups, destroy := vtctlBackupReplicaNoDropTables(t, "replica")
-	defer destroy(t)
+func TestReplicaFullBackup(t *testing.T) (manifest *mysqlctl.BackupManifest, destroy func(t *testing.T)) {
+	backups, destroy := vtctlBackupReplicaNoDestroyNoWrites(t, "replica")
 
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[len(backups)-1]
-	return readManifestFile(t, backupLocation)
+	return readManifestFile(t, backupLocation), destroy
 }
 
 func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest) {
