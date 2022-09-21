@@ -236,6 +236,21 @@ func (c *Collation_utf8mb4_uca_0900) ToUpper(dst, src []byte) []byte {
 	return dst
 }
 
+func (c *Collation_utf8mb4_uca_0900) CharLen(src []byte) int {
+	cnt := 0
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	for {
+		_, ok := it.Next()
+    if!ok {
+      break
+    }
+		cnt += 1
+	}
+	return cnt
+}
+
 type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) Init() {}
@@ -293,6 +308,10 @@ func (c *Collation_utf8mb4_0900_bin) ToLower(dst, src []byte) []byte {
 func (c *Collation_utf8mb4_0900_bin) ToUpper(dst, src []byte) []byte {
 	dst = append(dst, bytes.ToUpper(src)...)
 	return dst
+}
+
+func (c *Collation_utf8mb4_0900_bin) CharLen(src []byte) int {
+	return len(src)
 }
 
 type Collation_uca_legacy struct {
@@ -425,4 +444,19 @@ func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {
 
 func (c *Collation_uca_legacy) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newUnicodeWildcardMatcher(c.charset, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_uca_legacy) CharLen(src []byte) int {
+	cnt := 0
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	for {
+		_, ok := it.Next()
+		if !ok {
+			break
+		}
+		cnt += 1
+	}
+	return cnt
 }

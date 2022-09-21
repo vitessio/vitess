@@ -165,6 +165,10 @@ func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, match
 	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
+func (c *Collation_unicode_general_ci) CharLen(src []byte) int {
+	return len(src) / 2
+}
+
 type Collation_unicode_bin struct {
 	id      ID
 	name    string
@@ -365,4 +369,8 @@ func collationBinary(left, right []byte, rightPrefix bool) int {
 		left = left[:minLen]
 	}
 	return len(left) - len(right)
+}
+
+func (c *Collation_unicode_bin) CharLen(src []byte) int {
+	return len(src) / 2
 }
