@@ -29,6 +29,7 @@ import (
 var testReadConnBufferSize = connBufferSize
 
 func init() {
+	// Don't see a clear way to use pflag for this go test -benchmem flag
 	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", connBufferSize, "buffer size for reads from connections in tests")
 }
 
