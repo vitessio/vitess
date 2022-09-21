@@ -38,7 +38,7 @@ type localVtctldClient struct {
 func (client *localVtctldClient) Close() error { return nil }
 
 //go:generate -command localvtctldclient go run ../vtctldclient/codegen
-//go:generate localvtctldclient -targetpkg localvtctldclient -impl localVtctldClient -out client_gen.go -local
+//go:generate localvtctldclient --targetpkg localvtctldclient --impl localVtctldClient --out client_gen.go --local
 
 // New returns a local vtctldclient.VtctldClient that makes method calls on the
 // provided VtctldServer implementation. No network traffic takes place between
