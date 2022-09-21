@@ -248,3 +248,13 @@ send semi-sync ACKs. This ensures that any committed write exists in at least 2 
 #### FORMAT=vtexplain
 
 With this new `explain` format, you can get an output that is very similar to the command line `vtexplain` app, but from a running `vtgate`, through a MySQL query.
+
+### VTOrc
+
+#### Debug Pages in VTOrc
+
+Like the other vitess binaries (`vtgate`, `vttablet`), now `vtorc` also takes a `--port` flag, on which it 
+displays the `/debug` pages including `/debug/status` and variables it tracks on `/debug/vars`.
+
+This change is backward compatible and opt-in by default. Not specifying the flag works like it used to with
+VTOrc running without displaying these pages.
