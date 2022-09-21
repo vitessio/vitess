@@ -60,6 +60,7 @@ import {
     fetchShardReplicationPositions,
     createKeyspace,
     reloadSchema,
+    deleteShard,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -441,5 +442,17 @@ export const useReloadSchema = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
         return reloadSchema(params);
+    }, options);
+};
+
+/**
+ * useDeleteShard is a mutate hook that deletes a shard in a keyspace.
+ */
+export const useDeleteShard = (
+  params: Parameters<typeof deleteShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof deleteShard>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof deleteShard>>, Error>(() => {
+        return deleteShard(params);
     }, options);
 };

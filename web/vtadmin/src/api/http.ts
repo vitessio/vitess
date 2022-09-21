@@ -560,3 +560,25 @@ export const reloadSchema = async (params: ReloadSchemaParams) => {
 
     return pb.ReloadSchemasResponse.create(result);
 };
+
+export interface DeleteShardParams {
+  clusterID: string
+  keyspaceShard: string
+  evenIfServing: boolean
+  recursive: boolean
+}
+
+export const deleteShard = async (params: DeleteShardParams) => {
+  const req = new URLSearchParams();
+  req.append('keyspace_shard', params.keyspaceShard)
+  req.append('even_if_serving', String(params.evenIfServing))
+  req.append('recursive', String(params.recursive))
+
+
+  const { result } = await vtfetch(`/api/shards/${params.clusterID}`, { method: 'delete' });
+
+  const err = vtctldata.DeleteShardsResponse.verify(result);
+  if (err) throw Error(err);
+
+  return vtctldata.DeleteShardsResponse.create(result);
+};
