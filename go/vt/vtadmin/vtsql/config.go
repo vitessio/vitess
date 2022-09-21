@@ -97,13 +97,29 @@ func (c *Config) Parse(args []string) error {
 			"a Username and Password. Templates are given the context of the vtsql.Config, and primarily "+
 			"interoplate the cluster name and ID variables.")
 	effectiveUser := fs.String("effective-user", "", "username to send queries on behalf of")
+	credentialsUsername := fs.String("credentials-username", "",
+		"A string specifying the Username to use for authenticating with vtgate. "+
+			"Used with credentials-password in place of credentials-path-tmpl, in cases where providing a static file cannot be done.")
+	credentialsPassword := fs.String("credentials-password", "",
+		"A string specifying a Password to use for authenticating with vtgate. "+
+			"Used with credentials-username in place of credentials-path-tmpl, in cases where providing a static file cannot be done.")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	var creds *grpcclient.StaticAuthClientCreds
+	// First set credentials to values potentially supplied by credentials-password and credentials-username
+	c.Credentials = &StaticAuthCredentials{
+		EffectiveUser: *credentialsUsername,
+		StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
+			Username: *credentialsUsername,
+			Password: *credentialsPassword,
+		},
+	}
 
+	var tmplStrCreds *grpcclient.StaticAuthClientCreds
+
+	// If credentials-path-tmpl is provided, use those credentials instead
 	if *credentialsTmplStr != "" {
 		_creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)
 		if err != nil {
@@ -111,19 +127,19 @@ func (c *Config) Parse(args []string) error {
 		}
 
 		c.CredentialsPath = path
-		creds = _creds
+		tmplStrCreds = _creds
 	}
 
-	if creds != nil {
+	if tmplStrCreds != nil {
 		// If we did not receive an effective user, but loaded credentials, then the
 		// immediate user is the effective user.
 		if *effectiveUser == "" {
-			*effectiveUser = creds.Username
+			*effectiveUser = tmplStrCreds.Username
 		}
 
 		c.Credentials = &StaticAuthCredentials{
 			EffectiveUser:         *effectiveUser,
-			StaticAuthClientCreds: creds,
+			StaticAuthClientCreds: tmplStrCreds,
 		}
 	}
 

@@ -40,6 +40,14 @@ defaults:
   vtsql-discovery-tags: "tag1,tag2"
   # Username to send queries on behalf of. See package callerid.
   vtsql-effective-user: "my-effective-user"
+  # Username used to make requests against vtgates in the cluster. Used with
+  # vtsql-credentials-password in place of vtsql-credentials-path-tmpl.
+  # If both vtsql-credentials-username and vtsql-credentials-path-tmpl are
+  # provided, vtsql-credentials-path-tmpl takes precedent.
+  vtsql-credentials-username: "my-username"
+  # Password used to make requests against vtgates in the cluster. Used with
+  # vtsql-credentials-username in place of vtsql-credentials-path-tmpl.
+  vtsql-credentials-password: "my-password"
 
   # VTAdmin also provides different RPC pools to gate the number of concurrent
   # requests it will make against vtctlds/vtgates in a given cluster, to prevent
