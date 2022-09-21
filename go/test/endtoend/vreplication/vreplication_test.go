@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/buger/jsonparser"
-	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -149,7 +148,10 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
-	verifySourceTabletThrottling(t, targetKs, workflow)
+	// Wait for the copy phase to start
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
+	// The initial copy phase should be blocking on the history list
+	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
 	trxConn.Close()
 }
@@ -446,6 +448,8 @@ func insertInitialData(t *testing.T) {
 	})
 }
 
+// insertMoreCustomers creates additional customers.
+// Note: this will only work when the customer sequence is in place.
 func insertMoreCustomers(t *testing.T, numCustomers int) {
 	sql := "insert into customer (name) values "
 	i := 0
@@ -501,8 +505,22 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 
+		// Wait to finish the copy phase for all tables
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
+
+		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
+		dec80Replicated := false
+		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
+		waitForNoWorkflowLag(t, vc, targetKs, workflow)
+		for _, shard := range []string{"-80", "80-"} {
+			shardTarget := fmt.Sprintf("%s:%s", targetKs, shard)
+			if res := execVtgateQuery(t, vtgateConn, shardTarget, "select cid from customer"); len(res.Rows) > 0 {
+				waitForQueryResult(t, vtgateConn, shardTarget, "select distinct dec80 from customer", `[[DECIMAL(0)]]`)
+				dec80Replicated = true
+			}
+		}
+		require.Equal(t, true, dec80Replicated)
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
@@ -532,6 +550,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
 		switchWrites(t, ksWorkflow, false)
+		checkThatVDiffFails(t, targetKs, workflow)
+
 		if withOpenTx && commit != nil {
 			commit(t)
 		}
@@ -635,40 +655,6 @@ func validateRollupReplicates(t *testing.T) {
 		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
 	})
-}
-
-func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
-	timer := time.NewTimer(defaultTimeout)
-	defer timer.Stop()
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
-	for {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-		require.NoError(t, err)
-		result := gjson.Get(output, "ShardStatuses")
-		result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
-			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
-				if streamId.String() == "PrimaryReplicationStatuses" {
-					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
-						state := attributeValue.Get("State").String()
-						if state != "Copying" {
-							require.FailNowf(t, "Unexpected running workflow stream",
-								"Initial copy phase for the MoveTables workflow %s started in less than %s when it should have been waiting. Show output: %s",
-								ksWorkflow, defaultTimeout, output)
-						}
-						return true // end attribute loop
-					})
-				}
-				return true // end stream loop
-			})
-			return true // end tablet loop
-		})
-		select {
-		case <-timer.C:
-			return
-		default:
-			time.Sleep(defaultTick)
-		}
-	}
 }
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
@@ -828,6 +814,21 @@ func shardOrders(t *testing.T) {
 		waitForRowCountInTablet(t, customerTab1, "customer", "orders", 1)
 		waitForRowCountInTablet(t, customerTab2, "customer", "orders", 2)
 		waitForRowCount(t, vtgateConn, "customer", "orders", 3)
+	})
+}
+
+func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
+	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", ksWorkflow)
+		require.Error(t, err)
+		require.Contains(t, output, "invalid VDiff run")
+	})
+	t.Run("check that vdiff2 won't run", func(t2 *testing.T) {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", ksWorkflow)
+		require.Error(t, err)
+		require.Contains(t, output, "invalid VDiff run")
+
 	})
 }
 
@@ -1201,8 +1202,9 @@ func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory in
 	execQuery(t, dbConn1, "use "+sourceKS)
 	execQuery(t, dbConn2, "use "+sourceKS)
 	offset := int64(1000)
+	limit := int64(neededTrxHistory * 100)
 	insertStmt := strings.Builder{}
-	for i := offset; i <= (neededTrxHistory*10)+offset; i++ {
+	for i := offset; i <= offset+limit; i++ {
 		if i == offset {
 			insertStmt.WriteString(fmt.Sprintf("insert into product (pid, description) values (%d, 'test')", i))
 		} else {
@@ -1215,10 +1217,12 @@ func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory in
 	execQuery(t, dbConn2, "rollback")
 	execQuery(t, dbConn2, "start transaction")
 	execQuery(t, dbConn2, "select count(*) from product")
-	execQuery(t, dbConn1, fmt.Sprintf("delete from product where pid >= %d and pid < %d", offset, offset+10000))
+	execQuery(t, dbConn1, fmt.Sprintf("delete from product where pid >= %d and pid <= %d", offset, offset+limit))
 	return dbConn2
 }
 
+// waitForInnoDBRowHistory waits for the history list length to be greater than the
+// expected length.
 func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, expectedLength int64) {
 	timer := time.NewTimer(defaultTimeout)
 	historyLen := int64(0)
@@ -1229,7 +1233,7 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 		require.Equal(t, 1, len(res.Rows))
 		historyLen, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
-		if historyLen >= expectedLength {
+		if historyLen > expectedLength {
 			return
 		}
 		select {

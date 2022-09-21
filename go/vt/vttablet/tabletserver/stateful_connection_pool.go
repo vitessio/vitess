@@ -17,20 +17,18 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"time"
 
 	"vitess.io/vitess/go/pools"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"context"
-
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const (
@@ -171,14 +169,14 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 
 // NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 // the found_rows pool, depending on the options provided
-func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, settings []string) (*StatefulConnection, error) {
+func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, setting *pools.Setting) (*StatefulConnection, error) {
 	var conn *connpool.DBConn
 	var err error
 
 	if options.GetClientFoundRows() {
-		conn, err = sf.foundRowsPool.Get(ctx, settings)
+		conn, err = sf.foundRowsPool.Get(ctx, setting)
 	} else {
-		conn, err = sf.conns.Get(ctx, settings)
+		conn, err = sf.conns.Get(ctx, setting)
 	}
 	if err != nil {
 		return nil, err

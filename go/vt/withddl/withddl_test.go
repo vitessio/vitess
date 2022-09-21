@@ -18,7 +18,6 @@ package withddl
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -30,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
 	"vitess.io/vitess/go/vt/vttest"
 )
 
@@ -281,7 +281,7 @@ func checkResult(t *testing.T, wantqr *sqltypes.Result, wanterr string, qr *sqlt
 }
 
 func TestMain(m *testing.M) {
-	flag.Parse() // Do not remove this comment, import into google3 depends on it
+	tabletenvtest.LoadTabletEnvFlags()
 	tabletenv.Init()
 
 	exitCode := func() int {

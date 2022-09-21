@@ -207,9 +207,11 @@ func TestUnownedVindexInsertSelect(t *testing.T) {
 	assert.EqualValues(t, 4, qr.RowsAffected)
 
 	utils.Exec(t, mcmp.VtConn, "use `sks/-80`")
-	utils.AssertMatches(t, mcmp.VtConn, `select count(*) from order_tbl o join oevent_tbl oe on o.oid = oe.oid`, `[[INT64(3)]]`)
+	qr = utils.Exec(t, mcmp.VtConn, `select count(*) from order_tbl o join oevent_tbl oe on o.oid = oe.oid`)
+	assert.Equal(t, `[[INT64(3)]]`, fmt.Sprintf("%v", qr.Rows))
 	utils.Exec(t, mcmp.VtConn, "use `sks/80-`")
-	utils.AssertMatches(t, mcmp.VtConn, `select count(*) from order_tbl o join oevent_tbl oe on o.oid = oe.oid`, `[[INT64(1)]]`)
+	qr = utils.Exec(t, mcmp.VtConn, `select count(*) from order_tbl o join oevent_tbl oe on o.oid = oe.oid`)
+	assert.Equal(t, `[[INT64(1)]]`, fmt.Sprintf("%v", qr.Rows))
 
 	// resetting the target
 	utils.Exec(t, mcmp.VtConn, "use `sks`")

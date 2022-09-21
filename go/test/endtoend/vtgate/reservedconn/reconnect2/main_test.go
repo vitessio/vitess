@@ -98,7 +98,7 @@ func runAllTests(m *testing.M) int {
 	}
 	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5"}
 	if enableSettingsPool {
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver_enable_settings_pool")
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
 	}
 	if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true); err != nil {
 		return 1

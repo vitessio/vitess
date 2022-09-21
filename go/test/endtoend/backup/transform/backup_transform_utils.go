@@ -229,6 +229,10 @@ func TestBackupTransformImpl(t *testing.T) {
 	err := replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
 
+	if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, []string{"replica", "primary"}); err != nil {
+		require.Nil(t, err)
+	}
+
 	// take backup, it should not give any error
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)

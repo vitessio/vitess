@@ -24,10 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -37,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -59,7 +59,7 @@ type QueryExecutor struct {
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
-	settings       []string
+	setting        *pools.Setting
 }
 
 const (
@@ -143,9 +143,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, err
 		}
 		defer conn.Unlock()
-		if len(qre.settings) > 0 {
-			if err = conn.ApplySettings(qre.ctx, qre.settings); err != nil {
-				return nil, vterrors.Wrap(err, "failed to execute system settings on the connection")
+		if qre.setting != nil {
+			if err = conn.ApplySetting(qre.ctx, qre.setting); err != nil {
+				return nil, vterrors.Wrap(err, "failed to execute system setting on the connection")
 			}
 		}
 		return qre.txConnExec(conn)
@@ -183,8 +183,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	case p.PlanShowThrottledApps:
 		return qre.execShowThrottledApps()
 	case p.PlanSet:
-		if len(qre.settings) == 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without settings connection", qre.query)
+		if qre.setting == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
 		}
 		// The execution is not required as this setting will be applied when any other query type is executed.
 		return &sqltypes.Result{}, nil
@@ -198,7 +198,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.settings)
+	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
 
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.settings)
+	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
 	if err != nil {
 		return nil, err
 	}
@@ -334,9 +334,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 			return err
 		}
 		defer txConn.Unlock()
-		if len(qre.settings) > 0 {
-			if err = txConn.ApplySettings(qre.ctx, qre.settings); err != nil {
-				return vterrors.Wrap(err, "failed to execute system settings on the connection")
+		if qre.setting != nil {
+			if err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+				return vterrors.Wrap(err, "failed to execute system setting on the connection")
 			}
 		}
 		conn = txConn.UnderlyingDBConn()
@@ -719,7 +719,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.conns.Get(ctx, qre.settings)
+	conn, err := qre.tsv.qe.conns.Get(ctx, qre.setting)
 
 	switch err {
 	case nil:
@@ -736,7 +736,7 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.settings)
+	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.setting)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -874,6 +874,10 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.RetryMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CleanupMigrationType:
 		return qre.tsv.onlineDDLExecutor.CleanupMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.LaunchMigrationType:
+		return qre.tsv.onlineDDLExecutor.LaunchMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
+	case sqlparser.LaunchAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx)
 	case sqlparser.CompleteMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CompleteAllMigrationType:

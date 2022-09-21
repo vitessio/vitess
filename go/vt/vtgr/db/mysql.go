@@ -28,11 +28,11 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (

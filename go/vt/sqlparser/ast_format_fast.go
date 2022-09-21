@@ -406,8 +406,14 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case LaunchMigrationType:
+		alterType = "launch"
+	case LaunchAllMigrationType:
+		alterType = "launch all"
 	case CompleteMigrationType:
 		alterType = "complete"
+	case CompleteAllMigrationType:
+		alterType = "complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -431,6 +437,11 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 	if node.Ratio != nil {
 		buf.WriteString(" ratio ")
 		node.Ratio.formatFast(buf)
+	}
+	if node.Shards != "" {
+		buf.WriteString(" vitess_shards '")
+		buf.WriteString(node.Shards)
+		buf.WriteByte('\'')
 	}
 }
 

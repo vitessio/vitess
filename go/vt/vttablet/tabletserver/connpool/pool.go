@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -24,9 +25,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/netutil"
-
-	"context"
-
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
@@ -35,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -43,6 +42,11 @@ import (
 
 // ErrConnPoolClosed is returned when the connection pool is closed.
 var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: unexpected: conn pool is closed")
+
+const (
+	getWithoutS = "GetWithoutSettings"
+	getWithS    = "GetWithSettings"
+)
 
 // Pool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
@@ -64,6 +68,7 @@ type Pool struct {
 	waiterQueueFull    sync2.AtomicInt64
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
+	getConnTime        *servenv.TimingsWrapper
 }
 
 // NewPool creates a new Pool. The name is used
@@ -98,6 +103,8 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", cp.GetSettingCount)
 	env.Exporter().NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", cp.DiffSettingCount)
 	env.Exporter().NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", cp.ResetSettingCount)
+	cp.getConnTime = env.Exporter().NewTimings(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
+
 	return cp
 }
 
@@ -168,7 +175,7 @@ func (cp *Pool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *Pool) Get(ctx context.Context, settings []string) (*DBConn, error) {
+func (cp *Pool) Get(ctx context.Context, setting *pools.Setting) (*DBConn, error) {
 	span, ctx := trace.NewSpan(ctx, "Pool.Get")
 	defer span.Finish()
 
@@ -182,7 +189,7 @@ func (cp *Pool) Get(ctx context.Context, settings []string) (*DBConn, error) {
 	}
 
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, nil)
+		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, setting)
 	}
 	p := cp.pool()
 	if p == nil {
@@ -198,9 +205,18 @@ func (cp *Pool) Get(ctx context.Context, settings []string) (*DBConn, error) {
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
-	r, err := p.Get(ctx, settings)
+
+	start := time.Now()
+	r, err := p.Get(ctx, setting)
 	if err != nil {
 		return nil, err
+	}
+	if cp.getConnTime != nil {
+		if setting == nil {
+			cp.getConnTime.Record(getWithoutS, start)
+		} else {
+			cp.getConnTime.Record(getWithS, start)
+		}
 	}
 	return r.(*DBConn), nil
 }

@@ -317,3 +317,32 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 	}, sel.SelectExprs)
 	return found
 }
+
+// BuildSettingQuery builds a query for system settings.
+func BuildSettingQuery(settings []string) (query string, resetQuery string, err error) {
+	if len(settings) == 0 {
+		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
+	}
+	var setExprs sqlparser.SetExprs
+	var resetSetExprs sqlparser.SetExprs
+	lDefault := sqlparser.NewStrLiteral("default")
+	for _, setting := range settings {
+		stmt, err := sqlparser.Parse(setting)
+		if err != nil {
+			return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
+		}
+		set, ok := stmt.(*sqlparser.Set)
+		if !ok {
+			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+		}
+		setExprs = append(setExprs, set.Exprs...)
+		for _, sExpr := range set.Exprs {
+			sysVar := sExpr.Var
+			if sysVar.Scope != sqlparser.SessionScope {
+				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
+			}
+			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: lDefault})
+		}
+	}
+	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
+}

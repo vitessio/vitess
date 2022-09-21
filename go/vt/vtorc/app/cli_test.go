@@ -1,0 +1,30 @@
+package app
+
+import (
+	"testing"
+
+	"vitess.io/vitess/go/vt/vtorc/config"
+	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
+)
+
+func init() {
+	config.Config.HostnameResolveMethod = "none"
+	config.MarkConfigurationLoaded()
+}
+
+func TestKnownCommands(t *testing.T) {
+	Cli("help", false, "localhost:9999", "localhost:9999", "orc", "no-reason", "1m", ".", "no-alias", "no-pool", "")
+
+	commandsMap := make(map[string]string)
+	for _, command := range knownCommands {
+		commandsMap[command.Command] = command.Section
+	}
+	test.S(t).ExpectEquals(commandsMap["no-such-command"], "")
+	test.S(t).ExpectEquals(commandsMap["relocate"], "Smart relocation")
+	test.S(t).ExpectEquals(commandsMap["relocate-slaves"], "")
+	test.S(t).ExpectEquals(commandsMap["relocate-replicas"], "Smart relocation")
+
+	for _, synonym := range commandSynonyms {
+		test.S(t).ExpectNotEquals(commandsMap[synonym], "")
+	}
+}

@@ -101,7 +101,7 @@ type LocalProcessCluster struct {
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
 	VtbackupProcess VtbackupProcess
-	VtorcProcesses  []*VtorcProcess
+	VTOrcProcesses  []*VTOrcProcess
 
 	nextPortForProcess int
 
@@ -861,7 +861,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtgate teardown: %v", err)
 	}
 
-	for _, vtorcProcess := range cluster.VtorcProcesses {
+	for _, vtorcProcess := range cluster.VTOrcProcesses {
 		if err := vtorcProcess.TearDown(); err != nil {
 			log.Errorf("Error in vtorc teardown: %v", err)
 		}
@@ -1069,11 +1069,11 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 	}
 }
 
-// NewOrcProcess creates a new VtorcProcess object
-func (cluster *LocalProcessCluster) NewOrcProcess(config VtorcConfiguration) *VtorcProcess {
+// NewVTOrcProcess creates a new VTOrcProcess object
+func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *VTOrcProcess {
 	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	base.Binary = "vtorc"
-	return &VtorcProcess{
+	return &VTOrcProcess{
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       config,
