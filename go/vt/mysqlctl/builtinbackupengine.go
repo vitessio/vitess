@@ -224,7 +224,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if !ok {
 		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", rpGTID)
 	}
-	// binlogs may not contain information about prged GTIDs. e.g. some binlog.000003 may have
+	// binlogs may not contain information about purged GTIDs. e.g. some binlog.000003 may have
 	// previous GTIDs like 00021324-1111-1111-1111-111111111111:30-60, ie 1-29 range is missing. This can happen
 	// when a server is restored from backup and set with gtid_purged != "".
 	// This is fine!
@@ -274,7 +274,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
 	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
 	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
-	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
+	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, mysql.Position{}, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -341,6 +341,15 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
+	gtidPurgedPosition, err := params.Mysqld.GetGTIDPurged(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get gtid_purged")
+	}
+
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get purged position")
+	}
+
 	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get server uuid")
@@ -355,7 +364,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, mysql.Position{}, nil, serverUUID)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -436,6 +445,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	params BackupParams,
 	bh backupstorage.BackupHandle,
 	replicationPosition mysql.Position,
+	purgedPosition mysql.Position,
 	fromPosition mysql.Position,
 	binlogFiles []string,
 	serverUUID string,
@@ -506,16 +516,17 @@ func (be *BuiltinBackupEngine) backupFiles(
 	bm := &builtinBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod: builtinBackupEngineName,
-			Position:     replicationPosition,
-			FromPosition: fromPosition,
-			Incremental:  !fromPosition.IsZero(),
-			ServerUUID:   serverUUID,
-			TabletAlias:  params.TabletAlias,
-			Keyspace:     params.Keyspace,
-			Shard:        params.Shard,
-			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
-			FinishedTime: time.Now().UTC().Format(time.RFC3339),
+			BackupMethod:   builtinBackupEngineName,
+			Position:       replicationPosition,
+			PurgedPosition: purgedPosition,
+			FromPosition:   fromPosition,
+			Incremental:    !fromPosition.IsZero(),
+			ServerUUID:     serverUUID,
+			TabletAlias:    params.TabletAlias,
+			Keyspace:       params.Keyspace,
+			Shard:          params.Shard,
+			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
+			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
 		},
 
 		// Builtin-specific fields

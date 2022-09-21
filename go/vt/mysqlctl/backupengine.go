@@ -193,6 +193,9 @@ type BackupManifest struct {
 	// Position is the replication position at which the backup was taken.
 	Position mysql.Position
 
+	// PurgedPosition stands for purged GTIDs, information that is necessary for PITR recovery. This is specific to MySQL56
+	PurgedPosition mysql.Position
+
 	// FromPosition is only applicable to incremental backups, and stands for the position from
 	// which incremental changes are backed up.
 	FromPosition mysql.Position

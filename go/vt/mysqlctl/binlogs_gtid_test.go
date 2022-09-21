@@ -127,6 +127,7 @@ func TestIsValidIncrementalBakcup(t *testing.T) {
 	}
 	tt := []struct {
 		baseGTID      string
+		purgedGTID    string
 		backupFromPos string
 		backupPos     string
 		expectIsValid bool
@@ -173,27 +174,52 @@ func TestIsValidIncrementalBakcup(t *testing.T) {
 			backupPos:     "1-70",
 			expectIsValid: false,
 		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			backupFromPos: "3-51",
+			backupPos:     "3-70",
+			expectIsValid: false,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			purgedGTID:    "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-2",
+			backupFromPos: "3-51",
+			backupPos:     "3-70",
+			expectIsValid: true,
+		},
+		{
+			baseGTID:      "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
+			purgedGTID:    "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-2",
+			backupFromPos: "4-51",
+			backupPos:     "4-70",
+			expectIsValid: false,
+		},
 	}
 	for i, tc := range tt {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			basePos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.baseGTID)
 			require.NoError(t, err)
-			isValid := IsValidIncrementalBakcup(basePos.GTIDSet, incrementalManifest(tc.backupPos, tc.backupFromPos))
+			purgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, tc.purgedGTID)
+			require.NoError(t, err)
+			isValid := IsValidIncrementalBakcup(basePos.GTIDSet, purgedPos.GTIDSet, incrementalManifest(tc.backupPos, tc.backupFromPos))
 			assert.Equal(t, tc.expectIsValid, isValid)
 		})
 	}
 }
 
 func TestFindPITRPath(t *testing.T) {
+	generatePosition := func(posRange string) mysql.Position {
+		return mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
+	}
 	fullManifest := func(backupPos string) *BackupManifest {
 		return &BackupManifest{
-			Position: mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
+			Position: generatePosition(backupPos),
 		}
 	}
 	incrementalManifest := func(backupPos string, backupFromPos string) *BackupManifest {
 		return &BackupManifest{
-			Position:     mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
-			FromPosition: mysql.MustParsePosition(mysql.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupFromPos)),
+			Position:     generatePosition(backupPos),
+			FromPosition: generatePosition(backupFromPos),
 			Incremental:  true,
 		}
 	}
@@ -217,6 +243,7 @@ func TestFindPITRPath(t *testing.T) {
 	tt := []struct {
 		name                       string
 		restoreGTID                string
+		purgedGTID                 string
 		incrementalBackups         []*BackupManifest
 		expectFullManifest         *BackupManifest
 		expectIncrementalManifests []*BackupManifest
@@ -330,8 +357,23 @@ func TestFindPITRPath(t *testing.T) {
 			},
 		},
 		{
+			name:        "fail incomplete binlog previous GTIDs",
+			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-92",
+			incrementalBackups: []*BackupManifest{
+				incrementalManifest("3-90", "3-75"),
+				incrementalManifest("3-95", "3-90"),
+			},
+			expectFullManifest: fullManifest("1-80"),
+			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("3-90", "3-75"),
+				incrementalManifest("3-95", "3-90"),
+			},
+			expectError: "no path found",
+		},
+		{
 			name:        "incomplete binlog previous GTIDs",
 			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-92",
+			purgedGTID:  "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-2",
 			incrementalBackups: []*BackupManifest{
 				incrementalManifest("3-90", "3-75"),
 				incrementalManifest("3-95", "3-90"),
@@ -347,6 +389,15 @@ func TestFindPITRPath(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.incrementalBackups == nil {
 				tc.incrementalBackups = incrementalBackups
+			}
+			for i := range fullBackups {
+				var err error
+				fullBackup := fullBackups[i]
+				fullBackup.PurgedPosition, err = mysql.ParsePosition(mysql.Mysql56FlavorID, tc.purgedGTID)
+				require.NoError(t, err)
+				defer func() {
+					fullBackup.PurgedPosition = mysql.Position{}
+				}()
 			}
 			var manifests []*BackupManifest
 			manifests = append(manifests, fullBackups...)

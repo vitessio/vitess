@@ -90,7 +90,7 @@ func ChooseBinlogsForIncrementalBackup(
 // IsValidIncrementalBakcup determines whether the given manifest can be used to extend a backup
 // based on baseGTIDSet. The manifest must be able to pick up from baseGTIDSet, and must extend it by at least
 // one entry.
-func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, manifest *BackupManifest) bool {
+func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, purgedGTIDSet mysql.GTIDSet, manifest *BackupManifest) bool {
 	if manifest == nil {
 		return false
 	}
@@ -107,7 +107,7 @@ func IsValidIncrementalBakcup(baseGTIDSet mysql.GTIDSet, manifest *BackupManifes
 		// the incremental backup adds nothing; it's already contained in the base set
 		return false
 	}
-	if !manifest.Position.GTIDSet.Contains(baseGTIDSet) {
+	if !manifest.Position.GTIDSet.Union(purgedGTIDSet).Contains(baseGTIDSet) {
 		// the base set seems to have extra entries?
 		return false
 	}
@@ -127,7 +127,7 @@ func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest))
 		}
 	}
 	sort.SliceStable(sortedManifests, func(i, j int) bool {
-		return sortedManifests[j].Position.GTIDSet.Contains(sortedManifests[i].Position.GTIDSet)
+		return sortedManifests[j].Position.GTIDSet.Union(sortedManifests[i].PurgedPosition.GTIDSet).Contains(sortedManifests[i].Position.GTIDSet)
 	})
 	mostRelevantFullBackupIndex := -1 // an invalid value
 	for i, manifest := range sortedManifests {
@@ -155,6 +155,7 @@ func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest))
 		// The result path is a single full backup.
 		return append(shortestPath, fullBackup), nil
 	}
+	purgedGTIDSet := fullBackup.PurgedPosition.GTIDSet
 
 	var validRestorePaths []BackupManifestPath
 	// recursive function that searches for all possible paths:
@@ -170,7 +171,7 @@ func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest))
 			return
 		}
 		// if the next manifest is eligible to be part of the path, try it out
-		if IsValidIncrementalBakcup(baseGTIDSet, remainingManifests[0]) {
+		if IsValidIncrementalBakcup(baseGTIDSet, purgedGTIDSet, remainingManifests[0]) {
 			nextGTIDSet := baseGTIDSet.Union(remainingManifests[0].Position.GTIDSet)
 			findPaths(nextGTIDSet, append(pathManifests, remainingManifests[0]), remainingManifests[1:])
 		}
