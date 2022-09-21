@@ -834,11 +834,15 @@ func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *Compression
 	require.Nil(t, err)
 }
 
+func RemoveBackup(t *testing.T, backupName string) {
+	err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backupName)
+	require.Nil(t, err)
+}
+
 func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []string) {
 	// Remove the backup
 	for _, backup := range backups {
-		err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
-		require.Nil(t, err)
+		RemoveBackup(t, backup)
 	}
 
 	// Now, there should not be no backup
@@ -1001,7 +1005,7 @@ func TestReplicaFullBackup(t *testing.T) (manifest *mysqlctl.BackupManifest, des
 	return readManifestFile(t, backupLocation), destroy
 }
 
-func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest) {
+func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	incrementalFromPosArg := "auto"
 	if !incrementalFromPos.IsZero() {
 		incrementalFromPosArg = mysql.EncodePosition(incrementalFromPos)
@@ -1010,14 +1014,15 @@ func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Positio
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
-		return nil
+		return nil, ""
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 
 	backups, err := localCluster.ListBackups(shardKsName)
 	require.NoError(t, err)
-	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[len(backups)-1]
-	return readManifestFile(t, backupLocation)
+	backupName = backups[len(backups)-1]
+	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
+	return readManifestFile(t, backupLocation), backupName
 }
 
 func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectError string) {

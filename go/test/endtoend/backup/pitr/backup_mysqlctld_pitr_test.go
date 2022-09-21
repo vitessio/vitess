@@ -19,6 +19,7 @@ package mysqlctld
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -131,6 +132,7 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 			fromFullPosition: true,
 		},
 	}
+	var fromFullPositionBackups []string
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.writeBeforeBackup {
@@ -154,13 +156,16 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 					incrementalFromPos = fullBackupPos
 				}
 			}
-			manifest := backup.TestReplicaIncrementalBackup(t, incrementalFromPos, tc.expectError)
+			manifest, backupName := backup.TestReplicaIncrementalBackup(t, incrementalFromPos, tc.expectError)
 			if tc.expectError != "" {
 				return
 			}
 			defer func() {
 				lastBackupPos = manifest.Position
 			}()
+			if tc.fromFullPosition {
+				fromFullPositionBackups = append(fromFullPositionBackups, backupName)
+			}
 			require.False(t, manifest.FromPosition.IsZero())
 			require.NotEqual(t, manifest.Position, manifest.FromPosition)
 			require.True(t, manifest.Position.GTIDSet.Contains(manifest.FromPosition.GTIDSet))
@@ -178,8 +183,9 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 	}
 
 	testRestores := func() {
-		for _, pos := range backupPositions {
-			testName := fmt.Sprintf("PITR %s", pos)
+		for _, r := range rand.Perm(len(backupPositions)) {
+			pos := backupPositions[r]
+			testName := fmt.Sprintf("%s, %d records", pos, rowsPerPosition[pos])
 			t.Run(testName, func(t *testing.T) {
 				restoreToPos, err := mysql.DecodePosition(pos)
 				require.NoError(t, err)
@@ -191,7 +197,16 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 			})
 		}
 	}
-	testRestores()
-	// Delete the last incremental backup, which was fromFullPosition, and run the restores again:
-	// testRestores()
+	t.Run("PITR", func(t *testing.T) {
+		testRestores()
+	})
+	t.Run("remove full position backups", func(t *testing.T) {
+		// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
+		for _, backupName := range fromFullPositionBackups {
+			backup.RemoveBackup(t, backupName)
+		}
+	})
+	t.Run("PITR-2", func(t *testing.T) {
+		testRestores()
+	})
 }
