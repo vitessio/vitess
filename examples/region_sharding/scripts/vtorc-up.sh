@@ -5,7 +5,7 @@ source ./env.sh
 log_dir="${VTDATAROOT}/tmp"
 web_dir="../../web/vtorc"
 vtorc_web_port=16000
-port=16200
+port=16001
 
 vtorc \
   $TOPOLOGY_FLAGS \
