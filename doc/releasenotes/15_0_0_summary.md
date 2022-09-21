@@ -248,3 +248,58 @@ send semi-sync ACKs. This ensures that any committed write exists in at least 2 
 #### FORMAT=vtexplain
 
 With this new `explain` format, you can get an output that is very similar to the command line `vtexplain` app, but from a running `vtgate`, through a MySQL query.
+
+### VTOrc
+
+#### Configuration Renames
+
+VTOrc configurations that had `Orchestrator` as a substring have been renamed to have `VTOrc` instead. The old configuration won't 
+work in this release. So if backward compatibility is desired, then before upgrading it is suggested to duplicate the old configurations
+and also set them for the new configurations.
+
+VTOrc ignores the configurations that it doesn't understand. So new configurations can be added while running the previous release.
+After the upgrade, the old configurations can be dropped.
+
+|           Old Configuration            |        New Configuration        |
+|:--------------------------------------:|:-------------------------------:|
+|         MySQLOrchestratorHost          |         MySQLVTOrcHost          |
+|  MySQLOrchestratorMaxPoolConnections   |  MySQLVTOrcMaxPoolConnections   |
+|         MySQLOrchestratorPort          |         MySQLVTOrcPort          |
+|       MySQLOrchestratorDatabase        |       MySQLVTOrcDatabase        |
+|         MySQLOrchestratorUser          |         MySQLVTOrcUser          |
+|       MySQLOrchestratorPassword        |       MySQLVTOrcPassword        |
+| MySQLOrchestratorCredentialsConfigFile | MySQLVTOrcCredentialsConfigFile |
+|   MySQLOrchestratorSSLPrivateKeyFile   |   MySQLVTOrcSSLPrivateKeyFile   |
+|      MySQLOrchestratorSSLCertFile      |      MySQLVTOrcSSLCertFile      |
+|       MySQLOrchestratorSSLCAFile       |       MySQLVTOrcSSLCAFile       |
+|     MySQLOrchestratorSSLSkipVerify     |     MySQLVTOrcSSLSkipVerify     |
+|     MySQLOrchestratorUseMutualTLS      |     MySQLVTOrcUseMutualTLS      |
+|  MySQLOrchestratorReadTimeoutSeconds   |  MySQLVTOrcReadTimeoutSeconds   |
+|    MySQLOrchestratorRejectReadOnly     |    MySQLVTOrcRejectReadOnly     |
+
+
+For example, if you have the following configuration -
+```json
+{
+  "MySQLOrchestratorHost": "host"
+}
+```
+then, you should change it to
+```json
+{
+  "MySQLOrchestratorHost": "host",
+  "MySQLVTOrcHost": "host"
+}
+```
+while still on the old release. After changing the configuration, you can upgrade vitess.
+After upgrading, the old configurations can be dropped - 
+```json
+{
+  "MySQLVTOrcHost": "host"
+}
+```
+
+### Default Configuration Files
+
+The default files that VTOrc searches for configurations in have also changed from `"/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json"` to
+`"/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json"`.
