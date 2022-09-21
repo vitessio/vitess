@@ -387,6 +387,9 @@ var (
 		}, {
 			input: "select /* full outer join */ * from a full outer join b on a.x = b.x",
 		}, {
+			input:  "select /* full outer join */ * from a full join b on a.x = b.x",
+			output: "select /* full outer join */ * from a full outer join b on a.x = b.x",
+		}, {
 			input: "select /* join on */ 1 from t1 join t2 on a = b",
 		}, {
 			input: "select /* join using */ 1 from t1 join t2 using (a)",
