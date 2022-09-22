@@ -78,6 +78,7 @@ const (
 	PlanRevertMigration
 	PlanShowMigrationLogs
 	PlanShowThrottledApps
+	PlanAlterThrottler
 	NumPlans
 )
 
@@ -112,6 +113,7 @@ var planName = []string{
 	"RevertMigration",
 	"ShowMigrationLogs",
 	"ShowThrottledApps",
+	"AlterThrottler",
 }
 
 func (pt PlanType) String() string {
@@ -225,6 +227,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 		plan, err = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}, nil
 	case *sqlparser.ShowThrottledApps:
 		plan, err = &Plan{PlanID: PlanShowThrottledApps, FullStmt: stmt}, nil
+	case *sqlparser.AlterThrottler:
+		plan, err = &Plan{PlanID: PlanAlterThrottler, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, sqlparser.Explain:

@@ -182,6 +182,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
 		return qre.execShowThrottledApps()
+	case p.PlanAlterThrottler:
+		return qre.execAlterThrottler()
 	case p.PlanSet:
 		if qre.setting == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
@@ -948,6 +950,22 @@ func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
 				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
 				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
 			})
+	}
+	return result, nil
+}
+
+func (qre *QueryExecutor) execAlterThrottler() (*sqltypes.Result, error) {
+	// if err := qre.tsv.lagThrottler.CheckIsReady(); err != nil {
+	// 	return nil, err
+	// }
+	// alterThrottler, ok := qre.plan.FullStmt.(*sqlparser.AlterThrottler)
+	_, ok := qre.plan.FullStmt.(*sqlparser.AlterThrottler)
+	if !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_THROTTLER plan")
+	}
+	result := &sqltypes.Result{}
+	if err := qre.tsv.lagThrottler.CheckIsReady(); err == nil {
+		result.RowsAffected = 1
 	}
 	return result, nil
 }
