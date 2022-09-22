@@ -27,6 +27,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/grpccommon"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -73,6 +76,9 @@ func main() {
 	defer exit.Recover()
 
 	fs := pflag.NewFlagSet("vtctlclient", pflag.ExitOnError)
+	grpcclient.RegisterFlags(fs)
+	grpccommon.RegisterFlags(fs)
+	trace.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	_flag.Parse(fs)
 

@@ -20,22 +20,12 @@ import (
 	"io"
 
 	"github.com/golang/snappy"
-	"github.com/spf13/pflag"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
-
-	"vitess.io/vitess/go/vt/servenv"
 )
 
 var compression string
-
-func init() {
-	for _, cmd := range grpcclientBinaries {
-		servenv.OnParseFor(cmd, func(fs *pflag.FlagSet) {
-			fs.StringVar(&compression, "grpc_compression", compression, "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
-		})
-	}
-}
 
 // SnappyCompressor is a gRPC compressor using the Snappy algorithm.
 type SnappyCompressor struct{}
