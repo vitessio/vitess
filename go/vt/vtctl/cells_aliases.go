@@ -18,9 +18,10 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"strings"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -64,7 +65,7 @@ func init() {
 	})
 }
 
-func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cellsString := subFlags.String("cells", "", "The list of cell names that are members of this alias.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -86,7 +87,7 @@ func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	return err
 }
 
-func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cellsString := subFlags.String("cells", "", "The list of cell names that are members of this alias.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -110,7 +111,7 @@ func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return err
 }
 
-func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return err
 }
 
-func commandGetCellsAliases(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetCellsAliases(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
