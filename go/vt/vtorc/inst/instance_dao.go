@@ -1036,11 +1036,6 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			log.Error(err)
 			return instances, err
 		}
-		err = PopulateInstancesAgents(instances)
-		if err != nil {
-			log.Error(err)
-			return instances, err
-		}
 		return instances, err
 	}
 	instanceReadChan <- true
@@ -1736,61 +1731,6 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 
 	_ = AuditOperation("resolve-unknown-primaries", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
 	return err
-}
-
-// ReadCountMySQLSnapshots is a utility method to return registered number of snapshots for a given list of hosts
-func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
-	res := make(map[string]int)
-	if !config.Config.ServeAgentsHTTP {
-		return res, nil
-	}
-	query := fmt.Sprintf(`
-		select
-			hostname,
-			count_mysql_snapshots
-		from
-			host_agent
-		where
-			hostname in (%s)
-		order by
-			hostname
-		`, sqlutils.InClauseStringValues(hostnames))
-
-	err := db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
-		res[m.GetString("hostname")] = m.GetInt("count_mysql_snapshots")
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
-}
-
-// PopulateInstancesAgents will fill in extra data acquired from agents for given instances
-// At current this is the number of snapshots.
-// This isn't too pretty; it's a push-into-instance-data-that-belongs-to-agent thing.
-// Originally the need was to visually present the number of snapshots per host on the web/cluster page, which
-// indeed proves to be useful in our experience.
-func PopulateInstancesAgents(instances [](*Instance)) error {
-	if len(instances) == 0 {
-		return nil
-	}
-	hostnames := []string{}
-	for _, instance := range instances {
-		hostnames = append(hostnames, instance.Key.Hostname)
-	}
-	agentsCountMySQLSnapshots, err := ReadCountMySQLSnapshots(hostnames)
-	if err != nil {
-		return err
-	}
-	for _, instance := range instances {
-		if count, ok := agentsCountMySQLSnapshots[instance.Key.Hostname]; ok {
-			instance.CountMySQLSnapshots = count
-		}
-	}
-
-	return nil
 }
 
 func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {

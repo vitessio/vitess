@@ -151,14 +151,6 @@ type Configuration struct {
 	SupportFuzzyPoolHostnames                   bool              // Should "submit-pool-instances" command be able to pass list of fuzzy instances (fuzzy means non-fqdn, but unique enough to recognize). Defaults 'true', implies more queries on backend db
 	InstancePoolExpiryMinutes                   uint              // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
 	PromotionIgnoreHostnameFilters              []string          // VTOrc will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
-	ServeAgentsHTTP                             bool              // Spawn another HTTP interface dedicated for vtorc-agent
-	AgentsUseSSL                                bool              // When "true" vtorc will listen on agents port with SSL as well as connect to agents via SSL
-	AgentsUseMutualTLS                          bool              // When "true" Use mutual TLS for the server to agent communication
-	AgentSSLSkipVerify                          bool              // When using SSL for the Agent, should we ignore SSL certification error
-	AgentSSLPrivateKeyFile                      string            // Name of Agent SSL private key file, applies only when AgentsUseSSL = true
-	AgentSSLCertFile                            string            // Name of Agent SSL certification file, applies only when AgentsUseSSL = true
-	AgentSSLCAFile                              string            // Name of the Agent Certificate Authority file, applies only when AgentsUseSSL = true
-	AgentSSLValidOUs                            []string          // Valid organizational units when using mutual TLS to communicate with the agents
 	UseSSL                                      bool              // Use SSL on the server web port
 	UseMutualTLS                                bool              // When "true" Use mutual TLS for the server's web and API connections
 	SSLSkipVerify                               bool              // When using SSL, should we ignore SSL certification error
@@ -296,14 +288,6 @@ func newConfiguration() *Configuration {
 		SupportFuzzyPoolHostnames:                   true,
 		InstancePoolExpiryMinutes:                   60,
 		PromotionIgnoreHostnameFilters:              []string{},
-		ServeAgentsHTTP:                             false,
-		AgentsUseSSL:                                false,
-		AgentsUseMutualTLS:                          false,
-		AgentSSLValidOUs:                            []string{},
-		AgentSSLSkipVerify:                          false,
-		AgentSSLPrivateKeyFile:                      "",
-		AgentSSLCertFile:                            "",
-		AgentSSLCAFile:                              "",
 		UseSSL:                                      false,
 		UseMutualTLS:                                false,
 		SSLValidOUs:                                 []string{},

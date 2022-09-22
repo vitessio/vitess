@@ -101,7 +101,6 @@ type Instance struct {
 	IsUpToDate           bool
 	IsRecentlyChecked    bool
 	SecondsSinceLastSeen sql.NullInt64
-	CountMySQLSnapshots  int
 
 	// Careful. IsCandidate and PromotionRule are used together
 	// and probably need to be merged. IsCandidate's value may
