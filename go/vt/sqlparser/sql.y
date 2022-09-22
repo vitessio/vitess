@@ -4724,6 +4724,14 @@ outer_join:
   {
     $$ = RightJoinStr
   }
+| FULL OUTER JOIN
+  {
+    $$ = FullOuterJoinStr
+  }
+| FULL JOIN
+  {
+    $$ = FullOuterJoinStr
+  }
 
 natural_join:
  NATURAL JOIN
@@ -5987,7 +5995,11 @@ column_name:
   }
 | non_reserved_keyword2 '.' reserved_sql_id
   {
-    $$ = &ColName{Name: NewColIdent(string($1))}
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| non_reserved_keyword2 '.' FULL
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: NewColIdent(string($3))}
   }
 | ACCOUNT '.' reserved_sql_id
   {
@@ -7314,7 +7326,6 @@ non_reserved_keyword:
 | FOLLOWING
 | FOLLOWS
 | FOUND
-| FULL
 | GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
@@ -7465,6 +7476,7 @@ non_reserved_keyword2:
 | FAILED_LOGIN_ATTEMPTS
 | FILE
 | FIRST
+| FULL
 | IDENTIFIED
 | NONE
 | PASSWORD
