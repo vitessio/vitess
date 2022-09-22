@@ -299,7 +299,15 @@ After upgrading, the old configurations can be dropped -
 }
 ```
 
-### Default Configuration Files
+#### Default Configuration Files
 
 The default files that VTOrc searches for configurations in have also changed from `"/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json"` to
 `"/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json"`.
+
+#### Debug Pages in VTOrc
+
+Like the other vitess binaries (`vtgate`, `vttablet`), now `vtorc` also takes a `--port` flag, on which it 
+displays the `/debug` pages including `/debug/status` and variables it tracks on `/debug/vars`.
+
+This change is backward compatible and opt-in by default. Not specifying the flag works like it used to with
+VTOrc running without displaying these pages.
