@@ -4057,6 +4057,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}}
   }
+| SHOW VITESS_THROTTLER STATUS
+  {
+    $$ = &ShowThrottlerStatus{}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}

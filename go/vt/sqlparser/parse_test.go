@@ -2061,6 +2061,8 @@ var (
 	}, {
 		input: "alter vitess_throttler threshold '2s'",
 	}, {
+		input: "show vitess_throttler status",
+	}, {
 		input: "show warnings",
 	}, {
 		input:  "select warnings from t",
