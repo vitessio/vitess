@@ -49,6 +49,30 @@ func buildShowThrottledAppsPlan(query string, vschema plancontext.VSchema) (*pla
 	}), nil
 }
 
+func buildShowThrottlerStatusPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
+	dest, ks, tabletType, err := vschema.TargetDestination("")
+	if err != nil {
+		return nil, err
+	}
+	if ks == nil {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+	}
+
+	if tabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "SHOW VITESS_THROTTLER STATUS works only on primary tablet")
+	}
+
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	return newPlanResult(&engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             query,
+	}), nil
+}
+
 func buildAlterThrottlerPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
