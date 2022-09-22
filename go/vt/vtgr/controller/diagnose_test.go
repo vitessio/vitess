@@ -30,12 +30,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -153,6 +154,7 @@ func run() (*results, error) {
 	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	servenv.RegisterMySQLServerFlags(fs)
 	_flag.Parse(fs)
 	args := _flag.Args()
 

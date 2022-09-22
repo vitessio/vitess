@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -97,7 +98,6 @@ type TabletServer struct {
 	config                 *tabletenv.TabletConfig
 	stats                  *tabletenv.Stats
 	QueryTimeout           sync2.AtomicDuration
-	txTimeout              sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
 	topoServer             *topo.Server
@@ -153,7 +153,6 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
 		QueryTimeout:           sync2.NewAtomicDuration(config.Oltp.QueryTimeoutSeconds.Get()),
-		txTimeout:              sync2.NewAtomicDuration(config.Oltp.TxTimeoutSeconds.Get()),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
@@ -492,7 +491,14 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			if tsv.txThrottler.Throttle() {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
-			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, settings, options)
+			var connSetting *pools.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, connSetting, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
@@ -724,9 +730,12 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 	timeout := tsv.QueryTimeout.Get()
 	if transactionID != 0 {
 		allowOnShutdown = true
+		// Execute calls happen for OLTP only, so we can directly fetch the
+		// OLTP TX timeout.
+		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
 		// Use the smaller of the two values (0 means infinity).
 		// TODO(sougou): Assign deadlines to each transaction and set query timeout accordingly.
-		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
+		timeout = smallerTimeout(timeout, txTimeout)
 	}
 	err = tsv.execRequest(
 		ctx, timeout,
@@ -741,8 +750,8 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
+			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				return err
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
@@ -751,6 +760,14 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
+
+			var connSetting *pools.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
@@ -762,7 +779,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				logStats:       logStats,
 				tsv:            tsv,
 				tabletType:     target.GetTabletType(),
-				settings:       settings,
+				setting:        connSetting,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -820,8 +837,9 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 	var timeout time.Duration
 	if transactionID != 0 {
 		allowOnShutdown = true
-		// Use the transaction timeout.
-		timeout = tsv.txTimeout.Get()
+		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
+		// so we can directly fetch the OLAP TX timeout.
+		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
 	}
 
 	return tsv.execRequest(
@@ -837,13 +855,21 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			if err != nil {
 				return err
 			}
-			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
+			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				return err
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
 			if transactionID != 0 {
 				connID = transactionID
+			}
+
+			var connSetting *pools.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
 			}
 			qre := &QueryExecutor{
 				query:          query,
@@ -855,7 +881,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				ctx:            ctx,
 				logStats:       logStats,
 				tsv:            tsv,
-				settings:       settings,
+				setting:        connSetting,
 			}
 			return qre.Stream(callback)
 		},
@@ -1223,8 +1249,11 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	timeout := tsv.QueryTimeout.Get()
 	if transactionID != 0 {
 		allowOnShutdown = true
+		// ReserveExecute is for OLTP only, so we can directly fetch the OLTP
+		// TX timeout.
+		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
 		// Use the smaller of the two values (0 means infinity).
-		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
+		timeout = smallerTimeout(timeout, txTimeout)
 	}
 
 	err = tsv.execRequest(
@@ -1272,8 +1301,9 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	var timeout time.Duration
 	if transactionID != 0 {
 		allowOnShutdown = true
-		// Use the transaction timeout.
-		timeout = tsv.txTimeout.Get()
+		// Use the transaction timeout. ReserveStreamExecute is used for OLAP
+		// only, so we can directly fetch the OLAP TX timeout.
+		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
 	}
 
 	err = tsv.execRequest(
@@ -1893,17 +1923,6 @@ func (tsv *TabletServer) SetTxPoolSize(val int) {
 // TxPoolSize returns the tx pool size.
 func (tsv *TabletServer) TxPoolSize() int {
 	return tsv.te.txPool.scp.Capacity()
-}
-
-// SetTxTimeout changes the transaction timeout to the specified value.
-func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
-	tsv.te.txPool.SetTimeout(val)
-	tsv.txTimeout.Set(val)
-}
-
-// TxTimeout returns the transaction timeout.
-func (tsv *TabletServer) TxTimeout() time.Duration {
-	return tsv.txTimeout.Get()
 }
 
 // SetQueryPlanCacheCap changes the plan cache capacity to the specified value.

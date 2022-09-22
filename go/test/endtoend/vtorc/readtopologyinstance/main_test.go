@@ -24,9 +24,9 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	"vitess.io/vitess/go/vt/orchestrator/app"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/vt/vtorc/app"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -117,6 +117,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, primaryInstance.HasReplicationCredentials)
 	assert.Equal(t, primaryInstance.ReplicationIOThreadState, inst.ReplicationThreadStateNoThread)
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
+	assert.Equal(t, fmt.Sprintf("%v:%v", keyspace.Name, shard0.Name), primaryInstance.ClusterName)
 
 	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
 		Hostname: utils.Hostname,
@@ -168,4 +169,5 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, replicaInstance.HasReplicationFilters)
 	assert.LessOrEqual(t, int(replicaInstance.SecondsBehindPrimary.Int64), 1)
 	assert.False(t, replicaInstance.AllowTLS)
+	assert.Equal(t, fmt.Sprintf("%v:%v", keyspace.Name, shard0.Name), replicaInstance.ClusterName)
 }

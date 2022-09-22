@@ -27,8 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
@@ -36,7 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/env"
-
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -76,7 +74,10 @@ func init() {
 	flags.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {

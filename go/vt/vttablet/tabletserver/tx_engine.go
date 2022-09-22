@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -222,13 +223,13 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reservedID int64, settings []string, options *querypb.ExecuteOptions) (int64, string, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reservedID int64, setting *pools.Setting, options *querypb.ExecuteOptions) (int64, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 
 	// if the connection is already reserved then, we should not apply the settings.
-	if reservedID != 0 && len(settings) > 0 {
-		return 0, "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not mix reserved connection and connection with settings")
+	if reservedID != 0 && setting != nil {
+		return 0, "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not mix reserved connection and connection with setting")
 	}
 
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -237,7 +238,7 @@ func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reserv
 	}
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, savepointQueries, settings)
+	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, savepointQueries, setting)
 	if err != nil {
 		return 0, "", "", err
 	}

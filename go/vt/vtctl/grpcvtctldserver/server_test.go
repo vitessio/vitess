@@ -72,6 +72,22 @@ func init() {
 	})
 }
 
+func TestPanicHandler(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		err := recover()
+		assert.Nil(t, err, "bad request should catch panic")
+	}()
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, nil, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	_, err := vtctld.AddCellInfo(context.Background(), nil)
+	assert.Error(t, err)
+}
+
 func TestAddCellInfo(t *testing.T) {
 	t.Parallel()
 

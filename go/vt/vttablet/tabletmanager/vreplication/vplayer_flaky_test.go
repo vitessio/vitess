@@ -1410,6 +1410,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("create table %s.src1(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table binary_pk(b binary(4), val varbinary(4), primary key(b))",
 		fmt.Sprintf("create table %s.binary_pk(b binary(4), val varbinary(4), primary key(b))", vrepldb),
+		"create table vitess_decimal(id int, d1 decimal(8,0) default null, d2 decimal(8,0) default null, d3 decimal(8,0) default null, d4 decimal(8, 1), d5 decimal(8, 1), d6 decimal(8, 1), primary key(id))",
+		fmt.Sprintf("create table %s.vitess_decimal(id int, d1 decimal(8,0) default null, d2 decimal(8,0) default null, d3 decimal(8,0) default null, d4 decimal(8, 1), d5 decimal(8, 1), d6 decimal(8, 1), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1426,6 +1428,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("drop table %s.src1", vrepldb),
 		"drop table binary_pk",
 		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
+		"drop table vitess_decimal",
+		fmt.Sprintf("drop table %s.vitess_decimal", vrepldb),
 	})
 	if enableJSONColumnTesting {
 		execStatements(t, []string{
@@ -1500,6 +1504,13 @@ func TestPlayerTypes(t *testing.T) {
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "aaa"},
+		},
+	}, {
+		input:  "insert into vitess_decimal values(1, 0, 1, null, 0, 1.1, 1)",
+		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
+		table:  "vitess_decimal",
+		data: [][]string{
+			{"1", "0", "1", "", "0.0", "1.1", "1.0"},
 		},
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984

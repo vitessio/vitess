@@ -64,15 +64,15 @@ services:
       - "$GRPC_PORT"
     command: ["sh", "-c", " /vt/bin/vtctld \
         $TOPOLOGY_FLAGS \
-        -cell $CELL \
-        -workflow_manager_init \
-        -workflow_manager_use_election \
-        -service_map 'grpc-vtctl,grpc-vtctld' \
-        -backup_storage_implementation file \
-        -file_backup_storage_root /vt/vtdataroot/backups \
-        -logtostderr=true \
-        -port $WEB_PORT \
-        -grpc_port $GRPC_PORT
+        --cell $CELL \
+        --workflow_manager_init \
+        --workflow_manager_use_election \
+        --service_map 'grpc-vtctl,grpc-vtctld' \
+        --backup_storage_implementation file \
+        --file_backup_storage_root /vt/vtdataroot/backups \
+        --logtostderr=true \
+        --port $WEB_PORT \
+        --grpc_port $GRPC_PORT
         "]
     depends_on:
       - consul1
@@ -90,16 +90,16 @@ services:
       - "15306:$MYSQL_PORT"
     command: ["sh", "-c", "/vt/bin/vtgate \
         $TOPOLOGY_FLAGS \
-        -logtostderr=true \
-        -port $WEB_PORT \
-        -grpc_port $GRPC_PORT \
-        -mysql_server_port $MYSQL_PORT \
-        -mysql_auth_server_impl none \
-        -cell $CELL \
-        -cells_to_watch $CELL \
-        -tablet_types_to_wait PRIMARY,REPLICA \
-        -service_map 'grpc-vtgateservice' \
-        -enable_system_settings=true \
+        --logtostderr=true \
+        --port $WEB_PORT \
+        --grpc_port $GRPC_PORT \
+        --mysql_server_port $MYSQL_PORT \
+        --mysql_auth_server_impl none \
+        --cell $CELL \
+        --cells_to_watch $CELL \
+        --tablet_types_to_wait PRIMARY,REPLICA \
+        --service_map 'grpc-vtgateservice' \
+        --enable_system_settings=true \
         "]
     volumes:
       - ".:/script"
@@ -285,10 +285,12 @@ services:
       - vtctld
       - set_keyspace_durability_policy
     ports:
+      - "13200:8080"
       - "13000:3000"
     volumes:
       - ".:/script"
     environment:
+      - WEB_PORT=8080
       - TOPOLOGY_FLAGS
       - WEB_PORT
       - GRPC_PORT

@@ -310,5 +310,7 @@ func main() {
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 }

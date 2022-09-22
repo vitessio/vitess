@@ -28,13 +28,13 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"

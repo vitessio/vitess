@@ -833,7 +833,32 @@ Gen4 plan same as above
     "user.user"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from user where id = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
+    "Query": "delete from `user` where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # multi-table delete with comma join
 "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1"
@@ -934,7 +959,32 @@ Gen4 plan same as above
     "user.user"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from route1 where id = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
+    "Query": "delete from `user` as route1 where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # delete: routing rules for subquery
 "delete from  unsharded_a where a=(select a from route2)"
@@ -957,7 +1007,26 @@ Gen4 plan same as above
     "main.unsharded_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from  unsharded_a where a=(select a from route2)",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
+    "Table": "unsharded, unsharded_a"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_a"
+  ]
+}
 
 # update by lookup
 "update music set val = 1 where id = 1"
@@ -1084,7 +1153,32 @@ Gen4 plan same as above
     "user.music"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from music where id = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+    "Query": "delete from music where id = 1",
+    "Table": "music",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "music_user_map"
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
+}
 
 # delete from, no owned vindexes
 "delete from music_extra where user_id = 1"
@@ -1111,7 +1205,29 @@ Gen4 plan same as above
     "user.music_extra"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from music_extra where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from music_extra where user_id = 1",
+    "Table": "music_extra",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music_extra"
+  ]
+}
 
 # simple insert, no values
 "insert into unsharded values()"
@@ -2344,7 +2460,32 @@ Gen4 plan same as above
     "user.multicolvin"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicolvin where kid=1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "Query": "delete from multicolvin where kid = 1",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "kid_index"
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
+}
 
 # update columns of multi column vindex
 "update multicolvin set column_b = 1, column_c = 2 where kid = 1"
@@ -2912,7 +3053,26 @@ Gen4 plan same as above
     "main.unsharded"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+    "Table": "unsharded, unsharded_a"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_a"
+  ]
+}
 
 # update vindex value to null
 "update user set name = null where id = 1"
@@ -3199,7 +3359,32 @@ Gen4 plan same as above
     "user.music"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete music from music where id = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+    "Query": "delete from music where id = 1",
+    "Table": "music",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "music_user_map"
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
+}
 
 # scatter update table with owned vindexes without changing lookup vindex
 "update user set val = 1"
@@ -3396,7 +3581,32 @@ Gen4 plan same as above
     "user.user"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from user where name = _binary 'abc'",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
+    "Query": "delete from `user` where `name` = _binary 'abc'",
+    "Table": "user",
+    "Values": [
+      "VARBINARY(\"abc\")"
+    ],
+    "Vindex": "name_user_map"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # delete with shard targeting
 "delete from `user[-]`.user"
@@ -3622,7 +3832,32 @@ Gen4 plan same as above
     "zlookup_unique.t1"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
+    "Query": "delete from t1 where c2 = 10 and c3 = 20",
+    "Table": "t1",
+    "Values": [
+      "INT64(20)"
+    ],
+    "Vindex": "lookup_t1_2"
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
+}
 
 # Update on backfilling and non-backfilling unique lookup vindexes should be an equal
 "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20"
@@ -3990,7 +4225,33 @@ Gen4 plan same as above
     "user.multicol_tbl"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
+    "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
+}
 
 # delete with a multicol vindex - reverse order
 "delete from multicol_tbl where colb = 2 and cola = 1"
@@ -4021,7 +4282,33 @@ Gen4 plan same as above
     "user.multicol_tbl"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
+    "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
+}
 
 # delete with a multicol vindex using an IN clause
 "delete from multicol_tbl where colb IN (1,2) and cola = 1"
@@ -4425,7 +4712,32 @@ Gen4 plan same as above
     "user.multicol_tbl"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where cola = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "SubShard",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
+    "Query": "delete from multicol_tbl where cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "multicolIdx"
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
+}
 
 # delete with routing using subsharding column with in query
 "delete from multicol_tbl where cola in (1,2)"
@@ -4485,7 +4797,32 @@ Gen4 plan same as above
     "user.multicol_tbl"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where name = 'foo' and cola = 2",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
+    "Query": "delete from multicol_tbl where `name` = 'foo' and cola = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "VARCHAR(\"foo\")"
+    ],
+    "Vindex": "name_muticoltbl_map"
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
+}
 
 # insert using select with simple table.
 "insert into music(id, user_id) select * from user"
@@ -5545,7 +5882,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-
 # explain dml without any directive should fail
 "explain format=vtexplain delete from user"
 "explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
@@ -5613,3 +5949,46 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# Here V3 populates the TablesUsed incorrectly
+# delete with join from multi table join subquery.
+"delete foo from unsharded as foo join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+{
+  "QueryType": "DELETE",
+  "Original": "delete foo from unsharded as foo join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+    "Table": "unsharded, unsharded, unsharded_b"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded, unsharded_b"
+  ]
+}
+{
+  "QueryType": "DELETE",
+  "Original": "delete foo from unsharded as foo join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+    "Table": "unsharded, unsharded_b"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_b"
+  ]
+}

@@ -19,6 +19,10 @@
 
 source ./env.sh
 
+./scripts/vtadmin-down.sh
+
+./scripts/vtorc-down.sh
+
 ./scripts/vtgate-down.sh
 
 for tablet in 100 200 300 400 500; do

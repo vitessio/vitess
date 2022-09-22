@@ -710,6 +710,14 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 
 		// now see if we have a fraction
 		if scale == 0 {
+			// When the field is a DECIMAL using a scale of 0, e.g.
+			// DECIMAL(5,0), a binlogged value of 0 is almost treated
+			// like the NULL byte and we get a 0 byte length value.
+			// In this case let's return the correct value of 0.
+			if txt.Len() == 0 {
+				txt.WriteRune('0')
+			}
+
 			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 				txt.Bytes()), l, nil
 		}

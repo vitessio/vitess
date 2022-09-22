@@ -14,8 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vttestserver is a native Go implementation of `run_local_server.py`.
-// It allows users to spawn a self-contained Vitess server for local testing/CI
+// vttestserver allows users to spawn a self-contained Vitess server for local testing/CI.
 package main
 
 import (
@@ -205,17 +204,21 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 
 // Annoying, but in unit tests, parseFlags gets called multiple times per process
 // (anytime startCluster is called), so we need to guard against the second test
-// to run failing with:
+// to run failing with, for example:
+//
 //	flag redefined: log_rotate_max_size
-var logFlagsOnce sync.Once
+var flagsOnce sync.Once
 
 func parseFlags() (env vttest.Environment, err error) {
-	logFlagsOnce.Do(func() {
+	flagsOnce.Do(func() {
 		var tmp []string
 		tmp, os.Args = os.Args[1:], os.Args[0:1]
 		defer func() { os.Args = append(os.Args, tmp...) }()
 
+		servenv.RegisterFlags()
+		servenv.RegisterGRPCServerFlags()
 		servenv.RegisterGRPCServerAuthFlags()
+		servenv.RegisterServiceMapFlag()
 		servenv.ParseFlags("vttestserver")
 
 		// Move all pflag flags back to the goflag CommandLine.
