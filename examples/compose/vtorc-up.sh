@@ -17,6 +17,7 @@
 set -u
 
 external=${EXTERNAL_DB:-0}
+web_port=${WEB_PORT:-'8080'}
 config=${VTORC_CONFIG:-/vt/vtorc/config.json}
 # Copy config directory
 cp -R /script/vtorc /vt
@@ -40,5 +41,6 @@ echo "Starting vtorc..."
 exec /vt/bin/vtorc \
 $TOPOLOGY_FLAGS \
 --logtostderr=true \
+--port $web_port \
 --orc_web_dir=/vt/web/vtorc \
 --config $config

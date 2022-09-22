@@ -171,5 +171,5 @@ func standardHTTP(continuousDiscovery bool) {
 			log.Fatal(err)
 		}
 	}
-	log.Info("Web server started")
+	log.Info("Web server closed")
 }
