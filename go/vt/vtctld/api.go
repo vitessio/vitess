@@ -17,6 +17,7 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,10 +28,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/discovery"
@@ -40,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -55,7 +53,7 @@ import (
 var (
 	localCell        string
 	showTopologyCRUD = true
-	proxyTablets     = false
+	proxyTablets     bool
 )
 
 // This file implements a REST-style API for the vtctld web interface.

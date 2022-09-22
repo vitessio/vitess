@@ -22,7 +22,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/spf13/pflag"
 
@@ -47,8 +46,6 @@ var (
 	sanitizeLogMessages = false
 	webDir              string
 	webDir2             string
-	// deprecated, only here for backwards compatibility:
-	deprecatedOnlineDDLCheckInterval = time.Duration(0)
 )
 
 const (
@@ -68,16 +65,10 @@ func registerVtctldFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
 	fs.StringVar(&webDir, "web_dir", webDir, "NOT USED, here for backward compatibility")
 	fs.StringVar(&webDir2, "web_dir2", webDir2, "NOT USED, here for backward compatibility")
-	// deprecated, only here for backwards compatibility:
-	fs.DurationVar(&deprecatedOnlineDDLCheckInterval, "online_ddl_check_interval", deprecatedOnlineDDLCheckInterval, "deprecated. Will be removed in next Vitess version")
 }
 
 // InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) error {
-	if deprecatedOnlineDDLCheckInterval != 0 {
-		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions. It is currently unused.")
-	}
-
 	actionRepo := NewActionRepository(ts)
 
 	// keyspace actions

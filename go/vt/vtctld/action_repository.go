@@ -17,17 +17,15 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"

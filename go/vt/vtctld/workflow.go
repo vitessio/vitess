@@ -18,14 +18,12 @@ package vtctld
 
 import (
 	"context"
-	"flag"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/trace"
 
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -35,22 +33,23 @@ import (
 )
 
 var (
-	workflowManagerInit        = false
-	workflowManagerUseElection = false
+	workflowManagerInit        bool
+	workflowManagerUseElection bool
 
-	workflowManagerDisable flagutil.StringListValue
+	workflowManagerDisable []string
 )
 
 func registerVtctldWorkflowFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&workflowManagerInit, "workflow_manager_init", workflowManagerInit, "Initialize the workflow manager in this vtctld instance.")
 	fs.BoolVar(&workflowManagerUseElection, "workflow_manager_use_election", workflowManagerUseElection, "if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.")
+	fs.StringSliceVar(&workflowManagerDisable, "workflow_manager_disable", workflowManagerDisable, "comma separated list of workflow types to disable")
 }
 
 func init() {
 	for _, cmd := range []string{"vtcombo", "vtctld"} {
 		servenv.OnParseFor(cmd, registerVtctldWorkflowFlags)
 	}
-	flag.Var(&workflowManagerDisable, "workflow_manager_disable", "comma separated list of workflow types to disable")
+
 }
 
 func initWorkflowManager(ts *topo.Server) {
