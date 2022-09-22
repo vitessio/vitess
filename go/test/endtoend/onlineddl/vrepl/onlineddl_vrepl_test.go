@@ -546,7 +546,8 @@ func TestSchemaChange(t *testing.T) {
 				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", shards[0].Vttablets[reparentTabletIndex].Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
 			})
-
+			// TOOD(Shlomi): create a better fix below.
+			time.Sleep(time.Second) // quick hack to make sure the PRS has time to be identified and that the tablet changes state.
 			t.Run("unthrottle and expect completion", func(t *testing.T) {
 				for i := range shards {
 					var body string
