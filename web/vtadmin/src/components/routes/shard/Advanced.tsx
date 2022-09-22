@@ -5,6 +5,8 @@ import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel'
 import { success, warn } from '../../Snackbar';
 import { UseMutationResult } from 'react-query';
+import Toggle from '../../toggle/Toggle';
+import { Label } from '../../inputs/Label';
 
 interface RouteParams {
   clusterID: string;
@@ -14,7 +16,6 @@ interface RouteParams {
 
 const Advanced: React.FC = () => {
   const params = useParams<RouteParams>();
-  const { path, url } = useRouteMatch();
 
   const shardName = `${params.keyspace}/${params.shard}`;
 
@@ -68,11 +69,37 @@ const Advanced: React.FC = () => {
                   Delete shard <span className="font-bold">{shardName}</span>. In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard.
                 </>
               }
-              documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
+              documentationLink="https://vitess.io/docs/14.0/reference/programs/vtctl/shards/#deleteshard"
               loadingText="Deleting..."
               loadedText="Delete"
               mutation={deleteShardMutation as UseMutationResult}
               title="Delete Shard"
+              body={
+                <>
+                  <div className="mt-2">
+                    <div className="flex items-center">
+                      <Toggle
+                        className="mr-2"
+                        enabled={evenIfServing}
+                        onChange={() => setEvenIfServing(!evenIfServing)}
+                      />
+                      <Label label="Even If Serving" />
+                    </div>
+                    When set, removes the shard even if it is serving. Use with caution.
+                  </div>
+                  <div className="mt-2">
+                    <div className="flex items-center">
+                      <Toggle
+                        className="mr-2"
+                        enabled={recursive}
+                        onChange={() => setRecursive(!recursive)}
+                      />
+                      <Label label="Recursive" />
+                    </div>
+                    When set, also deletes all tablets belonging to the shard.
+                  </div>
+                </>
+              }
             />
           </div>
         </div>
