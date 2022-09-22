@@ -108,12 +108,12 @@ Usage of vtexplain:
       --mem-profile-rate int                                             deprecated: use '-pprof=mem' instead (default 524288)
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --mutex-profile-fraction int                                       deprecated: use '-pprof=mutex' instead
+      --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_default_workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
-      --mysql_server_pool_conn_read_buffers                              If set, the server will pool incoming connection read buffers
       --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
       --mysql_server_query_timeout duration                              mysql query timeout (default 0s)
       --mysql_server_read_timeout duration                               connection read timeout (default 0s)
