@@ -110,7 +110,6 @@ type Configuration struct {
 	DiscoverySeeds                              []string // Hard coded array of hostname:port, ensuring vtorc discovers these hosts upon startup, assuming not already known to vtorc
 	InstanceBulkOperationsWaitTimeoutSeconds    uint     // Time to wait on a single instance when doing bulk (many instances) operation
 	HostnameResolveMethod                       string   // Method by which to "normalize" hostname ("none"/"default"/"cname")
-	MySQLHostnameResolveMethod                  string   // Method by which to "normalize" hostname via MySQL server. ("none"/"@@hostname"/"@@report_host"; default "@@hostname")
 	SkipBinlogServerUnresolveCheck              bool     // Skip the double-check that an unresolved hostname resolves back to same hostname for binlog servers
 	ExpiryHostnameResolvesMinutes               int      // Number of minutes after which to expire hostname-resolves
 	RejectHostnameResolvePattern                string   // Regexp pattern for resolved hostname that will not be accepted (not cached, not written to db). This is done to avoid storing wrong resolves due to network glitches.
@@ -125,10 +124,7 @@ type Configuration struct {
 	AuditPurgeDays                              uint     // Days after which audit entries are purged from the database
 	RemoveTextFromHostnameDisplay               string   // Text to strip off the hostname on cluster/clusters pages
 	ReadOnly                                    bool
-	AuthenticationMethod                        string // Type of autherntication to use, if any. "" for none, "basic" for BasicAuth, "multi" for advanced BasicAuth, "proxy" for forwarded credentials via reverse proxy, "token" for token based access
-	OAuthClientID                               string
-	OAuthClientSecret                           string
-	OAuthScopes                                 []string
+	AuthenticationMethod                        string            // Type of autherntication to use, if any. "" for none, "basic" for BasicAuth, "multi" for advanced BasicAuth, "proxy" for forwarded credentials via reverse proxy, "token" for token based access
 	HTTPAuthUser                                string            // Username for HTTP Basic authentication (blank disables authentication)
 	HTTPAuthPassword                            string            // Password for HTTP Basic authentication
 	AuthUserHeader                              string            // HTTP header indicating auth user, when AuthenticationMethod is "proxy"
@@ -252,7 +248,6 @@ func newConfiguration() *Configuration {
 		DiscoverySeeds:                              []string{},
 		InstanceBulkOperationsWaitTimeoutSeconds:    10,
 		HostnameResolveMethod:                       "default",
-		MySQLHostnameResolveMethod:                  "none",
 		SkipBinlogServerUnresolveCheck:              true,
 		ExpiryHostnameResolvesMinutes:               60,
 		RejectHostnameResolvePattern:                "",

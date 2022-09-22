@@ -48,7 +48,6 @@ const discoveryMetricsName = "DISCOVERY_METRICS"
 var webDir = flag.String("orc_web_dir", "web/vtorc", "VTOrc http file location")
 
 var sslPEMPassword []byte
-var agentSSLPEMPassword []byte
 var discoveryMetrics *collection.Collection
 
 // HTTP starts serving
@@ -65,13 +64,6 @@ func HTTP(continuousDiscovery bool) {
 func promptForSSLPasswords() {
 	if ssl.IsEncryptedPEM(config.Config.SSLPrivateKeyFile) {
 		sslPEMPassword = ssl.GetPEMPassword(config.Config.SSLPrivateKeyFile)
-	}
-	if ssl.IsEncryptedPEM(config.Config.AgentSSLPrivateKeyFile) {
-		if config.Config.AgentSSLPrivateKeyFile == config.Config.SSLPrivateKeyFile {
-			agentSSLPEMPassword = sslPEMPassword
-		} else {
-			agentSSLPEMPassword = ssl.GetPEMPassword(config.Config.AgentSSLPrivateKeyFile)
-		}
 	}
 }
 
