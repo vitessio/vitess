@@ -312,6 +312,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // Table functions
 %token <bytes> JSON_TABLE PATH
 
+// Table options
+%token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
+%token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
+%token <bytes> STATS_SAMPLE_PAGES INNODB ASCII_BIN TABLESPACE_NAME STORAGE DISK
+
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
@@ -484,7 +489,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
-%type <str> equal_opt
+%type <str> equal_opt table_equal_opt
 %type <TableSpec> table_spec table_column_list json_table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
@@ -3374,28 +3379,151 @@ table_option_list:
     $$ = string($1) + ", " + string($3)
   }
 
-// rather than explicitly parsing the various keywords for table options,
-// just accept any number of keywords, IDs, strings, numbers, and '='
+table_equal_opt:
+  {
+    $$ = " "
+  }
+| '='
+  {
+    $$ = string($1)
+  }
+
 table_option:
-  table_opt_value
+  AUTOEXTEND_SIZE table_equal_opt table_opt_value
   {
-    $$ = $1
+    $$ = string($1) + $2 + $3
   }
-| table_option table_opt_value
+| AUTO_INCREMENT table_equal_opt table_opt_value
   {
-    $$ = $1 + " " + $2
+    $$ = string($1) + $2 + $3
   }
-| table_option '=' table_opt_value
+  | AVG_ROW_LENGTH table_equal_opt table_opt_value
   {
-    $$ = $1 + "=" + $3
+    $$ = string($1) + $2 + $3
+  }
+  | CHARACTER SET table_equal_opt charset
+  {
+    $$ = string($1) + " " + string($2) + $3 + $4
+  }
+  | DEFAULT CHARACTER SET table_equal_opt charset
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + $4 + $5
+  }
+  | CHECKSUM table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | COLLATE table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | DEFAULT COLLATE table_equal_opt table_opt_value
+  {
+    $$ = string($1) + " "  + string($2) + $3 + $4
+  }
+  | COMMENT_KEYWORD table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | COMPRESSION table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | CONNECTION table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | DATA DIRECTORY table_equal_opt table_opt_value
+  {
+    $$ = string($1) + " "  + string($2) + $3 + $4
+  }
+  | INDEX DIRECTORY table_equal_opt table_opt_value
+    {
+      $$ = string($1) + " "  + string($2) + $3 + $4
+    }
+  | DELAY_KEY_WRITE table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | ENCRYPTION table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | ENGINE table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | ENGINE_ATTRIBUTE table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | INSERT_METHOD table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | KEY_BLOCK_SIZE table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | MAX_ROWS table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | MIN_ROWS table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | PACK_KEYS table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | PASSWORD table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | ROW_FORMAT table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | START TRANSACTION
+  {
+    $$ = string($1) + " "  + string($2)
+  }
+  | SECONDARY_ENGINE_ATTRIBUTE table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | STATS_AUTO_RECALC table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | STATS_PERSISTENT table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | STATS_SAMPLE_PAGES table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
+  }
+  | TABLESPACE table_opt_value
+  {
+    $$ = string($1) + $2
+  }
+  | TABLESPACE TABLESPACE_NAME
+    {
+      $$ = string($1) + " "  + string($2)
+    }
+  | TABLESPACE TABLESPACE_NAME STORAGE DISK
+      {
+        $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+      }
+  | UNION table_equal_opt table_opt_value
+  {
+    $$ = string($1) + $2 + $3
   }
 
 table_opt_value:
-  reserved_sql_id
-  {
-    $$ = $1.String()
-  }
-| STRING
+  STRING
   {
     $$ = "'" + string($1) + "'"
   }
@@ -3408,6 +3536,10 @@ table_opt_value:
   {
     $$ = string($1)
   }
+| INNODB
+  {
+    $$ = string($1)
+  }
 | EVENT
   {
     $$ = string($1)
@@ -3416,9 +3548,21 @@ table_opt_value:
   {
     $$ = string($1)
   }
-| PARTITION
+| BINARY
   {
-    $$ = "partition"
+    $$ = string($1)
+  }
+| ASCII_BIN
+  {
+    $$ = string($1)
+  }
+| NO
+  {
+    $$ = string($1)
+  }
+| DEFAULT
+  {
+    $$ = string($1)
   }
 
 
@@ -7264,6 +7408,7 @@ non_reserved_keyword:
 | ARRAY
 | AUTHENTICATION
 | AUTO_INCREMENT
+| AVG_ROW_LENGTH
 | BEGIN
 | SERIAL
 | BIT
@@ -7273,6 +7418,7 @@ non_reserved_keyword:
 | CATALOG_NAME
 | CHANNEL
 | CHARSET
+| CHECKSUM
 | CIPHER
 | CLASS_ORIGIN
 | CLIENT
@@ -7281,6 +7427,7 @@ non_reserved_keyword:
 | COLUMNS
 | COLUMN_NAME
 | COMMIT
+| COMPRESSION
 | COMMITTED
 | CONNECTION
 | COMPONENT
@@ -7296,7 +7443,9 @@ non_reserved_keyword:
 | DAY
 | DEFINER
 | DEFINITION
+| DELAY_KEY_WRITE
 | DESCRIPTION
+| DIRECTORY
 | DISABLE
 | DUMPFILE
 | DUPLICATE
@@ -7306,6 +7455,7 @@ non_reserved_keyword:
 | ENFORCED
 | ENGINE
 | ENGINES
+| ENGINE_ATTRIBUTE
 | ENUM
 | ERROR
 | ERRORS
@@ -7333,6 +7483,7 @@ non_reserved_keyword:
 | INACTIVE
 | INDEXES
 | INITIAL
+| INSERT_METHOD
 | INVISIBLE
 | INVOKER
 | ISOLATION
@@ -7353,10 +7504,12 @@ non_reserved_keyword:
 | MASTER_ZSTD_COMPRESSION_LEVEL
 | MAX_CONNECTIONS_PER_HOUR
 | MAX_QUERIES_PER_HOUR
+| MAX_ROWS
 | MAX_UPDATES_PER_HOUR
 | MAX_USER_CONNECTIONS
 | MERGE
 | MESSAGE_TEXT
+| MIN_ROWS
 | MODE
 | MODIFY
 | MULTILINESTRING
@@ -7381,6 +7534,7 @@ non_reserved_keyword:
 | ORDINALITY
 | ORGANIZATION
 | OTHERS
+| PACK_KEYS
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -7410,10 +7564,12 @@ non_reserved_keyword:
 | ROLE
 | ROLLBACK
 | ROUTINE
+| ROW_FORMAT
 | SAVEPOINT
 | SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
+| SECONDARY_ENGINE_ATTRIBUTE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
 | SECURITY
@@ -7428,6 +7584,9 @@ non_reserved_keyword:
 | SRID
 | START
 | STATUS
+| STATS_AUTO_RECALC
+| STATS_PERSISTENT
+| STATS_SAMPLE_PAGES
 | STREAM
 | SUBCLASS_ORIGIN
 | SUBJECT
