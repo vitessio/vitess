@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
@@ -36,21 +38,40 @@ import (
 )
 
 var (
-	fromImplementation = flag.String("from_implementation", "", "topology implementation to copy data from")
-	fromServerAddress  = flag.String("from_server", "", "topology server address to copy data from")
-	fromRoot           = flag.String("from_root", "", "topology server root to copy data from")
-
-	toImplementation = flag.String("to_implementation", "", "topology implementation to copy data to")
-	toServerAddress  = flag.String("to_server", "", "topology server address to copy data to")
-	toRoot           = flag.String("to_root", "", "topology server root to copy data to")
-
-	compare             = flag.Bool("compare", false, "compares data between topologies")
-	doKeyspaces         = flag.Bool("do-keyspaces", false, "copies the keyspace information")
-	doShards            = flag.Bool("do-shards", false, "copies the shard information")
-	doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
-	doTablets           = flag.Bool("do-tablets", false, "copies the tablet information")
-	doRoutingRules      = flag.Bool("do-routing-rules", false, "copies the routing rules")
+	fromImplementation  string
+	fromServerAddress   string
+	fromRoot            string
+	toImplementation    string
+	toServerAddress     string
+	toRoot              string
+	compare             bool
+	doKeyspaces         bool
+	doShards            bool
+	doShardReplications bool
+	doTablets           bool
+	doRoutingRules      bool
 )
+
+func init() {
+	for _, cmd := range []string{"zk"} {
+		servenv.OnParseFor(cmd, registerServerFlags)
+	}
+}
+
+func registerServerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&fromImplementation, "from_implementation", fromImplementation, "topology implementation to copy data from")
+	fs.StringVar(&fromServerAddress, "from_server", fromServerAddress, "topology server address to copy data from")
+	fs.StringVar(&fromRoot, "from_root", fromRoot, "topology server root to copy data from")
+	fs.StringVar(&toImplementation, "to_implementation", toImplementation, "topology implementation to copy data to")
+	fs.StringVar(&toServerAddress, "to_server", toServerAddress, "topology server address to copy data to")
+	fs.StringVar(&toRoot, "to_root", toRoot, "topology server root to copy data to")
+	fs.BoolVar(&compare, "compare", compare, "compares data between topologies")
+	fs.BoolVar(&doKeyspaces, "do-keyspaces", doKeyspaces, "copies the keyspace information")
+	fs.BoolVar(&doShards, "do-shards", doShards, "copies the shard information")
+	fs.BoolVar(&doShardReplications, "do-shard-replications", doShardReplications, "copies the shard replication information")
+	fs.BoolVar(&doTablets, "do-tablets", doTablets, "copies the tablet information")
+	fs.BoolVar(&doRoutingRules, "do-routing-rules", doRoutingRules, "copies the routing rules")
+}
 
 func main() {
 	defer exit.RecoverAll()
@@ -67,18 +88,18 @@ func main() {
 		log.Exitf("topo2topo doesn't take any parameter.")
 	}
 
-	fromTS, err := topo.OpenServer(*fromImplementation, *fromServerAddress, *fromRoot)
+	fromTS, err := topo.OpenServer(fromImplementation, fromServerAddress, fromRoot)
 	if err != nil {
-		log.Exitf("Cannot open 'from' topo %v: %v", *fromImplementation, err)
+		log.Exitf("Cannot open 'from' topo %v: %v", fromImplementation, err)
 	}
-	toTS, err := topo.OpenServer(*toImplementation, *toServerAddress, *toRoot)
+	toTS, err := topo.OpenServer(toImplementation, toServerAddress, toRoot)
 	if err != nil {
-		log.Exitf("Cannot open 'to' topo %v: %v", *toImplementation, err)
+		log.Exitf("Cannot open 'to' topo %v: %v", toImplementation, err)
 	}
 
 	ctx := context.Background()
 
-	if *compare {
+	if compare {
 		compareTopos(ctx, fromTS, toTS)
 		return
 	}
@@ -86,44 +107,44 @@ func main() {
 }
 
 func copyTopos(ctx context.Context, fromTS, toTS *topo.Server) {
-	if *doKeyspaces {
+	if doKeyspaces {
 		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
-	if *doShards {
+	if doShards {
 		helpers.CopyShards(ctx, fromTS, toTS)
 	}
-	if *doShardReplications {
+	if doShardReplications {
 		helpers.CopyShardReplications(ctx, fromTS, toTS)
 	}
-	if *doTablets {
+	if doTablets {
 		helpers.CopyTablets(ctx, fromTS, toTS)
 	}
-	if *doRoutingRules {
+	if doRoutingRules {
 		helpers.CopyRoutingRules(ctx, fromTS, toTS)
 	}
 }
 
 func compareTopos(ctx context.Context, fromTS, toTS *topo.Server) {
 	var err error
-	if *doKeyspaces {
+	if doKeyspaces {
 		err = helpers.CompareKeyspaces(ctx, fromTS, toTS)
 		if err != nil {
 			log.Exitf("Compare keyspaces failed: %v", err)
 		}
 	}
-	if *doShards {
+	if doShards {
 		err = helpers.CompareShards(ctx, fromTS, toTS)
 		if err != nil {
 			log.Exitf("Compare shards failed: %v", err)
 		}
 	}
-	if *doShardReplications {
+	if doShardReplications {
 		err = helpers.CompareShardReplications(ctx, fromTS, toTS)
 		if err != nil {
 			log.Exitf("Compare shard replications failed: %v", err)
 		}
 	}
-	if *doTablets {
+	if doTablets {
 		err = helpers.CompareTablets(ctx, fromTS, toTS)
 		if err != nil {
 			log.Exitf("Compare tablets failed: %v", err)
