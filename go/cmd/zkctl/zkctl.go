@@ -24,6 +24,8 @@ import (
 	"io"
 	"os"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
@@ -42,11 +44,6 @@ Commands:
 `
 
 var (
-	zkCfg = flag.String("zk.cfg", "6@<hostname>:3801:3802:3803",
-		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
-	myID = flag.Uint("zk.myid", 0,
-		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
-
 	// Reason for nolint : Used in line 54 (stdin = bufio.NewReader(os.Stdin)) in the init function
 	stdin *bufio.Reader //nolint
 )
@@ -63,6 +60,13 @@ func main() {
 	defer logutil.Flush()
 
 	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
+	servenv.ParseFlags("zkctl")
+
+	zkCfg := fs.String("zk.cfg", "6@<hostname>:3801:3802:3803",
+		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
+	myID := flag.Uint("zk.myid", 0,
+		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
+
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	_flag.Parse(fs)
