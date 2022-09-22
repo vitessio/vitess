@@ -98,18 +98,25 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 		return
 	}
 
-	cmp, isCmp := expr.(*sqlparser.ComparisonExpr)
-	if !isCmp {
-		return
-	}
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if expr.Operator == sqlparser.NullSafeEqualOp {
+			return
+		}
 
-	if cmp.Operator == sqlparser.NullSafeEqualOp {
-		return
-	}
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(j.RHS.TableID()) ||
+			sqlparser.IsColName(expr.Right) && semTable.RecursiveDeps(expr.Right).IsSolvedBy(j.RHS.TableID()) {
+			j.LeftJoin = false
+		}
 
-	if sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
-		sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID()) {
-		j.LeftJoin = false
+	case *sqlparser.IsExpr:
+		if expr.Right != sqlparser.IsNotNullOp {
+			return
+		}
+
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(j.RHS.TableID()) {
+			j.LeftJoin = false
+		}
 	}
 }
 
