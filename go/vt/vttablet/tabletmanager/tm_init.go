@@ -865,7 +865,7 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (primary *topo.TabletInfo, err error) {
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
-	if *mysqlctl.DisableActiveReparents {
+	if mysqlctl.DisableActiveReparents {
 		return nil, nil
 	}
 

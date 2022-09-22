@@ -453,7 +453,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 			}
 		case io.EOF:
 			// Do not do anything for primary tablets and when active reparenting is disabled
-			if *mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
+			if mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
 				return nil
 			}
 
@@ -2607,7 +2607,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 			}
 		case io.EOF:
 			// Do not do anything when active reparenting is disabled.
-			if *mysqlctl.DisableActiveReparents {
+			if mysqlctl.DisableActiveReparents {
 				return nil
 			}
 

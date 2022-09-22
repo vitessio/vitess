@@ -19,11 +19,14 @@ package mysqlctl
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os/exec"
 	"sync"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"github.com/google/shlex"
 	"github.com/klauspost/compress/zstd"
@@ -44,13 +47,13 @@ const (
 )
 
 var (
-	compressionLevel = flag.Int("compression-level", 1, "what level to pass to the compressor")
+	compressionLevel = 1
 	// switch which compressor/decompressor to use
-	CompressionEngineName = flag.String("compression-engine-name", "pargzip", "compressor engine used for compression.")
+	CompressionEngineName = "pargzip"
 	// use and external command to decompress the backups
-	ExternalCompressorCmd   = flag.String("external-compressor", "", "command with arguments to use when compressing a backup")
-	ExternalCompressorExt   = flag.String("external-compressor-extension", "", "extension to use when using an external compressor")
-	ExternalDecompressorCmd = flag.String("external-decompressor", "", "command with arguments to use when decompressing a backup")
+	ExternalCompressorCmd   string
+	ExternalCompressorExt   string
+	ExternalDecompressorCmd string
 
 	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine")
 	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4'")
@@ -62,6 +65,20 @@ var (
 		".zst": {ZstdCompressor},
 	}
 )
+
+func init() {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtadmin", "vtbackup", "vtcombo", "vtctl", "vtctld", "vttablet", "vttestserver"} {
+		servenv.OnParseFor(cmd, registerBackupCompressionFlags)
+	}
+}
+
+func registerBackupCompressionFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&compressionLevel, "compression-level", compressionLevel, "what level to pass to the compressor.")
+	fs.StringVar(&CompressionEngineName, "compression-engine-name", CompressionEngineName, "compressor engine used for compression.")
+	fs.StringVar(&ExternalCompressorCmd, "external-compressor", ExternalCompressorCmd, "command with arguments to use when compressing a backup.")
+	fs.StringVar(&ExternalCompressorExt, "external-compressor-extension", ExternalCompressorExt, "extension to use when using an external compressor.")
+	fs.StringVar(&ExternalDecompressorCmd, "external-decompressor", ExternalDecompressorCmd, "command with arguments to use when decompressing a backup.")
+}
 
 func getExtensionFromEngine(engine string) (string, error) {
 	for ext, eng := range engineExtensions {
@@ -116,7 +133,7 @@ func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
 	logger.Infof("Compressing using external command: %q", cmdStr)
 	// validate value of compression engine name
-	if err := validateExternalCompressionEngineName(*CompressionEngineName); err != nil {
+	if err := validateExternalCompressionEngineName(CompressionEngineName); err != nil {
 		return nil, err
 	}
 
@@ -210,26 +227,26 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger) (compressor io.WriteCloser, err error) {
 	switch engine {
 	case PgzipCompressor:
-		gzip, err := pgzip.NewWriterLevel(writer, *compressionLevel)
+		gzip, err := pgzip.NewWriterLevel(writer, compressionLevel)
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create gzip compressor")
 		}
-		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+		gzip.SetConcurrency(backupCompressBlockSize, backupCompressBlocks)
 		compressor = gzip
 	case PargzipCompressor:
 		gzip := pargzip.NewWriter(writer)
-		gzip.ChunkSize = *backupCompressBlockSize
-		gzip.Parallel = *backupCompressBlocks
-		gzip.CompressionLevel = *compressionLevel
+		gzip.ChunkSize = backupCompressBlockSize
+		gzip.Parallel = backupCompressBlocks
+		gzip.CompressionLevel = compressionLevel
 		compressor = gzip
 	case Lz4Compressor:
-		lz4Writer := lz4.NewWriter(writer).WithConcurrency(*backupCompressBlocks)
+		lz4Writer := lz4.NewWriter(writer).WithConcurrency(backupCompressBlocks)
 		lz4Writer.Header = lz4.Header{
-			CompressionLevel: *compressionLevel,
+			CompressionLevel: compressionLevel,
 		}
 		compressor = lz4Writer
 	case ZstdCompressor:
-		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(*compressionLevel)))
+		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(compressionLevel)))
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create zstd compressor")
 		}
