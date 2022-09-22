@@ -19,18 +19,18 @@ limitations under the License.
 package vtgate
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/key"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -58,46 +58,79 @@ import (
 )
 
 var (
-	transactionMode      = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
-	normalizeQueries     = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
-	terseErrors          = flag.Bool("vtgate-config-terse-errors", false, "prevent bind vars from escaping in returned errors")
-	streamBufferSize     = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
-	queryPlanCacheSize   = flag.Int64("gate_query_cache_size", cache.DefaultConfig.MaxEntries, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
-	queryPlanCacheMemory = flag.Int64("gate_query_cache_memory", cache.DefaultConfig.MaxMemoryUsage, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	queryPlanCacheLFU    = flag.Bool("gate_query_cache_lfu", cache.DefaultConfig.LFU, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
-	_                    = flag.Bool("disable_local_gateway", false, "deprecated: if specified, this process will not route any queries to local tablets in the local cell")
-	maxMemoryRows        = flag.Int("max_memory_rows", 300000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
-	warnMemoryRows       = flag.Int("warn_memory_rows", 30000, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
-	defaultDDLStrategy   = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
-	dbDDLPlugin          = flag.String("dbddl_plugin", "fail", "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
-	noScatter            = flag.Bool("no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	transactionMode      *string
+	normalizeQueries     *bool
+	terseErrors          *bool
+	streamBufferSize     *int
+	queryPlanCacheSize   *int64
+	queryPlanCacheMemory *int64
+	queryPlanCacheLFU    *bool
+	maxMemoryRows        *int
+	warnMemoryRows       *int
+	defaultDDLStrategy   *string
+	dbDDLPlugin          *string
+	noScatter            *bool
 
 	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
-	// HealthCheckRetryDelay is the time to wait before retrying healthcheck
-	HealthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
-	// HealthCheckTimeout is the timeout on the RPC call to tablets
-	HealthCheckTimeout = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
-	maxPayloadSize     = flag.Int("max_payload_size", 0, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
-	warnPayloadSize    = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
+	// healthCheckRetryDelay is the time to wait before retrying healthcheck
+	healthCheckRetryDelay *time.Duration
+	// healthCheckTimeout is the timeout on the RPC call to tablets
+	healthCheckTimeout *time.Duration
 
-	// Put set-passthrough under a flag.
-	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
-	setVarEnabled    = flag.Bool("enable_set_var", true, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
+	maxPayloadSize  *int
+	warnPayloadSize *int
+
+	// Put set-passthrough under
+	sysVarSetEnabled *bool
+	setVarEnabled    *bool
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
-	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
-	warnShardedOnly   = flag.Bool("warn_sharded_only", false, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
+	lockHeartbeatTime *time.Duration
+	warnShardedOnly   *bool
 
-	foreignKeyMode = flag.String("foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
+	foreignKeyMode *string
 
 	// flags to enable/disable online and direct DDL statements
-	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
-	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+	enableOnlineDDL *bool
+	enableDirectDDL *bool
 
-	enableSchemaChangeSignal = flag.Bool("schema_change_signal", true, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
-	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
+	enableSchemaChangeSignal *bool
+	schemaChangeUser         *string
 )
+
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(transactionMode, "transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
+	fs.BoolVar(normalizeQueries, "normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	fs.BoolVar(terseErrors, "vtgate-config-terse-errors", false, "prevent bind vars from escaping in returned errors")
+	fs.IntVar(streamBufferSize, "stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
+	fs.Int64Var(queryPlanCacheSize, "gate_query_cache_size", cache.DefaultConfig.MaxEntries, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
+	fs.Int64Var(queryPlanCacheMemory, "gate_query_cache_memory", cache.DefaultConfig.MaxMemoryUsage, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	fs.BoolVar(queryPlanCacheLFU, "gate_query_cache_lfu", cache.DefaultConfig.LFU, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
+	_ = fs.Bool("disable_local_gateway", false, "deprecated: if specified, this process will not route any queries to local tablets in the local cell")
+	fs.IntVar(maxMemoryRows, "max_memory_rows", 300000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
+	fs.IntVar(warnMemoryRows, "warn_memory_rows", 30000, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
+	fs.StringVar(defaultDDLStrategy, "ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
+	fs.StringVar(dbDDLPlugin, "dbddl_plugin", "fail", "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
+	fs.BoolVar(noScatter, "no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	fs.DurationVar(healthCheckRetryDelay, "healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
+	fs.DurationVar(healthCheckTimeout, "healthcheck_timeout", time.Minute, "the health check timeout period")
+	fs.IntVar(maxPayloadSize, "max_payload_size", 0, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
+	fs.IntVar(warnPayloadSize, "warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
+	fs.BoolVar(sysVarSetEnabled, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	fs.BoolVar(setVarEnabled, "enable_set_var", true, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
+	fs.DurationVar(lockHeartbeatTime, "lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
+	fs.BoolVar(warnShardedOnly, "warn_sharded_only", false, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
+	fs.StringVar(foreignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
+	fs.BoolVar(enableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
+	fs.BoolVar(enableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+	fs.BoolVar(enableSchemaChangeSignal, "schema_change_signal", true, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
+	fs.StringVar(schemaChangeUser, "schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
+}
+func init() {
+	servenv.OnParseFor("vtgate", RegisterFlags)
+	servenv.OnParseFor("vtcombo", RegisterFlags)
+}
 
 func getTxMode() vtgatepb.TransactionMode {
 	switch strings.ToLower(*transactionMode) {

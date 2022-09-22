@@ -842,7 +842,7 @@ func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 }
 
 func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, *HealthCheckTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *healthCheckTimeout)
 	defer cancel()
 	rows := [][]sqltypes.Value{}
 
