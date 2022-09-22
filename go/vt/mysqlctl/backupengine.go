@@ -288,19 +288,19 @@ func (p *RestorePath) IncrementalBackupHandles() []backupstorage.BackupHandle {
 
 func (p *RestorePath) String() string {
 	var sb strings.Builder
-	sb.WriteString("RestorePath:")
+	sb.WriteString("RestorePath: [")
 	for i, m := range p.manifests {
 		if i > 0 {
-			sb.WriteString(",")
+			sb.WriteString(", ")
 		}
-		sb.WriteString(" ")
 		if m.Incremental {
 			sb.WriteString("incremental:")
 		} else {
 			sb.WriteString("full:")
 		}
-		sb.WriteString(m.Position.String())
+		sb.WriteString(p.manifestHandleMap.Handle(m).Name())
 	}
+	sb.WriteString("]")
 	return sb.String()
 }
 

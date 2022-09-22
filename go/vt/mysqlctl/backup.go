@@ -320,8 +320,9 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
 	}
+	params.Logger.Infof("Restore: %v", restorePath.String())
 	if params.DryRun {
-		return nil, vterrors.Errorf(vtrpc.Code_CANCELED, "Restore dry run. Path=%s", restorePath)
+		return nil, vterrors.Errorf(vtrpc.Code_CANCELED, "Restore: dry run, aborting operation")
 	}
 	manifest, err := re.ExecuteRestore(ctx, params, bh)
 	if err != nil {
