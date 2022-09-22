@@ -78,7 +78,6 @@ func main() {
 	fs := pflag.NewFlagSet("vtctlclient", pflag.ExitOnError)
 	grpcclient.RegisterFlags(fs)
 	grpccommon.RegisterFlags(fs)
-	trace.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	_flag.Parse(fs)
 

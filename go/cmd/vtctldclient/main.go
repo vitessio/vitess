@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
@@ -39,7 +38,6 @@ func main() {
 	logutil.RegisterFlags(command.Root.PersistentFlags())
 	grpcclient.RegisterFlags(command.Root.PersistentFlags())
 	grpccommon.RegisterFlags(command.Root.PersistentFlags())
-	trace.RegisterFlags(command.Root.PersistentFlags())
 	servenv.RegisterMySQLServerFlags(command.Root.PersistentFlags())
 
 	// hack to get rid of an "ERROR: logging before flag.Parse"

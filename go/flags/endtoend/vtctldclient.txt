@@ -99,8 +99,6 @@ Flags:
       --builtinbackup_progress duration                 how often to send progress updates when backing up large files (default 5s)
       --compression-engine-name string                  compressor engine used for compression. (default "pargzip")
       --compression-level int                           what level to pass to the compressor (default 1)
-      --datadog-agent-host string                       host to send spans to. if empty, no tracing will be done
-      --datadog-agent-port string                       port to send spans to. if empty, no tracing will be done
       --db-credentials-file string                      db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                    db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
       --db-credentials-vault-addr string                URL to Vault server
@@ -129,7 +127,6 @@ Flags:
       --grpc_max_message_size int                       Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_prometheus                                 Enable gRPC monitoring with Prometheus.
   -h, --help                                            help for vtctldclient
-      --jaeger-agent-host string                        host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                     keep logs for this long (using mtime) (zero to keep forever)
       --log_backtrace_at traceLocation                  when logging hits line file:N, emit a stack trace (default :0)
@@ -161,10 +158,6 @@ Flags:
       --topo_global_root string                         the path of the global topology data in the global topology server
       --topo_global_server_address string               the address of the global topology server
       --topo_implementation string                      the topology implementation to use
-      --tracer string                                   tracing service to use (default "noop")
-      --tracing-enable-logging                          whether to enable logging in the tracing service
-      --tracing-sampling-rate float                     sampling rate for the probabilistic jaeger sampler (default 0.1)
-      --tracing-sampling-type string                    sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
   -v, --v Level                                         log level for V logs
       --version                                         version for vtctldclient
       --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging
