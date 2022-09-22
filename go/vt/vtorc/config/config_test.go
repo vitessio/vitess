@@ -45,38 +45,6 @@ func TestRecoveryPeriodBlock(t *testing.T) {
 	}
 }
 
-func TestRaft(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.RaftBind = "1.2.3.4:1008"
-		c.RaftDataDir = "/path/to/somewhere"
-		err := c.postReadAdjustments()
-		require.NoError(t, err)
-		require.EqualValues(t, c.RaftAdvertise, c.RaftBind)
-	}
-	{
-		c := newConfiguration()
-		c.RaftEnabled = true
-		err := c.postReadAdjustments()
-		require.Error(t, err)
-	}
-	{
-		c := newConfiguration()
-		c.RaftEnabled = true
-		c.RaftDataDir = "/path/to/somewhere"
-		err := c.postReadAdjustments()
-		require.NoError(t, err)
-	}
-	{
-		c := newConfiguration()
-		c.RaftEnabled = true
-		c.RaftDataDir = "/path/to/somewhere"
-		c.RaftBind = ""
-		err := c.postReadAdjustments()
-		require.Error(t, err)
-	}
-}
-
 func TestHttpAdvertise(t *testing.T) {
 	{
 		c := newConfiguration()

@@ -173,9 +173,6 @@ Please update your scripts before the next version, when this will begin to brea
 	} else {
 		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
 	}
-	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
-		config.Config.SkipOrchestratorDatabaseUpdate = false
-	}
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()
 	}

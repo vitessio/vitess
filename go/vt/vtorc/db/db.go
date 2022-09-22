@@ -179,9 +179,7 @@ func OpenVTOrc() (db *sql.DB, err error) {
 		}
 	}
 	if err == nil && !fromCache {
-		if !config.Config.SkipOrchestratorDatabaseUpdate {
-			_ = initVTOrcDB(db)
-		}
+		_ = initVTOrcDB(db)
 		// A low value here will trigger reconnects which could
 		// make the number of backend connections hit the tcp
 		// limit. That's bad.  I could make this setting dynamic
@@ -210,23 +208,6 @@ func translateStatement(statement string) (string, error) {
 		statement = sqlutils.ToSqlite3Dialect(statement)
 	}
 	return statement, nil
-}
-
-// versionIsDeployed checks if given version has already been deployed
-func versionIsDeployed(db *sql.DB) (result bool, err error) {
-	query := `
-		select
-			count(*) as is_deployed
-		from
-			vtorc_db_deployments
-		where
-			deployed_version = ?
-		`
-	err = db.QueryRow(query, config.RuntimeCLIFlags.ConfiguredVersion).Scan(&result)
-	// err means the table 'vtorc_db_deployments' does not even exist, in which case we proceed
-	// to deploy.
-	// If there's another error to this, like DB gone bad, then we're about to find out anyway.
-	return result, err
 }
 
 // registerVTOrcDeployment updates the vtorc_metadata table upon successful deployment
@@ -309,15 +290,6 @@ func deployStatements(db *sql.DB, queries []string) error {
 // application's lifetime.
 func initVTOrcDB(db *sql.DB) error {
 	log.Info("Initializing vtorc")
-
-	versionAlreadyDeployed, err := versionIsDeployed(db)
-	if versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
-		// Already deployed with this version
-		return nil
-	}
-	if config.Config.PanicIfDifferentDatabaseDeploy && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
-		log.Fatalf("PanicIfDifferentDatabaseDeploy is set. Configured version %s is not the version found in the database", config.RuntimeCLIFlags.ConfiguredVersion)
-	}
 	log.Info("Migrating database schema")
 	_ = deployStatements(db, generateSQLBase)
 	_ = deployStatements(db, generateSQLPatches)

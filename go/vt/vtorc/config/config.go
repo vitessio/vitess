@@ -57,12 +57,9 @@ const (
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	Debug                                       bool   // set debug mode (similar to --debug option)
-	EnableSyslog                                bool   // Should logs be directed (in addition) to syslog daemon?
 	ListenAddress                               string // Where vtorc HTTP should listen for TCP
 	ListenSocket                                string // Where vtorc HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	HTTPAdvertise                               string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
-	AgentsServerPort                            string // port vtorc agents talk back to
 	MySQLTopologyUser                           string // The user VTOrc will use to connect to MySQL instances
 	MySQLTopologyPassword                       string // The password VTOrc will use to connect to MySQL instances
 	MySQLReplicaUser                            string // User to set on replica MySQL instances while configuring replication settings on them. If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
@@ -77,15 +74,6 @@ type Configuration struct {
 	TLSCacheTTLFactor                           uint   // Factor of InstancePollSeconds that we set as TLS info cache expiry
 	BackendDB                                   string // EXPERIMENTAL: type of backend db; either "mysql" or "sqlite3"
 	SQLite3DataFile                             string // when BackendDB == "sqlite3", full path to sqlite3 datafile
-	SkipOrchestratorDatabaseUpdate              bool   // When true, do not check backend database schema nor attempt to update it. Useful when you may be running multiple versions of vtorc, and you only wish certain boxes to dictate the db structure (or else any time a different vtorc version runs it will rebuild database schema)
-	PanicIfDifferentDatabaseDeploy              bool   // When true, and this process finds the vtorc backend DB was provisioned by a different version, panic
-	RaftEnabled                                 bool   // When true, setup vtorc in a raft consensus layout. When false (default) all Raft* variables are ignored
-	RaftBind                                    string
-	RaftAdvertise                               string
-	RaftDataDir                                 string
-	DefaultRaftPort                             int      // if a RaftNodes entry does not specify port, use this one
-	RaftNodes                                   []string // Raft nodes to make initial connection with
-	ExpectFailureAnalysisConcensus              bool
 	MySQLVTOrcHost                              string
 	MySQLVTOrcMaxPoolConnections                int // The maximum size of the connection pool to the VTOrc backend.
 	MySQLVTOrcPort                              uint
@@ -238,24 +226,13 @@ var readFileNames []string
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		Debug:                                       false,
-		EnableSyslog:                                false,
 		ListenAddress:                               ":3000",
 		ListenSocket:                                "",
 		HTTPAdvertise:                               "",
-		AgentsServerPort:                            ":3001",
 		StatusEndpoint:                              DefaultStatusAPIEndpoint,
 		StatusOUVerify:                              false,
 		BackendDB:                                   "sqlite",
 		SQLite3DataFile:                             "file::memory:?mode=memory&cache=shared",
-		SkipOrchestratorDatabaseUpdate:              false,
-		PanicIfDifferentDatabaseDeploy:              false,
-		RaftBind:                                    "127.0.0.1:10008",
-		RaftAdvertise:                               "",
-		RaftDataDir:                                 "",
-		DefaultRaftPort:                             10008,
-		RaftNodes:                                   []string{},
-		ExpectFailureAnalysisConcensus:              true,
 		MySQLVTOrcMaxPoolConnections:                128, // limit concurrent conns to backend DB
 		MySQLVTOrcPort:                              3306,
 		MySQLTopologyUseMutualTLS:                   false,
@@ -454,15 +431,7 @@ func (config *Configuration) postReadAdjustments() error {
 	if config.IsSQLite() && config.SQLite3DataFile == "" {
 		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite3")
 	}
-	if config.RaftEnabled && config.RaftDataDir == "" {
-		return fmt.Errorf("RaftDataDir must be defined since raft is enabled (RaftEnabled)")
-	}
-	if config.RaftEnabled && config.RaftBind == "" {
-		return fmt.Errorf("RaftBind must be defined since raft is enabled (RaftEnabled)")
-	}
-	if config.RaftAdvertise == "" {
-		config.RaftAdvertise = config.RaftBind
-	}
+
 	if config.HTTPAdvertise != "" {
 		u, err := url.Parse(config.HTTPAdvertise)
 		if err != nil {
