@@ -50,13 +50,21 @@ var (
 	//go:embed vtorc.txt
 	vtorcTxt string
 
+	//go:embed vtctlclient.txt
+	vtctlclientTxt string
+
+	//go:embed vtctldclient.txt
+	vtctldclientTxt string
+
 	helpOutput = map[string]string{
-		"vtexplain": vtexplainTxt,
-		"vtgate":    vtgateTxt,
-		"vtgr":      vtgrTxt,
-		"vttablet":  vttabletTxt,
-		"vtctld":    vtctldTxt,
-		"vtorc":     vtorcTxt,
+		"vtexplain":    vtexplainTxt,
+		"vtgate":       vtgateTxt,
+		"vtgr":         vtgrTxt,
+		"vttablet":     vttabletTxt,
+		"vtctld":       vtctldTxt,
+		"vtctlclient":  vtctlclientTxt,
+		"vtctldclient": vtctldclientTxt,
+		"vtorc":        vtorcTxt,
 	}
 )
 
@@ -67,6 +75,7 @@ func TestHelpOutput(t *testing.T) {
 			cmd := exec.Command(binary, args...)
 			output := bytes.Buffer{}
 			cmd.Stderr = &output
+			cmd.Stdout = &output
 			err := cmd.Run()
 			require.NoError(t, err)
 			utils.MustMatch(t, helptext, output.String())
