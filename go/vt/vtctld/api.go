@@ -19,12 +19,15 @@ package vtctld
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"context"
 
@@ -50,9 +53,9 @@ import (
 )
 
 var (
-	localCell        = flag.String("cell", "", "cell to use")
-	showTopologyCRUD = flag.Bool("vtctld_show_topology_crud", true, "Controls the display of the CRUD topology actions in the vtctld UI.")
-	proxyTablets     = flag.Bool("proxy_tablets", false, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
+	localCell        string
+	showTopologyCRUD = true
+	proxyTablets     = false
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -88,6 +91,18 @@ type TabletWithStatsAndURL struct {
 	URL                  string                  `json:"url,omitempty"`
 }
 
+func init() {
+	for _, cmd := range []string{"vtcombo", "vtctld"} {
+		servenv.OnParseFor(cmd, registerVtctldAPIFlags)
+	}
+}
+
+func registerVtctldAPIFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&localCell, "cell", localCell, "cell to use")
+	fs.BoolVar(&showTopologyCRUD, "vtctld_show_topology_crud", showTopologyCRUD, "Controls the display of the CRUD topology actions in the vtctld UI.")
+	fs.BoolVar(&proxyTablets, "proxy_tablets", proxyTablets, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
+}
+
 func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.HealthCheck) *TabletWithStatsAndURL {
 	tablet := &TabletWithStatsAndURL{
 		Alias:                t.Alias,
@@ -104,7 +119,7 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.Health
 		PrimaryTermStartTime: t.PrimaryTermStartTime,
 	}
 
-	if *proxyTablets {
+	if proxyTablets {
 		tablet.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
 	} else {
 		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
@@ -349,7 +364,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		keyspace := parts[1]
 
 		if cell == "local" {
-			if *localCell == "" {
+			if localCell == "" {
 				cells, err := ts.GetCellInfoNames(ctx)
 				if err != nil {
 					return nil, fmt.Errorf("could not fetch cell info: %v", err)
@@ -359,7 +374,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 				}
 				cell = cells[0]
 			} else {
-				cell = *localCell
+				cell = localCell
 			}
 		}
 
@@ -654,9 +669,9 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 
 		resp := make(map[string]any)
 		resp["activeReparents"] = !*mysqlctl.DisableActiveReparents
-		resp["showStatus"] = *enableRealtimeStats
-		resp["showTopologyCRUD"] = *showTopologyCRUD
-		resp["showWorkflows"] = *workflowManagerInit
+		resp["showStatus"] = enableRealtimeStats
+		resp["showTopologyCRUD"] = showTopologyCRUD
+		resp["showWorkflows"] = workflowManagerInit
 		resp["workflows"] = workflow.AvailableFactories()
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {

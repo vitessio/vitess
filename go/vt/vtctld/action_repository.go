@@ -17,9 +17,12 @@ limitations under the License.
 package vtctld
 
 import (
-	"flag"
 	"net/http"
 	"strings"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"context"
 
@@ -34,7 +37,7 @@ import (
 )
 
 var (
-	actionTimeout = flag.Duration("action_timeout", wrangler.DefaultActionTimeout, "time to wait for an action before resorting to force")
+	actionTimeout = wrangler.DefaultActionTimeout
 )
 
 // ActionResult contains the result of an action. If Error, the action failed.
@@ -48,6 +51,16 @@ type ActionResult struct {
 func (ar *ActionResult) error(text string) {
 	ar.Error = true
 	ar.Output = text
+}
+
+func init() {
+	for _, cmd := range []string{"vtcombo", "vtctld"} {
+		servenv.OnParseFor(cmd, registerActionRepositoryFlags)
+	}
+}
+
+func registerActionRepositoryFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&actionTimeout, "action_timeout", actionTimeout, "time to wait for an action before resorting to force")
 }
 
 // action{Keyspace,Shard,Tablet}Method is a function that performs
@@ -113,7 +126,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName,
 		return result
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action(ctx, wr, keyspace)
 	cancel()
@@ -140,7 +153,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 		return result
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action(ctx, wr, keyspace, shard)
 	cancel()
@@ -174,7 +187,7 @@ func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName st
 	}
 
 	// run the action
-	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action.method(ctx, wr, tabletAlias)
 	cancel()

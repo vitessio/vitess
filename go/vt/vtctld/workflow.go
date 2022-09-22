@@ -21,6 +21,8 @@ import (
 	"flag"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/flagutil"
@@ -33,17 +35,26 @@ import (
 )
 
 var (
-	workflowManagerInit        = flag.Bool("workflow_manager_init", false, "Initialize the workflow manager in this vtctld instance.")
-	workflowManagerUseElection = flag.Bool("workflow_manager_use_election", false, "if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.")
-	workflowManagerDisable     flagutil.StringListValue
+	workflowManagerInit        = false
+	workflowManagerUseElection = false
+
+	workflowManagerDisable flagutil.StringListValue
 )
 
+func registerVtctldWorkflowFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&workflowManagerInit, "workflow_manager_init", workflowManagerInit, "Initialize the workflow manager in this vtctld instance.")
+	fs.BoolVar(&workflowManagerUseElection, "workflow_manager_use_election", workflowManagerUseElection, "if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.")
+}
+
 func init() {
+	for _, cmd := range []string{"vtcombo", "vtctld"} {
+		servenv.OnParseFor(cmd, registerVtctldWorkflowFlags)
+	}
 	flag.Var(&workflowManagerDisable, "workflow_manager_disable", "comma separated list of workflow types to disable")
 }
 
 func initWorkflowManager(ts *topo.Server) {
-	if *workflowManagerInit {
+	if workflowManagerInit {
 		// Uncomment this line to register the UI test validator.
 		// topovalidator.RegisterUITestValidator()
 
@@ -59,13 +70,13 @@ func initWorkflowManager(ts *topo.Server) {
 
 		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)
-		vtctl.WorkflowManager.SetSanitizeHTTPHeaders(*sanitizeLogMessages)
+		vtctl.WorkflowManager.SetSanitizeHTTPHeaders(sanitizeLogMessages)
 
 		// Register the long polling and websocket handlers.
 		vtctl.WorkflowManager.HandleHTTPLongPolling(apiPrefix + "workflow")
 		vtctl.WorkflowManager.HandleHTTPWebSocket(apiPrefix + "workflow")
 
-		if *workflowManagerUseElection {
+		if workflowManagerUseElection {
 			runWorkflowManagerElection(ts)
 		} else {
 			runWorkflowManagerAlone()

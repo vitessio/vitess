@@ -17,10 +17,13 @@ limitations under the License.
 package vtctld
 
 import (
-	"flag"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"context"
 
@@ -39,7 +42,7 @@ import (
 // result.
 
 var (
-	tabletHealthKeepAlive = flag.Duration("tablet_health_keep_alive", 5*time.Minute, "close streaming tablet health connection if there are no requests for this long")
+	tabletHealthKeepAlive = 5 * time.Minute
 )
 
 type tabletHealth struct {
@@ -56,6 +59,16 @@ type tabletHealth struct {
 	done chan struct{}
 	// ready is closed when there is at least one result to read.
 	ready chan struct{}
+}
+
+func init() {
+	for _, cmd := range []string{"vtcombo", "vtctld"} {
+		servenv.OnParseFor(cmd, registerVtctlTabletFlags)
+	}
+}
+
+func registerVtctlTabletFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&tabletHealthKeepAlive, "tablet_health_keep_alive", tabletHealthKeepAlive, "close streaming tablet health connection if there are no requests for this long")
 }
 
 func newTabletHealth() *tabletHealth {
@@ -119,7 +132,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts *topo.Server, tabletAlias
 			close(th.ready)
 			first = false
 		}
-		if time.Since(th.lastAccessed()) >= *tabletHealthKeepAlive {
+		if time.Since(th.lastAccessed()) >= tabletHealthKeepAlive {
 			return io.EOF
 		}
 		return nil
