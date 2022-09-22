@@ -25,15 +25,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	vtlog "vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/orchestrator/app"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtorc/app"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (
@@ -81,7 +80,7 @@ func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 			// In the latter case, we don't need to do any transformations, but
 			// in the former, we do.
 			name := strings.SplitN(arg[1:], "=", 2)[0] // discard any potential value (`-myflag` and `-myflag=10` both have the name of `myflag`)
-			if fs.Lookup(name) != nil {
+			if fs.Lookup(name) != nil || name == "help" {
 				// Case 1: We have a long opt with this name, so we need to
 				// prepend an additional hyphen.
 				result = append(result, "-"+arg)
@@ -106,23 +105,12 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
 
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
-	servenv.ParseFlags("vtorc")
-
-	// N.B. This code has to be duplicated from go/internal/flag in order to
-	// correctly transform `-help` => `--help`. Otherwise passing `-help` would
-	// produce:
-	//	unknown shorthand flag: 'e' in -elp
-	var help bool
-	if fs.Lookup("help") == nil {
-		if fs.ShorthandLookup("h") == nil {
-			fs.BoolVarP(&help, "help", "h", false, "display usage and exit")
-		} else {
-			fs.BoolVar(&help, "help", false, "display usage and exit")
-		}
-	}
 
 	configFile := fs.String("config", "", "config file name")
 	sibling := fs.StringP("sibling", "s", "", "sibling instance, host_fqdn[:port]")
@@ -136,7 +124,7 @@ func main() {
 	config.RuntimeCLIFlags.GrabElection = fs.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
 	config.RuntimeCLIFlags.PromotionRule = fs.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
 	config.RuntimeCLIFlags.SkipContinuousRegistration = fs.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = fs.Bool("enable-database-update", false, "Enable database update, overrides SkipOrchestratorDatabaseUpdate")
+	config.RuntimeCLIFlags.EnableDatabaseUpdate = fs.Bool("enable-database-update", false, "Enable database update, overrides SkipVTOrcDatabaseUpdate")
 	config.RuntimeCLIFlags.IgnoreRaftSetup = fs.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
 	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 
@@ -151,12 +139,7 @@ Please update your scripts before the next version, when this will begin to brea
 		log.Warningf(warning, args, os.Args)
 	}
 
-	_flag.Parse(fs)
-	// N.B. Also duplicated from go/internal/flag, for the same reason as above.
-	if help || fs.Arg(0) == "help" {
-		pflag.Usage()
-		os.Exit(0)
-	}
+	servenv.ParseFlags("vtorc")
 
 	if *destination != "" && *sibling != "" {
 		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
@@ -175,7 +158,7 @@ Please update your scripts before the next version, when this will begin to brea
 		*destination = *sibling
 	}
 
-	startText := "starting orchestrator"
+	startText := "starting vtorc"
 	if AppVersion != "" {
 		startText += ", version: " + AppVersion
 	}
@@ -187,7 +170,7 @@ Please update your scripts before the next version, when this will begin to brea
 	if len(*configFile) > 0 {
 		config.ForceRead(*configFile)
 	} else {
-		config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
+		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false
@@ -198,5 +181,15 @@ Please update your scripts before the next version, when this will begin to brea
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	app.HTTP(*discovery)
+	go app.HTTP(*discovery)
+
+	servenv.OnRun(func() {
+		addStatusParts()
+	})
+
+	// For backward compatability, we require that VTOrc functions even when the --port flag is not provided.
+	// In this case, it should function like before but without the servenv pages.
+	// Therefore, currently we don't check for the --port flag to be necessary, but release 16+ that check
+	// can be added to always have the serenv page running in VTOrc.
+	servenv.RunDefault()
 }

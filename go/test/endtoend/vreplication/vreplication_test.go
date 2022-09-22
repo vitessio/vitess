@@ -550,6 +550,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
 		switchWrites(t, ksWorkflow, false)
+		checkThatVDiffFails(t, targetKs, workflow)
+
 		if withOpenTx && commit != nil {
 			commit(t)
 		}
@@ -812,6 +814,21 @@ func shardOrders(t *testing.T) {
 		waitForRowCountInTablet(t, customerTab1, "customer", "orders", 1)
 		waitForRowCountInTablet(t, customerTab2, "customer", "orders", 2)
 		waitForRowCount(t, vtgateConn, "customer", "orders", 3)
+	})
+}
+
+func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
+	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", ksWorkflow)
+		require.Error(t, err)
+		require.Contains(t, output, "invalid VDiff run")
+	})
+	t.Run("check that vdiff2 won't run", func(t2 *testing.T) {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", ksWorkflow)
+		require.Error(t, err)
+		require.Contains(t, output, "invalid VDiff run")
+
 	})
 }
 
