@@ -69,11 +69,13 @@ var (
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"vtctlbackup_sharded_clustertest_heavy",
+		"12",
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"vtgate_general_heavy",
 		"vtbackup_transform",
+		"18",
 		"xb_backup",
 		"21",
 		"22",
@@ -127,8 +129,6 @@ var (
 	}
 
 	clusterSelfHostedList = []string{
-		"12",
-		"18",
 		"vtorc",
 	}
 	clusterDockerList           = []string{}
