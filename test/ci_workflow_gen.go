@@ -367,10 +367,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
 				test.Name = test.Name + " " + string(mysqlVersion)
 			}
-			fmt.Printf(">>>>>>>>>>> %s\n", test.Shard)
 			if strings.Contains(test.Shard, "partial_keyspace") {
-				fmt.Printf("~~~~~~~~~~~~~~~~~~~~ %s", test.Shard)
-
 				test.PartialKeyspace = true
 			}
 
