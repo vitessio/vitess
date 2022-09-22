@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -29,11 +30,12 @@ import (
 // VtctlClientProcess is a generic handle for a running vtctlclient command .
 // It can be spawned manually
 type VtctlClientProcess struct {
-	Name          string
-	Binary        string
-	Server        string
-	TempDirectory string
-	ZoneName      string
+	Name                    string
+	Binary                  string
+	Server                  string
+	TempDirectory           string
+	ZoneName                string
+	VtctlClientMajorVersion int
 }
 
 // VtctlClientParams encapsulated params to provide if non-default
@@ -42,14 +44,14 @@ type VtctlClientParams struct {
 	MigrationContext string
 	SkipPreflight    bool
 	UUIDList         string
-	CallerId         string
+	CallerID         string
 }
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
 func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(
-		"InitShardPrimary",
-		"-force", "-wait_replicas_timeout", "31s",
+		"InitShardPrimary", "--",
+		"--force", "--wait_replicas_timeout", "31s",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
 	if err != nil {
@@ -61,10 +63,10 @@ func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard s
 // InitializeShard executes vtctlclient command to make specified tablet the primary for the shard.
 func (vtctlclient *VtctlClientProcess) InitializeShard(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", Keyspace, Shard),
-		"-wait_replicas_timeout", "31s",
-		"-new_primary", fmt.Sprintf("%s-%d", Cell, TabletUID))
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", fmt.Sprintf("%s/%s", Keyspace, Shard),
+		"--wait_replicas_timeout", "31s",
+		"--new_primary", fmt.Sprintf("%s-%d", Cell, TabletUID))
 	if err != nil {
 		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
 	}
@@ -74,24 +76,24 @@ func (vtctlclient *VtctlClientProcess) InitializeShard(Keyspace string, Shard st
 // ApplySchemaWithOutput applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, params VtctlClientParams) (result string, err error) {
 	args := []string{
-		"ApplySchema",
-		"-sql", SQL,
+		"ApplySchema", "--",
+		"--sql", SQL,
 	}
 	if params.MigrationContext != "" {
-		args = append(args, "-migration_context", params.MigrationContext)
+		args = append(args, "--migration_context", params.MigrationContext)
 	}
 	if params.DDLStrategy != "" {
-		args = append(args, "-ddl_strategy", params.DDLStrategy)
+		args = append(args, "--ddl_strategy", params.DDLStrategy)
 	}
 	if params.UUIDList != "" {
-		args = append(args, "-uuid_list", params.UUIDList)
+		args = append(args, "--uuid_list", params.UUIDList)
 	}
 	if params.SkipPreflight {
-		args = append(args, "-skip_preflight")
+		args = append(args, "--skip_preflight")
 	}
 
-	if params.CallerId != "" {
-		args = append(args, "-caller_id", params.CallerId)
+	if params.CallerID != "" {
+		args = append(args, "--caller_id", params.CallerID)
 	}
 	args = append(args, Keyspace)
 	return vtctlclient.ExecuteCommandWithOutput(args...)
@@ -107,15 +109,15 @@ func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string) (err error) {
 	return vtctlclient.ExecuteCommand(
-		"ApplyVSchema",
-		"-vschema", JSON,
+		"ApplyVSchema", "--",
+		"--vschema", JSON,
 		Keyspace,
 	)
 }
 
 // ApplyRoutingRules does it
 func (vtctlclient *VtctlClientProcess) ApplyRoutingRules(JSON string) (err error) {
-	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "-rules", JSON)
+	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "--", "--rules", JSON)
 }
 
 // OnlineDDLShowRecent responds with recent schema migration list
@@ -188,29 +190,47 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 }
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
-func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
-	pArgs := []string{"-server", vtctlclient.Server}
+func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (string, error) {
+	var resultByte []byte
+	var resultStr string
+	var err error
+	retries := 10
+	retryDelay := 1 * time.Second
+	pArgs := []string{"--server", vtctlclient.Server}
 	if *isCoverage {
-		pArgs = append(pArgs, "-test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "-test.v")
+		pArgs = append(pArgs, "--test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "--test.v")
 	}
 	pArgs = append(pArgs, args...)
-	tmpProcess := exec.Command(
-		vtctlclient.Binary,
-		pArgs...,
-	)
-	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
-	resultByte, err := tmpProcess.CombinedOutput()
-	return filterResultWhenRunsForCoverage(string(resultByte)), err
+	for i := 1; i <= retries; i++ {
+		tmpProcess := exec.Command(
+			vtctlclient.Binary,
+			filterDoubleDashArgs(pArgs, vtctlclient.VtctlClientMajorVersion)...,
+		)
+		log.Infof("Executing vtctlclient with command: %v (attempt %d of %d)", strings.Join(tmpProcess.Args, " "), i, retries)
+		resultByte, err = tmpProcess.CombinedOutput()
+		resultStr = string(resultByte)
+		if err == nil || !shouldRetry(resultStr) {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+	return filterResultWhenRunsForCoverage(resultStr), err
 }
 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
 // configured with the given Config.
 func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctlClientProcess {
+	version, err := GetMajorVersion("vtctl") // `vtctlclient` does not have a --version flag, so we assume both vtctl/vtctlclient have the same version
+	if err != nil {
+		log.Warningf("failed to get major vtctlclient version; interop with CLI changes for VEP-4 may not work: %s", err)
+	}
+
 	vtctlclient := &VtctlClientProcess{
-		Name:          "vtctlclient",
-		Binary:        "vtctlclient",
-		Server:        fmt.Sprintf("%s:%d", hostname, grpcPort),
-		TempDirectory: tmpDirectory,
+		Name:                    "vtctlclient",
+		Binary:                  "vtctlclient",
+		Server:                  fmt.Sprintf("%s:%d", hostname, grpcPort),
+		TempDirectory:           tmpDirectory,
+		VtctlClientMajorVersion: version,
 	}
 	return vtctlclient
 }
@@ -221,16 +241,22 @@ func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string,
 	if tablet.Type == "rdonly" {
 		tabletType = "rdonly"
 	}
-	args := []string{"InitTablet", "-hostname", hostname,
-		"-port", fmt.Sprintf("%d", tablet.HTTPPort), "-allow_update", "-parent",
-		"-keyspace", keyspaceName,
-		"-shard", shardName}
+	args := []string{"InitTablet", "--", "--hostname", hostname,
+		"--port", fmt.Sprintf("%d", tablet.HTTPPort), "--allow_update", "--parent",
+		"--keyspace", keyspaceName,
+		"--shard", shardName}
 	if tablet.MySQLPort > 0 {
-		args = append(args, "-mysql_port", fmt.Sprintf("%d", tablet.MySQLPort))
+		args = append(args, "--mysql_port", fmt.Sprintf("%d", tablet.MySQLPort))
 	}
 	if tablet.GrpcPort > 0 {
-		args = append(args, "-grpc_port", fmt.Sprintf("%d", tablet.GrpcPort))
+		args = append(args, "--grpc_port", fmt.Sprintf("%d", tablet.GrpcPort))
 	}
 	args = append(args, fmt.Sprintf("%s-%010d", cell, tablet.TabletUID), tabletType)
 	return vtctlclient.ExecuteCommand(args...)
+}
+
+// shouldRetry tells us if the command should be retried based on the results/output -- meaning that it
+// is likely an ephemeral or recoverable issue that is likely to succeed when retried.
+func shouldRetry(cmdResults string) bool {
+	return strings.Contains(cmdResults, "Deadlock found when trying to get lock; try restarting transaction")
 }

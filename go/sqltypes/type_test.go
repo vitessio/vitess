@@ -17,6 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
+	"strings"
 	"testing"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -125,6 +126,9 @@ func TestTypeValues(t *testing.T) {
 	}, {
 		defined:  HexVal,
 		expected: 33 | flagIsText,
+	}, {
+		defined:  BitNum,
+		expected: 34 | flagIsText,
 	}}
 	for _, tcase := range testcases {
 		if int(tcase.defined) != tcase.expected {
@@ -170,6 +174,7 @@ func TestCategory(t *testing.T) {
 		Expression,
 		HexNum,
 		HexVal,
+		BitNum,
 	}
 	for _, typ := range alltypes {
 		matched := false
@@ -200,7 +205,8 @@ func TestCategory(t *testing.T) {
 			}
 			matched = true
 		}
-		if typ == Null || typ == Decimal || typ == Expression || typ == Bit || typ == HexNum || typ == HexVal {
+		if typ == Null || typ == Decimal || typ == Expression || typ == Bit ||
+			typ == HexNum || typ == HexVal || typ == BitNum {
 			if matched {
 				t.Errorf("%v matched more than one category", typ)
 			}
@@ -439,5 +445,70 @@ func TestTypeEquivalenceCheck(t *testing.T) {
 	}
 	if AreTypesEquivalent(Uint16, Int16) {
 		t.Errorf("Uint16 in binlog and Int16 in schema are not equivalent types.")
+	}
+}
+
+func TestPrintTypeChecks(t *testing.T) {
+	var funcs = []struct {
+		name string
+		f    func(p Type) bool
+	}{
+		{"IsSigned", IsSigned},
+		{"IsFloat", IsFloat},
+		{"IsUnsigned", IsUnsigned},
+		{"IsIntegral", IsIntegral},
+		{"IsText", IsText},
+		{"IsNumber", IsNumber},
+		{"IsQuoted", IsQuoted},
+		{"IsBinary", IsBinary},
+		{"IsDate", IsDate},
+		{"IsNull", IsNull},
+	}
+	var types = []Type{
+		Null,
+		Int8,
+		Uint8,
+		Int16,
+		Uint16,
+		Int24,
+		Uint24,
+		Int32,
+		Uint32,
+		Int64,
+		Uint64,
+		Float32,
+		Float64,
+		Timestamp,
+		Date,
+		Time,
+		Datetime,
+		Year,
+		Decimal,
+		Text,
+		Blob,
+		VarChar,
+		VarBinary,
+		Char,
+		Binary,
+		Bit,
+		Enum,
+		Set,
+		Geometry,
+		TypeJSON,
+		Expression,
+		HexNum,
+		HexVal,
+		Tuple,
+		BitNum,
+	}
+
+	for _, f := range funcs {
+		var match []string
+		for _, tt := range types {
+			if f.f(tt) {
+				match = append(match, tt.String())
+			}
+		}
+		t.Logf("%s(): %s", f.name, strings.Join(match, ", "))
 	}
 }

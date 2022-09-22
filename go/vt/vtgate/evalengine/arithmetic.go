@@ -17,21 +17,49 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 // evalengine represents a numeric value extracted from
 // a Value, used for arithmetic operations.
 var zeroBytes = []byte("0")
 
-func dataOutOfRangeError(v1, v2 interface{}, typ, sign string) error {
+func dataOutOfRangeError(v1, v2 any, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
+}
+
+// FormatFloat formats a float64 as a byte string in a similar way to what MySQL does
+func FormatFloat(typ sqltypes.Type, f float64) []byte {
+	return AppendFloat(nil, typ, f)
+}
+
+func AppendFloat(buf []byte, typ sqltypes.Type, f float64) []byte {
+	format := byte('g')
+	if typ == sqltypes.Decimal {
+		format = 'f'
+	}
+
+	// the float printer in MySQL does not add a positive sign before
+	// the exponent for positive exponents, but the Golang printer does
+	// do that, and there's no way to customize it, so we must strip the
+	// redundant positive sign manually
+	// e.g. 1.234E+56789 -> 1.234E56789
+	fstr := strconv.AppendFloat(buf, f, format, -1, 64)
+	if idx := bytes.IndexByte(fstr, 'e'); idx >= 0 {
+		if fstr[idx+1] == '+' {
+			fstr = append(fstr[:idx+1], fstr[idx+2:]...)
+		}
+	}
+
+	return fstr
 }
 
 // Add adds two values together
@@ -42,10 +70,10 @@ func Add(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -63,10 +91,10 @@ func Subtract(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -85,10 +113,10 @@ func Multiply(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -107,10 +135,10 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -142,10 +170,10 @@ func NullSafeAdd(v1, v2 sqltypes.Value, resultType sqltypes.Type) (sqltypes.Valu
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -169,7 +197,7 @@ func addNumericWithError(v1, v2, out *EvalResult) error {
 			return uintPlusUintWithError(v1.uint64(), v2.uint64(), out)
 		}
 	case sqltypes.Decimal:
-		decimalPlusAny(v1.decimal(), v2, out)
+		decimalPlusAny(v1.decimal(), v1.length_, v2, out)
 		return nil
 	case sqltypes.Float64:
 		return floatPlusAny(v1.float64(), v2, out)
@@ -190,7 +218,7 @@ func subtractNumericWithError(v1, v2, out *EvalResult) error {
 		case sqltypes.Float64:
 			return anyMinusFloat(v1, v2.float64(), out)
 		case sqltypes.Decimal:
-			anyMinusDecimal(v1, v2.decimal(), out)
+			anyMinusDecimal(v1, v2.decimal(), v2.length_, out)
 			return nil
 		}
 	case sqltypes.Uint64:
@@ -202,7 +230,7 @@ func subtractNumericWithError(v1, v2, out *EvalResult) error {
 		case sqltypes.Float64:
 			return anyMinusFloat(v1, v2.float64(), out)
 		case sqltypes.Decimal:
-			anyMinusDecimal(v1, v2.decimal(), out)
+			anyMinusDecimal(v1, v2.decimal(), v2.length_, out)
 			return nil
 		}
 	case sqltypes.Float64:
@@ -212,7 +240,7 @@ func subtractNumericWithError(v1, v2, out *EvalResult) error {
 		case sqltypes.Float64:
 			return anyMinusFloat(v1, v2.float64(), out)
 		default:
-			decimalMinusAny(v1.decimal(), v2, out)
+			decimalMinusAny(v1.decimal(), v1.length_, v2, out)
 			return nil
 		}
 	}
@@ -234,7 +262,7 @@ func multiplyNumericWithError(v1, v2, out *EvalResult) error {
 	case sqltypes.Float64:
 		return floatTimesAny(v1.float64(), v2, out)
 	case sqltypes.Decimal:
-		decimalTimesAny(v1.decimal(), v2, out)
+		decimalTimesAny(v1.decimal(), v1.length_, v2, out)
 		return nil
 	}
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.value().String(), v2.value().String())
@@ -266,7 +294,8 @@ func divideNumericWithError(v1, v2 *EvalResult, precise bool, out *EvalResult) e
 		}
 		return floatDivideAnyWithError(v1f, v2, out)
 	default:
-		return decimalDivide(v1, v2, divPrecisionIncrement, out)
+		decimalDivide(v1, v2, divPrecisionIncrement, out)
+		return nil
 	}
 }
 
@@ -427,104 +456,43 @@ func floatTimesAny(v1 float64, v2 *EvalResult, out *EvalResult) error {
 	return nil
 }
 
-const roundingModeArithmetic = decimal.ToZero
-const roundingModeFormat = decimal.ToNearestAway
-const roundingModeIntegerConversion = decimal.ToNearestAway
-
-var decimalContextSQL = decimal.Context{
-	MaxScale:      30,
-	MinScale:      0,
-	Precision:     65,
-	Traps:         ^(decimal.Inexact | decimal.Rounded | decimal.Subnormal),
-	RoundingMode:  roundingModeArithmetic,
-	OperatingMode: decimal.GDA,
-}
-
-func newDecimalUint64(x uint64) *decimalResult {
-	var result decimalResult
-	result.num.Context = decimalContextSQL
-	result.num.SetUint64(x)
-	return &result
-}
-
-func newDecimalString(x string) (*decimalResult, error) {
-	var result decimalResult
-	result.num.Context = decimalContextSQL
-	result.num.SetString(x)
-	if result.num.Context.Conditions != 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", result.num.Context.Conditions)
+func maxprec(a, b int32) int32 {
+	if a > b {
+		return a
 	}
-	result.frac = result.num.Scale()
-	return &result, nil
+	return b
 }
 
-func newDecimalInt64(x int64) *decimalResult {
-	var result decimalResult
-	result.num.Context = decimalContextSQL
-	result.num.SetMantScale(x, 0)
-	return &result
-}
-
-func newDecimalFloat64(f float64) *decimalResult {
-	var result decimalResult
-	result.num.Context = decimalContextSQL
-	result.num.SetFloat64(f)
-	result.frac = result.num.Scale()
-	return &result
-}
-
-func newDecimalFromOp(left, right *decimalResult, op func(r, x, y *decimal.Big)) *decimalResult {
-	var result decimalResult
-	result.num.Context = decimalContextSQL
-	op(&result.num, &left.num, &right.num)
-	if left.frac > right.frac {
-		result.frac = left.frac
-	} else {
-		result.frac = right.frac
-	}
-	return &result
-}
-
-func decimalPlusAny(v1 *decimalResult, v2 *EvalResult, out *EvalResult) {
+func decimalPlusAny(v1 decimal.Decimal, f1 int32, v2 *EvalResult, out *EvalResult) {
 	v2d := v2.coerceToDecimal()
-	result := newDecimalFromOp(v1, v2d, func(r, x, y *decimal.Big) { r.Add(x, y) })
-	out.setDecimal(result)
+	out.setDecimal(v1.Add(v2d), maxprec(f1, v2.length_))
 }
 
-func decimalMinusAny(v1 *decimalResult, v2 *EvalResult, out *EvalResult) {
+func decimalMinusAny(v1 decimal.Decimal, f1 int32, v2 *EvalResult, out *EvalResult) {
 	v2d := v2.coerceToDecimal()
-	result := newDecimalFromOp(v1, v2d, func(r, x, y *decimal.Big) { r.Sub(x, y) })
-	out.setDecimal(result)
+	out.setDecimal(v1.Sub(v2d), maxprec(f1, v2.length_))
 }
 
-func anyMinusDecimal(v1 *EvalResult, v2 *decimalResult, out *EvalResult) {
+func anyMinusDecimal(v1 *EvalResult, v2 decimal.Decimal, f2 int32, out *EvalResult) {
 	v1d := v1.coerceToDecimal()
-	result := newDecimalFromOp(v1d, v2, func(r, x, y *decimal.Big) { r.Sub(x, y) })
-	out.setDecimal(result)
+	out.setDecimal(v1d.Sub(v2), maxprec(v1.length_, f2))
 }
 
-func decimalTimesAny(v1 *decimalResult, v2 *EvalResult, out *EvalResult) {
+func decimalTimesAny(v1 decimal.Decimal, f1 int32, v2 *EvalResult, out *EvalResult) {
 	v2d := v2.coerceToDecimal()
-	result := newDecimalFromOp(v1, v2d, func(r, x, y *decimal.Big) { r.Mul(x, y) })
-	out.setDecimal(result)
+	out.setDecimal(v1.Mul(v2d), maxprec(f1, v2.length_))
 }
 
 const divPrecisionIncrement = 4
 
-func decimalDivide(v1, v2 *EvalResult, incrPrecision int, out *EvalResult) error {
-	left := v1.coerceToDecimal()
-	right := v2.coerceToDecimal()
-
-	var result decimalResult
-	result.num.Context = decimalContextSQL
-	result.frac = left.frac + incrPrecision
-	result.num.Div(&left.num, &right.num, incrPrecision)
-	if result.num.Context.Conditions&(decimal.DivisionByZero|decimal.DivisionUndefined) != 0 {
+func decimalDivide(v1, v2 *EvalResult, incrPrecision int32, out *EvalResult) {
+	v1d := v1.coerceToDecimal()
+	v2d := v2.coerceToDecimal()
+	if v2d.IsZero() {
 		out.setNull()
-		return nil
+		return
 	}
-	out.setDecimal(&result)
-	return nil
+	out.setDecimal(v1d.Div(v2d, incrPrecision), v1.length_+incrPrecision)
 }
 
 func floatDivideAnyWithError(v1 float64, v2 *EvalResult, out *EvalResult) error {

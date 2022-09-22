@@ -21,6 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
@@ -42,6 +43,9 @@ service VTAdmin {
     rpc DeleteShards(DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
     // DeleteTablet deletes a tablet from the topology
     rpc DeleteTablet(DeleteTabletRequest) returns (DeleteTabletResponse) {};
+    // EmergencyFailoverShard fails over a shard to a new primary. It assumes
+    // the old primary is dead or otherwise not responding.
+    rpc EmergencyFailoverShard(EmergencyFailoverShardRequest) returns (EmergencyFailoverShardResponse) {};
     // FindSchema returns a single Schema that matches the provided table name
     // across all specified clusters IDs. Not specifying a set of cluster IDs
     // causes the search to span all configured clusters.
@@ -51,6 +55,13 @@ service VTAdmin {
     rpc FindSchema(FindSchemaRequest) returns (Schema) {};
     // GetBackups returns backups grouped by cluster.
     rpc GetBackups(GetBackupsRequest) returns (GetBackupsResponse) {};
+    // GetCellInfos returns the CellInfo objects for the specified clusters.
+    //
+    // Callers may optionally restrict the set of CellInfos, or restrict the
+    // response to include only cell names.
+    rpc GetCellInfos(GetCellInfosRequest) returns (GetCellInfosResponse) {};
+    // GetCellsAliases returns the CellsAliases data for the specified clusters.
+    rpc GetCellsAliases(GetCellsAliasesRequest) returns (GetCellsAliasesResponse) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
@@ -69,7 +80,8 @@ service VTAdmin {
     rpc GetShardReplicationPositions(GetShardReplicationPositionsRequest) returns (GetShardReplicationPositionsResponse) {};
     // GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
     rpc GetSrvVSchema (GetSrvVSchemaRequest) returns (SrvVSchema) {};
-    // GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
+    // GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters
+    // and cells.
     rpc GetSrvVSchemas(GetSrvVSchemasRequest) returns (GetSrvVSchemasResponse) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
@@ -88,23 +100,60 @@ service VTAdmin {
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
     // GetWorkflows returns the Workflows for all specified clusters.
     rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
-    // PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+    // PingTablet checks that the specified tablet is awake and responding to
+    // RPCs. This command can be blocked by other in-flight operations.
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
+    // PlannedFailoverShard fails over the shard to a new primary, or away from
+    // an old primary. Both the old and new primaries must be reachable and
+    // running.
+    //
+    // NOTE: A planned failover will not consider replicas outside the current
+    // shard primary's cell as promotion candidates unless NewPrimary is
+    // explicitly provided in the request.
+    rpc PlannedFailoverShard(PlannedFailoverShardRequest) returns (PlannedFailoverShardResponse) {};
     // RefreshState reloads the tablet record on the specified tablet.
     rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
-    // ReparentTablet 
-    rpc ReparentTablet(ReparentTabletRequest) returns (ReparentTabletResponse) {};
-    // RunHealthCheck runs a health check on the tablet
+    // RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
+    // on a tablet to replicate from the current primary in the shard.
+    rpc RefreshTabletReplicationSource(RefreshTabletReplicationSourceRequest) returns (RefreshTabletReplicationSourceResponse) {};
+    // ReloadSchemas reloads the schema definition across keyspaces, shards, or
+    // tablets in one or more clusters, depending on the request fields (see
+    // ReloadSchemasRequest for details).
+    rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
+    // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
-    // SetReadOnly will set the tablet to read only mode
+    // SetReadOnly sets the tablet to read-only mode.
     rpc SetReadOnly(SetReadOnlyRequest) returns (SetReadOnlyResponse) {};
-    // SetReadWrite will set the tablet to read-write mode
+    // SetReadWrite sets the tablet to read-write mode.
     rpc SetReadWrite(SetReadWriteRequest) returns (SetReadWriteResponse) {};
-    // StartReplication will run the underlying database command to start replication on a tablet
+    // StartReplication runs the underlying database command to start
+    // replication on a tablet.
     rpc StartReplication(StartReplicationRequest) returns (StartReplicationResponse) {};
-    // StopReplication will run th underlying database command to stop replication on a tablet
+    // StopReplication runs the underlying database command to stop replication
+    // on a tablet
     rpc StopReplication(StopReplicationRequest) returns (StopReplicationResponse) {};
-    // VTExplain provides information on how Vitess plans to execute a particular query.
+    // TabletExternallyPromoted updates the metadata in a cluster's topology
+    // to acknowledge a shard primary change performed by an external tool
+    // (e.g. orchestrator*).
+    //
+    // See the Reparenting guide for more information:
+    // https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
+    //
+    // * "orchestrator" here refers to external orchestrator, not the newer,
+    // Vitess-aware orchestrator, VTOrc.
+    rpc TabletExternallyPromoted(TabletExternallyPromotedRequest) returns (TabletExternallyPromotedResponse) {};
+    // ValidateKeyspace validates that all nodes reachable from the specified
+    // keyspace are consistent.
+    rpc ValidateKeyspace(ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+    // ValidateSchemaKeyspace validates that the schema on the primary tablet
+    // for shard 0 matches the schema on all of the other tablets in the
+    // keyspace.
+    rpc ValidateSchemaKeyspace(ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
+	// ValidateVersionKeyspace validates that the version on the primary of
+    // shard 0 matches all of the other tablets in the keyspace.
+    rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+    // VTExplain provides information on how Vitess plans to execute a
+    // particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
 
@@ -119,6 +168,20 @@ message Cluster {
 message ClusterBackup {
     Cluster cluster = 1;
     mysqlctl.BackupInfo backup = 2;
+}
+
+message ClusterCellsAliases {
+    Cluster cluster = 1;
+    map<string, topodata.CellsAlias> aliases = 2;
+}
+
+message ClusterCellInfo {
+    Cluster cluster = 1;
+    string name = 2;
+    // CellInfo contains the data for the cell.
+    //
+    // It may be nil if the GetCellsInfosRequest specified NamesOnly.
+    topodata.CellInfo cell_info = 3;
 }
 
 message ClusterShardReplicationPosition {
@@ -163,6 +226,13 @@ message Schema {
         uint64 data_length = 2;
         map<string, ShardTableSize> by_shard = 3;
     }
+}
+
+// Shard groups the vtctldata information about a shard record together with
+// the Vitess cluster it belongs to.
+message Shard {
+    Cluster cluster = 1;
+    vtctldata.Shard shard = 2;
 }
 
 message SrvVSchema {
@@ -252,12 +322,31 @@ message DeleteShardsRequest {
 }
 
 message DeleteTabletRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
+    bool allow_primary = 3;
 }
 
 message DeleteTabletResponse {
     string status = 1;
+    Cluster cluster = 2;
+}
+
+message EmergencyFailoverShardRequest {
+    string cluster_id = 1;
+    vtctldata.EmergencyReparentShardRequest options = 2;
+}
+
+message EmergencyFailoverShardResponse {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    // PromotedPrimary is the tablet alias that was promoted to shard primary.
+    // If NewPrimary was set in the request options, then this will be the
+    // same tablet alias. Otherwise, it will be the alias of the tablet found
+    // to be most up-to-date in the shard.
+    topodata.TabletAlias promoted_primary = 4;
+    repeated logutil.Event events = 5;
 }
 
 message FindSchemaRequest {
@@ -286,6 +375,32 @@ message GetBackupsRequest {
 
 message GetBackupsResponse {
     repeated ClusterBackup backups = 1;
+}
+
+message GetCellInfosRequest {
+    repeated string cluster_ids = 1;
+    // Cells, if specified, limits the response to include only CellInfo objects
+    // with those names. If omitted, all CellInfo objects in each cluster are
+    // returned.
+    //
+    // Mutually-exclusive with NamesOnly. If both are set, this field takes
+    // precedence.
+    repeated string cells = 2;
+    // Return only the cell names in each cluster; the actual CellInfo objects
+    // will be empty.
+    bool names_only = 3;
+}
+
+message GetCellInfosResponse {
+    repeated ClusterCellInfo cell_infos = 1;
+}
+
+message GetCellsAliasesRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetCellsAliasesResponse {
+    repeated ClusterCellsAliases aliases = 1;
 }
 
 message GetClustersRequest {}
@@ -368,11 +483,11 @@ message GetSchemaTableSizeOptions {
 }
 
 message GetTabletRequest {
-    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
-    string alias = 1;
+    // Unique (per cluster) tablet alias.
+    topodata.TabletAlias alias = 1;
     // ClusterIDs is an optional parameter to narrow the scope of the search, if
-    // the caller knows which cluster the tablet may be in, or, to disamiguate if
-    // multiple clusters have a tablet with the same hostname.
+    // the caller knows which cluster the tablet may be in, or, to disambiguate
+    // if multiple clusters have a tablet with the same hostname.
     repeated string cluster_ids = 2;
 }
 
@@ -440,80 +555,225 @@ message GetWorkflowsResponse {
 
 message PingTabletRequest {
     // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     // ClusterIDs is an optional parameter to narrow the scope of the search, if
-    // the caller knows which cluster the tablet may be in, or, to disamiguate if
-    // multiple clusters have a tablet with the same hostname.
+    // the caller knows which cluster the tablet may be in, or, to disambiguate
+    // if multiple clusters have a tablet with the same hostname.
     repeated string cluster_ids = 2;
 }
 
 message PingTabletResponse {
     string status = 1;
+    Cluster cluster = 2;
+}
+
+message PlannedFailoverShardRequest {
+    string cluster_id = 1;
+    vtctldata.PlannedReparentShardRequest options = 2;
+}
+
+message PlannedFailoverShardResponse {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    // PromotedPrimary is the tablet alias that was promoted to shard primary.
+    // If NewPrimary was set in the request options, then this will be the
+    // same tablet alias. Otherwise, it will be the alias of the tablet found
+    // to be most up-to-date in the shard.
+    topodata.TabletAlias promoted_primary = 4;
+    repeated logutil.Event events = 5;
 }
 
 message RefreshStateRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message RefreshStateResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
-message ReparentTabletRequest {
-    string alias = 1;
+message ReloadSchemasRequest {
+    // Keyspaces, if set, will reload schemas across one or more keyspaces. A
+    // keyspace not existing in a cluster will not fail the overall request.
+    //
+    // Superceded by KeyspaceShards and Tablets, in that order.
+    repeated string keyspaces = 1;
+    // KeyspaceShards, if set, will reload schemas across one or more shards.
+    // Each element must be a valid keyspace/shard according to
+    // topoproto.ParseKeyspaceShard. A shard not existing in a cluster will not
+    // fail the overall request.
+    //
+    // Supercedes Keyspaces, and is superceded by Tablets.
+    repeated string keyspace_shards = 2;
+    // Tablets, if set will reload schemas across one or more tablets.
+    // Supercedes both Keyspaces and KeyspaceShards.
+    repeated topodata.TabletAlias tablets = 3;
+    // ClusterIds optionally restricts the reload operation to clusters with
+    // the specified IDs. An empty list of ClusterIds will operate on all
+    // clusters.
+    repeated string cluster_ids = 4;
+    // Concurrency controls the number of tablets to reload at any given time.
+    // Its semantics depend on whether the request is for keyspace, shard, or
+    // tablet mode.
+    //
+    // In Keyspaces mode, Concurrency is the number of tablets to reload at once
+    // *per keyspace*.
+    //
+    // In KeyspaceShards mode, Concurrency is the number of tablets to reload at
+    // once *per shard*.
+    //
+    // In Tablets mode, Concurrency is the number of tablets to reload at once
+    // *per cluster*.
+    uint32 concurrency = 5;
+    // WaitPosition is the replication position that replicating tablets should
+    // reach prior to reloading their schemas.
+    //
+    // Does not apply in Tablets mode.
+    string wait_position = 6;
+    // IncludePrimary, if set, will reload the schemas on PRIMARY tablets as
+    // well as REPLICA and RDONLY.
+    //
+    // Does not apply in Tablets mode.
+    bool include_primary = 7;
+}
+
+message ReloadSchemasResponse {
+    // KeyspaceResult is a grouping of a Keyspace and any log events that
+    // occurred in that keyspace during a schema reload (usually associated with
+    // partial errors - ReloadSchemas requests are best-effort).
+    //
+    // It is only set when a ReloadSchemas request mandates Keyspaces mode
+    // (see ReloadSchemasRequest).
+    message KeyspaceResult {
+        Keyspace keyspace = 1;
+        repeated logutil.Event events = 2;
+    }
+    // KeyspaceResults is the list of KeyspaceResult objects for a ReloadSchemas
+    // operation. It is only set when the request mandates Keyspaces mode (see
+    // ReloadSchemasRequest).
+    repeated KeyspaceResult keyspace_results = 1;
+
+    // ShardResult is a grouping of a Shard and any log events that occurred in
+    // that shard during a schema reload (usually associated with partial
+    // errors - ReloadSchemas requests are best-effort).
+    //
+    // It is only set when a ReloadSchemas request mandates KeyspaceShards mode
+    // (see ReloadSchemasRequest).
+    message ShardResult {
+        Shard shard = 1;
+        repeated logutil.Event events = 2;
+    }
+    // ShardResults is the list of ShardResult objects for a ReloadSchemas
+    // operation. It is only set when the request mandates KeyspaceShards mode
+    // (see ReloadSchemasRequest).
+    repeated ShardResult shard_results = 2;
+
+    // TabletResult is a grouping of a Tablet and the result of reloading that
+    // Tablet's schema. Result will either be the string "ok", or the error
+    // message from that tablet. Note ReloadSchemas is best-effort, so tablet's
+    // failing to reload is not treated as an overall failure.
+    //
+    // It is only set when a ReloadSchemas request mandates Tablets mode (see
+    // ReloadSchemasRequest).
+    message TabletResult {
+        Tablet tablet = 1;
+        string result = 2;
+    }
+    // TabletResults is the list of TabletResult objects for a ReloadSchemas
+    // operation. It is only set when the request mandates Tablets mode (see
+    // ReloadSchemasRequest).
+    repeated TabletResult tablet_results = 3;
+}
+
+message RefreshTabletReplicationSourceRequest {
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
-message ReparentTabletResponse {
+message RefreshTabletReplicationSourceResponse {
     string keyspace = 1;
     string shard = 2;
-    string primary = 3;
+    topodata.TabletAlias primary = 3;
+    Cluster cluster = 4;
 }
 
 message RunHealthCheckRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message RunHealthCheckResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message SetReadOnlyRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message SetReadOnlyResponse {
-
 }
 
 message SetReadWriteRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message SetReadWriteResponse {
-    
 }
 
 message StartReplicationRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message StartReplicationResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message StopReplicationRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message StopReplicationResponse {
     string status = 1;
+    Cluster cluster = 2;
+}
+
+message TabletExternallyPromotedRequest {
+    // Tablet is the alias of the tablet that was promoted externally and should
+    // be updated to the shard primary in the topo.
+    topodata.TabletAlias alias = 1;
+    repeated string cluster_ids = 2;
+}
+  
+message TabletExternallyPromotedResponse {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    topodata.TabletAlias new_primary = 4;
+    topodata.TabletAlias old_primary = 5;
+}
+
+message ValidateKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    bool ping_tablets = 3;
+}
+
+message ValidateSchemaKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+}
+
+message ValidateVersionKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
 }
 
 message VTExplainRequest {

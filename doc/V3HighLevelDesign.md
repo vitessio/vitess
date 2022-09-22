@@ -1678,7 +1678,7 @@ Currently, the AST contains only information parsed from the query. When we anal
 
 Since we need them again for resolving dependencies, we have to store them somewhere. We also have to retrieve the right one for each subquery. This gives rise to a dependency issue: Subqueries can be anywhere in the parse tree. So, it’s unnatural to have an outside data structure that points to various parts of the AST.
 
-So, we make a compromise: we extend the Select structure and add a Symbols (interface{}) member to it. Every time we finish analyzing a subquery, we set the Symbols member to point to the symbol table. With this compromise, the rest of the code base will flow naturally while resolving dependencies.
+So, we make a compromise: we extend the Select structure and add a Symbols (any) member to it. Every time we finish analyzing a subquery, we set the Symbols member to point to the symbol table. With this compromise, the rest of the code base will flow naturally while resolving dependencies.
 
 ## Plan generation
 
@@ -1735,4 +1735,3 @@ Filter:
 ## Other expensive primitives
 
 The rest of the primitives have potentially unbounded memory consequences. For these, we’ll have to explore map-reduce based approaches.
-

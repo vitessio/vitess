@@ -41,6 +41,9 @@ var (
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
 
+	normalWaitTime   = 20 * time.Second
+	extendedWaitTime = 60 * time.Second
+
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
@@ -63,6 +66,13 @@ var (
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB
 	`
+	createT1IfNotExistsStatement = `
+		CREATE TABLE IF NOT EXISTS t1_test (
+			id bigint(20) not null,
+			hint_col varchar(64) not null default 'should_not_appear',
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
 	trivialAlterT1Statement = `
 		ALTER TABLE t1_test ENGINE=InnoDB;
 	`
@@ -76,7 +86,7 @@ var (
 		DROP TABLE IF EXISTS t3_test
 	`
 	dropT4Statement = `
-		DROP TABLE IF EXISTS t3_test
+		DROP TABLE IF EXISTS t4_test
 	`
 )
 
@@ -95,15 +105,17 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1"}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
+			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -122,8 +134,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
@@ -154,26 +164,39 @@ func TestSchemaChange(t *testing.T) {
 	var t1uuid string
 	var t2uuid string
 
-	testCompareTableTimes := func(t *testing.T, t1uuid, t2uuid string) {
-		t.Run("Compare t1, t2 times", func(t *testing.T) {
-			var t1endTime, t2startTime string
-			{
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					t1endTime = row.AsString("completed_timestamp", "")
-					assert.NotEmpty(t, t1endTime)
-				}
+	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			timestamp = row.AsString(timestampColumn, "")
+			assert.NotEmpty(t, timestamp)
+		}
+		return timestamp
+	}
+	testTableSequentialTimes := func(t *testing.T, uuid1, uuid2 string) {
+		// expect uuid2 to start after uuid1 completes
+		t.Run("Compare t1, t2 sequential times", func(t *testing.T) {
+			endTime1 := testReadTimestamp(t, uuid1, "completed_timestamp")
+			startTime2 := testReadTimestamp(t, uuid2, "started_timestamp")
+			assert.GreaterOrEqual(t, startTime2, endTime1)
+		})
+	}
+	testTableCompletionTimes := func(t *testing.T, uuid1, uuid2 string) {
+		// expect uuid1 to complete before uuid2
+		t.Run("Compare t1, t2 completion times", func(t *testing.T) {
+			endTime1 := testReadTimestamp(t, uuid1, "completed_timestamp")
+			endTime2 := testReadTimestamp(t, uuid2, "completed_timestamp")
+			assert.GreaterOrEqual(t, endTime2, endTime1)
+		})
+	}
+	testAllowConcurrent := func(t *testing.T, name string, uuid string, expect int64) {
+		t.Run("verify allow_concurrent: "+name, func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, expect, allowConcurrent)
 			}
-			{
-				rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					t2startTime = row.AsString("started_timestamp", "")
-					assert.NotEmpty(t, t2startTime)
-				}
-			}
-			assert.GreaterOrEqual(t, t2startTime, t1endTime)
 		})
 	}
 
@@ -190,40 +213,104 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, t2Name, true)
 		}
-		testCompareTableTimes(t, t1uuid, t2uuid)
+		testTableSequentialTimes(t, t1uuid, t2uuid)
+	})
+	t.Run("Postpone launch CREATE", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true) // skip wait
+		time.Sleep(2 * time.Second)
+		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			postponeLaunch := row.AsInt64("postpone_launch", 0)
+			assert.Equal(t, int64(1), postponeLaunch)
+		}
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+
+		t.Run("launch all shards", func(t *testing.T) {
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "", true)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(0), postponeLaunch)
+			}
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+	})
+	t.Run("Postpone launch ALTER", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true) // skip wait
+		time.Sleep(2 * time.Second)
+		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			postponeLaunch := row.AsInt64("postpone_launch", 0)
+			assert.Equal(t, int64(1), postponeLaunch)
+		}
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+
+		t.Run("launch irrelevant UUID", func(t *testing.T) {
+			someOtherUUID := "00000000_1111_2222_3333_444444444444"
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, someOtherUUID, "", false)
+			time.Sleep(2 * time.Second)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(1), postponeLaunch)
+			}
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		})
+		t.Run("launch irrelevant shards", func(t *testing.T) {
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x,y,z", false)
+			time.Sleep(2 * time.Second)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(1), postponeLaunch)
+			}
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		})
+		t.Run("launch relevant shard", func(t *testing.T) {
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x, y, 1", true)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(0), postponeLaunch)
+			}
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
 	})
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
 		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
 
 		t.Run("wait for t1 complete", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
 		t.Run("wait for t1 complete", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
 		t.Run("check both complete", func(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 		})
-		testCompareTableTimes(t, t1uuid, t2uuid)
+		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 	t.Run("ALTER both tables non-concurrent, postponed", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true) // skip wait
 		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true) // skip wait
 
-		t.Run("test allow-concurrent", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				allowConcurrent := row.AsInt64("allow_concurrent", 0)
-				assert.Equal(t, int64(0), allowConcurrent)
-			}
-		})
+		testAllowConcurrent(t, "t1", t1uuid, 0)
 		t.Run("expect t1 running, t2 queued", func(t *testing.T) {
-			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			// now that t1 is running, let's unblock t2. We expect it to remain queued.
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
 			time.Sleep(5 * time.Second)
@@ -236,79 +323,124 @@ func TestSchemaChange(t *testing.T) {
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("expect t2 to complete", func(t *testing.T) {
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 		})
-		testCompareTableTimes(t, t1uuid, t2uuid)
+		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
-	t.Run("ALTER both tables, not elligible for concurrenct", func(t *testing.T) {
-		// An ALTE RTABLE is not allowed to run concurrently. We add -allow-concurrent but it will be ignored
+	t.Run("ALTER both tables, elligible for concurrenct", func(t *testing.T) {
+		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
+		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true) // skip wait
+		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true) // skip wait
+
+		testAllowConcurrent(t, "t1", t1uuid, 1)
+		testAllowConcurrent(t, "t2", t2uuid, 1)
+		t.Run("expect both running", func(t *testing.T) {
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			time.Sleep(5 * time.Second)
+			// both should be still running!
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("complete t2", func(t *testing.T) {
+			// Issue a complete and wait for successful completion
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
+			// This part may take a while, because we depend on vreplication polling
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("complete t1", func(t *testing.T) {
+			// t1 should still be running!
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			// Issue a complete and wait for successful completion
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			// This part may take a while, because we depend on vreplication polling
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		testTableCompletionTimes(t, t2uuid, t1uuid)
+	})
+	t.Run("ALTER both tables, elligible for concurrenct, with throttling", func(t *testing.T) {
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 
-		t.Run("test allow-concurrent", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				allowConcurrent := row.AsInt64("allow_concurrent", 0)
-				assert.Equal(t, int64(0), allowConcurrent)
-			}
-		})
-		t.Run("expect t1 running, t2 queued", func(t *testing.T) {
-			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
-			// now that t1 is running, let's unblock t2. We expect it to remain queued.
-			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
+		testAllowConcurrent(t, "t1", t1uuid, 1)
+		testAllowConcurrent(t, "t2", t2uuid, 1)
+		t.Run("expect t1 running", func(t *testing.T) {
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			// since all migrations are throttled, t1 migration is not ready_to_complete, hence
+			// t2 should not be running
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 			time.Sleep(5 * time.Second)
-			// t1 should be still running!
+			// both should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
-			// non-concurrent -- should be queued!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 		})
-		t.Run("complete t1", func(t *testing.T) {
-			// Issue a complete and wait for successful completion
-			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
-			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		t.Run("unthrottle, expect t2 running", func(t *testing.T) {
+			onlineddl.UnthrottleAllMigrations(t, &vtParams)
+			// t1 should now be ready_to_complete, hence t2 should start running
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
+			time.Sleep(5 * time.Second)
+			// both should be still running!
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
 		})
-		t.Run("expect t2 to complete", func(t *testing.T) {
+		t.Run("complete t2", func(t *testing.T) {
+			// Issue a complete and wait for successful completion
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 		})
-		testCompareTableTimes(t, t1uuid, t2uuid)
+		t.Run("complete t1", func(t *testing.T) {
+			// t1 should still be running!
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			// Issue a complete and wait for successful completion
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			// This part may take a while, because we depend on vreplication polling
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {
 		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
 		t2uuid = testRevertMigration(t, t2uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
 
-		t.Run("test allow-concurrent", func(t *testing.T) {
+		testAllowConcurrent(t, "t1", t1uuid, 1)
+		t.Run("expect both migrations to run", func(t *testing.T) {
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("test ready-to-complete", func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
-				allowConcurrent := row.AsInt64("allow_concurrent", 0)
-				assert.Equal(t, int64(1), allowConcurrent)
+				readyToComplete := row.AsInt64("ready_to_complete", 0)
+				assert.Equal(t, int64(1), readyToComplete)
 			}
-		})
-		t.Run("expect both migrations to run", func(t *testing.T) {
-			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
-			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 		})
 		t.Run("complete t2", func(t *testing.T) {
 			// now that both are running, let's unblock t2. We expect it to complete.
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -318,7 +450,7 @@ func TestSchemaChange(t *testing.T) {
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -327,31 +459,17 @@ func TestSchemaChange(t *testing.T) {
 		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
 		drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
 
-		t.Run("test allow-concurrent", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				allowConcurrent := row.AsInt64("allow_concurrent", 0)
-				assert.Equal(t, int64(1), allowConcurrent)
-			}
-		})
-		t.Run("test allow-concurrent for drop3", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, drop3uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				allowConcurrent := row.AsInt64("allow_concurrent", 0)
-				assert.Equal(t, int64(0), allowConcurrent)
-			}
-		})
+		testAllowConcurrent(t, "t1", t1uuid, 1)
+		testAllowConcurrent(t, "drop3", drop3uuid, 0)
 		t.Run("expect t1 migration to run", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
 		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
 		t.Run("drop3 complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop3uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop3uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop3uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -360,8 +478,9 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
-			time.Sleep(2 * time.Second)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
 			// t1 should be still running!
@@ -369,7 +488,7 @@ func TestSchemaChange(t *testing.T) {
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -379,31 +498,17 @@ func TestSchemaChange(t *testing.T) {
 		drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true)                      // skip wait
 		drop4uuid := testOnlineDDLStatement(t, dropT4Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 
-		t.Run("test allow-concurrent for drop3", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, drop3uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				allowConcurrent := row.AsInt64("allow_concurrent", 0)
-				assert.Equal(t, int64(1), allowConcurrent)
-			}
-		})
+		testAllowConcurrent(t, "drop3", drop3uuid, 1)
 		t.Run("expect t1 migration to run", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
 		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true) // skip wait
-		t.Run("test allow-concurrent for drop1", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, drop1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				allowConcurrent := row.AsInt64("allow_concurrent", 0)
-				assert.Equal(t, int64(1), allowConcurrent)
-			}
-		})
+		testAllowConcurrent(t, "drop1", drop1uuid, 1)
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop3uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop3uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop3uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -417,7 +522,7 @@ func TestSchemaChange(t *testing.T) {
 			// Issue a complete and wait for successful completion. drop4 is non-conflicting and should be able to proceed
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, drop4uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop4uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop4uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop4uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -427,20 +532,20 @@ func TestSchemaChange(t *testing.T) {
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("t1drop unblocked", func(t *testing.T) {
 			// t1drop should now be unblocked!
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, t1Name, false)
 		})
 		t.Run("revert t1 drop", func(t *testing.T) {
 			revertDrop3uuid := testRevertMigration(t, drop1uuid, ddlStrategy+" -allow-concurrent", "vtgate", "", true)
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertDrop3uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertDrop3uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertDrop3uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, t1Name, true)
@@ -455,7 +560,7 @@ func TestSchemaChange(t *testing.T) {
 
 		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -postpone-completion", "vtgate", "", true)
 		t.Run("expect t1 revert migration to run", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
@@ -464,6 +569,14 @@ func TestSchemaChange(t *testing.T) {
 			time.Sleep(5 * time.Second)
 			// drop1 migration should block. It can run concurrently to t1, but conflicts on table name
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
+		})
+		t.Run("t3 ready to complete", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, drop1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				readyToComplete := row.AsInt64("ready_to_complete", 0)
+				assert.Equal(t, int64(1), readyToComplete)
+			}
 		})
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
@@ -476,8 +589,9 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
-			time.Sleep(2 * time.Second)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
 			// t1 should be still running!
@@ -485,7 +599,7 @@ func TestSchemaChange(t *testing.T) {
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -499,11 +613,12 @@ func TestSchemaChange(t *testing.T) {
 		t.Run("start and fail migration", func(t *testing.T) {
 			executedUUID := testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtctl", "", "", true) // skip wait
 			require.Equal(t, uuid, executedUUID)
-			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-			time.Sleep(2 * time.Second)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
 		})
 
 		// now, we submit the exact same migratoin again: same UUID, same migration context.
@@ -512,7 +627,7 @@ func TestSchemaChange(t *testing.T) {
 			require.Equal(t, uuid, executedUUID)
 
 			// expect it to complete
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
@@ -564,7 +679,7 @@ func testOnlineDDLStatement(t *testing.T, ddlStatement string, ddlStrategy strin
 	fmt.Printf("<%s>\n", uuid)
 
 	if !strategySetting.Strategy.IsDirect() && !skipWait {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 

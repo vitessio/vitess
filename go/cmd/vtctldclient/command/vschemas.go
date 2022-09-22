@@ -32,17 +32,19 @@ import (
 var (
 	// GetVSchema makes a GetVSchema gRPC call to a vtctld.
 	GetVSchema = &cobra.Command{
-		Use:  "GetVSchema keyspace",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetVSchema,
+		Use:                   "GetVSchema <keyspace>",
+		Short:                 "Prints a JSON representation of a keyspace's topo record.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetVSchema,
 	}
 	// ApplyVSchema makes an ApplyVSchema gRPC call to a vtctld.
 	ApplyVSchema = &cobra.Command{
-		Use:                   "ApplyVSchema {-vschema=<vschema> || -vschema-file=<vschema file> || -sql=<sql> || -sql-file=<sql file>} [-cells=c1,c2,...] [-skip-rebuild] [-dry-run] <keyspace>",
-		Args:                  cobra.ExactArgs(1),
-		DisableFlagsInUseLine: true,
-		RunE:                  commandApplyVSchema,
+		Use:                   "ApplyVSchema {--vschema=<vschema> || --vschema-file=<vschema file> || --sql=<sql> || --sql-file=<sql file>} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run] <keyspace>",
 		Short:                 "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandApplyVSchema,
 	}
 )
 
@@ -97,12 +99,12 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 			schema = []byte(applyVSchemaOptions.VSchema)
 		}
 
-		var vs *vschemapb.Keyspace
-		err = json2.Unmarshal(schema, vs)
+		var vs vschemapb.Keyspace
+		err = json2.Unmarshal(schema, &vs)
 		if err != nil {
 			return err
 		}
-		req.VSchema = vs
+		req.VSchema = &vs
 	}
 
 	cli.FinishedParsing(cmd)
@@ -142,13 +144,13 @@ func commandGetVSchema(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema-file", "", "VSchema File")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQL, "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQLFile, "sql-file", "", "A file containing VSchema DDL SQL")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema to apply, in JSON form.")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema-file", "", "Path to a file containing the vschema to apply, in JSON form.")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQL, "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`.")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQLFile, "sql-file", "", "Path to a file containing a VSchema DDL SQL.")
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.DryRun, "dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
-	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "If set, do no rebuild the SrvSchema objects.")
-	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
+	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvSchema objects.")
+	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "Limits the rebuild to the specified cells, after application. Ignored if --skip-rebuild is set.")
 	Root.AddCommand(ApplyVSchema)
 
 	Root.AddCommand(GetVSchema)

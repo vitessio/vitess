@@ -20,9 +20,9 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/key"
 
@@ -35,8 +35,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildSelectPlan(query string) selectPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildSelectPlan(query string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		sel := stmt.(*sqlparser.Select)
 		if sel.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
@@ -47,7 +47,7 @@ func buildSelectPlan(query string) selectPlanner {
 			return nil, err
 		}
 		if p != nil {
-			return p, nil
+			return newPlanResult(p), nil
 		}
 
 		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
@@ -70,10 +70,21 @@ func buildSelectPlan(query string) selectPlanner {
 			// by transforming the predicates to CNF, the planner will sometimes find better plans
 			primitive := rewriteToCNFAndReplan(stmt, getPlan)
 			if primitive != nil {
-				return primitive, nil
+				return newPlanResult(primitive), nil
 			}
 		}
-		return plan.Primitive(), nil
+		primitive := plan.Primitive()
+		if rb, ok := primitive.(*engine.Route); ok {
+			// this is done because engine.Route doesn't handle the empty result well
+			// if it doesn't find a shard to send the query to.
+			// All other engine primitives can handle this, so we only need it when
+			// Route is the last (and only) instruction before the user sees a result
+			if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
+				rb.NoRoutesSpecialHandling = true
+			}
+		}
+
+		return newPlanResult(primitive), nil
 	}
 }
 
@@ -190,12 +201,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 
 	if rb, ok := pb.plan.(*route); ok {
 		// TODO(sougou): this can probably be improved.
-		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+		directives := sel.Comments.Directives()
 		rb.eroute.QueryTimeout = queryTimeout(directives)
 		if rb.eroute.TargetDestination != nil {
 			return errors.New("unsupported: SELECT with a target destination")
 		}
-
 		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
 			rb.eroute.ScatterErrorsAsWarnings = true
 		}
@@ -291,10 +301,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.Limit = nil
 
 	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name:  sqlparser.NewColIdent("count"),
-			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-		},
+		Expr: &sqlparser.CountStar{},
 	}}
 	if sel2.GroupBy == nil && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
@@ -309,7 +316,7 @@ func buildSQLCalcFoundRowsPlan(
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
 					Expr: &sqlparser.DerivedTable{Select: sel2},
-					As:   sqlparser.NewTableIdent("t"),
+					As:   sqlparser.NewIdentifierCS("t"),
 				},
 			},
 		}
@@ -339,15 +346,28 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 
 	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
 	cols := make([]string, len(sel.SelectExprs))
+	var lockFunctions []*engine.LockFunc
 	for i, e := range sel.SelectExprs {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, nil
 		}
 		var err error
-		if sqlparser.IsLockingFunc(expr.Expr) {
-			// if we are using any locking functions, we bail out here and send the whole query to a single destination
-			return buildLockingPrimitive(sel, vschema)
+		lFunc, isLFunc := expr.Expr.(*sqlparser.LockingFunc)
+		if isLFunc {
+			elem := &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc)}
+			if lFunc.Name != nil {
+				n, err := evalengine.Translate(lFunc.Name, nil)
+				if err != nil {
+					return nil, err
+				}
+				elem.Name = n
+			}
+			lockFunctions = append(lockFunctions, elem)
+			continue
+		}
+		if len(lockFunctions) > 0 {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lock function and other expression in same select query")
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
@@ -358,6 +378,9 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			cols[i] = sqlparser.String(expr.Expr)
 		}
 	}
+	if len(lockFunctions) > 0 {
+		return buildLockingPrimitive(sel, vschema, lockFunctions)
+	}
 	return &engine.Projection{
 		Exprs: exprs,
 		Cols:  cols,
@@ -365,7 +388,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 	}, nil
 }
 
-func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, lockFunctions []*engine.LockFunc) (engine.Primitive, error) {
 	ks, err := vschema.FirstSortedKeyspace()
 	if err != nil {
 		return nil, err
@@ -374,8 +397,8 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (
 	return &engine.Lock{
 		Keyspace:          ks,
 		TargetDestination: key.DestinationKeyspaceID{0},
-		Query:             sqlparser.String(sel),
 		FieldQuery:        buf.String(),
+		LockFunctions:     lockFunctions,
 	}, nil
 }
 

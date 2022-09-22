@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -262,58 +264,58 @@ func TestExtractMysqlComment(t *testing.T) {
 func TestExtractCommentDirectives(t *testing.T) {
 	var testCases = []struct {
 		input string
-		vals  CommentDirectives
+		vals  map[string]string
 	}{{
 		input: "",
 		vals:  nil,
 	}, {
 		input: "/* not a vt comment */",
-		vals:  nil,
+		vals:  map[string]string{},
 	}, {
 		input: "/*vt+ */",
-		vals:  CommentDirectives{},
+		vals:  map[string]string{},
 	}, {
 		input: "/*vt+ SINGLE_OPTION */",
-		vals: CommentDirectives{
-			"SINGLE_OPTION": true,
+		vals: map[string]string{
+			"single_option": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT TWO_OPT */",
-		vals: CommentDirectives{
-			"ONE_OPT": true,
-			"TWO_OPT": true,
+		vals: map[string]string{
+			"one_opt": "true",
+			"two_opt": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT */ /* other comment */ /*vt+ TWO_OPT */",
-		vals: CommentDirectives{
-			"ONE_OPT": true,
-			"TWO_OPT": true,
+		vals: map[string]string{
+			"one_opt": "true",
+			"two_opt": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=abc TWO_OPT=def */",
-		vals: CommentDirectives{
-			"ONE_OPT": "abc",
-			"TWO_OPT": "def",
+		vals: map[string]string{
+			"one_opt": "abc",
+			"two_opt": "def",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=true TWO_OPT=false */",
-		vals: CommentDirectives{
-			"ONE_OPT": true,
-			"TWO_OPT": false,
+		vals: map[string]string{
+			"one_opt": "true",
+			"two_opt": "false",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=true TWO_OPT=\"false\" */",
-		vals: CommentDirectives{
-			"ONE_OPT": true,
-			"TWO_OPT": "\"false\"",
+		vals: map[string]string{
+			"one_opt": "true",
+			"two_opt": "\"false\"",
 		},
 	}, {
 		input: "/*vt+ RANGE_OPT=[a:b] ANOTHER ANOTHER_WITH_VALEQ=val= AND_ONE_WITH_EQ== */",
-		vals: CommentDirectives{
-			"RANGE_OPT":          "[a:b]",
-			"ANOTHER":            true,
-			"ANOTHER_WITH_VALEQ": "val=",
-			"AND_ONE_WITH_EQ":    "=",
+		vals: map[string]string{
+			"range_opt":          "[a:b]",
+			"another":            "true",
+			"another_with_valeq": "val=",
+			"and_one_with_eq":    "=",
 		},
 	}}
 
@@ -333,7 +335,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 			}
 			for _, sql := range sqls {
 				t.Run(sql, func(t *testing.T) {
-					var comments Comments
+					var comments *ParsedComments
 					stmt, _ := Parse(sql)
 					switch s := stmt.(type) {
 					case *Select:
@@ -357,48 +359,35 @@ func TestExtractCommentDirectives(t *testing.T) {
 					default:
 						t.Errorf("Unexpected statement type %+v", s)
 					}
-					vals := ExtractCommentDirectives(comments)
 
-					if !reflect.DeepEqual(vals, testCase.vals) {
-						t.Errorf("test input: '%v', got vals:\n%+v, want\n%+v", testCase.input, vals, testCase.vals)
+					vals := comments.Directives()
+					if vals == nil {
+						require.Nil(t, vals)
+						return
+					}
+					if !reflect.DeepEqual(vals.m, testCase.vals) {
+						t.Errorf("test input: '%v', got vals %T:\n%+v, want %T\n%+v", testCase.input, vals, vals, testCase.vals, testCase.vals)
 					}
 				})
 			}
 		})
 	}
 
-	d := CommentDirectives{
-		"ONE_OPT": true,
-		"TWO_OPT": false,
-		"three":   1,
-		"four":    2,
-		"five":    0,
+	d := &CommentDirectives{m: map[string]string{
+		"one_opt": "true",
+		"two_opt": "false",
+		"three":   "1",
+		"four":    "2",
+		"five":    "0",
 		"six":     "true",
-	}
+	}}
 
-	if !d.IsSet("ONE_OPT") {
-		t.Errorf("d.IsSet(ONE_OPT) should be true")
-	}
-
-	if d.IsSet("TWO_OPT") {
-		t.Errorf("d.IsSet(TWO_OPT) should be false")
-	}
-
-	if !d.IsSet("three") {
-		t.Errorf("d.IsSet(three) should be true")
-	}
-
-	if d.IsSet("four") {
-		t.Errorf("d.IsSet(four) should be false")
-	}
-
-	if d.IsSet("five") {
-		t.Errorf("d.IsSet(five) should be false")
-	}
-
-	if d.IsSet("six") {
-		t.Errorf("d.IsSet(six) should be false")
-	}
+	assert.True(t, d.IsSet("ONE_OPT"), "d.IsSet(ONE_OPT)")
+	assert.False(t, d.IsSet("TWO_OPT"), "d.IsSet(TWO_OPT)")
+	assert.True(t, d.IsSet("three"), "d.IsSet(three)")
+	assert.False(t, d.IsSet("four"), "d.IsSet(four)")
+	assert.False(t, d.IsSet("five"), "d.IsSet(five)")
+	assert.True(t, d.IsSet("six"), "d.IsSet(six)")
 }
 
 func TestSkipQueryPlanCacheDirective(t *testing.T) {

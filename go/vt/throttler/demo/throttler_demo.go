@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"math/rand"
 	"net/http"
@@ -25,9 +26,11 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
@@ -37,8 +40,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // This file contains a demo binary that demonstrates how the resharding
@@ -103,9 +104,8 @@ type replica struct {
 	wg       sync.WaitGroup
 }
 
-func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration) *replica {
+func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server) *replica {
 	t := &testing.T{}
-	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	fakeTablet := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
@@ -213,28 +213,30 @@ func (r *replica) stop() {
 type client struct {
 	primary *primary
 
-	healthCheck discovery.LegacyHealthCheck
+	healthCheck discovery.HealthCheck
 	throttler   *throttler.Throttler
 
-	stopChan chan struct{}
-	wg       sync.WaitGroup
+	stopChan      chan struct{}
+	wg            sync.WaitGroup
+	healthcheckCh chan *discovery.TabletHealth
 }
 
-func newClient(primary *primary, replica *replica) *client {
+func newClient(primary *primary, replica *replica, ts *topo.Server) *client {
 	t, err := throttler.NewThrottler("client", "TPS", 1, throttler.MaxRateModuleDisabled, 5 /* seconds */)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewLegacyHealthCheck(5*time.Second, 1*time.Minute)
+	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "")
 	c := &client{
 		primary:     primary,
 		healthCheck: healthCheck,
 		throttler:   t,
 		stopChan:    make(chan struct{}),
 	}
-	c.healthCheck.SetListener(c, false /* sendDownEvents */)
-	c.healthCheck.AddTablet(replica.fakeTablet.Tablet, "name")
+	healthcheckCh := c.healthCheck.Subscribe()
+	c.healthcheckCh = healthcheckCh
+	c.healthCheck.AddTablet(replica.fakeTablet.Tablet)
 	return c
 }
 
@@ -250,6 +252,8 @@ func (c *client) loop() {
 		select {
 		case <-c.stopChan:
 			return
+		case th := <-c.healthcheckCh:
+			c.StatsUpdate(th)
 		default:
 		}
 
@@ -273,10 +277,9 @@ func (c *client) stop() {
 	c.throttler.Close()
 }
 
-// StatsUpdate implements discovery.LegacyHealthCheckStatsListener.
-// It gets called by the healthCheck instance every time a tablet broadcasts
+// StatsUpdate gets called by the healthCheck instance every time a tablet broadcasts
 // a health update.
-func (c *client) StatsUpdate(ts *discovery.LegacyTabletStats) {
+func (c *client) StatsUpdate(ts *discovery.TabletHealth) {
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 		return
@@ -286,7 +289,7 @@ func (c *client) StatsUpdate(ts *discovery.LegacyTabletStats) {
 }
 
 func main() {
-	flag.Parse()
+	servenv.ParseFlags("throttler_demo")
 
 	go servenv.RunDefault()
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -294,9 +297,10 @@ func main() {
 	})
 
 	log.Infof("start rate set to: %v", *rate)
-	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration)
+	ts := memorytopo.NewServer("cell1")
+	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration, ts)
 	primary := &primary{replica: replica}
-	client := newClient(primary, replica)
+	client := newClient(primary, replica, ts)
 	client.run()
 
 	time.Sleep(*duration)
@@ -306,4 +310,7 @@ func main() {
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
 }

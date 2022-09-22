@@ -25,8 +25,9 @@ package replicationdata;
 // flavor-specific command and parsed into a Position and fields.
 message Status {
   string position = 1;
-  bool io_thread_running = 2;
-  bool sql_thread_running = 3;
+  // 2 used to be io_thread_running. Instead io_state is used.
+  // 3 used to be sql_thread_running. Instead sql_state is used.
+  reserved 2, 3;
   uint32 replication_lag_seconds = 4;
   string source_host = 5;
   int32 source_port = 6;
@@ -34,9 +35,21 @@ message Status {
   // RelayLogPosition will be empty for flavors that do not support returning the full GTIDSet from the relay log, such as MariaDB.
   string relay_log_position = 8;
   string file_position = 9;
-  string file_relay_log_position = 10;
+  string relay_log_source_binlog_equivalent_position = 10;
   uint32 source_server_id = 11;
   string source_uuid = 12;
+  int32 io_state = 13;
+  string last_io_error = 14;
+  int32 sql_state = 15;
+  string last_sql_error = 16;
+  string relay_log_file_position = 17;
+  string source_user = 18;
+  uint32 sql_delay = 19;
+  bool auto_position = 20;
+  bool using_gtid = 21;
+  bool has_replication_filters = 22;
+  bool ssl_allowed = 23;
+  bool replication_lag_unknown = 24;
 }
 
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
@@ -56,4 +69,28 @@ enum StopReplicationMode {
 message PrimaryStatus {
   string position = 1;
   string file_position = 2;
+}
+
+// FullStatus contains the full status of MySQL including the replication information, semi-sync information, GTID information among others
+message FullStatus {
+  uint32 server_id = 1;
+  string server_uuid = 2;
+  replicationdata.Status replication_status = 3;
+  replicationdata.PrimaryStatus primary_status = 4;
+  string gtid_purged = 5;
+  string version = 6;
+  string version_comment = 7;
+  bool read_only = 8;
+  string gtid_mode = 9;
+  string binlog_format = 10;
+  string binlog_row_image = 11;
+  bool log_bin_enabled = 12;
+  bool log_replica_updates = 13;
+  bool semi_sync_primary_enabled = 14;
+  bool semi_sync_replica_enabled = 15;
+  bool semi_sync_primary_status = 16;
+  bool semi_sync_replica_status = 17;
+  uint32 semi_sync_primary_clients = 18;
+  uint64 semi_sync_primary_timeout = 19;
+  uint32 semi_sync_wait_for_replica_count = 20;
 }

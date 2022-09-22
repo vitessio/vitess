@@ -218,11 +218,7 @@ func PrepareAST(
 func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) (*RewriteASTResult, error) {
 	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	setRewriter := &setNormalizer{}
-	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
-	if setRewriter.err != nil {
-		return nil, setRewriter.err
-	}
+	result := Rewrite(in, er.rewrite, nil)
 
 	out, ok := result.(Statement)
 	if !ok {
@@ -280,19 +276,19 @@ func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysV
 }
 
 const (
-	//LastInsertIDName is a reserved bind var name for last_insert_id()
+	// LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
 
-	//DBVarName is a reserved bind var name for database()
+	// DBVarName is a reserved bind var name for database()
 	DBVarName = "__vtdbname"
 
-	//FoundRowsName is a reserved bind var name for found_rows()
+	// FoundRowsName is a reserved bind var name for found_rows()
 	FoundRowsName = "__vtfrows"
 
-	//RowCountName is a reserved bind var name for row_count()
+	// RowCountName is a reserved bind var name for row_count()
 	RowCountName = "__vtrcount"
 
-	//UserDefinedVariableName is what we prepend bind var names for user defined variables
+	// UserDefinedVariableName is what we prepend bind var names for user defined variables
 	UserDefinedVariableName = "__vtudv"
 )
 
@@ -311,7 +307,7 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
 	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
-		newComments, err := supportOptimizerHint.GetComments().AddQueryHint(er.setVarComment)
+		newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
 		if err != nil {
 			er.err = err
 			return false
@@ -338,7 +334,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 					return false
 				}
 				if innerBindVarNeeds.HasRewrites() {
-					aliasedExpr.As = NewColIdent(buf.String())
+					aliasedExpr.As = NewIdentifierCI(buf.String())
 				}
 				er.bindVars.MergeWith(innerBindVarNeeds)
 			}
@@ -354,17 +350,22 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
-	case *ColName:
-		switch node.Name.at {
-		case SingleAt:
+	case *Variable:
+		// Iff we are in SET, we want to change the scope of variables if a modifier has been set
+		// and only on the lhs of the assignment:
+		// set session sql_mode = @someElse
+		// here we need to change the scope of `sql_mode` and not of `@someElse`
+		if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
+			break
+		}
+		switch node.Scope {
+		case VariableScope:
 			er.udvRewrite(cursor, node)
-		case DoubleAt:
+		case GlobalScope, SessionScope:
 			er.sysVarRewrite(cursor, node)
 		}
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
-	case *JoinCondition:
-		er.rewriteJoinCondition(cursor, node)
 	case *NotExpr:
 		switch inner := node.Expr.(type) {
 		case *ComparisonExpr:
@@ -397,7 +398,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 			break
 		}
 		if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
-			aliasTableName.Qualifier = NewTableIdent(er.keyspace)
+			aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
 			node.Expr = aliasTableName
 			cursor.Replace(node)
 		}
@@ -408,6 +409,8 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 				er.bindVars.AddSysVar(sysVar)
 			}
 		}
+	case *ExistsExpr:
+		er.existsRewrite(cursor, node)
 	}
 	return true
 }
@@ -443,49 +446,7 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 	return false, i
 }
 
-func (er *astRewriter) rewriteJoinCondition(cursor *Cursor, node *JoinCondition) {
-	if node.Using != nil && !er.hasStarInSelect {
-		joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
-		if !ok {
-			// this is not possible with the current AST
-			return
-		}
-		leftTable, leftOk := joinTableExpr.LeftExpr.(*AliasedTableExpr)
-		rightTable, rightOk := joinTableExpr.RightExpr.(*AliasedTableExpr)
-		if !(leftOk && rightOk) {
-			// we only deal with simple FROM A JOIN B USING queries at the moment
-			return
-		}
-		lft, err := leftTable.TableName()
-		if err != nil {
-			er.err = err
-			return
-		}
-		rgt, err := rightTable.TableName()
-		if err != nil {
-			er.err = err
-			return
-		}
-		newCondition := &JoinCondition{}
-		for _, colIdent := range node.Using {
-			lftCol := NewColNameWithQualifier(colIdent.String(), lft)
-			rgtCol := NewColNameWithQualifier(colIdent.String(), rgt)
-			cmp := &ComparisonExpr{
-				Operator: EqualOp,
-				Left:     lftCol,
-				Right:    rgtCol,
-			}
-			if newCondition.On == nil {
-				newCondition.On = cmp
-			} else {
-				newCondition.On = &AndExpr{Left: newCondition.On, Right: cmp}
-			}
-		}
-		cursor.Replace(newCondition)
-	}
-}
-
-func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
+func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
 	lowered := node.Name.Lowered()
 
 	var found bool
@@ -520,7 +481,7 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 	}
 }
 
-func (er *astRewriter) udvRewrite(cursor *Cursor, node *ColName) {
+func (er *astRewriter) udvRewrite(cursor *Cursor, node *Variable) {
 	udv := strings.ToLower(node.Name.CompliantName())
 	cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
 	er.bindVars.AddUserDefVar(udv)
@@ -550,6 +511,9 @@ func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 }
 
 func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
+	if _, isExists := cursor.Parent().(*ExistsExpr); isExists {
+		return
+	}
 	sel, isSimpleSelect := subquery.Select.(*Select)
 	if !isSimpleSelect {
 		return
@@ -599,6 +563,34 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	}
 
 	cursor.Replace(rewritten)
+}
+
+func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
+	switch node := node.Subquery.Select.(type) {
+	case *Select:
+		if node.Limit == nil {
+			node.Limit = &Limit{}
+		}
+		node.Limit.Rowcount = NewIntLiteral("1")
+
+		if node.Having != nil {
+			// If the query has HAVING, we can't take any shortcuts
+			return
+		}
+
+		if len(node.GroupBy) == 0 && node.SelectExprs.AllAggregation() {
+			// in these situations, we are guaranteed to always get a non-empty result,
+			// so we can replace the EXISTS with a literal true
+			cursor.Replace(BoolVal(true))
+		}
+
+		// If we are not doing HAVING, we can safely replace all select expressions with a
+		// single `1` and remove any grouping
+		node.SelectExprs = SelectExprs{
+			&AliasedExpr{Expr: NewIntLiteral("1")},
+		}
+		node.GroupBy = nil
+	}
 }
 
 func bindVarExpression(name string) Expr {

@@ -22,6 +22,10 @@ package vtexplain
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
+
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/topo"
@@ -30,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -44,49 +49,41 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-var (
-	explainTopo    *ExplainTopo
-	vtgateExecutor *vtgate.Executor
-	healthCheck    *discovery.FakeHealthCheck
+func (vte *VTExplain) initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
+	vte.explainTopo = &ExplainTopo{NumShards: opts.NumShards}
+	vte.explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
+	vte.healthCheck = discovery.NewFakeHealthCheck(nil)
 
-	vtgateSession = &vtgatepb.Session{
-		TargetString: "",
-		Autocommit:   true,
-	}
-)
+	resolver := vte.newFakeResolver(opts, vte.explainTopo, vtexplainCell)
 
-func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
-	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
-	explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
-	healthCheck = discovery.NewFakeHealthCheck(nil)
-
-	resolver := newFakeResolver(opts, explainTopo, vtexplainCell)
-
-	err := buildTopology(opts, vSchemaStr, ksShardMapStr, opts.NumShards)
+	err := vte.buildTopology(opts, vSchemaStr, ksShardMapStr, opts.NumShards)
 	if err != nil {
 		return err
 	}
 
-	vtgateSession.TargetString = opts.Target
+	vte.vtgateSession.TargetString = opts.Target
 
 	if opts.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
-		if vtgateSession.Options == nil {
-			vtgateSession.Options = &querypb.ExecuteOptions{}
+		if vte.vtgateSession.Options == nil {
+			vte.vtgateSession.Options = &querypb.ExecuteOptions{}
 		}
-		vtgateSession.Options.PlannerVersion = opts.PlannerVersion
+		vte.vtgateSession.Options.PlannerVersion = opts.PlannerVersion
 	}
 
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig, schemaTracker, false /*no-scatter*/)
+	vte.vtgateExecutor = vtgate.NewExecutor(context.Background(), vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, cache.DefaultConfig, schemaTracker, false, opts.PlannerVersion)
+
+	queryLogBufferSize := 10
+	vtgate.QueryLogger = streamlog.New("VTGate", queryLogBufferSize)
 
 	return nil
 }
 
-func newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
+func (vte *VTExplain) newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
-	gw := vtgate.NewTabletGateway(ctx, healthCheck, serv, cell)
-	_ = gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	gw := vtgate.NewTabletGateway(ctx, vte.healthCheck, serv, cell)
+	_ = gw.WaitForTablets([]topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
 	if opts.ExecutionMode == ModeTwoPC {
@@ -98,9 +95,9 @@ func newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Re
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }
 
-func buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int) error {
-	explainTopo.Lock.Lock()
-	defer explainTopo.Lock.Unlock()
+func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int) error {
+	vte.explainTopo.Lock.Lock()
+	defer vte.explainTopo.Lock.Unlock()
 
 	// We have to use proto's custom json loader so it can
 	// handle string->enum conversion correctly.
@@ -110,32 +107,38 @@ func buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numSh
 	if err != nil {
 		return err
 	}
-	explainTopo.Keyspaces = srvVSchema.Keyspaces
+	schema := vindexes.BuildVSchema(&srvVSchema)
+	for ks, ksSchema := range schema.Keyspaces {
+		if ksSchema.Error != nil {
+			return vterrors.Wrapf(ksSchema.Error, "vschema failed to load on keyspace [%s]", ks)
+		}
+	}
+	vte.explainTopo.Keyspaces = srvVSchema.Keyspaces
 
 	ksShardMap, err := getKeyspaceShardMap(ksShardMapStr)
 	if err != nil {
 		return err
 	}
 
-	explainTopo.TabletConns = make(map[string]*explainTablet)
-	explainTopo.KeyspaceShards = make(map[string]map[string]*topodatapb.ShardReference)
-	for ks, vschema := range explainTopo.Keyspaces {
+	vte.explainTopo.TabletConns = make(map[string]*explainTablet)
+	vte.explainTopo.KeyspaceShards = make(map[string]map[string]*topodatapb.ShardReference)
+	for ks, vschema := range vte.explainTopo.Keyspaces {
 		shards, err := getShardRanges(ks, vschema, ksShardMap, numShardsPerKeyspace)
 		if err != nil {
 			return err
 		}
 
-		explainTopo.KeyspaceShards[ks] = make(map[string]*topodatapb.ShardReference)
+		vte.explainTopo.KeyspaceShards[ks] = make(map[string]*topodatapb.ShardReference)
 
 		for _, shard := range shards {
 			hostname := fmt.Sprintf("%s/%s", ks, shard.Name)
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
 
-			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return newTablet(opts, t)
+			tablet := vte.healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
+				return vte.newTablet(opts, t)
 			})
-			explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
-			explainTopo.KeyspaceShards[ks][shard.Name] = shard
+			vte.explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
+			vte.explainTopo.KeyspaceShards[ks][shard.Name] = shard
 		}
 	}
 
@@ -192,14 +195,18 @@ func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[strin
 	return shards, nil
 }
 
-func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
+func (vte *VTExplain) vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
+	// This method will sort the shard session lexicographically.
+	// This will ensure that the commit/rollback order is predictable.
+	vte.sortShardSession()
+
 	// use the plan cache to get the set of plans used for this query, then
 	// clear afterwards for the next run
-	planCache := vtgateExecutor.Plans()
+	planCache := vte.vtgateExecutor.Plans()
 
-	_, err := vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vtgateSession), sql, nil)
+	_, err := vte.vtgateExecutor.Execute(context.Background(), "VtexplainExecute", vtgate.NewSafeSession(vte.vtgateSession), sql, nil)
 	if err != nil {
-		for _, tc := range explainTopo.TabletConns {
+		for _, tc := range vte.explainTopo.TabletConns {
 			tc.tabletQueries = nil
 			tc.mysqlQueries = nil
 		}
@@ -209,7 +216,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	}
 
 	var plans []*engine.Plan
-	planCache.ForEach(func(value interface{}) bool {
+	planCache.ForEach(func(value any) bool {
 		plan := value.(*engine.Plan)
 		plan.ExecTime = 0
 		plans = append(plans, plan)
@@ -218,7 +225,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	planCache.Clear()
 
 	tabletActions := make(map[string]*TabletActions)
-	for shard, tc := range explainTopo.TabletConns {
+	for shard, tc := range vte.explainTopo.TabletConns {
 		if len(tc.tabletQueries) == 0 {
 			continue
 		}
@@ -238,4 +245,15 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	}
 
 	return plans, tabletActions, nil
+}
+
+func (vte *VTExplain) sortShardSession() {
+	ss := vte.vtgateSession.ShardSessions
+
+	sort.Slice(ss, func(i, j int) bool {
+		if ss[i].Target.Keyspace != ss[j].Target.Keyspace {
+			return strings.Compare(ss[i].Target.Keyspace, ss[j].Target.Keyspace) <= 0
+		}
+		return strings.Compare(ss[i].Target.Shard, ss[j].Target.Shard) <= 0
+	})
 }

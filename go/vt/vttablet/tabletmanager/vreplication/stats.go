@@ -44,7 +44,7 @@ func StatusSummary() (maxReplicationLagSeconds int64, binlogPlayersCount int32) 
 
 // AddStatusPart adds the vreplication status to the status page.
 func AddStatusPart() {
-	servenv.AddStatusPart("VReplication", vreplicationTemplate, func() interface{} {
+	servenv.AddStatusPart("VReplication", vreplicationTemplate, func() any {
 		return globalStats.status()
 	})
 }

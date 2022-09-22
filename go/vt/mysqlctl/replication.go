@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,7 +48,7 @@ func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error
 			return err
 		}
 
-		if status.ReplicationRunning() {
+		if status.Running() {
 			return nil
 		}
 		time.Sleep(time.Second)
@@ -97,6 +98,19 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
 
+// StartSQLThreadUntilAfter starts replication's SQL thread(s) until replication has come to `targetPos`, then it stops it
+func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	queries := []string{conn.StartSQLThreadUntilAfterCommand(targetPos)}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
+}
+
 // StopReplication stops replication.
 func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
@@ -123,6 +137,17 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	defer conn.Recycle()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopIOThreadCommand()})
+}
+
+// StopSQLThread stops a replica's SQL thread(s) only.
+func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSQLThreadCommand()})
 }
 
 // RestartReplication stops, resets and starts replication.
@@ -162,6 +187,33 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 		return 0, err
 	}
 	return int32(utemp), nil
+}
+
+// GetServerID returns mysql server id
+func (mysqld *Mysqld) GetServerID(ctx context.Context) (uint32, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.server_id")
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 {
+		return 0, errors.New("no server_id in mysql")
+	}
+	utemp, err := evalengine.ToUint64(qr.Rows[0][0])
+	if err != nil {
+		return 0, err
+	}
+	return uint32(utemp), nil
+}
+
+// GetServerUUID returns mysql server uuid
+func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Recycle()
+
+	return conn.GetServerUUID()
 }
 
 // IsReadOnly return true if the instance is read only
@@ -244,14 +296,6 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 			return nil
 		}
 
-		// Start the SQL Thread before waiting for position to be reached, since the replicas
-		// can only make forward progress if the SQL thread is started and we have already verified
-		// that the replica is not already as advanced as we want it to be
-		err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()})
-		if err != nil {
-			return err
-		}
-
 		// Find the query to run, run it.
 		query, err = conn.WaitUntilPositionCommand(ctx, targetPos)
 		if err != nil {
@@ -299,6 +343,17 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, e
 	return conn.ShowPrimaryStatus()
 }
 
+// GetGTIDPurged returns the gtid purged statuses
+func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (mysql.Position, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	defer conn.Recycle()
+
+	return conn.GetGTIDPurged()
+}
+
 // PrimaryPosition returns the primary replication position.
 func (mysqld *Mysqld) PrimaryPosition() (mysql.Position, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
@@ -341,6 +396,14 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if replicationStopBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
+	// Reset replication parameters commands makes the instance forget the source host port
+	// This is required because sometimes MySQL gets stuck due to improper initialization of
+	// master info structure or related failures and throws errors like
+	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
+	// These errors can only be resolved by resetting the replication parameters, otherwise START SLAVE fails.
+	// Therefore, we have elected to always reset the replication parameters whenever we try to set the source host port
+	// Since there is no real overhead, but it makes this function robust enough to also handle failures like these.
+	cmds = append(cmds, conn.ResetReplicationParametersCommands()...)
 	// If flag value is same as default, check deprecated flag value
 	if *replicationConnectRetry == 10*time.Second && *masterConnectRetry != *replicationConnectRetry {
 		*replicationConnectRetry = *masterConnectRetry
@@ -362,6 +425,18 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 	defer conn.Recycle()
 
 	cmds := conn.ResetReplicationCommands()
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
+}
+
+// ResetReplicationParameters resets the replica replication parameters for this host.
+func (mysqld *Mysqld) ResetReplicationParameters(ctx context.Context) error {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
+	if connErr != nil {
+		return connErr
+	}
+	defer conn.Recycle()
+
+	cmds := conn.ResetReplicationParametersCommands()
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
@@ -468,6 +543,46 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 	return nil
 }
 
+// GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
+func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, string, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	if len(qr.Rows) != 1 {
+		return "", false, false, "", errors.New("unable to read global variables binlog_format, log_bin, log_slave_updates, gtid_mode, binlog_rowge")
+	}
+	res := qr.Named().Row()
+	binlogFormat, err := res.ToString("@@global.binlog_format")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	logBin, err := res.ToInt64("@@global.log_bin")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	logReplicaUpdates, err := res.ToInt64("@@global.log_slave_updates")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	binlogRowImage, err := res.ToString("@@global.binlog_row_image")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	return binlogFormat, logBin == 1, logReplicaUpdates == 1, binlogRowImage, nil
+}
+
+// GetGTIDMode gets the GTID mode for the server
+func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Recycle()
+
+	return conn.GetGTIDMode()
+}
+
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
@@ -501,6 +616,42 @@ func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
 	primary = (vars["rpl_semi_sync_master_enabled"] == "ON")
 	replica = (vars["rpl_semi_sync_slave_enabled"] == "ON")
 	return primary, replica
+}
+
+// SemiSyncStatus returns the current status of semi-sync for primary and replica.
+func (mysqld *Mysqld) SemiSyncStatus() (primary, replica bool) {
+	vars, err := mysqld.fetchStatuses(context.TODO(), "Rpl_semi_sync_%_status")
+	if err != nil {
+		return false, false
+	}
+	primary = vars["Rpl_semi_sync_master_status"] == "ON"
+	replica = vars["Rpl_semi_sync_slave_status"] == "ON"
+	return primary, replica
+}
+
+// SemiSyncClients returns the number of semi-sync clients for the primary.
+func (mysqld *Mysqld) SemiSyncClients() uint32 {
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'")
+	if err != nil {
+		return 0
+	}
+	if len(qr.Rows) != 1 {
+		return 0
+	}
+	countStr := qr.Rows[0][1].ToString()
+	count, _ := strconv.ParseUint(countStr, 10, 0)
+	return uint32(count)
+}
+
+// SemiSyncSettings returns the settings of semi-sync which includes the timeout and the number of replicas to wait for.
+func (mysqld *Mysqld) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
+	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%")
+	if err != nil {
+		return 0, 0
+	}
+	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 0)
+	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 0)
+	return timeout, uint32(numReplicasUint)
 }
 
 // SemiSyncReplicationStatus returns whether semi-sync is currently used by replication.

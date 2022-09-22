@@ -5,7 +5,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -189,7 +189,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "music, music_extra_`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
     "Inputs": [
       {
@@ -206,7 +206,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
         "Inputs": [
           {
@@ -234,5 +234,16 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_a",
+    "main.unsharded_auto",
+    "main.unsharded_b",
+    "user.music",
+    "user.music_extra",
+    "user.user",
+    "user.user_extra",
+    "user.user_metadata"
+  ]
 }

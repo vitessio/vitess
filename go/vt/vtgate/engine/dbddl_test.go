@@ -46,7 +46,7 @@ func TestDBDDLCreateExecute(t *testing.T) {
 
 	vc := &loggingVCursor{dbDDLPlugin: pluginName}
 
-	_, err := primitive.TryExecute(vc, nil, false)
+	_, err := primitive.TryExecute(context.Background(), vc, nil, false)
 	require.NoError(t, err)
 	require.True(t, plugin.createCalled)
 	require.False(t, plugin.dropCalled)
@@ -61,7 +61,7 @@ func TestDBDDLDropExecute(t *testing.T) {
 
 	vc := &loggingVCursor{dbDDLPlugin: pluginName, ksAvailable: false}
 
-	_, err := primitive.TryExecute(vc, nil, false)
+	_, err := primitive.TryExecute(context.Background(), vc, nil, false)
 	require.NoError(t, err)
 	require.False(t, plugin.createCalled)
 	require.True(t, plugin.dropCalled)
@@ -74,11 +74,11 @@ func TestDBDDLTimeout(t *testing.T) {
 
 	primitive := &DBDDL{name: "ks", create: true, queryTimeout: 100}
 	vc := &loggingVCursor{dbDDLPlugin: pluginName, shardErr: fmt.Errorf("db not available")}
-	_, err := primitive.TryExecute(vc, nil, false)
+	_, err := primitive.TryExecute(context.Background(), vc, nil, false)
 	assert.EqualError(t, err, "could not validate create database: destination not resolved")
 
 	primitive = &DBDDL{name: "ks", queryTimeout: 100}
 	vc = &loggingVCursor{dbDDLPlugin: pluginName, ksAvailable: true}
-	_, err = primitive.TryExecute(vc, nil, false)
+	_, err = primitive.TryExecute(context.Background(), vc, nil, false)
 	assert.EqualError(t, err, "could not validate drop database: keyspace still available in vschema")
 }

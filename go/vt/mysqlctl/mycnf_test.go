@@ -54,7 +54,7 @@ func TestMycnf(t *testing.T) {
 		return
 	}
 	mycnf := NewMycnf(uid, 0)
-	mycnf.path = MycnfPath
+	mycnf.Path = MycnfPath
 	mycnf, err = ReadMycnf(mycnf)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
@@ -79,7 +79,7 @@ func TestMycnf(t *testing.T) {
 // 4. \rm $VTROOT/vthook/make_mycnf
 // 5. Add No Prefix back
 
-//nolint
+// nolint
 func NoTestMycnfHook(t *testing.T) {
 	uid := uint32(11111)
 	cnf := NewMycnf(uid, 6802)
@@ -105,13 +105,13 @@ func NoTestMycnfHook(t *testing.T) {
 	if err != nil {
 		t.Errorf("err: %v", err)
 	}
-	_, err = os.ReadFile(cnf.path)
+	_, err = os.ReadFile(cnf.Path)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 		return
 	}
 	mycnf := NewMycnf(uid, 0)
-	mycnf.path = cnf.path
+	mycnf.Path = cnf.Path
 	mycnf, err = ReadMycnf(mycnf)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)

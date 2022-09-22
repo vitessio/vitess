@@ -19,16 +19,15 @@ package unsharded
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -65,14 +64,14 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 		if err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-vschema_ddl_authorized_users", "%"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -97,72 +96,40 @@ func TestNewUnshardedTable(t *testing.T) {
 	defer conn.Close()
 
 	// ensuring our initial table "main" is in the schema
-	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[VARCHAR("dual")] [VARCHAR("main")]]`
-	require.Equal(t, want, got)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
+		100*time.Millisecond,
+		3*time.Second,
+		"initial table list not complete")
 
 	// create a new table which is not part of the VSchema
-	exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
+	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("new_table_tracked")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"new_table_tracked not in vschema tables")
 
-	assertMatches(t, conn, "select id from new_table_tracked", `[]`)              // select
-	assertMatches(t, conn, "select id from new_table_tracked where id = 5", `[]`) // select
+	utils.AssertMatches(t, conn, "select id from new_table_tracked", `[]`)              // select
+	utils.AssertMatches(t, conn, "select id from new_table_tracked where id = 5", `[]`) // select
 	// DML on new table
 	// insert initial data ,update and delete for the new table
-	exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)
-	exec(t, conn, `update new_table_tracked set name = "newName1"`)
-	exec(t, conn, "delete from new_table_tracked where id = 0")
-	assertMatches(t, conn, `select * from new_table_tracked`, `[[INT64(1) VARCHAR("newName1")]]`)
+	utils.Exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)
+	utils.Exec(t, conn, `update new_table_tracked set name = "newName1"`)
+	utils.Exec(t, conn, "delete from new_table_tracked where id = 0")
+	utils.AssertMatches(t, conn, `select * from new_table_tracked`, `[[INT64(1) VARCHAR("newName1")]]`)
 
-	exec(t, conn, `drop table new_table_tracked`)
+	utils.Exec(t, conn, `drop table new_table_tracked`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"new_table_tracked not in vschema tables")
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := exec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
-}
-
-func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected string, r time.Duration, d time.Duration, failureMsg string) {
-	t.Helper()
-	timeout := time.After(d)
-	diff := "actual and expectation does not match"
-	for len(diff) > 0 {
-		select {
-		case <-timeout:
-			require.Fail(t, failureMsg, diff)
-		case <-time.After(r):
-			qr := exec(t, conn, query)
-			diff = cmp.Diff(expected,
-				fmt.Sprintf("%v", qr.Rows))
-		}
-
-	}
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err, "for query: "+query)
-	return qr
 }

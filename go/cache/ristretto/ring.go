@@ -77,7 +77,7 @@ func newRingBuffer(cons ringConsumer, capa int64) *ringBuffer {
 	// available to us (such as runtime_procPin()).
 	return &ringBuffer{
 		pool: &sync.Pool{
-			New: func() interface{} { return newRingStripe(cons, capa) },
+			New: func() any { return newRingStripe(cons, capa) },
 		},
 	}
 }

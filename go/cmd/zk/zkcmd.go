@@ -19,6 +19,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -32,8 +33,7 @@ import (
 	"syscall"
 	"time"
 
-	"context"
-
+	"github.com/spf13/pflag"
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"
 
@@ -42,6 +42,9 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/zk2topo"
 	"vitess.io/vitess/go/vt/vtctl"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var doc = `
@@ -137,13 +140,15 @@ var (
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, doc)
-	}
-	flag.Parse()
-	args := flag.Args()
+
+	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
+		Epilogue: func(w io.Writer) { fmt.Fprint(w, doc) },
+	})
+	_flag.Parse(fs)
+	args := _flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
 		exit.Return(1)
@@ -156,6 +161,7 @@ func main() {
 		log.Exitf("Unknown command %v", cmdName)
 	}
 	subFlags := flag.NewFlagSet(cmdName, flag.ExitOnError)
+	_flag.SetUsage(subFlags, _flag.UsageOptions{})
 
 	// Create a context for the command, cancel it if we get a signal.
 	ctx, cancel := context.WithCancel(context.Background())

@@ -29,11 +29,11 @@ import (
 //
 // For example:
 //
-//   type MyEvent struct {
-//     StatusUpdater
-//   }
-//   ev := &MyEvent{}
-//   event.DispatchUpdate(ev, "new status")
+//	type MyEvent struct {
+//	  StatusUpdater
+//	}
+//	ev := &MyEvent{}
+//	event.DispatchUpdate(ev, "new status")
 type StatusUpdater struct {
 	Status string
 
@@ -44,7 +44,7 @@ type StatusUpdater struct {
 
 // Update sets a new status and initializes the EventID if necessary.
 // This implements event.Updater.Update().
-func (su *StatusUpdater) Update(status interface{}) {
+func (su *StatusUpdater) Update(status any) {
 	su.Status = status.(string)
 
 	// initialize event ID

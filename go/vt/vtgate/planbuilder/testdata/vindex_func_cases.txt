@@ -26,7 +26,35 @@
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id, keyspace_id, range_start, range_end, hex_keyspace_id, shard from user_index where id = :id",
+  "Instructions": {
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "Fields": {
+      "hex_keyspace_id": "VARBINARY",
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY",
+      "range_end": "VARBINARY",
+      "range_start": "VARBINARY",
+      "shard": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user_index"
+  ]
+}
 
 # vindex func select *
 "select * from user_index where id = :id"
@@ -56,7 +84,35 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user_index where id = :id",
+  "Instructions": {
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "Fields": {
+      "hex_keyspace_id": "VARBINARY",
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY",
+      "range_end": "VARBINARY",
+      "range_start": "VARBINARY",
+      "shard": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user_index"
+  ]
+}
 
 # vindex func read with id repeated
 "select id, keyspace_id, id from user_index where id = :id"
@@ -79,7 +135,28 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id, keyspace_id, id from user_index where id = :id",
+  "Instructions": {
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      0
+    ],
+    "Fields": {
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user_index"
+  ]
+}
 
 # ambiguous vindex reference
 "select id, keyspace_id, id from hash_dup where id = :id"
@@ -107,7 +184,28 @@ Gen4 plan same as above
     "Vindex": "hash_dup"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
+  "Instructions": {
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      0
+    ],
+    "Fields": {
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "hash_dup"
+  },
+  "TablesUsed": [
+    "hash_dup"
+  ]
+}
 
 # You can even join with a vindexFunc primitive
 "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id"
@@ -117,7 +215,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -152,7 +250,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -162,7 +260,7 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "user_index.keyspace_id": "VARBINARY"
+          "keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -179,7 +277,11 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user_index"
+  ]
 }
 
 # Join vindexFunc on RHS
@@ -190,7 +292,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-1",
+    "JoinColumnIndexes": "R:0,L:0",
     "TableName": "unsharded_",
     "Inputs": [
       {
@@ -225,7 +327,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-1",
+    "JoinColumnIndexes": "R:0,L:0",
     "TableName": "unsharded_",
     "Inputs": [
       {
@@ -246,13 +348,17 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "user_index.keyspace_id": "VARBINARY"
+          "keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user_index"
+  ]
 }
 
 # Join with vindexFunc on a column of it, already present in select list
@@ -263,7 +369,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "JoinVars": {
       "user_index_id": 0
     },
@@ -303,7 +409,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "JoinVars": {
       "user_index_id": 0
     },
@@ -317,8 +423,8 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "user_index.id": "VARBINARY",
-          "user_index.keyspace_id": "VARBINARY"
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -335,7 +441,11 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user_index"
+  ]
 }
 
 # Join with vindexFunc on a column of it, already present at the end of the select list
@@ -346,7 +456,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "JoinVars": {
       "user_index_id": 1
     },
@@ -386,7 +496,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,-1,1",
+    "JoinColumnIndexes": "L:1,L:0,R:0",
     "JoinVars": {
       "user_index_id": 0
     },
@@ -400,8 +510,8 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "user_index.id": "VARBINARY",
-          "user_index.keyspace_id": "VARBINARY"
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -418,7 +528,11 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user_index"
+  ]
 }
 
 # Join with vindexFunc on a column of it, not present in select list
@@ -429,7 +543,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "user_index_id": 1
     },
@@ -469,7 +583,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,1",
+    "JoinColumnIndexes": "L:1,R:0",
     "JoinVars": {
       "user_index_id": 0
     },
@@ -483,8 +597,8 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "user_index.id": "VARBINARY",
-          "user_index.keyspace_id": "VARBINARY"
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -501,7 +615,11 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user_index"
+  ]
 }
 
 # Join with aliased table name
@@ -512,7 +630,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "ui_id": 1
     },
@@ -552,7 +670,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,1",
+    "JoinColumnIndexes": "L:1,R:0",
     "JoinVars": {
       "ui_id": 0
     },
@@ -566,8 +684,8 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "ui.id": "VARBINARY",
-          "ui.keyspace_id": "VARBINARY"
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -584,7 +702,11 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user_index"
+  ]
 }
 
 "select none from user_index where id = :id"

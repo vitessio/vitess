@@ -51,7 +51,7 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // a session context. It's only when we Execute() the primitive that we have that context.
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
-func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
+func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	if vschema.Destination() != nil {
 		return buildByPassDDLPlan(sql, vschema)
 	}
@@ -68,7 +68,7 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 		onlineDDLPlan = nil // emptying this so it does not accidentally gets used somewhere
 	}
 
-	return &engine.DDL{
+	eddl := &engine.DDL{
 		Keyspace:  normalDDLPlan.Keyspace,
 		SQL:       normalDDLPlan.Query,
 		DDL:       ddlStatement,
@@ -79,19 +79,26 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 		OnlineDDLEnabled: enableOnlineDDL,
 
 		CreateTempTable: ddlStatement.IsTemporary(),
-	}, nil
+	}
+	tc := &tableCollector{}
+	for _, tbl := range ddlStatement.AffectedTables() {
+		tc.addASTTable(normalDDLPlan.Keyspace.Name, tbl)
+	}
+
+	return newPlanResult(eddl, tc.getTables()...), nil
 }
 
-func buildByPassDDLPlan(sql string, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildByPassDDLPlan(sql string, vschema plancontext.VSchema) (*planResult, error) {
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
 	}
-	return &engine.Send{
+	send := &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: vschema.Destination(),
 		Query:             sql,
-	}, nil
+	}
+	return newPlanResult(send), nil
 }
 
 func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*engine.Send, *engine.OnlineDDL, error) {
@@ -203,12 +210,11 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 		return nil, nil, err
 	}
 
-	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	selectPlan, err := createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, nil, err
 	}
-	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan)
+	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
@@ -237,14 +243,13 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if err != nil {
 		return nil, nil, err
 	}
-	ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
+	ddl.ViewName.Qualifier = sqlparser.NewIdentifierCS("")
 
-	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	selectPlan, err := createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, nil, err
 	}
-	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan)
+	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}

@@ -20,7 +20,7 @@
 source ./env.sh
 
 for tablet in 100 200 300; do
-  if vtctlclient -action_timeout 1s -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+  if vtctlclient --action_timeout 1s --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
     # The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
     for i in 0 1 2; do
       uid=$(($tablet + $i))
@@ -29,7 +29,7 @@ for tablet in 100 200 300; do
       echo "Shutting down mysql zone1-$uid"
       CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
       echo "Removing tablet directory zone1-$uid"
-      vtctlclient DeleteTablet -allow_primary=true zone1-$uid
+      vtctlclient DeleteTablet -- --allow_primary=true zone1-$uid
       rm -Rf $VTDATAROOT/vt_0000000$uid
     done
   fi

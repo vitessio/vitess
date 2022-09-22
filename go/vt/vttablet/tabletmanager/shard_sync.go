@@ -17,23 +17,32 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"flag"
+	"context"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	shardSyncRetryDelay = flag.Duration("shard_sync_retry_delay", 30*time.Second, "delay between retries of updates to keep the tablet and its shard record in sync")
-)
+var shardSyncRetryDelay = 30 * time.Second
+
+func registerShardSyncFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&shardSyncRetryDelay, "shard_sync_retry_delay", shardSyncRetryDelay, "delay between retries of updates to keep the tablet and its shard record in sync")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerShardSyncFlags)
+	servenv.OnParseFor("vttablet", registerShardSyncFlags)
+}
 
 // shardSyncLoop is a loop that tries to keep the tablet state and the
 // shard record in sync.
@@ -100,7 +109,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			if tablet.PrimaryTermStartTime == nil {
 				log.Errorf("PrimaryTermStartTime should not be nil: %v", tablet)
 				// Start retry timer and go back to sleep.
-				retryChan = time.After(*shardSyncRetryDelay)
+				retryChan = time.After(shardSyncRetryDelay)
 				continue
 			}
 			// If we think we're primary, check if we need to update the shard record.
@@ -109,7 +118,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
-				retryChan = time.After(*shardSyncRetryDelay)
+				retryChan = time.After(shardSyncRetryDelay)
 				continue
 			}
 			if shouldDemote {
@@ -119,7 +128,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				if err := tm.endPrimaryTerm(ctx, primaryAlias); err != nil {
 					log.Errorf("Failed to end primary term: %v", err)
 					// Start retry timer and go back to sleep.
-					retryChan = time.After(*shardSyncRetryDelay)
+					retryChan = time.After(shardSyncRetryDelay)
 					continue
 				}
 				// We're not primary anymore, so stop watching the shard record.
@@ -133,10 +142,10 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				// We already have an active watch. Nothing to do.
 				continue
 			}
-			if err := shardWatch.start(ctx, tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
+			if err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
 				log.Errorf("Failed to start shard watch: %v", err)
 				// Start retry timer and go back to sleep.
-				retryChan = time.After(*shardSyncRetryDelay)
+				retryChan = time.After(shardSyncRetryDelay)
 				continue
 			}
 		default:

@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -36,7 +37,7 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error {
+func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) error {
 	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
@@ -46,8 +47,8 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
-	if !allowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 	engine, err := mysqlctl.GetBackupEngine()
 	if err != nil {
@@ -58,8 +59,8 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	if err != nil {
 		return err
 	}
-	if !allowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+	if !req.AllowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
 	// prevent concurrent backups, and record stats
@@ -107,7 +108,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		Cnf:          tm.Cnf,
 		Mysqld:       tm.MysqlDaemon,
 		Logger:       l,
-		Concurrency:  concurrency,
+		Concurrency:  int(req.Concurrency),
 		HookExtraEnv: tm.hookExtraEnv(),
 		TopoServer:   tm.TopoServer,
 		Keyspace:     tablet.Keyspace,

@@ -89,7 +89,7 @@ func TestLatest(t *testing.T) {
 
 type duplic int
 
-func (d duplic) IsDuplicate(other interface{}) bool {
+func (d duplic) IsDuplicate(other any) bool {
 	return d == other
 }
 
@@ -104,6 +104,6 @@ func TestIsEquivalent(t *testing.T) {
 
 type mod10 int
 
-func (m mod10) IsDuplicate(other interface{}) bool {
+func (m mod10) IsDuplicate(other any) bool {
 	return m%10 == other.(mod10)%10
 }

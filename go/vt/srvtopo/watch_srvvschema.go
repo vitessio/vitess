@@ -36,18 +36,25 @@ func (k cellName) String() string {
 }
 
 func NewSrvVSchemaWatcher(topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvVSchemaWatcher {
-	watch := func(ctx context.Context, entry *watchEntry) {
+	watch := func(entry *watchEntry) {
 		key := entry.key.(cellName)
-		current, changes, cancel := topoServer.WatchSrvVSchema(context.Background(), key.String())
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-		entry.update(ctx, current.Value, current.Err, true)
+		current, changes, err := topoServer.WatchSrvVSchema(ctx, key.String())
+		if err != nil {
+			entry.update(nil, err, true)
+			return
+		}
+
+		entry.update(current.Value, current.Err, true)
 		if current.Err != nil {
 			return
 		}
 
 		defer cancel()
 		for c := range changes {
-			entry.update(ctx, c.Value, c.Err, false)
+			entry.update(c.Value, c.Err, false)
 			if c.Err != nil {
 				return
 			}
@@ -73,7 +80,7 @@ func (w *SrvVSchemaWatcher) GetSrvVSchema(ctx context.Context, cell string) (*vs
 
 func (w *SrvVSchemaWatcher) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	entry := w.rw.getEntry(cellName(cell))
-	entry.addListener(ctx, func(v interface{}, err error) bool {
+	entry.addListener(ctx, func(v any, err error) bool {
 		vschema, _ := v.(*vschemapb.SrvVSchema)
 		return callback(vschema, err)
 	})

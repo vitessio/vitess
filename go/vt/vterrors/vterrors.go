@@ -20,7 +20,7 @@ limitations under the License.
 // and not fmt.Errorf(). This makes sure that stacktraces are kept and
 // propagated correctly.
 //
-// New errors should be created using vterrors.New or vterrors.Errorf
+// # New errors should be created using vterrors.New or vterrors.Errorf
 //
 // Vitess uses canonical error codes for error reporting. This is based
 // on years of industry experience with error reporting. This idea is
@@ -41,7 +41,7 @@ limitations under the License.
 // using gRPC's error propagation mechanism and decoded back to
 // the original code on the other end.
 //
-// Retrieving the cause of an error
+// # Retrieving the cause of an error
 //
 // Using vterrors.Wrap constructs a stack of errors, adding context to the
 // preceding error, instead of simply building up a string.
@@ -49,58 +49,61 @@ limitations under the License.
 // operation of errors.Wrap to retrieve the original error for inspection.
 // Any error value which implements this interface
 //
-//     type causer interface {
-//             Cause() error
-//     }
+//	type causer interface {
+//	        Cause() error
+//	}
 //
 // can be inspected by vterrors.Cause and vterrors.RootCause.
 //
-// * vterrors.Cause will find the immediate cause if one is available, or nil
-//   if the error is not a `causer` or if no cause is available.
-// * vterrors.RootCause will recursively retrieve
-//   the topmost error which does not implement causer, which is assumed to be
-//   the original cause. For example:
+//   - vterrors.Cause will find the immediate cause if one is available, or nil
+//     if the error is not a `causer` or if no cause is available.
+//
+//   - vterrors.RootCause will recursively retrieve
+//     the topmost error which does not implement causer, which is assumed to be
+//     the original cause. For example:
 //
 //     switch err := errors.RootCause(err).(type) {
 //     case *MyError:
-//             // handle specifically
+//     // handle specifically
 //     default:
-//             // unknown error
+//     // unknown error
 //     }
 //
 // causer interface is not exported by this package, but is considered a part
 // of stable public API.
 //
-// Formatted printing of errors
+// # Formatted printing of errors
 //
 // All error values returned from this package implement fmt.Formatter and can
 // be formatted by the fmt package. The following verbs are supported
 //
-//     %s    print the error. If the error has a Cause it will be
-//           printed recursively
-//     %v    extended format. Each Frame of the error's StackTrace will
-//           be printed in detail.
+//	%s    print the error. If the error has a Cause it will be
+//	      printed recursively
+//	%v    extended format. Each Frame of the error's StackTrace will
+//	      be printed in detail.
 //
 // Most but not all of the code in this file was originally copied from
 // https://github.com/pkg/errors/blob/v0.8.0/errors.go
 package vterrors
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"io"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// LogErrStacks controls whether or not printing errors includes the
+// logErrStacks controls whether or not printing errors includes the
 // embedded stack trace in the output.
-var LogErrStacks bool
+var logErrStacks bool
 
-func init() {
-	flag.BoolVar(&LogErrStacks, "log_err_stacks", false, "log stack traces for errors")
+// RegisterFlags registers the command-line options that control vterror
+// behavior on the provided FlagSet.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&logErrStacks, "log_err_stacks", false, "log stack traces for errors")
 }
 
 // New returns an error with the supplied message.
@@ -116,7 +119,8 @@ func New(code vtrpcpb.Code, message string) error {
 // Errorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 // Errorf also records the stack trace at the point it was called.
-func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
+// Use this for Vitess-specific errors that don't have a MySQL counterpart
+func Errorf(code vtrpcpb.Code, format string, args ...any) error {
 	return &fundamental{
 		msg:   fmt.Sprintf(format, args...),
 		code:  code,
@@ -127,7 +131,8 @@ func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
 // NewErrorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 // NewErrorf also records the stack trace at the point it was called.
-func NewErrorf(code vtrpcpb.Code, state State, format string, args ...interface{}) error {
+// Use this for errors in Vitess that we eventually want to mimic as a MySQL error
+func NewErrorf(code vtrpcpb.Code, state State, format string, args ...any) error {
 	return &fundamental{
 		msg:   fmt.Sprintf(format, args...),
 		code:  code,
@@ -151,7 +156,7 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	case 'v':
 		panicIfError(io.WriteString(s, "Code: "+f.code.String()+"\n"))
 		panicIfError(io.WriteString(s, f.msg+"\n"))
-		if LogErrStacks {
+		if logErrStacks {
 			f.stack.Format(s, verb)
 		}
 		return
@@ -223,7 +228,7 @@ func Wrap(err error, message string) error {
 // Wrapf returns an error annotating err with a stack trace
 // at the point Wrapf is call, and the format specifier.
 // If err is nil, Wrapf returns nil.
-func Wrapf(err error, format string, args ...interface{}) error {
+func Wrapf(err error, format string, args ...any) error {
 	if err == nil {
 		return nil
 	}
@@ -247,7 +252,7 @@ func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {
 		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
 		panicIfError(io.WriteString(s, w.msg))
-		if LogErrStacks {
+		if logErrStacks {
 			w.stack.Format(s, verb)
 		}
 		return
@@ -269,9 +274,9 @@ func panicIfError(_ int, err error) {
 // An error value has a cause if it implements the following
 // interface:
 //
-//     type causer interface {
-//            Cause() error
-//     }
+//	type causer interface {
+//	       Cause() error
+//	}
 //
 // If the error does not implement Cause, the original error will
 // be returned. If the error is nil, nil will be returned without further
@@ -286,14 +291,14 @@ func RootCause(err error) error {
 	}
 }
 
-//
 // Cause will return the immediate cause, if possible.
 // An error value has a cause if it implements the following
 // interface:
 //
-//     type causer interface {
-//            Cause() error
-//     }
+//	type causer interface {
+//	       Cause() error
+//	}
+//
 // If the error does not implement Cause, nil will be returned
 func Cause(err error) error {
 	type causer interface {

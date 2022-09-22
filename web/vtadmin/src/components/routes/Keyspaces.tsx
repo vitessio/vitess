@@ -29,15 +29,20 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import KeyspaceActions from './keyspaces/KeyspaceActions';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import { isReadOnlyMode } from '../../util/env';
+import { Link } from 'react-router-dom';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
-    const { data } = useKeyspaces();
+    const keyspacesQuery = useKeyspaces();
 
     const ksRows = React.useMemo(() => {
-        const mapped = (data || []).map((k) => {
+        const mapped = (keyspacesQuery.data || []).map((k) => {
             const shardsByState = getShardsByState(k);
 
             return {
@@ -50,7 +55,7 @@ export const Keyspaces = () => {
         });
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['cluster', 'name']);
-    }, [data, filter]);
+    }, [keyspacesQuery.data, filter]);
 
     const renderRows = (rows: typeof ksRows) =>
         rows.map((row, idx) => (
@@ -74,13 +79,27 @@ export const Keyspaces = () => {
                         </div>
                     )}
                 </DataCell>
+                <ReadOnlyGate>
+                    <DataCell>
+                        <KeyspaceActions keyspace={row.name as string} clusterID={row.clusterID as string} />
+                    </DataCell>
+                </ReadOnlyGate>
             </tr>
         ));
 
     return (
         <div>
             <WorkspaceHeader>
-                <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+                <div className="flex items-top justify-between max-w-screen-md">
+                    <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+                    <ReadOnlyGate>
+                        <div>
+                            <Link className="btn btn-secondary btn-md" to="/keyspaces/create">
+                                Create a Keyspace
+                            </Link>
+                        </div>
+                    </ReadOnlyGate>
+                </div>
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter
@@ -91,7 +110,12 @@ export const Keyspaces = () => {
                     value={filter || ''}
                 />
                 <div className="max-w-screen-md">
-                    <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+                    <DataTable
+                        columns={isReadOnlyMode() ? ['Keyspace', 'Shards'] : ['Keyspace', 'Shards', 'Actions']}
+                        data={ksRows}
+                        renderRows={renderRows}
+                    />
+                    <QueryLoadingPlaceholder query={keyspacesQuery} />
                 </div>
             </ContentContainer>
         </div>

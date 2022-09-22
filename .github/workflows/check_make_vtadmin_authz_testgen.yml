@@ -1,0 +1,68 @@
+name: check_make_vtadmin_authz_testgen
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: Check Make vtadmin_authz_testgen
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
+    - name: Check out code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          vtadmin_changes:
+            - 'bootstrap.sh'
+            - 'tools/**'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'Makefile'
+            - 'go/vt/vtadmin/**'
+            - '.github/workflows/check_make_vtadmin_authz_testgen.yml'
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      with:
+        go-version: 1.18.5
+
+    - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+
+    - name: Get dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y make unzip g++ etcd curl git wget
+        sudo service etcd stop
+        go mod download
+        go install golang.org/x/tools/cmd/goimports@latest
+
+    - name: Run make minimaltools
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      run: |
+        make minimaltools
+
+    - name: check_make_vtadmin_authz_testgen
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      run: |
+        tools/check_make_vtadmin_authz_testgen.sh

@@ -39,7 +39,7 @@ func TestReadAllRedo(t *testing.T) {
 	tpc := tsv.te.twoPC
 	ctx := context.Background()
 
-	conn, err := tsv.qe.conns.Get(ctx)
+	conn, err := tsv.qe.conns.Get(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestReadAllTransactions(t *testing.T) {
 	tpc := tsv.te.twoPC
 	ctx := context.Background()
 
-	conn, err := tsv.qe.conns.Get(ctx)
+	conn, err := tsv.qe.conns.Get(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 }
 
-func jsonStr(v interface{}) string {
+func jsonStr(v any) string {
 	out, _ := json.Marshal(v)
 	return string(out)
 }

@@ -37,8 +37,9 @@ type analyzer struct {
 	err          error
 	inProjection int
 
-	projErr error
-	warning string
+	projErr      error
+	unshardedErr error
+	warning      string
 }
 
 // newAnalyzer create the semantic analyzer
@@ -52,14 +53,16 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	}
 	s.org = a
 	a.tables.org = a
-	a.binder = newBinder(s, a, a.tables, a.typer)
-	a.rewriter = &earlyRewriter{scoper: s}
 
+	b := newBinder(s, a, a.tables, a.typer)
+	a.binder = b
+	a.rewriter = &earlyRewriter{scoper: s, binder: b}
+	s.binder = b
 	return a
 }
 
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
+func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 
 	// Analysis for initial scope
@@ -74,7 +77,13 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	return semTable, nil
 }
 
-func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collations.ID) *SemTable {
+func (a analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
+	var comments *sqlparser.ParsedComments
+	commentedStmt, isCommented := statement.(sqlparser.Commented)
+	if isCommented {
+		comments = commentedStmt.GetParsedComments()
+	}
+
 	return &SemTable{
 		Recursive:         a.binder.recursive,
 		Direct:            a.binder.direct,
@@ -82,8 +91,9 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 		Tables:            a.tables.Tables,
 		selectScope:       a.scoper.rScope,
 		NotSingleRouteErr: a.projErr,
+		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
-		Comments:          statement.GetComments(),
+		Comments:          comments,
 		SubqueryMap:       a.binder.subqueryMap,
 		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
@@ -92,16 +102,17 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 }
 
 func (a *analyzer) setError(err error) {
-	prErr, ok := err.(ProjError)
-	if ok {
-		a.projErr = prErr.Inner
-		return
-	}
-
-	if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
-		a.projErr = err
-	} else {
-		a.err = err
+	switch err := err.(type) {
+	case ProjError:
+		a.projErr = err.Inner
+	case UnshardedError:
+		a.unshardedErr = err.Inner
+	default:
+		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
+			a.projErr = err
+		} else {
+			a.err = err
+		}
 	}
 }
 
@@ -193,8 +204,8 @@ func checkUnionColumns(union *sqlparser.Union) error {
 }
 
 /*
-	errors that happen when we are evaluating SELECT expressions are saved until we know
-	if we can merge everything into a single route or not
+errors that happen when we are evaluating SELECT expressions are saved until we know
+if we can merge everything into a single route or not
 */
 func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
 	_, ok := cursor.Node().(sqlparser.SelectExprs)
@@ -212,6 +223,11 @@ func (a *analyzer) leaveProjection(cursor *sqlparser.Cursor) {
 
 func isParentSelect(cursor *sqlparser.Cursor) bool {
 	_, isSelect := cursor.Parent().(*sqlparser.Select)
+	return isSelect
+}
+
+func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
+	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
 	return isSelect
 }
 
@@ -238,6 +254,18 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Update:
+		if len(node.TableExprs) != 1 {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !isAlias {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
+		if isDerived {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the UPDATE is not updatable", alias.As.String())
+		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
@@ -276,25 +304,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
 		}
 	case *sqlparser.JoinTableExpr:
-		if node.Condition != nil && node.Condition.Using != nil {
-			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
-		}
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
 		}
-	case *sqlparser.FuncExpr:
-		if sqlparser.IsLockingFunc(node) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
-		}
-
-		if node.Distinct {
-			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
-			if len(node.Exprs) != 1 {
-				return err
-			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
-				return err
-			}
-		}
+	case *sqlparser.LockingFunc:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
 	case *sqlparser.Union:
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
@@ -314,6 +328,8 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if err != nil {
 			return err
 		}
+	case *sqlparser.JSONTableExpr:
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
 	}
 
 	return nil
@@ -334,5 +350,15 @@ type ProjError struct {
 }
 
 func (p ProjError) Error() string {
+	return p.Inner.Error()
+}
+
+// UnshardedError is used to mark an error as something that should only be returned
+// if the query is not unsharded
+type UnshardedError struct {
+	Inner error
+}
+
+func (p UnshardedError) Error() string {
 	return p.Inner.Error()
 }

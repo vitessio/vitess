@@ -20,13 +20,15 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func unshardedShortcut(stmt sqlparser.SelectStatement, ks *vindexes.Keyspace, semTable *semantics.SemTable) (logicalPlan, error) {
+func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (logicalPlan, error) {
 	// this method is used when the query we are handling has all tables in the same unsharded keyspace
 	sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
@@ -40,7 +42,7 @@ func unshardedShortcut(stmt sqlparser.SelectStatement, ks *vindexes.Keyspace, se
 		return true
 	}, nil)
 
-	tableNames, err := getTableNames(semTable)
+	tableNames, err := getTableNames(ctx.SemTable)
 	if err != nil {
 		return nil, err
 	}
@@ -54,17 +56,22 @@ func unshardedShortcut(stmt sqlparser.SelectStatement, ks *vindexes.Keyspace, se
 		},
 		Select: stmt,
 	}
-	if err := plan.WireupGen4(semTable); err != nil {
+
+	if err := plan.WireupGen4(ctx); err != nil {
 		return nil, err
 	}
 	return plan, nil
 }
 
 func getTableNames(semTable *semantics.SemTable) ([]string, error) {
-	tableNameMap := map[string]interface{}{}
+	tableNameMap := map[string]any{}
 
 	for _, tableInfo := range semTable.Tables {
 		tblObj := tableInfo.GetVindexTable()
+		if tblObj == nil {
+			// probably a derived table
+			continue
+		}
 		var name string
 		if tableInfo.IsInfSchema() {
 			name = "tableName"

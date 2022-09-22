@@ -25,6 +25,7 @@ import (
 )
 
 type earlyRewriter struct {
+	binder  *binder
 	scoper  *scoper
 	clause  string
 	warning string
@@ -32,33 +33,19 @@ type earlyRewriter struct {
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			return nil
+		}
+		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.SelectExprs:
 		_, isSel := cursor.Parent().(*sqlparser.Select)
 		if !isSel {
 			return nil
 		}
-		tables := r.scoper.currentScope().tables
-		var selExprs sqlparser.SelectExprs
-		changed := false
-		for _, selectExpr := range node {
-			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-			if !isStarExpr {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
-			if err != nil {
-				return err
-			}
-			if !starExpanded || colNames == nil {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			selExprs = append(selExprs, colNames...)
-			changed = true
-		}
-		if changed {
-			cursor.ReplaceAndRevisit(selExprs)
+		err := r.expandStar(cursor, node)
+		if err != nil {
+			return err
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.StraightJoinType {
@@ -67,6 +54,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.Order:
 		r.clause = "order clause"
+		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
 
@@ -94,6 +82,60 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
+func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+	currentScope := r.scoper.currentScope()
+	var selExprs sqlparser.SelectExprs
+	changed := false
+	for _, selectExpr := range node {
+		starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
+		if !isStarExpr {
+			selExprs = append(selExprs, selectExpr)
+			continue
+		}
+		starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
+		if err != nil {
+			return err
+		}
+		if !starExpanded || colNames == nil {
+			selExprs = append(selExprs, selectExpr)
+			continue
+		}
+		selExprs = append(selExprs, colNames...)
+		changed = true
+	}
+	if changed {
+		cursor.ReplaceAndRevisit(selExprs)
+	}
+	return nil
+}
+
+func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
+	sel, isSel := cursor.Parent().(*sqlparser.Select)
+	if !isSel {
+		return
+	}
+	sqlparser.Rewrite(node, func(inner *sqlparser.Cursor) bool {
+		switch col := inner.Node().(type) {
+		case *sqlparser.Subquery:
+			return false
+		case *sqlparser.ColName:
+			if !col.Qualifier.IsEmpty() {
+				return false
+			}
+			for _, e := range sel.SelectExprs {
+				ae, ok := e.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				if ae.As.Equal(col.Name) {
+					inner.Replace(ae.Expr)
+				}
+			}
+		}
+		return true
+	}, nil)
+}
+
 func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
 	currScope, found := r.scoper.specialExprScopes[node]
 	if !found {
@@ -102,21 +144,25 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 	num, err := strconv.Atoi(node.Val)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
-
 	}
-	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
+	stmt, isSel := currScope.stmt.(*sqlparser.Select)
+	if !isSel {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", currScope.stmt)
+	}
+
+	if num < 1 || num > len(stmt.SelectExprs) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
 	}
 
 	for i := 0; i < num; i++ {
-		expr := currScope.selectStmt.SelectExprs[i]
+		expr := stmt.SelectExprs[i]
 		_, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
 		}
 	}
 
-	aliasedExpr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
@@ -145,7 +191,75 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
+func rewriteJoinUsing(
+	current *scope,
+	using sqlparser.Columns,
+	org originable,
+) error {
+	joinUsing := current.prepareUsingMap()
+	predicates := make([]sqlparser.Expr, 0, len(using))
+	for _, column := range using {
+		var foundTables []sqlparser.TableName
+		for _, tbl := range current.tables {
+			if !tbl.authoritative() {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't handle JOIN USING without authoritative tables")
+			}
+
+			currTable := tbl.getTableSet(org)
+			usingCols := joinUsing[currTable]
+			if usingCols == nil {
+				usingCols = map[string]TableSet{}
+			}
+			for _, col := range tbl.getColumns() {
+				_, found := usingCols[col.Name]
+				if found {
+					tblName, err := tbl.Name()
+					if err != nil {
+						return err
+					}
+
+					foundTables = append(foundTables, tblName)
+					break // no need to look at other columns in this table
+				}
+			}
+		}
+		for i, lft := range foundTables {
+			for j := i + 1; j < len(foundTables); j++ {
+				rgt := foundTables[j]
+				predicates = append(predicates, &sqlparser.ComparisonExpr{
+					Operator: sqlparser.EqualOp,
+					Left:     sqlparser.NewColNameWithQualifier(column.String(), lft),
+					Right:    sqlparser.NewColNameWithQualifier(column.String(), rgt),
+				})
+			}
+		}
+	}
+
+	// now, we go up the scope until we find a SELECT with a where clause we can add this predicate to
+	for current != nil {
+		sel, found := current.stmt.(*sqlparser.Select)
+		if found {
+			if sel.Where == nil {
+				sel.Where = &sqlparser.Where{
+					Type: sqlparser.WhereClause,
+					Expr: sqlparser.AndExpressions(predicates...),
+				}
+			} else {
+				sel.Where.Expr = sqlparser.AndExpressions(append(predicates, sel.Where.Expr)...)
+			}
+			return nil
+		}
+		current = current.parent
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
+}
+
+func expandTableColumns(
+	starExpr *sqlparser.StarExpr,
+	tables []TableInfo,
+	joinUsing map[TableSet]map[string]TableSet,
+	org originable,
+) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
@@ -165,18 +279,58 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 
 		withAlias := len(tables) > 1
 		withQualifier := withAlias || !tbl.getExpr().As.IsEmpty()
-		for _, col := range tbl.getColumns() {
+		currTable := tbl.getTableSet(org)
+		usingCols := joinUsing[currTable]
+		if usingCols == nil {
+			usingCols = map[string]TableSet{}
+		}
+
+		addColName := func(col ColumnInfo) {
 			var colName *sqlparser.ColName
-			var alias sqlparser.ColIdent
+			var alias sqlparser.IdentifierCI
 			if withQualifier {
 				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
 			} else {
 				colName = sqlparser.NewColName(col.Name)
 			}
 			if withAlias {
-				alias = sqlparser.NewColIdent(col.Name)
+				alias = sqlparser.NewIdentifierCI(col.Name)
 			}
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+		}
+
+		/*
+			Redundant column elimination and column ordering occurs according to standard SQL, producing this display order:
+			  *	First, coalesced common columns of the two joined tables, in the order in which they occur in the first table
+			  *	Second, columns unique to the first table, in order in which they occur in that table
+			  *	Third, columns unique to the second table, in order in which they occur in that table
+
+			From: https://dev.mysql.com/doc/refman/8.0/en/join.html
+		*/
+	outer:
+		// in this first loop we just find columns used in any JOIN USING used on this table
+		for _, col := range tbl.getColumns() {
+			ts, found := usingCols[col.Name]
+			if found {
+				for i, ts := range ts.Constituents() {
+					if ts.Equals(currTable) {
+						if i == 0 {
+							addColName(col)
+						} else {
+							continue outer
+						}
+					}
+				}
+			}
+		}
+
+		// and this time around we are printing any columns not involved in any JOIN USING
+		for _, col := range tbl.getColumns() {
+			if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
+				continue
+			}
+
+			addColName(col)
 		}
 	}
 

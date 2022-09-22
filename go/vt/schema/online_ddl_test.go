@@ -28,7 +28,7 @@ import (
 )
 
 func TestCreateUUID(t *testing.T) {
-	_, err := createUUID("_")
+	_, err := CreateUUIDWithDelimiter("_")
 	assert.NoError(t, err)
 }
 
@@ -210,9 +210,6 @@ func TestNewOnlineDDL(t *testing.T) {
 		NewDDLStrategySetting(DDLStrategyVitess, ""),
 		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
 	}
-	require.True(t, strategies[0].IsSkipTopo())
-	require.True(t, strategies[1].IsSkipTopo())
-	require.True(t, strategies[2].IsSkipTopo())
 
 	for _, ts := range tt {
 		t.Run(ts.sql, func(t *testing.T) {
@@ -224,7 +221,6 @@ func TestNewOnlineDDL(t *testing.T) {
 						return
 					}
 					assert.NoError(t, err)
-					require.True(t, stgy.IsSkipTopo(), "IsSkipTopo() should always be true")
 					// onlineDDL.SQL enriched with /*vt+ ... */ comment
 					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
 					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))

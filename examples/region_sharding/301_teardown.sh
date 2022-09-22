@@ -19,13 +19,17 @@
 
 source ./env.sh
 
+./scripts/vtadmin-down.sh
+
+./scripts/vtorc-down.sh
+
 ./scripts/vtgate-down.sh
 
-for tablet in 200 300 400 500; do
-	if vtctlclient -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
-		echo "Shutting down tablet zone1-$tablet"
+for tablet in 100 200 300 400 500; do
+	if vtctlclient --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+		printf -v alias '%s-%010d' 'zone1' $uid
+		echo "Shutting down tablet $alias"
 		CELL=zone1 TABLET_UID=$tablet ./scripts/vttablet-down.sh
-		echo "Shutting down mysql zone1-$tablet"
 		CELL=zone1 TABLET_UID=$tablet ./scripts/mysqlctl-down.sh
 	fi
 done

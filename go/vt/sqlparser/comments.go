@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -43,6 +42,8 @@ const (
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
 	DirectiveQueryPlanner = "PLANNER"
+	// DirectiveVtexplainRunDMLQueries tells explain format = vtexplain that it is okay to also run the query.
+	DirectiveVtexplainRunDMLQueries = "EXECUTE_DML_QUERIES"
 )
 
 func isNonSpace(r rune) bool {
@@ -201,214 +202,170 @@ const commentDirectivePreamble = "/*vt+"
 
 // CommentDirectives is the parsed representation for execution directives
 // conveyed in query comments
-type CommentDirectives map[string]interface{}
+type CommentDirectives struct {
+	m map[string]string
+}
 
-// ExtractCommentDirectives parses the comment list for any execution directives
+// Directives parses the comment list for any execution directives
 // of the form:
 //
-//     /*vt+ OPTION_ONE=1 OPTION_TWO OPTION_THREE=abcd */
+//	/*vt+ OPTION_ONE=1 OPTION_TWO OPTION_THREE=abcd */
 //
 // It returns the map of the directive values or nil if there aren't any.
-func ExtractCommentDirectives(comments Comments) CommentDirectives {
-	if comments == nil {
+func (c *ParsedComments) Directives() *CommentDirectives {
+	if c == nil {
 		return nil
 	}
+	if c._directives == nil {
+		c._directives = &CommentDirectives{m: make(map[string]string)}
 
-	var vals map[string]interface{}
-
-	for _, commentStr := range comments {
-		if commentStr[0:5] != commentDirectivePreamble {
-			continue
-		}
-
-		if vals == nil {
-			vals = make(map[string]interface{})
-		}
-
-		// Split on whitespace and ignore the first and last directive
-		// since they contain the comment start/end
-		directives := strings.Fields(commentStr)
-		for i := 1; i < len(directives)-1; i++ {
-			directive := directives[i]
-			sep := strings.IndexByte(directive, '=')
-
-			// No value is equivalent to a true boolean
-			if sep == -1 {
-				vals[directive] = true
+		for _, commentStr := range c.comments {
+			if commentStr[0:5] != commentDirectivePreamble {
 				continue
 			}
 
-			strVal := directive[sep+1:]
-			directive = directive[:sep]
-
-			intVal, err := strconv.Atoi(strVal)
-			if err == nil {
-				vals[directive] = intVal
-				continue
+			// Split on whitespace and ignore the first and last directive
+			// since they contain the comment start/end
+			directives := strings.Fields(commentStr)
+			for i := 1; i < len(directives)-1; i++ {
+				directive, val, ok := strings.Cut(directives[i], "=")
+				if !ok {
+					val = "true"
+				}
+				c._directives.m[strings.ToLower(directive)] = val
 			}
-
-			boolVal, err := strconv.ParseBool(strVal)
-			if err == nil {
-				vals[directive] = boolVal
-				continue
-			}
-
-			vals[directive] = strVal
 		}
 	}
-	return vals
+	return c._directives
+}
+
+func (c *ParsedComments) Length() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.comments)
+}
+
+func (c *ParsedComments) Prepend(comment string) Comments {
+	if c == nil {
+		return Comments{comment}
+	}
+	comments := make(Comments, 0, len(c.comments)+1)
+	comments = append(comments, comment)
+	comments = append(comments, c.comments...)
+	return comments
 }
 
 // IsSet checks the directive map for the named directive and returns
 // true if the directive is set and has a true/false or 0/1 value
-func (d CommentDirectives) IsSet(key string) bool {
+func (d *CommentDirectives) IsSet(key string) bool {
 	if d == nil {
 		return false
 	}
-
-	val, ok := d[key]
-	if !ok {
+	val, found := d.m[strings.ToLower(key)]
+	if !found {
 		return false
 	}
-
-	boolVal, ok := val.(bool)
-	if ok {
-		return boolVal
-	}
-
-	intVal, ok := val.(int)
-	if ok {
-		return intVal == 1
-	}
-	return false
+	// ParseBool handles "0", "1", "true", "false" and all similars
+	set, _ := strconv.ParseBool(val)
+	return set
 }
 
 // GetString gets a directive value as string, with default value if not found
-func (d CommentDirectives) GetString(key string, defaultVal string) string {
-	val, ok := d[key]
+func (d *CommentDirectives) GetString(key string, defaultVal string) (string, bool) {
+	if d == nil {
+		return "", false
+	}
+	val, ok := d.m[strings.ToLower(key)]
 	if !ok {
-		return defaultVal
+		return defaultVal, false
 	}
-	stringVal := fmt.Sprintf("%v", val)
-	if unquoted, err := strconv.Unquote(stringVal); err == nil {
-		stringVal = unquoted
+	if unquoted, err := strconv.Unquote(val); err == nil {
+		return unquoted, true
 	}
-	return stringVal
+	return val, true
 }
 
 // MultiShardAutocommitDirective returns true if multishard autocommit directive is set to true in query.
 func MultiShardAutocommitDirective(stmt Statement) bool {
+	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	case *Insert:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(DirectiveMultiShardAutocommit) {
-			return true
-		}
+		comments = stmt.Comments
 	case *Update:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(DirectiveMultiShardAutocommit) {
-			return true
-		}
+		comments = stmt.Comments
 	case *Delete:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(DirectiveMultiShardAutocommit) {
-			return true
-		}
-	default:
-		return false
+		comments = stmt.Comments
 	}
-	return false
+	return comments != nil && comments.Directives().IsSet(DirectiveMultiShardAutocommit)
 }
 
 // SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
 func SkipQueryPlanCacheDirective(stmt Statement) bool {
+	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	case *Select:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			return true
-		}
+		comments = stmt.Comments
 	case *Insert:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			return true
-		}
+		comments = stmt.Comments
 	case *Update:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			return true
-		}
+		comments = stmt.Comments
 	case *Delete:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			return true
-		}
-	default:
-		return false
+		comments = stmt.Comments
 	}
-	return false
+	return comments != nil && comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
 }
 
 // IgnoreMaxPayloadSizeDirective returns true if the max payload size override
 // directive is set to true.
 func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
+	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	// For transactional statements, they should always be passed down and
 	// should not come into max payload size requirement.
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release:
 		return true
 	case *Select:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+		comments = stmt.Comments
 	case *Insert:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+		comments = stmt.Comments
 	case *Update:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+		comments = stmt.Comments
 	case *Delete:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
-	default:
-		return false
+		comments = stmt.Comments
 	}
+	return comments != nil && comments.Directives().IsSet(DirectiveIgnoreMaxPayloadSize)
 }
 
 // IgnoreMaxMaxMemoryRowsDirective returns true if the max memory rows override
 // directive is set to true.
 func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
+	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	case *Select:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+		comments = stmt.Comments
 	case *Insert:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+		comments = stmt.Comments
 	case *Update:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+		comments = stmt.Comments
 	case *Delete:
-		directives := ExtractCommentDirectives(stmt.Comments)
-		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
-	default:
-		return false
+		comments = stmt.Comments
 	}
+	return comments != nil && comments.Directives().IsSet(DirectiveIgnoreMaxMemoryRows)
 }
 
 // AllowScatterDirective returns true if the allow scatter override is set to true
 func AllowScatterDirective(stmt Statement) bool {
-	var directives CommentDirectives
+	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	case *Select:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Insert:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Update:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Delete:
-		directives = ExtractCommentDirectives(stmt.Comments)
-	default:
-		return false
+		comments = stmt.Comments
 	}
-	return directives.IsSet(DirectiveAllowScatter)
+	return comments != nil && comments.Directives().IsSet(DirectiveAllowScatter)
 }

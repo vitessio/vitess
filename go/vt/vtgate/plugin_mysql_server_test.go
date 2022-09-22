@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"os"
@@ -29,8 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/trace"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -262,11 +261,7 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestInitTLSConfig")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateCRL(root, tlstest.CA)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")

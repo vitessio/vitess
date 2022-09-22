@@ -4,6 +4,9 @@
 # For mac users
 .DS_Store
 
+# For direnv users
+.envrc
+
 # Produced by yacc
 *.output
 
@@ -26,6 +29,7 @@ tags
 
 # vscode
 .vscode/
+__debug_bin
 
 # C build dirs
 **/build
@@ -75,9 +79,6 @@ releases
 
 # Local examples
 /examples/local/vtdataroot
-
-# Vagrant
-.vagrant
 
 /dist/
 /vthook/

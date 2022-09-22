@@ -37,13 +37,13 @@ func init() {
 //
 // The rules for assigning a Coercibility value to an expression are as follows:
 //
-//	- An explicit COLLATE clause has a coercibility of 0 (not coercible at all).
-//  - The concatenation of two strings with different collations has a coercibility of 1.
-//  - The collation of a column or a stored routine parameter or local variable has a coercibility of 2.
-// 	- A “system constant” (the string returned by functions such as USER() or VERSION()) has a coercibility of 3.
-// 	- The collation of a literal has a coercibility of 4.
-// 	- The collation of a numeric or temporal value has a coercibility of 5.
-//  - NULL or an expression that is derived from NULL has a coercibility of 6.
+//   - An explicit COLLATE clause has a coercibility of 0 (not coercible at all).
+//   - The concatenation of two strings with different collations has a coercibility of 1.
+//   - The collation of a column or a stored routine parameter or local variable has a coercibility of 2.
+//   - A “system constant” (the string returned by functions such as USER() or VERSION()) has a coercibility of 3.
+//   - The collation of a literal has a coercibility of 4.
+//   - The collation of a numeric or temporal value has a coercibility of 5.
+//   - NULL or an expression that is derived from NULL has a coercibility of 6.
 //
 // According to the MySQL documentation, Coercibility is an actual word of the English
 // language, although the Vitess maintainers disagree with this assessment.
@@ -138,7 +138,7 @@ func checkCompatibleCollations(
 			}
 		}
 
-	case charset.Charset_utf8, charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le:
+	case charset.Charset_utf8mb3, charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le:
 		switch {
 		case leftCoercibility < rightCoercibility:
 			return true
@@ -257,13 +257,13 @@ func (env *Environment) MergeCollations(left, right TypedCollation, opt Coercion
 		if left.Coercibility <= right.Coercibility {
 			return left, nil, nil, nil
 		}
-		return right, nil, nil, nil
+		goto coerceToRight
 	}
 	if _, rightIsBinary := rightColl.(*Collation_binary); rightIsBinary {
 		if left.Coercibility >= right.Coercibility {
 			return right, nil, nil, nil
 		}
-		return left, nil, nil, nil
+		goto coerceToLeft
 	}
 
 	if opt.ConvertToSuperset {

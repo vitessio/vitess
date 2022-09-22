@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,10 +17,11 @@ package tabletmanager
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -42,8 +43,8 @@ func TestTopoCustomRule(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
-	exec(t, conn, "delete from t1")
-	exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
+	utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("r")] [VARCHAR("s")]]`)
 
 	// create empty topoCustomRuleFile.
@@ -54,12 +55,12 @@ func TestTopoCustomRule(t *testing.T) {
 	require.NoError(t, err)
 
 	// Copy config file into topo.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-topocustomrule_path", topoCustomRulePath,
+		"--topocustomrule_path", topoCustomRulePath,
 	}
 
 	// Start a new Tablet
@@ -76,15 +77,19 @@ func TestTopoCustomRule(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err, "error should be Nil")
 
-	// Verify that query is working
-	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
-	require.NoError(t, err)
-	resultMap := make(map[string]interface{})
-	err = json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
-
-	rowsAffected := resultMap["rows"].([]interface{})
-	assert.EqualValues(t, 2, len(rowsAffected))
+	// And wait until the query is working.
+	// We need a wait here because the instance we have created is a replica
+	// It might take a while to replicate the two rows.
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		qr, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil)
+		if err == nil {
+			if len(qr.Rows) == 2 {
+				break
+			}
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
 
 	// Now update the topocustomrule file.
 	data = []byte(`[{
@@ -96,29 +101,23 @@ func TestTopoCustomRule(t *testing.T) {
 	err = os.WriteFile(topoCustomRuleFile, data, 0777)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
-	timeout := time.Now().Add(10 * time.Second)
+	timeout = time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		result, err := vtctlExec("select id, value from t1", rTablet.Alias)
-		if err != nil {
-			assert.Contains(t, result, "disallow select on table t1")
+		if _, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil); err != nil {
+			assert.Contains(t, err.Error(), "disallow select on table t1")
 			break
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
 
 	// Empty the table
-	exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "delete from t1")
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
 	killTablets(t, rTablet)
-}
-
-func vtctlExec(sql string, tabletAlias string) (string, error) {
-	args := []string{"VtTabletExecute", "-json", tabletAlias, sql}
-	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }

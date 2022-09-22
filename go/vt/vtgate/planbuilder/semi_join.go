@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -33,16 +34,22 @@ type semiJoin struct {
 	gen4Plan
 	rhs  logicalPlan
 	lhs  logicalPlan
-	vars map[string]int
 	cols []int
+
+	vars map[string]int
+
+	// LHSColumns are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the vars field
+	LHSColumns []*sqlparser.ColName
 }
 
 // newSemiJoin builds a new semiJoin.
-func newSemiJoin(lhs, rhs logicalPlan, vars map[string]int) *semiJoin {
+func newSemiJoin(lhs, rhs logicalPlan, vars map[string]int, lhsCols []*sqlparser.ColName) *semiJoin {
 	return &semiJoin{
-		rhs:  rhs,
-		lhs:  lhs,
-		vars: vars,
+		rhs:        rhs,
+		lhs:        lhs,
+		vars:       vars,
+		LHSColumns: lhsCols,
 	}
 }
 
@@ -57,11 +64,11 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (ps *semiJoin) WireupGen4(semTable *semantics.SemTable) error {
-	if err := ps.lhs.WireupGen4(semTable); err != nil {
+func (ps *semiJoin) WireupGen4(ctx *plancontext.PlanningContext) error {
+	if err := ps.lhs.WireupGen4(ctx); err != nil {
 		return err
 	}
-	return ps.rhs.WireupGen4(semTable)
+	return ps.rhs.WireupGen4(ctx)
 }
 
 // Rewrite implements the logicalPlan interface

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"sort"
@@ -30,16 +31,22 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -52,9 +59,9 @@ in the form of :v1, :v2, etc.
 
 Examples:
 
-  $ vtclient -server vtgate:15991 "SELECT * FROM messages"
+  $ vtclient --server vtgate:15991 "SELECT * FROM messages"
 
-  $ vtclient -server vtgate:15991 -target '@primary' -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
+  $ vtclient --server vtgate:15991 --target '@primary' --bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
 
 `
 	server        = flag.String("server", "", "vtgate server to connect to")
@@ -76,14 +83,12 @@ var (
 )
 
 func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, usage)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Epilogue: func(w io.Writer) { fmt.Fprint(w, usage) },
+	})
 }
 
-type bindvars []interface{}
+type bindvars []any
 
 func (bv *bindvars) String() string {
 	b, err := json.Marshal(bv)
@@ -114,7 +119,7 @@ func (bv *bindvars) Set(s string) (err error) {
 }
 
 // For internal flag compatibility
-func (bv *bindvars) Get() interface{} {
+func (bv *bindvars) Get() any {
 	return bv
 }
 
@@ -145,8 +150,13 @@ func main() {
 }
 
 func run() (*results, error) {
-	flag.Parse()
-	args := flag.Args()
+	fs := pflag.NewFlagSet("vtclient", pflag.ExitOnError)
+	grpccommon.RegisterFlags(fs)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	servenv.RegisterMySQLServerFlags(fs)
+	_flag.Parse(fs)
+	args := _flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()
@@ -189,8 +199,8 @@ func run() (*results, error) {
 	return execMulti(ctx, db, args[0])
 }
 
-func prepareBindVariables() []interface{} {
-	bv := make([]interface{}, 0, len(*bindVariables)+1)
+func prepareBindVariables() []any {
+	bv := make([]any, 0, len(*bindVariables)+1)
 	bv = append(bv, (*bindVariables)...)
 	if *maxSeqID > *minSeqID {
 		bv = append(bv, <-seqChan)
@@ -261,7 +271,7 @@ func execDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 		return nil, vterrors.Wrap(err, "BEGIN failed")
 	}
 
-	result, err := tx.ExecContext(ctx, sql, []interface{}(prepareBindVariables())...)
+	result, err := tx.ExecContext(ctx, sql, []any(prepareBindVariables())...)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to execute DML")
 	}
@@ -282,7 +292,7 @@ func execDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 
 func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
-	rows, err := db.QueryContext(ctx, sql, []interface{}(prepareBindVariables())...)
+	rows, err := db.QueryContext(ctx, sql, []any(prepareBindVariables())...)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "client error")
 	}
@@ -298,7 +308,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 
 	// get the rows
 	for rows.Next() {
-		row := make([]interface{}, len(cols))
+		row := make([]any, len(cols))
 		for i := range row {
 			var col string
 			row[i] = &col

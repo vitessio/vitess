@@ -158,7 +158,7 @@ func getID(url, base string) (int, error) {
 
 const HTTPHeaderRedactedMessage string = "*** redacted by sanitizeRequestHeader() ***"
 
-var allowedHTTPHeadersList = map[string]interface{}{
+var allowedHTTPHeadersList = map[string]any{
 	"Accept":                    nil,
 	"Accept-Encoding":           nil,
 	"Accept-Language":           nil,
@@ -187,7 +187,7 @@ func sanitizeRequestHeader(r *http.Request, sanitizeHTTPHeaders bool) *http.Requ
 	return s
 }
 
-func (m *Manager) httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
+func (m *Manager) httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...any) {
 	errMsg := fmt.Sprintf(format, args...)
 	log.Errorf("HTTP error on %v: %v, request: %#v",
 		r.URL.Path,

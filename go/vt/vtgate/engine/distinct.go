@@ -17,32 +17,41 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // Distinct Primitive is used to uniqueify results
 var _ Primitive = (*Distinct)(nil)
 
-// Distinct Primitive is used to uniqueify results
-type Distinct struct {
-	Source        Primitive
-	ColCollations []collations.ID
-}
+type (
+	// Distinct Primitive is used to uniqueify results
+	Distinct struct {
+		Source    Primitive
+		CheckCols []CheckCol
+		Truncate  bool
+	}
+	CheckCol struct {
+		Col       int
+		WsCol     *int
+		Collation collations.ID
+	}
+	probeTable struct {
+		seenRows  map[evalengine.HashCode][]sqltypes.Row
+		checkCols []CheckCol
+	}
+)
 
-type row = []sqltypes.Value
-
-type probeTable struct {
-	seenRows      map[evalengine.HashCode][]row
-	colCollations []collations.ID
-}
-
-func (pt *probeTable) exists(inputRow row) (bool, error) {
+func (pt *probeTable) exists(inputRow sqltypes.Row) (bool, error) {
 	// the two prime numbers used here (17 and 31) are used to
-
-	// calculate hashcode from all column values in the input row
+	// calculate hashcode from all column values in the input sqltypes.Row
 	code, err := pt.hashCodeForRow(inputRow)
 	if err != nil {
 		return false, err
@@ -50,15 +59,15 @@ func (pt *probeTable) exists(inputRow row) (bool, error) {
 
 	existingRows, found := pt.seenRows[code]
 	if !found {
-		// nothing with this hash code found, we can be sure it's a not seen row
-		pt.seenRows[code] = []row{inputRow}
+		// nothing with this hash code found, we can be sure it's a not seen sqltypes.Row
+		pt.seenRows[code] = []sqltypes.Row{inputRow}
 		return false, nil
 	}
 
 	// we found something in the map - still need to check all individual values
 	// so we don't just fall for a hash collision
 	for _, existingRow := range existingRows {
-		exists, err := equal(existingRow, inputRow, pt.colCollations)
+		exists, err := pt.equal(existingRow, inputRow)
 		if err != nil {
 			return false, err
 		}
@@ -72,7 +81,7 @@ func (pt *probeTable) exists(inputRow row) (bool, error) {
 	return false, nil
 }
 
-func (pt *probeTable) hashCodeForRow(inputRow row) (evalengine.HashCode, error) {
+func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode, error) {
 	// Why use 17 and 31 in this method?
 	// Copied from an old usenet discussion on the topic:
 	// https://groups.google.com/g/comp.programming/c/HSurZEyrZ1E?pli=1#d887b5bdb2dac99d
@@ -105,32 +114,42 @@ func (pt *probeTable) hashCodeForRow(inputRow row) (evalengine.HashCode, error) 
 	// > So you want an odd MULT that has plenty of one-bits.
 
 	code := evalengine.HashCode(17)
-	for idx, value := range inputRow {
-		// We use unknown collations when we do not have collation information
-		// This is safe for types which do not require collation information like
-		// numeric types. It will fail at runtime for text types.
-		collation := collations.Unknown
-		if len(pt.colCollations) > idx {
-			collation = pt.colCollations[idx]
+	for i, checkCol := range pt.checkCols {
+		if i >= len(inputRow) {
+			return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "distinct check colls is larger than its input row")
 		}
-		hashcode, err := evalengine.NullsafeHashcode(value, collation, value.Type())
+		col := inputRow[checkCol.Col]
+		hashcode, err := evalengine.NullsafeHashcode(col, checkCol.Collation, col.Type())
 		if err != nil {
-			return 0, err
+			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
+				return 0, err
+			}
+			checkCol = checkCol.SwitchToWeightString()
+			pt.checkCols[i] = checkCol
+			hashcode, err = evalengine.NullsafeHashcode(inputRow[checkCol.Col], checkCol.Collation, col.Type())
+			if err != nil {
+				return 0, err
+			}
 		}
 		code = code*31 + hashcode
 	}
 	return code, nil
 }
 
-func equal(a, b []sqltypes.Value, colCollations []collations.ID) (bool, error) {
-	for i, aVal := range a {
-		collation := collations.Unknown
-		if len(colCollations) > i {
-			collation = colCollations[i]
-		}
-		cmp, err := evalengine.NullsafeCompare(aVal, b[i], collation)
+func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
+	for i, checkCol := range pt.checkCols {
+		cmp, err := evalengine.NullsafeCompare(a[i], b[i], checkCol.Collation)
 		if err != nil {
-			return false, err
+			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
+			if !isComparisonErr || checkCol.WsCol == nil {
+				return false, err
+			}
+			checkCol = checkCol.SwitchToWeightString()
+			pt.checkCols[i] = checkCol
+			cmp, err = evalengine.NullsafeCompare(a[i], b[i], checkCol.Collation)
+			if err != nil {
+				return false, err
+			}
 		}
 		if cmp != 0 {
 			return false, nil
@@ -139,16 +158,18 @@ func equal(a, b []sqltypes.Value, colCollations []collations.ID) (bool, error) {
 	return true, nil
 }
 
-func newProbeTable(colCollations []collations.ID) *probeTable {
+func newProbeTable(checkCols []CheckCol) *probeTable {
+	cols := make([]CheckCol, len(checkCols))
+	copy(cols, checkCols)
 	return &probeTable{
-		seenRows:      map[uintptr][]row{},
-		colCollations: colCollations,
+		seenRows:  map[uintptr][]sqltypes.Row{},
+		checkCols: cols,
 	}
 }
 
 // TryExecute implements the Primitive interface
-func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	input, err := vcursor.ExecutePrimitive(d.Source, bindVars, wantfields)
+func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	input, err := vcursor.ExecutePrimitive(ctx, d.Source, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +179,7 @@ func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		InsertID: input.InsertID,
 	}
 
-	pt := newProbeTable(d.ColCollations)
+	pt := newProbeTable(d.CheckCols)
 
 	for _, row := range input.Rows {
 		exists, err := pt.exists(row)
@@ -169,15 +190,17 @@ func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 			result.Rows = append(result.Rows, row)
 		}
 	}
-
+	if d.Truncate {
+		return result.Truncate(len(d.CheckCols)), nil
+	}
 	return result, err
 }
 
 // TryStreamExecute implements the Primitive interface
-func (d *Distinct) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	pt := newProbeTable(d.ColCollations)
+func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	pt := newProbeTable(d.CheckCols)
 
-	err := vcursor.StreamExecutePrimitive(d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(ctx, d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
 			Fields:   input.Fields,
 			InsertID: input.InsertID,
@@ -191,7 +214,7 @@ func (d *Distinct) TryStreamExecute(vcursor VCursor, bindVars map[string]*queryp
 				result.Rows = append(result.Rows, row)
 			}
 		}
-		return callback(result)
+		return callback(result.Truncate(len(d.CheckCols)))
 	})
 
 	return err
@@ -213,8 +236,8 @@ func (d *Distinct) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (d *Distinct) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return d.Source.GetFields(vcursor, bindVars)
+func (d *Distinct) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return d.Source.GetFields(ctx, vcursor, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -228,26 +251,46 @@ func (d *Distinct) Inputs() []Primitive {
 }
 
 func (d *Distinct) description() PrimitiveDescription {
-	var other map[string]interface{}
-	if d.ColCollations != nil {
-		allUnknown := true
-		other = map[string]interface{}{}
-		var colls []string
-		for _, collation := range d.ColCollations {
-			coll := collations.Local().LookupByID(collation)
-			if coll == nil {
-				colls = append(colls, "UNKNOWN")
-			} else {
-				colls = append(colls, coll.Name())
-				allUnknown = false
-			}
-		}
-		if !allUnknown {
-			other["Collations"] = colls
-		}
+	other := map[string]any{}
+
+	var colls []string
+	for _, checkCol := range d.CheckCols {
+		colls = append(colls, checkCol.String())
+	}
+	if colls != nil {
+		other["Collations"] = colls
+	}
+
+	if d.Truncate {
+		other["ResultColumns"] = len(d.CheckCols)
 	}
 	return PrimitiveDescription{
 		Other:        other,
 		OperatorType: "Distinct",
 	}
+}
+
+// SwitchToWeightString returns a new CheckCol that works on the weight string column instead
+func (cc CheckCol) SwitchToWeightString() CheckCol {
+	return CheckCol{
+		Col:       *cc.WsCol,
+		WsCol:     nil,
+		Collation: collations.CollationBinaryID,
+	}
+}
+
+func (cc CheckCol) String() string {
+	coll := collations.Local().LookupByID(cc.Collation)
+	var collation string
+	if coll != nil {
+		collation = ": " + coll.Name()
+	}
+
+	var column string
+	if cc.WsCol == nil {
+		column = fmt.Sprintf("%d", cc.Col)
+	} else {
+		column = fmt.Sprintf("(%d:%d)", cc.Col, *cc.WsCol)
+	}
+	return column + collation
 }

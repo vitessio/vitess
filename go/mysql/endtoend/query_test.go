@@ -33,9 +33,13 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+const (
+	charsetName = "utf8mb4"
+)
+
 func columnSize(cs collations.ID, size uint32) uint32 {
 	// utf8_general_ci results in smaller max column sizes because MySQL 5.7 is silly
-	if collations.Local().LookupByID(cs).Charset().Name() == "utf8" {
+	if collations.Local().LookupByID(cs).Charset().Name() == "utf8mb3" {
 		return size * 3 / 4
 	}
 	return size
@@ -78,6 +82,7 @@ func TestQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert failed: %v", err)
 	}
+	collID := getDefaultCollationID()
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -101,8 +106,8 @@ func TestQueries(t *testing.T) {
 				OrgTable:     "a",
 				Database:     "vttest",
 				OrgName:      "name",
-				ColumnLength: columnSize(conn.CharacterSet, 512),
-				Charset:      uint32(conn.CharacterSet),
+				ColumnLength: columnSize(collID, 512),
+				Charset:      uint32(collID),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -188,6 +193,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	}
 
 	// Check the fields.
+	collID := getDefaultCollationID()
 	expectedFields := []*querypb.Field{
 		{
 			Name:         "id",
@@ -210,8 +216,8 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			OrgTable:     "a",
 			Database:     "vttest",
 			OrgName:      "name",
-			ColumnLength: columnSize(conn.CharacterSet, 512),
-			Charset:      uint32(conn.CharacterSet),
+			ColumnLength: columnSize(collID, 512),
+			Charset:      uint32(collID),
 		},
 	}
 	fields, err := conn.Fields()
@@ -306,7 +312,8 @@ func TestSysInfo(t *testing.T) {
 	_, err = conn.ExecuteFetch("drop table if exists `a`", 1000, true)
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", 1000, true)
+	_, err = conn.ExecuteFetch(fmt.Sprintf("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=%s",
+		charsetName), 1000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table `a`", 1000, true)
 
@@ -333,9 +340,18 @@ func TestSysInfo(t *testing.T) {
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
 
 	// table_name
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+	// This can be either a VARCHAR or a VARBINARY. On Linux and MySQL 8, the
+	// string is tagged with a binary encoding, so it is VARBINARY.
+	// On case-insensitive filesystems, it's a VARCHAR.
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[0][10].String())
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[1][10].String())
 
 	assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type)
 	assert.EqualValues(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+}
+
+func getDefaultCollationID() collations.ID {
+	collationHandler := collations.Local()
+	collation := collationHandler.DefaultCollationForCharset(charsetName)
+	return collation.ID()
 }

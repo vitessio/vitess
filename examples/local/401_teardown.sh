@@ -19,16 +19,20 @@
 
 source ./env.sh
 
+./scripts/vtadmin-down.sh
+
+./scripts/vtorc-down.sh
+
 ./scripts/vtgate-down.sh
 
 for tablet in 100 200 300 400; do
-	if vtctlclient -action_timeout 1s -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+	if vtctlclient --action_timeout 1s --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
 		# The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
 		for i in 0 1 2; do
 			uid=$(($tablet + $i))
-			echo "Shutting down tablet zone1-$uid"
+			printf -v alias '%s-%010d' 'zone1' $uid
+			echo "Shutting down tablet $alias"
 			CELL=zone1 TABLET_UID=$uid ./scripts/vttablet-down.sh
-			echo "Shutting down mysql zone1-$uid"
 			CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
 		done
 	fi
@@ -40,6 +44,8 @@ if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ./scripts/zk-down.sh
 elif [ "${TOPO}" = "k8s" ]; then
 	CELL=zone1 ./scripts/k3s-down.sh
+elif [ "${TOPO}" = "consul" ]; then
+	CELL=zone1 ./scripts/consul-down.sh
 else
 	CELL=zone1 ./scripts/etcd-down.sh
 fi

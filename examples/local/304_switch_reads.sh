@@ -18,4 +18,4 @@
 
 source ./env.sh
 
-vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
+vtctlclient Reshard -- --tablet_types=rdonly,replica SwitchTraffic customer.cust2cust

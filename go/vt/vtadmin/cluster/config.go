@@ -17,13 +17,22 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
+	"github.com/spf13/viper"
+
 	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
+	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 )
 
 var (
@@ -56,11 +65,25 @@ type Config struct {
 	TopoRWPoolConfig       *RPCPoolConfig
 	TopoReadPoolConfig     *RPCPoolConfig
 	WorkflowReadPoolConfig *RPCPoolConfig
+
+	// EmergencyFailoverPoolConfig specifies the config for a pool dedicated
+	// solely to EmergencyFailoverShard operations. It has the semantics and
+	// defaults of an RW RPCPool.
+	EmergencyFailoverPoolConfig *RPCPoolConfig
+	// FailoverPoolConfig specifies the config for a pool shared by
+	// PlannedFailoverShard operations. It has the semantics and defaults of an
+	// RW RPCPool.
+	FailoverPoolConfig *RPCPoolConfig
+
+	SchemaCacheConfig *cache.Config
+
+	vtctldConfigOpts []vtctldclient.ConfigOption
+	vtsqlConfigOpts  []vtsql.ConfigOption
 }
 
 // Cluster returns a new cluster instance from the given config.
-func (cfg Config) Cluster() (*Cluster, error) {
-	return New(cfg)
+func (cfg Config) Cluster(ctx context.Context) (*Cluster, error) {
+	return New(ctx, cfg)
 }
 
 // String is part of the flag.Value interface.
@@ -72,19 +95,77 @@ func (cfg *Config) Type() string { return "cluster.Config" }
 // Set is part of the flag.Value interface. Each flag is parsed according to the
 // following DSN:
 //
-// 		id= // ID or shortname of the cluster.
-//		name= // Name of the cluster.
-// 		discovery= // Name of the discovery implementation
-// 		discovery-.*= // Per-discovery-implementation flags. These are passed to
-//		              // a given discovery implementation's constructor.
-//		vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
-// 		          // to the vtsql package.
+//	id= // ID or shortname of the cluster.
+//	name= // Name of the cluster.
+//	discovery= // Name of the discovery implementation
+//	discovery-.*= // Per-discovery-implementation flags. These are passed to
+//	              // a given discovery implementation's constructor.
+//	vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
+//	          // to the vtsql package.
 func (cfg *Config) Set(value string) error {
 	if cfg.DiscoveryFlagsByImpl == nil {
 		cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
 	}
 
 	return parseFlag(cfg, value)
+}
+
+// ErrNoConfigID is returned from LoadConfig when a cluster spec has a missing
+// or empty id.
+var ErrNoConfigID = stderrors.New("loaded config has no id")
+
+// LoadConfig reads an io.Reader into viper and tries unmarshal a Config.
+//
+// The second parameter is used to instruct viper what config type it will read,
+// so it knows what Unmarshaller to use. If no config type is given, LoadConfig
+// defaults to "json". It is the callers responsibility to pass a configType
+// value that viper can use, which, at the time of writing, include "json",
+// "yaml", "toml", "ini", "hcl", "tfvars", "env", and "props".
+//
+// Any error that occurs during viper's initial read results in a return value
+// of (nil, "", <the error>), and a triple of this shape should indicate to the
+// caller complete failure. If viper is able to read the config, and get a
+// non-empty cluster ID, then the returned id will be non-empty, but the
+// returned Config and error values may or may not be nil, depending on if the
+// Config can be fully unmarshalled or not.
+//
+// See dynamic.ClusterFromString for additional details on this three-tuple and
+// how callers should expect to use it.
+func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err error) {
+	v := viper.New()
+	if configType == "" {
+		log.Warning("no configType specified, defaulting to 'json'")
+		configType = "json"
+	}
+
+	v.SetConfigType(configType)
+
+	if err := v.ReadConfig(r); err != nil {
+		return nil, "", err
+	}
+
+	id = v.GetString("id")
+	if id == "" {
+		return nil, "", ErrNoConfigID
+	}
+
+	tmp := map[string]string{}
+	if err := v.Unmarshal(&tmp); err != nil {
+		return nil, id, err
+	}
+
+	cfg = &Config{
+		ID:                   id,
+		DiscoveryFlagsByImpl: map[string]map[string]string{},
+		VtSQLFlags:           map[string]string{},
+		VtctldFlags:          map[string]string{},
+	}
+
+	if err := cfg.unmarshalMap(tmp); err != nil {
+		return nil, id, err
+	}
+
+	return cfg, id, nil
 }
 
 func (cfg *Config) unmarshalMap(attributes map[string]string) error {
@@ -107,6 +188,11 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		Size:        DefaultReadPoolSize,
 		WaitTimeout: DefaultReadPoolWaitTimeout,
 	}
+	defaultCacheConfig := &cache.Config{
+		BackfillRequestTTL:      cache.DefaultBackfillRequestTTL,
+		BackfillQueueSize:       10,
+		BackfillEnqueueWaitTime: cache.DefaultBackfillEnqueueWaitTime,
+	}
 
 	tmp := struct {
 		ID                   string            `json:"id"`
@@ -122,18 +208,26 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoRWPoolConfig       *RPCPoolConfig `json:"topo_rw_pool_config"`
 		TopoReadPoolConfig     *RPCPoolConfig `json:"topo_read_pool_config"`
 		WorkflowReadPoolConfig *RPCPoolConfig `json:"workflow_read_pool_config"`
+
+		EmergencyFailoverPoolConfig *RPCPoolConfig `json:"emergency_failover_pool_config"`
+		FailoverPoolConfig          *RPCPoolConfig `json:"failover_pool_config"`
+
+		SchemaCacheConfig *cache.Config `json:"schema_cache_config"`
 	}{
-		ID:                     cfg.ID,
-		Name:                   cfg.Name,
-		DiscoveryImpl:          cfg.DiscoveryImpl,
-		DiscoveryFlagsByImpl:   cfg.DiscoveryFlagsByImpl,
-		VtSQLFlags:             cfg.VtSQLFlags,
-		VtctldFlags:            cfg.VtctldFlags,
-		BackupReadPoolConfig:   defaultReadPoolConfig.merge(cfg.BackupReadPoolConfig),
-		SchemaReadPoolConfig:   defaultReadPoolConfig.merge(cfg.SchemaReadPoolConfig),
-		TopoRWPoolConfig:       defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
-		TopoReadPoolConfig:     defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
-		WorkflowReadPoolConfig: defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
+		ID:                          cfg.ID,
+		Name:                        cfg.Name,
+		DiscoveryImpl:               cfg.DiscoveryImpl,
+		DiscoveryFlagsByImpl:        cfg.DiscoveryFlagsByImpl,
+		VtSQLFlags:                  cfg.VtSQLFlags,
+		VtctldFlags:                 cfg.VtctldFlags,
+		BackupReadPoolConfig:        defaultReadPoolConfig.merge(cfg.BackupReadPoolConfig),
+		SchemaReadPoolConfig:        defaultReadPoolConfig.merge(cfg.SchemaReadPoolConfig),
+		TopoRWPoolConfig:            defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
+		TopoReadPoolConfig:          defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
+		WorkflowReadPoolConfig:      defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
+		EmergencyFailoverPoolConfig: defaultRWPoolConfig.merge(cfg.EmergencyFailoverPoolConfig),
+		FailoverPoolConfig:          defaultRWPoolConfig.merge(cfg.FailoverPoolConfig),
+		SchemaCacheConfig:           mergeCacheConfigs(defaultCacheConfig, cfg.SchemaCacheConfig),
 	}
 
 	return json.Marshal(&tmp)
@@ -143,18 +237,21 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 // config. Neither the caller or the argument are modified in any way.
 func (cfg Config) Merge(override Config) Config {
 	merged := Config{
-		ID:                     cfg.ID,
-		Name:                   cfg.Name,
-		DiscoveryImpl:          cfg.DiscoveryImpl,
-		DiscoveryFlagsByImpl:   map[string]map[string]string{},
-		TabletFQDNTmplStr:      cfg.TabletFQDNTmplStr,
-		VtSQLFlags:             map[string]string{},
-		VtctldFlags:            map[string]string{},
-		BackupReadPoolConfig:   cfg.BackupReadPoolConfig.merge(override.BackupReadPoolConfig),
-		SchemaReadPoolConfig:   cfg.SchemaReadPoolConfig.merge(override.SchemaReadPoolConfig),
-		TopoReadPoolConfig:     cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
-		TopoRWPoolConfig:       cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
-		WorkflowReadPoolConfig: cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
+		ID:                          cfg.ID,
+		Name:                        cfg.Name,
+		DiscoveryImpl:               cfg.DiscoveryImpl,
+		DiscoveryFlagsByImpl:        map[string]map[string]string{},
+		TabletFQDNTmplStr:           cfg.TabletFQDNTmplStr,
+		VtSQLFlags:                  map[string]string{},
+		VtctldFlags:                 map[string]string{},
+		BackupReadPoolConfig:        cfg.BackupReadPoolConfig.merge(override.BackupReadPoolConfig),
+		SchemaReadPoolConfig:        cfg.SchemaReadPoolConfig.merge(override.SchemaReadPoolConfig),
+		TopoReadPoolConfig:          cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
+		TopoRWPoolConfig:            cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
+		WorkflowReadPoolConfig:      cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
+		EmergencyFailoverPoolConfig: cfg.EmergencyFailoverPoolConfig.merge(override.EmergencyFailoverPoolConfig),
+		FailoverPoolConfig:          cfg.FailoverPoolConfig.merge(override.FailoverPoolConfig),
+		SchemaCacheConfig:           mergeCacheConfigs(cfg.SchemaCacheConfig, override.SchemaCacheConfig),
 	}
 
 	if override.ID != "" {
@@ -191,6 +288,81 @@ func mergeStringMap(base map[string]string, override map[string]string) {
 	for k, v := range override {
 		base[k] = v
 	}
+}
+
+func mergeCacheConfigs(base, override *cache.Config) *cache.Config {
+	if base == nil && override == nil {
+		return nil
+	}
+
+	merged := &cache.Config{
+		DefaultExpiration:                -1,
+		CleanupInterval:                  -1,
+		BackfillRequestTTL:               -1,
+		BackfillRequestDuplicateInterval: -1,
+		BackfillQueueSize:                -1,
+		BackfillEnqueueWaitTime:          -1,
+	}
+
+	for _, c := range []*cache.Config{base, override} {
+		if c != nil {
+			if c.DefaultExpiration >= 0 {
+				merged.DefaultExpiration = c.DefaultExpiration
+			}
+
+			if c.CleanupInterval >= 0 {
+				merged.CleanupInterval = c.CleanupInterval
+			}
+
+			if c.BackfillRequestTTL >= 0 {
+				merged.BackfillRequestTTL = c.BackfillRequestTTL
+			}
+
+			if c.BackfillRequestDuplicateInterval >= 0 {
+				merged.BackfillRequestDuplicateInterval = c.BackfillRequestDuplicateInterval
+			}
+
+			if c.BackfillQueueSize >= 0 {
+				merged.BackfillQueueSize = c.BackfillQueueSize
+			}
+
+			if c.BackfillEnqueueWaitTime >= 0 {
+				merged.BackfillEnqueueWaitTime = c.BackfillEnqueueWaitTime
+			}
+		}
+	}
+
+	return merged
+}
+
+func parseCacheConfigFlag(cfg *cache.Config, name, val string) (err error) {
+	switch name {
+	case "default-expiration":
+		cfg.DefaultExpiration, err = time.ParseDuration(val)
+	case "cleanup-interval":
+		cfg.CleanupInterval, err = time.ParseDuration(val)
+	case "backfill-request-ttl":
+		cfg.BackfillRequestTTL, err = time.ParseDuration(val)
+	case "backfill-request-duplicate-interval":
+		cfg.BackfillRequestDuplicateInterval, err = time.ParseDuration(val)
+	case "backfill-queue-size":
+		size, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+
+		if size < 0 {
+			return fmt.Errorf("%w: backfill queue size must be non-negative; got %d", strconv.ErrRange, size)
+		}
+
+		cfg.BackfillQueueSize = int(size)
+	case "backfill-enqueue-wait-time":
+		cfg.BackfillEnqueueWaitTime, err = time.ParseDuration(val)
+	default:
+		return errors.ErrNoFlag
+	}
+
+	return err
 }
 
 // RPCPoolConfig holds configuration options for creating RPCPools.
@@ -291,4 +463,24 @@ func (cfg *RPCPoolConfig) parseFlag(name string, val string) (err error) {
 	}
 
 	return nil
+}
+
+// WithVtctldTestConfigOptions returns a new Config with the given vtctldclient
+// ConfigOptions appended to any existing ConfigOptions in the current Config.
+//
+// It should be used in tests only, and is exported to for use in the
+// vtadmin/testutil package.
+func (cfg Config) WithVtctldTestConfigOptions(opts ...vtctldclient.ConfigOption) Config {
+	cfg.vtctldConfigOpts = append(cfg.vtctldConfigOpts, opts...)
+	return cfg
+}
+
+// WithVtSQLTestConfigOptions returns a new Config with the given vtsql
+// ConfigOptions appended to any existing ConfigOptions in the current Config.
+//
+// It should be used in tests only, and is exported to for use in the
+// vtadmin/testutil package.
+func (cfg Config) WithVtSQLTestConfigOptions(opts ...vtsql.ConfigOption) Config {
+	cfg.vtsqlConfigOpts = append(cfg.vtsqlConfigOpts, opts...)
+	return cfg
 }

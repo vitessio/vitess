@@ -46,14 +46,14 @@ func hasObservers(serverAddr string) (string, string, bool) {
 // Further implementation design note: Zookeeper supports Observers:
 // https://zookeeper.apache.org/doc/trunk/zookeeperObservers.html
 // To use them, follow these instructions:
-// * setup your observer servers as described in the previous link.
-// * specify a second set of servers in serverAddr, after a '|', like:
-//   global1:port1,global2:port2|observer1:port1,observer2:port2
-// * if HasGlobalReadOnlyCell detects that the serverAddr has both lists,
-//   it returns true.
-// * the Create method below also splits the values, and if
-//   cell is GlobalCell, use the left side, if cell is GlobalReadOnlyCell,
-//   use the right side.
+//   - setup your observer servers as described in the previous link.
+//   - specify a second set of servers in serverAddr, after a '|', like:
+//     global1:port1,global2:port2|observer1:port1,observer2:port2
+//   - if HasGlobalReadOnlyCell detects that the serverAddr has both lists,
+//     it returns true.
+//   - the Create method below also splits the values, and if
+//     cell is GlobalCell, use the left side, if cell is GlobalReadOnlyCell,
+//     use the right side.
 func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
 	_, _, ok := hasObservers(serverAddr)
 	return ok

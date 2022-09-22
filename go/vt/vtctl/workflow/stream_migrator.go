@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -633,13 +632,11 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 // This can then be used by go's template package to substitute other keyrange values.
 func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
-	if !ok {
-		if !schema.IsInternalOperationTableName(rule.Match) {
-			return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
-		}
+	if !ok && !schema.IsInternalOperationTableName(rule.Match) {
+		return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
 
-	if vtable.Type == vindexes.TypeReference {
+	if vtable != nil && vtable.Type == vindexes.TypeReference {
 		return StreamTypeReference, nil
 	}
 
@@ -715,7 +712,7 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 	// There was no in_keyrange expression. Create a new one.
 	vtable := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	inkr := &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("in_keyrange"),
+		Name: sqlparser.NewIdentifierCI("in_keyrange"),
 		Exprs: sqlparser.SelectExprs{
 			&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]}},
 			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vtable.ColumnVindexes[0].Type)},
@@ -758,15 +755,11 @@ func (sm *StreamMigrator) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, 
 
 func (sm *StreamMigrator) identifyRuleType(rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
-	if !ok {
-		if schema.IsInternalOperationTableName(rule.Match) {
-			log.Infof("found internal table %s, ignoring in rule identification", rule.Match)
-		} else {
-			return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
-		}
+	if !ok && !schema.IsInternalOperationTableName(rule.Match) {
+		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
 
-	if vtable.Type == vindexes.TypeReference {
+	if vtable != nil && vtable.Type == vindexes.TypeReference {
 		return StreamTypeReference, nil
 	}
 

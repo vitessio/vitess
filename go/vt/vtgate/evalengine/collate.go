@@ -38,7 +38,7 @@ var collationNumeric = collations.TypedCollation{
 
 var collationBinary = collations.TypedCollation{
 	Collation:    collations.CollationBinaryID,
-	Coercibility: collations.CoerceExplicit,
+	Coercibility: collations.CoerceCoercible,
 	Repertoire:   collations.RepertoireASCII,
 }
 
@@ -51,7 +51,8 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 }
 
 func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
-	return c.Inner.typeof(env)
+	t, f := c.Inner.typeof(env)
+	return t, f | flagExplicitCollation
 }
 
 type LookupDefaultCollation collations.ID
@@ -75,8 +76,8 @@ func mergeCollations(left, right *EvalResult) (collations.ID, error) {
 		return lc.Collation, nil
 	}
 
-	lt := left.textual()
-	rt := right.textual()
+	lt := left.isTextual()
+	rt := right.isTextual()
 	if !lt || !rt {
 		if lt {
 			return lc.Collation, nil
@@ -97,10 +98,16 @@ func mergeCollations(left, right *EvalResult) (collations.ID, error) {
 	}
 
 	if coerceLeft != nil {
-		left.bytes_, _ = coerceLeft(nil, left.bytes())
+		left.bytes_, err = coerceLeft(nil, left.bytes())
+		if err != nil {
+			throwEvalError(err)
+		}
 	}
 	if coerceRight != nil {
-		right.bytes_, _ = coerceRight(nil, right.bytes())
+		right.bytes_, err = coerceRight(nil, right.bytes())
+		if err != nil {
+			throwEvalError(err)
+		}
 	}
 
 	left.replaceCollation(mc)

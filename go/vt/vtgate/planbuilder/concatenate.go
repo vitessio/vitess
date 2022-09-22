@@ -70,9 +70,7 @@ func (c *concatenate) Primitive() engine.Primitive {
 	lhs := c.lhs.Primitive()
 	rhs := c.rhs.Primitive()
 
-	return &engine.Concatenate{
-		Sources: []engine.Primitive{lhs, rhs},
-	}
+	return engine.NewConcatenate([]engine.Primitive{lhs, rhs}, nil)
 }
 
 // Rewrite implements the logicalPlan interface

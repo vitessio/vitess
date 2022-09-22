@@ -89,27 +89,27 @@ func TestVtclient(t *testing.T) {
 			args: []string{"SELECT * FROM table1"},
 		},
 		{
-			args: []string{"-target", "@primary", "-bind_variables", `[ 1, 100 ]`,
+			args: []string{"--target", "@primary", "--bind_variables", `[ 1, 100 ]`,
 				"INSERT INTO table1 (id, i) VALUES (:v1, :v2)"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@primary",
+			args: []string{"--target", "@primary",
 				"UPDATE table1 SET i = (i + 1)"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@primary",
+			args: []string{"--target", "@primary",
 				"SELECT * FROM table1"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@primary", "-bind_variables", `[ 1 ]`,
+			args: []string{"--target", "@primary", "--bind_variables", `[ 1 ]`,
 				"DELETE FROM table1 WHERE id = :v1"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@primary",
+			args: []string{"--target", "@primary",
 				"SELECT * FROM table1"},
 			rowsAffected: 0,
 		},
@@ -124,7 +124,7 @@ func TestVtclient(t *testing.T) {
 	for _, q := range queries {
 		// Run main function directly and not as external process. To achieve this,
 		// overwrite os.Args which is used by flag.Parse().
-		os.Args = []string{"vtclient_test.go", "-server", vtgateAddr}
+		os.Args = []string{"vtclient_test.go", "--server", vtgateAddr}
 		os.Args = append(os.Args, q.args...)
 
 		results, err := run()

@@ -163,3 +163,43 @@ func (c *Config) GetAuthenticator() Authenticator {
 func (c *Config) GetAuthorizer() *Authorizer {
 	return c.authorizer
 }
+
+// DefaultConfig returns a default config that allows all actions on all resources
+// It is mainly used in the case where users explicitly pass --no-rbac flag.
+func DefaultConfig() *Config {
+	log.Info("[rbac]: using default rbac configuration")
+	actions := []string{string(GetAction), string(CreateAction), string(DeleteAction), string(PutAction), string(PingAction)}
+	subjects := []string{"*"}
+	clusters := []string{"*"}
+
+	cfg := map[string][]*Rule{
+		"*": {
+			{
+				clusters: sets.NewString(clusters...),
+				actions:  sets.NewString(actions...),
+				subjects: sets.NewString(subjects...),
+			},
+		},
+	}
+
+	return &Config{
+		Rules: []*struct {
+			Resource string
+			Actions  []string
+			Subjects []string
+			Clusters []string
+		}{
+			{
+				Resource: "*",
+				Actions:  actions,
+				Subjects: subjects,
+				Clusters: clusters,
+			},
+		},
+		cfg: cfg,
+		authorizer: &Authorizer{
+			policies: cfg,
+		},
+		authenticator: nil,
+	}
+}

@@ -164,6 +164,9 @@ func TestRewrites(in *testing.T) {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42 from dual)` from dual",
 	}, {
+		in:       "select exists(select 1) from user",
+		expected: "select exists(select 1 limit 1) from user",
+	}, {
 		in:       "select * from user where col = (select 42)",
 		expected: "select * from user where col = 42",
 	}, {
@@ -181,9 +184,6 @@ func TestRewrites(in *testing.T) {
 		in:       `select * from user where col = @@read_after_write_gtid OR col = @@read_after_write_timeout OR col = @@session_track_gtids`,
 		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
 		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
-	}, {
-		in:       "SELECT a.col, b.col FROM A JOIN B USING (id)",
-		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id = B.id",
 	}, {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual)",
 		expected: "SELECT * FROM tbl WHERE id IN (1)",
@@ -212,9 +212,6 @@ func TestRewrites(in *testing.T) {
 	}, {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
-	}, {
-		in:       "SELECT a.col, b.col FROM A JOIN B USING (id1,id2,id3)",
-		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id1 = B.id1 AND A.id2 = B.id2 AND A.id3 = B.id3",
 	}, {
 		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
 		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
@@ -261,7 +258,25 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT * FROM tbl WHERE id not regexp '%foobar'",
 	}, {
 		in:       "SELECT * FROM tbl WHERE not id not regexp '%foobar'",
-		expected: "SELECT * FROM tbl WHERE id regexp '%foobar'",
+		expected: "select * from tbl where id regexp '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar limit 100 offset 34)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1 offset 34)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar group by col1, col2)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar)",
+		expected: "SELECT * FROM tbl WHERE true",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
+		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3 limit 1)",
 	}, {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
@@ -442,7 +457,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		expected: "SELECT 1 from (select 2 from sys.test) t",
 	}, {
 		in:       "SELECT 1 from test where exists (select 2 from test)",
-		expected: "SELECT 1 from sys.test where exists (select 2 from sys.test)",
+		expected: "SELECT 1 from sys.test where exists (select 1 from sys.test limit 1)",
 	}, {
 		in:       "SELECT 1 from dual",
 		expected: "SELECT 1 from dual",

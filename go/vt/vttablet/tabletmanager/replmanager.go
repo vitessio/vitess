@@ -65,8 +65,10 @@ func newReplManager(ctx context.Context, tm *TabletManager, interval time.Durati
 	}
 }
 
+// SetTabletType starts/stops the replication manager ticks based on the tablet type provided.
+// It stops the ticks if the tablet type is not a replica type, starts the ticks otherwise.
 func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
-	if *mysqlctl.DisableActiveReparents {
+	if *mysqlctl.DisableActiveReparents || disableReplicationManager {
 		return
 	}
 	if !topo.IsReplicaType(tabletType) {
@@ -107,11 +109,24 @@ func (rm *replManager) checkActionLocked() {
 			return
 		}
 	} else {
-		// If only one of the threads is stopped, it's probably
-		// intentional. So, we don't repair replication.
-		if status.SQLThreadRunning || status.IOThreadRunning {
+		// Cases to consider for replication repair -
+		// 1. If both the threads are healthy, then there is nothing to repair.
+		// 2. If the IO thread is healthy but SQL thread isn't, then we assume it is intentional, and we don't repair replication.
+		// 3. If SQL thread is healthy but IO thread is in Connecting state with an IO Error, then we know that no Vitess operation stopped the IO thread
+		//	  and it is having trouble connecting to the primary Maybe the primary host-port changed, or something else happened.
+		//	  This could be an ephemeral error, so we should try and fix it.
+		// 4. If SQL thread is healthy but IO thread is stopped, then we assume it is intentional, and we don't repair replication.
+		// 5. Both the threads are unhealthy, then we need to repair replication
+		if status.IOHealthy() {
+			// This covers cases 1 and 2.
 			return
 		}
+		if status.SQLHealthy() && (status.IOState != mysql.ReplicationStateConnecting || status.LastIOError == "") {
+			// This covers case 4.
+			return
+		}
+		// We now attempt to repair replication.
+		// This covers cases 3 and 5.
 	}
 
 	if !rm.failed {
@@ -133,7 +148,7 @@ func (rm *replManager) checkActionLocked() {
 // reset the replication manager state and deleting the marker-file.
 // it does not start or stop the ticks. Use setReplicationStopped instead to change that.
 func (rm *replManager) reset() {
-	if *mysqlctl.DisableActiveReparents {
+	if *mysqlctl.DisableActiveReparents || disableReplicationManager {
 		return
 	}
 
@@ -150,7 +165,7 @@ func (rm *replManager) reset() {
 // setReplicationStopped performs a best effort attempt of
 // remembering a decision to stop replication.
 func (rm *replManager) setReplicationStopped(stopped bool) {
-	if *mysqlctl.DisableActiveReparents {
+	if *mysqlctl.DisableActiveReparents || disableReplicationManager {
 		return
 	}
 

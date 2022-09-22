@@ -2196,7 +2196,7 @@ func runningResult(id int) *sqltypes.Result {
 	return getResult(id, "Running", tpChoice.keyspace, tpChoice.shard)
 }
 
-func switchWrites(tmeT interface{}) {
+func switchWrites(tmeT any) {
 	if tme, ok := tmeT.(*testMigraterEnv); ok {
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 	} else if tme, ok := tmeT.(*testShardMigraterEnv); ok {

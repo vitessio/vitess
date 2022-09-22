@@ -22,17 +22,16 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -434,13 +433,15 @@ func TestChooseNewPrimary(t *testing.T) {
 		},
 	}
 
+	durability, err := GetDurabilityPolicy("none")
+	require.NoError(t, err)
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := ChooseNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.avoidPrimaryAlias, time.Millisecond*50, logger)
+			actual, err := ChooseNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.avoidPrimaryAlias, time.Millisecond*50, durability, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1050,6 +1051,168 @@ func TestRestrictValidCandidates(t *testing.T) {
 			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
 			assert.NoError(t, err)
 			assert.Equal(t, res, test.result)
+		})
+	}
+}
+
+func Test_findCandidate(t *testing.T) {
+	tests := []struct {
+		name               string
+		intermediateSource *topodatapb.Tablet
+		possibleCandidates []*topodatapb.Tablet
+		candidate          *topodatapb.Tablet
+	}{
+		{
+			name:      "empty possible candidates list",
+			candidate: nil,
+		}, {
+			name: "intermediate source in possible candidates list",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  103,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+				},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				},
+			},
+		}, {
+			name: "intermediate source not in possible candidates list",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  104,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+				},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := findCandidate(tt.intermediateSource, tt.possibleCandidates)
+			if tt.candidate == nil {
+				require.Nil(t, res)
+			} else {
+				require.NotNil(t, res)
+				require.Equal(t, topoproto.TabletAliasString(tt.candidate.Alias), topoproto.TabletAliasString(res.Alias))
+			}
+		})
+	}
+}
+
+func Test_getTabletsWithPromotionRules(t *testing.T) {
+	var (
+		primaryTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  1,
+			},
+			Type: topodatapb.TabletType_PRIMARY,
+		}
+		replicaTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  2,
+			},
+			Type: topodatapb.TabletType_REPLICA,
+		}
+		rdonlyTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  3,
+			},
+			Type: topodatapb.TabletType_RDONLY,
+		}
+		replicaCrossCellTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-2",
+				Uid:  2,
+			},
+			Type: topodatapb.TabletType_REPLICA,
+		}
+		rdonlyCrossCellTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-2",
+				Uid:  3,
+			},
+			Type: topodatapb.TabletType_RDONLY,
+		}
+	)
+	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
+	tests := []struct {
+		name            string
+		tablets         []*topodatapb.Tablet
+		rule            promotionrule.CandidatePromotionRule
+		filteredTablets []*topodatapb.Tablet
+	}{
+		{
+			name:            "filter candidates with Neutral promotion rule",
+			tablets:         allTablets,
+			rule:            promotionrule.Neutral,
+			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
+		},
+		{
+			name:            "filter candidates with MustNot promotion rule",
+			tablets:         allTablets,
+			rule:            promotionrule.MustNot,
+			filteredTablets: []*topodatapb.Tablet{rdonlyTablet, rdonlyCrossCellTablet},
+		},
+		{
+			name:            "filter candidates with Must promotion rule",
+			tablets:         allTablets,
+			rule:            promotionrule.Must,
+			filteredTablets: nil,
+		},
+	}
+	durability, _ := GetDurabilityPolicy("none")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := getTabletsWithPromotionRules(durability, tt.tablets, tt.rule)
+			require.EqualValues(t, tt.filteredTablets, res)
 		})
 	}
 }

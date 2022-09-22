@@ -1,4 +1,4 @@
-FROM golang:1.17-buster
+FROM --platform=linux/amd64 golang:1.18.5-buster
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -48,4 +48,3 @@ RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln 
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
-

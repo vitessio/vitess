@@ -21,16 +21,13 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
-
-	"github.com/google/go-cmp/cmp"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestFunctionInDefault(t *testing.T) {
@@ -41,12 +38,12 @@ func TestFunctionInDefault(t *testing.T) {
 	defer conn.Close()
 
 	// set the sql mode ALLOW_INVALID_DATES
-	exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
+	utils.Exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
 
-	exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
-	exec(t, conn, "drop table function_default")
+	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
+	utils.Exec(t, conn, "drop table function_default")
 
-	exec(t, conn, `create table function_default (
+	utils.Exec(t, conn, `create table function_default (
 ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 dt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 ts2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -66,14 +63,14 @@ ts10 TIMESTAMP DEFAULT LOCALTIME,
 ts11 TIMESTAMP DEFAULT LOCALTIMESTAMP(),
 ts12 TIMESTAMP DEFAULT LOCALTIME()
 )`)
-	exec(t, conn, "drop table function_default")
+	utils.Exec(t, conn, "drop table function_default")
 
 	// this query works because utc_timestamp will get parenthesised before reaching MySQL. However, this syntax is not supported in MySQL 8.0
-	exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
-	exec(t, conn, "drop table function_default")
+	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
+	utils.Exec(t, conn, "drop table function_default")
 
-	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
-	exec(t, conn, "drop table function_default")
+	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
+	utils.Exec(t, conn, "drop table function_default")
 }
 
 // TestCheckConstraint test check constraints on CREATE TABLE
@@ -84,15 +81,15 @@ func TestCheckConstraint(t *testing.T) {
 	defer conn.Close()
 
 	query := `CREATE TABLE t7 (CHECK (c1 <> c2), c1 INT CHECK (c1 > 10), c2 INT CONSTRAINT c2_positive CHECK (c2 > 0), c3 INT CHECK (c3 < 100), CONSTRAINT c1_nonzero CHECK (c1 <> 0), CHECK (c1 > c3));`
-	exec(t, conn, query)
+	utils.Exec(t, conn, query)
 
 	checkQuery := `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = 't7' order by CONSTRAINT_NAME;`
 	expected := `[[VARCHAR("c1_nonzero")] [VARCHAR("c2_positive")] [VARCHAR("t7_chk_1")] [VARCHAR("t7_chk_2")] [VARCHAR("t7_chk_3")] [VARCHAR("t7_chk_4")]]`
 
-	assertMatches(t, conn, checkQuery, expected)
+	utils.AssertMatches(t, conn, checkQuery, expected)
 
 	cleanup := `DROP TABLE t7`
-	exec(t, conn, cleanup)
+	utils.Exec(t, conn, cleanup)
 }
 
 func TestValueDefault(t *testing.T) {
@@ -104,16 +101,17 @@ func TestValueDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1,b blob default ('abc'));`)
-	defer exec(t, conn, `drop table test_float_default`)
-	assertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_name", `[[VARBINARY("test_float_default") VARCHAR("b") BLOB("_utf8mb4\\'abc\\'")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")] [VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")]]`)
+	utils.Exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1,b blob default ('abc'));`)
+	defer utils.Exec(t, conn, `drop table test_float_default`)
+	utils.AssertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_name", `[[VARBINARY("test_float_default") VARCHAR("b") BLOB("_utf8mb4\\'abc\\'")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")] [VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")]]`)
 }
 
 func TestVersionCommentWorks(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-	exec(t, conn, "/*!80000 SET SESSION information_schema_stats_expiry=0 */")
+	utils.Exec(t, conn, "/*!80000 SET SESSION information_schema_stats_expiry=0 */")
+	utils.Exec(t, conn, "/*!80000 SET SESSION information_schema_stats_expiry=0 */")
 }
 
 func TestSystemVariables(t *testing.T) {
@@ -224,19 +222,73 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 	}
 }
 
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := exec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
-}
+func TestJsonFunctions(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err, "for query: "+query)
-	return qr
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_QUOTE('null'), 
+JSON_QUOTE('"null"'), 
+JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), 
+JSON_ARRAY(1, "abc", NULL, TRUE)`,
+		`[[VARBINARY("\"null\"") VARBINARY("\"\\\"null\\\"\"") JSON("{\"1\": 2, \"abc\": 52}") JSON("[1, \"abc\", null, true]")]]`)
+
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1'), 
+JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'one', '$.a', '$.e'), 
+JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), 
+JSON_UNQUOTE(JSON_EXTRACT('["a","b"]', '$[1]')), 
+JSON_KEYS('{"a": 1, "b": {"c": 30}}'), 
+JSON_OVERLAPS("[1,3,5,7]", "[2,5,7]"), 
+JSON_SEARCH('["abc"]', 'one', 'abc'), 
+JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname'), 
+JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')`,
+		`[[INT64(0) INT64(1) JSON("20") BLOB("b") JSON("[\"a\", \"b\"]") INT64(1) JSON("\"$[0]\"") VARBINARY("Joe") INT64(1)]]`)
+
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"'), 
+JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"');`,
+		`[[JSON("{\"valid\": true}") INT64(1)]]`)
+
+	utils.Exec(t, conn, "create table jt(a JSON, b INT)")
+	utils.Exec(t, conn, `INSERT INTO jt (a, b) VALUES ("[3,10,5,\"x\",44]", 33), ("[3,10,5,17,[22,44,66]]", 0)`)
+	defer func() {
+		utils.Exec(t, conn, "drop table jt")
+	}()
+
+	utils.AssertMatches(t, conn,
+		`SELECT a->"$[4]", a->>"$[3]" FROM jt`,
+		`[[JSON("44") BLOB("x")] [JSON("[22, 44, 66]") BLOB("17")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select JSON_DEPTH('{}'), JSON_LENGTH('{"a": 1, "b": {"c": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{"a": [10, true]}', '$.a')), JSON_VALID('{"a": 1}');`,
+		`[[INT64(1) INT64(1) VARBINARY("ARRAY") INT64(1)]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_ARRAY_APPEND('{"a": 1}', '$', 'z'), 
+JSON_ARRAY_INSERT('["a", {"b": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), 
+JSON_INSERT('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))`,
+		`[[JSON("[{\"a\": 1}, \"z\"]") JSON("[\"x\", \"a\", {\"b\": [1, 2]}, [3, 4]]") JSON("{\"a\": 1, \"b\": [2, 3], \"c\": [true, false]}")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_MERGE('[1, 2]', '[true, false]'), 
+JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}'),
+JSON_MERGE_PRESERVE('[1, 2]', '{"id": 47}')`,
+		`[[JSON("[1, 2, true, false]") JSON("{\"id\": 47, \"name\": \"x\"}") JSON("[1, 2, {\"id\": 47}]")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), 
+JSON_REPLACE('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), 
+JSON_SET('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), 
+JSON_UNQUOTE('"abc"')`,
+		`[[JSON("[1, 4]") JSON("{\"a\": 10, \"b\": [2, 3]}") JSON("{\"a\": 10, \"b\": [2, 3], \"c\": \"[true, false]\"}") VARBINARY("abc")]]`)
 }

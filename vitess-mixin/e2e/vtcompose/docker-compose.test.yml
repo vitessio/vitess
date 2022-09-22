@@ -105,8 +105,8 @@ services:
       - '/script/run-forever.sh $$VTROOT/bin/vtgate -topo_implementation consul -topo_global_server_address
       consul1:8500 -topo_global_root vitess/global -logtostderr=true -port 8080 -grpc_port
       15999 -mysql_server_port 15306 -mysql_auth_server_impl none -cell test -cells_to_watch
-      test -tablet_types_to_wait PRIMARY,REPLICA,RDONLY -gateway_implementation discoverygateway
-      -service_map ''grpc-vtgateservice'' -pid_file $$VTDATAROOT/tmp/vtgate.pid -normalize_queries=true '
+      test -tablet_types_to_wait PRIMARY,REPLICA,RDONLY -service_map ''grpc-vtgateservice''
+      -pid_file $$VTDATAROOT/tmp/vtgate.pid -normalize_queries=true '
     depends_on:
       - vtctld
     image: vitess/base
@@ -301,18 +301,4 @@ services:
       - "3306"
     volumes:
       - .:/script
-  vtwork:
-    command:
-      - sh
-      - -c
-      - '$$VTROOT/bin/vtworker -topo_implementation consul -topo_global_server_address
-      consul1:8500 -topo_global_root vitess/global -cell test -logtostderr=true -service_map
-      ''grpc-vtworker'' -port 8080 -grpc_port 15999 -use_v3_resharding_mode=true -pid_file
-      $$VTDATAROOT/tmp/vtwork.pid '
-    depends_on:
-      - vtctld
-    image: vitess/base
-    ports:
-      - 15100:8080
-      - "15999"
 version: "2.1"

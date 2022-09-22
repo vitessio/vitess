@@ -19,15 +19,14 @@ package readafterwrite
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -119,13 +118,15 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "5"}
+		clusterInstance.VtTabletExtraArgs = []string{
+			"--queryserver-config-transaction-timeout", "5",
+		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s"}
+		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {
@@ -147,29 +148,7 @@ func TestRAWSettings(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	assertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("") FLOAT64(0) VARCHAR("off")]]`)
-	exec(t, conn, `set read_after_write_gtid = 'some-gtid:1', read_after_write_timeout = 0.2, session_track_gtids = own_gtid`)
-	assertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("some-gtid:1") FLOAT64(0.2) VARCHAR("own_gtid")]]`)
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	t.Helper()
-	return conn.ExecuteFetch(query, 1000, true)
-}
-
-func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	return qr
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := checkedExec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
+	utils.AssertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("") FLOAT64(0) VARCHAR("off")]]`)
+	utils.Exec(t, conn, `set read_after_write_gtid = 'some-gtid:1', read_after_write_timeout = 0.2, session_track_gtids = own_gtid`)
+	utils.AssertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("some-gtid:1") FLOAT64(0.2) VARCHAR("own_gtid")]]`)
 }

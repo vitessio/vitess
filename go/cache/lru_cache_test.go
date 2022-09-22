@@ -24,7 +24,7 @@ type CacheValue struct {
 	size int64
 }
 
-func cacheValueSize(val interface{}) int64 {
+func cacheValueSize(val any) int64 {
 	return val.(*CacheValue).size
 }
 

@@ -47,6 +47,11 @@ service Vtctld {
   rpc ApplySchema(vtctldata.ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
   // ApplyVSchema applies a vschema to a keyspace.
   rpc ApplyVSchema(vtctldata.ApplyVSchemaRequest) returns (vtctldata.ApplyVSchemaResponse) {};
+  // Backup uses the BackupEngine and BackupStorage services on the specified
+  // tablet to create and store a new backup.
+  rpc Backup(vtctldata.BackupRequest) returns (stream vtctldata.BackupResponse) {};
+  // BackupShard chooses a tablet in the shard and uses it to create a backup.
+  rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
@@ -81,6 +86,10 @@ service Vtctld {
   // EmergencyReparentShard reparents the shard to the new primary. It assumes
   // the old primary is dead or otherwise not responding.
   rpc EmergencyReparentShard(vtctldata.EmergencyReparentShardRequest) returns (vtctldata.EmergencyReparentShardResponse) {};
+  // ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
+  rpc ExecuteFetchAsApp(vtctldata.ExecuteFetchAsAppRequest) returns (vtctldata.ExecuteFetchAsAppResponse) {};
+  // ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
+  rpc ExecuteFetchAsDBA(vtctldata.ExecuteFetchAsDBARequest) returns (vtctldata.ExecuteFetchAsDBAResponse) {};
   // ExecuteHook runs the hook on the tablet.
   rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
   // FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -96,10 +105,14 @@ service Vtctld {
   // GetCellsAliases returns a mapping of cell alias to cells identified by that
   // alias.
   rpc GetCellsAliases(vtctldata.GetCellsAliasesRequest) returns (vtctldata.GetCellsAliasesResponse) {};
+  // GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+  rpc GetFullStatus(vtctldata.GetFullStatusRequest) returns (vtctldata.GetFullStatusResponse) {};
   // GetKeyspace reads the given keyspace from the topo and returns it.
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetPermissions returns the permissions set on the remote tablet.
+  rpc GetPermissions(vtctldata.GetPermissionsRequest) returns (vtctldata.GetPermissionsResponse) {};
   // GetRoutingRules returns the VSchema routing rules.
   rpc GetRoutingRules(vtctldata.GetRoutingRulesRequest) returns (vtctldata.GetRoutingRulesResponse) {};
   // GetSchema returns the schema for a tablet, or just the schema for the
@@ -122,6 +135,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetVersion returns the version of a tablet from its debug vars.
+  rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.
   rpc GetVSchema(vtctldata.GetVSchemaRequest) returns (vtctldata.GetVSchemaResponse) {};
   // GetWorkflows returns a list of workflows for the given keyspace.
@@ -167,6 +182,8 @@ service Vtctld {
   // on a best-effort basis, and log warnings for any tablets that fail to
   // reload within the context deadline.
   rpc ReloadSchemaShard(vtctldata.ReloadSchemaShardRequest) returns (vtctldata.ReloadSchemaShardResponse) {};
+  // RemoveBackup removes a backup from the BackupStorage used by vtctld.
+  rpc RemoveBackup(vtctldata.RemoveBackupRequest) returns (vtctldata.RemoveBackupResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
   // shards in the specified keyspace (by calling RemoveShardCell on every
   // shard). It also removes the SrvKeyspace for that keyspace in that cell.
@@ -178,15 +195,12 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+  rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
-  // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
-  // only for emergency fixes. This does not rebuild the serving graph.
-  //
-  // The ServedFromMap is automatically updated as a part of MigrateServedFrom.
-  rpc SetKeyspaceServedFrom(vtctldata.SetKeyspaceServedFromRequest) returns (vtctldata.SetKeyspaceServedFromResponse) {};
-  // SetKeyspaceShardingInfo updates the sharding information for a keyspace.
-  rpc SetKeyspaceShardingInfo(vtctldata.SetKeyspaceShardingInfoRequest) returns (vtctldata.SetKeyspaceShardingInfoResponse) {};
+  // SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+  rpc SetKeyspaceDurabilityPolicy(vtctldata.SetKeyspaceDurabilityPolicyRequest) returns (vtctldata.SetKeyspaceDurabilityPolicyResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving
@@ -201,17 +215,40 @@ service Vtctld {
   rpc SetShardTabletControl(vtctldata.SetShardTabletControlRequest) returns (vtctldata.SetShardTabletControlResponse) {};
   // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
   rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
+  // ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
+  //
+  // It is a low-level function and should generally not be called.
+  rpc ShardReplicationAdd(vtctldata.ShardReplicationAddRequest) returns (vtctldata.ShardReplicationAddResponse) {};
+  // ShardReplicationFix walks the replication graph for a shard in a cell and
+  // attempts to fix the first problem encountered, returning information about
+  // the problem fixed, if any.
+  rpc ShardReplicationFix(vtctldata.ShardReplicationFixRequest) returns (vtctldata.ShardReplicationFixResponse) {};
   // ShardReplicationPositions returns the replication position of each tablet
   // in a shard. This RPC makes a best-effort to return partial results. For
   // example, if one tablet in the shard graph is unreachable, then
   // ShardReplicationPositions will return non-error, and include valid results
   // for the reachable tablets.
   rpc ShardReplicationPositions(vtctldata.ShardReplicationPositionsRequest) returns (vtctldata.ShardReplicationPositionsResponse) {};
+  // ShardReplicationRemove removes an entry from a topodata.ShardReplication
+  // object.
+  //
+  // It is a low-level function and should generally not be called.
+  rpc ShardReplicationRemove(vtctldata.ShardReplicationRemoveRequest) returns (vtctldata.ShardReplicationRemoveResponse) {};
   // SleepTablet blocks the aciton queue on the specified tablet for the
   // specified duration.
   //
   // This is typically used for testing.
   rpc SleepTablet(vtctldata.SleepTabletRequest) returns (vtctldata.SleepTabletResponse) {};
+  // SourceShardAdd adds the SourceShard record with the provided index. This
+  // should be used only as an emergency function.
+  //
+  // It does not call RefreshState for the shard primary.
+  rpc SourceShardAdd(vtctldata.SourceShardAddRequest) returns (vtctldata.SourceShardAddResponse) {};
+  // SourceShardDelete deletes the SourceShard record with the provided index.
+  // This should be used only as an emergency cleanup function.
+  //
+  // It does not call RefreshState for the shard primary.
+  rpc SourceShardDelete(vtctldata.SourceShardDeleteRequest) returns (vtctldata.SourceShardDeleteResponse) {};
   // StartReplication starts replication on the specified tablet.
   rpc StartReplication(vtctldata.StartReplicationRequest) returns (vtctldata.StartReplicationResponse) {};
   // StopReplication stops replication on the specified tablet.
@@ -237,7 +274,13 @@ service Vtctld {
   // ValidateKeyspace validates that all nodes reachable from the specified
   // keyspace are consistent.
   rpc ValidateKeyspace(vtctldata.ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+  // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+  rpc ValidateSchemaKeyspace(vtctldata.ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
   // ValidateShard validates that all nodes reachable from the specified shard
   // are consistent.
   rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
+  // ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+  rpc ValidateVersionKeyspace(vtctldata.ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+  // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
+  rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
 }

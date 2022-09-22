@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -39,6 +40,24 @@ type (
 	OpLogicalAnd struct{}
 
 	boolean int8
+
+	// IsExpr represents the IS expression in MySQL.
+	// boolean_primary IS [NOT] {TRUE | FALSE | NULL}
+	IsExpr struct {
+		UnaryExpr
+		Op    sqlparser.IsExprOperator
+		Check func(*EvalResult) bool
+	}
+
+	WhenThen struct {
+		when Expr
+		then Expr
+	}
+
+	CaseExpr struct {
+		cases []WhenThen
+		Else  Expr
+	}
 )
 
 const (
@@ -127,7 +146,7 @@ func (left boolean) xor(right boolean) boolean {
 func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var inner EvalResult
 	inner.init(env, n.Inner)
-	out.setBoolean(inner.truthy().not())
+	out.setBoolean(inner.isTruthy().not())
 }
 
 func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
@@ -142,21 +161,13 @@ func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	if left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple {
 		panic("did not typecheck tuples")
 	}
-	out.setBoolean(l.op(left.truthy(), right.truthy()))
+	out.setBoolean(l.op(left.isTruthy(), right.isTruthy()))
 }
 
 func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	_, f1 := l.Left.typeof(env)
 	_, f2 := l.Right.typeof(env)
 	return sqltypes.Uint64, f1 | f2
-}
-
-// IsExpr represents the IS expression in MySQL.
-// boolean_primary IS [NOT] {TRUE | FALSE | NULL}
-type IsExpr struct {
-	UnaryExpr
-	Op    sqlparser.IsExprOperator
-	Check func(*EvalResult) bool
 }
 
 func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
@@ -168,3 +179,115 @@ func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	return sqltypes.Int64, 0
 }
+
+func (c *CaseExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	var tmp EvalResult
+	var matched = false
+	var ca collationAggregation
+	var local = collations.Local()
+
+	// From what we can tell, MySQL actually evaluates all the branches
+	// of a CASE expression, even after a truthy match. I.e. the CASE
+	// operator does _not_ short-circuit.
+
+	for _, whenThen := range c.cases {
+		tmp.init(env, whenThen.when)
+		truthy := tmp.isTruthy() == boolTrue
+
+		tmp.init(env, whenThen.then)
+		ca.add(local, tmp.collation())
+
+		if !matched && truthy {
+			tmp.resolve()
+			*result = tmp
+			matched = true
+		}
+	}
+	if c.Else != nil {
+		tmp.init(env, c.Else)
+		ca.add(local, tmp.collation())
+
+		if !matched {
+			tmp.resolve()
+			*result = tmp
+			matched = true
+		}
+	}
+
+	if !matched {
+		result.setNull()
+	}
+
+	t, _ := c.typeof(env)
+	result.coerce(t, ca.result().Collation)
+}
+
+func (c *CaseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	var ta typeAggregation
+	var resultFlag flag
+
+	for _, whenthen := range c.cases {
+		t, f := whenthen.then.typeof(env)
+		ta.add(t, f)
+		resultFlag = resultFlag | f
+	}
+	if c.Else != nil {
+		t, f := c.Else.typeof(env)
+		ta.add(t, f)
+		resultFlag = f
+	}
+	return ta.result(), resultFlag
+}
+
+func (c *CaseExpr) format(buf *formatter, depth int) {
+	buf.WriteString("CASE")
+	for _, cs := range c.cases {
+		buf.WriteString(" WHEN ")
+		cs.when.format(buf, depth)
+		buf.WriteString(" THEN ")
+		cs.then.format(buf, depth)
+	}
+	if c.Else != nil {
+		buf.WriteString(" ELSE ")
+		c.Else.format(buf, depth)
+	}
+}
+
+func (c *CaseExpr) constant() bool {
+	// TODO we should be able to simplify more cases than constant/simplify allows us to today
+	// example: case when true then col end
+	if c.Else != nil {
+		if !c.Else.constant() {
+			return false
+		}
+	}
+
+	for _, then := range c.cases {
+		if !then.when.constant() || !then.then.constant() {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (c *CaseExpr) simplify(env *ExpressionEnv) error {
+	var err error
+	for i := range c.cases {
+		whenThen := &c.cases[i]
+		whenThen.when, err = simplifyExpr(env, whenThen.when)
+		if err != nil {
+			return err
+		}
+		whenThen.then, err = simplifyExpr(env, whenThen.then)
+		if err != nil {
+			return err
+		}
+	}
+	if c.Else != nil {
+		c.Else, err = simplifyExpr(env, c.Else)
+	}
+	return err
+}
+
+var _ Expr = (*CaseExpr)(nil)

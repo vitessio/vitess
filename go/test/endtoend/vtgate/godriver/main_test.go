@@ -17,8 +17,8 @@ limitations under the License.
 package godriver
 
 import (
-	"database/sql"
 	"flag"
+	"fmt"
 	"os"
 	"strconv"
 	"testing"
@@ -42,18 +42,24 @@ var (
 	KeyspaceName    = "customer"
 	SchemaSQL       = `
 create table my_message(
-  time_scheduled bigint,
-  id bigint,
-  time_next bigint,
-  epoch bigint,
-  time_created bigint,
-  time_acked bigint,
-  message varchar(128),
-  priority tinyint NOT NULL DEFAULT '0',
-  primary key(time_scheduled, id),
-  unique index id_idx(id),
-  index next_idx(priority, time_next)
-) comment 'vitess_message,vt_ack_wait=30,vt_purge_after=86400,vt_batch_size=10,vt_cache_size=10000,vt_poller_interval=30';
+	# required columns
+	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+	epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+	time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+	time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+	# add as many custom fields here as required
+	# optional - these are suggestions
+	tenant_id bigint,
+	message json,
+
+	# required indexes
+	primary key(id),
+	index poller_idx(time_acked, priority, time_next desc)
+
+	# add any secondary indexes or foreign keys - no restrictions
+) comment 'vitess_message,vt_min_backoff=30,vt_max_backoff=3600,vt_ack_wait=30,vt_purge_after=86400,vt_batch_size=10,vt_cache_size=10000,vt_poller_interval=30'
 `
 	VSchema = `
 {
@@ -75,6 +81,8 @@ create table my_message(
   }
 }
 `
+
+	testMessage = "{\"message\":\"hello world\"}"
 )
 
 func TestMain(m *testing.M) {
@@ -96,14 +104,16 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "3"}
+		clusterInstance.VtTabletExtraArgs = []string{
+			"--queryserver-config-transaction-timeout", "3",
+		}
 		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			log.Fatal(err.Error())
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-warn_sharded_only=true"}
+		clusterInstance.VtGateExtraArgs = []string{"--warn_sharded_only=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Fatal(err.Error())
 			return 1
@@ -136,8 +146,7 @@ func TestStreamMessaging(t *testing.T) {
 	defer db.Close()
 
 	// Exec not allowed in streaming
-	timenow := time.Now().Add(time.Second * 60).UnixNano()
-	_, err = db.Exec("insert into my_message(id, message, time_scheduled) values(1, 'hello world', :curr_time)", sql.Named("curr_time", timenow))
+	_, err = db.Exec(fmt.Sprintf("insert into my_message(id, message) values(1, '%s')", testMessage))
 	require.NoError(t, err)
 
 	// for streaming messages

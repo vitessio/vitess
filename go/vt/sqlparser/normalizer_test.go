@@ -25,10 +25,14 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestNormalize(t *testing.T) {
@@ -128,7 +132,7 @@ func TestNormalize(t *testing.T) {
 		outstmt: "update a set v1 = :bv1 where v2 in ::bv2",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(5),
-			"bv2": sqltypes.TestBindVariable([]interface{}{1, 4, 5}),
+			"bv2": sqltypes.TestBindVariable([]any{1, 4, 5}),
 		},
 	}, {
 		// Hex number values should work for selects
@@ -161,13 +165,17 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Bin value does not convert
 		in:      "select * from t where v1 = b'11'",
-		outstmt: "select * from t where v1 = B'11'",
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "select * from t where v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x3")),
+		},
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
-		outstmt: "update a set v1 = B'11'",
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "update a set v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x3")),
+		},
 	}, {
 		// ORDER BY column_position
 		in:      "select a, b from t order by 1 asc",
@@ -220,19 +228,19 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where v1 in (1, '2')",
 		outstmt: "select * from t where v1 in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]interface{}{1, "2"}),
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
 		// NOT IN clause
 		in:      "select * from t where v1 not in (1, '2')",
 		outstmt: "select * from t where v1 not in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]interface{}{1, "2"}),
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
 		// Do not normalize cast/convert types
 		in:      `select CAST("test" AS CHAR(60))`,
-		outstmt: `select convert(:bv1, CHAR(60)) from dual`,
+		outstmt: `select cast(:bv1 as CHAR(60)) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
 		},
@@ -245,23 +253,99 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.StringBindVariable("2"),
 			"bv3": sqltypes.Int64BindVariable(3),
 		},
+	}, {
+		// BitVal should also be normalized
+		in:      `select b'1', 0b01, b'1010', 0b1111111`,
+		outstmt: `select :bv1, :bv2, :bv3, :bv4 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x1")),
+			"bv2": sqltypes.HexNumBindVariable([]byte("0x1")),
+			"bv3": sqltypes.HexNumBindVariable([]byte("0xa")),
+			"bv4": sqltypes.HexNumBindVariable([]byte("0x7f")),
+		},
+	}, {
+		// DateVal should also be normalized
+		in:      `select date'2022-08-06'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
+		},
+	}, {
+		// TimeVal should also be normalized
+		in:      `select time'17:05:12'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
+		},
+	}, {
+		// TimestampVal should also be normalized
+		in:      `select timestamp'2022-08-06 17:05:12'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
+		},
 	}}
 	for _, tc := range testcases {
-		stmt, err := Parse(tc.in)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		known := GetBindvars(stmt)
-		bv := make(map[string]*querypb.BindVariable)
-		require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
-		outstmt := String(stmt)
-		if outstmt != tc.outstmt {
-			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
-		}
-		if !reflect.DeepEqual(tc.outbv, bv) {
-			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse(tc.in)
+			require.NoError(t, err)
+			known := GetBindvars(stmt)
+			bv := make(map[string]*querypb.BindVariable)
+			require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
+			assert.Equal(t, tc.outstmt, String(stmt))
+			assert.Equal(t, tc.outbv, bv)
+		})
+	}
+}
+
+func TestNormalizeInvalidDates(t *testing.T) {
+	testcases := []struct {
+		in  string
+		err error
+	}{{
+		in:  "select date'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATE value: '%s'", "foo"),
+	}, {
+		in:  "select time'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", "foo"),
+	}, {
+		in:  "select timestamp'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATETIME value: '%s'", "foo"),
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse(tc.in)
+			require.NoError(t, err)
+			known := GetBindvars(stmt)
+			bv := make(map[string]*querypb.BindVariable)
+			require.EqualError(t, Normalize(stmt, NewReservedVars("bv", known), bv), tc.err.Error())
+		})
+	}
+}
+
+func TestNormalizeValidSQL(t *testing.T) {
+	for _, tcase := range validSQL {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.partialDDL || tcase.ignoreNormalizerTest {
+				return
+			}
+			tree, err := Parse(tcase.input)
+			require.NoError(t, err, tcase.input)
+			// Skip the test for the queries that do not run the normalizer
+			if !CanNormalize(tree) {
+				return
+			}
+			bv := make(map[string]*querypb.BindVariable)
+			known := make(BindVars)
+			err = Normalize(tree, NewReservedVars("vtg", known), bv)
+			require.NoError(t, err)
+			normalizerOutput := String(tree)
+			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
+				return
+			}
+			_, err = Parse(normalizerOutput)
+			require.NoError(t, err, normalizerOutput)
+		})
 	}
 }
 

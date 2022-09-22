@@ -85,43 +85,43 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		"-topo_implementation", vttablet.CommonArg.TopoImplementation,
-		"-topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
-		"-topo_global_root", vttablet.CommonArg.TopoGlobalRoot,
-		"-log_queries_to_file", vttablet.FileToLogQueries,
-		"-tablet-path", vttablet.TabletPath,
-		"-port", fmt.Sprintf("%d", vttablet.Port),
-		"-grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
-		"-init_shard", vttablet.Shard,
-		"-log_dir", vttablet.LogDir,
-		"-tablet_hostname", vttablet.TabletHostname,
-		"-init_keyspace", vttablet.Keyspace,
-		"-init_tablet_type", vttablet.TabletType,
-		"-health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
-		"-enable_replication_reporter",
-		"-backup_storage_implementation", vttablet.BackupStorageImplementation,
-		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
-		"-service_map", vttablet.ServiceMap,
-		"-vtctld_addr", vttablet.VtctldAddress,
-		"-vtctld_addr", vttablet.VtctldAddress,
-		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
-		"-db_charset", vttablet.Charset,
+		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
+		"--topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
+		"--topo_global_root", vttablet.CommonArg.TopoGlobalRoot,
+		"--log_queries_to_file", vttablet.FileToLogQueries,
+		"--tablet-path", vttablet.TabletPath,
+		"--port", fmt.Sprintf("%d", vttablet.Port),
+		"--grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
+		"--init_shard", vttablet.Shard,
+		"--log_dir", vttablet.LogDir,
+		"--tablet_hostname", vttablet.TabletHostname,
+		"--init_keyspace", vttablet.Keyspace,
+		"--init_tablet_type", vttablet.TabletType,
+		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
+		"--enable_replication_reporter",
+		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
+		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
+		"--service_map", vttablet.ServiceMap,
+		"--vtctld_addr", vttablet.VtctldAddress,
+		"--vtctld_addr", vttablet.VtctldAddress,
+		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
+		"--db_charset", vttablet.Charset,
 	)
 	if *isCoverage {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
+		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
 	}
 	if *PerfTest {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
+		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
 	}
 
 	if vttablet.SupportsBackup {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-enable_semi_sync")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--enable_semi_sync")
 	}
 	if vttablet.DbFlavor != "" {
-		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("-db_flavor=%s", vttablet.DbFlavor))
+		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
 	}
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
@@ -164,22 +164,24 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	if err != nil {
 		return ""
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode == 200 {
 		respByte, _ := io.ReadAll(resp.Body)
-		defer resp.Body.Close()
 		return string(respByte)
 	}
 	return ""
 }
 
 // GetVars gets the debug vars as map
-func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
+func (vttablet *VttabletProcess) GetVars() map[string]any {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
 		return nil
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
@@ -196,6 +198,8 @@ func (vttablet *VttabletProcess) GetStatusDetails() string {
 	if err != nil {
 		return fmt.Sprintf("Status details failed: %v", err.Error())
 	}
+	defer resp.Body.Close()
+
 	respByte, _ := io.ReadAll(resp.Body)
 	return string(respByte)
 }
@@ -414,8 +418,28 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 	return executeQuery(conn, query)
 }
 
+// executeQuery will retry the query up to 10 times with a small sleep in between each try.
+// This allows the tests to be more robust in the face of transient failures.
 func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	return dbConn.ExecuteFetch(query, 10000, true)
+	var (
+		err    error
+		result *sqltypes.Result
+	)
+	retries := 10
+	retryDelay := 1 * time.Second
+	for i := 0; i < retries; i++ {
+		if i > 0 {
+			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
+			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+		}
+		result, err = dbConn.ExecuteFetch(query, 10000, true)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	return result, err
 }
 
 // GetDBVar returns first matching database variable's value
@@ -465,7 +489,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 		for duration > 0 {
 			log.Infof("Executing query %s on %s", query, vttablet.Name)
 			lastChecked = time.Now()
-			qr, err := conn.ExecuteFetch(query, 1000, true)
+			qr, err := executeQuery(conn, query)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -514,7 +538,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 	defer conn.Close()
 
 	query := fmt.Sprintf("LOAD DATA INFILE '%s' INTO TABLE `%s` FIELDS TERMINATED BY ',' ENCLOSED BY '\"'", tmpbulk.Name(), table)
-	_, err = conn.ExecuteFetch(query, 1, false)
+	_, err = executeQuery(conn, query)
 	if err != nil {
 		t.Fatal(err)
 	}

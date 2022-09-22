@@ -6,6 +6,7 @@ package mysqlctl_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -47,11 +49,20 @@ func createBackupDir(root string, dirs ...string) error {
 func TestExecuteBackup(t *testing.T) {
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
-	*filebackupstorage.FileBackupStorageRoot = backupRoot
+	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	defer os.RemoveAll(backupRoot)
 
 	ctx := context.Background()
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
+		if err := createBackupDir(backupRoot, fpath); err != nil {
+			t.Fatalf("failed to create directory %s: %v", fpath, err)
+		}
+	}
 
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
@@ -67,7 +78,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	require.NoError(t, ts.CreateTablet(ctx, tablet))
 
-	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
 
 		now := time.Now()
@@ -133,4 +144,26 @@ func TestExecuteBackup(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.False(t, ok)
+}
+
+// needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
+// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
+// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
+//
+//	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+func needInnoDBRedoLogSubdir() (needIt bool, err error) {
+	mysqldVersionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return needIt, err
+	}
+	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
+	if err != nil {
+		return needIt, err
+	}
+	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
+	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
+	if capableOf == nil {
+		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
+	}
+	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
 }

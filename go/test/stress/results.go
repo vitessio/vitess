@@ -73,7 +73,7 @@ func (r result) assert() bool {
 }
 
 // print renders the results held by result.
-func (r result) print(log func(format string, args ...interface{}), seconds float64) {
+func (r result) print(log func(format string, args ...any), seconds float64) {
 	allQCs := sumQueryCounts(r.selects, r.inserts, r.deletes)
 	log(`QPS:
 	select: %d | failed: %d (including %d meaningful failures) | sum: %d

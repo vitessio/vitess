@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
@@ -31,7 +32,10 @@ import (
 // covers the test case graceful-master-takeover from orchestrator
 func TestGracefulPrimaryTakeover(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+		RecoveryPeriodBlockSeconds:            5,
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -49,10 +53,26 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 	}
 	assert.NotNil(t, replica, "could not find replica tablet")
 
-	// check that the replication is setup correctly before we failover
+	// check that the replication is setup correctly before we set read-only
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 10*time.Second)
 
-	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", curPrimary.MySQLPort, replica.MySQLPort))
+	// Run a failure on the current primary before, just to check that we are able to
+	// register another recovery right after fixing this first
+	// Make the current primary database read-only.
+	_, err := utils.RunSQL(t, "set global read_only=ON", curPrimary, "")
+	require.NoError(t, err)
+
+	// wait for repair
+	match := utils.WaitForReadOnlyValue(t, curPrimary, 0)
+	require.True(t, match)
+
+	// this is added to reduce flakiness. We need to wait for 1 second before calling
+	// Graceful primray takeover to ensure that the recovery is registered. If the second recovery
+	// ran in less than 1 second, then trying to acknowledge completed recoveries fails because
+	// we try to set the same end timestamp on the recovery of first 2 failures which fails the unique constraint
+	time.Sleep(1 * time.Second)
+
+	status, _ := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VTOrcProcesses[0].WebPort, curPrimary.MySQLPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
@@ -65,7 +85,9 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 // orchestrator used to fail in this case, but for VtOrc, specifying no target makes it choose one on its own
 func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -86,7 +108,7 @@ func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 10*time.Second)
 
-	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/", curPrimary.MySQLPort))
+	status, _ := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/", clusterInfo.ClusterInstance.VTOrcProcesses[0].WebPort, curPrimary.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
@@ -98,7 +120,9 @@ func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 // covers the test case graceful-master-takeover-auto from orchestrator
 func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, "test_config.json")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -123,14 +147,14 @@ func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{replica, rdonly}, 10*time.Second)
 
-	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover-auto/localhost/%d/localhost/%d", primary.MySQLPort, replica.MySQLPort))
+	status, _ := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover-auto/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VTOrcProcesses[0].WebPort, primary.MySQLPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{primary, rdonly}, 10*time.Second)
 
-	status, _ = utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover-auto/localhost/%d/", replica.MySQLPort))
+	status, _ = utils.MakeAPICall(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover-auto/localhost/%d/", clusterInfo.ClusterInstance.VTOrcProcesses[0].WebPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the primary gets promoted back
@@ -142,7 +166,9 @@ func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 // covers the test case graceful-master-takeover-fail-cross-region from orchestrator
 func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, "test_config.json")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VTOrcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -160,10 +186,10 @@ func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	crossCellReplica1 := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
-	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	// newly started tablet does not replicate from anyone yet, we will allow vtorc to fix this too
 	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{crossCellReplica1, rdonly}, 25*time.Second)
 
-	status, response := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", primary.MySQLPort, crossCellReplica1.MySQLPort))
+	status, response := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VTOrcProcesses[0].WebPort, primary.MySQLPort, crossCellReplica1.MySQLPort))
 	assert.Equal(t, 500, status)
 	assert.Contains(t, response, "GracefulPrimaryTakeover: constraint failure")
 

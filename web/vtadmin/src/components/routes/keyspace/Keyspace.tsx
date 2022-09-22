@@ -18,15 +18,20 @@ import { Link, Redirect, Route } from 'react-router-dom';
 
 import { useKeyspace } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { isReadOnlyMode } from '../../../util/env';
 import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
+import { QueryLoadingPlaceholder } from '../../placeholders/QueryLoadingPlaceholder';
+import { ReadOnlyGate } from '../../ReadOnlyGate';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
+import { Advanced } from './Advanced';
 import style from './Keyspace.module.scss';
 import { KeyspaceShards } from './KeyspaceShards';
+import { KeyspaceVSchema } from './KeyspaceVSchema';
 
 interface RouteParams {
     clusterID: string;
@@ -40,7 +45,8 @@ export const Keyspace = () => {
 
     useDocumentTitle(`${name} (${clusterID})`);
 
-    const { data: keyspace, ...kq } = useKeyspace({ clusterID, name });
+    const kq = useKeyspace({ clusterID, name });
+    const { data: keyspace } = kq;
 
     if (kq.error) {
         return (
@@ -86,7 +92,12 @@ export const Keyspace = () => {
             <ContentContainer>
                 <TabContainer>
                     <Tab text="Shards" to={`${url}/shards`} />
+                    <Tab text="VSchema" to={`${url}/vschema`} />
                     <Tab text="JSON" to={`${url}/json`} />
+
+                    <ReadOnlyGate>
+                        <Tab text="Advanced" to={`${url}/advanced`} />
+                    </ReadOnlyGate>
                 </TabContainer>
 
                 <Switch>
@@ -94,15 +105,23 @@ export const Keyspace = () => {
                         <KeyspaceShards keyspace={keyspace} />
                     </Route>
 
+                    <Route path={`${path}/vschema`}>
+                        <KeyspaceVSchema clusterID={clusterID} name={name} />
+                    </Route>
+
                     <Route path={`${path}/json`}>
+                        <QueryLoadingPlaceholder query={kq} />
                         <Code code={JSON.stringify(keyspace, null, 2)} />
                     </Route>
 
+                    {!isReadOnlyMode() && (
+                        <Route path={`${path}/advanced`}>
+                            <Advanced clusterID={clusterID} name={name} />
+                        </Route>
+                    )}
+
                     <Redirect exact from={path} to={{ pathname: `${path}/shards`, search }} />
                 </Switch>
-
-                {/* TODO skeleton placeholder */}
-                {!!kq.isLoading && <div className={style.placeholder}>Loading</div>}
             </ContentContainer>
         </div>
     );

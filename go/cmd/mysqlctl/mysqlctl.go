@@ -18,12 +18,14 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
@@ -34,6 +36,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -200,17 +205,17 @@ type command struct {
 }
 
 var commands = []command{
-	{"init", initCmd, "[-wait_time=5m] [-init_db_sql_file=]",
+	{"init", initCmd, "[--wait_time=5m] [--init_db_sql_file=]",
 		"Initializes the directory structure and starts mysqld"},
 	{"init_config", initConfigCmd, "",
 		"Initializes the directory structure, creates my.cnf file, but does not start mysqld"},
 	{"reinit_config", reinitConfigCmd, "",
 		"Reinitializes my.cnf file with new server_id"},
-	{"teardown", teardownCmd, "[-wait_time=5m] [-force]",
+	{"teardown", teardownCmd, "[--wait_time=5m] [--force]",
 		"Shuts mysqld down, and removes the directory"},
-	{"start", startCmd, "[-wait_time=5m]",
+	{"start", startCmd, "[--wait_time=5m]",
 		"Starts mysqld on an already 'init'-ed directory"},
-	{"shutdown", shutdownCmd, "[-wait_time=5m]",
+	{"shutdown", shutdownCmd, "[--wait_time=5m]",
 		"Shuts down mysqld, does not remove any file"},
 
 	{"position", positionCmd,
@@ -222,43 +227,48 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
-
-		fmt.Fprintf(os.Stderr, "\nThe global optional parameters are:\n")
-		flag.PrintDefaults()
-
-		fmt.Fprintf(os.Stderr, "\nThe commands are listed below. Use '%s <command> -h' for more help.\n\n", os.Args[0])
-		for _, cmd := range commands {
-			fmt.Fprintf(os.Stderr, "  %s", cmd.name)
-			if cmd.params != "" {
-				fmt.Fprintf(os.Stderr, " %s", cmd.params)
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Preface: func(w io.Writer) {
+			fmt.Fprintf(w, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+			fmt.Fprintf(w, "\nThe global optional parameters are:\n")
+		},
+		Epilogue: func(w io.Writer) {
+			fmt.Fprintf(w, "\nThe commands are listed below. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+			for _, cmd := range commands {
+				fmt.Fprintf(w, "  %s", cmd.name)
+				if cmd.params != "" {
+					fmt.Fprintf(w, " %s", cmd.params)
+				}
+				fmt.Fprintf(w, "\n")
 			}
-			fmt.Fprintf(os.Stderr, "\n")
-		}
-		fmt.Fprintf(os.Stderr, "\n")
-	}
+			fmt.Fprintf(w, "\n")
+		},
+	})
 
 	if cmd.IsRunningAsRoot() {
 		fmt.Fprintln(os.Stderr, "mysqlctl cannot be ran as root. Please run as a different user")
 		exit.Return(1)
 	}
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
-	flag.Parse()
+	fs := pflag.NewFlagSet("mysqlctl", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	_flag.Parse(fs)
 
 	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
 
-	action := flag.Arg(0)
+	action := _flag.Arg(0)
 	for _, cmd := range commands {
 		if cmd.name == action {
 			subFlags := flag.NewFlagSet(action, flag.ExitOnError)
-			subFlags.Usage = func() {
-				fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.name, cmd.params)
-				fmt.Fprintf(os.Stderr, "%s\n\n", cmd.help)
-				subFlags.PrintDefaults()
-			}
+			_flag.SetUsage(subFlags, _flag.UsageOptions{
+				Preface: func(w io.Writer) {
+					fmt.Fprintf(w, "Usage: %s %s %s\n\n", os.Args[0], cmd.name, cmd.params)
+					fmt.Fprintf(w, "%s\n\n", cmd.help)
+				},
+			})
 
-			if err := cmd.method(subFlags, flag.Args()[1:]); err != nil {
+			if err := cmd.method(subFlags, _flag.Args()[1:]); err != nil {
 				log.Error(err)
 				exit.Return(1)
 			}

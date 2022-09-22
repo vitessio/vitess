@@ -18,30 +18,35 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // lookupInternal implements the functions for the Lookup vindexes.
 type lookupInternal struct {
-	Table         string   `json:"table"`
-	FromColumns   []string `json:"from_columns"`
-	To            string   `json:"to"`
-	Autocommit    bool     `json:"autocommit,omitempty"`
-	Upsert        bool     `json:"upsert,omitempty"`
-	IgnoreNulls   bool     `json:"ignore_nulls,omitempty"`
-	BatchLookup   bool     `json:"batch_lookup,omitempty"`
-	sel, ver, del string
+	Table                string   `json:"table"`
+	FromColumns          []string `json:"from_columns"`
+	To                   string   `json:"to"`
+	Autocommit           bool     `json:"autocommit,omitempty"`
+	MultiShardAutocommit bool     `json:"multi_shard_autocommit,omitempty"`
+	Upsert               bool     `json:"upsert,omitempty"`
+	IgnoreNulls          bool     `json:"ignore_nulls,omitempty"`
+	BatchLookup          bool     `json:"batch_lookup,omitempty"`
+	sel, ver, del        string   // sel: map query, ver: verify query, del: delete query
 }
 
-func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert bool) error {
+func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert, multiShardAutocommit bool) error {
 	lkp.Table = lookupQueryParams["table"]
 	lkp.To = lookupQueryParams["to"]
 	var fromColumns []string
@@ -62,6 +67,10 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 
 	lkp.Autocommit = autocommit
 	lkp.Upsert = upsert
+	if multiShardAutocommit {
+		lkp.Autocommit = true
+		lkp.MultiShardAutocommit = true
+	}
 
 	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
 	// as part of face 2 of https://github.com/vitessio/vitess/issues/3481
@@ -73,7 +82,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 }
 
 // Lookup performs a lookup for the ids.
-func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtgatepb.CommitOrder) ([]*sqltypes.Result, error) {
+func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, co vtgatepb.CommitOrder) ([]*sqltypes.Result, error) {
 	if vcursor == nil {
 		return nil, fmt.Errorf("cannot perform lookup: no vcursor provided")
 	}
@@ -94,7 +103,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: vars,
 		}
-		result, err := vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
+		result, err := vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -111,7 +120,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 	} else {
 		// for non integral and binary type, fallback to send query per id
 		for _, id := range ids {
-			vars, err := sqltypes.BuildBindVariable([]interface{}{id})
+			vars, err := sqltypes.BuildBindVariable([]any{id})
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
@@ -119,7 +128,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 				lkp.FromColumns[0]: vars,
 			}
 			var result *sqltypes.Result
-			result, err = vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
+			result, err = vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
@@ -136,22 +145,22 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 }
 
 // Verify returns true if ids map to values.
-func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
+func (lkp *lookupInternal) Verify(ctx context.Context, vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
 	co := vtgatepb.CommitOrder_NORMAL
 	if lkp.Autocommit {
 		co = vtgatepb.CommitOrder_AUTOCOMMIT
 	}
-	return lkp.VerifyCustom(vcursor, ids, values, co)
+	return lkp.VerifyCustom(ctx, vcursor, ids, values, co)
 }
 
-func (lkp *lookupInternal) VerifyCustom(vcursor VCursor, ids, values []sqltypes.Value, co vtgatepb.CommitOrder) ([]bool, error) {
+func (lkp *lookupInternal) VerifyCustom(ctx context.Context, vcursor VCursor, ids, values []sqltypes.Value, co vtgatepb.CommitOrder) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* rollbackOnError */, co)
+		result, err := vcursor.Execute(ctx, "VindexVerify", lkp.ver, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
@@ -204,14 +213,14 @@ func (v *sorter) Swap(i, j int) {
 // If we assume that the primary vindex is on column_c. The call to create will look like this:
 // Create(vcursor, [[value_a0, value_b0,], [value_a1, value_b1]], [binary(value_c0), binary(value_c1)])
 // Notice that toValues contains the computed binary value of the keyspace_id.
-func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
+func (lkp *lookupInternal) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
 	if lkp.Autocommit {
-		return lkp.createCustom(vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_AUTOCOMMIT)
+		return lkp.createCustom(ctx, vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_AUTOCOMMIT)
 	}
-	return lkp.createCustom(vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_NORMAL)
+	return lkp.createCustom(ctx, vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_NORMAL)
 }
 
-func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool, co vtgatepb.CommitOrder) error {
+func (lkp *lookupInternal) createCustom(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool, co vtgatepb.CommitOrder) error {
 	// Trim rows with null values
 	trimmedRowsCols := make([][]sqltypes.Value, 0, len(rowsColValues))
 	trimmedToValues := make([]sqltypes.Value, 0, len(toValues))
@@ -238,11 +247,15 @@ nextRow:
 	}
 	sort.Sort(&sorter{rowsColValues: trimmedRowsCols, toValues: trimmedToValues})
 
+	insStmt := "insert"
+	if lkp.MultiShardAutocommit {
+		insStmt = "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */"
+	}
 	buf := new(bytes.Buffer)
 	if ignoreMode {
-		fmt.Fprintf(buf, "insert ignore into %s(", lkp.Table)
+		fmt.Fprintf(buf, "%s ignore into %s(", insStmt, lkp.Table)
 	} else {
-		fmt.Fprintf(buf, "insert into %s(", lkp.Table)
+		fmt.Fprintf(buf, "%s into %s(", insStmt, lkp.Table)
 	}
 	for _, col := range lkp.FromColumns {
 		fmt.Fprintf(buf, "%s, ", col)
@@ -273,7 +286,7 @@ nextRow:
 		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
 	}
 
-	if _, err := vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
+	if _, err := vcursor.Execute(ctx, "VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
@@ -294,7 +307,7 @@ nextRow:
 //
 // A call to Delete would look like this:
 // Delete(vcursor, [[valuea, valueb]], 52CB7B1B31B2222E)
-func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value, co vtgatepb.CommitOrder) error {
+func (lkp *lookupInternal) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value, co vtgatepb.CommitOrder) error {
 	// In autocommit mode, it's not safe to delete. So, it's a no-op.
 	if lkp.Autocommit {
 		return nil
@@ -314,7 +327,7 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* rollbackOnError */, co)
+		_, err := vcursor.Execute(ctx, "VindexDelete", lkp.del, bindVars, true /* rollbackOnError */, co)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
@@ -323,11 +336,11 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 }
 
 // Update implements the update functionality.
-func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, toValue sqltypes.Value, newValues []sqltypes.Value) error {
-	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, toValue, vtgatepb.CommitOrder_NORMAL); err != nil {
+func (lkp *lookupInternal) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, toValue sqltypes.Value, newValues []sqltypes.Value) error {
+	if err := lkp.Delete(ctx, vcursor, [][]sqltypes.Value{oldValues}, toValue, vtgatepb.CommitOrder_NORMAL); err != nil {
 		return err
 	}
-	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{toValue}, false /* ignoreMode */)
+	return lkp.Create(ctx, vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{toValue}, false /* ignoreMode */)
 }
 
 func (lkp *lookupInternal) initDelStmt() string {
@@ -343,6 +356,27 @@ func (lkp *lookupInternal) initDelStmt() string {
 	return delBuffer.String()
 }
 
+func (lkp *lookupInternal) query() (selQuery string, arguments []string) {
+	return lkp.sel, lkp.FromColumns
+}
+
+type commonConfig struct {
+	autocommit           bool
+	multiShardAutocommit bool
+}
+
+func parseCommonConfig(m map[string]string) (*commonConfig, error) {
+	var c commonConfig
+	var err error
+	if c.autocommit, err = boolFromMap(m, "autocommit"); err != nil {
+		return nil, err
+	}
+	if c.multiShardAutocommit, err = boolFromMap(m, "multi_shard_autocommit"); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 func boolFromMap(m map[string]string, key string) (bool, error) {
 	val, ok := m[key]
 	if !ok {
@@ -354,6 +388,6 @@ func boolFromMap(m map[string]string, key string) (bool, error) {
 	case "false":
 		return false, nil
 	default:
-		return false, fmt.Errorf("%s value must be 'true' or 'false': '%s'", key, val)
+		return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s value must be 'true' or 'false': '%s'", key, val)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -100,7 +101,26 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	}
 	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
 	for k, v := range inner.SysTableTableName {
+		if outer.SysTableTableName == nil {
+			outer.SysTableTableName = map[string]evalengine.Expr{}
+		}
 		outer.SysTableTableName[k] = v
+	}
+
+	// When merging an inner query with its outer query, we can remove the
+	// inner query from the list of predicates that can influence routing of
+	// the outer query.
+	//
+	// Note that not all inner queries necessarily are part of the routing
+	// predicates list, so this might be a no-op.
+	for i, predicate := range outer.SeenPredicates {
+		if sqlparser.EqualsExpr(predicate, subq.ExtractedSubquery) {
+			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
+
+			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
+			// so we can stop after the first match.
+			break
+		}
 	}
 
 	err = outer.resetRoutingSelections(ctx)
@@ -121,11 +141,14 @@ func tryMergeSubQueryOp(
 	var err error
 	switch outerOp := outer.(type) {
 	case *Route:
-		merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
-		if err != nil {
-			return nil, err
+		if shouldTryMergingSubquery(outerOp, subq) {
+			merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
+			if err != nil {
+				return nil, err
+			}
+			return merged, err
 		}
-		return merged, err
+		return nil, nil
 	case *ApplyJoin:
 		// Trying to merge the subquery with the left-hand or right-hand side of the join
 
@@ -169,6 +192,20 @@ func tryMergeSubQueryOp(
 	default:
 		return nil, nil
 	}
+}
+
+// shouldTryMergingSubquery returns whether there is a possibility of merging the subquery with the outer route
+// For some cases like Reference, we shouldn't try to merge them, since the common logic of tryMerge will allow them to
+// be merged, even though they shouldn't
+func shouldTryMergingSubquery(outerOp *Route, subq abstract.PhysicalOperator) bool {
+	if outerOp.RouteOpCode == engine.Reference {
+		subqRoute, isRoute := subq.(*Route)
+		if !isRoute {
+			return false
+		}
+		return subqRoute.RouteOpCode.IsSingleShard()
+	}
+	return true
 }
 
 // rewriteColumnsInSubqueryOpForApplyJoin rewrites the columns that appear from the other side
@@ -241,6 +278,7 @@ func createCorrelatedSubqueryOp(
 	resultOuterOp := newOuter
 	vars := map[string]int{}
 	bindVars := map[*sqlparser.ColName]string{}
+	var lhsCols []*sqlparser.ColName
 	for _, pred := range preds {
 		var rewriteError error
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
@@ -269,6 +307,7 @@ func createCorrelatedSubqueryOp(
 						rewriteError = err
 						return false
 					}
+					lhsCols = append(lhsCols, node)
 					columnIndex := columnIndexes[0]
 					vars[bindVar] = columnIndex
 					resultOuterOp = newOuterOp
@@ -287,9 +326,10 @@ func createCorrelatedSubqueryOp(
 		}
 	}
 	return &CorrelatedSubQueryOp{
-		Outer:     resultOuterOp,
-		Inner:     innerOp,
-		Extracted: extractedSubquery,
-		Vars:      vars,
+		Outer:      resultOuterOp,
+		Inner:      innerOp,
+		Extracted:  extractedSubquery,
+		Vars:       vars,
+		LHSColumns: lhsCols,
 	}, nil
 }

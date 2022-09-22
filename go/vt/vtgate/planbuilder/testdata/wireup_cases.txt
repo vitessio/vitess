@@ -6,7 +6,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-1,2",
+    "JoinColumnIndexes": "R:0,L:0,R:1",
     "JoinVars": {
       "uid": 0
     },
@@ -43,7 +43,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,1,-3",
+    "JoinColumnIndexes": "L:1,R:0,L:2",
     "JoinVars": {
       "e_id": 0
     },
@@ -76,7 +76,11 @@
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # bind var already in use
@@ -87,7 +91,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-1,2",
+    "JoinColumnIndexes": "R:0,L:0,R:1",
     "JoinVars": {
       "uid1": 0
     },
@@ -124,7 +128,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,1,-3",
+    "JoinColumnIndexes": "L:1,R:0,L:2",
     "JoinVars": {
       "e_id": 0
     },
@@ -157,7 +161,11 @@
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # wire-up join with join, going left
@@ -168,7 +176,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -177,7 +185,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -224,7 +232,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -241,7 +249,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2",
+        "JoinColumnIndexes": "L:1",
         "JoinVars": {
           "u1_col": 0
         },
@@ -272,7 +280,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # wire-up join with join, going left, then right
@@ -283,7 +294,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u2_col": 1
     },
@@ -292,7 +303,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1",
+        "JoinColumnIndexes": "L:0,R:0",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -339,7 +350,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -386,7 +397,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # wire-up join with join, reuse existing result from a lower join
@@ -397,7 +411,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -406,7 +420,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
           "u1_col": 1
         },
@@ -456,7 +470,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "u3_col": 0
     },
@@ -476,7 +490,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2",
+        "JoinColumnIndexes": "L:1",
         "JoinVars": {
           "u1_col": 0
         },
@@ -507,7 +521,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # wire-up join with join, reuse existing result from a lower join.
@@ -521,7 +538,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -530,7 +547,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
           "u1_col": 1
         },
@@ -539,7 +556,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -603,7 +620,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "`user`_`user`_`user`_`user`",
     "Inputs": [
       {
@@ -620,7 +637,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "1",
+        "JoinColumnIndexes": "R:0",
         "JoinVars": {
           "u4_col": 0
         },
@@ -640,7 +657,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2",
+            "JoinColumnIndexes": "L:1",
             "JoinVars": {
               "u1_col": 0
             },
@@ -677,7 +694,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # Test reuse of join var already being supplied to the right of a node.
@@ -688,7 +708,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -751,7 +771,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "L:1",
     "JoinVars": {
       "u1_col": 0
     },
@@ -760,7 +780,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
           "u1_col": 0
         },
@@ -810,7 +830,10 @@
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # Join on weird columns.
@@ -821,7 +844,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "weird_name_a_b_c": 1
     },
@@ -858,7 +881,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-2",
+    "JoinColumnIndexes": "R:0,L:1",
     "JoinVars": {
       "unsharded_id": 0
     },
@@ -891,7 +914,11 @@
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.weird`name"
+  ]
 }
 
 # Join on weird column (col is not in select)
@@ -902,7 +929,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "weird_name_a_b_c": 0
     },
@@ -939,7 +966,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "L:1",
     "JoinVars": {
       "unsharded_id": 0
     },
@@ -972,7 +999,11 @@
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.weird`name"
+  ]
 }
 
 # wire-up with limit primitive
@@ -987,7 +1018,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
           "u_col": 1
         },
@@ -1030,7 +1061,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2,1",
+        "JoinColumnIndexes": "L:1,R:0",
         "JoinVars": {
           "u_col": 0
         },
@@ -1061,7 +1092,11 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # Wire-up in subquery
@@ -1084,7 +1119,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,1",
+            "JoinColumnIndexes": "L:0,R:0",
             "JoinVars": {
               "u_col": 1
             },
@@ -1152,7 +1187,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2,1",
+            "JoinColumnIndexes": "L:1,R:0",
             "JoinVars": {
               "u_col": 0
             },
@@ -1200,7 +1235,11 @@
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # Wire-up in underlying primitive after pullout
@@ -1234,7 +1273,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,1,-2",
+            "JoinColumnIndexes": "L:0,R:0,L:1",
             "JoinVars": {
               "u_col": 2
             },
@@ -1297,7 +1336,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2,1,-3",
+            "JoinColumnIndexes": "L:1,R:0,L:2",
             "JoinVars": {
               "u_col": 0
             },
@@ -1330,7 +1369,11 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # Invalid value in IN clause
@@ -1354,7 +1397,28 @@
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (18446744073709551616, 1)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id in ::__vals",
+    "Table": "`user`",
+    "Values": [
+      "(DECIMAL(18446744073709551616), INT64(1))"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # Invalid value in IN clause from LHS of join
 "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
@@ -1364,7 +1428,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_`user`",
     "Inputs": [
       {
@@ -1396,7 +1460,47 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1 where u1.id = 18446744073709551616",
+        "Table": "`user`",
+        "Values": [
+          "DECIMAL(18446744073709551616)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # Invalid value in IN clause from RHS of join
 "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
@@ -1406,7 +1510,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_`user`",
     "Inputs": [
       {
@@ -1438,7 +1542,47 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 18446744073709551616",
+        "Table": "`user`",
+        "Values": [
+          "DECIMAL(18446744073709551616)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # derived table with column aliases not supported by v3, but planner is overridden with hint
 "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1"
@@ -1446,20 +1590,48 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-    "Query": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
-    "Table": "`user`",
     "Values": [
       "INT64(1)"
     ],
-    "Vindex": "name_user_map"
-  }
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+        "Query": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1476,13 +1648,13 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -1521,6 +1693,10 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
 Gen4 plan same as above

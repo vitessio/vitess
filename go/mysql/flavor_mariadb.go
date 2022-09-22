@@ -53,8 +53,27 @@ func (mariadbFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMariadbGTIDSet(qr.Rows[0][0].ToString())
 }
 
+// purgedGTIDSet is part of the Flavor interface.
+func (mariadbFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+	return nil, nil
+}
+
+// serverUUID is part of the Flavor interface.
+func (mariadbFlavor) serverUUID(c *Conn) (string, error) {
+	return "", nil
+}
+
+// gtidMode is part of the Flavor interface.
+func (mariadbFlavor) gtidMode(c *Conn) (string, error) {
+	return "", nil
+}
+
 func (mariadbFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL master_gtid_pos = \"%s\"", pos)
+}
+
+func (mariadbFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return fmt.Sprintf("START SLAVE SQL_THREAD UNTIL master_gtid_pos = \"%s\"", pos)
 }
 
 func (mariadbFlavor) startReplicationCommand() string {
@@ -75,6 +94,10 @@ func (mariadbFlavor) stopReplicationCommand() string {
 
 func (mariadbFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
+}
+
+func (mariadbFlavor) stopSQLThreadCommand() string {
+	return "STOP SLAVE SQL_THREAD"
 }
 
 func (mariadbFlavor) startSQLThreadCommand() string {
@@ -118,6 +141,14 @@ func (mariadbFlavor) resetReplicationCommands(c *Conn) []string {
 	}
 	if c.SemiSyncExtensionLoaded() {
 		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when replica is started.
+	}
+	return resetCommands
+}
+
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mariadbFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	resetCommands := []string{
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 	}
 	return resetCommands
 }
@@ -239,4 +270,12 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 	ev := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 	return ev, nil
+}
+
+// supportsCapability is part of the Flavor interface.
+func (mariadbFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
 }

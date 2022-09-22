@@ -26,9 +26,17 @@ type debugAPI struct {
 
 // Cluster is part of the debug.API interface.
 func (dapi *debugAPI) Cluster(id string) (*cluster.Cluster, bool) {
+	dapi.api.clusterMu.Lock()
+	defer dapi.api.clusterMu.Unlock()
+
 	c, ok := dapi.api.clusterMap[id]
 	return c, ok
 }
 
 // Clusters is part of the debug.API interface.
-func (dapi *debugAPI) Clusters() []*cluster.Cluster { return dapi.api.clusters }
+func (dapi *debugAPI) Clusters() []*cluster.Cluster {
+	dapi.api.clusterMu.Lock()
+	defer dapi.api.clusterMu.Unlock()
+
+	return dapi.api.clusters
+}

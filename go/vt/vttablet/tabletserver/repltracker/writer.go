@@ -19,6 +19,7 @@ package repltracker
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -72,6 +73,12 @@ type heartbeatWriter struct {
 	appPool      *dbconnpool.ConnectionPool
 	allPrivsPool *dbconnpool.ConnectionPool
 	ticks        *timer.Timer
+
+	onDemandDuration            time.Duration
+	onDemandMu                  sync.Mutex
+	concurrentHeartbeatRequests int64
+	onDemandRequestTicks        int64
+	onDemandLastRequestTick     int64
 }
 
 // newHeartbeatWriter creates a new heartbeatWriter.
@@ -83,19 +90,35 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		return &heartbeatWriter{}
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
-	return &heartbeatWriter{
-		env:         env,
-		enabled:     true,
-		tabletAlias: proto.Clone(alias).(*topodatapb.TabletAlias),
-		now:         time.Now,
-		interval:    heartbeatInterval,
-		ticks:       timer.NewTimer(heartbeatInterval),
-		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
+	w := &heartbeatWriter{
+		env:              env,
+		enabled:          true,
+		tabletAlias:      proto.Clone(alias).(*topodatapb.TabletAlias),
+		now:              time.Now,
+		interval:         heartbeatInterval,
+		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemandSeconds.Get(),
+		ticks:            timer.NewTimer(heartbeatInterval),
+		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
 		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
 		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
 	}
+	if w.onDemandDuration > 0 {
+		// see RequestHeartbeats() for use of onDemandRequestTicks
+		// it's basically a mechnism to rate limit operation RequestHeartbeats().
+		// and selectively drop excessive requests.
+		w.allowNextHeartbeatRequest()
+		go func() {
+			// this will allow up to 1 request per (w.onDemandDuration / 4) to pass through
+			tick := time.NewTicker(w.onDemandDuration / 4)
+			defer tick.Stop()
+			for range tick.C {
+				w.allowNextHeartbeatRequest()
+			}
+		}()
+	}
+	return w
 }
 
 // InitDBConfig initializes the target name for the heartbeatWriter.
@@ -124,7 +147,14 @@ func (w *heartbeatWriter) Open() {
 	// keeping us safe from hanging the main thread.
 	w.appPool.Open(w.env.Config().DB.AppWithDB())
 	w.allPrivsPool.Open(w.env.Config().DB.AllPrivsWithDB())
-	w.enableWrites(true)
+	if w.onDemandDuration == 0 {
+		w.enableWrites(true)
+		// when onDemandDuration > 0 we only enable writes per request
+	} else {
+		// A one-time kick off of heartbeats upon Open()
+		go w.RequestHeartbeats()
+	}
+
 	w.isOpen = true
 }
 
@@ -208,9 +238,75 @@ func (w *heartbeatWriter) enableWrites(enable bool) {
 	if w.ticks == nil {
 		return
 	}
-	if enable {
-		w.ticks.Start(w.writeHeartbeat)
-	} else {
+	switch enable {
+	case true:
+		// We must combat a potential race condition: the writer is Open, and a request comes
+		// to enableWrites(true), but simultaneously the writes gets Close()d.
+		// We must not send any more ticks while the writer is closed.
+		go func() {
+			w.mu.Lock()
+			defer w.mu.Unlock()
+			if !w.isOpen {
+				return
+			}
+			w.ticks.Start(w.writeHeartbeat)
+		}()
+	case false:
 		w.ticks.Stop()
+		if w.onDemandDuration > 0 {
+			// Let the next RequestHeartbeats() go through
+			w.allowNextHeartbeatRequest()
+		}
 	}
+}
+
+// allowNextHeartbeatRequest ensures that the next call to RequestHeartbeats() passes through and
+// is not dropped.
+func (w *heartbeatWriter) allowNextHeartbeatRequest() {
+	atomic.AddInt64(&w.onDemandRequestTicks, 1)
+}
+
+// RequestHeartbeats implements heartbeat.HeartbeatWriter.RequestHeartbeats()
+// A client (such as the throttler) may call this function as frequently as it wishes, to request
+// for a heartbeat "lease".
+// This function will selectively and silently drop some such requests, depending on arrival rate.
+// This function is safe to call concurrently from goroutines
+func (w *heartbeatWriter) RequestHeartbeats() {
+	if w.onDemandDuration == 0 {
+		// heartbeats are not by demand. Therefore they are just coming in on their own (if enabled)
+		return
+	}
+	// In this function we're going to create a timer to activate heartbeats by-demand. Creating a timer has a cost.
+	// Now, this function can be spammed by clients (the lag throttler). We therefore only allow this function to
+	// actually operate once per X seconds (1/4 of onDemandDuration as a reasonable oversampling value):
+	if atomic.LoadInt64(&w.onDemandLastRequestTick) >= atomic.LoadInt64(&w.onDemandRequestTicks) {
+		// Too many requests. We're dropping this one.
+		return
+	}
+	atomic.StoreInt64(&w.onDemandLastRequestTick, atomic.LoadInt64(&w.onDemandRequestTicks))
+
+	// OK, the request passed through.
+
+	w.onDemandMu.Lock()
+	defer w.onDemandMu.Unlock()
+
+	// Now for the actual logic. A client requests heartbeats. If it were only this client, we would
+	// activate heartbeats for the duration of onDemandDuration, and then turn heartbeats off.
+	// However, there may be multiple clients interested in heartbeats, or maybe the same single client
+	// requesting heartbeats again and again. So we keep track of how many _concurrent_ requests we have.
+	// We enable heartbeats as soon as we have a request; we turn heartbeats off once
+	// we have zero concurrent requests
+	w.enableWrites(true)
+	w.concurrentHeartbeatRequests++
+
+	time.AfterFunc(w.onDemandDuration, func() {
+		w.onDemandMu.Lock()
+		defer w.onDemandMu.Unlock()
+		w.concurrentHeartbeatRequests--
+		if w.concurrentHeartbeatRequests == 0 {
+			// means there are currently no more clients interested in heartbeats
+			w.enableWrites(false)
+		}
+		w.allowNextHeartbeatRequest()
+	})
 }

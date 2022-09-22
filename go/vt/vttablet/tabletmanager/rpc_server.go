@@ -55,7 +55,7 @@ func (tm *TabletManager) unlock() {
 }
 
 // HandleRPCPanic is part of the RPCTM interface.
-func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
 		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4))
@@ -85,7 +85,6 @@ func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, 
 	}
 }
 
-//
 // RegisterTabletManager is used to delay registration of RPC servers until we have all the objects.
 type RegisterTabletManager func(*TabletManager)
 

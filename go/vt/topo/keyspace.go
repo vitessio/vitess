@@ -49,6 +49,11 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 	return ki.keyspace
 }
 
+// SetKeyspaceName sets the keyspace name
+func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
+	ki.keyspace = name
+}
+
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
 func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodatapb.Keyspace_ServedFrom {
 	for _, ksf := range ki.ServedFroms {
@@ -192,6 +197,20 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 		version:  version,
 		Keyspace: k,
 	}, nil
+}
+
+// GetKeyspaceDurability reads the given keyspace and returns its durabilty policy
+func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (string, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return "", err
+	}
+	// Get the durability policy from the keyspace information
+	// If it is unspecified, use the default durability which is "none" for backward compatibility
+	if keyspaceInfo.GetDurabilityPolicy() != "" {
+		return keyspaceInfo.GetDurabilityPolicy(), nil
+	}
+	return "none", nil
 }
 
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.

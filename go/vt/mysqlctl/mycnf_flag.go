@@ -78,14 +78,14 @@ func RegisterFlags() {
 // NewMycnfFromFlags creates a Mycnf object from the command line flags.
 //
 // Multiple modes are supported:
-// - at least mycnf_server_id is set on the command line
-//   --> then we read all parameters from the command line, and not from
-//       any my.cnf file.
-// - mycnf_server_id is not passed in, but mycnf-file is passed in
-//   --> then we read that mycnf file
-// - mycnf_server_id and mycnf-file are not passed in:
-//   --> then we use the default location of the my.cnf file for the
-//       provided uid and read that my.cnf file.
+//   - at least mycnf_server_id is set on the command line
+//     --> then we read all parameters from the command line, and not from
+//     any my.cnf file.
+//   - mycnf_server_id is not passed in, but mycnf-file is passed in
+//     --> then we read that mycnf file
+//   - mycnf_server_id and mycnf-file are not passed in:
+//     --> then we use the default location of the my.cnf file for the
+//     provided uid and read that my.cnf file.
 //
 // RegisterCommandLineFlags should have been called before calling
 // this, otherwise we'll panic.
@@ -114,7 +114,7 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 			// This is probably not going to be used by anybody,
 			// but fill in a default value. (Note it's used by
 			// mysqld.Start, in which case it is correct).
-			path: MycnfFile(uint32(*flagServerID)),
+			Path: MycnfFile(uint32(*flagServerID)),
 		}, nil
 	}
 
@@ -125,6 +125,6 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 		log.Infof("No mycnf_server_id specified, using mycnf-file file %v", *flagMycnfFile)
 	}
 	mycnf = NewMycnf(uid, 0)
-	mycnf.path = *flagMycnfFile
+	mycnf.Path = *flagMycnfFile
 	return ReadMycnf(mycnf)
 }

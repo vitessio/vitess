@@ -17,9 +17,8 @@ limitations under the License.
 package memorytopo
 
 import (
-	"path"
-
 	"context"
+	"path"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -27,6 +26,10 @@ import (
 
 // NewLeaderParticipation is part of the topo.Server interface
 func (c *Conn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	if c.closed {
+		return nil, ErrConnectionClosed
+	}
+
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
@@ -69,6 +72,10 @@ type cLeaderParticipation struct {
 
 // WaitForLeadership is part of the topo.LeaderParticipation interface.
 func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
+	if mp.c.closed {
+		return nil, ErrConnectionClosed
+	}
+
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
@@ -77,29 +84,28 @@ func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	}
 
 	electionPath := path.Join(electionsPath, mp.name)
-	var ld topo.LockDescriptor
 
 	// We use a cancelable context here. If stop is closed,
 	// we just cancel that context.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
+
+	// Try to get the primaryship, by getting a lock.
+	ld, err := mp.c.Lock(lockCtx, electionPath, mp.id)
+	if err != nil {
+		lockCancel()
+		close(mp.done)
+		// It can be that we were interrupted.
+		return nil, err
+	}
+
 	go func() {
 		<-mp.stop
-		if ld != nil {
-			if err := ld.Unlock(context.Background()); err != nil {
-				log.Errorf("failed to unlock LockDescriptor %v: %v", electionPath, err)
-			}
+		if err := ld.Unlock(context.Background()); err != nil {
+			log.Errorf("failed to unlock LockDescriptor %v: %v", electionPath, err)
 		}
 		lockCancel()
 		close(mp.done)
 	}()
-
-	// Try to get the primaryship, by getting a lock.
-	var err error
-	ld, err = mp.c.Lock(lockCtx, electionPath, mp.id)
-	if err != nil {
-		// It can be that we were interrupted.
-		return nil, err
-	}
 
 	// We got the lock. Return the lockContext. If Stop() is called,
 	// it will cancel the lockCtx, and cancel the returned context.
@@ -114,6 +120,10 @@ func (mp *cLeaderParticipation) Stop() {
 
 // GetCurrentLeaderID is part of the topo.LeaderParticipation interface
 func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
+	if mp.c.closed {
+		return "", ErrConnectionClosed
+	}
+
 	electionPath := path.Join(electionsPath, mp.name)
 
 	mp.c.factory.mu.Lock()
@@ -125,4 +135,49 @@ func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string,
 	}
 
 	return n.lockContents, nil
+}
+
+// WaitForNewLeader is part of the topo.LeaderParticipation interface
+func (mp *cLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan string, error) {
+	if mp.c.closed {
+		return nil, ErrConnectionClosed
+	}
+
+	mp.c.factory.mu.Lock()
+	defer mp.c.factory.mu.Unlock()
+
+	electionPath := path.Join(electionsPath, mp.name)
+	n := mp.c.factory.nodeByPath(mp.c.cell, electionPath)
+	if n == nil {
+		return nil, topo.NewError(topo.NoNode, electionPath)
+	}
+
+	notifications := make(chan string, 8)
+	watchIndex := nextWatchIndex
+	nextWatchIndex++
+	n.watches[watchIndex] = watch{lock: notifications}
+
+	if n.lock != nil {
+		notifications <- n.lockContents
+	}
+
+	go func() {
+		defer close(notifications)
+
+		select {
+		case <-mp.stop:
+		case <-ctx.Done():
+		}
+
+		mp.c.factory.mu.Lock()
+		defer mp.c.factory.mu.Unlock()
+
+		n := mp.c.factory.nodeByPath(mp.c.cell, electionPath)
+		if n == nil {
+			return
+		}
+		delete(n.watches, watchIndex)
+	}()
+
+	return notifications, nil
 }

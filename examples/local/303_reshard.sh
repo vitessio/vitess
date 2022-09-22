@@ -19,4 +19,4 @@
 
 source ./env.sh
 
-vtctlclient Reshard -source_shards '0' -target_shards '-80,80-' Create customer.cust2cust
+vtctlclient Reshard -- --source_shards '0' --target_shards '-80,80-' Create customer.cust2cust

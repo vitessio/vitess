@@ -42,7 +42,7 @@ var TypeNames = []string{
 
 // Table contains info about a table.
 type Table struct {
-	Name      sqlparser.TableIdent
+	Name      sqlparser.IdentifierCS
 	Fields    []*querypb.Field
 	PKColumns []int
 	Type      int
@@ -109,13 +109,13 @@ type MessageInfo struct {
 // NewTable creates a new Table.
 func NewTable(name string) *Table {
 	return &Table{
-		Name: sqlparser.NewTableIdent(name),
+		Name: sqlparser.NewIdentifierCS(name),
 	}
 }
 
 // FindColumn finds a column in the table. It returns the index if found.
 // Otherwise, it returns -1.
-func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
+func (ta *Table) FindColumn(name sqlparser.IdentifierCI) int {
 	for i, col := range ta.Fields {
 		if name.EqualString(col.Name) {
 			return i

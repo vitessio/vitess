@@ -17,32 +17,47 @@ limitations under the License.
 package consultopo
 
 import (
-	"flag"
+	"context"
 	"path"
 	"time"
 
-	"context"
-
 	"github.com/hashicorp/consul/api"
+	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	watchPollDuration = flag.Duration("topo_consul_watch_poll_duration", 30*time.Second, "time of the long poll for watch queries.")
+	watchPollDuration = 30 * time.Second
 )
 
+func init() {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
+		servenv.OnParseFor(cmd, registerWatchFlags)
+	}
+}
+
+func registerWatchFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&watchPollDuration, "topo_consul_watch_poll_duration", watchPollDuration, "time of the long poll for watch queries.")
+}
+
 // Watch is part of the topo.Conn interface.
-func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	// Initial get.
 	nodePath := path.Join(s.root, filePath)
-	pair, _, err := s.kv.Get(nodePath, nil)
+	options := &api.QueryOptions{}
+
+	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer initialCancel()
+
+	pair, _, err := s.kv.Get(nodePath, options.WithContext(initialCtx))
 	if err != nil {
-		return &topo.WatchData{Err: err}, nil, nil
+		return nil, nil, err
 	}
 	if pair == nil {
 		// Node doesn't exist.
-		return &topo.WatchData{Err: topo.NewError(topo.NoNode, nodePath)}, nil, nil
+		return nil, nil, topo.NewError(topo.NoNode, nodePath)
 	}
 
 	// Initial value to return.
@@ -50,9 +65,6 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		Contents: pair.Value,
 		Version:  ConsulVersion(pair.ModifyIndex),
 	}
-
-	// Create a context, will be used to cancel the watch.
-	watchCtx, watchCancel := context.WithCancel(context.Background())
 
 	// Create the notifications channel, send updates to it.
 	notifications := make(chan *topo.WatchData, 10)
@@ -74,7 +86,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			waitIndex := pair.ModifyIndex
 			opts := &api.QueryOptions{
 				WaitIndex: waitIndex,
-				WaitTime:  *watchPollDuration,
+				WaitTime:  watchPollDuration,
 			}
 
 			// Make a new Context for just this one Get() call.
@@ -83,7 +95,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			// This essentially uses WaitTime as a heartbeat interval to detect
 			// a dead connection.
 			cancelGetCtx()
-			getCtx, cancelGetCtx = context.WithTimeout(watchCtx, 2*opts.WaitTime)
+			getCtx, cancelGetCtx = context.WithTimeout(ctx, 2*opts.WaitTime)
 
 			pair, _, err = s.kv.Get(nodePath, opts.WithContext(getCtx))
 			if err != nil {
@@ -114,9 +126,9 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 			// See if the watch was canceled.
 			select {
-			case <-watchCtx.Done():
+			case <-ctx.Done():
 				notifications <- &topo.WatchData{
-					Err: convertError(watchCtx.Err(), nodePath),
+					Err: convertError(ctx.Err(), nodePath),
 				}
 				cancelGetCtx()
 				return
@@ -125,5 +137,14 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		}
 	}()
 
-	return wd, notifications, topo.CancelFunc(watchCancel)
+	return wd, notifications, nil
+}
+
+// WatchRecursive is part of the topo.Conn interface.
+func (s *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	// This isn't implemented yet, but likely can be implemented using List
+	// with blocking logic like how we use Get with blocking for regular Watch.
+	// See also how https://www.consul.io/docs/dynamic-app-config/watches#keyprefix
+	// works under the hood.
+	return nil, nil, topo.NewError(topo.NoImplementation, path)
 }

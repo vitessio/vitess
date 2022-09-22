@@ -41,7 +41,7 @@ func init() {
 	addCommand(workflowsGroupName, command{
 		name:   "WorkflowCreate",
 		method: commandWorkflowCreate,
-		params: "[-skip_start] <factoryName> [parameters...]",
+		params: "[--skip_start] <factoryName> [parameters...]",
 		help:   "Creates the workflow with the provided parameters. The workflow is also started, unless -skip_start is specified.",
 	})
 	addCommand(workflowsGroupName, command{

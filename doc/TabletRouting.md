@@ -78,68 +78,21 @@ This module also provides helper methods to find a tablet to route traffic
 to. Since it knows the health status of all tablets for a given keyspace / shard
 / tablet type, and their replication lag, it can provide a good list of tablets.
 
-## Vtgate Gateway interface
+## Vtgate TabletGateway
 
-An important interface inside vtgate is the Gateway interface. It can send
+An important component inside vtgate is the TabletGateway. It can send
 queries to a tablet by keyspace, shard, and tablet type.
 
 As mentioned previously, the higher levels inside vtgate can resolve queries to
-a keyspace, shard and tablet type. The queries are then passed to the Gateway
-implementation inside vtgate, to route them to the right tablet.
+a keyspace, shard and tablet type. The queries are then passed to the TabletGateway inside vtgate,
+to route them to the right tablet.
 
-There are two implementations of the Gateway interface:
-
-* discoveryGateway: deprecated
-* tabletGateway: Combines a set of TopologyWatchers (described in the
-  discovery section, one per cell) as a source of tablets, a HealthCheck module
-  to watch their health, and a tabletHealthCheck per tablet to collect all the health
-  information. Based on this data, it can find the best tablet to use.
+TabletGateway combines a set of TopologyWatchers (described in the
+discovery section, one per cell) as a source of tablets, a HealthCheck module
+to watch their health, and a tabletHealthCheck per tablet to collect all the health
+information. Based on this data, it can find the best tablet to use.
   
 # Extensions, work in progress
-
-## Regions, cross-cell targeting
-
-At first, the discoveryGateway was routing queries the following way:
-
-* For primary queries, just find the primary tablet, whichever cell it's in, and
-  send the query to it. This was meant to handle cross-cell primary fail-over.
-* For non-primary queries, just route to the local cell vtgate is in.
-
-This turned out to be a bit limiting, as if no local tablet was available in the
-cell, the queries would just fail. We added the concept of Region, and if
-tablets in the same Region are available to serve, they can be used instead.
-This fix however is not entirely correct, as it uses the SrvKeyspace of the
-current cell, instead of the SrvKeyspace of the other cell. Both ServedFrom and
-the shard partition may be different in a different cell.
-
-## Percolating the cell back up
-
-We think the correct fix is to percolate the cell back up at the vtgate routing
-layer. That way when the higher level is asking for the SrvKeyspace object, it
-can ask for the right one, in the right cell. For instance, we can read the
-current SrvKeyspace for the current cell, see if it has healthy tablets for the
-shard(s) we're interested in, and if not find another cell in the same region
-that has healthy tablets.
-
-In the l2vtgate case though, this is not as easy, as the vtgate process has no
-idea what tablets are healthy. We propose to solve this by adding a healthcheck
-between vtgate and l2vtgate:
-
-* vtgate would maintain a healthcheck connection to the l2vtgate pool (a single
-  connection should be good enough, but we may be more aggressive to collect
-  more up to date information, so we don't depend on a single l2vtgate).
-* l2vtgate will report on a regular basis which keyspace / shard / tablet type
-  it can serve. It would also report the minimum and maximum replication lag
-  (and whatever other pertinent information vtgate needs).
-* l2vtgateGateway can then provide the health information back up inside vtgate.
-* This would also lift the limitation previously noted about l2vtgate going
-  cross-cell. When a primary is moved from one cell to another, the l2vtgate in
-  the old cell would advertize back that they lost the ability to serve the
-  primary tablet type, and the l2vtgate in the new cell would start advertizing
-  it. Vtgates would then know where to look.
-
-This would also be a good time to merge the vtgate code that uses the VSchema
-with the code that doesn't for SrvKeyspace access.
 
 ## Config-based routing
 

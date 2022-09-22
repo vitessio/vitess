@@ -57,7 +57,7 @@ func (e stackError) StackTrace() string {
 	return e.stackTrace
 }
 
-func Errorf(msg string, args ...interface{}) error {
+func Errorf(msg string, args ...any) error {
 	stack := ""
 	// See if any arg is already embedding a stack - no need to
 	// recompute something expensive and make the message unreadable.

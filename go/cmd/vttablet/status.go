@@ -85,8 +85,8 @@ var (
 )
 
 func addStatusParts(qsc tabletserver.Controller) {
-	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
-		return map[string]interface{}{
+	servenv.AddStatusPart("Tablet", tabletTemplate, func() any {
+		return map[string]any{
 			"Tablet":       topo.NewTabletInfo(tm.Tablet(), nil),
 			"DeniedTables": tm.DeniedTables(),
 		}

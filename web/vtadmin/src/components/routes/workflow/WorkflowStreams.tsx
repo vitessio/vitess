@@ -28,6 +28,7 @@ import { TabletLink } from '../../links/TabletLink';
 import { StreamStatePip } from '../../pips/StreamStatePip';
 import { WorkflowStreamsLagChart } from '../../charts/WorkflowStreamsLagChart';
 import { ShardLink } from '../../links/ShardLink';
+import { env } from '../../../util/env';
 
 interface Props {
     clusterID: string;
@@ -106,7 +107,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
 
     return (
         <div className="mt-12 mb-16">
-            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+            {env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                 <>
                     <h3 className="my-8">Stream VReplication Lag</h3>
                     <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />

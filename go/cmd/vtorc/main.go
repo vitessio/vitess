@@ -17,15 +17,22 @@
 package main
 
 import (
-	"flag"
+	"os"
+	"reflect"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/orchestrator/app"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/vt/grpccommon"
+	"vitess.io/vitess/go/vt/log"
+	vtlog "vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtorc/app"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (
@@ -33,30 +40,106 @@ var (
 	AppVersion string
 )
 
-// main is the application's entry point. It will either spawn a CLI or HTTP itnerfaces.
+// transformArgsForPflag turns a slice of raw args passed on the command line,
+// possibly incompatible with pflag (because the user is expecting stdlib flag
+// parsing behavior) and transforms them into the arguments that should have
+// been passed to conform to pflag parsing behavior.
+//
+// the primary function is to catch any cases where the user specified a longopt
+// with only a single hyphen (e.g. `-myflag`) and correct it to be
+// double-hyphenated.
+//
+// note that this transformation does _not_ actually validate the arguments; for
+// example if the user specifies `--myflag`, but the FlagSet has no such flag
+// defined, that will still appear in the returned result and will (correctly)
+// cause a parse error later on in `main`, at which point the CLI usage will
+// be printed.
+//
+// note also that this transformation is incomplete. pflag allows interspersing
+// of flag and positional arguments, whereas stdlib flag does not. however, for
+// vtorc specifically, with the exception of `vtorc help <topic>`, the CLI only
+// consumes flag arguments (in other words, there are no supported subcommands),
+// so this is a non-issue, and is not implemented here in order to make this
+// function a bit simpler.
+func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
+	for i, arg := range args {
+		switch {
+		case arg == "--":
+			// pflag stops parsing at `--`, so we're done transforming the CLI
+			// arguments. Just append everything remaining and be done.
+			result = append(result, args[i:]...)
+			return result
+		case strings.HasPrefix(arg, "--"):
+			// Long-hand flag. Append it and continue.
+			result = append(result, arg)
+		case strings.HasPrefix(arg, "-"):
+			// Most complex case. This is either:
+			// 1. A legacy long-hand flag that needs a double-dash (e.g. `-myflag` => `--myflag`).
+			// 2. One _or more_ pflag shortopts all shoved together (think `rm -rf` as `rm -r -f`).
+			//
+			// In the latter case, we don't need to do any transformations, but
+			// in the former, we do.
+			name := strings.SplitN(arg[1:], "=", 2)[0] // discard any potential value (`-myflag` and `-myflag=10` both have the name of `myflag`)
+			if fs.Lookup(name) != nil || name == "help" {
+				// Case 1: We have a long opt with this name, so we need to
+				// prepend an additional hyphen.
+				result = append(result, "-"+arg)
+			} else {
+				// Case 2: No transformation needed.
+				result = append(result, arg)
+			}
+		default:
+			// Just a flag argument. Nothing to transform.
+			result = append(result, arg)
+		}
+	}
+
+	return result
+}
+
+// main is the application's entry point. It will spawn an HTTP interface.
 func main() {
-	// TODO(sougou): change this to use vitess servenv framework
-	// TODO(sougou): remove cli code
-	configFile := flag.String("config", "", "config file name")
-	sibling := flag.String("s", "", "sibling instance, host_fqdn[:port]")
-	destination := flag.String("d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
-	discovery := flag.Bool("discovery", true, "auto discovery mode")
-	quiet := flag.Bool("quiet", false, "quiet")
-	verbose := flag.Bool("verbose", false, "verbose")
-	debug := flag.Bool("debug", false, "debug mode (very verbose)")
-	stack := flag.Bool("stack", false, "add stack trace upon error")
-	config.RuntimeCLIFlags.SkipUnresolve = flag.Bool("skip-unresolve", false, "Do not unresolve a host name")
-	config.RuntimeCLIFlags.SkipUnresolveCheck = flag.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
-	config.RuntimeCLIFlags.Noop = flag.Bool("noop", false, "Dry run; do not perform destructing operations")
-	config.RuntimeCLIFlags.BinlogFile = flag.String("binlog", "", "Binary log file name")
-	config.RuntimeCLIFlags.Statement = flag.String("statement", "", "Statement/hint")
-	config.RuntimeCLIFlags.GrabElection = flag.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
-	config.RuntimeCLIFlags.PromotionRule = flag.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
-	config.RuntimeCLIFlags.SkipContinuousRegistration = flag.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = flag.Bool("enable-database-update", false, "Enable database update, overrides SkipOrchestratorDatabaseUpdate")
-	config.RuntimeCLIFlags.IgnoreRaftSetup = flag.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
-	config.RuntimeCLIFlags.Tag = flag.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
-	flag.Parse()
+	// TODO(ajm188): after v15, remove this pflag hack and use servenv.ParseFlags
+	// directly.
+	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
+	grpccommon.RegisterFlags(fs)
+	vtlog.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
+
+	args := append([]string{}, os.Args...)
+	os.Args = os.Args[0:1]
+
+	configFile := fs.String("config", "", "config file name")
+	sibling := fs.StringP("sibling", "s", "", "sibling instance, host_fqdn[:port]")
+	destination := fs.StringP("destination", "d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
+	discovery := fs.Bool("discovery", true, "auto discovery mode")
+	config.RuntimeCLIFlags.SkipUnresolve = fs.Bool("skip-unresolve", false, "Do not unresolve a host name")
+	config.RuntimeCLIFlags.SkipUnresolveCheck = fs.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
+	config.RuntimeCLIFlags.Noop = fs.Bool("noop", false, "Dry run; do not perform destructing operations")
+	config.RuntimeCLIFlags.BinlogFile = fs.String("binlog", "", "Binary log file name")
+	config.RuntimeCLIFlags.Statement = fs.String("statement", "", "Statement/hint")
+	config.RuntimeCLIFlags.GrabElection = fs.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
+	config.RuntimeCLIFlags.PromotionRule = fs.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
+	config.RuntimeCLIFlags.SkipContinuousRegistration = fs.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
+	config.RuntimeCLIFlags.EnableDatabaseUpdate = fs.Bool("enable-database-update", false, "Enable database update, overrides SkipVTOrcDatabaseUpdate")
+	config.RuntimeCLIFlags.IgnoreRaftSetup = fs.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
+	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
+
+	os.Args = append(os.Args, transformArgsForPflag(fs, args[1:])...)
+	if !reflect.DeepEqual(args, os.Args) {
+		// warn the user so they can adjust their CLI scripts
+		warning := `CLI args passed do not conform to pflag parsing behavior
+The arguments have been transformed for compatibility as follows:
+	%v => %v
+Please update your scripts before the next version, when this will begin to break.
+`
+		log.Warningf(warning, args, os.Args)
+	}
+
+	servenv.ParseFlags("vtorc")
 
 	if *destination != "" && *sibling != "" {
 		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
@@ -68,25 +151,14 @@ func main() {
 		}
 	default:
 		{
-			log.Fatalf("-promotion-rule only supports prefer|neutral|prefer_not|must_not")
+			log.Fatalf("--promotion-rule only supports prefer|neutral|prefer_not|must_not")
 		}
 	}
 	if *destination == "" {
 		*destination = *sibling
 	}
 
-	log.SetLevel(log.ERROR)
-	if *verbose {
-		log.SetLevel(log.INFO)
-	}
-	if *debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *stack {
-		log.SetPrintStackTrace(*stack)
-	}
-
-	startText := "starting orchestrator"
+	startText := "starting vtorc"
 	if AppVersion != "" {
 		startText += ", version: " + AppVersion
 	}
@@ -98,21 +170,10 @@ func main() {
 	if len(*configFile) > 0 {
 		config.ForceRead(*configFile)
 	} else {
-		config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
+		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false
-	}
-	if config.Config.Debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *quiet {
-		// Override!!
-		log.SetLevel(log.ERROR)
-	}
-	if config.Config.EnableSyslog {
-		log.EnableSyslogWriter("orchestrator")
-		log.SetSyslogLevel(log.INFO)
 	}
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()
@@ -120,17 +181,15 @@ func main() {
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	helpTopic := ""
-	if flag.Arg(0) == "help" {
-		if flag.Arg(1) != "" {
-			helpTopic = flag.Arg(1)
-		}
-	}
+	go app.HTTP(*discovery)
 
-	switch {
-	case helpTopic != "":
-		app.HelpCommand(helpTopic)
-	default:
-		app.HTTP(*discovery)
-	}
+	servenv.OnRun(func() {
+		addStatusParts()
+	})
+
+	// For backward compatability, we require that VTOrc functions even when the --port flag is not provided.
+	// In this case, it should function like before but without the servenv pages.
+	// Therefore, currently we don't check for the --port flag to be necessary, but release 16+ that check
+	// can be added to always have the serenv page running in VTOrc.
+	servenv.RunDefault()
 }

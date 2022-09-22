@@ -12,23 +12,32 @@ on:
       - '.github/workflows/vtadmin_web_lint.yml'
       - 'web/vtadmin/**'
 
-defaults:
-  run:
-    working-directory: ./web/vtadmin
-
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - name: Check if workflow needs to be skipped
+        id: skip-workflow
+        run: |
+          skip='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+          fi
+          echo Skip ${skip}
+          echo "::set-output name=skip-workflow::${skip}"
+
       - uses: actions/checkout@v2
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
 
       - uses: actions/setup-node@v2
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json
           node-version: '16.13.0'
 
       - name: Install dependencies
-        run: npm install
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        run: cd ./web/vtadmin && npm ci
 
       # Using "if: always()" means each step will run, even if a previous
       # step fails. This is nice because, for example, we want stylelint and 
@@ -39,13 +48,18 @@ jobs:
       # A nice enhancement is to parallelize these steps into jobs, with the
       # trade-off of more complexity around sharing npm install artifacts. 
       - name: Run eslint
-        if: always()
-        run: npm run lint:eslint
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
+        run: cd ./web/vtadmin && npm run lint:eslint
 
       - name: Run stylelint
-        if: always()
-        run: npm run lint:stylelint -- -f verbose
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
+        run: cd ./web/vtadmin && npm run lint:stylelint -- -f verbose
         
       - name: Run prettier
-        if: always()
-        run: npm run lint:prettier
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
+        run: cd ./web/vtadmin && npm run lint:prettier
+
+    # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
+    concurrency: 
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true

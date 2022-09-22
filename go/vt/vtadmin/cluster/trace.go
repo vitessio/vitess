@@ -44,4 +44,5 @@ func annotateGetSchemaRequest(req *vtctldatapb.GetSchemaRequest, span trace.Span
 	span.Annotate("include_views", req.IncludeViews)
 	span.Annotate("table_names_only", req.TableNamesOnly)
 	span.Annotate("table_sizes_only", req.TableSizesOnly)
+	span.Annotate("table_schema_only", req.TableSchemaOnly)
 }

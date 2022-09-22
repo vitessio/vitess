@@ -5,14 +5,19 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -49,9 +54,11 @@ type VReplicationWorkflowParams struct {
 	Direction                         workflow.TrafficSwitchDirection
 	MaxAllowedTransactionLagSeconds   int64
 
-	// MoveTables specific
+	// MoveTables/Migrate specific
 	SourceKeyspace, Tables  string
 	AllTables, RenameTables bool
+	SourceTimeZone          string
+	DropForeignKeys         bool
 
 	// Reshard specific
 	SourceShards, TargetShards []string
@@ -375,25 +382,18 @@ func (vrw *VReplicationWorkflow) getCellsAsArray() []string {
 	return nil
 }
 
-func (vrw *VReplicationWorkflow) getTabletTypes() []topodatapb.TabletType {
-	tabletTypesArr := strings.Split(vrw.params.TabletTypes, ",")
-	var tabletTypes []topodatapb.TabletType
-	for _, tabletType := range tabletTypesArr {
-		servedType, _ := topoproto.ParseTabletType(tabletType)
-		tabletTypes = append(tabletTypes, servedType)
-	}
-	return tabletTypes
-}
-
 func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasPrimary bool, err error) {
-	tabletTypesArr := strings.Split(vrw.params.TabletTypes, ",")
-	for _, tabletType := range tabletTypesArr {
-		switch strings.ToLower(tabletType) {
-		case "replica":
+	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(vrw.params.TabletTypes)
+	if err != nil {
+		return false, false, false, err
+	}
+	for _, tabletType := range tabletTypes {
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA:
 			hasReplica = true
-		case "rdonly":
+		case topodatapb.TabletType_RDONLY:
 			hasRdonly = true
-		case "primary", "master":
+		case topodatapb.TabletType_PRIMARY:
 			hasPrimary = true
 		default:
 			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
@@ -410,7 +410,7 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	log.Infof("In VReplicationWorkflow.initMoveTables() for %+v", vrw)
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
-		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster)
+		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys, vrw.params.SourceTimeZone)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
@@ -421,15 +421,18 @@ func (vrw *VReplicationWorkflow) initReshard() error {
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {
 	log.Infof("In VReplicationWorkflow.switchReads() for %+v", vrw)
-	var tabletTypes []topodatapb.TabletType
-	for _, tt := range vrw.getTabletTypes() {
+	fullTabletTypes, _, err := discovery.ParseTabletTypesAndOrder(vrw.params.TabletTypes)
+	if err != nil {
+		return nil, err
+	}
+	var nonPrimaryTabletTypes []topodatapb.TabletType
+	for _, tt := range fullTabletTypes {
 		if tt != topodatapb.TabletType_PRIMARY {
-			tabletTypes = append(tabletTypes, tt)
+			nonPrimaryTabletTypes = append(nonPrimaryTabletTypes, tt)
 		}
 	}
 	var dryRunResults *[]string
-	var err error
-	dryRunResults, err = vrw.wr.SwitchReads(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, tabletTypes,
+	dryRunResults, err = vrw.wr.SwitchReads(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, nonPrimaryTabletTypes,
 		vrw.getCellsAsArray(), vrw.params.Direction, vrw.params.DryRun)
 	if err != nil {
 		return nil, err
@@ -472,10 +475,11 @@ type TableCopyProgress struct {
 type CopyProgress map[string]*TableCopyProgress
 
 const (
-	cannotSwitchError          = "workflow has errors"
-	cannotSwitchCopyIncomplete = "copy is still in progress"
-	cannotSwitchHighLag        = "replication lag %ds is higher than allowed lag %ds"
-	cannotSwitchFrozen         = "workflow is frozen"
+	cannotSwitchError               = "workflow has errors"
+	cannotSwitchCopyIncomplete      = "copy is still in progress"
+	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
+	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
+	cannotSwitchFrozen              = "workflow is frozen"
 )
 
 func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reason string, err error) {
@@ -510,6 +514,33 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 	if result.MaxVReplicationTransactionLag > vrw.params.MaxAllowedTransactionLagSeconds {
 		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
 	}
+
+	// Ensure that the tablets on both sides are in good shape as we make this same call in the process
+	// and an error will cause us to backout
+	refreshErrors := strings.Builder{}
+	var m sync.Mutex
+	var wg sync.WaitGroup
+	rtbsCtx, cancel := context.WithTimeout(vrw.ctx, shardTabletRefreshTimeout)
+	defer cancel()
+	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
+		defer wg.Done()
+		for _, si := range shards {
+			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, vrw.wr.ts, vrw.wr.tmc, si, nil, vrw.wr.Logger()); err != nil || partial {
+				m.Lock()
+				refreshErrors.WriteString(fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+					si.Keyspace(), si.ShardName(), stype, err, partialDetails))
+				m.Unlock()
+			}
+		}
+	}
+	wg.Add(1)
+	go refreshTablets(vrw.ts.SourceShards(), "source")
+	wg.Add(1)
+	go refreshTablets(vrw.ts.TargetShards(), "target")
+	wg.Wait()
+	if refreshErrors.Len() > 0 {
+		return fmt.Sprintf(cannotSwitchFailedTabletRefresh, refreshErrors.String()), nil
+	}
 	return "", nil
 }
 
@@ -524,7 +555,10 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	for _, target := range vrw.ts.targets {
 		for id, bls := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), MaxRows, false, false)
+			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:   []byte(query),
+				MaxRows: MaxRows,
+			})
 			if err != nil {
 				return nil, err
 			}
@@ -568,7 +602,10 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	}
 
 	var getTableMetrics = func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
-		p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, []byte(query), len(tables), false, false)
+		p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:   []byte(query),
+			MaxRows: uint64(len(tables)),
+		})
 		if err != nil {
 			return err
 		}
@@ -636,6 +673,27 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 		}
 	}
 	return &copyProgress, nil
+}
+
+// endregion
+
+// region Workflow related utility functions
+
+// deleteWorkflowVDiffData cleans up any potential VDiff related data associated with the workflow on the given tablet
+func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb.Tablet, workflow string) {
+	sqlDeleteVDiffs := `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+						where vd.keyspace = %s and vd.workflow = %s`
+	query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(tablet.Keyspace), encodeString(workflow))
+	rows := -1
+	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:   []byte(query),
+		MaxRows: uint64(rows),
+	}); err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
+			wr.Logger().Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
+		}
+	}
 }
 
 // endregion

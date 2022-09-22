@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -87,6 +88,8 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		return err
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr, reservedVars, where)
+	case *sqlparser.JSONTableExpr:
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
@@ -106,6 +109,9 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
 	case *sqlparser.DerivedTable:
+		if expr.Lateral {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: lateral derived tables")
+		}
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
 		case *sqlparser.Select:
@@ -148,8 +154,18 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// a new set of column references will be generated against the new tables,
 		// and those vindex maps will be returned. They have to replace the old vindex
 		// maps of the inherited route options.
+		var tableNames []string
+		spbTables, err := spb.st.AllVschemaTableNames()
+		if err != nil {
+			return err
+		}
+		for _, table := range spbTables {
+			tableNames = append(tableNames, table.Name.String())
+		}
+		sort.Strings(tableNames)
 		vschemaTable := &vindexes.Table{
 			Keyspace: subroute.eroute.Keyspace,
+			Name:     sqlparser.NewIdentifierCS(strings.Join(tableNames, ", ")),
 		}
 		for _, rc := range subroute.ResultColumns() {
 			if rc.column.vindex == nil {
@@ -163,7 +179,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 				}
 			}
 			vschemaTable.ColumnVindexes = append(vschemaTable.ColumnVindexes, &vindexes.ColumnVindex{
-				Columns: []sqlparser.ColIdent{rc.alias},
+				Columns: []sqlparser.IdentifierCI{rc.alias},
 				Vindex:  rc.column.vindex,
 			})
 		}

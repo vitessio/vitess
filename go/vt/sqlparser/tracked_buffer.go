@@ -36,14 +36,54 @@ type TrackedBuffer struct {
 	*strings.Builder
 	bindLocations []bindLocation
 	nodeFormatter NodeFormatter
+	literal       func(string) (int, error)
+	escape        bool
+	fast          bool
 }
 
 // NewTrackedBuffer creates a new TrackedBuffer.
 func NewTrackedBuffer(nodeFormatter NodeFormatter) *TrackedBuffer {
-	return &TrackedBuffer{
+	buf := &TrackedBuffer{
 		Builder:       new(strings.Builder),
 		nodeFormatter: nodeFormatter,
 	}
+	buf.literal = buf.WriteString
+	buf.fast = nodeFormatter == nil
+	return buf
+}
+
+func (buf *TrackedBuffer) writeStringUpperCase(lit string) (int, error) {
+	// Upcasing is performed for ASCII only, following MySQL's behavior
+	buf.Grow(len(lit))
+	for i := 0; i < len(lit); i++ {
+		c := lit[i]
+		if 'a' <= c && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		buf.WriteByte(c)
+	}
+	return len(lit), nil
+}
+
+// SetUpperCase sets whether all SQL statements formatted by this TrackedBuffer will be normalized into
+// uppercase. By default, formatted statements are normalized into lowercase.
+// Enabling this option will prevent the optimized fastFormat routines from running.
+func (buf *TrackedBuffer) SetUpperCase(enable bool) {
+	buf.fast = false
+	if enable {
+		buf.literal = buf.writeStringUpperCase
+	} else {
+		buf.literal = buf.WriteString
+	}
+}
+
+// SetEscapeAllIdentifiers sets whether ALL identifiers in the serialized SQL query should be quoted
+// and escaped. By default, identifiers are only escaped if they match the name of a SQL keyword or they
+// contain characters that must be escaped.
+// Enabling this option will prevent the optimized fastFormat routines from running.
+func (buf *TrackedBuffer) SetEscapeAllIdentifiers(enable bool) {
+	buf.fast = false
+	buf.escape = enable
 }
 
 // WriteNode function, initiates the writing of a single SQLNode tree by passing
@@ -63,7 +103,7 @@ func (buf *TrackedBuffer) WriteNode(node SQLNode) *TrackedBuffer {
 // The name must be something other than the usual Printf() to avoid "go vet"
 // warnings due to our custom format specifiers.
 // *** THIS METHOD SHOULD NOT BE USED FROM ast.go. USE astPrintf INSTEAD ***
-func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
+func (buf *TrackedBuffer) Myprintf(format string, values ...any) {
 	buf.astPrintf(nil, format, values...)
 }
 
@@ -83,7 +123,7 @@ func (buf *TrackedBuffer) printExpr(currentExpr Expr, expr Expr, left bool) {
 }
 
 // astPrintf is for internal use by the ast structs
-func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values ...interface{}) {
+func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values ...any) {
 	currentExpr, checkParens := currentNode.(Expr)
 	if checkParens {
 		// expressions that have Precedence Syntactic will never need parens
@@ -98,14 +138,20 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			i++
 		}
 		if i > lasti {
-			buf.WriteString(format[lasti:i])
+			_, _ = buf.literal(format[lasti:i])
 		}
 		if i >= end {
 			break
 		}
 		i++ // '%'
-		token := format[i]
-		switch token {
+
+		caseSensitive := false
+		if format[i] == '#' {
+			caseSensitive = true
+			i++
+		}
+
+		switch format[i] {
 		case 'c':
 			switch v := values[fieldnum].(type) {
 			case byte:
@@ -117,15 +163,17 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			}
 		case 's':
 			switch v := values[fieldnum].(type) {
-			case []byte:
-				buf.Write(v)
 			case string:
-				buf.WriteString(v)
+				if caseSensitive {
+					buf.WriteString(v)
+				} else {
+					_, _ = buf.literal(v)
+				}
 			default:
 				panic(fmt.Sprintf("unexpected TrackedBuffer type %T", v))
 			}
 		case 'l', 'r', 'v':
-			left := token != 'r'
+			left := format[i] != 'r'
 			value := values[fieldnum]
 			expr := getExpressionForParensEval(checkParens, value)
 
@@ -153,7 +201,7 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 	}
 }
 
-func getExpressionForParensEval(checkParens bool, value interface{}) Expr {
+func getExpressionForParensEval(checkParens bool, value any) Expr {
 	if checkParens {
 		expr, isExpr := value.(Expr)
 		if isExpr {
@@ -164,10 +212,13 @@ func getExpressionForParensEval(checkParens bool, value interface{}) Expr {
 }
 
 func (buf *TrackedBuffer) formatter(node SQLNode) {
-	if buf.nodeFormatter == nil {
+	switch {
+	case buf.fast:
 		node.formatFast(buf)
-	} else {
+	case buf.nodeFormatter != nil:
 		buf.nodeFormatter(buf, node)
+	default:
+		node.Format(buf)
 	}
 }
 
@@ -236,8 +287,33 @@ func (buf *TrackedBuffer) HasBindVars() bool {
 }
 
 // BuildParsedQuery builds a ParsedQuery from the input.
-func BuildParsedQuery(in string, vars ...interface{}) *ParsedQuery {
+func BuildParsedQuery(in string, vars ...any) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf(in, vars...)
 	return buf.ParsedQuery()
+}
+
+// String returns a string representation of an SQLNode.
+func String(node SQLNode) string {
+	if node == nil {
+		return "<nil>"
+	}
+
+	buf := NewTrackedBuffer(nil)
+	node.formatFast(buf)
+	return buf.String()
+}
+
+// CanonicalString returns a canonical string representation of an SQLNode where all identifiers
+// are always escaped and all SQL syntax is in uppercase. This matches the canonical output from MySQL.
+func CanonicalString(node SQLNode) string {
+	if node == nil {
+		return "" // do not return '<nil>', which is Go syntax.
+	}
+
+	buf := NewTrackedBuffer(nil)
+	buf.SetUpperCase(true)
+	buf.SetEscapeAllIdentifiers(true)
+	node.Format(buf)
+	return buf.String()
 }

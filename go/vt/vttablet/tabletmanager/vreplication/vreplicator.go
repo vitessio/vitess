@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"flag"
 	"fmt"
 	"math"
 	"sort"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var (
@@ -49,27 +50,12 @@ var (
 	idleTimeout = 1100 * time.Millisecond
 
 	dbLockRetryDelay = 1 * time.Second
-	relayLogMaxSize  = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
-	relayLogMaxItems = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 
-	copyPhaseDuration   = flag.Duration("vreplication_copy_phase_duration", 1*time.Hour, "Duration for each copy phase loop (before running the next catchup: default 1h)")
-	replicaLagTolerance = flag.Duration("vreplication_replica_lag_tolerance", 1*time.Minute, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
-
-	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
-	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
-	// outages. Keep this high if
-	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
-	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
-	vreplicationHeartbeatUpdateInterval = flag.Int("vreplication_heartbeat_update_interval", 1, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
 	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
 
-	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0x01, "(Bitmask) of experimental features in vreplication to enable")
-
 	vreplicationExperimentalFlagOptimizeInserts int64 = 1
-
-	vreplicationStoreCompressedGTID = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
 )
 
 const (
@@ -82,7 +68,17 @@ const (
 	// in effect on the source when it was created:
 	//   https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/client/mysqldump.cc#L795-L818
 	SQLMode          = "NO_AUTO_VALUE_ON_ZERO"
+	StrictSQLMode    = "STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO"
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
+)
+
+type ComponentName string
+
+const (
+	VPlayerComponentName     ComponentName = "vplayer"
+	VCopierComponentName     ComponentName = "vcopier"
+	VStreamerComponentName   ComponentName = "vstreamer"
+	RowStreamerComponentName ComponentName = "rowstreamer"
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -101,6 +97,11 @@ type vreplicator struct {
 
 	originalFKCheckSetting int64
 	originalSQLMode        string
+
+	WorkflowType int64
+	WorkflowName string
+
+	throttleUpdatesRateLimiter *timer.RateLimiter
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -110,24 +111,25 @@ type vreplicator struct {
 // The Filter can be empty: get all rows and columns.
 // The Filter can be a keyrange, like "-80": get all rows that are within the keyrange.
 // The Filter can be a select expression. Examples.
-//   "select * from t", same as an empty Filter,
-//   "select * from t where in_keyrange('-80')", same as "-80",
-//   "select * from t where in_keyrange(col1, 'hash', '-80')",
-//   "select col1, col2 from t where...",
-//   "select col1, keyspace_id() as ksid from t where...",
-//   "select id, count(*), sum(price) from t group by id",
-//   "select * from t where customer_id=1 and val = 'newton'".
-//   Only "in_keyrange" expressions, integer and string comparisons are supported in the where clause.
-//   The select expressions can be any valid non-aggregate expressions,
-//   or count(*), or sum(col).
-//   If the target column name does not match the source expression, an
-//   alias like "a+b as targetcol" must be used.
-//   More advanced constructs can be used. Please see the table plan builder
-//   documentation for more info.
+//
+//	"select * from t", same as an empty Filter,
+//	"select * from t where in_keyrange('-80')", same as "-80",
+//	"select * from t where in_keyrange(col1, 'hash', '-80')",
+//	"select col1, col2 from t where...",
+//	"select col1, keyspace_id() as ksid from t where...",
+//	"select id, count(*), sum(price) from t group by id",
+//	"select * from t where customer_id=1 and val = 'newton'".
+//	Only "in_keyrange" expressions, integer and string comparisons are supported in the where clause.
+//	The select expressions can be any valid non-aggregate expressions,
+//	or count(*), or sum(col).
+//	If the target column name does not match the source expression, an
+//	alias like "a+b as targetcol" must be used.
+//	More advanced constructs can be used. Please see the table plan builder
+//	documentation for more info.
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
-	if *vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
+	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("the supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
-			*vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	return &vreplicator{
 		vre:             vre,
@@ -137,6 +139,8 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
+
+		throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
 	}
 }
 
@@ -175,7 +179,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	// Manage SQL_MODE in the same way that mysqldump does.
 	// Save the original sql_mode, set it to a permissive mode,
 	// and then reset it back to the original value at the end.
-	resetFunc, err := vr.setSQLMode()
+	resetFunc, err := vr.setSQLMode(ctx)
 	defer resetFunc()
 	if err != nil {
 		return err
@@ -206,8 +210,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// If any of the operations below changed state to Stopped, we should return.
-		if settings.State == binlogplayer.BlpStopped {
+		// If any of the operations below changed state to Stopped or Error, we should return.
+		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
 			return nil
 		}
 		switch {
@@ -263,7 +267,8 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
 	}
@@ -281,9 +286,17 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 
 		var pks []string
 		if len(td.PrimaryKeyColumns) != 0 {
+			// Use the PK
 			pks = td.PrimaryKeyColumns
 		} else {
-			pks = td.Columns
+			// Use a PK equivalent if one exists
+			if pks, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+				return nil, err
+			}
+			// Fall back to using every column in the table if there's no PK or PKE
+			if len(pks) == 0 {
+				pks = td.Columns
+			}
 		}
 		var colInfo []*ColumnInfo
 		for _, row := range qr.Rows {
@@ -355,6 +368,8 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
+	vr.WorkflowType = settings.WorkflowType
+	vr.WorkflowName = settings.WorkflowName
 	return settings, numTablesToCopy, nil
 }
 
@@ -429,7 +444,7 @@ func (vr *vreplicator) resetFKCheckAfterCopy() error {
 	return err
 }
 
-func (vr *vreplicator) setSQLMode() (func(), error) {
+func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	resetFunc := func() {}
 	// First save the original SQL mode if we have not already done so
 	if vr.originalSQLMode == "" {
@@ -450,17 +465,66 @@ func (vr *vreplicator) setSQLMode() (func(), error) {
 			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
 		}
 	}
+	vreplicationSQLMode := SQLMode
+	settings, _, err := vr.readSettings(ctx)
+	if err != nil {
+		return resetFunc, err
+	}
+	if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		vreplicationSQLMode = StrictSQLMode
+	}
 
 	// Now set it to a permissive mode that will allow us to recreate
 	// any database object that exists on the source in full on the
 	// target
-	query := fmt.Sprintf(setSQLModeQueryf, SQLMode)
-	_, err := vr.dbClient.Execute(query)
-	if err != nil {
+	query := fmt.Sprintf(setSQLModeQueryf, vreplicationSQLMode)
+	if _, err := vr.dbClient.Execute(query); err != nil {
 		return resetFunc, fmt.Errorf("could not set the permissive sql_mode on target using %s: %v", query, err)
 	}
 
 	return resetFunc, nil
+}
+
+// throttlerAppName returns the app name to be used by throttlerClient for this particular workflow
+// example results:
+//   - "vreplication" for most flows
+//   - "vreplication:online-ddl" for online ddl flows.
+//     Note that with such name, it's possible to throttle
+//     the worflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//     This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
+//     migrations as well as gh-ost migrations.
+func (vr *vreplicator) throttlerAppName() string {
+	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
+	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		names = append(names, throttlerOnlineDDLAppName)
+	}
+	return strings.Join(names, ":")
+}
+
+func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) error {
+	err := vr.throttleUpdatesRateLimiter.Do(func() error {
+		tm := time.Now().Unix()
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, string(componentThrottled))
+		if err != nil {
+			return err
+		}
+		if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+			return fmt.Errorf("error %v updating time throttled", err)
+		}
+		return nil
+	})
+	return err
+}
+
+func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
+	update, err := binlogplayer.GenerateUpdateHeartbeat(vr.id, tm)
+	if err != nil {
+		return err
+	}
+	if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		return fmt.Errorf("error %v updating time", err)
+	}
+	return nil
 }
 
 func (vr *vreplicator) clearFKCheck() error {

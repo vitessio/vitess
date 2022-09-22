@@ -21,6 +21,10 @@ import (
 	"fmt"
 	"os"
 
+	"vitess.io/vitess/go/vt/env"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -28,6 +32,9 @@ import (
 	"vitess.io/vitess/go/vt/vtexplain"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -39,13 +46,14 @@ var (
 	vschemaFileFlag    = flag.String("vschema-file", "", "Identifies the VTGate routing schema file")
 	ksShardMapFlag     = flag.String("ks-shard-map", "", "JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace")
 	ksShardMapFileFlag = flag.String("ks-shard-map-file", "", "File containing json blob of keyspace name -> shard name -> ShardReference object")
-	numShards          = flag.Int("shards", 2, "Number of shards per keyspace. Passing -ks-shard-map/-ks-shard-map-file causes this flag to be ignored.")
+	numShards          = flag.Int("shards", 2, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
 	executionMode      = flag.String("execution-mode", "multi", "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
 	replicationMode    = flag.String("replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	normalize          = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode         = flag.String("output-mode", "text", "Output in human-friendly text or json")
 	dbName             = flag.String("dbname", "", "Optional database target to override normal routing")
-	plannerVersionStr  = flag.String("planner-version", "V3", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+	plannerVersionStr  = flag.String("planner-version", "", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+	badPlannerVersion  = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 
 	// vtexplainFlags lists all the flags that should show in usage
 	vtexplainFlags = []string{
@@ -67,47 +75,20 @@ var (
 	}
 )
 
-func usage() {
-	fmt.Printf("usage of vtexplain:\n")
-	for _, name := range vtexplainFlags {
-		f := flag.Lookup(name)
-		if f == nil {
-			panic("unknown flag " + name)
-		}
-		flagUsage(f)
-	}
-}
-
-// Cloned from the source to print out the usage for a given flag
-func flagUsage(f *flag.Flag) {
-	s := fmt.Sprintf("  -%s", f.Name) // Two spaces before -; see next two comments.
-	name, usage := flag.UnquoteUsage(f)
-	if len(name) > 0 {
-		s += " " + name
-	}
-	// Boolean flags of one ASCII letter are so common we
-	// treat them specially, putting their usage on the same line.
-	if len(s) <= 4 { // space, space, '-', 'x'.
-		s += "\t"
-	} else {
-		// Four spaces before the tab triggers good alignment
-		// for both 4- and 8-space tab stops.
-		s += "\n    \t"
-	}
-	s += usage
-	if name == "string" {
-		// put quotes on the value
-		s += fmt.Sprintf(" (default %q)", f.DefValue)
-	} else {
-		s += fmt.Sprintf(" (default %v)", f.DefValue)
-	}
-	fmt.Printf(s + "\n")
-}
-
 func init() {
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	flag.Usage = usage
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		FlagFilter: func(f *flag.Flag) bool {
+			for _, name := range vtexplainFlags {
+				if f.Name == name {
+					return true
+				}
+			}
+
+			return false
+		},
+	})
 }
 
 // getFileParam returns a string containing either flag is not "",
@@ -135,7 +116,6 @@ func getFileParam(flag, flagFile, name string, required bool) (string, error) {
 }
 
 func main() {
-	defer vtexplain.Stop()
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
@@ -149,6 +129,16 @@ func main() {
 }
 
 func parseAndRun() error {
+	verStr, err := env.CheckPlannerVersionFlag(plannerVersionStr, badPlannerVersion)
+	if err != nil {
+		return err
+	}
+
+	plannerVersion, _ := plancontext.PlannerNameToVersion(verStr)
+	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
+		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
+	}
+
 	sql, err := getFileParam(*sqlFlag, *sqlFileFlag, "sql", true)
 	if err != nil {
 		return err
@@ -169,11 +159,6 @@ func parseAndRun() error {
 		return err
 	}
 
-	plannerVersion := querypb.ExecuteOptions_PlannerVersion(querypb.ExecuteOptions_PlannerVersion_value[*plannerVersionStr])
-	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
-		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
-	}
-
 	opts := &vtexplain.Options{
 		ExecutionMode:   *executionMode,
 		PlannerVersion:  plannerVersion,
@@ -187,18 +172,19 @@ func parseAndRun() error {
 	log.V(100).Infof("schema %s\n", schema)
 	log.V(100).Infof("vschema %s\n", vschema)
 
-	err = vtexplain.Init(vschema, schema, ksShardMap, opts)
+	vte, err := vtexplain.Init(vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}
+	defer vte.Stop()
 
-	plans, err := vtexplain.Run(sql)
+	plans, err := vte.Run(sql)
 	if err != nil {
 		return err
 	}
 
 	if *outputMode == "text" {
-		fmt.Print(vtexplain.ExplainsAsText(plans))
+		fmt.Print(vte.ExplainsAsText(plans))
 	} else {
 		fmt.Print(vtexplain.ExplainsAsJSON(plans))
 	}

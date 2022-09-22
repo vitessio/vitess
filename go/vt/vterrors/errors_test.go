@@ -17,14 +17,13 @@ limitations under the License.
 package vterrors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
-
-	"context"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -193,8 +192,8 @@ func TestStackFormat(t *testing.T) {
 	assertContains(t, got, "middle", false)
 	assertContains(t, got, "outer", false)
 
-	LogErrStacks = true
-	defer func() { LogErrStacks = false }()
+	logErrStacks = true
+	defer func() { logErrStacks = false }()
 	got = fmt.Sprintf("%v", err)
 	assertContains(t, got, "innerMost", true)
 	assertContains(t, got, "middle", true)
@@ -276,9 +275,9 @@ func TestWrapping(t *testing.T) {
 	err3 := Wrapf(err2, "baz")
 	errorWithoutStack := fmt.Sprintf("%v", err3)
 
-	LogErrStacks = true
+	logErrStacks = true
 	errorWithStack := fmt.Sprintf("%v", err3)
-	LogErrStacks = false
+	logErrStacks = false
 
 	assertEquals(t, err3.Error(), "baz: bar: foo")
 	assertContains(t, errorWithoutStack, "foo", true)
@@ -300,7 +299,7 @@ func assertContains(t *testing.T, s, substring string, contains bool) {
 	}
 }
 
-func assertEquals(t *testing.T, a, b interface{}) {
+func assertEquals(t *testing.T, a, b any) {
 	if a != b {
 		t.Fatalf("expected [%s] to be equal to [%s]", a, b)
 	}

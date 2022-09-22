@@ -18,27 +18,28 @@ package db
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 
 	gouuid "github.com/google/uuid"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (
-	configFilePath       = flag.String("db_config", "", "full path to db config file that will be used by VTGR")
-	dbFlavor             = flag.String("db_flavor", "MySQL56", "mysql flavor override")
-	mysqlGroupPort       = flag.Int("gr_port", 33061, "port to bootstrap a mysql group")
-	enableHeartbeatCheck = flag.Bool("enable_heartbeat_check", false, "enable heartbeat checking, set together with -group_heartbeat_threshold")
+	configFilePath       string
+	dbFlavor             = "MySQL56"
+	mysqlGroupPort       = 33061
+	enableHeartbeatCheck bool
 
 	// ErrGroupSplitBrain is the error when mysql group is split-brain
 	ErrGroupSplitBrain = errors.New("group has split brain")
@@ -51,6 +52,15 @@ var (
 	// ErrInvalidInstance is the error when the instance key has empty hostname
 	ErrInvalidInstance = errors.New("invalid mysql instance key")
 )
+
+func init() {
+	servenv.OnParseFor("vtgr", func(fs *pflag.FlagSet) {
+		fs.StringVar(&configFilePath, "db_config", "", "Full path to db config file that will be used by VTGR.")
+		fs.StringVar(&dbFlavor, "db_flavor", "MySQL56", "MySQL flavor override.")
+		fs.IntVar(&mysqlGroupPort, "gr_port", 33061, "Port to bootstrap a MySQL group.")
+		fs.BoolVar(&enableHeartbeatCheck, "enable_heartbeat_check", false, "Enable heartbeat checking, set together with --group_heartbeat_threshold.")
+	})
+}
 
 // Agent is used by vtgr to interact with Mysql
 type Agent interface {
@@ -148,17 +158,17 @@ func NewGroupMember(state, role, host string, port int, readonly bool) *GroupMem
 // NewVTGRSqlAgent creates a SQLAgentImpl
 func NewVTGRSqlAgent() *SQLAgentImpl {
 	var conf *config.Configuration
-	if (*configFilePath) != "" {
-		log.Infof("use config from %v", *configFilePath)
-		conf = config.ForceRead(*configFilePath)
+	if (configFilePath) != "" {
+		log.Infof("use config from %v", configFilePath)
+		conf = config.ForceRead(configFilePath)
 	} else {
 		log.Warningf("use default config")
 		conf = config.Config
 	}
 	agent := &SQLAgentImpl{
 		config:          conf,
-		dbFlavor:        *dbFlavor,
-		enableHeartbeat: *enableHeartbeatCheck,
+		dbFlavor:        dbFlavor,
+		enableHeartbeat: enableHeartbeatCheck,
 	}
 	return agent
 }
@@ -197,8 +207,8 @@ func (agent *SQLAgentImpl) bootstrapInternal(instanceKey *inst.InstanceKey, uuid
 	cmds := []string{
 		"set global offline_mode=0",
 		fmt.Sprintf("set @@persist.group_replication_group_name=\"%s\"", uuid),
-		fmt.Sprintf("set global group_replication_local_address=\"%s:%d\"", instanceKey.Hostname, *mysqlGroupPort),
-		fmt.Sprintf("set global group_replication_group_seeds=\"%s:%d\"", instanceKey.Hostname, *mysqlGroupPort),
+		fmt.Sprintf("set global group_replication_local_address=\"%s:%d\"", instanceKey.Hostname, mysqlGroupPort),
+		fmt.Sprintf("set global group_replication_group_seeds=\"%s:%d\"", instanceKey.Hostname, mysqlGroupPort),
 		"set global group_replication_bootstrap_group=ON",
 		fmt.Sprintf("start group_replication user='%s', password='%s'", agent.config.MySQLReplicaUser, agent.config.MySQLReplicaPassword),
 		"set global group_replication_bootstrap_group=OFF",
@@ -279,7 +289,7 @@ func (agent *SQLAgentImpl) JoinGroupLocked(instanceKey *inst.InstanceKey, primar
 		"set global offline_mode=0",
 		fmt.Sprintf("set @@persist.group_replication_group_name=\"%s\"", uuid),
 		fmt.Sprintf("set global group_replication_group_seeds=\"%s:%d\"", primaryInstanceKey.Hostname, primaryGrPort),
-		fmt.Sprintf("set global group_replication_local_address=\"%s:%d\"", instanceKey.Hostname, *mysqlGroupPort),
+		fmt.Sprintf("set global group_replication_local_address=\"%s:%d\"", instanceKey.Hostname, mysqlGroupPort),
 		fmt.Sprintf("start group_replication user='%s', password='%s'", agent.config.MySQLReplicaUser, agent.config.MySQLReplicaPassword),
 	}
 	for _, cmd := range cmds {
@@ -445,7 +455,7 @@ func (agent *SQLAgentImpl) FetchApplierGTIDSet(instanceKey *inst.InstanceKey) (m
 }
 
 // execInstance executes a given query on the given MySQL discovery instance
-func execInstance(instanceKey *inst.InstanceKey, query string, args ...interface{}) error {
+func execInstance(instanceKey *inst.InstanceKey, query string, args ...any) error {
 	if err := verifyInstance(instanceKey); err != nil {
 		return err
 	}
@@ -459,7 +469,7 @@ func execInstance(instanceKey *inst.InstanceKey, query string, args ...interface
 }
 
 // execInstanceWithTopo executes a given query on the given MySQL topology instance
-func execInstanceWithTopo(instanceKey *inst.InstanceKey, query string, args ...interface{}) error {
+func execInstanceWithTopo(instanceKey *inst.InstanceKey, query string, args ...any) error {
 	if err := verifyInstance(instanceKey); err != nil {
 		return err
 	}

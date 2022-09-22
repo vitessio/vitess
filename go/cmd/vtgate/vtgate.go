@@ -23,32 +23,38 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
-	cell              = flag.String("cell", "test_nj", "cell to use")
-	tabletTypesToWait = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	cell                     = flag.String("cell", "test_nj", "cell to use")
+	tabletTypesToWait        = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	plannerVersion           = flag.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerVersionDeprecated = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 )
 
 var resilientServer *srvtopo.ResilientServer
-var legacyHealthCheck discovery.LegacyHealthCheck
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
@@ -138,22 +144,19 @@ func main() {
 		log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
 	}
 
-	err := CheckCellFlags(context.Background(), resilientServer, *cell, *vtgate.CellsToWatch)
+	err := CheckCellFlags(context.Background(), resilientServer, *cell, vtgate.CellsToWatch)
 	if err != nil {
 		log.Exitf("cells_to_watch validation failed: %v", err)
 	}
 
-	var vtg *vtgate.VTGate
-	if *vtgate.GatewayImplementation == vtgate.GatewayImplementationDiscovery {
-		// default value
-		legacyHealthCheck = discovery.NewLegacyHealthCheck(*vtgate.HealthCheckRetryDelay, *vtgate.HealthCheckTimeout)
-		legacyHealthCheck.RegisterStats()
-
-		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *vtgate.RetryCount, tabletTypes)
-	} else {
-		// use new Init otherwise
-		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes)
+	version, err := env.CheckPlannerVersionFlag(plannerVersion, plannerVersionDeprecated)
+	if err != nil {
+		log.Exitf("failed to get planner version from flags: %v", err)
 	}
+	plannerVersion, _ := plancontext.PlannerNameToVersion(version)
+
+	// pass nil for HealthCheck and it will be created
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, *cell, tabletTypes, plannerVersion)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
@@ -162,9 +165,6 @@ func main() {
 	})
 	servenv.OnClose(func() {
 		_ = vtg.Gateway().Close(context.Background())
-		if legacyHealthCheck != nil {
-			_ = legacyHealthCheck.Close()
-		}
 	})
 	servenv.RunDefault()
 }

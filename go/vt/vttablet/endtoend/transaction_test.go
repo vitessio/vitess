@@ -17,26 +17,25 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
+
 	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestCommit(t *testing.T) {
@@ -204,6 +203,8 @@ func TestAutoCommit(t *testing.T) {
 }
 
 func TestTxPoolSize(t *testing.T) {
+	tabletenvtest.LoadTabletEnvFlags()
+
 	vstart := framework.DebugVars()
 
 	client1 := framework.NewClient()
@@ -366,10 +367,117 @@ func TestShutdownGracePeriod(t *testing.T) {
 	client.Rollback()
 }
 
+func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
+	client := framework.NewClient()
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.StreamExecute("select sleep(10) from dual", nil)
+		assert.Error(t, err)
+	}()
+
+	started := false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, started)
+
+	start := time.Now()
+	err = client.SetServingType(topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	client.Rollback()
+
+	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+	err = client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.StreamExecute("select sleep(11) from dual", nil)
+		assert.Error(t, err)
+	}()
+
+	started = false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, started)
+	start = time.Now()
+	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	client.Rollback()
+}
+
+func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
+	client := framework.NewClient()
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.ReserveExecute("select sleep(10) from dual", nil, nil)
+		assert.Error(t, err)
+	}()
+
+	started := false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, started)
+
+	start := time.Now()
+	err = client.SetServingType(topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	client.Rollback()
+
+	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+	err = client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.ReserveExecute("select sleep(11) from dual", nil, nil)
+		assert.Error(t, err)
+	}()
+
+	started = false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, started)
+	start = time.Now()
+	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	client.Rollback()
+}
+
 func TestShortTxTimeout(t *testing.T) {
 	client := framework.NewClient()
-	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
-	framework.Server.SetTxTimeout(10 * time.Millisecond)
+	defer framework.Server.Config().SetTxTimeoutForWorkload(
+		framework.Server.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
+		querypb.ExecuteOptions_OLTP,
+	)
+	framework.Server.Config().SetTxTimeoutForWorkload(10*time.Millisecond, querypb.ExecuteOptions_OLTP)
 
 	err := client.Begin(false)
 	require.NoError(t, err)

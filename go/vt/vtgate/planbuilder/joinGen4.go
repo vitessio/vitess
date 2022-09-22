@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -31,20 +32,32 @@ var _ logicalPlan = (*joinGen4)(nil)
 type joinGen4 struct {
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
-	Opcode      engine.JoinOpcode
-	Cols        []int
-	Vars        map[string]int
+
+	// The Opcode tells us if this is an inner or outer join
+	Opcode engine.JoinOpcode
+
+	// These are the columns that will be produced by this plan.
+	// Negative offsets come from the LHS, and positive from the RHS
+	Cols []int
+
+	// Vars are the columns that will be sent from the LHS to the RHS
+	// the number is the offset on the LHS result, and the string is the bind variable name used in the RHS
+	Vars map[string]int
+
+	// LHSColumns are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the Vars field
+	LHSColumns []*sqlparser.ColName
 
 	gen4Plan
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
-	err := j.Left.WireupGen4(semTable)
+func (j *joinGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
+	err := j.Left.WireupGen4(ctx)
 	if err != nil {
 		return err
 	}
-	return j.Right.WireupGen4(semTable)
+	return j.Right.WireupGen4(ctx)
 }
 
 // Primitive implements the logicalPlan interface

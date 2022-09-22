@@ -52,8 +52,8 @@ $KUBECTL create -f ../../go/vt/topo/k8stopo/VitessTopoNodes-crd.yaml
 # Add the CellInfo description for the cell
 set +e
 echo "add $cell CellInfo"
-vtctl $TOPOLOGY_FLAGS AddCellInfo \
-  -root /vitess/$cell \
+vtctl $TOPOLOGY_FLAGS AddCellInfo -- \
+  --root /vitess/$cell \
   $cell
 set -e
 

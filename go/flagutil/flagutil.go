@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/spf13/pflag"
 )
 
 var (
@@ -36,7 +38,7 @@ var (
 type StringListValue []string
 
 // Get returns the []string value of this flag.
-func (value StringListValue) Get() interface{} {
+func (value StringListValue) Get() any {
 	return []string(value)
 }
 
@@ -93,6 +95,9 @@ func StringListVar(p *[]string, name string, defaultValue []string, usage string
 // StringMapValue is a map[string]string flag. It accepts a
 // comma-separated list of key value pairs, of the form key:value. The
 // keys cannot contain colons.
+//
+// TODO (andrew): Look into whether there's a native pflag Flag type that we can
+// use/transition to instead.
 type StringMapValue map[string]string
 
 // Set sets the value of this flag from parsing the given string.
@@ -111,7 +116,7 @@ func (value *StringMapValue) Set(v string) error {
 }
 
 // Get returns the map[string]string value of this flag.
-func (value StringMapValue) Get() interface{} {
+func (value StringMapValue) Get() any {
 	return map[string]string(value)
 }
 
@@ -126,8 +131,11 @@ func (value StringMapValue) String() string {
 	return strings.Join(parts, ",")
 }
 
+// Type is part of the pflag.Value interface.
+func (value StringMapValue) Type() string { return "StringMap" }
+
 // DualFormatStringListVar creates a flag which supports both dashes and underscores
-func DualFormatStringListVar(p *[]string, name string, value []string, usage string) {
+func DualFormatStringListVar(fs *pflag.FlagSet, p *[]string, name string, value []string, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -138,7 +146,7 @@ func DualFormatStringListVar(p *[]string, name string, value []string, usage str
 }
 
 // DualFormatStringVar creates a flag which supports both dashes and underscores
-func DualFormatStringVar(p *string, name string, value string, usage string) {
+func DualFormatStringVar(fs *pflag.FlagSet, p *string, name string, value string, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -149,7 +157,7 @@ func DualFormatStringVar(p *string, name string, value string, usage string) {
 }
 
 // DualFormatInt64Var creates a flag which supports both dashes and underscores
-func DualFormatInt64Var(p *int64, name string, value int64, usage string) {
+func DualFormatInt64Var(fs *pflag.FlagSet, p *int64, name string, value int64, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -160,7 +168,7 @@ func DualFormatInt64Var(p *int64, name string, value int64, usage string) {
 }
 
 // DualFormatIntVar creates a flag which supports both dashes and underscores
-func DualFormatIntVar(p *int, name string, value int, usage string) {
+func DualFormatIntVar(fs *pflag.FlagSet, p *int, name string, value int, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -171,7 +179,7 @@ func DualFormatIntVar(p *int, name string, value int, usage string) {
 }
 
 // DualFormatBoolVar creates a flag which supports both dashes and underscores
-func DualFormatBoolVar(p *bool, name string, value bool, usage string) {
+func DualFormatBoolVar(fs *pflag.FlagSet, p *bool, name string, value bool, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 

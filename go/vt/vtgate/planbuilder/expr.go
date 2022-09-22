@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type subqueryInfo struct {
@@ -209,13 +210,14 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlparser.ReservedVars, nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlparser.ReservedVars, nodes ...sqlparser.SQLNode) (bool, []*vindexes.Table) {
 	var keyspace string
+	var tables []*vindexes.Table
 	if rb, ok := pb.plan.(*route); ok {
 		keyspace = rb.eroute.Keyspace.Name
 	} else {
 		// This code is unreachable because the caller checks.
-		return false
+		return false, nil
 	}
 
 	for _, node := range nodes {
@@ -247,6 +249,11 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 				for _, sub := range innerRoute.substitutions {
 					*sub.oldExpr = *sub.newExpr
 				}
+				spbTables, err := spb.st.AllVschemaTableNames()
+				if err != nil {
+					return false, err
+				}
+				tables = append(tables, spbTables...)
 			case *sqlparser.Union:
 				if !inSubQuery {
 					return true, nil
@@ -270,10 +277,10 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 			return true, nil
 		}, node)
 		if !samePlan {
-			return false
+			return false, nil
 		}
 	}
-	return true
+	return true, tables
 }
 
 func valEqual(a, b sqlparser.Expr) bool {

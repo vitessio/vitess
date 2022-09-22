@@ -189,7 +189,6 @@ func (b *BitwiseNotExpr) format(buf *formatter, depth int) {
 func (c *ConvertExpr) format(buf *formatter, depth int) {
 	buf.WriteString("CONVERT(")
 	c.Inner.format(buf, depth)
-	buf.WriteString(", ")
 
 	switch {
 	case c.HasLength && c.HasScale:

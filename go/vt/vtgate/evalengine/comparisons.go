@@ -27,6 +27,13 @@ import (
 )
 
 type (
+	Filter interface {
+		Expr
+		LeftExpr() Expr
+		RightExpr() Expr
+		filterExpr()
+	}
+
 	ComparisonExpr struct {
 		BinaryExpr
 		Op ComparisonOp
@@ -58,6 +65,9 @@ type (
 	compareGE         struct{}
 	compareNullSafeEQ struct{}
 )
+
+func (*ComparisonExpr) filterExpr() {}
+func (*InExpr) filterExpr()         {}
 
 func (compareEQ) String() string { return "=" }
 func (compareEQ) compare(left, right *EvalResult) (boolean, error) {
@@ -102,7 +112,7 @@ func (compareNullSafeEQ) compare(left, right *EvalResult) (boolean, error) {
 }
 
 func evalResultsAreStrings(l, r *EvalResult) bool {
-	return l.textual() && r.textual()
+	return l.isTextual() && r.isTextual()
 }
 
 func evalResultsAreSameNumericType(l, r *EvalResult) bool {
@@ -134,7 +144,7 @@ func evalResultsAreDates(l, r *EvalResult) bool {
 func evalResultsAreDateAndString(l, r *EvalResult) bool {
 	ltype := l.typeof()
 	rtype := r.typeof()
-	return (sqltypes.IsDate(ltype) && r.textual()) || (l.textual() && sqltypes.IsDate(rtype))
+	return (sqltypes.IsDate(ltype) && r.isTextual()) || (l.isTextual() && sqltypes.IsDate(rtype))
 }
 
 func evalResultsAreDateAndNumeric(l, r *EvalResult) bool {
@@ -146,7 +156,7 @@ func evalResultsAreDateAndNumeric(l, r *EvalResult) bool {
 func compareAsTuples(lVal, rVal *EvalResult) bool {
 	left := lVal.typeof() == sqltypes.Tuple
 	right := rVal.typeof() == sqltypes.Tuple
-	if left && right {
+	if right && left {
 		return true
 	}
 	if left || right {
@@ -156,8 +166,8 @@ func compareAsTuples(lVal, rVal *EvalResult) bool {
 }
 
 func evalCompareNullSafe(lVal, rVal *EvalResult) (bool, error) {
-	if lVal.null() || rVal.null() {
-		return lVal.null() == rVal.null(), nil
+	if lVal.isNull() || rVal.isNull() {
+		return lVal.isNull() == rVal.isNull(), nil
 	}
 	if compareAsTuples(lVal, rVal) {
 		return evalCompareTuplesNullSafe(lVal, rVal)
@@ -189,7 +199,7 @@ func evalCompareMany(left, right []EvalResult, fulleq bool) (int, bool, error) {
 }
 
 func evalCompareAll(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
-	if lVal.null() || rVal.null() {
+	if lVal.isNull() || rVal.isNull() {
 		return 0, true, nil
 	}
 	if compareAsTuples(lVal, rVal) {
@@ -200,21 +210,17 @@ func evalCompareAll(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
 }
 
 // For more details on comparison expression evaluation and type conversion:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func evalCompare(lVal, rVal *EvalResult) (comp int, err error) {
 	switch {
 	case evalResultsAreStrings(lVal, rVal):
 		return compareStrings(lVal, rVal), nil
-
 	case evalResultsAreSameNumericType(lVal, rVal), needsDecimalHandling(lVal, rVal):
 		return compareNumeric(lVal, rVal)
-
 	case evalResultsAreDates(lVal, rVal):
 		return compareDates(lVal, rVal)
-
 	case evalResultsAreDateAndString(lVal, rVal):
 		return compareDateAndString(lVal, rVal)
-
 	case evalResultsAreDateAndNumeric(lVal, rVal):
 		// TODO: support comparison between a date and a numeric value
 		// 		queries like the ones below should be supported:
@@ -222,10 +228,8 @@ func evalCompare(lVal, rVal *EvalResult) (comp int, err error) {
 		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
 		// 			- select 1 where 104200 = cast("10:42:00" as time)
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
-
 	case lVal.typeof() == sqltypes.Tuple || rVal.typeof() == sqltypes.Tuple:
-		panic("evalCompare: tuple comparison should be handled early")
-
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
 	default:
 		// Quoting MySQL Docs:
 		//
@@ -287,7 +291,7 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	if right.typeof() != sqltypes.Tuple {
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
 	}
-	if left.null() {
+	if left.isNull() {
 		result.setNull()
 		return
 	}
@@ -364,14 +368,14 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	switch {
 	case left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple:
 		panic("failed to typecheck tuples")
-	case left.null() || right.null():
+	case left.isNull() || right.isNull():
 		result.setNull()
 		return
-	case left.textual() && right.textual():
+	case left.isTextual() && right.isTextual():
 		matched = l.matchWildcard(left.bytes(), right.bytes(), coll)
-	case right.textual():
+	case right.isTextual():
 		matched = l.matchWildcard(left.value().Raw(), right.bytes(), coll)
-	case left.textual():
+	case left.isTextual():
 		matched = l.matchWildcard(left.bytes(), right.value().Raw(), coll)
 	default:
 		matched = l.matchWildcard(left.value().Raw(), right.value().Raw(), collations.CollationBinaryID)
@@ -408,6 +412,9 @@ func (err UnsupportedCollationError) Error() string {
 	return fmt.Sprintf("cannot compare strings, collation is unknown or unsupported (collation ID: %d)", err.ID)
 }
 
+// UnsupportedCollationHashError is returned when we try to get the hash value and are missing the collation to use
+var UnsupportedCollationHashError = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
+
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
 // NULL is the lowest value. If any value is
 // numeric, then a numeric comparison is performed after
@@ -428,16 +435,8 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 		return 1, nil
 	}
 
-	if isByteComparable(v1.Type()) && isByteComparable(v2.Type()) {
-		v1Bytes, err1 := v1.ToBytes()
-		if err1 != nil {
-			return 0, err1
-		}
-		v2Bytes, err2 := v2.ToBytes()
-		if err2 != nil {
-			return 0, err2
-		}
-		return bytes.Compare(v1Bytes, v2Bytes), nil
+	if isByteComparable(v1.Type(), collationID) && isByteComparable(v2.Type(), collationID) {
+		return bytes.Compare(v1.Raw(), v2.Raw()), nil
 	}
 
 	typ, err := CoerceTo(v1.Type(), v2.Type()) // TODO systay we should add a method where this decision is done at plantime
@@ -446,17 +445,22 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	}
 
 	switch {
-	case typ == sqltypes.VarChar:
-		v1Bytes := v1.Raw()
-		v2Bytes := v2.Raw()
-
+	case sqltypes.IsText(typ):
 		if collationID == collations.Unknown {
 			return 0, UnsupportedCollationError{ID: collationID}
 		}
-
 		collation := collations.Local().LookupByID(collationID)
 		if collation == nil {
 			return 0, UnsupportedCollationError{ID: collationID}
+		}
+
+		v1Bytes, err := v1.ToBytes()
+		if err != nil {
+			return 0, err
+		}
+		v2Bytes, err := v2.ToBytes()
+		if err != nil {
+			return 0, err
 		}
 
 		switch result := collation.Collate(v1Bytes, v2Bytes, false); {
@@ -491,15 +495,19 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 }
 
 // isByteComparable returns true if the type is binary or date/time.
-func isByteComparable(typ sqltypes.Type) bool {
+func isByteComparable(typ sqltypes.Type, collationID collations.ID) bool {
 	if sqltypes.IsBinary(typ) {
 		return true
+	}
+	if sqltypes.IsText(typ) {
+		return collationID == collations.CollationBinaryID
 	}
 	switch typ {
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 // Min returns the minimum of v1 and v2. If one of the

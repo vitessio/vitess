@@ -189,7 +189,10 @@ message Filter {
   // If the value is ERR_ON_MISMATCH (default), then it errors out.
   // If it's BEST_EFFORT, it sends a field event with fake column
   // names as "@1", "@2", etc.
-  FieldEventMode fieldEventMode = 2;
+  FieldEventMode field_event_mode = 2;
+
+  int64 workflow_type = 3;
+  string workflow_name = 4;
 }
 
 // OnDDLAction lists the possible actions for DDLs.
@@ -198,6 +201,16 @@ enum OnDDLAction {
   STOP = 1;
   EXEC = 2;
   EXEC_IGNORE = 3;
+}
+
+// VReplicationWorkflowType define types of vreplication workflows.
+enum VReplicationWorkflowType {
+  MATERIALIZE = 0;
+  MOVETABLES = 1;
+  CREATELOOKUPINDEX = 2;
+  MIGRATE = 3;
+  RESHARD = 4;
+  ONLINEDDL = 5;
 }
 
 // BinlogSource specifies the source  and filter parameters for
@@ -237,6 +250,12 @@ message BinlogSource {
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
   string external_cluster = 10;
+
+  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTables
+  string source_time_zone = 11;
+  // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
+  // and to the SourceTimeZone in reverse workflows
+  string target_time_zone = 12;
 }
 
 // VEventType enumerates the event types. Many of these types
@@ -391,7 +410,8 @@ message VEvent {
   string keyspace = 22;
   // the source shard
   string shard = 23;
-
+  // indicate that we are being throttled right now
+  bool throttled = 24;
 }
 
 message MinimalTable {
@@ -437,6 +457,10 @@ message VStreamRowsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
+  // Throttled indicates that rowstreamer is being throttled right now
+  bool throttled = 6;
+  // Heartbeat indicates that this is a heartbeat message
+  bool heartbeat = 7;
 }
 
 message LastPKEvent {

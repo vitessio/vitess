@@ -17,8 +17,11 @@ limitations under the License.
 package utils
 
 import (
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -33,22 +36,24 @@ import (
 // Top declaration:
 //
 // var mustMatch = testutils.MustMatchFn(
-// 	[]interface{}{  // types with unexported fields
-// 		type1{},
-// 		type2{},
-// 		...
-// 		typeN{},
-// 	},
-// 	[]string{  // ignored fields
-// 		".id",        // id numbers are unstable
-// 		".createAt",  // created dates might not be interesting to compare
-// 	},
+//
+//	[]any{  // types with unexported fields
+//		type1{},
+//		type2{},
+//		...
+//		typeN{},
+//	},
+//	[]string{  // ignored fields
+//		".id",        // id numbers are unstable
+//		".createAt",  // created dates might not be interesting to compare
+//	},
+//
 // )
 //
 // In Test*() function:
 //
 // mustMatch(t, want, got, "something doesn't match")
-func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got interface{}, errMsg ...string) {
+func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got any, errMsg ...string) {
 	diffOpts := []cmp.Option{
 		cmp.Comparer(func(a, b proto.Message) bool {
 			return proto.Equal(a, b)
@@ -59,7 +64,7 @@ func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got interface
 		cmpIgnoreFields(ignoredFields...),
 	}
 	// Diffs want/got and fails with errMsg on any failure.
-	return func(t *testing.T, want, got interface{}, errMsg ...string) {
+	return func(t *testing.T, want, got any, errMsg ...string) {
 		t.Helper()
 		diff := cmp.Diff(want, got, diffOpts...)
 		if diff != "" {
@@ -101,4 +106,19 @@ func MustMatchPB(t *testing.T, expected string, pb proto.Message) {
 	}
 
 	MustMatch(t, expectedPb, pb)
+}
+
+func MakeTestOutput(t *testing.T, dir, pattern string) string {
+	testOutputTempDir, err := os.MkdirTemp(dir, pattern)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		} else {
+			t.Logf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
+		}
+	})
+
+	return testOutputTempDir
 }

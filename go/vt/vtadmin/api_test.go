@@ -24,11 +24,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
+	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -36,24 +41,28 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
-	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
+}
 
 func TestFindSchema(t *testing.T) {
 	t.Parallel()
@@ -74,7 +83,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -100,6 +109,22 @@ func TestFindSchema(t *testing.T) {
 								},
 							},
 						},
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-": {
+											Shard: &topodatapb.Shard{
+												IsPrimaryServing: true,
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 					Tablets: []*vtadminpb.Tablet{
 						{
@@ -109,6 +134,7 @@ func TestFindSchema(t *testing.T) {
 									Uid:  100,
 								},
 								Keyspace: "testkeyspace",
+								Shard:    "-",
 							},
 							State: vtadminpb.Tablet_SERVING,
 						},
@@ -145,6 +171,16 @@ func TestFindSchema(t *testing.T) {
 					DBConfig: vtadmintestutil.Dbcfg{
 						ShouldErr: true,
 					},
+					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetKeyspacesResults: &struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{Name: "testkeyspace"},
+							},
+						},
+					},
 				},
 			},
 			req: &vtadminpb.FindSchemaRequest{
@@ -161,7 +197,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -196,7 +232,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -243,7 +279,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -298,7 +334,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -344,7 +380,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -399,7 +435,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -445,7 +481,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -521,6 +557,7 @@ func TestFindSchema(t *testing.T) {
 			}
 
 			api := NewAPI(clusters, Options{})
+			defer api.Close()
 
 			resp, err := api.FindSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -599,7 +636,7 @@ func TestFindSchema(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -693,7 +730,7 @@ func TestFindSchema(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -730,6 +767,8 @@ func TestFindSchema(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		schema, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 			Table: "testtable",
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
@@ -764,6 +803,9 @@ func TestFindSchema(t *testing.T) {
 		}
 
 		if schema != nil {
+			// Clone so our mutation below doesn't trip the race detector.
+			schema = proto.Clone(schema).(*vtadminpb.Schema)
+
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -1369,7 +1411,6 @@ func TestGetSchema(t *testing.T) {
 						Name: "testtable",
 					},
 				},
-				TableSizes: map[string]*vtadminpb.Schema_TableSize{},
 			},
 			shouldErr: false,
 		},
@@ -1519,12 +1560,18 @@ func TestGetSchema(t *testing.T) {
 					Tablets:      tt.tablets,
 				})
 				api := NewAPI([]*cluster.Cluster{c}, Options{})
+				defer api.Close()
 
 				resp, err := api.GetSchema(ctx, tt.req)
 				if tt.shouldErr {
 					assert.Error(t, err)
 
 					return
+				}
+
+				if resp != nil {
+					// Clone so our mutation below doesn't trip the race detector.
+					resp = proto.Clone(resp).(*vtadminpb.Schema)
 				}
 
 				assert.NoError(t, err)
@@ -1645,6 +1692,8 @@ func TestGetSchema(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		schema, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
 			ClusterId: c1.ID,
 			Keyspace:  "testkeyspace",
@@ -1681,6 +1730,9 @@ func TestGetSchema(t *testing.T) {
 		}
 
 		if schema != nil {
+			// Clone so our mutation below doesn't trip the race detector.
+			schema = proto.Clone(schema).(*vtadminpb.Schema)
+
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -2195,6 +2247,7 @@ func TestGetSchemas(t *testing.T) {
 				}
 
 				api := NewAPI(clusters, Options{})
+				defer api.Close()
 
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
@@ -2269,7 +2322,7 @@ func TestGetSchemas(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -2363,7 +2416,7 @@ func TestGetSchemas(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -2415,6 +2468,8 @@ func TestGetSchemas(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
@@ -2482,14 +2537,22 @@ func TestGetSchemas(t *testing.T) {
 		}
 
 		if resp != nil {
-			for _, schema := range resp.Schemas {
+			// Clone schemas so our mutations below don't trip the race detector.
+			schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
+			for i, schema := range resp.Schemas {
+				schema := proto.Clone(schema).(*vtadminpb.Schema)
+
 				for _, td := range schema.TableDefinitions {
 					// Zero these out because they're non-deterministic and also not
 					// relevant to the final result.
 					td.RowCount = 0
 					td.DataLength = 0
 				}
+
+				schemas[i] = schema
 			}
+
+			resp.Schemas = schemas
 		}
 
 		assert.NoError(t, err)
@@ -2724,7 +2787,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							Keyspaces: map[string]*vschemapb.Keyspace{
 								"commerce": {
 									Tables: map[string]*vschemapb.Table{
@@ -2761,7 +2824,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2818,7 +2881,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2859,7 +2922,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2886,7 +2949,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{},
+						SrvVSchema: &vschemapb.SrvVSchema{},
 					},
 				},
 			},
@@ -2987,7 +3050,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 			},
 			expected: &vtadminpb.Tablet{
 				Cluster: &vtadminpb.Cluster{
@@ -3048,7 +3114,10 @@ func TestGetTablet(t *testing.T) {
 				"c1": {ShouldErr: true},
 			},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "doesn't matter",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "doesntmatter",
+					Uid:  100,
+				},
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -3091,7 +3160,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias:      "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 				ClusterIds: []string{"c0"},
 			},
 			expected: &vtadminpb.Tablet{
@@ -3151,7 +3223,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -3164,7 +3239,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -3203,7 +3281,7 @@ func TestGetTablet(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -3555,7 +3633,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3583,7 +3661,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3638,7 +3716,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3666,7 +3744,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3715,7 +3793,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3743,7 +3821,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3765,7 +3843,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3791,7 +3869,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4101,7 +4179,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4136,7 +4214,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4217,7 +4295,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4252,7 +4330,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4341,7 +4419,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4376,7 +4454,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4448,7 +4526,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4483,7 +4561,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4817,6 +4895,15 @@ func TestVTExplain(t *testing.T) {
 	}
 }
 
+type ServeHTTPVtctldResponse struct {
+	Result ServeHTTPVtctldResult `json:"result"`
+	Ok     bool                  `json:"ok"`
+}
+
+type ServeHTTPVtctldResult struct {
+	Vtctlds []*vtadminpb.Vtctld `json:"vtctlds"`
+}
+
 type ServeHTTPResponse struct {
 	Result ServeHTTPResult `json:"result"`
 	Ok     bool            `json:"ok"`
@@ -4829,12 +4916,26 @@ type ServeHTTPResult struct {
 func TestServeHTTP(t *testing.T) {
 	t.Parallel()
 
+	testCluster, _ := cluster.Config{
+		ID:            "dynamiccluster1",
+		Name:          "dynamiccluster1",
+		DiscoveryImpl: "dynamic",
+		DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+			"dynamic": {
+				"discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}",
+			},
+		},
+	}.Cluster(context.Background())
+
 	tests := []struct {
 		name                  string
 		cookie                string
 		enableDynamicClusters bool
+		testClusterVtctld     string
 		clusters              []*cluster.Cluster
 		expected              []*vtadminpb.Cluster
+		expectedVtctlds       []*vtadminpb.Vtctld
+		repeat                bool
 	}{
 		{
 			name:                  "multiple clusters without dynamic clusters",
@@ -4871,7 +4972,7 @@ func TestServeHTTP(t *testing.T) {
 		{
 			name:                  "multiple clusters with dynamic clusters",
 			enableDynamicClusters: true,
-			cookie:                `{"name": "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
 			clusters: []*cluster.Cluster{
 				{
 					ID:        "c1",
@@ -4892,9 +4993,55 @@ func TestServeHTTP(t *testing.T) {
 			},
 		},
 		{
+			name:                  "dynamic clusters - cluster is updated when values change",
+			enableDynamicClusters: true,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15001\", \"hostname\": \"localhost:15998\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				testCluster,
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+			testClusterVtctld: "dynamiccluster1",
+			expectedVtctlds: []*vtadminpb.Vtctld{
+				{
+					Hostname: "localhost:15998",
+					Cluster:  &vtadminpb.Cluster{Id: "dynamiccluster1", Name: "dynamiccluster1"},
+					FQDN:     "localhost:15001",
+				},
+			},
+		},
+		{
+			name:                  "multiple clusters with dynamic clusters - no duplicates",
+			enableDynamicClusters: true,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+			repeat: true,
+		},
+		{
 			name:                  "multiple clusters with invalid json cookie and dynamic clusters",
 			enableDynamicClusters: true,
-			cookie:                `{"name "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			cookie:                `{"id "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
 			clusters: []*cluster.Cluster{
 				{
 					ID:        "c1",
@@ -4932,15 +5079,19 @@ func TestServeHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(tt.clusters, Options{HTTPOpts: vtadminhttp.Options{EnableDynamicClusters: tt.enableDynamicClusters}})
+			api := NewAPI(tt.clusters, Options{EnableDynamicClusters: tt.enableDynamicClusters})
 
 			// Copy the Cookie over to a new Request
 			req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)
-			req.AddCookie(&http.Cookie{Name: "cluster", Value: base64.StdEncoding.EncodeToString([]byte(tt.cookie))})
+			req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(tt.cookie)))})
 
 			w := httptest.NewRecorder()
 
 			api.ServeHTTP(w, req)
+
+			if tt.repeat {
+				api.ServeHTTP(w, req)
+			}
 
 			res := w.Result()
 			defer res.Body.Close()
@@ -4952,6 +5103,30 @@ func TestServeHTTP(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, clustersResponse.Result.Clusters)
+
+			if tt.testClusterVtctld != "" {
+				req := httptest.NewRequest(http.MethodGet, "/api/vtctlds?cluster="+tt.testClusterVtctld, nil)
+				req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(tt.cookie)))})
+
+				w := httptest.NewRecorder()
+
+				api.ServeHTTP(w, req)
+
+				if tt.repeat {
+					api.ServeHTTP(w, req)
+				}
+
+				res := w.Result()
+				defer res.Body.Close()
+
+				dec := json.NewDecoder(res.Body)
+				dec.DisallowUnknownFields()
+				var vtctldsResponse ServeHTTPVtctldResponse
+				err := dec.Decode(&vtctldsResponse)
+
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedVtctlds, vtctldsResponse.Result.Vtctlds)
+			}
 		})
 	}
 }
@@ -4964,7 +5139,7 @@ func init() {
 	// Tests that do care about the tmclient should use
 	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
 	// VtctldServer.
-	*tmclient.TabletManagerProtocol = "vtadmin.test"
+	tmclienttest.SetProtocol("go.vt.vtadmin", "vtadmin.test")
 	tmclient.RegisterTabletManagerClientFactory("vtadmin.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
@@ -4980,3 +5155,6 @@ func init() {
 	// attempts to read that value by way of grpc.NewServer().
 	grpccommon.EnableTracingOpt()
 }
+
+//go:generate -command authztestgen go run ./testutil/authztestgen
+//go:generate authztestgen -c ./testutil/authztestgen/config.json -o ./api_authz_test.go

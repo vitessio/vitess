@@ -17,25 +17,33 @@ limitations under the License.
 package controller
 
 import (
-	"flag"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgr/db"
 	"vitess.io/vitess/go/vt/vtgr/log"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (
 	groupOnlineSize = stats.NewGaugesWithMultiLabels("MysqlGroupOnlineSize", "Online MySQL server in the group", []string{"Keyspace", "Shard"})
 	isLostQuorum    = stats.NewGaugesWithMultiLabels("MysqlGroupLostQuorum", "If MySQL group lost quorum", []string{"Keyspace", "Shard"})
 
-	heartbeatThreshold = flag.Int("group_heartbeat_threshold", 0, "VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with -enable_heartbeat_check")
+	heartbeatThreshold int
 )
+
+func init() {
+	servenv.OnParseFor("vtgr", func(fs *pflag.FlagSet) {
+		fs.IntVar(&heartbeatThreshold, "group_heartbeat_threshold", 0, "VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with --enable_heartbeat_check.")
+	})
+}
 
 // SQLGroup contains views from all the nodes within the shard
 type SQLGroup struct {
@@ -60,7 +68,7 @@ func NewSQLGroup(size int, singlePrimary bool, keyspace, shard string) *SQLGroup
 		singlePrimary:         singlePrimary,
 		statsTags:             []string{keyspace, shard},
 		logger:                log.NewVTGRLogger(keyspace, shard),
-		heartbeatThreshold:    *heartbeatThreshold,
+		heartbeatThreshold:    heartbeatThreshold,
 	}
 }
 

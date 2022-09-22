@@ -37,7 +37,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 		Variant:           "Scatter",
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"Query":      route.Query,
 			"Table":      route.TableName,
 			"FieldQuery": route.FieldQuery,
@@ -79,7 +79,7 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 
 	expected := PrimitiveDescription{
 		OperatorType: "Limit",
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"Count":  evalengine.FormatExpr(count),
 			"Offset": evalengine.FormatExpr(offset),
 		},
@@ -95,7 +95,7 @@ func getDescriptionFor(route *Route) PrimitiveDescription {
 		Variant:           route.Opcode.String(),
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"Query":      route.Query,
 			"Table":      route.TableName,
 			"FieldQuery": route.FieldQuery,

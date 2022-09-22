@@ -25,6 +25,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 type (
@@ -139,17 +140,17 @@ func translateIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup Tr
 
 	switch op {
 	case sqlparser.IsNullOp:
-		check = func(er *EvalResult) bool { return er.null() }
+		check = func(er *EvalResult) bool { return er.isNull() }
 	case sqlparser.IsNotNullOp:
-		check = func(er *EvalResult) bool { return !er.null() }
+		check = func(er *EvalResult) bool { return !er.isNull() }
 	case sqlparser.IsTrueOp:
-		check = func(er *EvalResult) bool { return er.truthy() == boolTrue }
+		check = func(er *EvalResult) bool { return er.isTruthy() == boolTrue }
 	case sqlparser.IsNotTrueOp:
-		check = func(er *EvalResult) bool { return er.truthy() != boolTrue }
+		check = func(er *EvalResult) bool { return er.isTruthy() != boolTrue }
 	case sqlparser.IsFalseOp:
-		check = func(er *EvalResult) bool { return er.truthy() == boolFalse }
+		check = func(er *EvalResult) bool { return er.isTruthy() == boolFalse }
 	case sqlparser.IsNotFalseOp:
-		check = func(er *EvalResult) bool { return er.truthy() != boolFalse }
+		check = func(er *EvalResult) bool { return er.isTruthy() != boolFalse }
 	}
 
 	return &IsExpr{
@@ -202,6 +203,12 @@ func translateLiteral(lit *sqlparser.Literal, lookup TranslationLookup) (*Litera
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
+	case sqlparser.DateVal:
+		return NewLiteralDateFromBytes(lit.Bytes())
+	case sqlparser.TimeVal:
+		return NewLiteralTimeFromBytes(lit.Bytes())
+	case sqlparser.TimestampVal:
+		return NewLiteralDatetimeFromBytes(lit.Bytes())
 	default:
 		return nil, translateExprNotSupported(lit)
 	}
@@ -318,7 +325,7 @@ func translateIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup Transl
 
 func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, error) {
 	var args TupleExpr
-	var aliases []sqlparser.ColIdent
+	var aliases []sqlparser.IdentifierCI
 	for _, expr := range fn.Exprs {
 		aliased, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -401,9 +408,24 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 	}
 }
 
-func translateConvertCharset(charset string, lookup TranslationLookup) (collations.ID, error) {
+func binaryCollationForCollation(collation collations.ID) collations.ID {
+	binary := collations.Local().LookupByID(collation)
+	if binary == nil {
+		return collations.Unknown
+	}
+	binaryCollation := collations.Local().BinaryCollationForCharset(binary.Charset().Name())
+	if binaryCollation == nil {
+		return collations.Unknown
+	}
+	return binaryCollation.ID()
+}
+
+func translateConvertCharset(charset string, binary bool, lookup TranslationLookup) (collations.ID, error) {
 	if charset == "" {
 		collation := lookup.DefaultCollation()
+		if binary {
+			collation = binaryCollationForCollation(collation)
+		}
 		if collation == collations.Unknown {
 			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No default character set specified")
 		}
@@ -414,31 +436,38 @@ func translateConvertCharset(charset string, lookup TranslationLookup) (collatio
 	if collation == nil {
 		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
 	}
-	return collation.ID(), nil
+	collationID := collation.ID()
+	if binary {
+		collationID = binaryCollationForCollation(collationID)
+		if collationID == collations.Unknown {
+			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No binary collation found for character set: %s ", charset)
+		}
+	}
+	return collationID, nil
 }
 
-func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (Expr, error) {
+func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType, lookup TranslationLookup) (Expr, error) {
 	var (
 		convert ConvertExpr
 		err     error
 	)
 
-	convert.Inner, err = translateExpr(expr.Expr, lookup)
+	convert.Inner, err = translateExpr(expr, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Length, convert.HasLength, err = translateIntegral(expr.Type.Length, lookup)
+	convert.Length, convert.HasLength, err = translateIntegral(convertType.Length, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Scale, convert.HasScale, err = translateIntegral(expr.Type.Scale, lookup)
+	convert.Scale, convert.HasScale, err = translateIntegral(convertType.Scale, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Type = strings.ToUpper(expr.Type.Type)
+	convert.Type = strings.ToUpper(convertType.Type)
 	switch convert.Type {
 	case "DECIMAL":
 		if convert.Length < convert.Scale {
@@ -447,10 +476,20 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 				"", // TODO: column name
 			)
 		}
+		if convert.Length > decimal.MyMaxPrecision {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too-big precision %d specified for '%s'. Maximum is %d.",
+				convert.Length, sqlparser.String(expr), decimal.MyMaxPrecision)
+		}
+		if convert.Scale > decimal.MyMaxScale {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too big scale %d specified for column '%s'. Maximum is %d.",
+				convert.Scale, sqlparser.String(expr), decimal.MyMaxScale)
+		}
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID
 	case "CHAR":
-		convert.Collation, err = translateConvertCharset(expr.Type.Charset, lookup)
+		convert.Collation, err = translateConvertCharset(convertType.Charset.Name, convertType.Charset.Binary, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -470,12 +509,60 @@ func translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr, lookup Translat
 		return nil, err
 	}
 
-	using.Collation, err = translateConvertCharset(expr.Type, lookup)
+	using.Collation, err = translateConvertCharset(expr.Type, false, lookup)
 	if err != nil {
 		return nil, err
 	}
 
 	return &using, nil
+}
+
+func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr, error) {
+	var err error
+	var result CaseExpr
+
+	if node.Else != nil {
+		result.Else, err = translateExpr(node.Else, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var cmpbase Expr
+	if node.Expr != nil {
+		cmpbase, err = translateExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, when := range node.Whens {
+		var cond, val Expr
+
+		cond, err = translateExpr(when.Cond, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		val, err = translateExpr(when.Val, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		if cmpbase != nil {
+			cond, err = translateComparisonExpr2(sqlparser.EqualOp, cmpbase, cond)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		result.cases = append(result.cases, WhenThen{
+			when: cond,
+			then: val,
+		})
+	}
+
+	return &result, nil
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {
@@ -491,6 +578,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return NewLiteralInt(0), nil
 	case *sqlparser.ColName:
 		return translateColName(node, lookup)
+	case *sqlparser.Offset:
+		return NewColumn(node.V, getCollation(node, lookup)), nil
 	case *sqlparser.ComparisonExpr:
 		return translateComparisonExpr(node.Operator, node.Left, node.Right, lookup)
 	case sqlparser.Argument:
@@ -527,10 +616,14 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateWeightStringFuncExpr(node, lookup)
 	case *sqlparser.UnaryExpr:
 		return translateUnaryExpr(node, lookup)
+	case *sqlparser.CastExpr:
+		return translateConvertExpr(node.Expr, node.Type, lookup)
 	case *sqlparser.ConvertExpr:
-		return translateConvertExpr(node, lookup)
+		return translateConvertExpr(node.Expr, node.Type, lookup)
 	case *sqlparser.ConvertUsingExpr:
 		return translateConvertUsingExpr(node, lookup)
+	case *sqlparser.CaseExpr:
+		return translateCaseExpr(node, lookup)
 	default:
 		return nil, translateExprNotSupported(e)
 	}

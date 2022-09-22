@@ -54,27 +54,21 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		"-enable_queries",
-		"-topo_implementation", vtctld.CommonArg.TopoImplementation,
-		"-topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
-		"-topo_global_root", vtctld.CommonArg.TopoGlobalRoot,
-		"-cell", cell,
-		"-workflow_manager_init",
-		"-workflow_manager_use_election",
-		"-service_map", vtctld.ServiceMap,
-		"-backup_storage_implementation", vtctld.BackupStorageImplementation,
-		"-file_backup_storage_root", vtctld.FileBackupStorageRoot,
-		// hard-code these two soon-to-be deprecated drain values.
-		"-wait_for_drain_sleep_rdonly", "1s",
-		"-wait_for_drain_sleep_replica", "1s",
-		// short online-ddl check interval to hasten tests
-		"-online_ddl_check_interval", "2s",
-		"-log_dir", vtctld.LogDir,
-		"-port", fmt.Sprintf("%d", vtctld.Port),
-		"-grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
+		"--topo_implementation", vtctld.CommonArg.TopoImplementation,
+		"--topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
+		"--topo_global_root", vtctld.CommonArg.TopoGlobalRoot,
+		"--cell", cell,
+		"--workflow_manager_init",
+		"--workflow_manager_use_election",
+		"--service_map", vtctld.ServiceMap,
+		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
+		"--file_backup_storage_root", vtctld.FileBackupStorageRoot,
+		"--log_dir", vtctld.LogDir,
+		"--port", fmt.Sprintf("%d", vtctld.Port),
+		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
 	)
 	if *isCoverage {
-		vtctld.proc.Args = append(vtctld.proc.Args, "-test.coverprofile="+getCoveragePath("vtctld.out"))
+		vtctld.proc.Args = append(vtctld.proc.Args, "--test.coverprofile="+getCoveragePath("vtctld.out"))
 	}
 	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
@@ -124,10 +118,8 @@ func (vtctld *VtctldProcess) IsHealthy() bool {
 	if err != nil {
 		return false
 	}
-	if resp.StatusCode == 200 {
-		return true
-	}
-	return false
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 // TearDown shutdowns the running vtctld service
@@ -160,7 +152,7 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		Name:                        "vtctld",
 		Binary:                      "vtctld",
 		CommonArg:                   *vtctl,
-		ServiceMap:                  "grpc-vtctl",
+		ServiceMap:                  "grpc-vtctl,grpc-vtctld",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		LogDir:                      tmpDirectory,

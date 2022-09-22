@@ -18,6 +18,7 @@ package engine
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"math"
 	"reflect"
@@ -65,13 +66,13 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := vcursor.ExecutePrimitive(ms.Input, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return err
@@ -107,7 +108,7 @@ func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 		comparers: extractSlices(ms.OrderBy),
 		reverse:   true,
 	}
-	err = vcursor.StreamExecutePrimitive(ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -143,8 +144,8 @@ func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 }
 
 // GetFields satisfies the Primitive interface.
-func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return ms.Input.GetFields(vcursor, bindVars)
+func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return ms.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input to memory sort
@@ -179,7 +180,7 @@ func (ms *MemorySort) fetchCount(vcursor VCursor, bindVars map[string]*querypb.B
 
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
-	other := map[string]interface{}{"OrderBy": orderByIndexes}
+	other := map[string]any{"OrderBy": orderByIndexes}
 	if ms.TruncateColumnCount > 0 {
 		other["ResultColumns"] = ms.TruncateColumnCount
 	}
@@ -190,13 +191,13 @@ func (ms *MemorySort) description() PrimitiveDescription {
 	}
 }
 
-func orderByParamsToString(i interface{}) string {
+func orderByParamsToString(i any) string {
 	return i.(OrderByParams).String()
 }
 
 // GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
 // string representation of each element, and then uses strings.Join() join all the strings into a single one
-func GenericJoin(input interface{}, f func(interface{}) string) string {
+func GenericJoin(input any, f func(any) string) string {
 	sl := reflect.ValueOf(input)
 	var keys []string
 	switch sl.Kind() {
@@ -256,12 +257,12 @@ func (sh *sortHeap) Swap(i, j int) {
 }
 
 // Push satisfies heap.Interface.
-func (sh *sortHeap) Push(x interface{}) {
+func (sh *sortHeap) Push(x any) {
 	sh.rows = append(sh.rows, x.([]sqltypes.Value))
 }
 
 // Pop satisfies heap.Interface.
-func (sh *sortHeap) Pop() interface{} {
+func (sh *sortHeap) Pop() any {
 	n := len(sh.rows)
 	x := sh.rows[n-1]
 	sh.rows = sh.rows[:n-1]

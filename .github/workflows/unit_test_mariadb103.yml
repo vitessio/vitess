@@ -8,30 +8,61 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
+    - name: Check out code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          unit_tests:
+            - 'go/**'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/unit_test_mariadb103.yml'
+
     - name: Set up Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17
+        go-version: 1.18.5
 
     - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
 
-    - name: Check out code
-      uses: actions/checkout@v2
-
     - name: Get dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
-
-        # !mysql57
 
         # Uninstall any previously installed MySQL first
         sudo systemctl stop apparmor
@@ -45,11 +76,11 @@ jobs:
         # mariadb103
         sudo apt-get install -y software-properties-common
         sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu bionic main'
+        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] https://mirror.rackspace.com/mariadb/repo/10.3/ubuntu bionic main'
         sudo apt update
         sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
@@ -63,10 +94,12 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make tools
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
 
     - name: Run test
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
         eatmydata -- make unit_test

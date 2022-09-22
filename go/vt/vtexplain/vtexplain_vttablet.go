@@ -24,12 +24,14 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -53,23 +55,31 @@ type tabletEnv struct {
 	tableColumns map[string]map[string]querypb.Type
 }
 
-var (
-	// time simulator
-	batchTime         *sync2.Batcher
-	globalTabletEnv   *tabletEnv
-	globalTabletEnvMu sync.Mutex
-)
-
-func setGlobalTabletEnv(env *tabletEnv) {
-	globalTabletEnvMu.Lock()
-	defer globalTabletEnvMu.Unlock()
-	globalTabletEnv = env
+func newTabletEnv() *tabletEnv {
+	return &tabletEnv{
+		schemaQueries: make(map[string]*sqltypes.Result),
+		tableColumns:  make(map[string]map[string]querypb.Type),
+	}
 }
 
-func getGlobalTabletEnv() *tabletEnv {
-	globalTabletEnvMu.Lock()
-	defer globalTabletEnvMu.Unlock()
-	return globalTabletEnv
+func (te *tabletEnv) addResult(query string, result *sqltypes.Result) {
+	te.schemaQueries[query] = result
+}
+
+func (te *tabletEnv) getResult(query string) *sqltypes.Result {
+	result, ok := te.schemaQueries[query]
+	if !ok {
+		return nil
+	}
+	return result
+}
+
+func (vte *VTExplain) setGlobalTabletEnv(env *tabletEnv) {
+	vte.globalTabletEnv = env
+}
+
+func (vte *VTExplain) getGlobalTabletEnv() *tabletEnv {
+	return vte.globalTabletEnv
 }
 
 // explainTablet is the query service that simulates a tablet.
@@ -88,11 +98,12 @@ type explainTablet struct {
 	tabletQueries []*TabletQuery
 	mysqlQueries  []*MysqlQuery
 	currentTime   int
+	vte           *VTExplain
 }
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
+func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
 	config := tabletenv.NewCurrentConfig()
@@ -107,7 +118,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	// XXX much of this is cloned from the tabletserver tests
 	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), t.Alias)
 
-	tablet := explainTablet{db: db, tsv: tsv}
+	tablet := explainTablet{db: db, tsv: tsv, vte: vte}
 	db.Handler = &tablet
 
 	tablet.QueryService = queryservice.Wrap(
@@ -140,9 +151,9 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interface check
 
 // Begin is part of the QueryService interface.
-func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
 		Time: t.currentTime,
 		SQL:  "begin",
@@ -156,7 +167,7 @@ func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, optio
 // Commit is part of the QueryService interface.
 func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
 		Time: t.currentTime,
 		SQL:  "commit",
@@ -169,7 +180,7 @@ func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, tran
 // Rollback is part of the QueryService interface.
 func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.Rollback(ctx, target, transactionID)
 }
@@ -177,7 +188,7 @@ func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, tr
 // Execute is part of the QueryService interface.
 func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 
 	// Since the query is simulated being "sent" over the wire we need to
 	// copy the bindVars into the executor to avoid a data race.
@@ -195,7 +206,7 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 // Prepare is part of the QueryService interface.
 func (t *explainTablet) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.Prepare(ctx, target, transactionID, dtid)
 }
@@ -203,7 +214,7 @@ func (t *explainTablet) Prepare(ctx context.Context, target *querypb.Target, tra
 // CommitPrepared commits the prepared transaction.
 func (t *explainTablet) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.CommitPrepared(ctx, target, dtid)
 }
@@ -211,7 +222,7 @@ func (t *explainTablet) CommitPrepared(ctx context.Context, target *querypb.Targ
 // CreateTransaction is part of the QueryService interface.
 func (t *explainTablet) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.CreateTransaction(ctx, target, dtid, participants)
 }
@@ -219,7 +230,7 @@ func (t *explainTablet) CreateTransaction(ctx context.Context, target *querypb.T
 // StartCommit is part of the QueryService interface.
 func (t *explainTablet) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.StartCommit(ctx, target, transactionID, dtid)
 }
@@ -227,7 +238,7 @@ func (t *explainTablet) StartCommit(ctx context.Context, target *querypb.Target,
 // SetRollback is part of the QueryService interface.
 func (t *explainTablet) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.SetRollback(ctx, target, dtid, transactionID)
 }
@@ -235,7 +246,7 @@ func (t *explainTablet) SetRollback(ctx context.Context, target *querypb.Target,
 // ConcludeTransaction is part of the QueryService interface.
 func (t *explainTablet) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.ConcludeTransaction(ctx, target, dtid)
 }
@@ -243,15 +254,15 @@ func (t *explainTablet) ConcludeTransaction(ctx context.Context, target *querypb
 // ReadTransaction is part of the QueryService interface.
 func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.ReadTransaction(ctx, target, dtid)
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
+	t.currentTime = t.vte.batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
 		Time:     t.currentTime,
@@ -269,10 +280,8 @@ func (t *explainTablet) Close(ctx context.Context) error {
 }
 
 func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tabletEnv, error) {
-	var tEnv tabletEnv
-
-	tEnv.tableColumns = make(map[string]map[string]querypb.Type)
-	tEnv.schemaQueries = map[string]*sqltypes.Result{
+	tEnv := newTabletEnv()
+	schemaQueries := map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
@@ -375,11 +384,14 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		),
 	}
 
+	for query, result := range schemaQueries {
+		tEnv.addResult(query, result)
+	}
 	for _, query := range onlineddl.ApplyDDL {
-		tEnv.schemaQueries[query] = &sqltypes.Result{
+		tEnv.addResult(query, &sqltypes.Result{
 			Fields: []*querypb.Field{{Type: sqltypes.Uint64}},
 			Rows:   [][]sqltypes.Value{},
-		}
+		})
 	}
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)
@@ -396,21 +408,32 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		}
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
 	}
-	tEnv.schemaQueries[mysql.TablesWithSize57] = &sqltypes.Result{
+	tEnv.addResult(mysql.TablesWithSize57, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows:   showTableRows,
-	}
+	})
 
 	indexRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
 		table := sqlparser.String(ddl.GetTable().Name)
-
+		backtickedTable := sqlescape.EscapeID(sqlescape.UnescapeID(table))
 		if ddl.GetOptLike() != nil {
 			likeTable := ddl.GetOptLike().LikeTable.Name.String()
-			if _, ok := tEnv.schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
+			backtickedLikeTable := sqlescape.EscapeID(sqlescape.UnescapeID(likeTable))
+
+			likeQuery := "SELECT * FROM " + backtickedLikeTable + " WHERE 1 != 1"
+			query := "SELECT * FROM " + backtickedTable + " WHERE 1 != 1"
+			if tEnv.getResult(likeQuery) == nil {
 				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
-			tEnv.schemaQueries["select * from "+table+" where 1 != 1"] = tEnv.schemaQueries["select * from "+likeTable+" where 1 != 1"]
+			tEnv.addResult(query, tEnv.getResult(likeQuery))
+
+			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(likeTable))
+			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+			if tEnv.getResult(likeQuery) == nil {
+				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
+			}
+			tEnv.addResult(query, tEnv.getResult(likeQuery))
 			continue
 		}
 		for _, idx := range ddl.GetTableSpec().Indexes {
@@ -425,6 +448,13 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 
 		tEnv.tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
+		var colTypes []*querypb.Field
+		var colValues [][]sqltypes.Value
+		colType := &querypb.Field{
+			Name: "column_type",
+			Type: sqltypes.VarChar,
+		}
+		colTypes = append(colTypes, colType)
 		for _, col := range ddl.GetTableSpec().Columns {
 			colName := strings.ToLower(col.Name.String())
 			rowType := &querypb.Field{
@@ -433,18 +463,24 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			}
 			rowTypes = append(rowTypes, rowType)
 			tEnv.tableColumns[table][colName] = col.Type.SQLType()
+			colValues = append(colValues, []sqltypes.Value{sqltypes.NewVarChar(colName)})
 		}
-		tEnv.schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
+		tEnv.addResult("SELECT * FROM "+backtickedTable+" WHERE 1 != 1", &sqltypes.Result{
 			Fields: rowTypes,
-		}
+		})
+		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+		tEnv.addResult(query, &sqltypes.Result{
+			Fields: colTypes,
+			Rows:   colValues,
+		})
 	}
 
-	tEnv.schemaQueries[mysql.BaseShowPrimary] = &sqltypes.Result{
+	tEnv.addResult(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
 		Rows:   indexRows,
-	}
+	})
 
-	return &tEnv, nil
+	return tEnv, nil
 }
 
 // HandleQuery implements the fakesqldb query handler interface
@@ -460,11 +496,12 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	// return the pre-computed results for any schema introspection queries
-	result, ok := getGlobalTabletEnv().schemaQueries[query]
-	if ok {
+	tEnv := t.vte.getGlobalTabletEnv()
+	result := tEnv.getResult(query)
+
+	if result != nil {
 		return callback(result)
 	}
-
 	switch sqlparser.Preview(query) {
 	case sqlparser.StmtSelect:
 		// Parse the select statement to figure out the table and columns
@@ -492,15 +529,14 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			tables = append(tables, getTables(from)...)
 		}
 
-		tableColumnMap := map[sqlparser.TableIdent]map[string]querypb.Type{}
-
+		tableColumnMap := map[sqlparser.IdentifierCS]map[string]querypb.Type{}
 		for _, table := range tables {
 			if table == nil {
 				continue
 			}
 
 			tableName := sqlparser.String(sqlparser.GetTableName(table.Expr))
-			columns, exists := getGlobalTabletEnv().tableColumns[tableName]
+			columns, exists := t.vte.getGlobalTabletEnv().tableColumns[tableName]
 			if !exists && tableName != "" && tableName != "dual" {
 				return fmt.Errorf("unable to resolve table name %s", tableName)
 			}
@@ -553,7 +589,8 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 
 		// the query against lookup table is in-query, handle it specifically
 		var inColName string
-		inVal := make([][]byte, 0, 10)
+		inVal := make([]sqltypes.Value, 0, 10)
+
 		rowCount := 1
 		if selStmt.Where != nil {
 			switch v := selStmt.Where.Expr.(type) {
@@ -561,12 +598,42 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 				if v.Operator == sqlparser.InOp {
 					switch c := v.Left.(type) {
 					case *sqlparser.ColName:
+						colName := strings.ToLower(c.Name.String())
+						colType := tableColumnMap[sqlparser.GetTableName(selStmt.From[0].(*sqlparser.AliasedTableExpr).Expr)][colName]
+
 						switch values := v.Right.(type) {
 						case sqlparser.ValTuple:
 							for _, val := range values {
 								switch v := val.(type) {
 								case *sqlparser.Literal:
-									inVal = append(inVal, v.Bytes())
+									value, err := evalengine.LiteralToValue(v)
+									if err != nil {
+										return err
+									}
+
+									// Cast the value in the tuple to the expected value of the column
+									castedValue, err := evalengine.Cast(value, colType)
+									if err != nil {
+										return err
+									}
+
+									// Check if we have a duplicate value
+									isNewValue := true
+									for _, v := range inVal {
+										result, err := evalengine.NullsafeCompare(v, value, collations.Default())
+										if err != nil {
+											return err
+										}
+
+										if result == 0 {
+											isNewValue = false
+											break
+										}
+									}
+
+									if isNewValue {
+										inVal = append(inVal, castedValue)
+									}
 								}
 							}
 							rowCount = len(inVal)
@@ -596,7 +663,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 				// a string type that encodes the column name + index.
 				colType := colTypes[i]
 				if len(inVal) > j && col == inColName {
-					values[i], _ = sqltypes.NewValue(querypb.Type_VARBINARY, inVal[j])
+					values[i], _ = sqltypes.NewValue(querypb.Type_VARBINARY, inVal[j].Raw())
 				} else if sqltypes.IsIntegral(colType) {
 					values[i] = sqltypes.NewInt32(int32(i + 1))
 				} else if sqltypes.IsFloat(colType) {
@@ -644,7 +711,7 @@ func getTables(node sqlparser.SQLNode) []*sqlparser.AliasedTableExpr {
 	return tables
 }
 
-func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.TableIdent]map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
+func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.IdentifierCS]map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
 	switch node := node.(type) {
 	case *sqlparser.ColName:
 		if node.Qualifier.Name.IsEmpty() {

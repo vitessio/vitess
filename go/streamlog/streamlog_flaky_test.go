@@ -38,7 +38,7 @@ func (l *logMessage) Format(params url.Values) string {
 	return l.val + "\n"
 }
 
-func testLogf(w io.Writer, params url.Values, m interface{}) error {
+func testLogf(w io.Writer, params url.Values, m any) error {
 	_, err := io.WriteString(w, m.(*logMessage).Format(params))
 	return err
 }
@@ -193,10 +193,7 @@ func TestChannel(t *testing.T) {
 func TestFile(t *testing.T) {
 	logger := New("logger", 10)
 
-	dir, err := os.MkdirTemp("", "streamlog_file")
-	if err != nil {
-		t.Fatalf("error getting tempdir: %v", err)
-	}
+	dir := t.TempDir()
 
 	logPath := path.Join(dir, "test.log")
 	logChan, err := logger.LogToFile(logPath, testLogf)

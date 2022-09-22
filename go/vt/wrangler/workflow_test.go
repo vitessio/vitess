@@ -19,12 +19,16 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -69,8 +73,11 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf.ws.WritesSwitched = true
 	require.Errorf(t, mtwf.Cancel(), ErrWorkflowPartiallySwitched)
 
+	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(mtwf.params.TabletTypes)
+	require.NoError(t, err)
+
 	require.ElementsMatch(t, mtwf.getCellsAsArray(), []string{"cell1", "cell2"})
-	require.ElementsMatch(t, mtwf.getTabletTypes(), []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
+	require.ElementsMatch(t, tabletTypes, []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
 	hasReplica, hasRdonly, hasPrimary, err := mtwf.parseTabletTypes()
 	require.NoError(t, err)
 	require.True(t, hasReplica)
@@ -78,7 +85,9 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	require.False(t, hasPrimary)
 
 	mtwf.params.TabletTypes = "replica,rdonly,primary"
-	require.ElementsMatch(t, mtwf.getTabletTypes(),
+	tabletTypes, _, err = discovery.ParseTabletTypesAndOrder(mtwf.params.TabletTypes)
+	require.NoError(t, err)
+	require.ElementsMatch(t, tabletTypes,
 		[]topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY, topodata.TabletType_PRIMARY})
 
 	hasReplica, hasRdonly, hasPrimary, err = mtwf.parseTabletTypes()
@@ -90,11 +99,11 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 
 func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state string, currentLag int64) {
 	now := time.Now().Unix()
-	rowTemplate := "1|||||%s|vt_%s|%d|%d|0||"
+	rowTemplate := "1|||||%s|vt_%s|%d|%d|0|0|||"
 	row := fmt.Sprintf(rowTemplate, state, keyspace, now, now-currentLag)
 	replicationResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|message|tags",
-		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|varchar|varchar"),
+		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
+		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
 		row)
 	copyStateResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"table|lastpk",
@@ -137,13 +146,13 @@ func TestCanSwitch(t *testing.T) {
 		name                  string
 		state                 string
 		streamLag, allowedLag int64 /* seconds */
-		expectedReason        string
+		expectedReason        *regexp.Regexp
 	}
 
 	testCases := []testCase{
-		{"In Copy Phase", "Copying", 0, 0, cannotSwitchCopyIncomplete},
-		{"High Lag", "Running", 6, 5, cannotSwitchHighLag},
-		{"Acceptable Lag", "Running", 4, 5, ""},
+		{"In Copy Phase", "Copying", 0, 0, regexp.MustCompile(cannotSwitchCopyIncomplete)},
+		{"High Lag", "Running", 6, 5, regexp.MustCompile(strings.ReplaceAll(cannotSwitchHighLag, "%d", "(\\d+)"))},
+		{"Acceptable Lag", "Running", 4, 5, nil},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -151,11 +160,30 @@ func TestCanSwitch(t *testing.T) {
 			p.MaxAllowedTransactionLagSeconds = tc.allowedLag
 			reason, err := wf.canSwitch("ks2", workflowName)
 			require.NoError(t, err)
-			expected := ""
-			if reason != "" {
-				expected = fmt.Sprintf(tc.expectedReason, tc.streamLag, tc.allowedLag)
+
+			if tc.expectedReason != nil {
+				require.Regexp(t, tc.expectedReason, reason)
+
+				m := tc.expectedReason.FindStringSubmatch(reason)
+				switch tc.expectedReason.NumSubexp() {
+				case 0:
+					// cannotSwitchCopyIncomplete, nothing else to do
+				case 2:
+					// cannotSwitchHighLag, assert streamLag > allowedLag
+					curLag, err := strconv.ParseInt(m[1], 10, 64)
+					require.NoError(t, err, "could not parse current lag %s as int", m[1])
+
+					allowedLag, err := strconv.ParseInt(m[2], 10, 64)
+					require.NoError(t, err, "could not parse allowed lag %s as int", m[2])
+
+					require.Greater(t, curLag, allowedLag, "current lag %d should be strictly greater than allowed lag %d (from reason %q)", curLag, allowedLag, reason)
+				default:
+					// unexpected regexp, fail loudly
+					require.Fail(t, "unknown reason regexp %s -- did you add a new test case?", tc.expectedReason)
+				}
+			} else {
+				require.Empty(t, reason, "should be able to switch, but cannot because %s", reason)
 			}
-			require.Contains(t, expected, reason)
 		})
 	}
 }

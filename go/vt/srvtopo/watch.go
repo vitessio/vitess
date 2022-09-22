@@ -45,18 +45,17 @@ type watchEntry struct {
 
 	watchStartingChan chan struct{}
 
-	value     interface{}
+	value     any
 	lastError error
 
 	lastValueTime time.Time
-	lastErrorCtx  context.Context
 	lastErrorTime time.Time
 
-	listeners []func(interface{}, error) bool
+	listeners []func(any, error) bool
 }
 
 type resilientWatcher struct {
-	watcher func(ctx context.Context, entry *watchEntry)
+	watcher func(entry *watchEntry)
 
 	counts               *stats.CountersWithSingleLabel
 	cacheRefreshInterval time.Duration
@@ -84,7 +83,7 @@ func (w *resilientWatcher) getEntry(wkey fmt.Stringer) *watchEntry {
 	return entry
 }
 
-func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (interface{}, error) {
+func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (any, error) {
 	entry := w.getEntry(wkey)
 
 	entry.mutex.Lock()
@@ -92,7 +91,7 @@ func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (int
 	return entry.currentValueLocked(ctx)
 }
 
-func (entry *watchEntry) addListener(ctx context.Context, callback func(interface{}, error) bool) {
+func (entry *watchEntry) addListener(ctx context.Context, callback func(any, error) bool) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
@@ -101,7 +100,7 @@ func (entry *watchEntry) addListener(ctx context.Context, callback func(interfac
 	callback(v, err)
 }
 
-func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
+func (entry *watchEntry) ensureWatchingLocked() {
 	switch entry.watchState {
 	case watchStateRunning, watchStateStarting:
 	case watchStateIdle:
@@ -110,19 +109,19 @@ func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
 		if shouldRefresh {
 			entry.watchState = watchStateStarting
 			entry.watchStartingChan = make(chan struct{})
-			go entry.rw.watcher(ctx, entry)
+			go entry.rw.watcher(entry)
 		}
 	}
 }
 
-func (entry *watchEntry) currentValueLocked(ctx context.Context) (interface{}, error) {
+func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 	entry.rw.counts.Add(queryCategory, 1)
 
 	if entry.watchState == watchStateRunning {
 		return entry.value, entry.lastError
 	}
 
-	entry.ensureWatchingLocked(ctx)
+	entry.ensureWatchingLocked()
 
 	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < entry.rw.cacheTTL
 	if cacheValid {
@@ -147,12 +146,12 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (interface{}, e
 	return nil, entry.lastError
 }
 
-func (entry *watchEntry) update(ctx context.Context, value interface{}, err error, init bool) {
+func (entry *watchEntry) update(value any, err error, init bool) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
 	if err != nil {
-		entry.onErrorLocked(ctx, err, init)
+		entry.onErrorLocked(err, init)
 	} else {
 		entry.onValueLocked(value)
 	}
@@ -167,7 +166,7 @@ func (entry *watchEntry) update(ctx context.Context, value interface{}, err erro
 	}
 }
 
-func (entry *watchEntry) onValueLocked(value interface{}) {
+func (entry *watchEntry) onValueLocked(value any) {
 	entry.watchState = watchStateRunning
 	if entry.watchStartingChan != nil {
 		close(entry.watchStartingChan)
@@ -177,14 +176,12 @@ func (entry *watchEntry) onValueLocked(value interface{}) {
 	entry.lastValueTime = time.Now()
 
 	entry.lastError = nil
-	entry.lastErrorCtx = nil
 	entry.lastErrorTime = time.Time{}
 }
 
-func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, init bool) {
+func (entry *watchEntry) onErrorLocked(err error, init bool) {
 	entry.rw.counts.Add(errorCategory, 1)
 
-	entry.lastErrorCtx = callerCtx
 	entry.lastErrorTime = time.Now()
 
 	// if the node disappears, delete the cached value
@@ -219,12 +216,13 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, ini
 
 	entry.watchState = watchStateIdle
 
-	if len(entry.listeners) > 0 {
+	// only retry the watch if we haven't been explicitly interrupted
+	if len(entry.listeners) > 0 && !topo.IsErrType(err, topo.Interrupted) {
 		go func() {
 			time.Sleep(entry.rw.cacheRefreshInterval)
 
 			entry.mutex.Lock()
-			entry.ensureWatchingLocked(context.Background())
+			entry.ensureWatchingLocked()
 			entry.mutex.Unlock()
 		}()
 	}

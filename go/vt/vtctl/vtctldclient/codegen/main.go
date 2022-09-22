@@ -18,7 +18,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"go/types"
 	"io"
@@ -27,33 +26,34 @@ import (
 	"regexp"
 	"sort"
 
+	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 )
 
 func main() { // nolint:funlen
-	source := flag.String("source", "../../proto/vtctlservice", "source package")
-	typeName := flag.String("type", "VtctldClient", "interface type to implement")
-	implType := flag.String("impl", "gRPCVtctldClient", "type implementing the interface")
-	pkgName := flag.String("targetpkg", "grpcvtctldclient", "package name to generate code for")
-	local := flag.Bool("local", false, "generate a local, in-process client rather than a grpcclient")
-	out := flag.String("out", "", "output destination. leave empty to use stdout")
+	source := pflag.String("source", "../../proto/vtctlservice", "source package")
+	typeName := pflag.String("type", "VtctldClient", "interface type to implement")
+	implType := pflag.String("impl", "gRPCVtctldClient", "type implementing the interface")
+	pkgName := pflag.String("targetpkg", "grpcvtctldclient", "package name to generate code for")
+	local := pflag.Bool("local", false, "generate a local, in-process client rather than a grpcclient")
+	out := pflag.String("out", "", "output destination. leave empty to use stdout")
 
-	flag.Parse()
+	pflag.Parse()
 
 	if *source == "" {
-		panic("-source cannot be empty")
+		panic("--source cannot be empty")
 	}
 
 	if *typeName == "" {
-		panic("-type cannot be empty")
+		panic("--type cannot be empty")
 	}
 
 	if *implType == "" {
-		panic("-impl cannot be empty")
+		panic("--impl cannot be empty")
 	}
 
 	if *pkgName == "" {
-		panic("-targetpkg cannot be empty")
+		panic("--targetpkg cannot be empty")
 	}
 
 	var output io.Writer = os.Stdout
@@ -213,6 +213,23 @@ type ClientInterfaceDef struct {
 	Methods     []*Func
 	Local       bool
 	ClientName  string
+}
+
+// NeedsGRPCShim returns true if the generated client code needs the internal
+// grpcshim imported. Currently this is true if the client is Local and has any
+// methods that are streaming RPCs.
+func (def *ClientInterfaceDef) NeedsGRPCShim() bool {
+	if !def.Local {
+		return false
+	}
+
+	for _, m := range def.Methods {
+		if m.IsStreaming {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Import contains the meta information about a Go import.

@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
-func wikiRequest(lang testutil.Lang, args map[string]string, output interface{}) error {
+func wikiRequest(lang testutil.Lang, args map[string]string, output any) error {
 	wikipedia := fmt.Sprintf("https://%s.wikipedia.org/w/api.php", lang)
 	req, err := http.NewRequest("GET", wikipedia, nil)
 	if err != nil {

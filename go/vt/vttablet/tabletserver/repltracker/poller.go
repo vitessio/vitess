@@ -55,7 +55,7 @@ func (p *poller) Status() (time.Duration, error) {
 	// but it hasn't yet reached the point where it can calculate the seconds_behind_master
 	// value and it's thus NULL -- then we will estimate the lag ourselves using the last seen
 	// value + the time elapsed since.
-	if !status.ReplicationRunning() || status.ReplicationLagUnknown {
+	if !status.Healthy() || status.ReplicationLagUnknown {
 		if p.timeRecorded.IsZero() {
 			return 0, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "replication is not running")
 		}

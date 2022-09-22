@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -24,9 +25,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/netutil"
-
-	"context"
-
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
@@ -35,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -43,6 +42,11 @@ import (
 
 // ErrConnPoolClosed is returned when the connection pool is closed.
 var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: unexpected: conn pool is closed")
+
+const (
+	getWithoutS = "GetWithoutSettings"
+	getWithS    = "GetWithSettings"
+)
 
 // Pool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
@@ -54,7 +58,7 @@ type Pool struct {
 	env                tabletenv.Env
 	name               string
 	mu                 sync.Mutex
-	connections        *pools.ResourcePool
+	connections        pools.IResourcePool
 	capacity           int
 	prefillParallelism int
 	timeout            time.Duration
@@ -64,6 +68,7 @@ type Pool struct {
 	waiterQueueFull    sync2.AtomicInt64
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
+	getConnTime        *servenv.TimingsWrapper
 }
 
 // NewPool creates a new Pool. The name is used
@@ -94,10 +99,16 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	env.Exporter().NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Get)
+	env.Exporter().NewCounterFunc(name+"Get", "Tablet server conn pool get count", cp.GetCount)
+	env.Exporter().NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", cp.GetSettingCount)
+	env.Exporter().NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", cp.DiffSettingCount)
+	env.Exporter().NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", cp.ResetSettingCount)
+	cp.getConnTime = env.Exporter().NewTimings(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
+
 	return cp
 }
 
-func (cp *Pool) pool() (p *pools.ResourcePool) {
+func (cp *Pool) pool() (p pools.IResourcePool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()
@@ -123,7 +134,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		refreshCheck = netutil.DNSTracker(appParams.Host())
 	}
 
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
@@ -141,22 +152,30 @@ func (cp *Pool) getLogWaitCallback() func(time.Time) {
 // Close will close the pool and wait for connections to be returned before
 // exiting.
 func (cp *Pool) Close() {
+	log.Infof("connpool - started execution of Close")
 	p := cp.pool()
+	log.Infof("connpool - found the pool")
 	if p == nil {
+		log.Infof("connpool - pool is empty")
 		return
 	}
 	// We should not hold the lock while calling Close
 	// because it waits for connections to be returned.
+	log.Infof("connpool - calling close on the pool")
 	p.Close()
+	log.Infof("connpool - acquiring lock")
 	cp.mu.Lock()
+	log.Infof("connpool - acquired lock")
 	cp.connections = nil
 	cp.mu.Unlock()
+	log.Infof("connpool - closing dbaPool")
 	cp.dbaPool.Close()
+	log.Infof("connpool - finished execution of Close")
 }
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
+func (cp *Pool) Get(ctx context.Context, setting *pools.Setting) (*DBConn, error) {
 	span, ctx := trace.NewSpan(ctx, "Pool.Get")
 	defer span.Finish()
 
@@ -170,7 +189,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	}
 
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool)
+		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, setting)
 	}
 	p := cp.pool()
 	if p == nil {
@@ -186,9 +205,18 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
-	r, err := p.Get(ctx)
+
+	start := time.Now()
+	r, err := p.Get(ctx, setting)
 	if err != nil {
 		return nil, err
+	}
+	if cp.getConnTime != nil {
+		if setting == nil {
+			cp.getConnTime.Record(getWithoutS, start)
+		} else {
+			cp.getConnTime.Record(getWithS, start)
+		}
 	}
 	return r.(*DBConn), nil
 }
@@ -333,6 +361,42 @@ func (cp *Pool) Exhausted() int64 {
 		return 0
 	}
 	return p.Exhausted()
+}
+
+// GetCount returns the number of times get was called
+func (cp *Pool) GetCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.GetCount()
+}
+
+// GetSettingCount returns the number of times getWithSettings was called
+func (cp *Pool) GetSettingCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.GetSettingCount()
+}
+
+// DiffSettingCount returns the number of times different settings were applied on the resource.
+func (cp *Pool) DiffSettingCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.DiffSettingCount()
+}
+
+// ResetSettingCount returns the number of times settings were reset on the resource.
+func (cp *Pool) ResetSettingCount() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.ResetSettingCount()
 }
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {

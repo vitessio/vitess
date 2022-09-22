@@ -32,9 +32,11 @@ import (
 
 const (
 	// BaseShowPrimary is the base query for fetching primary key info.
-	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
-	// BaseShowTableUniqueKey returns names of colunms covered by a given unique constraint on a given table, in key order
-	BaseShowTableUniqueKey = "SELECT column_name as column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND table_name=%a AND constraint_name=%a ORDER BY ordinal_position"
+	BaseShowPrimary = `
+		SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
+		FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = DATABASE() AND LOWER(INDEX_NAME) = 'primary'
+		ORDER BY table_name, SEQ_IN_INDEX`
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 
@@ -54,48 +56,31 @@ CREATE TABLE if not exists _vt.schemacopy (
 	column_key varchar(3) NOT NULL,
 	PRIMARY KEY (table_schema, table_name, ordinal_position))`
 
-	detectNewColumns = `
-select ISC.table_name
-from information_schema.columns as ISC
-	 left join _vt.schemacopy as c on 
-		ISC.table_name = c.table_name and 
-		ISC.table_schema=c.table_schema and 
-		ISC.ordinal_position = c.ordinal_position
-where ISC.table_schema = database() AND c.table_schema is null`
-
-	detectChangeColumns = `
-select ISC.table_name
-from information_schema.columns as ISC
-	  join _vt.schemacopy as c on 
-		ISC.table_name = c.table_name and 
-		ISC.table_schema=c.table_schema and 
-		ISC.ordinal_position = c.ordinal_position
-where ISC.table_schema = database() 
-	AND (not(c.column_name <=> ISC.column_name) 
-	OR not(ISC.character_set_name <=> c.character_set_name) 
-	OR not(ISC.collation_name <=> c.collation_name) 
-	OR not(ISC.data_type <=> c.data_type) 
-	OR not(ISC.column_key <=> c.column_key))`
-
-	detectRemoveColumns = `
-select c.table_name
-from information_schema.columns as ISC
-	  right join _vt.schemacopy as c on 
-		ISC.table_name = c.table_name and 
-		ISC.table_schema=c.table_schema and 
-		ISC.ordinal_position = c.ordinal_position
-where c.table_schema = database() AND ISC.table_schema is null`
-
 	// DetectSchemaChange query detects if there is any schema change from previous copy.
-	DetectSchemaChange = detectChangeColumns + " UNION " + detectNewColumns + " UNION " + detectRemoveColumns
+	DetectSchemaChange = `
+SELECT DISTINCT table_name
+FROM (
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM information_schema.columns
+	WHERE table_schema = database()
+
+	UNION ALL
+
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM _vt.schemacopy c
+	WHERE table_schema = database()
+) _inner
+GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+HAVING COUNT(*) = 1
+`
 
 	// ClearSchemaCopy query clears the schemacopy table.
 	ClearSchemaCopy = `delete from _vt.schemacopy where table_schema = database()`
 
 	// InsertIntoSchemaCopy query copies over the schema information from information_schema.columns table.
-	InsertIntoSchemaCopy = `insert _vt.schemacopy 
-select table_schema, table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key 
-from information_schema.columns 
+	InsertIntoSchemaCopy = `insert _vt.schemacopy
+select table_schema, table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+from information_schema.columns
 where table_schema = database()`
 
 	// fetchColumns are the columns we fetch
@@ -103,16 +88,19 @@ where table_schema = database()`
 
 	// FetchUpdatedTables queries fetches all information about updated tables
 	FetchUpdatedTables = `select  ` + fetchColumns + `
-from _vt.schemacopy 
-where table_schema = database() and 
-	table_name in ::tableNames 
+from _vt.schemacopy
+where table_schema = database() and
+	table_name in ::tableNames
 order by table_name, ordinal_position`
 
 	// FetchTables queries fetches all information about tables
-	FetchTables = `select ` + fetchColumns + ` 
-from _vt.schemacopy 
-where table_schema = database() 
+	FetchTables = `select ` + fetchColumns + `
+from _vt.schemacopy
+where table_schema = database()
 order by table_name, ordinal_position`
+
+	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
+	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to

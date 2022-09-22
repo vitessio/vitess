@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -27,7 +29,7 @@ import (
 
 var _ Primitive = (*AlterVSchema)(nil)
 
-//AlterVSchema operator applies changes to VSchema
+// AlterVSchema operator applies changes to VSchema
 type AlterVSchema struct {
 	Keyspace *vindexes.Keyspace
 
@@ -42,7 +44,7 @@ func (v *AlterVSchema) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "AlterVSchema",
 		Keyspace:     v.Keyspace,
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"query": sqlparser.String(v.AlterVschemaDDL),
 		},
 	}
@@ -64,8 +66,8 @@ func (v *AlterVSchema) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *AlterVSchema) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.AlterVschemaDDL)
+func (v *AlterVSchema) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	err := vcursor.ExecuteVSchema(ctx, v.Keyspace.Name, v.AlterVschemaDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +75,8 @@ func (v *AlterVSchema) TryExecute(vcursor VCursor, bindVars map[string]*query.Bi
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := v.TryExecute(vcursor, bindVars, wantfields)
+func (v *AlterVSchema) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := v.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -82,6 +84,6 @@ func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, bindVars map[string]*qu
 }
 
 // GetFields implements the Primitive interface
-func (v *AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (v *AlterVSchema) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 }

@@ -72,7 +72,7 @@ type RestoreParams struct {
 	Cnf    *Mycnf
 	Mysqld MysqlDaemon
 	Logger logutil.Logger
-	// Concurrency is the value of -restore_concurrency flag (init restore parameter)
+	// Concurrency is the value of --restore_concurrency flag (init restore parameter)
 	// It determines how many files are processed in parallel
 	Concurrency int
 	// Extra env variables for pre-restore and post-restore transform hooks
@@ -154,7 +154,7 @@ func GetBackupManifest(ctx context.Context, backup backupstorage.BackupHandle) (
 }
 
 // getBackupManifestInto fetches and decodes a MANIFEST file into the specified object.
-func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandle, outManifest interface{}) error {
+func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandle, outManifest any) error {
 	file, err := backup.ReadFile(ctx, backupManifestFileName)
 	if err != nil {
 		return vterrors.Wrap(err, "can't read MANIFEST")
@@ -381,14 +381,32 @@ func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]Fi
 func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	var err error
 	var result []FileEntry
-	var totalSize int64
+	var size, totalSize int64
+	var flavor MySQLFlavor
+	var version ServerVersion
+	var features capabilitySet
 
-	// first add inno db files
+	// get the flavor and version to deal with any behavioral differences
+	versionStr, err := GetVersionString()
+	if err != nil {
+		return nil, 0, err
+	}
+	flavor, version, err = ParseVersionString(versionStr)
+	if err != nil {
+		return nil, 0, err
+	}
+	features = newCapabilitySet(flavor, version)
+
+	// first add innodb files
 	result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
 	if err != nil {
 		return nil, 0, err
 	}
-	result, size, err := addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
+	if features.hasDynamicRedoLogCapacity() {
+		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
+	} else {
+		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -416,5 +434,6 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 			totalSize = totalSize + size
 		}
 	}
+
 	return result, totalSize, nil
 }

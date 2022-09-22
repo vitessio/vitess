@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -63,8 +64,8 @@ type HashJoin struct {
 }
 
 // TryExecute implements the Primitive interface
-func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	lresult, err := vcursor.ExecutePrimitive(hj.Left, bindVars, wantfields)
+func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	lresult, err := vcursor.ExecutePrimitive(ctx, hj.Left, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 		return nil, err
 	}
 
-	rresult, err := vcursor.ExecutePrimitive(hj.Right, bindVars, wantfields)
+	rresult, err := vcursor.ExecutePrimitive(ctx, hj.Right, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +113,8 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return result, nil
 }
 
-func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.HashCode][]row, error) {
-	probeTable := map[evalengine.HashCode][]row{}
+func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.HashCode][]sqltypes.Row, error) {
+	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
 	for _, current := range lresult.Rows {
 		joinVal := current[hj.LHSKey]
 		if joinVal.IsNull() {
@@ -129,11 +130,11 @@ func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.Ha
 }
 
 // TryStreamExecute implements the Primitive interface
-func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
-	probeTable := map[evalengine.HashCode][]row{}
+	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
 	var lfields []*querypb.Field
-	err := vcursor.StreamExecutePrimitive(hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
 		if len(lfields) == 0 && len(result.Fields) != 0 {
 			lfields = result.Fields
 		}
@@ -154,7 +155,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 		return err
 	}
 
-	return vcursor.StreamExecutePrimitive(hj.Right, bindVars, wantfields, func(result *sqltypes.Result) error {
+	return vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, wantfields, func(result *sqltypes.Result) error {
 		// compare the results coming from the RHS with the probe-table
 		res := &sqltypes.Result{}
 		if len(result.Fields) != 0 {
@@ -212,14 +213,14 @@ func (hj *HashJoin) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (hj *HashJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (hj *HashJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
-	lresult, err := hj.Left.GetFields(vcursor, bindVars)
+	lresult, err := hj.Left.GetFields(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 	result := &sqltypes.Result{}
-	rresult, err := hj.Right.GetFields(vcursor, combineVars(bindVars, joinVars))
+	rresult, err := hj.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +240,7 @@ func (hj *HashJoin) Inputs() []Primitive {
 
 // description implements the Primitive interface
 func (hj *HashJoin) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"TableName":         hj.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(hj.Cols)), ","), "[]"),
 		"Predicate":         sqlparser.String(hj.ASTPred),

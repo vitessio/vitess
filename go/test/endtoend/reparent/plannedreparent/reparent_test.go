@@ -22,18 +22,17 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/reparent/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -45,7 +44,7 @@ func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 
 func TestReparentCrossCell(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -59,14 +58,12 @@ func TestReparentCrossCell(t *testing.T) {
 
 func TestReparentGraceful(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// Run this to make sure it succeeds.
-	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, false)
-	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
-	assert.Contains(t, strArray[0], "primary") // primary first
+	utils.WaitForReplicationToStart(t, clusterInstance, utils.KeyspaceName, utils.ShardName, len(tablets), true)
 
 	// Perform a graceful reparent operation
 	utils.Prs(t, clusterInstance, tablets[1])
@@ -84,7 +81,7 @@ func TestReparentGraceful(t *testing.T) {
 // TestPRSWithDrainedLaggingTablet tests that PRS succeeds even if we have a lagging drained tablet
 func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -111,7 +108,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 
 func TestReparentReplicaOffline(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -128,7 +125,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 
 func TestReparentAvoid(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
@@ -149,7 +146,7 @@ func TestReparentAvoid(t *testing.T) {
 	// tablets[1 is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
-	// If we kill the tablet in the same cell as primary then reparent -avoid_tablet will fail.
+	// If we kill the tablet in the same cell as primary then reparent --avoid_tablet will fail.
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
@@ -160,14 +157,14 @@ func TestReparentAvoid(t *testing.T) {
 
 func TestReparentFromOutside(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	reparentFromOutside(t, clusterInstance, false)
 }
 
 func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -236,8 +233,8 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	if downPrimary {
 		err := tablets[0].VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
-			"-allow_primary", tablets[0].Alias)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--",
+			"--allow_primary", tablets[0].Alias)
 		require.NoError(t, err)
 	}
 
@@ -256,7 +253,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 
 func TestReparentWithDownReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -299,7 +296,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 
 func TestChangeTypeSemiSync(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -363,7 +360,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 
 func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 

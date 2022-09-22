@@ -17,8 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -27,18 +27,23 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgr/db"
 )
 
-var (
-	pingTabletTimeout = flag.Duration("ping_tablet_timeout", 2*time.Second, "time to wait when we ping a tablet")
-)
+var pingTabletTimeout = 2 * time.Second
+
+func init() {
+	servenv.OnParseFor("vtgr", func(fs *pflag.FlagSet) {
+		fs.DurationVar(&pingTabletTimeout, "ping_tablet_timeout", 2*time.Second, "time to wait when we ping a tablet")
+	})
+}
 
 // DiagnoseType is the types of Diagnose result
 type DiagnoseType string
@@ -173,6 +178,9 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 	// if no, we should bootstrap one
 	mysqlGroup := shard.shardAgreedGroupName()
 	if mysqlGroup == "" {
+		if len(shard.sqlGroup.views) != shard.sqlGroup.expectedBootstrapSize {
+			return DiagnoseTypeError, fmt.Errorf("fail to diagnose ShardHasNoGroup with %v nodes", len(shard.sqlGroup.views))
+		}
 		return DiagnoseTypeShardHasNoGroup, nil
 	}
 	// We handle the case where the shard has an agreed group name but all nodes are offline
@@ -180,6 +188,15 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 	// old group for the shard
 	if shard.isAllOfflineOrError() {
 		shard.logger.Info("Found all members are OFFLINE or ERROR")
+		// On rebootstrap, we always want to make sure _all_ the nodes in topo are reachable
+		// unless we override the rebootstrap size
+		desiredRebootstrapSize := len(shard.instances)
+		if shard.sqlGroup.rebootstrapSize != 0 {
+			desiredRebootstrapSize = shard.sqlGroup.rebootstrapSize
+		}
+		if len(shard.sqlGroup.views) != desiredRebootstrapSize {
+			return DiagnoseTypeError, fmt.Errorf("fail to diagnose ShardHasInactiveGroup with %v nodes expecting %v", len(shard.sqlGroup.views), desiredRebootstrapSize)
+		}
 		return DiagnoseTypeShardHasInactiveGroup, nil
 	}
 
@@ -351,7 +368,7 @@ func (shard *GRShard) isPrimaryReachable(ctx context.Context) (bool, error) {
 }
 
 func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstance) bool {
-	pingCtx, cancel := context.WithTimeout(context.Background(), *pingTabletTimeout)
+	pingCtx, cancel := context.WithTimeout(context.Background(), pingTabletTimeout)
 	defer cancel()
 	c := make(chan error, 1)
 	// tmc.Ping create grpc client connection first without timeout via dial
@@ -361,7 +378,7 @@ func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstanc
 	go func() { c <- shard.tmc.Ping(pingCtx, instance.tablet) }()
 	select {
 	case <-pingCtx.Done():
-		shard.logger.Errorf("Ping abort timeout %v", *pingTabletTimeout)
+		shard.logger.Errorf("Ping abort timeout %v", pingTabletTimeout)
 		return false
 	case err := <-c:
 		if err != nil {

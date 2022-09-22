@@ -30,17 +30,17 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtorc/inst"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const diagnoseGroupSize = 2
+const diagnoseGroupSize = 3
 
 var (
 	testHost, _ = os.Hostname()
@@ -244,9 +244,9 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 func TestMysqlIssueDiagnoses(t *testing.T) {
 	cfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 	disableProtectionCfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, DisableReadOnlyProtection: true, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	*heartbeatThreshold = 10
+	heartbeatThreshold = 10
 	defer func() {
-		*heartbeatThreshold = math.MaxInt64
+		heartbeatThreshold = math.MaxInt64
 	}()
 	type data struct {
 		alias       string
@@ -309,6 +309,17 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
 		}},
+		{name: "fail to bootstrap with incorrect number of nodes", expected: DiagnoseTypeError, errMessage: "fail to diagnose ShardHasNoGroup with 3 nodes", inputs: []data{
+			{alias0, "", true, 0, []db.TestGroupState{
+				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+			{alias1, "", true, 0, []db.TestGroupState{
+				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+			{alias2, "", true, 0, []db.TestGroupState{
+				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+		}, config: &config.VTGRConfig{BootstrapGroupSize: 2, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}},
 		{name: "unreachable node", expected: DiagnoseTypeBackoffError, errMessage: "", inputs: []data{
 			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
@@ -668,12 +679,13 @@ func TestDiagnoseWithInactive(t *testing.T) {
 		ttype      topodatapb.TabletType
 	}
 	var sqltests = []struct {
-		name          string
-		expected      DiagnoseType
-		errMessage    string
-		config        *config.VTGRConfig
-		inputs        []data
-		removeTablets []string // to simulate missing tablet in topology
+		name                 string
+		expected             DiagnoseType
+		errMessage           string
+		config               *config.VTGRConfig
+		inputs               []data
+		rebootstrapGroupSize int
+		removeTablets        []string // to simulate missing tablet in topology
 	}{
 		// although mysql and vitess has different primary, but since this is an active shard, VTGR won't fix that
 		{name: "mysql and tablet has different primary", expected: DiagnoseTypeHealthy, errMessage: "", inputs: []data{
@@ -758,6 +770,17 @@ func TestDiagnoseWithInactive(t *testing.T) {
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
+		{name: "error when there are only two nodes", expected: DiagnoseTypeError, errMessage: "fail to diagnose ShardHasInactiveGroup with 3 nodes expecting 2", inputs: []data{
+			{alias0, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+			{alias1, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+			{alias2, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+		}, rebootstrapGroupSize: 2},
 	}
 	for _, tt := range sqltests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -828,6 +851,9 @@ func TestDiagnoseWithInactive(t *testing.T) {
 					AnyTimes()
 			}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, conf, testPort0, false)
+			if tt.rebootstrapGroupSize != 0 {
+				shard.OverrideRebootstrapGroupSize(tt.rebootstrapGroupSize)
+			}
 			shard.refreshTabletsInShardLocked(ctx)
 			diagnose, err := shard.Diagnose(ctx)
 			assert.Equal(t, expected, diagnose)

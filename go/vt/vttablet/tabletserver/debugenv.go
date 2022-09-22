@@ -39,9 +39,9 @@ var (
 	`)
 	debugEnvRow = template.Must(template.New("debugenv").Parse(`
 	<tr><form method="POST">
-		<td>{{.VarName}}</td>
+		<td>{{.Name}}</td>
 		<td>
-			<input type="hidden" name="varname" value="{{.VarName}}"></input>
+			<input type="hidden" name="varname" value="{{.Name}}"></input>
 			<input type="text" name="value" value="{{.Value}}"></input>
 		</td>
 		<td><input type="submit" name="Action" value="Modify"></input></td>
@@ -66,6 +66,15 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		value := r.FormValue("value")
 		setIntVal := func(f func(int)) {
 			ival, err := strconv.Atoi(value)
+			if err != nil {
+				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+				return
+			}
+			f(ival)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		}
+		setInt64Val := func(f func(int64)) {
+			ival, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
 				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
 				return
@@ -104,6 +113,10 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
 			setIntVal(tsv.SetWarnResultSize)
+		case "RowStreamerMaxInnoDBTrxHistLen":
+			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxInnoDBTrxHistLen = val })
+		case "RowStreamerMaxMySQLReplLagSecs":
+			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxMySQLReplLagSecs = val })
 		case "UnhealthyThreshold":
 			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
 			setDurationVal(tsv.hs.SetUnhealthyThreshold)
@@ -118,6 +131,12 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 
 	var vars []envValue
 	addIntVar := func(varname string, f func() int) {
+		vars = append(vars, envValue{
+			VarName: varname,
+			Value:   fmt.Sprintf("%v", f()),
+		})
+	}
+	addInt64Var := func(varname string, f func() int64) {
 		vars = append(vars, envValue{
 			VarName: varname,
 			Value:   fmt.Sprintf("%v", f()),
@@ -141,6 +160,8 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
 	addIntVar("MaxResultSize", tsv.MaxResultSize)
 	addIntVar("WarnResultSize", tsv.WarnResultSize)
+	addInt64Var("RowStreamerMaxInnoDBTrxHistLen", func() int64 { return tsv.Config().RowStreamer.MaxInnoDBTrxHistLen })
+	addInt64Var("RowStreamerMaxMySQLReplLagSecs", func() int64 { return tsv.Config().RowStreamer.MaxMySQLReplLagSecs })
 	addDurationVar("UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
 	addFloat64Var("ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{

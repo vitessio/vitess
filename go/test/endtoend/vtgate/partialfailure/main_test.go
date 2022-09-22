@@ -22,9 +22,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -124,7 +124,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "-planner_version", "Gen4Fallback")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version", "Gen4Fallback")
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}

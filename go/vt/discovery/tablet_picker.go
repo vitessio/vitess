@@ -74,12 +74,7 @@ type TabletPicker struct {
 
 // NewTabletPicker returns a TabletPicker.
 func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTypesStr string) (*TabletPicker, error) {
-	inOrder := false
-	if strings.HasPrefix(tabletTypesStr, inOrderHint) {
-		inOrder = true
-		tabletTypesStr = tabletTypesStr[len(inOrderHint):]
-	}
-	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
+	tabletTypes, inOrder, err := ParseTabletTypesAndOrder(tabletTypesStr)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)
 	}
@@ -107,9 +102,9 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 	}, nil
 }
 
-// PickForStreaming picks an available tablet
+// PickForStreaming picks an available tablet.
 // All tablets that belong to tp.cells are evaluated and one is
-// chosen at random
+// chosen at random.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
 	rand.Seed(time.Now().UnixNano())
 	// keep trying at intervals (tabletPickerRetryDelay) until a tablet is found
@@ -201,6 +196,8 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
 				if err == nil {
 					actualCells = append(actualCells, alias.Cells...)
+				} else {
+					log.Infof("Unable to resolve cell %s, ignoring", cell)
 				}
 			} else {
 				// valid cell, add it to our list

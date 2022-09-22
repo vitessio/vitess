@@ -18,12 +18,16 @@ package vtgate
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -31,44 +35,70 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// SafeSession is a mutex-protected version of the Session.
-// It is thread-safe if each thread only accesses one shard.
-// (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
-// for a single shard)
-type SafeSession struct {
-	mu              sync.Mutex
-	mustRollback    bool
-	autocommitState autocommitState
-	commitOrder     vtgatepb.CommitOrder
-	savepointState  savepointState
-	// rollbackOnPartialExec is set if any DML was successfully
-	// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
-	// Otherwise, the transaction is rolled back.
-	rollbackOnPartialExec string
+type (
+	// SafeSession is a mutex-protected version of the Session.
+	// It is thread-safe if each thread only accesses one shard.
+	// (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
+	// for a single shard)
+	SafeSession struct {
+		mu              sync.Mutex
+		mustRollback    bool
+		autocommitState autocommitState
+		commitOrder     vtgatepb.CommitOrder
+		savepointState  savepointState
+		// rollbackOnPartialExec is set if any DML was successfully
+		// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
+		// Otherwise, the transaction is rolled back.
+		rollbackOnPartialExec string
+		savepointName         string
 
-	// this is a signal that found_rows has already been handles by the primitives,
-	// and doesn't have to be updated by the executor
-	foundRowsHandled bool
-	*vtgatepb.Session
-}
+		// this is a signal that found_rows has already been handles by the primitives,
+		// and doesn't have to be updated by the executor
+		foundRowsHandled bool
 
-// autocommitState keeps track of whether a single round-trip
-// commit to vttablet is possible. It starts as autocommitable
-// if we started a transaction because of the autocommit flag
-// being set. Otherwise, it starts as notAutocommitable.
-// If execute is recursively called using the same session,
-// like from a vindex, we will already be in a transaction,
-// and this should cause the state to become notAutocommitable.
-//
-// SafeSession lets you request a commit token, which will
-// be issued if the state is autocommitable,
-// implying that no intermediate transactions were started.
-// If so, the state transitions to autocommited, which is terminal.
-// If the token is successfully issued, the caller has to perform
-// the commit. If a token cannot be issued, then a traditional
-// commit has to be performed at the outermost level where
-// the autocommitable transition happened.
-type autocommitState int
+		// queryFromVindex is used to avoid erroring out on multi-db transaction
+		// as the query that started a new transaction on the shard belong to a vindex.
+		queryFromVindex bool
+
+		logging *executeLogger
+
+		*vtgatepb.Session
+	}
+
+	executeLogger struct {
+		mu      sync.Mutex
+		entries []engine.ExecuteEntry
+		lastID  int
+	}
+
+	// autocommitState keeps track of whether a single round-trip
+	// commit to vttablet is possible. It starts as autocommitable
+	// if we started a transaction because of the autocommit flag
+	// being set. Otherwise, it starts as notAutocommitable.
+	// If execute is recursively called using the same session,
+	// like from a vindex, we will already be in a transaction,
+	// and this should cause the state to become notAutocommitable.
+	//
+	// SafeSession lets you request a commit token, which will
+	// be issued if the state is autocommitable,
+	// implying that no intermediate transactions were started.
+	// If so, the state transitions to autocommited, which is terminal.
+	// If the token is successfully issued, the caller has to perform
+	// the commit. If a token cannot be issued, then a traditional
+	// commit has to be performed at the outermost level where
+	// the autocommitable transition happened.
+	autocommitState int
+
+	// savepointState keeps track of whether savepoints need to be inserted
+	// before running the query. This will help us prevent rolling back the
+	// entire transaction in case of partial failures, and be closer to MySQL
+	// compatibility, by only reverting the changes from the failed statement
+	// If execute is recursively called using the same session,
+	// like from a vindex, we should not override the savePointState.
+	// It is set the first time and is then permanent for the remainder of the query
+	// execution. It should not be affected later by transactions starting or not.
+	savepointState int
+)
 
 const (
 	notAutocommittable = autocommitState(iota)
@@ -76,20 +106,18 @@ const (
 	autocommitted
 )
 
-// savepointState keeps track of whether savepoints need to be inserted
-// before running the query. This will help us prevent rolling back the
-// entire transaction in case of partial failures, and be closer to MySQL
-// compatibility, by only reverting the changes from the failed statement
-// If execute is recursively called using the same session,
-// like from a vindex, we should not override the savePointState.
-// It is set the first time and is then permanent for the remainder of the query
-// execution. It should not be affected later by transactions starting or not.
-type savepointState int
-
 const (
 	savepointStateNotSet = savepointState(iota)
-	savepointNeeded
+	// savepointNotNeeded - savepoint is not required
 	savepointNotNeeded
+	// savepointNeeded - savepoint may be required
+	savepointNeeded
+	// savepointSet - savepoint is set on the session
+	savepointSet
+	// savepointRollbackSet - rollback to savepoint is set on the session
+	savepointRollbackSet
+	// savepointRollback - rollback happened on the savepoint
+	savepointRollback
 )
 
 // NewSafeSession returns a new SafeSession based on the Session
@@ -108,6 +136,7 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	newSession.ShardSessions = nil
 	newSession.PreSessions = nil
 	newSession.PostSessions = nil
+	newSession.LockSession = nil
 	newSession.Autocommit = true
 	newSession.Warnings = nil
 	return NewSafeSession(newSession)
@@ -206,12 +235,55 @@ func (session *SafeSession) SetSavepointState(spNeed bool) {
 	}
 }
 
-// InsertSavepoints returns true if we should insert savepoints.
-func (session *SafeSession) InsertSavepoints() bool {
+// CanAddSavepoint returns true if we should insert savepoint and there is no existing savepoint.
+func (session *SafeSession) CanAddSavepoint() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	return session.savepointState == savepointNeeded
+}
+
+// SetSavepoint stores the savepoint name to session.
+func (session *SafeSession) SetSavepoint(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.savepointName = name
+	session.savepointState = savepointSet
+}
+
+// SetRollbackCommand stores the rollback command to session and executed if required.
+func (session *SafeSession) SetRollbackCommand() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// if the rollback already happened on the savepoint. There is nothing to set or execute on later.
+	if session.savepointState == savepointRollback {
+		return
+	}
+
+	if session.savepointState == savepointSet {
+		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
+	} else {
+		session.rollbackOnPartialExec = txRollback
+	}
+	session.savepointState = savepointRollbackSet
+}
+
+// SavepointRollback updates the state that transaction was rolledback to the savepoint stored in the session.
+func (session *SafeSession) SavepointRollback() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.savepointState = savepointRollback
+}
+
+// IsRollbackSet returns true if rollback to savepoint can be done.
+func (session *SafeSession) IsRollbackSet() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return session.savepointState == savepointRollbackSet
 }
 
 // SetCommitOrder sets the commit order.
@@ -228,8 +300,9 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
-// Find returns the transactionId and tabletAlias, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, reservedID int64, alias *topodatapb.TabletAlias) {
+// FindAndChangeSessionIfInSingleTxMode returns the transactionId and tabletAlias, if any, for a session
+// modifies the shard session in a specific case for single mode transaction.
+func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard string, tabletType topodatapb.TabletType, txMode vtgatepb.TransactionMode) (int64, int64, *topodatapb.TabletAlias, error) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -241,10 +314,22 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias
+			if txMode != vtgatepb.TransactionMode_SINGLE || !shardSession.VindexOnly || session.queryFromVindex {
+				return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
+			}
+			count := actualNoOfShardSession(session.ShardSessions)
+			// If the count of shard session which are non vindex only is greater than 0, then it is a
+			if count > 0 {
+				session.mustRollback = true
+				return 0, 0, nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
+			}
+			// the shard session is now used by non-vindex query as well,
+			// so it is not an exclusive vindex only shard session anymore.
+			shardSession.VindexOnly = false
+			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
 		}
 	}
-	return 0, 0, nil
+	return 0, 0, nil, nil
 }
 
 func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
@@ -294,13 +379,24 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	// Always append, in order for rollback to succeed.
 	switch session.commitOrder {
 	case vtgatepb.CommitOrder_NORMAL:
+		if session.queryFromVindex {
+			shardSession.VindexOnly = true
+		}
 		newSessions, err := addOrUpdate(shardSession, session.ShardSessions)
 		if err != nil {
 			return err
 		}
 		session.ShardSessions = newSessions
+
+		if session.queryFromVindex {
+			break
+		}
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
+			count := actualNoOfShardSession(session.ShardSessions)
+			if count <= 1 {
+				break
+			}
 			session.mustRollback = true
 			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
@@ -322,6 +418,17 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	}
 
 	return nil
+}
+
+func actualNoOfShardSession(sessions []*vtgatepb.Session_ShardSession) int {
+	actualSS := 0
+	for _, ss := range sessions {
+		if ss.VindexOnly {
+			continue
+		}
+		actualSS++
+	}
+	return actualSS
 }
 
 func (session *SafeSession) isSingleDB(txMode vtgatepb.TransactionMode) bool {
@@ -435,13 +542,31 @@ func (session *SafeSession) SetReservedConn(reservedConn bool) {
 func (session *SafeSession) SetPreQueries() []string {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	result := make([]string, len(session.SystemVariables))
-	idx := 0
-	for k, v := range session.SystemVariables {
-		result[idx] = fmt.Sprintf("set @@%s = %s", k, v)
-		idx++
+
+	if len(session.SystemVariables) == 0 {
+		return nil
 	}
-	return result
+
+	// extract keys
+	keys := make([]string, 0, len(session.SystemVariables))
+	for k := range session.SystemVariables {
+		keys = append(keys, k)
+	}
+	// sort the keys
+	sort.Strings(keys)
+
+	// build the query using sorted keys
+	var preQuery strings.Builder
+	first := true
+	for _, k := range keys {
+		if first {
+			preQuery.WriteString(fmt.Sprintf("set @@%s = %s", k, session.SystemVariables[k]))
+			first = false
+		} else {
+			preQuery.WriteString(fmt.Sprintf(", @@%s = %s", k, session.SystemVariables[k]))
+		}
+	}
+	return []string{preQuery.String()}
 }
 
 // SetLockSession sets the lock session.
@@ -479,6 +604,7 @@ func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetAll resets the shard sessions and lock session.
@@ -494,6 +620,7 @@ func (session *SafeSession) ResetAll() {
 	session.PreSessions = nil
 	session.PostSessions = nil
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetShard reset the shard session for the provided tablet alias.
@@ -561,13 +688,6 @@ func (session *SafeSession) GetSessionEnableSystemSettings() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.EnableSystemSettings
-}
-
-// GetEnableSetVar returns the EnableSetVar value.
-func (session *SafeSession) GetEnableSetVar() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return session.EnableSetVar
 }
 
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
@@ -669,4 +789,129 @@ func (session *SafeSession) getSessions() []*vtgatepb.Session_ShardSession {
 	default:
 		return session.ShardSessions
 	}
+}
+
+func (session *SafeSession) RemoveInternalSavepoint() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.savepointName == "" {
+		return
+	}
+	sCount := len(session.Savepoints)
+	if sCount == 0 {
+		return
+	}
+	sLast := sCount - 1
+	if strings.Contains(session.Savepoints[sLast], session.savepointName) {
+		session.Savepoints = session.Savepoints[0:sLast]
+	}
+}
+
+// HasAdvisoryLock returns if any advisory lock is taken
+func (session *SafeSession) HasAdvisoryLock() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return len(session.AdvisoryLock) != 0
+}
+
+// AddAdvisoryLock adds the advisory lock to the list.
+func (session *SafeSession) AddAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		session.AdvisoryLock = map[string]int64{name: 1}
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if exists {
+		count++
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// RemoveAdvisoryLock removes the advisory lock from the list.
+func (session *SafeSession) RemoveAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if !exists {
+		return
+	}
+	count--
+	if count == 0 {
+		delete(session.AdvisoryLock, name)
+		return
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// ClearAdvisoryLock clears the advisory lock list.
+func (session *SafeSession) ClearAdvisoryLock() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.AdvisoryLock = nil
+}
+
+func (session *SafeSession) EnableLogging() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.logging = &executeLogger{}
+}
+
+func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv map[string]*querypb.BindVariable) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	id := l.lastID
+	l.lastID++
+	if begin {
+		l.entries = append(l.entries, engine.ExecuteEntry{
+			ID:         id,
+			Keyspace:   target.Keyspace,
+			Shard:      target.Shard,
+			TabletType: target.TabletType,
+			Cell:       target.Cell,
+			Query:      "begin",
+		})
+	}
+	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		panic("query not able to parse. this should not happen")
+	}
+	pq := sqlparser.NewParsedQuery(ast)
+	if bv == nil {
+		bv = map[string]*querypb.BindVariable{}
+	}
+	q, err := pq.GenerateQuery(bv, nil)
+	if err != nil {
+		panic("query not able to generate query. this should not happen")
+	}
+
+	l.entries = append(l.entries, engine.ExecuteEntry{
+		ID:         id,
+		Keyspace:   target.Keyspace,
+		Shard:      target.Shard,
+		TabletType: target.TabletType,
+		Cell:       target.Cell,
+		Query:      q,
+	})
+}
+
+func (l *executeLogger) GetLogs() []engine.ExecuteEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	result := make([]engine.ExecuteEntry, len(l.entries))
+	copy(result, l.entries)
+	return result
 }

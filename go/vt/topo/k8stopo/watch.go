@@ -28,25 +28,21 @@ import (
 )
 
 // Watch is part of the topo.Conn interface.
-func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	log.Info("Starting Kubernetes topo Watch on ", filePath)
 
 	current := &topo.WatchData{}
 
 	// get current
-	contents, ver, err := s.Get(ctx, filePath)
+	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer initialCancel()
+
+	contents, ver, err := s.Get(initialCtx, filePath)
 	if err != nil {
-		// Per the topo.Conn interface:
-		// "If the initial read fails, or the file doesn't
-		// exist, current.Err is set, and 'changes'/'cancel' are nil."
-		current.Err = err
-		return current, nil, nil
+		return nil, nil, err
 	}
 	current.Contents = contents
 	current.Version = ver
-
-	// Create a context, will be used to cancel the watch.
-	watchCtx, watchCancel := context.WithCancel(context.Background())
 
 	// Create the changes channel
 	changes := make(chan *topo.WatchData, 10)
@@ -56,11 +52,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 	resource, err := s.buildFileResource(filePath, []byte{})
 	if err != nil {
-		// Per the topo.Conn interface:
-		// current.Err is set, and 'changes'/'cancel' are nil
-		watchCancel()
-		current.Err = err
-		return current, nil, nil
+		return nil, nil, err
 	}
 
 	// Create the informer / indexer to watch the single resource
@@ -73,7 +65,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 	_, memberInformer := cache.NewIndexerInformer(listwatch, &vtv1beta1.VitessTopoNode{}, 0,
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				vtn := obj.(*vtv1beta1.VitessTopoNode)
 				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
@@ -86,7 +78,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 				}
 			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
+			UpdateFunc: func(oldObj, newObj any) {
 				vtn := newObj.(*vtv1beta1.VitessTopoNode)
 				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
@@ -99,7 +91,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 				}
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				vtn := obj.(*vtv1beta1.VitessTopoNode)
 				changes <- &topo.WatchData{Err: topo.NewError(topo.NoNode, vtn.Name)}
 				close(gracefulShutdown)
@@ -111,9 +103,9 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	go memberInformer.Run(informerChan)
 
 	// Handle interrupts
-	go closeOnDone(watchCtx, filePath, informerChan, gracefulShutdown, changes)
+	go closeOnDone(ctx, filePath, informerChan, gracefulShutdown, changes)
 
-	return current, changes, topo.CancelFunc(watchCancel)
+	return current, changes, nil
 }
 
 func closeOnDone(ctx context.Context, filePath string, informerChan chan struct{}, gracefulShutdown chan struct{}, changes chan *topo.WatchData) {
@@ -126,4 +118,11 @@ func closeOnDone(ctx context.Context, filePath string, informerChan chan struct{
 	}
 	close(informerChan)
 	close(changes)
+}
+
+// WatchRecursive is part of the topo.Conn interface.
+func (s *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	// Kubernetes doesn't seem to provide a primitive that watches a prefix
+	// or directory, so this likely can never be implemented.
+	return nil, nil, topo.NewError(topo.NoImplementation, path)
 }

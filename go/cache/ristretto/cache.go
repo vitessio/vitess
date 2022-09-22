@@ -67,7 +67,7 @@ type Cache struct {
 	// onReject is called when an item is rejected via admission policy.
 	onReject itemCallback
 	// onExit is called whenever a value goes out of scope from the cache.
-	onExit func(interface{})
+	onExit func(any)
 	// KeyToHash function is used to customize the key hashing algorithm.
 	// Each key will be hashed using the provided function. If keyToHash value
 	// is not set, the default keyToHash function is used.
@@ -77,7 +77,7 @@ type Cache struct {
 	// indicates whether cache is closed.
 	isClosed bool
 	// cost calculates cost from a value.
-	cost func(value interface{}) int64
+	cost func(value any) int64
 	// ignoreInternalCost dictates whether to ignore the cost of internally storing
 	// the item in the cost calculation.
 	ignoreInternalCost bool
@@ -124,7 +124,7 @@ type Config struct {
 	// OnExit is called whenever a value is removed from cache. This can be
 	// used to do manual memory deallocation. Would also be called on eviction
 	// and rejection of the value.
-	OnExit func(val interface{})
+	OnExit func(val any)
 	// KeyToHash function is used to customize the key hashing algorithm.
 	// Each key will be hashed using the provided function. If keyToHash value
 	// is not set, the default keyToHash function is used.
@@ -132,7 +132,7 @@ type Config struct {
 	// Cost evaluates a value and outputs a corresponding cost. This function
 	// is ran after Set is called for a new item or an item update with a cost
 	// param of 0.
-	Cost func(value interface{}) int64
+	Cost func(value any) int64
 	// IgnoreInternalCost set to true indicates to the cache that the cost of
 	// internally storing the value should be ignored. This is useful when the
 	// cost passed to set is not using bytes as units. Keep in mind that setting
@@ -153,7 +153,7 @@ type Item struct {
 	flag     itemFlag
 	Key      uint64
 	Conflict uint64
-	Value    interface{}
+	Value    any
 	Cost     int64
 	wg       *sync.WaitGroup
 }
@@ -179,7 +179,7 @@ func NewCache(config *Config) (*Cache, error) {
 		cost:               config.Cost,
 		ignoreInternalCost: config.IgnoreInternalCost,
 	}
-	cache.onExit = func(val interface{}) {
+	cache.onExit = func(val any) {
 		if config.OnExit != nil && val != nil {
 			config.OnExit(val)
 		}
@@ -223,7 +223,7 @@ func (c *Cache) Wait() {
 // Get returns the value (if any) and a boolean representing whether the
 // value was found or not. The value can be nil and the boolean can be true at
 // the same time.
-func (c *Cache) Get(key string) (interface{}, bool) {
+func (c *Cache) Get(key string) (any, bool) {
 	if c == nil || c.isClosed {
 		return nil, false
 	}
@@ -245,14 +245,14 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 // item will be added and other items will be evicted in order to make room.
 //
 // The cost of the entry will be evaluated lazily by the cache's Cost function.
-func (c *Cache) Set(key string, value interface{}) bool {
+func (c *Cache) Set(key string, value any) bool {
 	return c.SetWithCost(key, value, 0)
 }
 
 // SetWithCost works like Set but adds a key-value pair to the cache with a specific
 // cost. The built-in Cost function will not be called to evaluate the object's cost
 // and instead the given value will be used.
-func (c *Cache) SetWithCost(key string, value interface{}, cost int64) bool {
+func (c *Cache) SetWithCost(key string, value any, cost int64) bool {
 	if c == nil || c.isClosed {
 		return false
 	}
@@ -421,7 +421,7 @@ func (c *Cache) Misses() int64 {
 
 // ForEach yields all the values currently stored in the cache to the given callback.
 // The callback may return `false` to stop the iteration early.
-func (c *Cache) ForEach(forEach func(interface{}) bool) {
+func (c *Cache) ForEach(forEach func(any) bool) {
 	if c == nil {
 		return
 	}

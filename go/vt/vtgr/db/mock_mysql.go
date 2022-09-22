@@ -23,7 +23,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 
 	mysql "vitess.io/vitess/go/mysql"
-	inst "vitess.io/vitess/go/vt/orchestrator/inst"
+	inst "vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // MockAgent is a mock of Agent interface
@@ -58,7 +58,7 @@ func (m *MockAgent) BootstrapGroupLocked(instanceKey *inst.InstanceKey) error {
 }
 
 // BootstrapGroupLocked indicates an expected call of BootstrapGroupLocked
-func (mr *MockAgentMockRecorder) BootstrapGroupLocked(instanceKey interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) BootstrapGroupLocked(instanceKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BootstrapGroupLocked", reflect.TypeOf((*MockAgent)(nil).BootstrapGroupLocked), instanceKey)
 }
@@ -72,7 +72,7 @@ func (m *MockAgent) RebootstrapGroupLocked(instanceKey *inst.InstanceKey, name s
 }
 
 // RebootstrapGroupLocked indicates an expected call of RebootstrapGroupLocked
-func (mr *MockAgentMockRecorder) RebootstrapGroupLocked(instanceKey, name interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) RebootstrapGroupLocked(instanceKey, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RebootstrapGroupLocked", reflect.TypeOf((*MockAgent)(nil).RebootstrapGroupLocked), instanceKey, name)
 }
@@ -86,7 +86,7 @@ func (m *MockAgent) StopGroupLocked(instanceKey *inst.InstanceKey) error {
 }
 
 // StopGroupLocked indicates an expected call of StopGroupLocked
-func (mr *MockAgentMockRecorder) StopGroupLocked(instanceKey interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) StopGroupLocked(instanceKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopGroupLocked", reflect.TypeOf((*MockAgent)(nil).StopGroupLocked), instanceKey)
 }
@@ -100,7 +100,7 @@ func (m *MockAgent) JoinGroupLocked(instanceKey, primaryKey *inst.InstanceKey) e
 }
 
 // JoinGroupLocked indicates an expected call of JoinGroupLocked
-func (mr *MockAgentMockRecorder) JoinGroupLocked(instanceKey, primaryKey interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) JoinGroupLocked(instanceKey, primaryKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JoinGroupLocked", reflect.TypeOf((*MockAgent)(nil).JoinGroupLocked), instanceKey, primaryKey)
 }
@@ -114,7 +114,7 @@ func (m *MockAgent) SetReadOnly(instanceKey *inst.InstanceKey, readOnly bool) er
 }
 
 // SetReadOnly indicates an expected call of SetReadOnly
-func (mr *MockAgentMockRecorder) SetReadOnly(instanceKey, readOnly interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) SetReadOnly(instanceKey, readOnly any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReadOnly", reflect.TypeOf((*MockAgent)(nil).SetReadOnly), instanceKey, readOnly)
 }
@@ -129,7 +129,7 @@ func (m *MockAgent) FetchApplierGTIDSet(instanceKey *inst.InstanceKey) (mysql.GT
 }
 
 // FetchApplierGTIDSet indicates an expected call of FetchApplierGTIDSet
-func (mr *MockAgentMockRecorder) FetchApplierGTIDSet(instanceKey interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) FetchApplierGTIDSet(instanceKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchApplierGTIDSet", reflect.TypeOf((*MockAgent)(nil).FetchApplierGTIDSet), instanceKey)
 }
@@ -143,7 +143,7 @@ func (m *MockAgent) Failover(instance *inst.InstanceKey) error {
 }
 
 // Failover indicates an expected call of Failover
-func (mr *MockAgentMockRecorder) Failover(instance interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) Failover(instance any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Failover", reflect.TypeOf((*MockAgent)(nil).Failover), instance)
 }
@@ -158,7 +158,7 @@ func (m *MockAgent) FetchGroupView(alias string, instanceKey *inst.InstanceKey) 
 }
 
 // FetchGroupView indicates an expected call of FetchGroupView
-func (mr *MockAgentMockRecorder) FetchGroupView(alias, instanceKey interface{}) *gomock.Call {
+func (mr *MockAgentMockRecorder) FetchGroupView(alias, instanceKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchGroupView", reflect.TypeOf((*MockAgent)(nil).FetchGroupView), alias, instanceKey)
 }

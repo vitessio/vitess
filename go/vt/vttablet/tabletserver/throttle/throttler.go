@@ -9,7 +9,7 @@ package throttle
 import (
 	"context"
 	"encoding/json"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -21,19 +21,22 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/patrickmn/go-cache"
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
-
-	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -60,14 +63,31 @@ const (
 )
 
 var (
-	throttleThreshold         = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for default lag throttling")
-	throttleTabletTypes       = flag.String("throttle_tablet_types", "replica", "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
-	throttleMetricQuery       = flag.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
-	throttleMetricThreshold   = flag.Float64("throttle_metrics_threshold", math.MaxFloat64, "Override default throttle threshold, respective to -throttle_metrics_query")
-	throttlerCheckAsCheckSelf = flag.Bool("throttle_check_as_check_self", false, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+	// flag vars
+	throttleThreshold         = 1 * time.Second
+	throttleTabletTypes       = "replica"
+	throttleMetricQuery       string
+	throttleMetricThreshold   = math.MaxFloat64
+	throttlerCheckAsCheckSelf = false
 )
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerThrottlerFlags)
+	servenv.OnParseFor("vttablet", registerThrottlerFlags)
+}
+
+func registerThrottlerFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&throttleThreshold, "throttle_threshold", throttleThreshold, "Replication lag threshold for default lag throttling")
+	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
+	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to -throttle_metrics_query")
+	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+}
+
 var (
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
+
+	ErrThrottlerNotReady = errors.New("throttler not enabled/ready")
 )
 
 // ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
@@ -90,14 +110,16 @@ type Throttler struct {
 	keyspace string
 	shard    string
 
-	check    *ThrottlerCheck
-	isLeader int64
-	isOpen   int64
+	check     *ThrottlerCheck
+	isEnabled bool
+	isLeader  int64
+	isOpen    int64
 
-	env            tabletenv.Env
-	pool           *connpool.Pool
-	tabletTypeFunc func() topodatapb.TabletType
-	ts             *topo.Server
+	env             tabletenv.Env
+	pool            *connpool.Pool
+	tabletTypeFunc  func() topodatapb.TabletType
+	ts              *topo.Server
+	heartbeatWriter heartbeat.HeartbeatWriter
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -141,14 +163,15 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
 		isLeader: 0,
 		isOpen:   0,
 
-		env:            env,
-		tabletTypeFunc: tabletTypeFunc,
-		ts:             ts,
+		env:             env,
+		tabletTypeFunc:  tabletTypeFunc,
+		ts:              ts,
+		heartbeatWriter: heartbeatWriter,
 		pool: connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{
 			Size:               2,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
@@ -156,6 +179,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 	}
 
 	if env.Config().EnableLagThrottler {
+		throttler.isEnabled = true
 		throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 
 		throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
@@ -176,12 +200,24 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 
 		throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 		throttler.initThrottleTabletTypes()
-		throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+		throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 		throttler.check = NewThrottlerCheck(throttler)
 		throttler.initConfig()
 		throttler.check.SelfChecks(context.Background())
+	} else {
+		// Create an empty cache, just so that it isn't nil
+		throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	}
 	return throttler
+}
+
+// CheckIsReady checks if this throttler is ready to serve. If not, it returns an error
+func (throttler *Throttler) CheckIsReady() error {
+	if throttler.isEnabled && throttler.IsOpen() {
+		// all good
+		return nil
+	}
+	return ErrThrottlerNotReady
 }
 
 // initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
@@ -189,7 +225,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)
 
-	tokens := textutil.SplitDelimitedList(*throttleTabletTypes)
+	tokens := textutil.SplitDelimitedList(throttleTabletTypes)
 	for _, token := range tokens {
 		token = strings.ToUpper(token)
 		if value, ok := topodatapb.TabletType_value[token]; ok {
@@ -220,24 +256,30 @@ func (throttler *Throttler) initConfig() {
 			},
 		},
 	}
-	if *throttleMetricQuery != "" {
-		throttler.metricsQuery = *throttleMetricQuery
+	if throttleMetricQuery != "" {
+		throttler.metricsQuery = throttleMetricQuery
 	}
-	if *throttleMetricThreshold != math.MaxFloat64 {
-		throttler.MetricsThreshold = sync2.NewAtomicFloat64(*throttleMetricThreshold)
+	if throttleMetricThreshold != math.MaxFloat64 {
+		throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleMetricThreshold)
 	}
 	throttler.metricsQueryType = mysql.GetMetricsQueryType(throttler.metricsQuery)
 
 	config.Instance.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
 		MetricQuery:       throttler.metricsQuery,
-		ThrottleThreshold: throttler.MetricsThreshold.Get(),
+		ThrottleThreshold: &throttler.MetricsThreshold,
 		IgnoreHostsCount:  0,
 	}
 	config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
 		MetricQuery:       throttler.metricsQuery,
-		ThrottleThreshold: throttler.MetricsThreshold.Get(),
+		ThrottleThreshold: &throttler.MetricsThreshold,
 		IgnoreHostsCount:  0,
 	}
+}
+
+func (throttler *Throttler) IsOpen() bool {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+	return atomic.LoadInt64(&throttler.isOpen) > 0
 }
 
 // Open opens database pool and initializes the schema
@@ -257,25 +299,32 @@ func (throttler *Throttler) Open() error {
 		// since we just resume now, speed up the tickers by forcng an immediate tick
 		go t.TickNow()
 	}
+	go throttler.heartbeatWriter.RequestHeartbeats()
 
 	return nil
 }
 
 // Close frees resources
 func (throttler *Throttler) Close() {
+	log.Infof("Throttler - started execution of Close. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
+	log.Infof("Throttler - acquired initMutex lock")
 	defer throttler.initMutex.Unlock()
 	if atomic.LoadInt64(&throttler.isOpen) == 0 {
+		log.Infof("Throttler - no throttler is open")
 		// not open
 		return
 	}
 	for _, t := range throttler.tickers {
 		t.Suspend()
 	}
+	log.Infof("Throttler - finished suspending tickers")
 	atomic.StoreInt64(&throttler.isLeader, 0)
 
+	log.Infof("Throttler - closing pool")
 	throttler.pool.Close()
 	atomic.StoreInt64(&throttler.isOpen, 0)
+	log.Infof("Throttler - finished execution of Close")
 }
 
 // readSelfMySQLThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
@@ -287,7 +336,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 		Err:         nil,
 	}
 	ctx := context.Background()
-	conn, err := throttler.pool.Get(ctx)
+	conn, err := throttler.pool.Get(ctx, nil)
 	if err != nil {
 		metric.Err = err
 		return metric
@@ -321,9 +370,18 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 	return metric
 }
 
-// ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
-func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
+// throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps
+func (throttler *Throttler) throttledAppsSnapshot() map[string]cache.Item {
 	return throttler.throttledApps.Items()
+}
+
+// ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
+func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
+	for _, item := range throttler.throttledAppsSnapshot() {
+		appThrottle, _ := item.Object.(*base.AppThrottle)
+		result = append(result, *appThrottle)
+	}
+	return result
 }
 
 // isDormant returns true when the last check was more than dormantPeriod ago
@@ -382,6 +440,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					if transitionedIntoLeader {
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 						go mysqlRefreshTicker.TickNow()
+						go throttler.heartbeatWriter.RequestHeartbeats()
 					}
 				}()
 			}
@@ -532,7 +591,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() {
-			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
+			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold.Get(), cache.DefaultExpiration)
 			clusterProbes := &mysql.ClusterProbes{
 				ClusterName:      clusterName,
 				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
@@ -667,6 +726,8 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 // UnthrottleApp cancels any throttling, if any, for a given app
 func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.AppThrottle) {
 	throttler.throttledApps.Delete(appName)
+	// the app is likely to check
+	go throttler.heartbeatWriter.RequestHeartbeats()
 	return base.NewAppThrottle(appName, time.Now(), 0)
 }
 
@@ -783,11 +844,12 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remot
 
 // CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
+	go throttler.heartbeatWriter.RequestHeartbeats()
 	switch checkType {
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 	case ThrottleCheckPrimaryWrite:
-		if *throttlerCheckAsCheckSelf {
+		if throttlerCheckAsCheckSelf {
 			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 		}
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)

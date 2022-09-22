@@ -358,7 +358,6 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			DDLStrategy:          *defaultDDLStrategy,
 			SessionUUID:          u.String(),
 			EnableSystemSettings: *sysVarSetEnabled,
-			EnableSetVar:         *setVarEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
@@ -438,8 +437,8 @@ func initMySQLProtocol() {
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		if *servenv.MySQLServerVersion != "" {
-			mysqlListener.ServerVersion = *servenv.MySQLServerVersion
+		if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
+			mysqlListener.ServerVersion = mySQLVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(*mysqlTLSMinVersion)
@@ -535,6 +534,10 @@ func shutdownMysqlProtocolAndDrain() {
 
 func rollbackAtShutdown() {
 	defer log.Flush()
+	if vtgateHandle == nil {
+		// we still haven't been able to initialise the vtgateHandler, so we don't need to rollback anything
+		return
+	}
 
 	// Close all open connections. If they're waiting for reads, this will cause
 	// them to error out, which will automatically rollback open transactions.

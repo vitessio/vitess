@@ -166,12 +166,12 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	var totalRowsForTable, filteredRows int
 	for {
 		evs, err := reader.Recv()
-		//fmt.Printf("events received: %d\n",len(evs))
+		// fmt.Printf("events received: %d\n",len(evs))
 		switch err {
 		case nil:
 			for _, ev := range evs {
 				now := time.Now().Unix()
-				if now-lastLoggedAt > 60 && ev.Timestamp != 0 { //every minute
+				if now-lastLoggedAt > 60 && ev.Timestamp != 0 { // every minute
 					lastLoggedAt = now
 					log.Infof("%s Progress: %d/%d rows, %s: %s", keyspace, filteredRows, totalRowsForTable,
 						time.Unix(ev.Timestamp, 0).Format(time.RFC3339), gtid)
@@ -180,10 +180,10 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				switch ev.Type {
 				case binlogdatapb.VEventType_VGTID:
 					gtid = ev.Vgtid.ShardGtids[0].Gtid
-					//fmt.Printf("gtid %s\n", gtid)
+					// fmt.Printf("gtid %s\n", gtid)
 				case binlogdatapb.VEventType_FIELD:
 					fields = ev.FieldEvent.Fields
-					//fmt.Printf("field %s\n", fields)
+					// fmt.Printf("field %s\n", fields)
 					plan = getTablePlan(keyspace, fields, ev.FieldEvent.TableName, pk, ids)
 					if !fieldsPrinted {
 						outputHeader(plan)
@@ -193,15 +193,15 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 					totalRowsForTable += len(ev.RowEvent.RowChanges)
 					rows := processRowEvent(plan, gtid, ev)
 					if len(rows) > 0 {
-						//fmt.Printf("#rows %d\n", len(rows))
+						// fmt.Printf("#rows %d\n", len(rows))
 						filteredRows += len(rows)
 						outputRows(plan, rows)
 					}
 				default:
-					//fmt.Printf("event type %v\n",ev.Type)
+					// fmt.Printf("event type %v\n",ev.Type)
 				}
 			}
-			//fmt.Printf("stopPos %s\n", stopPos)
+			// fmt.Printf("stopPos %s\n", stopPos)
 			var err error
 			var currentPosition, stopPosition mysql.Position
 			currentPosition, err = binlogplayer.DecodePosition(gtid)
@@ -301,10 +301,18 @@ func processRowEvent(plan *TablePlan, gtid string, ev *binlogdatapb.VEvent) []*R
 			before = sqltypes.MakeRowTrusted(plan.fields, change.Before)
 		}
 		for _, val := range after {
-			afterVals = append(afterVals, string(val.ToBytes()))
+			bytes, err := val.ToBytes()
+			if err != nil {
+				panic(err)
+			}
+			afterVals = append(afterVals, string(bytes))
 		}
 		for _, val := range before {
-			beforeVals = append(beforeVals, string(val.ToBytes()))
+			bytes, err := val.ToBytes()
+			if err != nil {
+				panic(err)
+			}
+			beforeVals = append(beforeVals, string(bytes))
 		}
 		if !mustSend(plan, afterVals, beforeVals) {
 			continue
@@ -360,7 +368,7 @@ type TablePlan struct {
 
 func getFlavor(ctx context.Context, server, keyspace string) string {
 	curPos, err := getPosition(ctx, server, keyspace, "0")
-	//fmt.Printf("curpos is %s\n", curPos)
+	// fmt.Printf("curpos is %s\n", curPos)
 	if err != nil {
 		return ""
 	}
@@ -417,14 +425,14 @@ func processPositionResult(gtidset string) (string, string) {
 		fmt.Errorf(err.Error())
 		return "", ""
 	}
-	firstPos := arr[0] + ":" + strconv.Itoa(id) //subs[0]
+	firstPos := arr[0] + ":" + strconv.Itoa(id) // subs[0]
 	lastPos := gtids
 	return firstPos, lastPos
 }
 
 // hack, should read json in a structured manner
 func parseExecOutput(result string) string {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(result), &resultMap)
 	if err != nil {
 		fmt.Errorf("error parsing result json %s", result)
@@ -433,7 +441,7 @@ func parseExecOutput(result string) string {
 	rows := reflect.ValueOf(resultMap["rows"])
 	s := fmt.Sprintf("%v", rows)
 	s = strings.Trim(s, "[]")
-	//fmt.Printf("gtidset %s", s)
+	// fmt.Printf("gtidset %s", s)
 	return s
 }
 
@@ -445,7 +453,7 @@ func getPositions(ctx context.Context, server, tablet string) (string, string, e
 		log.Errorf(err.Error())
 		return "", "", err
 	}
-	//fmt.Printf("results are %v\n", results)
+	// fmt.Printf("results are %v\n", results)
 	firstPos := parseExecOutput(strings.Join(results, ""))
 
 	query = "select @@GLOBAL.gtid_executed;"
@@ -455,9 +463,9 @@ func getPositions(ctx context.Context, server, tablet string) (string, string, e
 		log.Errorf(err.Error())
 		return "", "", err
 	}
-	//fmt.Printf("results are %v\n", results)
+	// fmt.Printf("results are %v\n", results)
 	lastPos := parseExecOutput(strings.Join(results, ""))
-	//fmt.Printf("firstPos %s, lastPos %s\n", firstPos, lastPos)
+	// fmt.Printf("firstPos %s, lastPos %s\n", firstPos, lastPos)
 	return firstPos, lastPos, nil
 }
 

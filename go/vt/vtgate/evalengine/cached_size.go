@@ -120,9 +120,9 @@ func (cached *CallExpr) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Aliases []vitess.io/vitess/go/vt/sqlparser.ColIdent
+	// field Aliases []vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Aliases)) * int64(40))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Aliases)) * int64(32))
 		for _, elem := range cached.Aliases {
 			size += elem.CachedSize(false)
 		}
@@ -131,6 +131,27 @@ func (cached *CallExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Method)))
 	// field F vitess.io/vitess/go/vt/vtgate/evalengine.builtin
 	if cc, ok := cached.F.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *CaseExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field cases []vitess.io/vitess/go/vt/vtgate/evalengine.WhenThen
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.cases)) * int64(32))
+		for _, elem := range cached.cases {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field Else vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Else.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
@@ -205,7 +226,7 @@ func (cached *EvalResult) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field expr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.expr.(cachedObject); ok {
@@ -220,13 +241,13 @@ func (cached *EvalResult) CachedSize(alloc bool) int64 {
 	// field tuple_ *[]vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
 	if cached.tuple_ != nil {
 		size += int64(24)
-		size += hack.RuntimeAllocSize(int64(cap(*cached.tuple_)) * int64(80))
+		size += hack.RuntimeAllocSize(int64(cap(*cached.tuple_)) * int64(88))
 		for _, elem := range *cached.tuple_ {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field decimal_ *vitess.io/vitess/go/vt/vtgate/evalengine.decimalResult
-	size += cached.decimal_.CachedSize(true)
+	// field decimal_ vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal.Decimal
+	size += cached.decimal_.CachedSize(false)
 	return size
 }
 
@@ -237,7 +258,7 @@ func (cached *ExpressionEnv) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field BindVars map[string]*vitess.io/vitess/go/vt/proto/query.BindVariable
 	if cached.BindVars != nil {
@@ -259,6 +280,13 @@ func (cached *ExpressionEnv) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.Row)) * int64(32))
 		for _, elem := range cached.Row {
 			size += elem.CachedSize(false)
+		}
+	}
+	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Fields)) * int64(8))
+		for _, elem := range cached.Fields {
+			size += elem.CachedSize(true)
 		}
 	}
 	return size
@@ -322,7 +350,7 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field Val vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
 	size += cached.Val.CachedSize(false)
@@ -396,6 +424,24 @@ func (cached *WeightStringCallExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Cast)))
 	return size
 }
+func (cached *WhenThen) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field when vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.when.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field then vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.then.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *builtinMultiComparison) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -406,17 +452,5 @@ func (cached *builtinMultiComparison) CachedSize(alloc bool) int64 {
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
-	return size
-}
-func (cached *decimalResult) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(112)
-	}
-	// field num vitess.io/vitess/go/vt/vtgate/evalengine/decimal.Big
-	size += cached.num.CachedSize(false)
 	return size
 }

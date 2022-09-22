@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//nolint
+// nolint
 package integration
 
 import (
@@ -157,7 +157,7 @@ func (r *SubImpl) String() string {
 func (r *SubImpl) iface() {}
 
 type InterfaceContainer struct {
-	v interface{}
+	v any
 }
 
 func (r InterfaceContainer) String() string {

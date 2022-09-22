@@ -338,7 +338,7 @@ INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1) UNION ALL SELECT a FROM t1;
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc limit 1) union all select a from t1
+(select a from t1 order by count(*) asc limit 1) union all select a from t1
 END
 INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(3 1, 4 1))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
@@ -452,7 +452,7 @@ INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*)) UNION ALL SELECT a FROM t1;
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc) union all select a from t1
+(select a from t1 order by count(*) asc) union all select a from t1
 END
 INPUT
 (SELECT * FROM t1 LIMIT 5 OFFSET 4) UNION ALL (SELECT * FROM t2 LIMIT 4 OFFSET 2) LIMIT 7 OFFSET 1;
@@ -524,7 +524,7 @@ INPUT
 SELECT a FROM t1 UNION (SELECT a FROM t1 ORDER BY COUNT(*));
 END
 OUTPUT
-select a from t1 union (select a from t1 order by COUNT(*) asc)
+select a from t1 union (select a from t1 order by count(*) asc)
 END
 INPUT
 select min(`col002`) from t1 union select `col002` from t1;
@@ -746,7 +746,7 @@ INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1) UNION SELECT a FROM t1;
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc limit 1) union select a from t1
+(select a from t1 order by count(*) asc limit 1) union select a from t1
 END
 INPUT
 select * from t1 union select * from t2 order by 1 limit 1;
@@ -788,13 +788,13 @@ INPUT
 SELECT t1.i FROM t1 WHERE FALSE AND       t1.i > (SELECT MAX(a)               FROM (SELECT 8 AS a UNION SELECT 3) AS tt);
 END
 OUTPUT
-select t1.i from t1 where false and t1.i > (select MAX(a) from (select 8 as a from dual union select 3 from dual) as tt)
+select t1.i from t1 where false and t1.i > (select max(a) from (select 8 as a from dual union select 3 from dual) as tt)
 END
 INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*)) UNION SELECT a FROM t1;
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc) union select a from t1
+(select a from t1 order by count(*) asc) union select a from t1
 END
 INPUT
 select 1 union select 1;
@@ -836,7 +836,7 @@ INPUT
 SELECT a FROM t1 UNION (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
 END
 OUTPUT
-select a from t1 union (select a from t1 order by COUNT(*) asc limit 1, 1)
+select a from t1 union (select a from t1 order by count(*) asc limit 1, 1)
 END
 INPUT
 (SELECT * FROM t1 LIMIT 5) UNION SELECT * FROM t2 LIMIT 8;
@@ -866,7 +866,7 @@ INPUT
 (SELECT MAX(f1) FROM t1) UNION (SELECT MAX(f1) FROM t1);
 END
 OUTPUT
-select MAX(f1) from t1 union select MAX(f1) from t1
+select max(f1) from t1 union select max(f1) from t1
 END
 INPUT
 SELECT c FROM t1 UNION SELECT b FROM t2;
@@ -908,7 +908,7 @@ INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1) UNION (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc limit 1) union (select a from t1 order by COUNT(*) asc limit 1, 1)
+(select a from t1 order by count(*) asc limit 1) union (select a from t1 order by count(*) asc limit 1, 1)
 END
 INPUT
 SELECT 2 as "my_col" UNION SELECT 1;
@@ -974,7 +974,7 @@ INPUT
 SELECT a FROM t1 UNION ALL (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
 END
 OUTPUT
-select a from t1 union all (select a from t1 order by COUNT(*) asc limit 1, 1)
+select a from t1 union all (select a from t1 order by count(*) asc limit 1, 1)
 END
 INPUT
 (SELECT p1 FROM v2 LEFT JOIN v1 ON b = a WHERE p2 = 1 GROUP BY p1 ORDER BY p1) UNION (SELECT NULL LIMIT 0);
@@ -992,7 +992,7 @@ INPUT
 SELECT a, SUM(a), SUM(a)+1 FROM (SELECT 1 a UNION select 2) d   GROUP BY a;
 END
 OUTPUT
-select a, SUM(a), SUM(a) + 1 from (select 1 as a from dual union select 2 from dual) as d group by a
+select a, sum(a), sum(a) + 1 from (select 1 as a from dual union select 2 from dual) as d group by a
 END
 INPUT
 SELECT 2, 3 UNION SELECT 4, 5;
@@ -1106,7 +1106,7 @@ INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1) UNION ALL (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc limit 1) union all (select a from t1 order by COUNT(*) asc limit 1, 1)
+(select a from t1 order by count(*) asc limit 1) union all (select a from t1 order by count(*) asc limit 1, 1)
 END
 INPUT
 select 'a' union select concat('a', -(4 + 1));
@@ -1208,7 +1208,7 @@ INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*)) UNION ALL (SELECT a FROM t1 ORDER BY COUNT(*));
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc) union all (select a from t1 order by COUNT(*) asc)
+(select a from t1 order by count(*) asc) union all (select a from t1 order by count(*) asc)
 END
 INPUT
 select 1 as a union all select 1 union all select 2 union select 1 union all select 2;
@@ -1220,13 +1220,13 @@ INPUT
 select (ST_aswkb(cast(st_union(multipoint(                                        point(8,6), point(1,-17679),                                        point(-9,-9)),                             linestring(point(91,12), point(-77,49),                                        point(53,-81)))as char(18)))) in  ('1','2');
 END
 OUTPUT
-select ST_aswkb(convert(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))), char(18))) in ('1', '2') from dual
+select ST_aswkb(cast(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))) as char(18))) in ('1', '2') from dual
 END
 INPUT
 select st_astext(st_union(cast(point(1,1)as char(15)),point(1,1))) as res;
 END
 OUTPUT
-select st_astext(st_union(convert(point(1, 1), char(15)), point(1, 1))) as res from dual
+select st_astext(st_union(cast(point(1, 1) as char(15)), point(1, 1))) as res from dual
 END
 INPUT
 select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                    st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -1250,7 +1250,7 @@ INPUT
 SELECT 1 FROM   t1 AS alias1   JOIN t2 AS alias2 ON alias1.col_int = alias2.col_int   JOIN t1 AS alias3 ON 1   WHERE     ( SELECT 1 UNION SELECT MAX(alias1.pk) ) = alias3.pk;
 END
 OUTPUT
-select 1 from t1 as alias1 join t2 as alias2 on alias1.col_int = alias2.col_int join t1 as alias3 on 1 where (select 1 from dual union select MAX(alias1.pk) from dual) = alias3.pk
+select 1 from t1 as alias1 join t2 as alias2 on alias1.col_int = alias2.col_int join t1 as alias3 on 1 where (select 1 from dual union select max(alias1.pk) from dual) = alias3.pk
 END
 INPUT
 select   (with recursive dt as     (select t1.a as a union all select a+1 from dt where a<10)    select concat(count(*), ' - ', avg(dt.a)) from dt   ) as subq from t1;
@@ -1280,7 +1280,7 @@ INPUT
 SELECT a FROM t1 UNION ALL (SELECT a FROM t1 ORDER BY COUNT(*));
 END
 OUTPUT
-select a from t1 union all (select a from t1 order by COUNT(*) asc)
+select a from t1 union all (select a from t1 order by count(*) asc)
 END
 INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((-7 -9,-3 7,0 -10,-6 5,10 10,-3 -4,7 9,2 -9)),((1 -10,-3 10,-2 5)))'),                           ST_GEOMFROMTEXT('POLYGON((6 10,-7 10,-1 -6,0 5,5 4,1 -9,1 3,-10 -7,-10 8))'))) as result;
@@ -1382,7 +1382,7 @@ INPUT
 select st_union((cast(linestring(point(6,-68), point(-22,-4)) as binary(13))),                 st_intersection(point(6,8),multipoint(point(3,1),point(-4,-6),point(1,6),point(-3,-5),point(5,4))));
 END
 OUTPUT
-select st_union(convert(linestring(point(6, -68), point(-22, -4)), binary(13)), st_intersection(point(6, 8), multipoint(point(3, 1), point(-4, -6), point(1, 6), point(-3, -5), point(5, 4)))) from dual
+select st_union(cast(linestring(point(6, -68), point(-22, -4)) as binary(13)), st_intersection(point(6, 8), multipoint(point(3, 1), point(-4, -6), point(1, 6), point(-3, -5), point(5, 4)))) from dual
 END
 INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 0,10 10,20 0,0 0))'), ST_GEOMFROMTEXT('POLYGON((10 5,20 7,10 10,30 10,20 0,20 5,10 5))')));
@@ -1418,7 +1418,7 @@ INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*)) UNION (SELECT a FROM t1 ORDER BY COUNT(*));
 END
 OUTPUT
-(select a from t1 order by COUNT(*) asc) union (select a from t1 order by COUNT(*) asc)
+(select a from t1 order by count(*) asc) union (select a from t1 order by count(*) asc)
 END
 INPUT
 SELECT GROUP_CONCAT(t.c) as c FROM t1 t UNION SELECT '' as c;
@@ -1448,5 +1448,5 @@ INPUT
 SELECT a, SUM(a), SUM(a)+1 FROM (SELECT a FROM t1 UNION select 2) d   GROUP BY a;
 END
 OUTPUT
-select a, SUM(a), SUM(a) + 1 from (select a from t1 union select 2 from dual) as d group by a
+select a, sum(a), sum(a) + 1 from (select a from t1 union select 2 from dual) as d group by a
 END

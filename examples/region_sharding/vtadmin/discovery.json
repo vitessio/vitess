@@ -1,0 +1,17 @@
+{
+    "vtctlds": [
+        {
+            "host": {
+                "fqdn": "localhost:15000",
+                "hostname": "localhost:15999"
+            }
+        }
+    ],
+    "vtgates": [
+        {
+            "host": {
+                "hostname": "localhost:15991"
+            }
+        }
+    ]
+}

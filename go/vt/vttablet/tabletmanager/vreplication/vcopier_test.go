@@ -23,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"context"
 
 	"github.com/stretchr/testify/require"
@@ -39,10 +42,10 @@ func TestPlayerCopyCharPK(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -140,10 +143,10 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -244,10 +247,10 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -446,9 +449,9 @@ func TestPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table src1(id int, val varbinary(128), primary key(id))",
-		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), primary key(id))", vrepldb),
+		"create table src1(id int, val varbinary(128), d decimal(8,0), primary key(id))",
+		"insert into src1 values(2, 'bbb', 1), (1, 'aaa', 0)",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), d decimal(8,0), primary key(id))", vrepldb),
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table no(id int, val varbinary(128), primary key(id))",
@@ -465,7 +468,7 @@ func TestPlayerCopyTables(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "dst1",
-			Filter: "select id, val, val as val2 from src1",
+			Filter: "select id, val, val as val2, d from src1",
 		}, {
 			Match: "/yes",
 		}},
@@ -501,7 +504,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into dst1(id,val,val2) values (1,'aaa','aaa'), (2,'bbb','bbb')",
+		"insert into dst1(id,val,val2,d) values (1,'aaa','aaa',0), (2,'bbb','bbb',1)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -516,8 +519,8 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{
-		{"1", "aaa", "aaa"},
-		{"2", "bbb", "bbb"},
+		{"1", "aaa", "aaa", "0"},
+		{"2", "bbb", "bbb", "1"},
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 2)
@@ -551,13 +554,13 @@ func TestPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -667,13 +670,13 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multipel times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -1013,10 +1016,10 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 // TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
 // enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
-	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
-	*vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
+	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
+	vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
 	defer func() {
-		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -1217,14 +1220,14 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 	})
 	env.SchemaEngine.Reload(context.Background())
 
-	saveTimeout := *copyPhaseDuration
-	*copyPhaseDuration = 1 * time.Millisecond
-	defer func() { *copyPhaseDuration = saveTimeout }()
+	saveTimeout := copyPhaseDuration
+	copyPhaseDuration = 1 * time.Millisecond
+	defer func() { copyPhaseDuration = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		*copyPhaseDuration = saveTimeout
+		copyPhaseDuration = saveTimeout
 		vstreamRowsHook = nil
 	}
 
@@ -1284,7 +1287,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 
 func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// Disable tests on percona and mariadb platforms in CI since
 	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
 	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
 		return
@@ -1438,5 +1441,81 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
 		"commit",
+	})
+}
+
+func supportsInvisibleColumns() bool {
+	if env.DBType == string(mysqlctl.FlavorMySQL) && env.DBMajorVersion >= 8 &&
+		(env.DBMinorVersion > 0 || env.DBPatchVersion >= 23) {
+		return true
+	}
+	log.Infof("invisible columns not supported in %d.%d.%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion)
+	return false
+}
+
+func TestCopyInvisibleColumns(t *testing.T) {
+	if !supportsInvisibleColumns() {
+		t.Skip()
+	}
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, id2 int, inv1 int invisible, inv2 int invisible, primary key(id, inv1))",
+		"insert into src1(id, id2, inv1, inv2) values(2, 20, 200, 2000), (1, 10, 100, 1000)",
+		fmt.Sprintf("create table %s.dst1(id int, id2 int, inv1 int invisible, inv2 int invisible, primary key(id, inv1))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		// Create the list of tables to copy and transition to Copying state.
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message=",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`,
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		"/update _vt.vreplication set state",
+	})
+	expectData(t, "dst1", [][]string{
+		{"1", "10"},
+		{"2", "20"},
+	})
+	expectQueryResult(t, "select id,id2,inv1,inv2 from vrepl.dst1", [][]string{
+		{"1", "10", "100", "1000"},
+		{"2", "20", "200", "2000"},
 	})
 }

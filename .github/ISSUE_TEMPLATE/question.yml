@@ -15,6 +15,5 @@ body:
     id: question
     attributes:
       label: Question
-      render: markdown
     validations:
       required: true

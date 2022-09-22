@@ -19,10 +19,28 @@ package mysqlctld
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
 // TestBackupMysqlctld - tests the backup using mysqlctld.
 func TestBackupMysqlctld(t *testing.T) {
-	backup.TestBackup(t, backup.Mysqlctld, "", 0)
+	backup.TestBackup(t, backup.Mysqlctld, "xbstream", 0, nil, nil)
+}
+
+func TestBackupMysqlctldWithlz4Compression(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &backup.CompressionDetails{
+		CompressorEngineName: "lz4",
+	}
+
+	backup.TestBackup(t, backup.Mysqlctld, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+}
+
+func setDefaultCompressionFlag() {
+	*mysqlctl.CompressionEngineName = "pgzip"
+	*mysqlctl.ExternalCompressorCmd = ""
+	*mysqlctl.ExternalCompressorExt = ""
+	*mysqlctl.ExternalDecompressorCmd = ""
 }

@@ -27,7 +27,7 @@ in which case it will not attempt to create keyspaces/schemas/tables, nor will i
 The game is to setup the cluster with a stable version (say `v8.0.0`), take it down (and preserve data), then setup a new cluster with a new version (namely the branch/PR head) and attempt to read the data.
 
 Both executions must force some settings so that both reuse same directories, ports, etc. An invocation will look like:
-go test ./go/test/endtoend/versionupgrade80/upgrade_test.go --keep-data -force-vtdataroot /tmp/vtdataroot/vtroot_10901 --force-port-start 11900 --force-base-tablet-uid 1190
+go test ./go/test/endtoend/versionupgrade80/upgrade_test.go --keep-data --force-vtdataroot /tmp/vtdataroot/vtroot_10901 --force-port-start 11900 --force-base-tablet-uid 1190
 
 */
 
@@ -40,12 +40,11 @@ import (
 	"path"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
@@ -87,9 +86,9 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1"}
 
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
@@ -111,8 +110,6 @@ func TestMain(m *testing.M) {
 		// setting the planner version to 0, so the vtgate binary's default is used
 		clusterInstance.VtGatePlannerVersion = 0
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err

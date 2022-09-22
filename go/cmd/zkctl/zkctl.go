@@ -21,12 +21,18 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/zkctl"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var usage = `
@@ -46,11 +52,9 @@ var (
 )
 
 func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, usage)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Epilogue: func(w io.Writer) { fmt.Fprint(w, usage) },
+	})
 	stdin = bufio.NewReader(os.Stdin)
 }
 
@@ -58,8 +62,11 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	flag.Parse()
-	args := flag.Args()
+	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	_flag.Parse(fs)
+	args := _flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()
@@ -69,7 +76,7 @@ func main() {
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
-	action := flag.Arg(0)
+	action := _flag.Arg(0)
 	var err error
 	switch action {
 	case "init":

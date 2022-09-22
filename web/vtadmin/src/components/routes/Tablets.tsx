@@ -37,6 +37,7 @@ import { ShardLink } from '../links/ShardLink';
 import InfoDropdown from './tablets/InfoDropdown';
 import { isReadOnlyMode } from '../../util/env';
 import { ReadOnlyGate } from '../ReadOnlyGate';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 
 const COLUMNS = ['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname'];
 if (!isReadOnlyMode()) {
@@ -47,12 +48,16 @@ export const Tablets = () => {
     useDocumentTitle('Tablets');
 
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
-    const { data = [] } = useTablets();
-    const { data: keyspaces = [], ...ksQuery } = useKeyspaces();
+
+    const tabletsQuery = useTablets();
+    const keyspacesQuery = useKeyspaces();
+    const queries = [tabletsQuery, keyspacesQuery];
+
+    const { data: keyspaces = [], ...ksQuery } = keyspacesQuery;
 
     const filteredData = React.useMemo(() => {
-        return formatRows(data, keyspaces, filter);
-    }, [data, filter, keyspaces]);
+        return formatRows(tabletsQuery.data, keyspaces, filter);
+    }, [tabletsQuery.data, filter, keyspaces]);
 
     const renderRows = React.useCallback(
         (rows: typeof filteredData) => {
@@ -119,6 +124,7 @@ export const Tablets = () => {
                     value={filter || ''}
                 />
                 <DataTable columns={COLUMNS} data={filteredData} renderRows={renderRows} />
+                <QueryLoadingPlaceholder queries={queries} />
             </ContentContainer>
         </div>
     );

@@ -45,8 +45,8 @@ var (
 	cell                              = "zone1"
 	schemaChangeDirectory             = ""
 	tableName                         = `stress_test`
-	onlineSingletonDDLStrategy        = "online -singleton"
-	onlineSingletonContextDDLStrategy = "online -singleton-context"
+	onlineSingletonDDLStrategy        = "online --singleton"
+	onlineSingletonContextDDLStrategy = "online --singleton-context"
 	createStatement                   = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
@@ -75,6 +75,9 @@ var (
 	dropStatement = `
 		DROP TABLE stress_test
 	`
+	dropNonexistentTableStatement = `
+		DROP TABLE IF EXISTS t_non_existent
+	`
 	multiDropStatements = `DROP TABLE IF EXISTS t1; DROP TABLE IF EXISTS t2; DROP TABLE IF EXISTS t3;`
 )
 
@@ -93,15 +96,17 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1"}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
+			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -120,8 +125,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
@@ -153,21 +156,21 @@ func TestSchemaChange(t *testing.T) {
 	// CREATE
 	t.Run("CREATE TABLE", func(t *testing.T) {
 		// The table does not exist
-		uuid := testOnlineDDLStatement(t, createStatement, onlineSingletonDDLStrategy, "vtgate", "", "", false)
+		uuid := testOnlineDDLStatement(t, createStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
 		// The table existed, so it will now be dropped (renamed)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", "", false)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", onlineSingletonDDLStrategy, "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert CREATE TABLE", func(t *testing.T) {
 		// Table was dropped (renamed) so it will now be restored
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", "", false)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", onlineSingletonDDLStrategy, "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -175,42 +178,43 @@ func TestSchemaChange(t *testing.T) {
 
 	var throttledUUID string
 	t.Run("throttled migration", func(t *testing.T) {
-		throttledUUID = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtgate", "hint_col", "", false)
+		throttledUUID = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtgate", "", "hint_col", "", false)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
 	})
 	t.Run("failed singleton migration, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtgate", "hint_col", "rejected", true)
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtgate", "", "hint_col", "rejected", true)
 		assert.Empty(t, uuid)
 	})
 	t.Run("failed singleton migration, vtctl", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtctl", "hint_col", "rejected", true)
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtctl", "", "hint_col", "rejected", true)
 		assert.Empty(t, uuid)
 	})
 	t.Run("failed revert migration", func(t *testing.T) {
-		uuid := testRevertMigration(t, throttledUUID, "vtgate", "rejected", true)
+		uuid := testRevertMigration(t, throttledUUID, "vtgate", onlineSingletonDDLStrategy, "", "rejected", true)
 		assert.Empty(t, uuid)
 	})
 	t.Run("terminate throttled migration", func(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, throttledUUID, true)
-		time.Sleep(2 * time.Second)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, throttledUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusCancelled)
 	})
 	t.Run("successful gh-ost alter, vtctl", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtctl", "hint_col", "", false)
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost --singleton", "vtctl", "", "hint_col", "", false)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("successful gh-ost alter, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", false)
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost --singleton", "vtgate", "", "hint_col", "", false)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 
 	t.Run("successful online alter, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, onlineSingletonDDLStrategy, "vtgate", "hint_col", "", false)
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, onlineSingletonDDLStrategy, "vtgate", "", "hint_col", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
@@ -219,7 +223,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("revert ALTER TABLE, vttablet", func(t *testing.T) {
 		// The table existed, so it will now be dropped (renamed)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vttablet", "", false)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtctl", onlineSingletonDDLStrategy, "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -228,7 +232,7 @@ func TestSchemaChange(t *testing.T) {
 	var throttledUUIDs []string
 	// singleton-context
 	t.Run("throttled migrations, singleton-context", func(t *testing.T) {
-		uuidList := testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost -singleton-context --max-load=Threads_running=1", "vtctl", "hint_col", "", false)
+		uuidList := testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost --singleton-context --max-load=Threads_running=1", "vtctl", "", "hint_col", "", false)
 		throttledUUIDs = strings.Split(uuidList, "\n")
 		assert.Equal(t, 3, len(throttledUUIDs))
 		for _, uuid := range throttledUUIDs {
@@ -236,7 +240,7 @@ func TestSchemaChange(t *testing.T) {
 		}
 	})
 	t.Run("failed migrations, singleton-context", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost -singleton-context --max-load=Threads_running=1", "vtctl", "hint_col", "rejected", false)
+		_ = testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost --singleton-context --max-load=Threads_running=1", "vtctl", "", "hint_col", "rejected", false)
 	})
 	t.Run("terminate throttled migrations", func(t *testing.T) {
 		for _, uuid := range throttledUUIDs {
@@ -251,7 +255,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 
 	t.Run("successful multiple statement, singleton-context, vtctl", func(t *testing.T) {
-		uuidList := testOnlineDDLStatement(t, multiDropStatements, onlineSingletonContextDDLStrategy, "vtctl", "", "", false)
+		uuidList := testOnlineDDLStatement(t, multiDropStatements, onlineSingletonContextDDLStrategy, "vtctl", "", "", "", false)
 		uuidSlice := strings.Split(uuidList, "\n")
 		assert.Equal(t, 3, len(uuidSlice))
 		for _, uuid := range uuidSlice {
@@ -263,34 +267,59 @@ func TestSchemaChange(t *testing.T) {
 	//DROP
 
 	t.Run("online DROP TABLE", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, dropStatement, onlineSingletonDDLStrategy, "vtgate", "", "", false)
+		uuid := testOnlineDDLStatement(t, dropStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert DROP TABLE", func(t *testing.T) {
 		// This will recreate the table (well, actually, rename it back into place)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vttablet", "", false)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vttablet", onlineSingletonDDLStrategy, "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 
-	// Last two tests (we run an incomplete migration)
-	t.Run("submit successful migration, no wait, vtgate", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", true)
+	t.Run("fail concurrent singleton, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess --postpone-completion --singleton", "vtgate", "", "hint_col", "", true)
+		uuids = append(uuids, uuid)
+		_ = testOnlineDDLStatement(t, dropNonexistentTableStatement, "vitess --singleton", "vtgate", "", "hint_col", "rejected", true)
+		onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 	})
-	t.Run("fail submit migration, no wait, vtgate", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "rejected", true)
+	t.Run("fail concurrent singleton-context with revert", func(t *testing.T) {
+		revertUUID := testRevertMigration(t, uuids[len(uuids)-1], "vtctl", "vitess --allow-concurrent --postpone-completion --singleton-context", "rev:ctx", "", false)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusRunning)
+		// revert is running
+		_ = testOnlineDDLStatement(t, dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "rejected", true)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
+	})
+	t.Run("success concurrent singleton-context with no-context revert", func(t *testing.T) {
+		revertUUID := testRevertMigration(t, uuids[len(uuids)-1], "vtctl", "vitess --allow-concurrent --postpone-completion", "rev:ctx", "", false)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusRunning)
+		// revert is running but has no --singleton-context. Our next migration should be able to run.
+		uuid := testOnlineDDLStatement(t, dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) (uuid string) {
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, migrationContext string, expectHint string, expectError string, skipWait bool) (uuid string) {
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	require.NoError(t, err)
 
 	if executeStrategy == "vtgate" {
+		assert.Empty(t, migrationContext, "explicit migration context not supported in vtgate. Test via vtctl")
 		result := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, expectError)
 		if result != nil {
 			row := result.Named().Row()
@@ -299,7 +328,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, MigrationContext: migrationContext})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output
@@ -324,10 +353,11 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 }
 
 // testRevertMigration reverts a given migration
-func testRevertMigration(t *testing.T, revertUUID string, executeStrategy string, expectError string, skipWait bool) (uuid string) {
+func testRevertMigration(t *testing.T, revertUUID string, executeStrategy string, ddlStrategy string, migrationContext string, expectError string, skipWait bool) (uuid string) {
 	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", revertUUID)
 	if executeStrategy == "vtgate" {
-		result := onlineddl.VtgateExecDDL(t, &vtParams, onlineSingletonDDLStrategy, revertQuery, expectError)
+		assert.Empty(t, migrationContext, "explicit migration context not supported in vtgate. Test via vtctl")
+		result := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, revertQuery, expectError)
 		if result != nil {
 			row := result.Named().Row()
 			if row != nil {
@@ -335,7 +365,7 @@ func testRevertMigration(t *testing.T, revertUUID string, executeStrategy string
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: onlineSingletonDDLStrategy, SkipPreflight: true})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, MigrationContext: migrationContext})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output

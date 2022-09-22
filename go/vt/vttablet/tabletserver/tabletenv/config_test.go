@@ -20,12 +20,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
-
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/yaml2"
 )
@@ -47,6 +46,10 @@ func TestConfigParse(t *testing.T) {
 			IdleTimeoutSeconds: 20,
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
+		},
+		RowStreamer: RowStreamerConfig{
+			MaxInnoDBTrxHistLen: 1000,
+			MaxMySQLReplLagSecs: 400,
 		},
 	}
 	gotBytes, err := yaml2.Marshal(&cfg)
@@ -70,6 +73,7 @@ func TestConfigParse(t *testing.T) {
 gracePeriods: {}
 healthcheck: {}
 hotRowProtection: {}
+olap: {}
 olapReadPool: {}
 oltp: {}
 oltpReadPool:
@@ -79,6 +83,9 @@ oltpReadPool:
   size: 16
   timeoutSeconds: 10
 replicationTracker: {}
+rowStreamer:
+  maxInnoDBTrxHistLen: 1000
+  maxMySQLReplLagSecs: 400
 txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
@@ -124,6 +131,8 @@ hotRowProtection:
   maxQueueSize: 20
   mode: disable
 messagePostponeParallelism: 4
+olap:
+  txTimeoutSeconds: 30
 olapReadPool:
   idleTimeoutSeconds: 1800
   size: 200
@@ -141,8 +150,12 @@ queryCacheSize: 5000
 replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
+rowStreamer:
+  maxInnoDBTrxHistLen: 1000000
+  maxMySQLReplLagSecs: 43200
 schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
+signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
   idleTimeoutSeconds: 1800
@@ -154,8 +167,8 @@ txPool:
 }
 
 func TestClone(t *testing.T) {
-	*queryLogHandler = ""
-	*txLogHandler = ""
+	queryLogHandler = ""
+	txLogHandler = ""
 
 	cfg1 := &TabletConfig{
 		OltpReadPool: ConnPoolConfig{
@@ -165,6 +178,10 @@ func TestClone(t *testing.T) {
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
 		},
+		RowStreamer: RowStreamerConfig{
+			MaxInnoDBTrxHistLen: 1000000,
+			MaxMySQLReplLagSecs: 43200,
+		},
 	}
 	cfg2 := cfg1.Clone()
 	assert.Equal(t, cfg1, cfg2)
@@ -173,50 +190,10 @@ func TestClone(t *testing.T) {
 }
 
 func TestFlags(t *testing.T) {
-	want := TabletConfig{
-		OltpReadPool: ConnPoolConfig{
-			Size:               16,
-			IdleTimeoutSeconds: 1800,
-			MaxWaiters:         5000,
-		},
-		OlapReadPool: ConnPoolConfig{
-			Size: 200,
-		},
-		TxPool: ConnPoolConfig{
-			Size:           20,
-			TimeoutSeconds: 1,
-			MaxWaiters:     5000,
-		},
-		Oltp: OltpConfig{
-			QueryTimeoutSeconds: 30,
-			TxTimeoutSeconds:    30,
-			MaxRows:             10000,
-		},
-		HotRowProtection: HotRowProtectionConfig{
-			MaxQueueSize:       20,
-			MaxGlobalQueueSize: 1000,
-			MaxConcurrency:     5,
-		},
-		StreamBufferSize:                        32768,
-		QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
-		QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
-		QueryCacheLFU:                           cache.DefaultConfig.LFU,
-		SchemaReloadIntervalSeconds:             1800,
-		SignalSchemaChangeReloadIntervalSeconds: 5,
-		TrackSchemaVersions:                     false,
-		MessagePostponeParallelism:              4,
-		CacheResultFields:                       true,
-		TxThrottlerConfig:                       "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
-		TxThrottlerHealthCheckCells:             []string{},
-		TransactionLimitConfig: TransactionLimitConfig{
-			TransactionLimitPerUser:     0.4,
-			TransactionLimitByUsername:  true,
-			TransactionLimitByPrincipal: true,
-		},
-		EnforceStrictTransTables: true,
-		EnableOnlineDDL:          true,
-		DB:                       &dbconfigs.DBConfigs{},
-	}
+	fs := pflag.NewFlagSet("TestFlags", pflag.ContinueOnError)
+	registerTabletEnvFlags(fs)
+	want := *NewDefaultConfig()
+	want.DB = &dbconfigs.DBConfigs{}
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
 
@@ -331,5 +308,15 @@ func TestFlags(t *testing.T) {
 	currentConfig.GracePeriods.TransitionSeconds = 0
 	Init()
 	want.GracePeriods.TransitionSeconds = 4
+	assert.Equal(t, want, currentConfig)
+
+	currentConfig.SanitizeLogMessages = false
+	Init()
+	want.SanitizeLogMessages = false
+	assert.Equal(t, want, currentConfig)
+
+	currentConfig.SanitizeLogMessages = true
+	Init()
+	want.SanitizeLogMessages = true
 	assert.Equal(t, want, currentConfig)
 }

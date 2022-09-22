@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,21 +16,19 @@ limitations under the License.
 package primary
 
 import (
-	"encoding/json"
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/json2"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -87,9 +85,9 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--enable_replication_reporter",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -173,13 +171,10 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	require.Nil(t, err)
 
 	// Capture the current TER.
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
 	require.Nil(t, err)
 
-	var streamHealthRes1 querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(result), &streamHealthRes1)
-	require.Nil(t, err)
+	streamHealthRes1 := shrs[0]
 	actualType := streamHealthRes1.GetTarget().GetTabletType()
 	tabletType := topodatapb.TabletType_value["PRIMARY"]
 	got := fmt.Sprintf("%d", actualType)
@@ -200,13 +195,10 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	require.Nil(t, err)
 
 	// Make sure that the TER did not change
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
+	shrs, err = clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
 	require.Nil(t, err)
 
-	var streamHealthRes2 querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(result), &streamHealthRes2)
-	require.Nil(t, err)
+	streamHealthRes2 := shrs[0]
 
 	actualType = streamHealthRes2.GetTarget().GetTabletType()
 	tabletType = topodatapb.TabletType_value["PRIMARY"]

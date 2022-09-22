@@ -17,9 +17,13 @@ limitations under the License.
 package aggregation
 
 import (
+	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,155 +32,15 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks_union"
-	Cell            = "test_union"
-	SchemaSQL       = `create table t3(
-	id5 bigint,
-	id6 bigint,
-	id7 bigint,
-	primary key(id5)
-) Engine=InnoDB;
+	mysqlParams     mysql.ConnParams
+	keyspaceName    = "ks_union"
+	cell            = "test_union"
 
-create table t3_id7_idx(
-    id bigint not null auto_increment,
-	id7 bigint,
-	id6 bigint,
-    primary key(id)
-) Engine=InnoDB;
+	//go:embed schema.sql
+	schemaSQL string
 
-create table aggr_test(
-	id bigint,
-	val1 varchar(16),
-	val2 bigint,
-	primary key(id)
-) Engine=InnoDB;
-
-create table aggr_test_dates(
-	id bigint,
-	val1 datetime default current_timestamp,
-	val2 datetime default current_timestamp,
-	primary key(id)
-) Engine=InnoDB;
-
-create table t7_xxhash(
-	uid varchar(50),
-	phone bigint,
-    msg varchar(100),
-    primary key(uid)
-) Engine=InnoDB;
-
-create table t7_xxhash_idx(
-	phone bigint,
-	keyspace_id varbinary(50),
-	primary key(phone, keyspace_id)
-) Engine=InnoDB;
-`
-
-	VSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    },
-	"unicode_loose_xxhash" : {
-	  "type": "unicode_loose_xxhash"
-    },
-    "t3_id7_vdx": {
-      "type": "lookup_hash",
-      "params": {
-        "table": "t3_id7_idx",
-        "from": "id7",
-        "to": "id6"
-      },
-      "owner": "t3"
-    },
-    "t7_xxhash_vdx": {
-      "type": "consistent_lookup",
-      "params": {
-        "table": "t7_xxhash_idx",
-        "from": "phone",
-        "to": "keyspace_id",
-        "ignore_nulls": "true"
-      },
-      "owner": "t7_xxhash"
-    }
-  },
-  "tables": {
-	"t3": {
-      "column_vindexes": [
-        {
-          "column": "id6",
-          "name": "hash"
-        },
-        {
-          "column": "id7",
-          "name": "t3_id7_vdx"
-        }
-      ]
-    },
-    "t3_id7_idx": {
-      "column_vindexes": [
-        {
-          "column": "id7",
-          "name": "hash"
-        }
-      ]
-    },
-	"aggr_test": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "val1",
-          "type": "VARCHAR"
-        }
-      ]
-    },
-	"aggr_test_dates": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "val1",
-          "type": "DATETIME"
-        },
-        {
-          "name": "val2",
-          "type": "DATETIME"
-        }
-      ]
-    },
-	"t7_xxhash": {
-      "column_vindexes": [
-        {
-          "column": "uid",
-          "name": "unicode_loose_xxhash"
-        },
-        {
-          "column": "phone",
-          "name": "t7_xxhash_vdx"
-        }
-      ]
-    },
-    "t7_xxhash_idx": {
-      "column_vindexes": [
-        {
-          "column": "phone",
-          "name": "unicode_loose_xxhash"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed vschema.json
+	vschema string
 )
 
 func TestMain(m *testing.M) {
@@ -184,7 +48,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -195,18 +59,18 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
+			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "-enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
@@ -217,6 +81,16 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)

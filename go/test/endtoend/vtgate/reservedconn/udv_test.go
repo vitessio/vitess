@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	utils2 "vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/utils"
@@ -55,7 +57,7 @@ func TestSetUDV(t *testing.T) {
 		query: "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */",
 	}, { // This is handled at vtgate.
 		query:        "select @foo, @bar, @baz, @tablet",
-		expectedRows: `[[VARCHAR("abc") INT64(42) DECIMAL(30.5) VARBINARY("foobar")]]`, rowsReturned: 1,
+		expectedRows: `[[VARCHAR("abc") INT64(42) DECIMAL(30.5) VARCHAR("foobar")]]`, rowsReturned: 1,
 	}, { // Cannot really check a specific value for sql_mode as it will differ based on database selected to run these tests.
 		query:        "select @OLD_SQL_MODE = @@SQL_MODE",
 		expectedRows: `[[INT64(1)]]`, rowsReturned: 1,
@@ -106,13 +108,11 @@ func TestSetUDV(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-	_, err = exec(t, conn, "delete from test")
-	require.NoError(t, err)
+	utils2.Exec(t, conn, "delete from test")
 
 	for i, q := range queries {
 		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
-			qr, err := exec(t, conn, q.query)
-			require.NoError(t, err)
+			qr := utils2.Exec(t, conn, q.query)
 			assert.EqualValues(t, q.rowsAffected, qr.RowsAffected, "rows affected wrong for query: %s", q.query)
 			assert.EqualValues(t, q.rowsReturned, len(qr.Rows), "rows returned wrong for query: %s", q.query)
 			if q.expectedRows != "" {
@@ -177,11 +177,10 @@ func TestUserDefinedVariableResolvedAtTablet(t *testing.T) {
 	defer conn.Close()
 
 	// this should set the UDV foo to a value that has to be evaluated by mysqld
-	exec(t, conn, "set @foo = CONCAT('Any','Expression','Is','Valid')")
+	utils2.Exec(t, conn, "set @foo = CONCAT('Any','Expression','Is','Valid')")
 
 	// now getting that value should return the value from the tablet
-	qr, err := exec(t, conn, "select @foo")
-	require.NoError(t, err)
+	qr := utils2.Exec(t, conn, "select @foo")
 	got := fmt.Sprintf("%v", qr.Rows)
-	utils.MustMatch(t, `[[VARBINARY("AnyExpressionIsValid")]]`, got, "didnt match")
+	utils.MustMatch(t, `[[VARCHAR("AnyExpressionIsValid")]]`, got, "didnt match")
 }

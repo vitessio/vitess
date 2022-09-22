@@ -21,15 +21,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -140,7 +138,7 @@ func TestShardedKeyspace(t *testing.T) {
 	_, _ = shard1Primary.VttabletProcess.QueryTablet("insert into vt_select_test (id, msg) values (1, 'test 1')", keyspaceName, true)
 	_, _ = shard2Primary.VttabletProcess.QueryTablet("insert into vt_select_test (id, msg) values (10, 'test 10')", keyspaceName, true)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "--", "--ping-tablets")
 	require.Nil(t, err)
 
 	rows, err := shard1Primary.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
@@ -155,8 +153,12 @@ func TestShardedKeyspace(t *testing.T) {
 
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
 	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "schemas differ on table vt_select_test:\n"+shard1Primary.Alias+": CREATE TABLE"))
-	//log.Info(output)
+	// We should assert that there is a schema difference and that both the shard primaries are involved in it.
+	// However, we cannot assert in which order the two primaries will occur since the underlying function does not guarantee that
+	// We could have an output here like `schemas differ ... shard1Primary ... differs from: shard2Primary ...` or `schemas differ ... shard2Primary ... differs from: shard1Primary ...`
+	assert.Contains(t, output, "schemas differ on table vt_select_test:")
+	assert.Contains(t, output, shard1Primary.Alias+": CREATE TABLE")
+	assert.Contains(t, output, shard2Primary.Alias+": CREATE TABLE")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateVersionShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 	require.Nil(t, err)

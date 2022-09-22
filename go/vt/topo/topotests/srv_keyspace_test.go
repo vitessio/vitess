@@ -17,6 +17,7 @@ limitations under the License.
 package topotests
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"strings"
@@ -24,9 +25,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
@@ -39,23 +37,24 @@ import (
 
 // waitForInitialSrvKeyspace waits for the initial SrvKeyspace to
 // appear, and match the provided srvKeyspace.
-func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel topo.CancelFunc) {
-	ctx := context.Background()
+func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
 	start := time.Now()
+	var err error
 	for {
-		current, changes, cancel = ts.WatchSrvKeyspace(ctx, cell, keyspace)
+		current, changes, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
 		switch {
-		case topo.IsErrType(current.Err, topo.NoNode):
+		case topo.IsErrType(err, topo.NoNode):
 			// hasn't appeared yet
 			if time.Since(start) > 10*time.Second {
 				t.Fatalf("time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
 			continue
-		case current.Err == nil:
+		case err == nil:
 			return
 		default:
-			t.Fatalf("watch failed: %v", current.Err)
+			t.Fatalf("watch failed: %v", err)
 		}
 	}
 }
@@ -67,9 +66,9 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 	ts := memorytopo.NewServer(cell)
 
 	// No SrvKeyspace -> ErrNoNode
-	current, _, _ := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if !topo.IsErrType(current.Err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", current.Err)
+	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
+	if !topo.IsErrType(err, topo.NoNode) {
+		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", err)
 	}
 }
 
@@ -91,28 +90,6 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	current, changes, cancel := waitForInitialSrvKeyspace(t, ts, cell, keyspace)
 	if !proto.Equal(current.Value, wanted) {
 		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
-	}
-
-	// Update the value with good data, wait until we see it
-	wanted.ShardingColumnName = "scn1"
-	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
-	}
-	for {
-		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
-		if wd.Err != nil {
-			t.Fatalf("watch channel unexpectedly got error: %v", wd.Err)
-		}
-		if proto.Equal(wd.Value, wanted) {
-			break
-		}
-		if proto.Equal(wd.Value, &topodatapb.SrvKeyspace{}) {
-			t.Log("got duplicate empty value, skipping.")
-		}
-		t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
 	}
 
 	// Update the value with bad data, wait until error.
@@ -144,9 +121,9 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	cancel()
 
 	// Bad data in topo, setting the watch should now fail.
-	current, _, _ = ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if current.Err == nil || !strings.Contains(current.Err.Error(), "error unpacking initial SrvKeyspace object") {
-		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", current.Err)
+	_, _, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
+	if err == nil || !strings.Contains(err.Error(), "error unpacking initial SrvKeyspace object") {
+		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", err)
 	}
 
 	// Update content, wait until Watch works again
@@ -155,9 +132,9 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 	start := time.Now()
 	for {
-		current, changes, _ = ts.WatchSrvKeyspace(ctx, cell, keyspace)
-		if current.Err != nil {
-			if strings.Contains(current.Err.Error(), "error unpacking initial SrvKeyspace object") {
+		current, changes, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
+		if err != nil {
+			if strings.Contains(err.Error(), "error unpacking initial SrvKeyspace object") {
 				// hasn't changed yet
 				if time.Since(start) > 10*time.Second {
 					t.Fatalf("time out waiting for file to appear")
@@ -202,15 +179,13 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	ts := memorytopo.NewServer(cell)
 
 	// No SrvKeyspace -> ErrNoNode
-	current, _, _ := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if !topo.IsErrType(current.Err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", current.Err)
+	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
+	if !topo.IsErrType(err, topo.NoNode) {
+		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", err)
 	}
 
 	// Create initial value
-	wanted := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "scn2",
-	}
+	wanted := &topodatapb.SrvKeyspace{}
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
 		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
 	}

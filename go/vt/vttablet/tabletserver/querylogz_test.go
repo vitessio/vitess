@@ -36,7 +36,7 @@ import (
 func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	response := httptest.NewRecorder()
-	ch := make(chan interface{}, 1)
+	ch := make(chan any, 1)
 	ch <- "test msg"
 	querylogzHandler(ch, response, req)
 	close(ch)
@@ -87,7 +87,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	}
 	logStats.EndTime = logStats.StartTime.Add(1 * time.Millisecond)
 	response := httptest.NewRecorder()
-	ch := make(chan interface{}, 1)
+	ch := make(chan any, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)
@@ -118,7 +118,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	}
 	logStats.EndTime = logStats.StartTime.Add(20 * time.Millisecond)
 	response = httptest.NewRecorder()
-	ch = make(chan interface{}, 1)
+	ch = make(chan any, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)
@@ -148,7 +148,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td></td>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(500 * time.Millisecond)
-	ch = make(chan interface{}, 1)
+	ch = make(chan any, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)
@@ -156,9 +156,9 @@ func TestQuerylogzHandler(t *testing.T) {
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 
 	// ensure querylogz is not affected by the filter tag
-	*streamlog.QueryLogFilterTag = "XXX_SKIP_ME"
-	defer func() { *streamlog.QueryLogFilterTag = "" }()
-	ch = make(chan interface{}, 1)
+	streamlog.SetQueryLogFilterTag("XXX_SKIP_ME")
+	defer func() { streamlog.SetQueryLogFilterTag("") }()
+	ch = make(chan any, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)

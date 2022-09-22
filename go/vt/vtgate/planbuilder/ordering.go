@@ -86,7 +86,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 	}
 
 	// referenced tracks the keys referenced by the order by clause.
-	referenced := make([]bool, len(oa.eaggr.GroupByKeys))
+	referenced := make([]bool, len(oa.groupByKeys))
 	postSort := false
 	selOrderBy := make(v3OrderBy, 0, len(orderBy))
 	for _, order := range orderBy {
@@ -101,6 +101,12 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 			orderByCol = oa.resultColumns[num].column
 		case *sqlparser.ColName:
 			orderByCol = expr.Metadata.(*column)
+		case *sqlparser.CastExpr:
+			col, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+			}
+			orderByCol = col.Metadata.(*column)
 		case *sqlparser.ConvertExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
@@ -113,7 +119,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 
 		// Match orderByCol against the group by columns.
 		found := false
-		for j, groupBy := range oa.eaggr.GroupByKeys {
+		for j, groupBy := range oa.groupByKeys {
 			if oa.resultColumns[groupBy.KeyCol].column != orderByCol {
 				continue
 			}
@@ -130,7 +136,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 	}
 
 	// Append any unreferenced keys at the end of the order by.
-	for i, groupByKey := range oa.eaggr.GroupByKeys {
+	for i, groupByKey := range oa.groupByKeys {
 		if referenced[i] {
 			continue
 		}

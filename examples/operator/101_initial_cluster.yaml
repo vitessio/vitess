@@ -9,9 +9,11 @@ metadata:
 spec:
   images:
     vtctld: vitess/lite:latest
+    vtadmin: vitess/vtadmin:latest
     vtgate: vitess/lite:latest
     vttablet: vitess/lite:latest
     vtbackup: vitess/lite:latest
+    vtorc: vitess/lite:latest
     mysqld:
       mysql56Compatible: vitess/lite:latest
     mysqldExporter: prom/mysqld-exporter:v0.11.0
@@ -42,10 +44,43 @@ spec:
       requests:
         cpu: 100m
         memory: 128Mi
+  vtadmin:
+    rbac:
+      name: example-cluster-config
+      key: rbac.yaml
+    cells:
+      - zone1
+    apiAddresses:
+      - http://localhost:14001
+    replicas: 1
+    readOnly: false
+    apiResources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    webResources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
 
   keyspaces:
   - name: commerce
+    durabilityPolicy: none
     turndownPolicy: Immediate
+    vitessOrchestrator:
+      configSecret:
+        name: example-cluster-config
+        key: orc_config.json
+      resources:
+        limits:
+          memory: 128Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
     partitionings:
     - equal:
         parts: 1
@@ -61,6 +96,7 @@ spec:
             replicas: 2
             vttablet:
               extraFlags:
+                disable_active_reparents: "true"
                 db_charset: utf8mb4
               resources:
                 limits:
@@ -71,10 +107,10 @@ spec:
             mysqld:
               resources:
                 limits:
-                  memory: 256Mi
+                  memory: 512Mi
                 requests:
                   cpu: 100m
-                  memory: 256Mi
+                  memory: 512Mi
             dataVolumeClaimTemplate:
               accessModes: ["ReadWriteOnce"]
               resources:
@@ -146,7 +182,7 @@ stringData:
     CREATE USER 'vt_app'@'localhost';
     GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
       REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
-      LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+      LOCK TABLES, EXECUTE, REPLICATION CLIENT, CREATE VIEW,
       SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
       ON *.* TO 'vt_app'@'localhost';
 
@@ -179,13 +215,39 @@ stringData:
 
     # User for Orchestrator (https://github.com/openark/orchestrator).
     # TODO: Reenable when the password is randomly generated.
-    #CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
-    #GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
-    #  ON *.* TO 'orc_client_user'@'%';
-    #GRANT SELECT
-    #  ON _vt.* TO 'orc_client_user'@'%';
+    CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
+    GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
+      ON *.* TO 'orc_client_user'@'%';
+    GRANT SELECT
+      ON _vt.* TO 'orc_client_user'@'%';
 
     FLUSH PRIVILEGES;
 
     RESET SLAVE ALL;
     RESET MASTER;
+  rbac.yaml: |
+    rules:
+    - resource: "*"
+      actions:
+        - "get"
+        - "create"
+        - "put"
+        - "ping"
+      subjects: ["*"]
+      clusters: ["*"]
+    - resource: "Shard"
+      actions:
+        - "emergency_reparent_shard"
+        - "planned_reparent_shard"
+      subjects: ["*"]
+      clusters:
+        - "local"
+  orc_config.json: |
+    {
+      "Debug": true,
+      "MySQLTopologyUser": "orc_client_user",
+      "MySQLTopologyPassword": "orc_client_user_password",
+      "MySQLReplicaUser": "vt_repl",
+      "MySQLReplicaPassword": "",
+      "RecoveryPeriodBlockSeconds": 5
+    }

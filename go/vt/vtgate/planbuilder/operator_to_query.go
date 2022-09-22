@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
@@ -31,10 +33,16 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 )
 
+type queryBuilder struct {
+	ctx        *plancontext.PlanningContext
+	sel        sqlparser.SelectStatement
+	tableNames []string
+}
+
 func toSQL(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
-	q.produce()
+	q.sortTables()
 	return q.sel
 }
 
@@ -91,33 +99,49 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	}
 }
 
-func (qb *queryBuilder) produce() {
-	sort.Sort(qb)
+func (qb *queryBuilder) sortTables() {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		sel, isSel := node.(*sqlparser.Select)
+		if !isSel {
+			return true, nil
+		}
+		ts := &tableSorter{
+			sel: sel,
+			tbl: qb.ctx.SemTable,
+		}
+		sort.Sort(ts)
+		return true, nil
+	}, qb.sel)
+
 }
 
-func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints *sqlparser.IndexHints) {
+func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
 	tableExpr := sqlparser.TableName{
-		Name:      sqlparser.NewTableIdent(tableName),
-		Qualifier: sqlparser.NewTableIdent(db),
+		Name:      sqlparser.NewIdentifierCS(tableName),
+		Qualifier: sqlparser.NewIdentifierCS(db),
 	}
 	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints)
 }
 
-func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr, hint *sqlparser.IndexHints) {
+func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr, hints sqlparser.IndexHints) {
 	if qb.sel == nil {
 		qb.sel = &sqlparser.Select{}
 	}
 	sel := qb.sel.(*sqlparser.Select)
-	sel.From = append(sel.From, &sqlparser.AliasedTableExpr{
+	elems := &sqlparser.AliasedTableExpr{
 		Expr:       tblExpr,
 		Partitions: nil,
-		As:         sqlparser.NewTableIdent(alias),
-		Hints:      hint,
+		As:         sqlparser.NewIdentifierCS(alias),
+		Hints:      hints,
 		Columns:    nil,
-	})
+	}
+	err := qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
+	if err != nil {
+		log.Warningf("error in replacing table expression in semtable: %v", err)
+	}
+	sel.From = append(sel.From, elems)
 	qb.sel = sel
 	qb.tableNames = append(qb.tableNames, tableName)
-	qb.tableIDsInFrom = append(qb.tableIDsInFrom, tableID)
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
@@ -146,7 +170,6 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 	sel := qb.sel.(*sqlparser.Select)
 	otherSel := other.sel.(*sqlparser.Select)
 	sel.From = append(sel.From, otherSel.From...)
-	qb.tableIDsInFrom = append(qb.tableIDsInFrom, other.tableIDsInFrom...)
 	sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 
 	var predicate sqlparser.Expr
@@ -154,7 +177,9 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 		predicate = sel.Where.Expr
 	}
 	if otherSel.Where != nil {
-		predicate = sqlparser.AndExpressions(sqlparser.SplitAndExpression(sqlparser.SplitAndExpression(nil, predicate), otherSel.Where.Expr)...)
+		predExprs := sqlparser.SplitAndExpression(nil, predicate)
+		otherExprs := sqlparser.SplitAndExpression(nil, otherSel.Where.Expr)
+		predicate = sqlparser.AndExpressions(append(predExprs, otherExprs...)...)
 	}
 	if predicate != nil {
 		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
@@ -186,15 +211,7 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 			On: onCondition,
 		},
 	}}
-	tableSet := semantics.EmptyTableSet()
-	for _, set := range qb.tableIDsInFrom {
-		tableSet.MergeInPlace(set)
-	}
-	for _, set := range other.tableIDsInFrom {
-		tableSet.MergeInPlace(set)
-	}
 
-	qb.tableIDsInFrom = []semantics.TableSet{tableSet}
 	sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 	var predicate sqlparser.Expr
 	if sel.Where != nil {
@@ -215,7 +232,7 @@ func (qb *queryBuilder) rewriteExprForDerivedTable(expr sqlparser.Expr, dtName s
 			hasTable := qb.hasTable(node.Qualifier.Name.String())
 			if hasTable {
 				node.Qualifier = sqlparser.TableName{
-					Name: sqlparser.NewTableIdent(dtName),
+					Name: sqlparser.NewIdentifierCS(dtName),
 				}
 			}
 		}
@@ -232,28 +249,33 @@ func (qb *queryBuilder) hasTable(tableName string) bool {
 	return false
 }
 
-type queryBuilder struct {
-	ctx            *plancontext.PlanningContext
-	sel            sqlparser.SelectStatement
-	tableIDsInFrom []semantics.TableSet
-	tableNames     []string
+type tableSorter struct {
+	sel *sqlparser.Select
+	tbl *semantics.SemTable
 }
 
 // Len implements the Sort interface
-func (qb *queryBuilder) Len() int {
-	return len(qb.tableIDsInFrom)
+func (ts *tableSorter) Len() int {
+	return len(ts.sel.From)
 }
 
 // Less implements the Sort interface
-func (qb *queryBuilder) Less(i, j int) bool {
-	return qb.tableIDsInFrom[i].TableOffset() < qb.tableIDsInFrom[j].TableOffset()
+func (ts *tableSorter) Less(i, j int) bool {
+	lhs := ts.sel.From[i]
+	rhs := ts.sel.From[j]
+	left, ok := lhs.(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return i < j
+	}
+	right, ok := rhs.(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return i < j
+	}
+
+	return ts.tbl.TableSetFor(left).TableOffset() < ts.tbl.TableSetFor(right).TableOffset()
 }
 
 // Swap implements the Sort interface
-func (qb *queryBuilder) Swap(i, j int) {
-	sel, isSel := qb.sel.(*sqlparser.Select)
-	if isSel {
-		sel.From[i], sel.From[j] = sel.From[j], sel.From[i]
-	}
-	qb.tableIDsInFrom[i], qb.tableIDsInFrom[j] = qb.tableIDsInFrom[j], qb.tableIDsInFrom[i]
+func (ts *tableSorter) Swap(i, j int) {
+	ts.sel.From[i], ts.sel.From[j] = ts.sel.From[j], ts.sel.From[i]
 }

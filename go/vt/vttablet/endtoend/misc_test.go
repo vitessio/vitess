@@ -125,7 +125,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err := client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{2, 3, 4}),
+			"list": sqltypes.TestBindVariable([]any{2, 3, 4}),
 		},
 	)
 	if err != nil {
@@ -137,7 +137,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{3, 4}),
+			"list": sqltypes.TestBindVariable([]any{3, 4}),
 		},
 	)
 	if err != nil {
@@ -149,7 +149,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{3}),
+			"list": sqltypes.TestBindVariable([]any{3}),
 		},
 	)
 	if err != nil {
@@ -162,7 +162,7 @@ func TestNocacheListArgs(t *testing.T) {
 	_, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{}),
+			"list": sqltypes.TestBindVariable([]any{}),
 		},
 	)
 	want := "empty list supplied for list (CallerID: dev)"
@@ -302,11 +302,8 @@ func TestBindInSelect(t *testing.T) {
 		"select :bv from dual",
 		map[string]*querypb.BindVariable{"bv": sqltypes.Int64BindVariable(1)},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want := &sqltypes.Result{
+	require.NoError(t, err)
+	want57 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "1",
 			Type:         sqltypes.Int64,
@@ -320,14 +317,15 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !qr.Equal(want) {
-		// MariaDB 10.3 has different behavior.
-		want2 := want.Copy()
-		want2.Fields[0].Type = sqltypes.Int32
-		want2.Rows[0][0] = sqltypes.NewInt32(1)
-		if !qr.Equal(want2) {
-			t.Errorf("Execute:\n%v, want\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want), prettyPrint(*want2))
-		}
+	want80 := want57.Copy()
+	want80.Fields[0].ColumnLength = 2
+
+	wantMaria := want57.Copy()
+	wantMaria.Fields[0].Type = sqltypes.Int32
+	wantMaria.Rows[0][0] = sqltypes.NewInt32(1)
+
+	if !qr.Equal(want57) && !qr.Equal(want80) && !qr.Equal(wantMaria) {
+		t.Errorf("Execute:\n%v, want\n%v,\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want57), prettyPrint(*want80), prettyPrint(*wantMaria))
 	}
 
 	// String bind var.
@@ -339,7 +337,7 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want = &sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "abcd",
 			Type:         sqltypes.VarChar,
@@ -595,8 +593,8 @@ func TestDBAStatements(t *testing.T) {
 
 type testLogger struct {
 	logs        []string
-	savedInfof  func(format string, args ...interface{})
-	savedErrorf func(format string, args ...interface{})
+	savedInfof  func(format string, args ...any)
+	savedErrorf func(format string, args ...any)
 }
 
 func newTestLogger() *testLogger {
@@ -614,13 +612,13 @@ func (tl *testLogger) Close() {
 	log.Errorf = tl.savedErrorf
 }
 
-func (tl *testLogger) recordInfof(format string, args ...interface{}) {
+func (tl *testLogger) recordInfof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedInfof(msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...interface{}) {
+func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedErrorf(msg)
@@ -657,7 +655,7 @@ func TestLogTruncation(t *testing.T) {
 	}
 
 	// Test that the data too long error is truncated once the option is set
-	*sqlparser.TruncateErrLen = 30
+	sqlparser.SetTruncateErrLen(30)
 	_, err = client.Execute(
 		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
@@ -675,7 +673,7 @@ func TestLogTruncation(t *testing.T) {
 	}
 
 	// Test that trailing comments are preserved data too long error is truncated once the option is set
-	*sqlparser.TruncateErrLen = 30
+	sqlparser.SetTruncateErrLen(30)
 	_, err = client.Execute(
 		"insert into vitess_test values(123, null, :data, null) /* KEEP ME */",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
@@ -906,8 +904,11 @@ func TestSysSchema(t *testing.T) {
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
 
 	// table_name
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+	// This can be either a VARCHAR or a VARBINARY. On Linux and MySQL 8, the
+	// string is tagged with a binary encoding, so it is VARBINARY.
+	// On case-insensitive filesystems, it's a VARCHAR.
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[0][10].String())
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[1][10].String())
 
 	// The field Type and the row value type are not matching and because of this wrong packet is send regarding the data of bigint unsigned to the client on vttestserver.
 	// On, Vitess cluster using protobuf we are doing the row conversion to field type and so the final row type send to client is same as field type.
@@ -915,4 +916,34 @@ func TestSysSchema(t *testing.T) {
 	// The issue is only in MySQL 8.0 , As CI is on MySQL 5.7 need to check with Uint64
 	assert.True(t, qr.Fields[4].Type == sqltypes.Uint64 || qr.Fields[4].Type == sqltypes.Uint32)
 	assert.Equal(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+}
+
+func TestHexAndBitBindVar(t *testing.T) {
+	client := framework.NewClient()
+
+	bv := map[string]*querypb.BindVariable{
+		"vtg1": sqltypes.HexNumBindVariable([]byte("0x9")),
+		"vtg2": sqltypes.HexValBindVariable([]byte("X'09'")),
+	}
+	qr, err := client.Execute("select :vtg1, :vtg2, 0x9, X'09', 0b1001, B'1001'", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = client.Execute("select 1 + :vtg1, 1 + :vtg2, 1 + 0x9, 1 + X'09', 1 + 0b1001, 1 + B'1001'", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10) INT64(10) INT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	bv = map[string]*querypb.BindVariable{
+		"vtg1": sqltypes.BitNumBindVariable([]byte("0b1001")),
+		"vtg2": sqltypes.HexNumBindVariable([]byte("0x9")),
+		"vtg3": sqltypes.BitNumBindVariable([]byte("0b100110101111")),
+		"vtg4": sqltypes.HexNumBindVariable([]byte("0x9af")),
+	}
+	qr, err = client.Execute("select :vtg1, :vtg2, :vtg3, :vtg4", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\t\xaf") VARBINARY("\t\xaf")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = client.Execute("select 1 + :vtg1, 1 + :vtg2, 1 + :vtg3, 1 + :vtg4", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(10) UINT64(10) INT64(2480) UINT64(2480)]]`, fmt.Sprintf("%v", qr.Rows))
 }

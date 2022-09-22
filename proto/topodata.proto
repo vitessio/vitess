@@ -44,21 +44,6 @@ enum KeyspaceType {
   SNAPSHOT = 1;
 }
 
-// KeyspaceIdType describes the type of the sharding key for a
-// range-based sharded keyspace.
-enum KeyspaceIdType {
-  // UNSET is the default value, when range-based sharding is not used.
-  UNSET = 0;
-
-  // UINT64 is when uint64 value is used.
-  // This is represented as 'unsigned bigint' in mysql
-  UINT64 = 1;
-
-  // BYTES is when an array of bytes is used.
-  // This is represented as 'varbinary' in mysql
-  BYTES = 2;
-}
-
 // TabletAlias is a globally unique tablet identifier.
 message TabletAlias {
   // cell is the cell (or datacenter) the tablet is in
@@ -275,13 +260,11 @@ message Shard {
 
 // A Keyspace contains data about a keyspace.
 message Keyspace {
-  // name of the column used for sharding
-  // empty if the keyspace is not sharded
-  string sharding_column_name = 1;
+  // OBSOLETE string sharding_column_name = 1;
+  reserved 1;
 
-  // type of the column used for sharding
-  // UNSET if the keyspace is not sharded
-  KeyspaceIdType sharding_column_type = 2;
+  // OBSOLETE KeyspaceIdType sharding_column_type = 2;
+  reserved 2;
 
   // OBSOLETE int32 split_shard_count = 3;
   reserved 3;
@@ -316,7 +299,11 @@ message Keyspace {
   // snapshot_time (in UTC) is a property of snapshot
   // keyspaces which tells us what point in time
   // the snapshot is of
-  vttime.Time snapshot_time = 7;  
+  vttime.Time snapshot_time = 7;
+
+  // DurabilityPolicy is the durability policy to be
+  // used for the keyspace.
+  string durability_policy = 8;
 }
 
 // ShardReplication describes the MySQL replication relationships
@@ -331,6 +318,27 @@ message ShardReplication {
   // Note there can be only one Node in this array
   // for a given tablet.
   repeated Node nodes = 1;
+}
+
+// ShardReplicationError describes the error being fixed by
+// ShardReplicationFix.
+message ShardReplicationError {
+  enum Type {
+    // UNKNOWN is not a valid value.
+    UNKNOWN = 0;
+    // NOT_FOUND occurs when a tablet is in the ShardReplication record
+    // but does not exist in the topology.
+    NOT_FOUND = 1;
+    // TOPOLOGY_MISMATCH occurs when a tablet is in the replication graph and
+    // exists in the topology, but at least one of the Keyspace, Shard, or Cell
+    // fields for that tablet does not match the ShardReplication record.
+    TOPOLOGY_MISMATCH = 2;
+  }
+
+  // Type is the category of problem being fixed.
+  Type type = 1;
+  // TabletAlias is the tablet record that has the problem.
+  topodata.TabletAlias tablet_alias = 2;
 }
 
 // ShardReference is used as a pointer from a SrvKeyspace to a Shard
@@ -377,9 +385,14 @@ message SrvKeyspace {
   }
 
   // copied from Keyspace
-  string sharding_column_name = 2;
-  KeyspaceIdType sharding_column_type = 3;
+  // OBSOLETE string sharding_column_name = 2;
+  reserved 2;
+
+  // OBSOLETE KeyspaceIdType sharding_column_type = 3;
+  reserved 3;
+
   repeated ServedFrom served_from = 4;
+
   // OBSOLETE int32 split_shard_count = 5;
   reserved 5;
 }

@@ -89,11 +89,13 @@ func (g *Generator) WriteToFile(out string) {
 	fmt.Fprintf(&file, ")\n\n")
 	g.Buffer.WriteTo(&file)
 
+	var stderr bytes.Buffer
 	gofmt := exec.Command("gofmt", "-s")
 	gofmt.Stdin = &file
 	gofmt.Stdout = &fmtfile
+	gofmt.Stderr = &stderr
 	if err := gofmt.Run(); err != nil {
-		g.Fail(fmt.Sprintf("failed to format generated code: %v", err))
+		g.Fail(fmt.Sprintf("failed to format generated code: %v\n%s", err, stderr.Bytes()))
 	}
 
 	if err := os.WriteFile(out, fmtfile.Bytes(), 0644); err != nil {
@@ -108,7 +110,7 @@ func (g *Generator) Fail(err string) {
 	os.Exit(1)
 }
 
-func (g *Generator) printArray(iface interface{}) {
+func (g *Generator) printArray(iface any) {
 	switch ary := iface.(type) {
 	case Array8:
 		g.WriteString("[...]uint8{")
@@ -156,7 +158,7 @@ func (g *Generator) UsePackage(pkg Package) {
 	g.imported[pkg] = false
 }
 
-func (g *Generator) printAtom(v interface{}) {
+func (g *Generator) printAtom(v any) {
 	switch v := v.(type) {
 	case string:
 		g.WriteString(v)
@@ -199,7 +201,7 @@ func (pkg Package) Name() string {
 	return path.Base(string(pkg))
 }
 
-func (g *Generator) P(str ...interface{}) {
+func (g *Generator) P(str ...any) {
 	for _, v := range str {
 		g.printAtom(v)
 	}

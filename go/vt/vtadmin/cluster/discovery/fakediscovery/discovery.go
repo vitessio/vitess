@@ -20,6 +20,7 @@ package fakediscovery
 import (
 	"context"
 	"math/rand"
+	"sync"
 
 	"github.com/stretchr/testify/assert"
 
@@ -44,6 +45,8 @@ type gates struct {
 type Fake struct {
 	gates   *gates
 	vtctlds *vtctlds
+
+	m sync.Mutex
 }
 
 // New returns a new fake.
@@ -60,11 +63,29 @@ func New() *Fake {
 	}
 }
 
+func (d *Fake) Clear() {
+	d.m.Lock()
+	defer d.m.Unlock()
+
+	d.gates = &gates{
+		byTag:  map[string][]*vtadminpb.VTGate{},
+		byName: map[string]*vtadminpb.VTGate{},
+	}
+
+	d.vtctlds = &vtctlds{
+		byTag:  map[string][]*vtadminpb.Vtctld{},
+		byName: map[string]*vtadminpb.Vtctld{},
+	}
+}
+
 // AddTaggedGates adds the given gates to the discovery fake, associating each
 // gate with each tag. To tag different gates with multiple tags, call multiple
 // times with the same gates but different tag slices. Gates are uniquely
 // identified by hostname.
 func (d *Fake) AddTaggedGates(tags []string, gates ...*vtadminpb.VTGate) {
+	d.m.Lock()
+	defer d.m.Unlock()
+
 	for _, tag := range tags {
 		d.gates.byTag[tag] = append(d.gates.byTag[tag], gates...)
 	}
@@ -79,6 +100,9 @@ func (d *Fake) AddTaggedGates(tags []string, gates ...*vtadminpb.VTGate) {
 // multiple times with the same vtctlds but different tag slices. Vtctlds are
 // uniquely identified by hostname.
 func (d *Fake) AddTaggedVtctlds(tags []string, vtctlds ...*vtadminpb.Vtctld) {
+	d.m.Lock()
+	defer d.m.Unlock()
+
 	for _, tag := range tags {
 		d.vtctlds.byTag[tag] = append(d.vtctlds.byTag[tag], vtctlds...)
 	}
@@ -91,12 +115,18 @@ func (d *Fake) AddTaggedVtctlds(tags []string, vtctlds ...*vtadminpb.Vtctld) {
 // SetGatesError instructs whether the fake should return an error on gate
 // discovery functions.
 func (d *Fake) SetGatesError(shouldErr bool) {
+	d.m.Lock()
+	defer d.m.Unlock()
+
 	d.gates.shouldErr = shouldErr
 }
 
 // SetVtctldsError instructs whether the fake should return an error on vtctld
 // discovery functions.
 func (d *Fake) SetVtctldsError(shouldErr bool) {
+	d.m.Lock()
+	defer d.m.Unlock()
+
 	d.vtctlds.shouldErr = shouldErr
 }
 
@@ -104,6 +134,9 @@ var _ discovery.Discovery = (*Fake)(nil)
 
 // DiscoverVTGates is part of the discovery.Discovery interface.
 func (d *Fake) DiscoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
+	d.m.Lock()
+	defer d.m.Unlock()
+
 	if d.gates.shouldErr {
 		return nil, assert.AnError
 	}
@@ -169,8 +202,26 @@ func (d *Fake) DiscoverVTGateAddr(ctx context.Context, tags []string) (string, e
 	return gate.Hostname, nil
 }
 
+// DiscoverVTGateAddrs is part of the discovery.Discovery interface.
+func (d *Fake) DiscoverVTGateAddrs(ctx context.Context, tags []string) ([]string, error) {
+	gates, err := d.DiscoverVTGates(ctx, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]string, len(gates))
+	for i, gate := range gates {
+		addrs[i] = gate.Hostname
+	}
+
+	return addrs, nil
+}
+
 // DiscoverVtctlds is part of the discover.Discovery interface.
 func (d *Fake) DiscoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+	d.m.Lock()
+	defer d.m.Unlock()
+
 	if d.vtctlds.shouldErr {
 		return nil, assert.AnError
 	}
@@ -220,6 +271,21 @@ func (d *Fake) DiscoverVtctldAddr(ctx context.Context, tags []string) (string, e
 	}
 
 	return vtctld.Hostname, nil
+}
+
+// DiscoverVtctldAddrs is part of the discovery.Discovery interface.
+func (d *Fake) DiscoverVtctldAddrs(ctx context.Context, tags []string) ([]string, error) {
+	vtctlds, err := d.DiscoverVtctlds(ctx, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]string, len(vtctlds))
+	for i, vtctld := range vtctlds {
+		addrs[i] = vtctld.Hostname
+	}
+
+	return addrs, nil
 }
 
 // DiscoverVtctld is part of the discover.Discovery interface.

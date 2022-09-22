@@ -66,17 +66,24 @@ type vplayer struct {
 	canAcceptStmtEvents bool
 
 	phase string
+
+	throttlerAppName string
 }
 
 // newVPlayer creates a new vplayer. Parameters:
 // vreplicator: the outer replicator. It's used for common functions like setState.
-//   Also used to access the engine for registering journal events.
+//
+//	Also used to access the engine for registering journal events.
+//
 // settings: current settings read from _vt.vreplication.
 // copyState: if set, contains the list of tables yet to be copied, or in the process
-//   of being copied. If copyState is non-nil, the plans generated make sure that
-//   replication is only applied to parts that have been copied so far.
+//
+//	of being copied. If copyState is non-nil, the plans generated make sure that
+//	replication is only applied to parts that have been copied so far.
+//
 // pausePos: if set, replication will stop at that position without updating the state to "Stopped".
-//   This is used by the fastForward function during copying.
+//
+//	This is used by the fastForward function during copying.
 func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position, phase string) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
@@ -84,15 +91,16 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		saveStop = false
 	}
 	return &vplayer{
-		vr:            vr,
-		startPos:      settings.StartPos,
-		pos:           settings.StartPos,
-		stopPos:       settings.StopPos,
-		saveStop:      saveStop,
-		copyState:     copyState,
-		timeLastSaved: time.Now(),
-		tablePlans:    make(map[string]*TablePlan),
-		phase:         phase,
+		vr:               vr,
+		startPos:         settings.StartPos,
+		pos:              settings.StartPos,
+		stopPos:          settings.StopPos,
+		saveStop:         saveStop,
+		copyState:        copyState,
+		timeLastSaved:    time.Now(),
+		tablePlans:       make(map[string]*TablePlan),
+		phase:            phase,
+		throttlerAppName: vr.throttlerAppName(),
 	}
 }
 
@@ -106,7 +114,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
+	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -141,7 +149,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, *relayLogMaxItems, *relayLogMaxSize)
+	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -232,7 +240,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.numAccumulatedHeartbeats = 0
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), *vreplicationStoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
@@ -251,19 +259,8 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) updateHeartbeat(tm int64) error {
-	update, err := binlogplayer.GenerateUpdateHeartbeat(vp.vr.id, tm)
-	if err != nil {
-		return err
-	}
-	if _, err := withDDL.Exec(vp.vr.vre.ctx, update, vp.vr.dbClient.ExecuteFetch, vp.vr.dbClient.ExecuteFetch); err != nil {
-		return fmt.Errorf("error %v updating time", err)
-	}
-	return nil
-}
-
 func (vp *vplayer) mustUpdateHeartbeat() bool {
-	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
+	return vp.numAccumulatedHeartbeats >= vreplicationHeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
 
@@ -274,35 +271,35 @@ func (vp *vplayer) recordHeartbeat() error {
 		return nil
 	}
 	vp.numAccumulatedHeartbeats = 0
-	return vp.updateHeartbeat(tm)
+	return vp.vr.updateHeartbeatTime(tm)
 }
 
 // applyEvents is the main thread that applies the events. It has the following use
 // cases to take into account:
-// * Normal transaction that has row mutations. In this case, the transaction
-//   is committed along with an update of the position.
-// * DDL event: the action depends on the OnDDL setting.
-// * OTHER event: the current position of the event is saved.
-// * JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
-//   of the engine, and terminate.
-// * HEARTBEAT: update ReplicationLagSeconds.
-// * Empty transaction: The event is remembered as an unsavedEvent. If no commits
-//   happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
-//   is committed (updatePos).
-// * An empty transaction: Empty transactions are necessary because the current
-//   position of that transaction may be the stop position. If so, we have to record it.
-//   If not significant, we should avoid saving these empty transactions individually
-//   because they can cause unnecessary churn and binlog bloat. We should
-//   also not go for too long without saving because we should not fall way behind
-//   on the current replication position. Additionally, WaitForPos or other external
-//   agents could be waiting on that specific position by watching the vreplication
-//   record.
-// * A group of transactions: Combine them into a single transaction.
-// * Partial transaction: Replay the events received so far and refetch from relay log
-//   for more.
-// * A combination of any of the above: The trickier case is the one where a group
-//   of transactions come in, with the last one being partial. In this case, all transactions
-//   up to the last one have to be committed, and the final one must be partially applied.
+//   - Normal transaction that has row mutations. In this case, the transaction
+//     is committed along with an update of the position.
+//   - DDL event: the action depends on the OnDDL setting.
+//   - OTHER event: the current position of the event is saved.
+//   - JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
+//     of the engine, and terminate.
+//   - HEARTBEAT: update ReplicationLagSeconds.
+//   - Empty transaction: The event is remembered as an unsavedEvent. If no commits
+//     happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
+//     is committed (updatePos).
+//   - An empty transaction: Empty transactions are necessary because the current
+//     position of that transaction may be the stop position. If so, we have to record it.
+//     If not significant, we should avoid saving these empty transactions individually
+//     because they can cause unnecessary churn and binlog bloat. We should
+//     also not go for too long without saving because we should not fall way behind
+//     on the current replication position. Additionally, WaitForPos or other external
+//     agents could be waiting on that specific position by watching the vreplication
+//     record.
+//   - A group of transactions: Combine them into a single transaction.
+//   - Partial transaction: Replay the events received so far and refetch from relay log
+//     for more.
+//   - A combination of any of the above: The trickier case is the one where a group
+//     of transactions come in, with the last one being partial. In this case, all transactions
+//     up to the last one have to be committed, and the final one must be partially applied.
 //
 // Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Eventhough
 // A GTID comes as a separate event, it's not saveable until a subsequent saveable
@@ -335,8 +332,12 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		// check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
+			_ = vp.vr.updateTimeThrottled(VPlayerComponentName)
 			continue
 		}
 
@@ -627,10 +628,14 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
+		if event.Throttled {
+			if err := vp.vr.updateTimeThrottled(VStreamerComponentName); err != nil {
+				return err
+			}
+		}
 		if !vp.vr.dbClient.InTransaction {
 			vp.numAccumulatedHeartbeats++
-			err := vp.recordHeartbeat()
-			if err != nil {
+			if err := vp.recordHeartbeat(); err != nil {
 				return err
 			}
 		}

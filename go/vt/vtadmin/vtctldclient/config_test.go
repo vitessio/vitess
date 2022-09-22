@@ -23,11 +23,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -46,14 +49,18 @@ func TestParse(t *testing.T) {
 	t.Run("no credentials provided", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, err := Parse(nil, nil, []string{})
+		cfg, err := Parse(&vtadminpb.Cluster{}, nil, []string{})
 		require.NoError(t, err)
 
 		expected := &Config{
-			Cluster:         nil,
-			Discovery:       nil,
+			Cluster:         &vtadminpb.Cluster{},
 			Credentials:     nil,
 			CredentialsPath: "",
+			ResolverOptions: &resolver.Options{
+				DiscoveryTimeout:     100 * time.Millisecond,
+				MinDiscoveryInterval: time.Second * 30,
+				BackoffConfig:        backoff.DefaultConfig,
+			},
 		}
 		assert.Equal(t, expected, cfg)
 	})
@@ -88,9 +95,13 @@ func TestParse(t *testing.T) {
 				Cluster: &vtadminpb.Cluster{
 					Name: "testcluster",
 				},
-				Discovery:       nil,
 				Credentials:     creds,
 				CredentialsPath: credsfile.Name(),
+				ResolverOptions: &resolver.Options{
+					DiscoveryTimeout:     100 * time.Millisecond,
+					MinDiscoveryInterval: time.Second * 30,
+					BackoffConfig:        backoff.DefaultConfig,
+				},
 			}
 
 			assert.Equal(t, expected, cfg)

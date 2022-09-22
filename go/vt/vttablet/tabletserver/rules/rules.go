@@ -18,6 +18,7 @@ package rules
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -36,6 +37,10 @@ import (
 )
 
 //-----------------------------------------------
+
+const (
+	bufferedTableRuleName = "buffered_table"
+)
 
 // Rules is used to store and execute rules for the tabletserver.
 type Rules struct {
@@ -122,7 +127,7 @@ func (qrs *Rules) Delete(name string) (qr *Rule) {
 
 // UnmarshalJSON unmarshals Rules.
 func (qrs *Rules) UnmarshalJSON(data []byte) (err error) {
-	var rulesInfo []map[string]interface{}
+	var rulesInfo []map[string]any
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	err = dec.Decode(&rulesInfo)
@@ -156,10 +161,10 @@ func (qrs *Rules) MarshalJSON() ([]byte, error) {
 // FilterByPlan creates a new Rules by prefiltering on the query and planId. This allows
 // us to create query plan specific Rules out of the original Rules. In the new rules,
 // query, plans and tableNames predicates are empty.
-func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *Rules) {
+func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
 	var newrules []*Rule
 	for _, qr := range qrs.rules {
-		if newrule := qr.FilterByPlan(query, planid, tableName); newrule != nil {
+		if newrule := qr.FilterByPlan(query, planid, tableNames); newrule != nil {
 			newrules = append(newrules, newrule)
 		}
 	}
@@ -172,13 +177,13 @@ func (qrs *Rules) GetAction(
 	user string,
 	bindVars map[string]*querypb.BindVariable,
 	marginComments sqlparser.MarginComments,
-) (action Action, desc string) {
+) (action Action, cancelCtx context.Context, desc string) {
 	for _, qr := range qrs.rules {
 		if act := qr.GetAction(ip, user, bindVars, marginComments); act != QRContinue {
-			return act, qr.Description
+			return act, qr.cancelCtx, qr.Description
 		}
 	}
-	return QRContinue, ""
+	return QRContinue, nil, ""
 }
 
 //-----------------------------------------------
@@ -211,6 +216,9 @@ type Rule struct {
 
 	// Action to be performed on trigger
 	act Action
+
+	// a rule can be dynamically cancelled. This function determines whether it is cancelled
+	cancelCtx context.Context
 }
 
 type namedRegexp struct {
@@ -235,6 +243,12 @@ func (nr namedRegexp) Equal(other namedRegexp) bool {
 func NewQueryRule(description, name string, act Action) (qr *Rule) {
 	// We ignore act because there's only one action right now
 	return &Rule{Description: description, Name: name, act: act}
+}
+
+// NewBufferedTableQueryRule creates a new buffer Rule.
+func NewBufferedTableQueryRule(cancelCtx context.Context, tableName string, description string) (qr *Rule) {
+	// We ignore act because there's only one action right now
+	return &Rule{cancelCtx: cancelCtx, Description: description, Name: bufferedTableRuleName, tableNames: []string{tableName}, act: QRBuffer}
 }
 
 // Equal returns true if other is equal to this Rule, otherwise false.
@@ -266,6 +280,7 @@ func (qr *Rule) Copy() (newqr *Rule) {
 		leadingComment:  qr.leadingComment,
 		trailingComment: qr.trailingComment,
 		act:             qr.act,
+		cancelCtx:       qr.cancelCtx,
 	}
 	if qr.plans != nil {
 		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
@@ -391,7 +406,7 @@ func makeExact(pattern string) string {
 // int64    ==, !=, <, >=, >, <=                   whole numbers
 // string   ==, !=, <, >=, >, <=, MATCH, NOMATCH   []byte, string
 // whole numbers can be: int, int8, int16, int32, int64, uint64
-func (qr *Rule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value interface{}) error {
+func (qr *Rule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value any) error {
 	var converted bvcValue
 	if op == QRNoOp {
 		qr.bindVarConds = append(qr.bindVarConds, BindVarCond{name, onAbsent, onMismatch, op, nil})
@@ -436,14 +451,14 @@ Error:
 // The new Rule will contain all the original constraints other
 // than the plan and query. If the plan and query don't match the Rule,
 // then it returns nil.
-func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *Rule) {
+func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNames []string) (newqr *Rule) {
 	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
 	if !planMatch(qr.plans, planid) {
 		return nil
 	}
-	if !tableMatch(qr.tableNames, tableName) {
+	if !tableMatch(qr.tableNames, tableNames) {
 		return nil
 	}
 	newqr = qr.Copy()
@@ -462,6 +477,16 @@ func (qr *Rule) GetAction(
 	bindVars map[string]*querypb.BindVariable,
 	marginComments sqlparser.MarginComments,
 ) Action {
+	if qr.cancelCtx != nil {
+		select {
+		case <-qr.cancelCtx.Done():
+			// rule was cancelled. Nothing else to check
+			return QRContinue
+		default:
+			// rule will be cancelled in the future. Until then, it applies!
+			// proceed to evaluate rules
+		}
+	}
 	if !reMatch(qr.leadingComment.Regexp, marginComments.Leading) {
 		return QRContinue
 	}
@@ -498,12 +523,16 @@ func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
 	return false
 }
 
-func tableMatch(tableNames []string, tableName string) bool {
+func tableMatch(tableNames []string, otherNames []string) bool {
 	if tableNames == nil {
 		return true
 	}
-	for _, t := range tableNames {
-		if t == tableName {
+	otherNamesMap := map[string]bool{}
+	for _, name := range otherNames {
+		otherNamesMap[name] = true
+	}
+	for _, name := range tableNames {
+		if otherNamesMap[name] {
 			return true
 		}
 	}
@@ -533,6 +562,7 @@ const (
 	QRContinue = Action(iota)
 	QRFail
 	QRFailRetry
+	QRBuffer
 )
 
 // MarshalJSON marshals to JSON.
@@ -544,6 +574,8 @@ func (act Action) MarshalJSON() ([]byte, error) {
 		str = "FAIL"
 	case QRFailRetry:
 		str = "FAIL_RETRY"
+	case QRBuffer:
+		str = "BUFFER"
 	default:
 		str = "INVALID"
 	}
@@ -827,11 +859,11 @@ func MapStrOperator(strop string) (op Operator, err error) {
 }
 
 // BuildQueryRule builds a query rule from a ruleInfo.
-func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
+func BuildQueryRule(ruleInfo map[string]any) (qr *Rule, err error) {
 	qr = NewQueryRule("", "", QRFail)
 	for k, v := range ruleInfo {
 		var sv string
-		var lv []interface{}
+		var lv []any
 		var ok bool
 		switch k {
 		case "Name", "Description", "RequestIP", "User", "Query", "Action", "LeadingComment", "TrailingComment":
@@ -840,7 +872,7 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want string for %s", k)
 			}
 		case "Plans", "BindVarConds", "TableNames":
-			lv, ok = v.([]interface{})
+			lv, ok = v.([]any)
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want list for %s", k)
 			}
@@ -914,6 +946,8 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 				qr.act = QRFail
 			case "FAIL_RETRY":
 				qr.act = QRFailRetry
+			case "BUFFER":
+				qr.act = QRBuffer
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid Action %s", sv)
 			}
@@ -922,14 +956,14 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 	return qr, nil
 }
 
-func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch bool, op Operator, value interface{}, err error) {
-	bvcinfo, ok := bvc.(map[string]interface{})
+func buildBindVarCondition(bvc any) (name string, onAbsent, onMismatch bool, op Operator, value any, err error) {
+	bvcinfo, ok := bvc.(map[string]any)
 	if !ok {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want json object for bind var conditions")
 		return
 	}
 
-	var v interface{}
+	var v any
 	v, ok = bvcinfo["Name"]
 	if !ok {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Name missing in BindVarConds")
@@ -1014,7 +1048,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 	return
 }
 
-func safeEncode(b *bytes.Buffer, prefix string, v interface{}) {
+func safeEncode(b *bytes.Buffer, prefix string, v any) {
 	enc := json.NewEncoder(b)
 	_, _ = b.WriteString(prefix)
 	if err := enc.Encode(v); err != nil {

@@ -22,14 +22,21 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
 )
 
 func TestFindFilesToBackup(t *testing.T) {
-	root, err := os.MkdirTemp("", "backuptest")
-	if err != nil {
-		t.Fatalf("os.TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
+
+	// get the flavor and version to deal with any behavioral differences
+	versionStr, err := GetVersionString()
+	require.NoError(t, err)
+	flavor, version, err := ParseVersionString(versionStr)
+	require.NoError(t, err)
+	features := newCapabilitySet(flavor, version)
 
 	// Initialize the fake mysql root directories
 	innodbDataDir := path.Join(root, "innodb_data")
@@ -45,11 +52,18 @@ func TestFindFilesToBackup(t *testing.T) {
 			t.Fatalf("failed to create directory %v: %v", s, err)
 		}
 	}
+
+	innodbLogFile := "innodb_log_1"
+	if features.hasDynamicRedoLogCapacity() {
+		os.Mkdir(path.Join(innodbLogDir, mysql.DynamicRedoLogSubdir), os.ModePerm)
+		innodbLogFile = path.Join(mysql.DynamicRedoLogSubdir, "#ib_redo1")
+	}
+
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_data_1: %v", err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_log_1: %v", err)
+	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
+		t.Fatalf("failed to write file %s: %v", innodbLogFile, err)
 	}
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file db.opt: %v", err)
@@ -105,7 +119,7 @@ func TestFindFilesToBackup(t *testing.T) {
 		},
 		{
 			Base: "InnoDBLog",
-			Name: "innodb_log_1",
+			Name: innodbLogFile,
 		},
 	}
 	if !reflect.DeepEqual(result, expected) {

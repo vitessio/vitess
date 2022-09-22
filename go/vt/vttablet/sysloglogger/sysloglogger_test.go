@@ -101,7 +101,7 @@ func TestSyslog(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
 	mock := newFakeWriter()
 	writer = mock
-	ch = make(chan interface{}, 10)
+	ch = make(chan any, 10)
 
 	// Start running the plugin loop
 	syncChannel := make(chan bool)
@@ -141,13 +141,13 @@ func TestSyslog(t *testing.T) {
 // when redaction is enabled.
 func TestSyslogRedacted(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
-	*streamlog.RedactDebugUIQueries = true
+	streamlog.SetRedactDebugUIQueries(true)
 	defer func() {
-		*streamlog.RedactDebugUIQueries = false
+		streamlog.SetRedactDebugUIQueries(false)
 	}()
 	mock := newFakeWriter()
 	writer = mock
-	ch = make(chan interface{}, 10)
+	ch = make(chan any, 10)
 
 	// Start running the plugin loop
 	syncChannel := make(chan bool)
@@ -188,7 +188,7 @@ func TestSyslogRedacted(t *testing.T) {
 func TestSyslogWithBadData(t *testing.T) {
 	mock := newFakeWriter()
 	writer = mock
-	ch = make(chan interface{}, 10)
+	ch = make(chan any, 10)
 
 	syncChannel := make(chan bool)
 	go func() {
@@ -231,7 +231,7 @@ func TestSyslogWithInterruptedConnection(t *testing.T) {
 	// This mock will simulate a broken syslog connection when processing every 4th record
 	mock := newFailingFakeWriter()
 	writer = mock
-	ch = make(chan interface{}, 10)
+	ch = make(chan any, 10)
 
 	syncChannel := make(chan bool)
 	go func() {

@@ -16,7 +16,7 @@
 GOLANGCI_LINT=$(command -v golangci-lint >/dev/null 2>&1)
 if [ $? -eq 1 ]; then
   echo "Downloading golangci-lint..."
-  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
+  go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2
 fi
 
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')

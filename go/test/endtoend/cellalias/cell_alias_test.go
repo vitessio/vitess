@@ -22,7 +22,7 @@ Then we add an alias, and these tablets should be routable
 package binlog
 
 import (
-	"encoding/json"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -32,9 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/sharding"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -54,16 +52,15 @@ var (
 					) Engine=InnoDB
 `
 	commonTabletArg = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_replication_reporter",
-		"-serving_state_grace_period", "1s",
-		"-binlog_player_protocol", "grpc",
-		"-enable-autocommit",
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s",
+		"--binlog_player_protocol", "grpc",
 	}
 	vSchema = `
 		{
@@ -242,24 +239,22 @@ func TestAlias(t *testing.T) {
 	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name, shard2.Name}
-	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *localCluster)
-	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *localCluster)
+	cluster.CheckSrvKeyspace(t, cell1, keyspaceName, expectedPartitions, *localCluster)
+	cluster.CheckSrvKeyspace(t, cell2, keyspaceName, expectedPartitions, *localCluster)
 
 	// Adds alias so vtgate can route to replica/rdonly tablets that are not in the same cell, but same alias
-	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias",
-		"-cells", allCells,
+	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias", "--",
+		"--cells", allCells,
 		"region_east_coast")
 	require.NoError(t, err)
-	err = localCluster.VtctlclientProcess.ExecuteCommand("UpdateCellsAlias",
-		"-cells", allCells,
+	err = localCluster.VtctlclientProcess.ExecuteCommand("UpdateCellsAlias", "--",
+		"--cells", allCells,
 		"region_east_coast")
 	require.NoError(t, err)
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "PRIMARY,REPLICA"
-	// Use legacy gateway. There's a separate test for tabletgateway in go/test/endtoend/tabletgateway/cellalias/cell_alias_test.go
-	vtgateInstance.GatewayImplementation = "discoverygateway"
 	err = vtgateInstance.Setup()
 	require.NoError(t, err)
 
@@ -308,8 +303,8 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name, shard2.Name}
-	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *localCluster)
-	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *localCluster)
+	cluster.CheckSrvKeyspace(t, cell1, keyspaceName, expectedPartitions, *localCluster)
+	cluster.CheckSrvKeyspace(t, cell2, keyspaceName, expectedPartitions, *localCluster)
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
@@ -325,8 +320,8 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
 
 	// Adds alias so vtgate can route to replica/rdonly tablets that are not in the same cell, but same alias
-	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias",
-		"-cells", allCells,
+	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias", "--",
+		"--cells", allCells,
 		"region_east_coast")
 	require.NoError(t, err)
 
@@ -340,65 +335,61 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
 	for _, shard := range shards {
 		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 	}
 }
 
 func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int, shouldFail bool) {
-	output, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("VtGateExecute", "-json",
-		"-server", fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
-		"-target", "@"+tabletType,
-		fmt.Sprintf(`select * from %s`, tableName))
+	qr, err := localCluster.ExecOnVTGate(context.Background(),
+		fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
+		"@"+tabletType,
+		fmt.Sprintf(`select * from %s`, tableName), nil, nil,
+	)
 	if shouldFail {
 		require.Error(t, err)
 		return
 	}
-	require.NoError(t, err)
-	var result sqltypes.Result
-
-	err = json.Unmarshal([]byte(output), &result)
-	require.NoError(t, err)
-	assert.Equal(t, len(result.Rows), 3)
+	assert.Equal(t, len(qr.Rows), 3)
 }
 
 func insertInitialValues(t *testing.T) {
-	sharding.ExecuteOnTablet(t,
-		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 1, "msg1", 1),
+	cluster.ExecuteOnTablet(t,
+		fmt.Sprintf(cluster.InsertTabletTemplateKsID, tableName, 1, "msg1", 1),
 		*shard1Primary,
 		keyspaceName,
 		false)
 
-	sharding.ExecuteOnTablet(t,
-		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 2, "msg2", 2),
+	cluster.ExecuteOnTablet(t,
+		fmt.Sprintf(cluster.InsertTabletTemplateKsID, tableName, 2, "msg2", 2),
 		*shard1Primary,
 		keyspaceName,
 		false)
 
-	sharding.ExecuteOnTablet(t,
-		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 4, "msg4", 4),
+	cluster.ExecuteOnTablet(t,
+		fmt.Sprintf(cluster.InsertTabletTemplateKsID, tableName, 4, "msg4", 4),
 		*shard2Primary,
 		keyspaceName,
 		false)
 }
 
 func deleteInitialValues(t *testing.T) {
-	sharding.ExecuteOnTablet(t,
+	cluster.ExecuteOnTablet(t,
 		fmt.Sprintf("delete from %s where id = %v", tableName, 1),
 		*shard1Primary,
 		keyspaceName,
 		false)
 
-	sharding.ExecuteOnTablet(t,
+	cluster.ExecuteOnTablet(t,
 		fmt.Sprintf("delete from %s where id = %v", tableName, 2),
 		*shard1Primary,
 		keyspaceName,
 		false)
 
-	sharding.ExecuteOnTablet(t,
+	cluster.ExecuteOnTablet(t,
 		fmt.Sprintf("delete from %s where id = %v", tableName, 4),
 		*shard2Primary,
 		keyspaceName,

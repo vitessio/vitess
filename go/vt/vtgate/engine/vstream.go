@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -61,13 +62,13 @@ func (v *VStream) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *VStream) TryExecute(_ VCursor, _ map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *VStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for VStream")
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *VStream) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(v.Keyspace.Name, nil, []key.Destination{v.TargetDestination})
+func (v *VStream) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	rss, _, err := vcursor.ResolveDestinations(ctx, v.Keyspace.Name, nil, []key.Destination{v.TargetDestination})
 	if err != nil {
 		return err
 	}
@@ -124,7 +125,7 @@ func (v *VStream) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		return nil
 	}
 
-	return vcursor.VStream(rss, filter, v.Position, send)
+	return vcursor.VStream(ctx, rss, filter, v.Position, send)
 }
 
 // for demo purposes we prefix the row with a column with a single char +/*/- to indicate why the row changed
@@ -153,12 +154,12 @@ func addRowChangeIndicatorColumn(change *binlogdatapb.RowChange, eventFields []*
 }
 
 // GetFields implements the Primitive interface
-func (v *VStream) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (v *VStream) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for VStream")
 }
 
 func (v *VStream) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Table":    v.TableName,
 		"Limit":    v.Limit,
 		"Position": v.Position,

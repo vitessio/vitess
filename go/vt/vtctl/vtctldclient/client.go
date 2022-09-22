@@ -9,9 +9,10 @@ import (
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
-// VtctldClient augments the vtctlservicepb.VtctlClient interface with io.Closer.
 type VtctldClient interface {
 	vtctlservicepb.VtctldClient
+
+	// Close augments the vtctlservicepb.VtctlClient interface with io.Closer.
 	Close() error
 }
 

@@ -22,9 +22,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
-// Generate all the metadata used for collations from the JSON data dumped from MySQL
-//go:generate go run ./tools/makecolldata/
-
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
@@ -189,10 +186,5 @@ func Validate(collation Collation, input []byte) bool {
 // into a byte slice encoded in `dstCollation`'s charset. The resulting byte slice is
 // appended to `dst` and returned.
 func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
-	switch srcCollation.(type) {
-	case *Collation_binary:
-		return charset.ConvertFromBinary(dst, dstCollation.Charset(), src)
-	default:
-		return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
-	}
+	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package normalize
 
 import (
+	_ "embed"
 	"flag"
 	"os"
 	"testing"
@@ -28,26 +29,13 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks_normalize"
-	Cell            = "test_normalize"
-	SchemaSQL       = `
-create table t1(
-  id bigint unsigned not null,
-  charcol char(10),
-  vcharcol varchar(50),
-  bincol binary(50),
-  varbincol varbinary(50),
-  floatcol float,
-  deccol decimal(5,2),
-  bitcol bit,
-  datecol date,
-  enumcol enum('small', 'medium', 'large'),
-  setcol set('a', 'b', 'c'),
-  jsoncol json,
-  geocol geometry,
-  primary key(id)
-) Engine=InnoDB;
-`
+	keyspaceName    = "ks_normalize"
+	cell            = "test_normalize"
+
+	//go:embed schema.sql
+	schemaSQL string
+	//go:embed vschema.json
+	_ string
 )
 
 func TestMain(m *testing.M) {
@@ -55,7 +43,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -66,8 +54,8 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 		clusterInstance.VtTabletExtraArgs = []string{}

@@ -86,6 +86,7 @@ type DBConfigs struct {
 	ServerName                 string        `json:"serverName,omitempty"`
 	ConnectTimeoutMilliseconds int           `json:"connectTimeoutMilliseconds,omitempty"`
 	DBName                     string        `json:"dbName,omitempty"`
+	EnableQueryInfo            bool          `json:"enableQueryInfo,omitempty"`
 
 	App          UserConfig `json:"app,omitempty"`
 	Dba          UserConfig `json:"dba,omitempty"`
@@ -138,6 +139,7 @@ func registerBaseFlags() {
 	flag.StringVar(&GlobalDBConfigs.TLSMinVersion, "db_tls_min_version", "", "Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.")
 	flag.StringVar(&GlobalDBConfigs.ServerName, "db_server_name", "", "server name of the DB we are connecting to.")
 	flag.IntVar(&GlobalDBConfigs.ConnectTimeoutMilliseconds, "db_connect_timeout_ms", 0, "connection timeout to mysqld in milliseconds (0 for no timeout)")
+	flag.BoolVar(&GlobalDBConfigs.EnableQueryInfo, "db_conn_query_info", false, "enable parsing and processing of QUERY_OK info fields")
 }
 
 // The flags will change the global singleton
@@ -368,6 +370,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 			cp.Flavor = dbcfgs.Flavor
 		}
 		cp.ConnectTimeoutMs = uint64(dbcfgs.ConnectTimeoutMilliseconds)
+		cp.EnableQueryInfo = dbcfgs.EnableQueryInfo
 
 		cp.Uname = uc.User
 		cp.Pass = uc.Password
@@ -417,9 +420,10 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 }
 
 // SetDbParams sets the dba and app params
-func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
+func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams, filteredParams mysql.ConnParams) {
 	dbcfgs.dbaParams = dbaParams
 	dbcfgs.appParams = appParams
+	dbcfgs.filteredParams = filteredParams
 }
 
 // NewTestDBConfigs returns a DBConfigs meant for testing.

@@ -140,6 +140,16 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("unexpected ShardReplication: %v", sr)
 	}
 
+	// check ShardReplications is idempotent
+	CopyShardReplications(ctx, fromTS, toTS)
+	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("toTS.GetShardReplication failed: %v", err)
+	}
+	if len(sr.Nodes) != 2 {
+		t.Fatalf("unexpected ShardReplication after second copy: %v", sr)
+	}
+
 	// check tablet copy
 	CopyTablets(ctx, fromTS, toTS)
 	tablets, err := toTS.GetTabletAliasesByCell(ctx, "test_cell")

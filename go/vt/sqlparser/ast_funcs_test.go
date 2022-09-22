@@ -26,51 +26,52 @@ import (
 
 func TestAddQueryHint(t *testing.T) {
 	tcs := []struct {
-		node      Comments
+		comments  Comments
 		queryHint string
 		expected  Comments
 		err       string
 	}{
 		{
-			node:      Comments{},
+			comments:  Comments{},
 			queryHint: "",
-			expected:  Comments{},
+			expected:  nil,
 		},
 		{
-			node:      Comments{},
+			comments:  Comments{},
 			queryHint: "SET_VAR(aa)",
 			expected:  Comments{"/*+ SET_VAR(aa) */"},
 		},
 		{
-			node:      Comments{"/* toto */"},
+			comments:  Comments{"/* toto */"},
 			queryHint: "SET_VAR(aa)",
 			expected:  Comments{"/*+ SET_VAR(aa) */", "/* toto */"},
 		},
 		{
-			node:      Comments{"/* toto */", "/*+ SET_VAR(bb) */"},
+			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) */"},
 			queryHint: "SET_VAR(aa)",
 			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/* toto */"},
 		},
 		{
-			node:      Comments{"/* toto */", "/*+ SET_VAR(bb) "},
+			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) "},
 			queryHint: "SET_VAR(aa)",
 			err:       "Query hint comment is malformed",
 		},
 		{
-			node:      Comments{"/* toto */", "/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) */"},
+			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) */"},
 			queryHint: "SET_VAR(aa)",
 			err:       "Must have only one query hint",
 		},
 		{
-			node:      Comments{"/*+ SET_VAR(bb) */"},
+			comments:  Comments{"/*+ SET_VAR(bb) */"},
 			queryHint: "SET_VAR(bb)",
 			expected:  Comments{"/*+ SET_VAR(bb) */"},
 		},
 	}
 
 	for i, tc := range tcs {
-		t.Run(fmt.Sprintf("%d %s", i, String(tc.expected)), func(t *testing.T) {
-			got, err := tc.node.AddQueryHint(tc.queryHint)
+		comments := tc.comments.Parsed()
+		t.Run(fmt.Sprintf("%d %s", i, String(comments)), func(t *testing.T) {
+			got, err := comments.AddQueryHint(tc.queryHint)
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)
 			} else {

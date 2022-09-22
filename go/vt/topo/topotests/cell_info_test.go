@@ -17,6 +17,7 @@ limitations under the License.
 package topotests
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -24,8 +25,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"

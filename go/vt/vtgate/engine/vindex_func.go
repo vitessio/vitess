@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -88,13 +89,13 @@ func (vf *VindexFunc) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (vf *VindexFunc) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return vf.mapVindex(vcursor, bindVars)
+func (vf *VindexFunc) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return vf.mapVindex(ctx, vcursor, bindVars)
 }
 
 // TryStreamExecute performs a streaming exec.
-func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	r, err := vf.mapVindex(vcursor, bindVars)
+func (vf *VindexFunc) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	r, err := vf.mapVindex(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -105,11 +106,11 @@ func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 }
 
 // GetFields fetches the field info.
-func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vf *VindexFunc) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 
-func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	k, err := env.Evaluate(vf.Value)
 	if err != nil {
@@ -129,7 +130,7 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 		if err != nil {
 			return nil, err
 		}
-		destinations, err := vf.Vindex.Map(vcursor, []sqltypes.Value{value})
+		destinations, err := vf.Vindex.Map(ctx, vcursor, []sqltypes.Value{value})
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +146,7 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 		case key.DestinationKeyspaceID:
 			if len(d) > 0 {
 				if vcursor != nil {
-					resolvedShards, _, err := vcursor.ResolveDestinations(vcursor.GetKeyspace(), nil, []key.Destination{d})
+					resolvedShards, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.Destination{d})
 					if err != nil {
 						return nil, err
 					}
@@ -235,7 +236,7 @@ func (vf *VindexFunc) description() PrimitiveDescription {
 		fields[field.Name] = field.Type.String()
 	}
 
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Fields":  fields,
 		"Columns": vf.Cols,
 		"Value":   evalengine.FormatExpr(vf.Value),

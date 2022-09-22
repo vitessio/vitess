@@ -1,0 +1,108 @@
+# Copyright 2022 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# NOTE: We have to build the Vitess binaries from scratch instead of sharing
+#       a base image because Docker Hub dropped the feature we relied upon to
+#       ensure images contain the right binaries.
+
+# Use a temporary layer for the build stage.
+ARG bootstrap_version=11
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
+
+FROM "${image}" AS builder
+
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
+
+# Re-copy sources from working tree.
+COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+
+# Build and install Vitess in a temporary output directory.
+USER vitess
+RUN make install PREFIX=/vt/install
+
+# Start over and build the final image.
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install keys and dependencies
+RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
+ && yum install -y --setopt=alwaysprompt=no gnupg \
+ && ( gpg --keyserver keyserver.ubuntu.com --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 99DB70FAE1D7CE227FB6488205B555B38483C65D 3A79BD29 A4A9406876FCBD3C456770C88C718D3B5072E1F5 94E279EB8D8F25B21810ADF121EA45AB2F86D6A1 ) \
+ && gpg --export --armor 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A > ${GNUPGHOME}/RPM-GPG-KEY-Percona.1 \
+ && gpg --export --armor 4D1BB29D63D98E422B2113B19334A25F8507EFA5 > ${GNUPGHOME}/RPM-GPG-KEY-Percona.2 \
+ && gpg --export --armor 99DB70FAE1D7CE227FB6488205B555B38483C65D > ${GNUPGHOME}/RPM-GPG-KEY-CentOS-8 \
+ && gpg --export --armor 94E279EB8D8F25B21810ADF121EA45AB2F86D6A1 > ${GNUPGHOME}/RPM-GPG-KEY-EPEL-8 \
+ && gpg --export --armor 3A79BD29 > ${GNUPGHOME}/RPM-GPG-KEY-MySQL.1 \
+ && gpg --export --armor A4A9406876FCBD3C456770C88C718D3B5072E1F5 > ${GNUPGHOME}/RPM-GPG-KEY-MySQL.2 \
+ && rpmkeys --import ${GNUPGHOME}/RPM-GPG-KEY-Percona.1 ${GNUPGHOME}/RPM-GPG-KEY-Percona.2 ${GNUPGHOME}/RPM-GPG-KEY-CentOS-8 ${GNUPGHOME}/RPM-GPG-KEY-MySQL.1 ${GNUPGHOME}/RPM-GPG-KEY-MySQL.2 /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release ${GNUPGHOME}/RPM-GPG-KEY-EPEL-8 \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/mysqlrepo.rpm https://dev.mysql.com/get/mysql80-community-release-el8-1.noarch.rpm \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/perconarepo.rpm https://repo.percona.com/yum/percona-release-latest.noarch.rpm \
+ && rpmkeys --checksig /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm \
+ && rpm -Uvh /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm \
+ && rm -f /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm
+RUN echo H4sICIDAHmICA2ZvbwDVkDFLxEAQhfv9FVfY7o4RhCBsoXJcIXKHwUIOi7m5MVk2yS6zG0//vYlRULTU4rrHvOHN+2ZL5Q4TP6oeO7bX3Od1pcuFXlyNUzVZg7S2yTmmCwDsgzjuDSUyB5SDI2+QzOChcyJBEnwkPOPQZijNuTkrigKmsHUFJ1MeCjUQEqg61tQweVtM0vOrfXItj1eAM0H0DiR2erTgbnOrV5uVvlk+6M+Kinvctby3p0ptqRziHjOnnxz3s/FnKJcxVlkYu/+k4Zcs+AvM8n3+jWW8MBc2NO6FZILUMEsoYQ76UvWI/vAGB/SOZZsCAAA= | base64 -d | gzip -dc > /etc/yum.repos.d/CentOS-Base.repo \
+ && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs --enablerepo c8base --enablerepo c8updates --enablerepo c8extras libev numactl-libs sysstat strace \
+ && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs https://download-ib01.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/g/gperftools-libs-2.7-9.el8.x86_64.rpm https://download-ib01.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/j/jemalloc-5.2.1-2.el8.x86_64.rpm https://download-ib01.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/l/libunwind-1.3.1-3.el8.x86_64.rpm
+RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
+ && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs bzip2 ca-certificates gnupg libaio libcurl \
+    procps-ng rsync wget openssl hostname curl tzdata make \
+# Can't use alwaysprompt=no here, since we need to pick up deps
+#   No way to separate key imports and accept deps separately in yum/dnf
+ && yum install -y --setopt=tsflags=nodocs --enablerepo mysql80-community \
+    mysql-community-client mysql-community-server \
+# Have to use hacks to ignore conflicts on /etc/my.cnf install
+ && mkdir -p /tmp/1 \
+ && /usr/bin/percona-release enable-only pxb-80 \
+ && /usr/bin/percona-release enable pt \
+ && yum install -y --setopt=alwaysprompt=no --downloadonly --downloaddir=/tmp/1 --enablerepo mysql80-community percona-xtrabackup-80 percona-toolkit \
+ && rpm -Uvh --replacefiles /tmp/1/*rpm \
+ && rm -rf /tmp/1 \
+ && yum clean all \
+ && yum clean all --enablerepo mysql80-community \
+ && rm -rf /etc/my.cnf /var/lib/mysql /tmp/gpg /sbin/mysqld-debug
+
+# Set up Vitess user and directory tree.
+RUN groupadd -g 1001 -r vitess && useradd -r -u 1001 -g vitess vitess
+RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
+
+# Set up Vitess environment (just enough to run pre-built Go binaries)
+ENV VTROOT /vt/src/vitess.io/vitess
+ENV VTDATAROOT /vt/vtdataroot
+ENV PATH $VTROOT/bin:$PATH
+ENV MYSQL_FLAVOR MySQL80
+
+# Copy artifacts from builder layer.
+COPY --from=builder --chown=vitess:vitess /vt/install /vt
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/orchestrator /vt/web/orchestrator
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtorc /vt/web/vtorc
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
+
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
+
+# Create mount point for actual data (e.g. MySQL data dir)
+VOLUME /vt/vtdataroot
+USER vitess
+
+LABEL name="Vitess Lite image - MySQL Community Server 8.0" \
+      io.k8s.display-name="Vitess Lite image - MySQL Community Server 8.0" \
+      maintainer="cncf-vitess-maintainers@lists.cncf.io" \
+      vendor="CNCF" \
+      version="13.0.0" \
+      release="1" \
+      summary="Vitess base container image, containing Vitess components along with MySQL Community Server 8.0" \
+      description="Vitess base container image, containing Vitess components along with MySQL Community Server 8.0" \
+      io.k8s.description="Vitess base container image, containing Vitess components along with MySQL Community Server 8.0" \
+      distribution-scope="public" \
+      url="https://vitess.io"

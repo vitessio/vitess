@@ -38,6 +38,12 @@ const (
 	flagIsBinary   = int(querypb.Flag_ISBINARY)
 )
 
+const (
+	TimestampFormat           = "2006-01-02 15:04:05"
+	TimestampFormatPrecision3 = "2006-01-02 15:04:05.000"
+	TimestampFormatPrecision6 = "2006-01-02 15:04:05.000000"
+)
+
 // IsIntegral returns true if querypb.Type is an integral
 // (signed/unsigned) that can be represented using
 // up to 64 binary bits.
@@ -98,24 +104,22 @@ func IsNull(t querypb.Type) bool {
 	return t == Null
 }
 
-// Vitess data types. These are idiomatically
-// named synonyms for the querypb.Type values.
-// Although these constants are interchangeable,
-// they should be treated as different from querypb.Type.
-// Use the synonyms only to refer to the type in Value.
-// For proto variables, use the querypb.Type constants
-// instead.
-// The following conditions are non-overlapping
-// and cover all types: IsSigned(), IsUnsigned(),
-// IsFloat(), IsQuoted(), Null, Decimal, Expression, Bit
-// Also, IsIntegral() == (IsSigned()||IsUnsigned()).
-// TestCategory needs to be updated accordingly if
-// you add a new type.
-// If IsBinary or IsText is true, then IsQuoted is
-// also true. But there are IsQuoted types that are
-// neither binary or text.
-// querypb.Type_TUPLE is not included in this list
-// because it's not a valid Value type.
+// Vitess data types. These are idiomatically named synonyms for the querypb.Type values.
+// Although these constants are interchangeable, they should be treated as different from querypb.Type.
+// Use the synonyms only to refer to the type in Value. For proto variables, use the querypb.Type constants instead.
+// The following is a complete listing of types that match each classification function in this API:
+//
+//	IsSigned(): INT8, INT16, INT24, INT32, INT64
+//	IsFloat(): FLOAT32, FLOAT64
+//	IsUnsigned(): UINT8, UINT16, UINT24, UINT32, UINT64, YEAR
+//	IsIntegral(): INT8, UINT8, INT16, UINT16, INT24, UINT24, INT32, UINT32, INT64, UINT64, YEAR
+//	IsText(): TEXT, VARCHAR, CHAR, HEXNUM, HEXVAL, BITNUM
+//	IsNumber(): INT8, UINT8, INT16, UINT16, INT24, UINT24, INT32, UINT32, INT64, UINT64, FLOAT32, FLOAT64, YEAR, DECIMAL
+//	IsQuoted(): TIMESTAMP, DATE, TIME, DATETIME, TEXT, BLOB, VARCHAR, VARBINARY, CHAR, BINARY, ENUM, SET, GEOMETRY, JSON
+//	IsBinary(): BLOB, VARBINARY, BINARY
+//	IsDate(): TIMESTAMP, DATE, TIME, DATETIME
+//	IsNull(): NULL_TYPE
+//
 // TODO(sougou): provide a categorization function
 // that returns enums, which will allow for cleaner
 // switch statements for those who want to cover types
@@ -155,6 +159,7 @@ const (
 	HexNum     = querypb.Type_HEXNUM
 	HexVal     = querypb.Type_HEXVAL
 	Tuple      = querypb.Type_TUPLE
+	BitNum     = querypb.Type_BITNUM
 )
 
 // bit-shift the mysql flags by two byte so we
@@ -308,6 +313,9 @@ var typeToMySQL = map[querypb.Type]struct {
 	Decimal:   {typ: 246},
 	Text:      {typ: 252},
 	Blob:      {typ: 252, flags: mysqlBinary},
+	BitNum:    {typ: 253, flags: mysqlBinary},
+	HexNum:    {typ: 253, flags: mysqlBinary},
+	HexVal:    {typ: 253, flags: mysqlBinary},
 	VarChar:   {typ: 253},
 	VarBinary: {typ: 253, flags: mysqlBinary},
 	Char:      {typ: 254},

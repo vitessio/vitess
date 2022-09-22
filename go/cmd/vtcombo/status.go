@@ -27,23 +27,23 @@ import (
 
 func addStatusParts(vtg *vtgate.VTGate) {
 	// Override and reparse the template string so we can point tablet server urls to a local path.
-	*discovery.TabletURLTemplateString = "{{.NamedStatusURL}}"
+	discovery.TabletURLTemplateString = "{{.NamedStatusURL}}"
 	discovery.ParseTabletURLTemplateFromFlag()
 
-	servenv.AddStatusPart("Executor", vtgate.ExecutorTemplate, func() interface{} {
+	servenv.AddStatusPart("Executor", vtgate.ExecutorTemplate, func() any {
 		return nil
 	})
-	servenv.AddStatusPart("VSchema", vtgate.VSchemaTemplate, func() interface{} {
+	servenv.AddStatusPart("VSchema", vtgate.VSchemaTemplate, func() any {
 		return vtg.VSchemaStats()
 	})
 	servenv.AddStatusFuncs(srvtopo.StatusFuncs)
-	servenv.AddStatusPart("Topology Cache", srvtopo.TopoTemplate, func() interface{} {
+	servenv.AddStatusPart("Topology Cache", srvtopo.TopoTemplate, func() any {
 		return resilientServer.CacheStatus()
 	})
-	servenv.AddStatusPart("Gateway Status", vtgate.StatusTemplate, func() interface{} {
+	servenv.AddStatusPart("Gateway Status", vtgate.StatusTemplate, func() any {
 		return vtg.GetGatewayCacheStatus()
 	})
-	servenv.AddStatusPart("Health Check Cache", discovery.HealthCheckTemplate, func() interface{} {
+	servenv.AddStatusPart("Health Check Cache", discovery.HealthCheckTemplate, func() any {
 		return vtg.Gateway().TabletsCacheStatus()
 	})
 }

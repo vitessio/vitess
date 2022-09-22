@@ -17,11 +17,11 @@ limitations under the License.
 package trace
 
 import (
-	"flag"
 	"io"
 	"os"
 
 	"github.com/opentracing/opentracing-go"
+	"github.com/spf13/pflag"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
 
@@ -36,14 +36,19 @@ included but nothing Jaeger specific.
 */
 
 var (
-	agentHost    = flag.String("jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
+	agentHost    string
 	samplingType = flagutil.NewOptionalString("const")
 	samplingRate = flagutil.NewOptionalFloat64(0.1)
 )
 
 func init() {
-	flag.Var(samplingType, "tracing-sampling-type", "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
-	flag.Var(samplingRate, "tracing-sampling-rate", "sampling rate for the probabilistic jaeger sampler")
+	// If compiled with plugin_jaeger, ensure that trace.RegisterFlags includes
+	// jaeger tracing flags.
+	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
+		fs.StringVar(&agentHost, "jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
+		fs.Var(samplingType, "tracing-sampling-type", "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
+		fs.Var(samplingRate, "tracing-sampling-rate", "sampling rate for the probabilistic jaeger sampler")
+	})
 }
 
 // newJagerTracerFromEnv will instantiate a tracingService implemented by Jaeger,
@@ -74,8 +79,8 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	}
 
 	// Allow command line args to override environment variables.
-	if *agentHost != "" {
-		cfg.Reporter.LocalAgentHostPort = *agentHost
+	if agentHost != "" {
+		cfg.Reporter.LocalAgentHostPort = agentHost
 	}
 	log.Infof("Tracing to: %v as %v", cfg.Reporter.LocalAgentHostPort, cfg.ServiceName)
 
@@ -92,17 +97,17 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	if samplingType.IsSet() {
 		cfg.Sampler.Type = samplingType.Get()
 	} else if cfg.Sampler.Type == "" {
-		log.Infof("-tracing-sampler-type was not set, and JAEGER_SAMPLER_TYPE was not set, defaulting to const sampler")
+		log.Infof("--tracing-sampler-type was not set, and JAEGER_SAMPLER_TYPE was not set, defaulting to const sampler")
 		cfg.Sampler.Type = jaeger.SamplerTypeConst
 	}
 
 	log.Infof("Tracing sampler type %v (param: %v)", cfg.Sampler.Type, cfg.Sampler.Param)
 
 	var opts []config.Option
-	if *enableLogging {
+	if enableLogging {
 		opts = append(opts, config.Logger(&traceLogger{}))
 	} else if cfg.Reporter.LogSpans {
-		log.Warningf("JAEGER_REPORTER_LOG_SPANS was set, but -tracing-enable-logging was not; spans will not be logged")
+		log.Warningf("JAEGER_REPORTER_LOG_SPANS was set, but --tracing-enable-logging was not; spans will not be logged")
 	}
 
 	tracer, closer, err := cfg.NewTracer(opts...)

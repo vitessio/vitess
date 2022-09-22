@@ -1,0 +1,62 @@
+name: check_make_vtadmin_web_proto
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: Check Make VTAdmin Web Proto
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
+    - name: Check out code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          proto_changes:
+            - 'bootstrap.sh'
+            - 'tools/**'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'Makefile'
+            - 'go/vt/proto/**'
+            - 'proto/*.proto'
+            - 'web/vtadmin/src/proto/**'
+            - '.github/workflows/check_make_vtadmin_web_proto.yml'
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+      with:
+        go-version: 1.18.5
+
+    - name: Setup Node
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+      uses: actions/setup-node@v2
+      with:
+        # node-version should match package.json
+        node-version: '16.13.0'
+
+    - name: Install npm dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+      run: npm ci
+      working-directory: ./web/vtadmin
+
+    - name: check_make_vtadmin_web_proto
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+      run: |
+        tools/check_make_vtadmin_web_proto.sh

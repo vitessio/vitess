@@ -76,13 +76,30 @@ func TestDistinct(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
+		var checkCols []CheckCol
+		if len(tc.inputs.Rows) > 0 {
+			for i := range tc.inputs.Rows[0] {
+				collID := collations.Unknown
+				if tc.collations != nil {
+					collID = tc.collations[i]
+				}
+				if sqltypes.IsNumber(tc.inputs.Fields[i].Type) {
+					collID = collations.CollationBinaryID
+				}
+				checkCols = append(checkCols, CheckCol{
+					Col:       i,
+					Collation: collID,
+				})
+			}
+		}
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
 			distinct := &Distinct{
-				Source:        &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
-				ColCollations: tc.collations,
+				Source:    &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
+				CheckCols: checkCols,
+				Truncate:  false,
 			}
 
-			qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
+			qr, err := distinct.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 				got := fmt.Sprintf("%v", qr.Rows)
@@ -94,11 +111,11 @@ func TestDistinct(t *testing.T) {
 		})
 		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
 			distinct := &Distinct{
-				Source:        &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
-				ColCollations: tc.collations,
+				Source:    &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
+				CheckCols: checkCols,
 			}
 
-			result, err := wrapStreamExecute(distinct, &noopVCursor{ctx: context.Background()}, nil, true)
+			result, err := wrapStreamExecute(distinct, &noopVCursor{}, nil, true)
 
 			if tc.expectedError == "" {
 				require.NoError(t, err)
@@ -110,4 +127,38 @@ func TestDistinct(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWeightStringFallBack(t *testing.T) {
+	offsetOne := 1
+	checkCols := []CheckCol{{
+		Col:       0,
+		WsCol:     &offsetOne,
+		Collation: collations.Unknown,
+	}}
+	input := r("myid|weightstring(myid)",
+		"varchar|varbinary",
+		"monkey|monkey",
+		"horse|horse",
+		"horse|horse")
+
+	distinct := &Distinct{
+		Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+		CheckCols: checkCols,
+		Truncate:  true,
+	}
+
+	qr, err := distinct.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+
+	got := fmt.Sprintf("%v", qr.Rows)
+	expected := fmt.Sprintf("%v", r("myid", "varchar", "monkey", "horse").Rows)
+	utils.MustMatch(t, expected, got)
+
+	// the primitive must not change just because one run needed weight strings
+	utils.MustMatch(t, []CheckCol{{
+		Col:       0,
+		WsCol:     &offsetOne,
+		Collation: collations.Unknown,
+	}}, distinct.CheckCols, "checkCols should not be updated")
 }

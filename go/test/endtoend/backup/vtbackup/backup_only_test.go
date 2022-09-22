@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -135,6 +137,11 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
+	// eventhough we change the value of compression it won't effect
+	// decompression since it gets its value from MANIFEST file, created
+	// as part of backup.
+	*mysqlctl.CompressionEngineName = "lz4"
+	defer func() { *mysqlctl.CompressionEngineName = "pgzip" }()
 	// now bring up the other replica, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
@@ -160,14 +167,13 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	removeBackups(t)
 	verifyBackupCount(t, shardKsName, 0)
-
 }
 
 func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 	// Take the back using vtbackup executable
-	extraArgs := []string{"-allow_first_backup", "-db-credentials-file", dbCredentialFile}
+	extraArgs := []string{"--allow_first_backup", "--db-credentials-file", dbCredentialFile}
 	if restartBeforeBackup {
-		extraArgs = append(extraArgs, "-restart_before_backup")
+		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
 	log.Infof("starting backup tablet %s", time.Now())
 	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
@@ -183,8 +189,8 @@ func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string 
 
 func listBackups(shardKsName string) ([]string, error) {
 	backups, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
-		"-backup_storage_implementation", "file",
-		"-file_backup_storage_root",
+		"--backup_storage_implementation", "file",
+		"--file_backup_storage_root",
 		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
 		"ListBackups", shardKsName,
 	)
@@ -207,8 +213,8 @@ func removeBackups(t *testing.T) {
 	require.Nil(t, err)
 	for _, backup := range backups {
 		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
-			"-backup_storage_implementation", "file",
-			"-file_backup_storage_root",
+			"--backup_storage_implementation", "file",
+			"--file_backup_storage_root",
 			path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
 			"RemoveBackup", shardKsName, backup,
 		)
@@ -245,7 +251,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	require.Nil(t, err)
 
 	// Start tablets
-	tablet.VttabletProcess.ExtraArgs = []string{"-db-credentials-file", dbCredentialFile}
+	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true
@@ -255,7 +261,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
 
-	extraArgs := []string{"-db-credentials-file", dbCredentialFile}
+	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
 	// Shutdown Mysql
@@ -302,7 +308,7 @@ func tearDown(t *testing.T, initMysql bool) {
 
 		resetTabletDirectory(t, tablet, initMysql)
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
-		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
+		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
 		require.Nil(t, err)
 	}
 }

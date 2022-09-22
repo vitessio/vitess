@@ -21,20 +21,29 @@ import (
 	"bytes"
 	"encoding/json"
 	"expvar"
-	"flag"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	openTsdbURI = flag.String("opentsdb_uri", "", "URI of opentsdb /api/put method")
-)
+var openTsdbURI string
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&openTsdbURI, "opentsdb_uri", openTsdbURI, "URI of opentsdb /api/put method")
+}
+
+func init() {
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
 
 // dataPoint represents a single OpenTSDB data point.
 type dataPoint struct {
@@ -55,7 +64,7 @@ func sendDataPoints(data []dataPoint) error {
 		return err
 	}
 
-	resp, err := http.Post(*openTsdbURI, "application/json", bytes.NewReader(json))
+	resp, err := http.Post(openTsdbURI, "application/json", bytes.NewReader(json))
 	if err != nil {
 		return err
 	}
@@ -93,7 +102,7 @@ func Init(prefix string) {
 
 // InitWithoutServenv initializes the opentsdb without servenv
 func InitWithoutServenv(prefix string) {
-	if *openTsdbURI == "" {
+	if openTsdbURI == "" {
 		return
 	}
 
@@ -208,6 +217,8 @@ func (dc *dataCollector) addExpVar(kv expvar.KeyValue) {
 		dc.addInt(k, v.F(), nil)
 	case *stats.Gauge:
 		dc.addInt(k, v.Get(), nil)
+	case *stats.GaugeFloat64:
+		dc.addFloat(k, v.Get(), nil)
 	case *stats.GaugeFunc:
 		dc.addInt(k, v.F(), nil)
 	case *stats.CounterDuration:
@@ -247,7 +258,7 @@ func (dc *dataCollector) addExpVar(kv expvar.KeyValue) {
 	default:
 		// Deal with generic expvars by converting them to JSON and pulling out
 		// all the floats. Strings and lists will not be exported to opentsdb.
-		var obj map[string]interface{}
+		var obj map[string]any
 		if err := json.Unmarshal([]byte(v.String()), &obj); err != nil {
 			return
 		}
@@ -274,11 +285,11 @@ func makeLabels(labelNames []string, labelValsCombined string) map[string]string
 }
 
 // addUnrecognizedExpvars recurses into a json object to pull out float64 variables to report.
-func (dc *dataCollector) addUnrecognizedExpvars(prefix string, obj map[string]interface{}) {
+func (dc *dataCollector) addUnrecognizedExpvars(prefix string, obj map[string]any) {
 	for k, v := range obj {
 		prefix := combineMetricName(prefix, k)
 		switch v := v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			dc.addUnrecognizedExpvars(prefix, v)
 		case float64:
 			dc.addFloat(prefix, v, nil)

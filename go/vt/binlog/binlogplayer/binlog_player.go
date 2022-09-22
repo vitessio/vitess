@@ -30,9 +30,9 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
+	"vitess.io/vitess/go/vt/withddl"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"google.golang.org/protobuf/proto"
 
 	"context"
 
@@ -471,12 +471,12 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // writeRecoveryPosition writes the current GTID as the recovery position
 // for the next transaction.
 // It also tries to get the timestamp for the transaction. Two cases:
-// - we have statements, and they start with a SET TIMESTAMP that we
-//   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set ReplicationLagSeconds to now() - transaction_timestamp
-// - otherwise (the statements are probably filtered out), we leave
-//   transaction_timestamp alone (keeping the old value), and we don't
-//   change ReplicationLagSeconds
+//   - we have statements, and they start with a SET TIMESTAMP that we
+//     can parse: then we update transaction_timestamp in vreplication
+//     with it, and set ReplicationLagSeconds to now() - transaction_timestamp
+//   - otherwise (the statements are probably filtered out), we leave
+//     transaction_timestamp alone (keeping the old value), and we don't
+//     change ReplicationLagSeconds
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
@@ -521,7 +521,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // CreateVReplicationTable returns the statements required to create
 // the _vt.vreplication table.
 // id: is an auto-increment column that identifies the stream.
-// workflow: documents the creator/manager of the stream. Example: 'SplitClone'.
+// workflow: documents the creator/manager of the stream. Example: 'MoveTables'.
 // source: contains a string proto representation of binlogpb.BinlogSource.
 // pos: initially, a start position, and is updated to the current position by the binlog player.
 // stop_pos: optional column that specifies the stop position.
@@ -560,23 +560,31 @@ func CreateVReplicationTable() []string {
 // AlterVReplicationTable adds new columns to vreplication table
 var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
-	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
+	"ALTER TABLE _vt.vreplication MODIFY source MEDIUMBLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
 
 	// records the time of the last heartbeat. Heartbeats are only received if the source has no recent events
 	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled BIGINT NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled VARCHAR(255) NOT NULL DEFAULT ''",
 }
 
 // WithDDLInitialQueries contains the queries that:
-// - are to be expected by the mock db client during tests, or
-// - trigger some of the above _vt.vreplication schema changes to take effect
-//   when the binlogplayer starts up
+//   - are to be expected by the mock db client during tests, or
+//   - trigger some of the above _vt.vreplication schema changes to take effect
+//     when the binlogplayer starts up
+//
+// todo: cleanup here. QueryToTriggerWithDDL will be enough to ensure vreplication schema gets created/altered correctly.
+//
+//	So do that explicitly and move queries required into the mock code.
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
 	"SELECT time_heartbeat FROM _vt.vreplication LIMIT 0",
+	withddl.QueryToTriggerWithDDL,
 }
 
 // VRSettings contains the settings of a vreplication table.
@@ -586,12 +594,14 @@ type VRSettings struct {
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
+	WorkflowType      int64
+	WorkflowName      string
 }
 
 // ReadVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
 func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=%v", uid)
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
@@ -600,31 +610,36 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if len(qr.Rows) != 1 {
 		return VRSettings{}, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	vrRow := qr.Rows[0]
+	vrRow := qr.Named().Row()
 
-	maxTPS, err := evalengine.ToInt64(vrRow[2])
+	maxTPS, err := vrRow.ToInt64("max_tps")
 	if err != nil {
-		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
+		return VRSettings{}, fmt.Errorf("failed to parse max_tps column2: %v", err)
 	}
-	maxReplicationLag, err := evalengine.ToInt64(vrRow[3])
+	maxReplicationLag, err := vrRow.ToInt64("max_replication_lag")
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
-	startPos, err := DecodePosition(vrRow[0].ToString())
+	startPos, err := DecodePosition(vrRow.AsString("pos", ""))
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
 	}
-	stopPos, err := mysql.DecodePosition(vrRow[1].ToString())
+	stopPos, err := mysql.DecodePosition(vrRow.AsString("stop_pos", ""))
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
-
+	workflowType, err := vrRow.ToInt64("workflow_type")
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse workflow_type column: %v", err)
+	}
 	return VRSettings{
 		StartPos:          startPos,
 		StopPos:           stopPos,
 		MaxTPS:            maxTPS,
 		MaxReplicationLag: maxReplicationLag,
-		State:             vrRow[4].ToString(),
+		State:             vrRow.AsString("state", ""),
+		WorkflowType:      workflowType,
+		WorkflowName:      vrRow.AsString("workflow", ""),
 	}, nil
 }
 
@@ -671,6 +686,14 @@ func GenerateUpdateHeartbeat(uid uint32, timeUpdated int64) (string, error) {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_heartbeat=%v where id=%v", timeUpdated, timeUpdated, uid), nil
+}
+
+// GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the _vt.vreplication table.
+func GenerateUpdateTimeThrottled(uid uint32, timeThrottledUnix int64, componentThrottled string) (string, error) {
+	if timeThrottledUnix == 0 {
+		return "", fmt.Errorf("timeUpdated cannot be zero")
+	}
+	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
 }
 
 // StartVReplication returns a statement to start the replication.
@@ -775,6 +798,6 @@ type StatsHistoryRecord struct {
 }
 
 // IsDuplicate implements history.Deduplicable
-func (r *StatsHistoryRecord) IsDuplicate(other interface{}) bool {
+func (r *StatsHistoryRecord) IsDuplicate(other any) bool {
 	return false
 }

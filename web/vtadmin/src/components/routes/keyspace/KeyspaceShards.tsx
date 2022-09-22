@@ -32,6 +32,7 @@ import { ShardLink } from '../../links/ShardLink';
 import { getShardSortRange } from '../../../util/keyspaces';
 import { Pip } from '../../pips/Pip';
 import { Tooltip } from '../../tooltip/Tooltip';
+import { QueryLoadingPlaceholder } from '../../placeholders/QueryLoadingPlaceholder';
 
 interface Props {
     keyspace: pb.Keyspace | null | undefined;
@@ -40,7 +41,9 @@ interface Props {
 const TABLE_COLUMNS = ['Shard', 'Primary Serving?', 'Tablets', 'Primary Tablet'];
 
 export const KeyspaceShards = ({ keyspace }: Props) => {
-    const { data: tablets = [], ...tq } = useTablets();
+    const tq = useTablets();
+    const { data: tablets = [] } = tq;
+
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('shardFilter');
 
     const data = useMemo(() => {
@@ -150,6 +153,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
 
     return (
         <div className={style.container}>
+            <QueryLoadingPlaceholder query={tq} />
             <DataFilter
                 autoFocus
                 onChange={(e) => updateFilter(e.target.value)}

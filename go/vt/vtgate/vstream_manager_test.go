@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -33,8 +34,6 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,8 +72,12 @@ func TestVStreamSkew(t *testing.T) {
 		{numEventsPerShard: 4, shard0idx: 1, shard1idx: 0, expectedDelays: 0},
 	}
 	previousDelays := int64(0)
-	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
-		"Number of events that had to wait because the skew across shards was too high")
+	if vstreamSkewDelayCount == nil {
+		// HACK: without a mutex we are not guaranteed that this will avoid the panic caused by a race
+		// between this initialization and the one in vtgate.go
+		vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
+			"Number of events that had to wait because the skew across shards was too high")
+	}
 
 	cell := "aa"
 	for idx, tcase := range tcases {
@@ -873,7 +876,7 @@ func TestResolveVStreamParams(t *testing.T) {
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck(nil)
-	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
+	vsm := newTestVStreamManager(hc, newSandboxForCells([]string{"aa"}), "aa")
 	testcases := []struct {
 		input  *binlogdatapb.VGtid
 		output *binlogdatapb.VGtid

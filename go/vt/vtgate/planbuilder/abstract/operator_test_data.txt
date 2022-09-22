@@ -444,3 +444,35 @@ OuterJoin: {
 	}
 	Predicate: t.id = y.t_id
 }
+
+update tbl set col1 = apa
+Update {
+	table: 	TableSet{0}:tbl
+assignments:
+	col1 = apa
+}
+
+update tbl set col1 = 'apa', col2 = 1337 where id = 12 and name = 'gangal'
+Update {
+	table: 	TableSet{0}:tbl where id = 12 and `name` = 'gangal'
+assignments:
+	col1 = 'apa'
+	col2 = 1337
+}
+
+update user set u = 1 where id = (select id from user_extra where id = 42)
+SubQuery: {
+	SubQueries: [
+	{
+		Type: PulloutValue
+		Query: 	QueryGraph: {
+		Tables:
+			TableSet{1}:user_extra where id = 42
+		}
+	}]
+	Outer: 	Update {
+		table: 	TableSet{0}:`user` where id = (select id from user_extra where id = 42)
+	assignments:
+		u = 1
+	}
+}

@@ -17,29 +17,28 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/faketopo"
-
-	"vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/faketopo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestStateOpenClose(t *testing.T) {
@@ -382,6 +381,69 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 }
 
+/*
+	This test verifies, even if SetServingType returns error we should still publish
+
+the new table type
+*/
+func TestStateChangeTabletTypeWithFailure(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	statsTabletTypeCount.ResetAll()
+	// create TM with replica and put a hook to return error during SetServingType
+	tm := newTestTM(t, ts, 2, "ks", "0")
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	qsc.SetServingTypeError = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "mocking resource exhaustion error ")
+	defer tm.Stop()
+
+	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
+
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  2,
+	}
+
+	// change table type to primary
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
+	errMsg := "Cannot start query service: Code: RESOURCE_EXHAUSTED\nmocking resource exhaustion error \n: mocking resource exhaustion error "
+	require.EqualError(t, err, errMsg)
+
+	ti, err := ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// even though SetServingType failed. It still is expected to publish the new table type
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	assert.NotNil(t, ti.PrimaryTermStartTime)
+	assert.Equal(t, "primary", statsTabletType.Get())
+	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["primary"])
+
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
+	require.EqualError(t, err, errMsg)
+	ti, err = ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// even though SetServingType failed. It still is expected to publish the new table type
+	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+	assert.Nil(t, ti.PrimaryTermStartTime)
+	assert.Equal(t, "replica", statsTabletType.Get())
+	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
+
+	// since the table type is spare, it will exercise reason != "" in UpdateLocked and thus
+	// populate error object differently as compare to above scenarios
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_SPARE, DBActionNone)
+	errMsg = "SetServingType(serving=false) failed: Code: RESOURCE_EXHAUSTED\nmocking resource exhaustion error \n: mocking resource exhaustion error "
+	require.EqualError(t, err, errMsg)
+	ti, err = ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// even though SetServingType failed. It still is expected to publish the new table type
+	assert.Equal(t, topodatapb.TabletType_SPARE, ti.Type)
+	assert.Nil(t, ti.PrimaryTermStartTime)
+	assert.Equal(t, "spare", statsTabletType.Get())
+	assert.Equal(t, 3, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["spare"])
+}
+
 // TestChangeTypeErrorWhileWritingToTopo tests the case where we fail while writing to the topo-server
 func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 	testcases := []struct {
@@ -450,8 +512,8 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 }
 
 func TestPublishStateNew(t *testing.T) {
-	defer func(saved time.Duration) { *publishRetryInterval = saved }(*publishRetryInterval)
-	*publishRetryInterval = 1 * time.Millisecond
+	defer func(saved time.Duration) { publishRetryInterval = saved }(publishRetryInterval)
+	publishRetryInterval = 1 * time.Millisecond
 
 	// This flow doesn't test the failure scenario, which
 	// we can't do using memorytopo, but we do test the retry

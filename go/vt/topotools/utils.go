@@ -84,11 +84,11 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 }
 
 // SortedTabletMap returns two maps:
-// - The replicaMap contains all the non-primary non-scrapped hosts.
-//   This can be used as a list of replicas to fix up for reparenting
-// - The primaryMap contains all the tablets without parents
-//   (scrapped or not). This can be used to special case
-//   the old primary, and any tablet in a weird state, left over, ...
+//   - The replicaMap contains all the non-primary non-scrapped hosts.
+//     This can be used as a list of replicas to fix up for reparenting
+//   - The primaryMap contains all the tablets without parents
+//     (scrapped or not). This can be used to special case
+//     the old primary, and any tablet in a weird state, left over, ...
 func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.TabletInfo, map[string]*topo.TabletInfo) {
 	replicaMap := make(map[string]*topo.TabletInfo)
 	primaryMap := make(map[string]*topo.TabletInfo)
@@ -105,7 +105,7 @@ func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.Ta
 // CopyMapKeys copies keys from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
-func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
+func CopyMapKeys(m any, typeHint any) any {
 	mapVal := reflect.ValueOf(m)
 	keys := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())
 	for _, k := range mapVal.MapKeys() {
@@ -117,7 +117,7 @@ func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 // CopyMapValues copies values from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
-func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
+func CopyMapValues(m any, typeHint any) any {
 	mapVal := reflect.ValueOf(m)
 	vals := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())
 	for _, k := range mapVal.MapKeys() {
@@ -127,8 +127,8 @@ func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
 }
 
 // MapKeys returns an array with th provided map keys.
-func MapKeys(m interface{}) []interface{} {
-	keys := make([]interface{}, 0, 16)
+func MapKeys(m any) []any {
+	keys := make([]any, 0, 16)
 	mapVal := reflect.ValueOf(m)
 	for _, kv := range mapVal.MapKeys() {
 		keys = append(keys, kv.Interface())

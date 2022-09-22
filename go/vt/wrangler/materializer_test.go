@@ -62,7 +62,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "")
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -103,11 +103,11 @@ func TestMissingTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, "")
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, "")
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "")
 	require.NoError(t, err)
 }
 
@@ -163,7 +163,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "")
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, "")
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(env))
 		})
@@ -197,7 +197,7 @@ func TestMoveTablesStopFlags(t *testing.T) {
 		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 		// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
 		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "")
+			"", false, "", false, true, "", false, "")
 		require.NoError(t, err)
 		env.tmc.verifyQueries(t)
 	})
@@ -223,7 +223,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, "")
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -1436,7 +1436,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				},
 			},
 		},
-		err: "vindex 'table' must be <keyspace>.<table>",
+		err: "vindex table name must be in the form <keyspace>.<table>",
 	}, {
 		description: "unique lookup should have only one from column",
 		input: &vschemapb.Keyspace{
@@ -1671,11 +1671,13 @@ func TestExternalizeVindex(t *testing.T) {
 		},
 	}
 	fields := sqltypes.MakeTestFields(
-		"id|state|message",
-		"int64|varbinary|varbinary",
+		"id|state|message|source",
+		"int64|varbinary|varbinary|blob",
 	)
-	running := sqltypes.MakeTestResult(fields, "1|Running|msg")
-	stopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy")
+	sourceStopAfterCopy := `keyspace:"sourceKs",shard:"0",filter:{rules:{match:"owned" filter:"select * from t1 where in_keyrange(col1, 'sourceKs.hash', '-80')"}} stop_after_copy:true`
+	sourceKeepRunningAfterCopy := `keyspace:"sourceKs",shard:"0",filter:{rules:{match:"owned" filter:"select * from t1 where in_keyrange(col1, 'sourceKs.hash', '-80')"}}`
+	running := sqltypes.MakeTestResult(fields, "1|Running|msg|"+sourceKeepRunningAfterCopy)
+	stopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy|"+sourceStopAfterCopy)
 	testcases := []struct {
 		input        string
 		vrResponse   *sqltypes.Result
@@ -1696,11 +1698,11 @@ func TestExternalizeVindex(t *testing.T) {
 		err:   "vindex sourceks.absent not found in vschema",
 	}, {
 		input: "sourceks.bad",
-		err:   "table name in vindex should be of the form keyspace.table: unqualified",
+		err:   "vindex table name must be in the form <keyspace>.<table>. Got: unqualified",
 	}, {
-		input:      "sourceks.owned",
-		vrResponse: running,
-		err:        "is not in Stopped after copy state",
+		input:        "sourceks.owned",
+		vrResponse:   running,
+		expectDelete: true,
 	}, {
 		input:      "sourceks.unowned",
 		vrResponse: stopped,
@@ -1712,7 +1714,7 @@ func TestExternalizeVindex(t *testing.T) {
 			t.Fatal(err)
 		}
 		if tcase.vrResponse != nil {
-			validationQuery := "select id, state, message from _vt.vreplication where workflow='lkp_vdx' and db_name='vt_targetks'"
+			validationQuery := "select id, state, message, source from _vt.vreplication where workflow='lkp_vdx' and db_name='vt_targetks'"
 			env.tmc.expectVRQuery(200, validationQuery, tcase.vrResponse)
 			env.tmc.expectVRQuery(210, validationQuery, tcase.vrResponse)
 		}
@@ -2546,6 +2548,71 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(context.Background(), ms)
 	require.EqualError(t, err, "could not find vindex column c1")
+}
+
+func TestStripForeignKeys(t *testing.T) {
+	tcs := []struct {
+		desc string
+		ddl  string
+
+		hasErr bool
+		newDDL string
+	}{
+		{
+			desc: "has FK constraints",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
+				"`foreign_id` int(11) CHECK (foreign_id>10),\n" +
+				"PRIMARY KEY (`id`),\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"CONSTRAINT `fk_table1_ref_foreign_id` FOREIGN KEY (`foreign_id`) REFERENCES `foreign` (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+
+			newDDL: "create table table1 (\n" +
+				"\tid int(11) not null auto_increment,\n" +
+				"\tforeign_id int(11),\n" +
+				"\tPRIMARY KEY (id),\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tcheck (foreign_id > 10)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+
+			hasErr: false,
+		},
+		{
+			desc: "no FK constraints",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
+				"`foreign_id` int(11) NOT NULL  CHECK (foreign_id>10),\n" +
+				"`user_id` int(11) NOT NULL,\n" +
+				"PRIMARY KEY (`id`),\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"KEY `fk_table1_ref_user_id` (`user_id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+
+			newDDL: "create table table1 (\n" +
+				"\tid int(11) not null auto_increment,\n" +
+				"\tforeign_id int(11) not null,\n" +
+				"\tuser_id int(11) not null,\n" +
+				"\tPRIMARY KEY (id),\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tKEY fk_table1_ref_user_id (user_id),\n" +
+				"\tcheck (foreign_id > 10)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+		},
+	}
+
+	for _, tc := range tcs {
+		newDDL, err := stripTableForeignKeys(tc.ddl)
+		if tc.hasErr != (err != nil) {
+			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
+		}
+
+		if newDDL != tc.newDDL {
+			utils.MustMatch(t, tc.newDDL, newDDL, fmt.Sprintf("newDDL does not match. tc: %+v", tc))
+		}
+	}
 }
 
 func TestStripConstraints(t *testing.T) {

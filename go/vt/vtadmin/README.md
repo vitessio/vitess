@@ -49,7 +49,7 @@ Then, you can run `make build`, and run `./bin/vtadmin` with any flags you need
 
 ### Building and running `vtadmin-web`
 
-Make sure you are using node version 12.x.
+Make sure you are using node version 16.x.
 
 Then, you may run:
 

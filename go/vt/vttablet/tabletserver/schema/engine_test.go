@@ -50,9 +50,7 @@ var mustMatch = utils.MustMatchFn(".Mutex")
 func TestOpenAndReload(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	db.AddQueryPattern(baseShowTablesPattern,
 		&sqltypes.Result{
 			Fields:       mysql.BaseShowTablesFields,
@@ -97,7 +95,6 @@ func TestOpenAndReload(t *testing.T) {
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
-	db.ClearQueryPattern()
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -116,7 +113,7 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
 	})
-	db.AddQuery("select * from test_table_03 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk1",
 			Type: sqltypes.Int32,
@@ -128,12 +125,14 @@ func TestOpenAndReload(t *testing.T) {
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
+
+	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
+
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
 		Rows: [][]sqltypes.Value{
@@ -170,7 +169,7 @@ func TestOpenAndReload(t *testing.T) {
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
 
 	want["test_table_03"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_03"),
+		Name: sqlparser.NewIdentifierCS("test_table_03"),
 		Fields: []*querypb.Field{{
 			Name: "pk1",
 			Type: sqltypes.Int32,
@@ -187,7 +186,7 @@ func TestOpenAndReload(t *testing.T) {
 		AllocatedSize: 256,
 	}
 	want["test_table_04"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_04"),
+		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -217,7 +216,6 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
-	db.ClearQueryPattern()
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -249,9 +247,7 @@ func TestOpenAndReload(t *testing.T) {
 func TestReloadWithSwappedTables(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	db.AddQueryPattern(baseShowTablesPattern,
 		&sqltypes.Result{
 			Fields:       mysql.BaseShowTablesFields,
@@ -283,7 +279,6 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		"int64"),
 		"1427325876",
 	))
-	db.ClearQueryPattern()
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -302,7 +297,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
-	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
@@ -322,7 +317,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 	want["test_table_04"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_04"),
+		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
@@ -342,7 +337,6 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		"int64"),
 		"1427325877",
 	))
-	db.ClearQueryPattern()
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -361,18 +355,20 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
-	db.AddQuery("select * from test_table_03 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
+
+	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
+
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
 		Rows: [][]sqltypes.Value{
@@ -390,7 +386,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	delete(want, "test_table_03")
 	delete(want, "test_table_04")
 	want["test_table_03"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_03"),
+		Name: sqlparser.NewIdentifierCS("test_table_03"),
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
@@ -401,7 +397,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		AllocatedSize: 256,
 	}
 	want["test_table_04"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_04"),
+		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -417,10 +413,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 func TestOpenFailedDueToExecErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-
+	schematest.AddDefaultQueries(db)
 	want := "injected error"
 	db.RejectQueryPattern(baseShowTablesPattern, want)
 	se := newEngine(10, 1*time.Second, 1*time.Second, db)
@@ -433,16 +426,14 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 func TestOpenFailedDueToTableErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table", false, ""),
 		},
 	})
-	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
 		// this will cause NewTable error, as it expects zero rows.
 		Fields: []*querypb.Field{
 			{
@@ -453,6 +444,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			{sqltypes.NewVarBinary("")},
 		},
 	})
+
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
@@ -465,9 +457,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 func TestExportVars(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	se.Open()
 	defer se.Close()
@@ -479,9 +469,7 @@ func TestExportVars(t *testing.T) {
 func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	se.Open()
 	defer se.Close()
@@ -489,6 +477,54 @@ func TestStatsURL(t *testing.T) {
 	request, _ := http.NewRequest("GET", "/debug/schema", nil)
 	response := httptest.NewRecorder()
 	se.handleDebugSchema(response, request)
+}
+
+func TestSchemaEngineCloseTickRace(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQueryPattern(baseShowTablesPattern,
+		&sqltypes.Result{
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 0,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			},
+			SessionStateChanges: "",
+			StatusFlags:         0,
+		})
+	AddFakeInnoDBReadRowsResult(db, 12)
+	// Start the engine with a small reload tick
+	se := newEngine(10, 100*time.Millisecond, 1*time.Second, db)
+	err := se.Open()
+	require.NoError(t, err)
+
+	finished := make(chan bool)
+	go func() {
+		{
+			// Emulate the command of se.Close(), but with a wait in between
+			// to ensure that a reload-tick happens after locking the mutex but before
+			// stopping the ticks
+			se.mu.Lock()
+			// We wait for 200 milliseconds to be sure that the timer tick happens after acquiring the lock
+			// before we call closeLocked function
+			time.Sleep(200 * time.Millisecond)
+			se.closeLocked()
+		}
+		finished <- true
+	}()
+	// Wait until the ticks are stopped or 2 seonds have expired.
+	select {
+	case <-finished:
+		return
+	case <-time.After(2 * time.Second):
+		t.Fatal("Could not stop the ticks after 2 seconds")
+	}
 }
 
 func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, db *fakesqldb.DB) *Engine {
@@ -506,16 +542,16 @@ func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Du
 func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
-	return dbconfigs.NewTestDBConfigs(cp, cp, "")
+	return dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 }
 
 func initialSchema() map[string]*Table {
 	return map[string]*Table{
 		"dual": {
-			Name: sqlparser.NewTableIdent("dual"),
+			Name: sqlparser.NewIdentifierCS("dual"),
 		},
 		"test_table_01": {
-			Name: sqlparser.NewTableIdent("test_table_01"),
+			Name: sqlparser.NewIdentifierCS("test_table_01"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -526,7 +562,7 @@ func initialSchema() map[string]*Table {
 			AllocatedSize: 0x96,
 		},
 		"test_table_02": {
-			Name: sqlparser.NewTableIdent("test_table_02"),
+			Name: sqlparser.NewIdentifierCS("test_table_02"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -537,7 +573,7 @@ func initialSchema() map[string]*Table {
 			AllocatedSize: 0x96,
 		},
 		"test_table_03": {
-			Name: sqlparser.NewTableIdent("test_table_03"),
+			Name: sqlparser.NewIdentifierCS("test_table_03"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -548,7 +584,7 @@ func initialSchema() map[string]*Table {
 			AllocatedSize: 0x96,
 		},
 		"seq": {
-			Name: sqlparser.NewTableIdent("seq"),
+			Name: sqlparser.NewIdentifierCS("seq"),
 			Type: Sequence,
 			Fields: []*querypb.Field{{
 				Name: "id",
@@ -570,7 +606,7 @@ func initialSchema() map[string]*Table {
 			SequenceInfo:  &SequenceInfo{},
 		},
 		"msg": {
-			Name: sqlparser.NewTableIdent("msg"),
+			Name: sqlparser.NewIdentifierCS("msg"),
 			Type: Message,
 			Fields: []*querypb.Field{{
 				Name: "id",

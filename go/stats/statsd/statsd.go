@@ -3,13 +3,13 @@ package statsd
 import (
 	"encoding/json"
 	"expvar"
-	"flag"
 	"fmt"
 	"hash/crc32"
 	"strings"
 	"sync"
 
 	"github.com/DataDog/datadog-go/statsd"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -17,9 +17,19 @@ import (
 )
 
 var (
-	statsdAddress    = flag.String("statsd_address", "", "Address for statsd client")
-	statsdSampleRate = flag.Float64("statsd_sample_rate", 1.0, "")
+	statsdAddress    string
+	statsdSampleRate = 1.0
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&statsdAddress, "statsd_address", statsdAddress, "Address for statsd client")
+	fs.Float64Var(&statsdSampleRate, "statsd_sample_rate", statsdSampleRate, "Sample rate for statsd metrics")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
 
 // StatsBackend implements PullBackend using statsd
 type StatsBackend struct {
@@ -67,11 +77,11 @@ func Init(namespace string) {
 
 // InitWithoutServenv initializes the statsd using the namespace but without servenv
 func InitWithoutServenv(namespace string) {
-	if *statsdAddress == "" {
+	if statsdAddress == "" {
 		log.Info("statsdAddress is empty")
 		return
 	}
-	statsdC, err := statsd.NewBuffered(*statsdAddress, 100)
+	statsdC, err := statsd.NewBuffered(statsdAddress, 100)
 	if err != nil {
 		log.Errorf("Failed to create statsd client %v", err)
 		return
@@ -82,7 +92,7 @@ func InitWithoutServenv(namespace string) {
 	}
 	sb.namespace = namespace
 	sb.statsdClient = statsdC
-	sb.sampleRate = *statsdSampleRate
+	sb.sampleRate = statsdSampleRate
 	stats.RegisterPushBackend("statsd", sb)
 	stats.RegisterTimerHook(func(statsName, name string, value int64, timings *stats.Timings) {
 		tags := makeLabels(strings.Split(timings.Label(), "."), name)
@@ -107,6 +117,10 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 	case *stats.Gauge:
 		if err := sb.statsdClient.Gauge(k, float64(v.Get()), nil, sb.sampleRate); err != nil {
 			log.Errorf("Failed to add Gauge %v for key %v", v, k)
+		}
+	case *stats.GaugeFloat64:
+		if err := sb.statsdClient.Gauge(k, v.Get(), nil, sb.sampleRate); err != nil {
+			log.Errorf("Failed to add GaugeFloat64 %v for key %v", v, k)
 		}
 	case *stats.GaugeFunc:
 		if err := sb.statsdClient.Gauge(k, float64(v.F()), nil, sb.sampleRate); err != nil {
@@ -174,7 +188,7 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 	case expvar.Func:
 		// Export memstats as gauge so that we don't need to call extra ReadMemStats
 		if k == "memstats" {
-			var obj map[string]interface{}
+			var obj map[string]any
 			if err := json.Unmarshal([]byte(v.String()), &obj); err != nil {
 				return
 			}

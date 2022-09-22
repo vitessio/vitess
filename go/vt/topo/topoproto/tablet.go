@@ -63,6 +63,16 @@ func TabletAliasEqual(left, right *topodatapb.TabletAlias) bool {
 	return proto.Equal(left, right)
 }
 
+// IsTabletInList returns true if the tablet is in the list of tablets given
+func IsTabletInList(tablet *topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+	for _, tab := range allTablets {
+		if TabletAliasEqual(tablet.Alias, tab.Alias) {
+			return true
+		}
+	}
+	return false
+}
+
 // TabletAliasString formats a TabletAlias
 func TabletAliasString(ta *topodatapb.TabletAlias) string {
 	if ta == nil {

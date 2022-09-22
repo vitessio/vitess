@@ -198,6 +198,12 @@ func (c *Conn) Ping() error {
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
 func (c *Conn) clientHandshake(params *ConnParams) error {
+	// if EnableQueryInfo is set, make sure that all queries starting with the handshake
+	// will actually process the INFO fields in QUERY_OK packets
+	if params.EnableQueryInfo {
+		c.enableQueryInfo = true
+	}
+
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
@@ -283,13 +289,14 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 	}
 
 	// Client Session Tracking Capability.
-	if params.Flags&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+	if capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		// If the server also supports it, we will have enabled
+		// it so we also add it to our capabilities.
+		c.Capabilities |= CapabilityClientSessionTrack
+	} else if params.Flags&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
 		// If client asked for ClientSessionTrack, but server doesn't support it,
 		// stop right here.
-		if capabilities&CapabilityClientSessionTrack == 0 {
-			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
-		}
-		c.Capabilities |= CapabilityClientSessionTrack
+		return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
 	}
 
 	// Build and send our handshake response 41.
@@ -472,6 +479,9 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
+		// If the server supported
+		// CapabilityClientSessionTrack, we also support it.
+		c.Capabilities&CapabilityClientSessionTrack |
 		// Pass-through ClientFoundRows flag.
 		CapabilityClientFoundRows&uint32(params.Flags)
 

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,10 +27,11 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -42,9 +43,9 @@ func TestVtgateProcess(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "insert into customer(id, email) values(1,'email1')")
-	_ = exec(t, conn, "begin")
-	qr := exec(t, conn, "select id, email from customer")
+	utils.Exec(t, conn, "insert into customer(id, email) values(1,'email1')")
+	_ = utils.Exec(t, conn, "begin")
+	qr := utils.Exec(t, conn, "select id, email from customer")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -53,7 +54,7 @@ func TestVtgateProcess(t *testing.T) {
 func verifyVtgateVariables(t *testing.T, url string) {
 	resp, _ := http.Get(url)
 	if resp != nil && resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		require.Nil(t, err)
@@ -89,8 +90,8 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	}
 }
 
-func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
-	result := make(map[string]interface{})
+func getMapFromJSON(JSON map[string]any, key string) map[string]any {
+	result := make(map[string]any)
 	object := reflect.ValueOf(JSON[key])
 	if object.Kind() == reflect.Map {
 		for _, key := range object.MapKeys() {
@@ -101,18 +102,11 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]any) bool {
 	for key := range tablets {
 		if strings.Contains(key, "primary") {
 			return true
 		}
 	}
 	return false
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
 }

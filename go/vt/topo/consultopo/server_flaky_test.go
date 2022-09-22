@@ -17,6 +17,7 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,8 +27,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"context"
 
 	"github.com/hashicorp/consul/api"
 
@@ -45,11 +44,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	// Create a temporary config file, as ports cannot all be set
 	// via command line. The file name has to end with '.json' so
 	// we're not using TempFile.
-	configDir, err := os.MkdirTemp("", "consul")
-	if err != nil {
-		t.Fatalf("cannot create temp dir: %v", err)
-	}
-	defer os.RemoveAll(configDir)
+	configDir := t.TempDir()
 
 	configFilename := path.Join(configDir, "consul.json")
 	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
@@ -59,7 +54,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 
 	// Create the JSON config, save it.
 	port := testfiles.GoVtTopoConsultopoPort
-	config := map[string]interface{}{
+	config := map[string]any{
 		"ports": map[string]int{
 			"dns":      port,
 			"http":     port + 1,
@@ -130,7 +125,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 
 func TestConsulTopo(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
+	watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "")
@@ -174,9 +169,9 @@ func TestConsulTopo(t *testing.T) {
 
 func TestConsulTopoWithChecks(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
-	*consulLockSessionChecks = "serfHealth"
-	*consulLockSessionTTL = "15s"
+	watchPollDuration = 100 * time.Millisecond
+	consulLockSessionChecks = "serfHealth"
+	consulLockSessionTTL = "15s"
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "")
@@ -220,7 +215,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 func TestConsulTopoWithAuth(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
+	watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "123456")
@@ -245,7 +240,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	*consulAuthClientStaticFile = tmpFile.Name()
+	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
@@ -277,7 +272,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
+	watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "123456")
@@ -294,7 +289,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	*consulAuthClientStaticFile = tmpFile.Name()
+	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {

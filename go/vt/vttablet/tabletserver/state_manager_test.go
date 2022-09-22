@@ -671,7 +671,7 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	assert.False(t, sm.replHealthy)
 }
 
-func verifySubcomponent(t *testing.T, order int64, component interface{}, state testState) {
+func verifySubcomponent(t *testing.T, order int64, component any, state testState) {
 	tos := component.(orderState)
 	assert.Equal(t, order, tos.Order())
 	assert.Equal(t, state, tos.State())

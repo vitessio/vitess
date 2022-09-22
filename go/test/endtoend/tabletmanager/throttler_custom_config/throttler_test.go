@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -96,15 +96,15 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
-			"-enable-lag-throttler",
-			"-throttle_metrics_query", "show global status like 'threads_running'",
-			"-throttle_metrics_threshold", fmt.Sprintf("%d", testThreshold),
-			"-throttle_check_as_check_self",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--enable_replication_reporter",
+			"--enable-lag-throttler",
+			"--throttle_metrics_query", "show global status like 'threads_running'",
+			"--throttle_metrics_threshold", fmt.Sprintf("%d", testThreshold),
+			"--throttle_check_as_check_self",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -131,8 +131,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1
@@ -190,7 +188,8 @@ func TestThreadsRunning(t *testing.T) {
 
 	sleepSeconds := 6
 	for i := 0; i < testThreshold; i++ {
-		go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds), "")
+		// each query must be distinct, so they don't get consolidated
+		go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds+i), "")
 	}
 	t.Run("exceeds threshold", func(t *testing.T) {
 		time.Sleep(3 * time.Second)

@@ -18,6 +18,7 @@ limitations under the License.
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,45 +30,98 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// VtorcProcess is a test struct for running
+// VTOrcProcess is a test struct for running
 // vtorc as a separate process for testing
-type VtorcProcess struct {
+type VTOrcProcess struct {
 	VtctlProcess
-	LogDir    string
-	ExtraArgs []string
-	Config    string
-	proc      *exec.Cmd
-	exit      chan error
+	LogDir     string
+	ExtraArgs  []string
+	ConfigPath string
+	Config     VTOrcConfiguration
+	WebPort    int
+	proc       *exec.Cmd
+	exit       chan error
+}
+
+type VTOrcConfiguration struct {
+	Debug                                 bool
+	ListenAddress                         string
+	MySQLTopologyUser                     string
+	MySQLTopologyPassword                 string
+	MySQLReplicaUser                      string
+	MySQLReplicaPassword                  string
+	RecoveryPeriodBlockSeconds            int
+	InstancePollSeconds                   int
+	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
+	LockShardTimeoutSeconds               int    `json:",omitempty"`
+	ReplicationLagQuery                   string `json:",omitempty"`
+	FailPrimaryPromotionOnLagMinutes      int    `json:",omitempty"`
+}
+
+// ToJSONString will marshal this configuration as JSON
+func (config *VTOrcConfiguration) ToJSONString() string {
+	b, _ := json.MarshalIndent(config, "", "\t")
+	return string(b)
+}
+
+func (config *VTOrcConfiguration) AddDefaults(webPort int) {
+	config.Debug = true
+	config.MySQLTopologyUser = "orc_client_user"
+	config.MySQLTopologyPassword = "orc_client_user_password"
+	config.MySQLReplicaUser = "vt_repl"
+	config.MySQLReplicaPassword = ""
+	if config.RecoveryPeriodBlockSeconds == 0 {
+		config.RecoveryPeriodBlockSeconds = 1
+	}
+	config.InstancePollSeconds = 1
+	config.ListenAddress = fmt.Sprintf(":%d", webPort)
 }
 
 // Setup starts orc process with required arguements
-func (orc *VtorcProcess) Setup() (err error) {
+func (orc *VTOrcProcess) Setup() (err error) {
+
+	// create the configuration file
+	timeNow := time.Now().UnixNano()
+	configFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
+	orc.ConfigPath = configFile.Name()
+
+	// Add the default configurations and print them out
+	orc.Config.AddDefaults(orc.WebPort)
+	log.Errorf("configuration - %v", orc.Config.ToJSONString())
+	_, err = configFile.WriteString(orc.Config.ToJSONString())
+	if err != nil {
+		return err
+	}
+	err = configFile.Close()
+	if err != nil {
+		return err
+	}
 
 	/* minimal command line arguments:
-	$ vtorc -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
-	-config config/orchestrator/default.json -alsologtostderr http
+	$ vtorc --topo_implementation etcd2 --topo_global_server_address localhost:2379 --topo_global_root /vitess/global
+	--config config/vtorc/default.json --alsologtostderr
 	*/
 	orc.proc = exec.Command(
 		orc.Binary,
-		"-topo_implementation", orc.TopoImplementation,
-		"-topo_global_server_address", orc.TopoGlobalAddress,
-		"-topo_global_root", orc.TopoGlobalRoot,
-		"-config", orc.Config,
-		"-orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
+		"--topo_implementation", orc.TopoImplementation,
+		"--topo_global_server_address", orc.TopoGlobalAddress,
+		"--topo_global_root", orc.TopoGlobalRoot,
+		"--config", orc.ConfigPath,
+		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
-		orc.proc.Args = append(orc.proc.Args, "-test.coverprofile="+getCoveragePath("orc.out"))
+		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "-alsologtostderr", "http")
+	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
-	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", time.Now().UnixNano())))
+	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", timeNow)))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 
-	log.Infof("Running orc with command: %v", strings.Join(orc.proc.Args, " "))
+	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
 
 	err = orc.proc.Start()
 	if err != nil {
@@ -85,7 +139,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 }
 
 // TearDown shuts down the running vtorc service
-func (orc *VtorcProcess) TearDown() error {
+func (orc *VTOrcProcess) TearDown() error {
 	if orc.proc == nil || orc.exit == nil {
 		return nil
 	}

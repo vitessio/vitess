@@ -98,8 +98,8 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 	}
 
 	vtGateArgs := []string{
-		"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-		"-keyspaces_to_watch", keyspaceUnshardedName,
+		"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+		"--keyspaces_to_watch", keyspaceUnshardedName,
 	}
 
 	if extraVTGateArgs != nil {
@@ -147,7 +147,7 @@ func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	extraVTGateArgs := []string{
-		"-vschema_ddl_authorized_users", "%",
+		"--vschema_ddl_authorized_users", "%",
 	}
 	clusterInstance, exitCode := createCluster(extraVTGateArgs)
 	defer clusterInstance.Teardown()

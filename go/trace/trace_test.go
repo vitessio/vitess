@@ -49,7 +49,7 @@ func TestRegisterService(t *testing.T) {
 		return tracer, tracer, nil
 	}
 
-	tracingServer = &fakeName
+	tracingServer = fakeName
 
 	serviceName := "vtservice"
 	closer := StartTracing(serviceName)
@@ -115,6 +115,6 @@ func (m *mockSpan) Finish() {
 	m.tracer.log = append(m.tracer.log, "span finished")
 }
 
-func (m *mockSpan) Annotate(key string, value interface{}) {
+func (m *mockSpan) Annotate(key string, value any) {
 	m.tracer.log = append(m.tracer.log, fmt.Sprintf("key: %v values:%v", key, value))
 }

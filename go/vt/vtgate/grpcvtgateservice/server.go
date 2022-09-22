@@ -18,19 +18,17 @@ limitations under the License.
 package grpcvtgateservice
 
 import (
-	"flag"
+	"context"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -47,9 +45,16 @@ const (
 	unsecureClient = "unsecure_grpc_client"
 )
 
-var (
-	useEffective = flag.Bool("grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
-)
+var useEffective bool
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vtcombo", registerFlags)
+}
 
 // VTGate is the public structure that is exported via gRPC
 type VTGate struct {
@@ -89,7 +94,7 @@ func immediateCallerID(ctx context.Context) (string, []string) {
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
 	immediate, dnsNames := immediateCallerID(ctx)
-	if immediate == "" && *useEffective && effectiveCallerID != nil {
+	if immediate == "" && useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
 	}
 	if immediate == "" {
@@ -109,12 +114,6 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	session := request.Session
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
-	}
-	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
-	}
-	if session.Options == nil {
-		session.Options = request.Options
 	}
 	session, result, err := vtg.server.Execute(ctx, session, request.Query.Sql, request.Query.BindVariables)
 	return &vtgatepb.ExecuteResponse{
@@ -139,12 +138,6 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	if session.TargetString == "" {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
-	}
-	if session.Options == nil {
-		session.Options = request.Options
-	}
 	session, results, err := vtg.server.ExecuteBatch(ctx, session, sqlQueries, bindVars)
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
@@ -164,13 +157,6 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	// Do not set target if the tablet_type is not set correctly.
-	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
-	}
-	if session.Options == nil {
-		session.Options = request.Options
-	}
 	vtgErr := vtg.server.StreamExecute(ctx, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.

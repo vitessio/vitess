@@ -116,6 +116,7 @@ type ITrafficSwitcher interface {
 	TargetKeyspaceName() string
 	Targets() map[string]*MigrationTarget
 	WorkflowName() string
+	SourceTimeZone() string
 
 	/* Functions that *wrangler.trafficSwitcher implements */
 

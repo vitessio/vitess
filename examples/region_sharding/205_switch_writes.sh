@@ -18,7 +18,7 @@
 
 source ./env.sh
 
-vtctlclient SwitchWrites main.main2regions
+vtctlclient Reshard -- --tablet_types=primary SwitchTraffic main.main2regions
 
 # to go back to unsharded
 # call SwitchReads and SwitchWrites with workflow main.main2regions_reverse

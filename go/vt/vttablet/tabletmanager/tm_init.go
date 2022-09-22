@@ -36,7 +36,6 @@ package tabletmanager
 import (
 	"context"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"math/rand"
 	"regexp"
@@ -44,6 +43,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/flagutil"
@@ -62,7 +62,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -75,17 +77,32 @@ const denyListQueryList string = "DenyListQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
-	tabletHostname     = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
-	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
-	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
-	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
-	skipBuildInfoTags  = flag.String("vttablet_skip_buildinfo_tags", "/.*/", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
+	tabletHostname     string
+	initKeyspace       string
+	initShard          string
+	initTabletType     string
+	initDbNameOverride string
+	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
 
-	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
-	initTimeout          = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+	initPopulateMetadata bool
+	initTimeout          = 1 * time.Minute
+)
 
+func registerInitFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&tabletHostname, "tablet_hostname", tabletHostname, "if not empty, this hostname will be assumed instead of trying to resolve it")
+	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
+	fs.StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
+	fs.StringVar(&initTabletType, "init_tablet_type", initTabletType, "(init parameter) the tablet type to use for this tablet.")
+	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
+	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
+	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
+
+	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
+	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
+}
+
+var (
 	// statsTabletType is set to expose the current tablet type.
 	statsTabletType *stats.String
 
@@ -112,7 +129,8 @@ var (
 )
 
 func init() {
-	flag.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
+	servenv.OnParseFor("vtcombo", registerInitFlags)
+	servenv.OnParseFor("vttablet", registerInitFlags)
 
 	statsTabletType = stats.NewString("TabletType")
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
@@ -131,6 +149,7 @@ type TabletManager struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
+	VDiffEngine         *vdiff.Engine
 
 	// MetadataManager manages the local metadata tables for a tablet. It
 	// exists, and is exported, to support swapping a nil pointer in test code,
@@ -196,29 +215,29 @@ type TabletManager struct {
 
 // BuildTabletFromInput builds a tablet record from input parameters.
 func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
-	hostname := *tabletHostname
+	hostname := tabletHostname
 	if hostname == "" {
 		var err error
 		hostname, err = netutil.FullyQualifiedHostname()
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
+		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet_hostname.", hostname)
 	} else {
-		log.Infof("Using hostname: %v from -tablet_hostname flag.", hostname)
+		log.Infof("Using hostname: %v from --tablet_hostname flag.", hostname)
 	}
 
-	if *initKeyspace == "" || *initShard == "" {
+	if initKeyspace == "" || initShard == "" {
 		return nil, fmt.Errorf("init_keyspace and init_shard must be specified")
 	}
 
 	// parse and validate shard name
-	shard, keyRange, err := topo.ValidateShardName(*initShard)
+	shard, keyRange, err := topo.ValidateShardName(initShard)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot validate shard name %v", *initShard)
+		return nil, vterrors.Wrapf(err, "cannot validate shard name %v", initShard)
 	}
 
-	tabletType, err := topoproto.ParseTabletType(*initTabletType)
+	tabletType, err := topoproto.ParseTabletType(initTabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +247,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
 	}
 
-	buildTags, err := getBuildTags(servenv.AppVersion.ToStringMap(), *skipBuildInfoTags)
+	buildTags, err := getBuildTags(servenv.AppVersion.ToStringMap(), skipBuildInfoTags)
 	if err != nil {
 		return nil, err
 	}
@@ -250,11 +269,11 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 			"vt":   port,
 			"grpc": grpcPort,
 		},
-		Keyspace:             *initKeyspace,
+		Keyspace:             initKeyspace,
 		Shard:                shard,
 		KeyRange:             keyRange,
 		Type:                 tabletType,
-		DbNameOverride:       *initDbNameOverride,
+		DbNameOverride:       initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
 		DbServerVersion:      dbServerVersion,
 		DefaultConnCollation: uint32(charset),
@@ -338,7 +357,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 
 	tm.baseTabletType = tablet.Type
 
-	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
+	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
 	si, err := tm.createKeyspaceShard(ctx)
 	if err != nil {
@@ -375,6 +394,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		servenv.OnTerm(tm.VREngine.Close)
 	}
 
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.InitDBConfig(tm.DBConfigs)
+		servenv.OnTerm(tm.VDiffEngine.Close)
+	}
+
 	// The following initializations don't need to be done
 	// in any specific order.
 	tm.startShardSync()
@@ -395,12 +419,16 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}
 	if restoring {
 		// If restore was triggered, it will take care
-		// of updating the tablet state.
+		// of updating the tablet state and initializing replication.
 		return nil
 	}
 
+	// We should be re-read the tablet from tabletManager and use the type specified there.
+	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
+	// earlier in tm.checkPrimaryShip code.
+	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
 	tm.tmState.Open()
-	return nil
+	return err
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -450,6 +478,10 @@ func (tm *TabletManager) Stop() {
 
 	if tm.VREngine != nil {
 		tm.VREngine.Close()
+	}
+
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.Close()
 	}
 
 	tm.MysqlDaemon.Close()
@@ -713,12 +745,12 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
-	if tm.Cnf == nil && *restoreFromBackup {
-		return false, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
+	if tm.Cnf == nil && restoreFromBackup {
+		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
 	}
 
 	// Restore in the background
-	if *restoreFromBackup {
+	if restoreFromBackup {
 		go func() {
 			// Open the state manager after restore is done.
 			defer tm.tmState.Open()
@@ -727,17 +759,17 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			backupTime := time.Time{}
 
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
-			if *restoreFromBackupTsStr != "" {
+			if restoreFromBackupTsStr != "" {
 				var err error
-				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *restoreFromBackupTsStr)
+				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
 				if err != nil {
-					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", *restoreFromBackupTsStr))
+					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr))
 				}
 			}
 
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()
@@ -745,7 +777,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	}
 
 	// optionally populate metadata records
-	if *initPopulateMetadata {
+	if initPopulateMetadata {
 		localMetadata := tm.getLocalMetadataValues(tablet.Type)
 		if tm.Cnf != nil { // we are managing mysqld
 			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
@@ -757,7 +789,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		if tm.MetadataManager != nil {
 			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
 			if err != nil {
-				return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
+				return false, vterrors.Wrap(err, "failed to --init_populate_metadata")
 			}
 		}
 	}
@@ -826,4 +858,66 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 		"KEYSPACE":     tablet.Keyspace,
 		"SHARD":        tablet.Shard,
 	}
+}
+
+// initializeReplication is used to initialize the replication when the tablet starts.
+// It returns the current primary tablet for use externally
+func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (primary *topo.TabletInfo, err error) {
+	// If active reparents are disabled, we do not touch replication.
+	// There is nothing to do
+	if *mysqlctl.DisableActiveReparents {
+		return nil, nil
+	}
+
+	// If the desired tablet type is primary, then we shouldn't be setting our replication source.
+	// So there is nothing to do.
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		return nil, nil
+	}
+
+	// Read the shard to find the current primary, and its location.
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "cannot read shard")
+	}
+	if si.PrimaryAlias == nil {
+		// There's no primary. This is fine, since there might be no primary currently
+		log.Warningf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
+		return nil, nil
+	}
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
+		// We used to be the primary before we got restarted,
+		// and no other primary has been elected in the meantime.
+		// There isn't anything to do here either.
+		log.Warningf("cannot start replication during initialization: primary in shard record still points to this tablet.")
+		return nil, nil
+	}
+	currentPrimary, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
+	}
+
+	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+	}
+	// If using semi-sync, we need to enable it before connecting to primary.
+	// We should set the correct type, since it is used in replica semi-sync
+	tablet.Type = tabletType
+	if err := tm.fixSemiSync(tabletType, convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))); err != nil {
+		return nil, err
+	}
+
+	// Set primary and start replication.
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, int(currentPrimary.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+		return nil, vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+	}
+
+	return currentPrimary, nil
 }

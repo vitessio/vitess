@@ -262,6 +262,10 @@ func TestArithmetics(t *testing.T) {
 			v1:  NewUint64(maxUint64),
 			v2:  NewInt64(2),
 			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
+		}, {
+			v1:  sqltypes.NewHexNum([]byte("0x9")),
+			v2:  NewInt64(1),
+			out: NewUint64(10),
 		}},
 	}, {
 		operator: "/",
@@ -713,7 +717,7 @@ func TestToFloat64(t *testing.T) {
 func TestToNative(t *testing.T) {
 	testcases := []struct {
 		in  sqltypes.Value
-		out interface{}
+		out any
 	}{{
 		in:  NULL,
 		out: nil,
@@ -814,57 +818,6 @@ func TestToNative(t *testing.T) {
 	want := vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(aa) cannot be converted to a go type")
 	if !vterrors.Equals(err, want) {
 		t.Errorf("ToNative(EXPRESSION): %v, want %v", vterrors.Print(err), vterrors.Print(want))
-	}
-}
-
-func TestNewNumeric(t *testing.T) {
-	tcases := []struct {
-		v   sqltypes.Value
-		out EvalResult
-		err error
-	}{{
-		v:   NewInt64(1),
-		out: newEvalInt64(1),
-	}, {
-		v:   NewUint64(1),
-		out: newEvalUint64(1),
-	}, {
-		v:   NewFloat64(1),
-		out: newEvalFloat(1.0),
-	}, {
-		// For non-number type, Int64 is the default.
-		v:   TestValue(sqltypes.VarChar, "1"),
-		out: newEvalInt64(1),
-	}, {
-		// If Int64 can't work, we use Float64.
-		v:   TestValue(sqltypes.VarChar, "1.2"),
-		out: newEvalFloat(1.2),
-	}, {
-		// Only valid Int64 allowed if type is Int64.
-		v:   TestValue(sqltypes.Int64, "1.2"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
-	}, {
-		// Only valid Uint64 allowed if type is Uint64.
-		v:   TestValue(sqltypes.Uint64, "1.2"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
-	}, {
-		// Only valid Float64 allowed if type is Float64.
-		v:   TestValue(sqltypes.Float64, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
-	}, {
-		v:   TestValue(sqltypes.VarChar, "abcd"),
-		out: newEvalFloat(0),
-	}}
-	for _, tcase := range tcases {
-		got, err := newEvalResult(tcase.v)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("newEvalResult(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err == nil {
-			continue
-		}
-
-		utils.MustMatch(t, tcase.out, got, "newEvalResult")
 	}
 }
 
@@ -1428,7 +1381,7 @@ func makeNativeInt64(v int64) sqltypes.Value {
 }
 
 func BenchmarkAddGoInterface(b *testing.B) {
-	var v1, v2 interface{}
+	var v1, v2 any
 	v1 = int64(1)
 	v2 = int64(2)
 	for i := 0; i < b.N; i++ {

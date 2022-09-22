@@ -51,6 +51,9 @@ type VReplStream struct {
 	source               string
 	pos                  string
 	timeUpdated          int64
+	timeHeartbeat        int64
+	timeThrottled        int64
+	componentThrottled   string
 	transactionTimestamp int64
 	state                string
 	message              string
@@ -58,17 +61,47 @@ type VReplStream struct {
 	bls                  *binlogdatapb.BinlogSource
 }
 
+// livenessTimeIndicator returns a time indicator for last known healthy state.
+// vreplication uses three indicators:
+// - transaction_timestamp
+// - time_heartbeat
+// - time_throttled.
+// Updating any of them, also updates time_updated, indicating liveness.
+func (v *VReplStream) livenessTimeIndicator() int64 {
+	return v.timeUpdated
+}
+
+// isFailed() returns true when the workflow is actively running
+func (v *VReplStream) isRunning() bool {
+	switch v.state {
+	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+		return true
+	}
+	return false
+}
+
+// isFailed() returns true when the workflow has failed and will not retry
+func (v *VReplStream) isFailed() bool {
+	switch {
+	case v.state == binlogplayer.BlpError:
+		return true
+	case strings.Contains(strings.ToLower(v.message), "error"):
+		return true
+	}
+	return false
+}
+
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
-	workflow     string
-	keyspace     string
-	shard        string
-	dbName       string
-	sourceTable  string
-	targetTable  string
-	pos          string
-	alterOptions string
-	tableRows    int64
+	workflow    string
+	keyspace    string
+	shard       string
+	dbName      string
+	sourceTable string
+	targetTable string
+	pos         string
+	alterQuery  string
+	tableRows   int64
 
 	sourceSharedColumns              *vrepl.ColumnList
 	targetSharedColumns              *vrepl.ColumnList
@@ -95,7 +128,7 @@ type VRepl struct {
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string) *VRepl {
 	return &VRepl{
 		workflow:       workflow,
 		keyspace:       keyspace,
@@ -103,7 +136,7 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		dbName:         dbName,
 		sourceTable:    sourceTable,
 		targetTable:    targetTable,
-		alterOptions:   alterOptions,
+		alterQuery:     alterQuery,
 		parser:         vrepl.NewAlterTableParser(),
 		enumToTextMap:  map[string]string{},
 		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
@@ -284,11 +317,15 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 }
 
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
-	if err := v.parser.ParseAlterStatement(v.alterOptions); err != nil {
+	if v.alterQuery == "" {
+		// Happens for REVERT
+		return nil
+	}
+	if err := v.parser.ParseAlterStatement(v.alterQuery); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
-		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterOptions)
+		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterQuery)
 	}
 	return nil
 }
@@ -420,6 +457,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		name := sourceCol.Name
 		targetName := v.sharedColumnsMap[name]
 
+		targetCol := v.targetSharedColumns.GetColumn(targetName)
+		if targetCol == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
+		}
+
 		if i > 0 {
 			sb.WriteString(", ")
 		}
@@ -429,10 +471,6 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case sourceCol.Type == vrepl.StringColumnType:
-			targetCol := v.targetSharedColumns.GetColumn(targetName)
-			if targetCol == nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
-			}
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
 			fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
@@ -440,10 +478,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
 			toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
-			if !ok {
+			// Let's see if target col is at all textual
+			if targetCol.Type == vrepl.StringColumnType && !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
 			}
-			if fromEncoding == nil && toEncoding == nil {
+			if fromEncoding == nil && toEncoding == nil && targetCol.Type != vrepl.JSONColumnType {
 				// Both source and target have trivial charsets
 				sb.WriteString(escapeName(name))
 			} else {
@@ -454,6 +493,9 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 				}
 				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 			}
+		case targetCol.Type == vrepl.JSONColumnType && sourceCol.Type != vrepl.JSONColumnType:
+			// Convert any type to JSON: encode the type as utf8mb4 text
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}

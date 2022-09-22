@@ -200,10 +200,9 @@ func (env *LocalTestEnv) ProcessHealthCheck(name string) HealthChecker {
 // VtcomboArguments implements VtcomboArguments for LocalTestEnv.
 func (env *LocalTestEnv) VtcomboArguments() []string {
 	return []string{
-		"-service_map", strings.Join(
+		"--service_map", strings.Join(
 			[]string{"grpc-vtgateservice", "grpc-vtctl", "grpc-vtctld"}, ",",
 		),
-		"-enable_queries",
 	}
 }
 

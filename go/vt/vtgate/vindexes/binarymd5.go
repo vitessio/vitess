@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -60,7 +61,7 @@ func (vind *BinaryMD5) NeedsVCursor() bool {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *BinaryMD5) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, 0, len(ids))
 	for i, id := range ids {
 		ksid, err := vind.Hash(id)
@@ -73,7 +74,7 @@ func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *BinaryMD5) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		ksid, err := vind.Hash(id)

@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type (
@@ -56,6 +57,12 @@ type (
 		// Clone creates a copy of the operator that can be updated without changing the original
 		Clone() PhysicalOperator
 	}
+
+	// IntroducesTable is used to make it possible to gather information about the table an operator introduces
+	IntroducesTable interface {
+		GetQTable() *QueryTable
+		GetVTable() *vindexes.Table
+	}
 )
 
 func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (LogicalOperator, error) {
@@ -83,7 +90,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
-			inner, err := CreateOperatorFromAST(tbl.Select, semTable)
+			inner, err := CreateLogicalOperatorFromAST(tbl.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -158,13 +165,17 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 	}
 }
 
-// CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
+// CreateLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
+func CreateLogicalOperatorFromAST(selStmt sqlparser.Statement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(node, semTable)
 	case *sqlparser.Union:
 		op, err = createOperatorFromUnion(node, semTable)
+	case *sqlparser.Update:
+		op, err = createOperatorFromUpdate(node, semTable)
+	case *sqlparser.Delete:
+		op, err = createOperatorFromDelete(node, semTable)
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 	}
@@ -175,7 +186,7 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
-	opLHS, err := CreateOperatorFromAST(node.Left, semTable)
+	opLHS, err := CreateLogicalOperatorFromAST(node.Left, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +195,7 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	if isRHSUnion {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
 	}
-	opRHS, err := CreateOperatorFromAST(node.Right, semTable)
+	opRHS, err := CreateLogicalOperatorFromAST(node.Right, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -199,19 +210,9 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
 func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (LogicalOperator, error) {
-	var resultantOp *SubQuery
-	if len(semTable.SubqueryMap[sel]) > 0 {
-		resultantOp = &SubQuery{}
-		for _, sq := range semTable.SubqueryMap[sel] {
-			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable)
-			if err != nil {
-				return nil, err
-			}
-			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				ExtractedSubquery: sq,
-				Inner:             opInner,
-			})
-		}
+	subq, err := createSubqueryFromStatement(sel, semTable)
+	if err != nil {
+		return nil, err
 	}
 	op, err := crossJoin(sel.From, semTable)
 	if err != nil {
@@ -227,11 +228,115 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 			addColumnEquality(semTable, expr)
 		}
 	}
-	if resultantOp == nil {
+	if subq == nil {
 		return op, nil
 	}
-	resultantOp.Outer = op
-	return resultantOp, nil
+	subq.Outer = op
+	return subq, nil
+}
+
+func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.SemTable) (LogicalOperator, error) {
+	tableInfo, qt, err := createQueryTableForDML(updStmt.TableExprs[0], semTable, updStmt.Where)
+	if err != nil {
+		return nil, err
+	}
+
+	assignments := make(map[string]sqlparser.Expr)
+	for _, set := range updStmt.Exprs {
+		assignments[set.Name.Name.String()] = set.Expr
+	}
+
+	u := &Update{
+		Table:       qt,
+		Assignments: assignments,
+		AST:         updStmt,
+		TableInfo:   tableInfo,
+	}
+
+	subq, err := createSubqueryFromStatement(updStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
+	if subq == nil {
+		return u, nil
+	}
+	subq.Outer = u
+	return subq, nil
+}
+
+func createQueryTableForDML(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
+	alTbl, ok := tableExpr.(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
+	}
+	tblName, ok := alTbl.Expr.(sqlparser.TableName)
+	if !ok {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
+	}
+
+	tableID := semTable.TableSetFor(alTbl)
+	tableInfo, err := semTable.TableInfoFor(tableID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if tableInfo.IsInfSchema() {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
+	}
+
+	var predicates []sqlparser.Expr
+	if whereClause != nil {
+		predicates = sqlparser.SplitAndExpression(nil, whereClause.Expr)
+	}
+	qt := &QueryTable{
+		ID:          tableID,
+		Alias:       alTbl,
+		Table:       tblName,
+		Predicates:  predicates,
+		IsInfSchema: false,
+	}
+	return tableInfo, qt, nil
+}
+
+func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.SemTable) (LogicalOperator, error) {
+	tableInfo, qt, err := createQueryTableForDML(deleteStmt.TableExprs[0], semTable, deleteStmt.Where)
+	if err != nil {
+		return nil, err
+	}
+
+	u := &Delete{
+		Table:     qt,
+		AST:       deleteStmt,
+		TableInfo: tableInfo,
+	}
+
+	subq, err := createSubqueryFromStatement(deleteStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
+	if subq == nil {
+		return u, nil
+	}
+	subq.Outer = u
+	return subq, nil
+}
+
+func createSubqueryFromStatement(stmt sqlparser.Statement, semTable *semantics.SemTable) (*SubQuery, error) {
+	if len(semTable.SubqueryMap[stmt]) == 0 {
+		return nil, nil
+	}
+	subq := &SubQuery{}
+	for _, sq := range semTable.SubqueryMap[stmt] {
+		opInner, err := CreateLogicalOperatorFromAST(sq.Subquery.Select, semTable)
+		if err != nil {
+			return nil, err
+		}
+		subq.Inner = append(subq.Inner, &SubQueryInner{
+			ExtractedSubquery: sq,
+			Inner:             opInner,
+		})
+	}
+	return subq, nil
 }
 
 func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {

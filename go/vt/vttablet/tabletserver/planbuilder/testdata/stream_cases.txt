@@ -18,7 +18,12 @@
 
 # select for update
 "select * from a for update"
-"select with lock not allowed for streaming"
+{
+  "PlanID": "SelectStream",
+  "TableName": "a",
+  "Permissions":[{"TableName":"a","Role":0}],
+  "FullQuery": "select * from a for update"
+}
 
 # union
 "select * from a union select * from b"
@@ -55,12 +60,27 @@
 
 # dml
 "update a set b = 1"
-"'update a set b = 1' not allowed for streaming"
+"UPDATE not allowed for streaming"
 
 # syntax error
 "syntax error"
 "syntax error at position 7 near 'syntax'"
 
-# named locks are unsafe with server-side connection pooling
-"select get_lock('foo') from dual"
-"get_lock('foo') not allowed without a reserved connections"
+# named locks are unsafe with server-side connection pooling, plan is generated with NeedReservedConn set to true
+"select get_lock('foo', 10) from dual"
+{
+  "PlanID": "SelectStream",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "select get_lock('foo', 10) from dual",
+  "NeedsReservedConn": true
+}
+
+# set statement unsafe with pooling
+"set @udv = 10"
+"SET not allowed for streaming"

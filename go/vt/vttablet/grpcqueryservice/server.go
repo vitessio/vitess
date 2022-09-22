@@ -79,14 +79,15 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, alias, err := q.server.Begin(ctx, request.Target, request.Options)
+	state, err := q.server.Begin(ctx, request.Target, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.BeginResponse{
-		TransactionId: transactionID,
-		TabletAlias:   alias,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -239,22 +240,23 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
+	state, result, err := q.server.BeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
-		if transactionID != 0 {
+		if state.TransactionID != 0 {
 			return &querypb.BeginExecuteResponse{
 				Error:         vterrors.ToVTRPC(err),
-				TransactionId: transactionID,
-				TabletAlias:   alias,
+				TransactionId: state.TransactionID,
+				TabletAlias:   state.TabletAlias,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.BeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: transactionID,
-		TabletAlias:   alias,
+		Result:              sqltypes.ResultToProto3(result),
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -265,14 +267,15 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
+	state, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
 	errInLastPacket := stream.Send(&querypb.BeginStreamExecuteResponse{
-		TransactionId: transactionID,
-		TabletAlias:   alias,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	})
 	if err != nil {
 		return vterrors.ToGRPC(err)
@@ -328,7 +331,7 @@ func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservic
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.VStream(ctx, request.Target, request.Position, request.TableLastPKs, request.Filter, func(events []*binlogdatapb.VEvent) error {
+	err = q.server.VStream(ctx, request, func(events []*binlogdatapb.VEvent) error {
 		return stream.Send(&binlogdatapb.VStreamResponse{
 			Events: events,
 		})
@@ -343,7 +346,7 @@ func (q *query) VStreamRows(request *binlogdatapb.VStreamRowsRequest, stream que
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.VStreamRows(ctx, request.Target, request.Query, request.Lastpk, stream.Send)
+	err = q.server.VStreamRows(ctx, request, stream.Send)
 	return vterrors.ToGRPC(err)
 }
 
@@ -365,22 +368,22 @@ func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExec
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, reservedID, alias, err := q.server.ReserveExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
+	state, result, err := q.server.ReserveExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
 	if err != nil {
 		// if we have a valid reservedID, return the error in-band
-		if reservedID != 0 {
+		if state.ReservedID != 0 {
 			return &querypb.ReserveExecuteResponse{
 				Error:       vterrors.ToVTRPC(err),
-				ReservedId:  reservedID,
-				TabletAlias: alias,
+				ReservedId:  state.ReservedID,
+				TabletAlias: state.TabletAlias,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ReserveExecuteResponse{
 		Result:      sqltypes.ResultToProto3(result),
-		ReservedId:  reservedID,
-		TabletAlias: alias,
+		ReservedId:  state.ReservedID,
+		TabletAlias: state.TabletAlias,
 	}, nil
 }
 
@@ -391,14 +394,14 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	reservedID, alias, err := q.server.ReserveStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
+	state, err := q.server.ReserveStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
 	errInLastPacket := stream.Send(&querypb.ReserveStreamExecuteResponse{
-		ReservedId:  reservedID,
-		TabletAlias: alias,
+		ReservedId:  state.ReservedID,
+		TabletAlias: state.TabletAlias,
 	})
 	if err != nil {
 		return vterrors.ToGRPC(err)
@@ -414,24 +417,26 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, transactionID, reservedID, alias, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
+	state, result, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
 		// if we have a valid reservedID, return the error in-band
-		if reservedID != 0 {
+		if state.ReservedID != 0 {
 			return &querypb.ReserveBeginExecuteResponse{
-				Error:         vterrors.ToVTRPC(err),
-				TransactionId: transactionID,
-				ReservedId:    reservedID,
-				TabletAlias:   alias,
+				Error:               vterrors.ToVTRPC(err),
+				TransactionId:       state.TransactionID,
+				ReservedId:          state.ReservedID,
+				TabletAlias:         state.TabletAlias,
+				SessionStateChanges: state.SessionStateChanges,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ReserveBeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: transactionID,
-		ReservedId:    reservedID,
-		TabletAlias:   alias,
+		Result:              sqltypes.ResultToProto3(result),
+		TransactionId:       state.TransactionID,
+		ReservedId:          state.ReservedID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -442,15 +447,16 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, reservedID, alias, err := q.server.ReserveBeginStreamExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+	state, err := q.server.ReserveBeginStreamExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
 	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
-		ReservedId:    reservedID,
-		TransactionId: transactionID,
-		TabletAlias:   alias,
+		ReservedId:          state.ReservedID,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	})
 	if err != nil {
 		return vterrors.ToGRPC(err)

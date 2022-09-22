@@ -2,7 +2,6 @@ This page lists all active maintainers and their areas of expertise. This can be
 
 The following is the full list, alphabetically ordered.
 
-* Alkin Tezuysal ([askdba](https://github.com/askdba)) alkin@planetscale.com
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Andrew Mason ([amason](https://github.com/ajm188)) andrew@planetscale.com
 * Anthony Yeh ([enisoc](https://github.com/enisoc)) enisoc@enisoc.dev
@@ -15,11 +14,11 @@ The following is the full list, alphabetically ordered.
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
 * Mali Akmanalp ([makmanalp](https://github.com/makmanalp) makmanalp@hubspot.com
 * Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
+* Matt Lord ([mattlord](https://github.com/mattlord)) mlord@planetscale.com
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@figma.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
-* Sara Bee ([doeg](https://github.com/doeg)) sarab@slack-corp.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
 * Sugu Sougoumarane ([sougou](https://github.com/sougou)) sougou@planetscale.com
 * Vicent Marti ([vmg](https://github.com/vmg)) vmg@planetscale.com
@@ -27,13 +26,13 @@ The following is the full list, alphabetically ordered.
 ## Areas of expertise
 
 ### General Vitess
-sougou, deepthi, demmer, rafael, dweitzman, tirsen, askdba, enisoc
+sougou, deepthi, demmer, rafael, dweitzman, tirsen, enisoc
 
 ### Builds
 dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100
 
 ### Resharding
-sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps, deepthi
+sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps, deepthi, mattlord
 
 ### Parser
 sougou, dweitzman, systay, harshit-gangal, vmg, GuptaManan100
@@ -54,7 +53,7 @@ mpawliszyn, makmanalp, harshit-gangal
 derekperkins, dkhenry, enisoc
 
 ### VTAdmin
-ajm188, doeg
+ajm188
 
 ### Messaging
 derekperkins

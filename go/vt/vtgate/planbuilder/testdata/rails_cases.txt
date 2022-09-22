@@ -6,7 +6,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,-3,-4",
+    "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
     "JoinVars": {
       "book6s_supplier5_id": 4
     },
@@ -15,7 +15,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,-3,-4,-5",
+        "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4",
         "JoinVars": {
           "order2s_customer2_id": 5
         },
@@ -24,7 +24,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2,-3,-4,-5,1",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4,R:0",
             "JoinVars": {
               "book6s_order2s_order2_id": 5
             },
@@ -33,7 +33,7 @@
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "-1,-2,-3,-4,-5,1",
+                "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4,R:0",
                 "JoinVars": {
                   "book6s_id": 5
                 },
@@ -121,7 +121,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,2,3,4",
+    "JoinColumnIndexes": "R:0,R:1,R:2,R:3",
     "JoinVars": {
       "order2s_id": 0
     },
@@ -141,7 +141,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2,-3,-4,-5",
+        "JoinColumnIndexes": "L:1,L:2,L:3,L:4",
         "JoinVars": {
           "book6s_supplier5_id": 0
         },
@@ -150,7 +150,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2,-3,-4,-5,-6",
+            "JoinColumnIndexes": "L:1,L:2,L:3,L:4,L:5",
             "JoinVars": {
               "book6s_id": 0
             },
@@ -202,6 +202,13 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.author5s",
+    "user.book6s",
+    "user.book6s_order2s",
+    "user.customer2s",
+    "user.order2s",
+    "user.supplier5s"
+  ]
 }
-

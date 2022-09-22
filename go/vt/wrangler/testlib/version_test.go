@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -90,18 +91,28 @@ func TestVersion(t *testing.T) {
 
 	// sourceReplica loop
 	sourceReplicaGitRev := "fake git rev"
+	sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
+	sourceReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	sourceReplica.StartActionLoop(t, wr)
 	sourceReplica.HTTPServer.Handler.(*http.ServeMux).HandleFunc("/debug/vars", expvarHandler(&sourceReplicaGitRev))
 	defer sourceReplica.StopActionLoop(t)
 
 	// test when versions are the same
+	sourceReplicaGitRev = "fake git rev"
 	if err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace}); err != nil {
 		t.Fatalf("ValidateVersionKeyspace(same) failed: %v", err)
 	}
 
 	// test when versions are different
 	sourceReplicaGitRev = "different fake git rev"
-	if err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "is different than replica") {
+	err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace})
+	fmt.Printf("ERROR %v", err)
+	if err == nil || !strings.Contains(err.Error(), "is different than replica") {
 		t.Fatalf("ValidateVersionKeyspace(different) returned an unexpected error: %v", err)
 	}
 }

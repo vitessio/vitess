@@ -22,12 +22,14 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
-func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -36,24 +38,36 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 	defer conn.Close()
 
 	// disable binlogs if necessary
-	if disableBinlogs {
+	if req.DisableBinlogs {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if dbName != "" {
+	if req.DbName != "" {
 		// This execute might fail if db does not exist.
 		// Error is ignored because given query might create this database.
-		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
+		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
+	// Handle special possible directives
+	var directives *sqlparser.CommentDirectives
+	if stmt, err := sqlparser.Parse(string(req.Query)); err == nil {
+		if cmnt, ok := stmt.(sqlparser.Commented); ok {
+			directives = cmnt.GetParsedComments().Directives()
+		}
+	}
+	if directives.IsSet("allowZeroInDate") {
+		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
+			return nil, err
+		}
+	}
 	// run the query
-	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
+	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
 
 	// re-enable binlogs if necessary
-	if disableBinlogs && !conn.IsClosed() {
+	if req.DisableBinlogs && !conn.IsClosed() {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = ON", 0, false)
 		if err != nil {
 			// if we can't reset the sql_log_bin flag,
@@ -62,7 +76,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 		}
 	}
 
-	if err == nil && reloadSchema {
+	if err == nil && req.ReloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
 			log.Errorf("failed to reload the schema %v", reloadErr)
@@ -72,7 +86,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 }
 
 // ExecuteFetchAsAllPrivs will execute the given query, possibly reloading schema.
-func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
@@ -80,16 +94,16 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []byt
 	}
 	defer conn.Close()
 
-	if dbName != "" {
+	if req.DbName != "" {
 		// This execute might fail if db does not exist.
 		// Error is ignored because given query might create this database.
-		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
+		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
 	// run the query
-	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
+	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
 
-	if err == nil && reloadSchema {
+	if err == nil && req.ReloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
 			log.Errorf("failed to reload the schema %v", reloadErr)
@@ -99,22 +113,22 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []byt
 }
 
 // ExecuteFetchAsApp will execute the given query.
-func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
+	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
 	return sqltypes.ResultToProto3(result), err
 }
 
 // ExecuteQuery submits a new online DDL request
-func (tm *TabletManager) ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	// get the db name from the tablet
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, string(query), nil, 0, 0, nil)
+	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, string(req.Query), nil, 0, 0, nil)
 	return sqltypes.ResultToProto3(result), err
 }

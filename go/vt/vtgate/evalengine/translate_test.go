@@ -88,6 +88,18 @@ func TestTranslateSimplification(t *testing.T) {
 		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
 		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R")`)},
 		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R\x00 \x00 \x00 \x00 \x00 \x00 ")`)},
+		{"case when 1 = 1 then 2 else 3 end", ok("CASE WHEN INT64(1) = INT64(1) THEN INT64(2) ELSE INT64(3)"), ok("INT64(2)")},
+		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`CASE WHEN NULL THEN INT64(2) WHEN INT64(12) = INT64(4) THEN VARCHAR("ohnoes") ELSE INT64(42)`), ok(`VARCHAR("42")`)},
+		{"convert('a', char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
+		{"convert('a', char(2) character set latin1 binary)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET latin1_bin)`), ok(`VARCHAR("a")`)},
+		{"cast('a' as char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
+		{"cast('a' as char(2) character set latin1 binary)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET latin1_bin)`), ok(`VARCHAR("a")`)},
+		{"date'2022-10-03'", ok(`DATE("2022-10-03")`), ok(`DATE("2022-10-03")`)},
+		{"time'12:34:45'", ok(`TIME("12:34:45")`), ok(`TIME("12:34:45")`)},
+		{"timestamp'2022-10-03 12:34:45'", ok(`DATETIME("2022-10-03 12:34:45")`), ok(`DATETIME("2022-10-03 12:34:45")`)},
+		{"date'2022'", err(`incorrect DATE value: '2022'`), err(`incorrect DATE value: '2022'`)},
+		{"time'2022-10-03'", err(`incorrect TIME value: '2022-10-03'`), err(`incorrect TIME value: '2022-10-03'`)},
+		{"timestamp'2022-10-03'", err(`incorrect DATETIME value: '2022-10-03'`), err(`incorrect DATETIME value: '2022-10-03'`)},
 	}
 
 	for _, tc := range testCases {
@@ -108,9 +120,7 @@ func TestTranslateSimplification(t *testing.T) {
 				}
 				return
 			}
-			if FormatExpr(converted) != tc.converted.literal {
-				t.Errorf("mismatch (simplify=false): got %s, expected %s", FormatExpr(converted), tc.converted.literal)
-			}
+			assert.Equal(t, tc.converted.literal, FormatExpr(converted))
 
 			simplified, err := TranslateEx(astExpr, LookupDefaultCollation(45), true)
 			if err != nil {
@@ -122,9 +132,7 @@ func TestTranslateSimplification(t *testing.T) {
 				}
 				return
 			}
-			if FormatExpr(simplified) != tc.simplified.literal {
-				t.Errorf("mismatch (simplify=true): got %s, expected %s", FormatExpr(simplified), tc.simplified.literal)
-			}
+			assert.Equal(t, tc.simplified.literal, FormatExpr(simplified))
 		})
 	}
 }
@@ -158,6 +166,12 @@ func TestEvaluate(t *testing.T) {
 	}, {
 		expression: ":exp",
 		expected:   sqltypes.NewInt64(66),
+	}, {
+		expression: ":int32_bind_variable",
+		expected:   sqltypes.NewInt64(20),
+	}, {
+		expression: ":uint32_bind_variable",
+		expected:   sqltypes.NewUint64(21),
 	}, {
 		expression: ":uint64_bind_variable",
 		expected:   sqltypes.NewUint64(22),
@@ -272,6 +286,8 @@ func TestEvaluate(t *testing.T) {
 				map[string]*querypb.BindVariable{
 					"exp":                  sqltypes.Int64BindVariable(66),
 					"string_bind_variable": sqltypes.StringBindVariable("bar"),
+					"int32_bind_variable":  sqltypes.Int32BindVariable(20),
+					"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
 				}, 0)

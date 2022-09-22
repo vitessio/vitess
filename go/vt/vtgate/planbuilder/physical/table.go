@@ -32,6 +32,7 @@ type Table struct {
 }
 
 var _ abstract.PhysicalOperator = (*Table)(nil)
+var _ abstract.IntroducesTable = (*Table)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
@@ -77,4 +78,14 @@ func (to *Table) CheckValid() error {
 // Compact implements the PhysicalOperator interface
 func (to *Table) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return to, nil
+}
+
+// GetQTable implements the IntroducesTable interface
+func (to *Table) GetQTable() *abstract.QueryTable {
+	return to.QTable
+}
+
+// GetVTable implements the IntroducesTable interface
+func (to *Table) GetVTable() *vindexes.Table {
+	return to.VTable
 }

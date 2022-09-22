@@ -1,4 +1,4 @@
-ARG bootstrap_version=4
+ARG bootstrap_version=11
 ARG image="vitess/bootstrap:${bootstrap_version}-mariadb103"
 
 FROM "${image}"
@@ -19,4 +19,3 @@ RUN make build
 # Fix permissions
 RUN chown -R vitess:vitess /vt
 USER vitess
-

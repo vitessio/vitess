@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -52,6 +53,10 @@ type Plan struct {
 	ColExprs []ColExpr
 
 	convertUsingUTF8Columns map[string]bool
+
+	// Any columns that require a function expression in the
+	// stream.
+	columnFuncExprs map[string]*sqlparser.FuncExpr
 
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
@@ -119,7 +124,7 @@ type Table struct {
 
 // FindColumn finds a column in the table. It returns the index if found.
 // Otherwise, it returns -1.
-func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
+func (ta *Table) FindColumn(name sqlparser.IdentifierCI) int {
 	for i, col := range ta.Fields {
 		if name.EqualString(col.Name) {
 			return i
@@ -257,7 +262,7 @@ func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumn
 	for _, col := range vindexColumns {
 		vindexValues = append(vindexValues, values[col])
 	}
-	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{vindexValues})
+	destinations, err := vindexes.Map(context.TODO(), vindex, nil, [][]sqltypes.Value{vindexValues})
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +438,7 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 	return plan, nil
 }
 
-func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.TableIdent, err error) {
+func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.IdentifierCS, err error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, fromTable, err
@@ -472,6 +477,27 @@ func (plan *Plan) setConvertColumnUsingUTF8(columnName string) {
 		plan.convertUsingUTF8Columns = map[string]bool{}
 	}
 	plan.convertUsingUTF8Columns[columnName] = true
+}
+
+// setColumnFuncExpr sets the function expression for the column, which
+// can then be used when building the streamer's query.
+func (plan *Plan) setColumnFuncExpr(columnName string, funcExpr *sqlparser.FuncExpr) {
+	if plan.columnFuncExprs == nil {
+		plan.columnFuncExprs = map[string]*sqlparser.FuncExpr{}
+	}
+	plan.columnFuncExprs[columnName] = funcExpr
+}
+
+// getColumnFuncExpr returns a function expression if the column needs
+// one when building the streamer's query.
+func (plan *Plan) getColumnFuncExpr(columnName string) *sqlparser.FuncExpr {
+	if plan.columnFuncExprs == nil {
+		return nil
+	}
+	if val, ok := plan.columnFuncExprs[columnName]; ok {
+		return val
+	}
+	return nil
 }
 
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
@@ -584,19 +610,15 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		if err != nil {
 			return ColExpr{}, err
 		}
-		as := aliased.As
-		if as.IsEmpty() {
-			as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
-		}
 		return ColExpr{
 			ColNum: colnum,
 			Field:  plan.Table.Fields[colnum],
 		}, nil
-	case *sqlparser.FuncExpr:
-		if inner.Name.Lowered() != "keyspace_id" {
+	case sqlparser.AggrFunc:
+		if strings.ToLower(inner.AggrName()) != "keyspace_id" {
 			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
 		}
-		if len(inner.Exprs) != 0 {
+		if len(inner.GetArgs()) != 0 {
 			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
 		}
 		cv, err := vschema.FindColVindex(plan.Table.Name)
@@ -615,6 +637,46 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Vindex:        cv.Vindex,
 			VindexColumns: vindexColumns,
 		}, nil
+	case *sqlparser.FuncExpr:
+		switch inner.Name.Lowered() {
+		case "keyspace_id":
+			// This function is used internally to route queries and records properly
+			// in sharded keyspaces using vindexes.
+			if len(inner.Exprs) != 0 {
+				return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
+			}
+			cv, err := vschema.FindColVindex(plan.Table.Name)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			return ColExpr{
+				Field: &querypb.Field{
+					Name: "keyspace_id",
+					Type: sqltypes.VarBinary,
+				},
+				Vindex:        cv.Vindex,
+				VindexColumns: vindexColumns,
+			}, nil
+		case "convert_tz":
+			// This function is used when transforming datetime
+			// values between the source and target.
+			colnum, err := findColumn(plan.Table, aliased.As)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			field := plan.Table.Fields[colnum]
+			plan.setColumnFuncExpr(field.Name, inner)
+			return ColExpr{
+				ColNum: colnum,
+				Field:  field,
+			}, nil
+		default:
+			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
+		}
 	case *sqlparser.Literal:
 		//allow only intval 1
 		if inner.Type != sqlparser.IntVal {
@@ -656,7 +718,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
 func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
-	var colnames []sqlparser.ColIdent
+	var colnames []sqlparser.IdentifierCI
 	var krExpr sqlparser.SelectExpr
 	whereFilter := Filter{
 		Opcode: VindexMatch,
@@ -737,7 +799,7 @@ func selString(expr sqlparser.SelectExpr) (string, error) {
 
 // buildVindexColumns builds the list of column numbers of the table
 // that will be the input to the vindex function.
-func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error) {
+func buildVindexColumns(ti *Table, colnames []sqlparser.IdentifierCI) ([]int, error) {
 	vindexColumns := make([]int, 0, len(colnames))
 	for _, colname := range colnames {
 		colnum, err := findColumn(ti, colname)
@@ -749,7 +811,7 @@ func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error)
 	return vindexColumns, nil
 }
 
-func findColumn(ti *Table, name sqlparser.ColIdent) (int, error) {
+func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 	for i, col := range ti.Fields {
 		if name.EqualString(col.Name) {
 			return i, nil

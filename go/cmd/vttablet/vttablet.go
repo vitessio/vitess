@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -35,12 +34,14 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
+	"vitess.io/vitess/resources"
 
-	rice "github.com/GeertJohan/go.rice"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -55,6 +56,10 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 func main() {
@@ -65,11 +70,11 @@ func main() {
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Exit("-tablet-path required")
+		log.Exit("--tablet-path required")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
 	if err != nil {
-		log.Exitf("failed to parse -tablet-path: %v", err)
+		log.Exitf("failed to parse --tablet-path: %v", err)
 	}
 
 	// config and mycnf initializations are intertwined.
@@ -87,12 +92,12 @@ func main() {
 
 	// Initialize and start tm.
 	gRPCPort := int32(0)
-	if servenv.GRPCPort != nil {
-		gRPCPort = int32(*servenv.GRPCPort)
+	if servenv.GRPCPort() != 0 {
+		gRPCPort = int32(servenv.GRPCPort())
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort, mysqld.GetVersionString(), config.DB)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, mysqld.GetVersionString(), config.DB)
 	if err != nil {
-		log.Exitf("failed to parse -tablet-path: %v", err)
+		log.Exitf("failed to parse --tablet-path: %v", err)
 	}
 	tm = &tabletmanager.TabletManager{
 		BatchCtx:            context.Background(),
@@ -103,10 +108,11 @@ func main() {
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
+		VDiffEngine:         vdiff.NewEngine(config, ts, tablet),
 		MetadataManager:     &mysqlctl.MetadataManager{},
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
-		log.Exitf("failed to parse -tablet-path or initialize DB credentials: %v", err)
+		log.Exitf("failed to parse --tablet-path or initialize DB credentials: %v", err)
 	}
 	servenv.OnClose(func() {
 		// Close the tm so that our topo entry gets pruned properly and any
@@ -167,24 +173,14 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 }
 
 // extractOnlineDDL extracts the gh-ost binary from this executable. gh-ost is appended
-// to vttablet executable by `make build` and via ricebox
+// to vttablet executable by `make build` with a go:embed
 func extractOnlineDDL() error {
 	if binaryFileName, isOverride := onlineddl.GhostBinaryFileName(); !isOverride {
-		riceBox, err := rice.FindBox("../../../resources/bin")
-		if err != nil {
-			return err
-		}
-
-		// there is no path override for gh-ost. We're expected to auto-extract gh-ost.
-		ghostBinary, err := riceBox.Bytes("gh-ost")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
+		if err := os.WriteFile(binaryFileName, resources.GhostBinary, 0755); err != nil {
 			// One possibility of failure is that gh-ost is up and running. In that case,
 			// let's pause and check if the running gh-ost is exact same binary as the one we wish to extract.
 			foundBytes, _ := os.ReadFile(binaryFileName)
-			if bytes.Equal(ghostBinary, foundBytes) {
+			if bytes.Equal(resources.GhostBinary, foundBytes) {
 				// OK, it's the same binary, there is no need to extract the file anyway
 				return nil
 			}

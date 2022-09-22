@@ -46,7 +46,7 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var left, right EvalResult
 	left.init(env, b.Left)
 	right.init(env, b.Right)
-	if left.null() || right.null() {
+	if left.isNull() || right.isNull() {
 		out.setNull()
 		return
 	}

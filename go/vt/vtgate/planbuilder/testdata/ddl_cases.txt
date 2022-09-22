@@ -10,7 +10,10 @@
       "Sharded": false
     },
     "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
-  }
+  },
+  "TablesUsed": [
+    "main.t1"
+  ]
 }
 Gen4 plan same as above
 
@@ -26,7 +29,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
-  }
+  },
+  "TablesUsed": [
+    "user.t1"
+  ]
 }
 Gen4 plan same as above
 
@@ -42,7 +48,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create table a (\n\tid int\n)"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -63,7 +72,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "alter table a add column id int"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -79,7 +91,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "alter table `user` add column id int"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -95,7 +110,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "alter table a add column id int"
-  }
+  },
+  "TablesUsed": [
+    "user.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -203,7 +221,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "alter table `user` add index a (id)"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -219,7 +240,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "alter table unknown add index a (id)"
-  }
+  },
+  "TablesUsed": [
+    "main.unknown"
+  ]
 }
 Gen4 plan same as above
 
@@ -235,7 +259,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a"
-  }
+  },
+  "TablesUsed": [
+    "main.view_a"
+  ]
 }
 {
   "QueryType": "DDL",
@@ -247,7 +274,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create view view_a as select a.col1, a.col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a"
-  }
+  },
+  "TablesUsed": [
+    "main.view_a"
+  ]
 }
 
 # create view with subquery in unsharded keyspace with IN clause
@@ -262,7 +292,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create view view_a as select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)"
-  }
+  },
+  "TablesUsed": [
+    "main.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -278,7 +311,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create view view_a as select id from unsharded union select id from unsharded_auto order by id asc limit 5"
-  }
+  },
+  "TablesUsed": [
+    "main.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -294,7 +330,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
-  }
+  },
+  "TablesUsed": [
+    "main.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -310,7 +349,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -326,7 +368,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "alter view user_extra as select * from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -342,7 +387,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "drop table unsharded_a"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -358,7 +406,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "drop view a"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -374,7 +425,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "truncate table user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -390,7 +444,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "rename table a to b"
-  }
+  },
+  "TablesUsed": [
+    "main.a",
+    "main.b"
+  ]
 }
 Gen4 plan same as above
 
@@ -407,7 +465,10 @@ Gen4 plan same as above
     },
     "Query": "create temporary table a (\n\tid int\n)",
     "TempTable": true
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -424,7 +485,10 @@ Gen4 plan same as above
     },
     "Query": "drop temporary table a",
     "TempTable": true
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -439,7 +503,10 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "Query": "create table function_default (\n\tx varchar(25) default (TRIM(' check '))\n)"
-  }
+    "Query": "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)"
+  },
+  "TablesUsed": [
+    "main.function_default"
+  ]
 }
 Gen4 plan same as above

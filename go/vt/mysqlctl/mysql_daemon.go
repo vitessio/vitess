@@ -40,6 +40,12 @@ type MysqlDaemon interface {
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int32, error)
 
+	// GetServerID returns the servers ID.
+	GetServerID(ctx context.Context) (uint32, error)
+
+	// GetServerUUID returns the servers UUID
+	GetServerUUID(ctx context.Context) (string, error)
+
 	// replication related methods
 	StartReplication(hookExtraEnv map[string]string) error
 	RestartReplication(hookExtraEnv map[string]string) error
@@ -48,9 +54,16 @@ type MysqlDaemon interface {
 	StopIOThread(ctx context.Context) error
 	ReplicationStatus() (mysql.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error)
+	GetGTIDPurged(ctx context.Context) (mysql.Position, error)
 	SetSemiSyncEnabled(source, replica bool) error
 	SemiSyncEnabled() (source, replica bool)
+	SemiSyncStatus() (source, replica bool)
+	SemiSyncClients() (count uint32)
+	SemiSyncSettings() (timeout uint64, numReplicas uint32)
 	SemiSyncReplicationStatus() (bool, error)
+	ResetReplicationParameters(ctx context.Context) error
+	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error)
+	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
@@ -69,9 +82,10 @@ type MysqlDaemon interface {
 	Promote(map[string]string) (mysql.Position, error)
 
 	// Schema related methods
-	GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 	GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error)
 	GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error)
+	GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error)
 	PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 	ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
@@ -84,6 +98,9 @@ type MysqlDaemon interface {
 
 	// GetVersionString returns the database version as a string
 	GetVersionString() string
+
+	// GetVersionComment returns the version comment
+	GetVersionComment(ctx context.Context) string
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error

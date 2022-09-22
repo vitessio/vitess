@@ -32,7 +32,7 @@ var errRejected = errors.New("rejected")
 func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
-	return dbconfigs.NewTestDBConfigs(cp, cp, "")
+	return dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 }
 
 // requireLogs ensure that the given logs contains all the string in wants.

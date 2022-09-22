@@ -18,13 +18,14 @@ package evalengine
 
 import (
 	"math"
-	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 // Cast converts a Value to the target type.
@@ -99,33 +100,25 @@ func ToInt64(v sqltypes.Value) (int64, error) {
 // ToFloat64 converts Value to float64.
 func ToFloat64(v sqltypes.Value) (float64, error) {
 	var num EvalResult
-	if err := num.setValue(v); err != nil {
+	if err := num.setValue(v, collationNumeric); err != nil {
 		return 0, err
 	}
-	switch num.typeof() {
-	case sqltypes.Int64:
-		return float64(num.int64()), nil
-	case sqltypes.Uint64:
-		return float64(num.uint64()), nil
-	case sqltypes.Float64:
-		return num.float64(), nil
-	}
+	num.makeFloat()
+	return num.float64(), nil
+}
 
-	if num.textual() {
-		fval, err := strconv.ParseFloat(string(v.Raw()), 64)
-		if err != nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return fval, nil
+func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
+	lit, err := translateLiteral(literal, nil)
+	if err != nil {
+		return sqltypes.Value{}, err
 	}
-
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert to float: %s", v.String())
+	return lit.Val.Value(), nil
 }
 
 // ToNative converts Value to a native go type.
 // Decimal is returned as []byte.
-func ToNative(v sqltypes.Value) (interface{}, error) {
-	var out interface{}
+func ToNative(v sqltypes.Value) (any, error) {
+	var out any
 	var err error
 	switch {
 	case v.Type() == sqltypes.Null:
@@ -145,6 +138,11 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 }
 
 func compareNumeric(v1, v2 *EvalResult) (int, error) {
+	// upcast all <64 bit numeric types to 64 bit, e.g. int8 -> int64, uint8 -> uint64, float32 -> float64
+	// so we don't have to consider integer types which aren't 64 bit
+	v1.upcastNumeric()
+	v2.upcastNumeric()
+
 	// Equalize the types the same way MySQL does
 	// https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 	switch v1.typeof() {
@@ -158,7 +156,7 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 		case sqltypes.Float64:
 			v1.setFloat(float64(v1.int64()))
 		case sqltypes.Decimal:
-			v1.setDecimal(newDecimalInt64(v1.int64()))
+			v1.setDecimal(decimal.NewFromInt(v1.int64()), 0)
 		}
 	case sqltypes.Uint64:
 		switch v2.typeof() {
@@ -170,7 +168,7 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 		case sqltypes.Float64:
 			v1.setFloat(float64(v1.uint64()))
 		case sqltypes.Decimal:
-			v1.setDecimal(newDecimalUint64(v1.uint64()))
+			v1.setDecimal(decimal.NewFromUint(v1.uint64()), 0)
 		}
 	case sqltypes.Float64:
 		switch v2.typeof() {
@@ -182,7 +180,7 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 			}
 			v2.setFloat(float64(v2.uint64()))
 		case sqltypes.Decimal:
-			f, ok := v2.decimal().num.Float64()
+			f, ok := v2.decimal().Float64()
 			if !ok {
 				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 			}
@@ -191,11 +189,11 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 	case sqltypes.Decimal:
 		switch v2.typeof() {
 		case sqltypes.Int64:
-			v2.setDecimal(newDecimalInt64(v2.int64()))
+			v2.setDecimal(decimal.NewFromInt(v2.int64()), 0)
 		case sqltypes.Uint64:
-			v2.setDecimal(newDecimalUint64(v2.uint64()))
+			v2.setDecimal(decimal.NewFromUint(v2.uint64()), 0)
 		case sqltypes.Float64:
-			f, ok := v1.decimal().num.Float64()
+			f, ok := v1.decimal().Float64()
 			if !ok {
 				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 			}
@@ -229,28 +227,19 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 			return -1, nil
 		}
 	case sqltypes.Decimal:
-		return v1.decimal().num.Cmp(&v2.decimal().num), nil
+		return v1.decimal().Cmp(v2.decimal()), nil
 	}
-
-	// v1>v2
 	return 1, nil
 }
 
 func parseDate(expr *EvalResult) (t time.Time, err error) {
 	switch expr.typeof() {
 	case sqltypes.Date:
-		t, err = time.Parse("2006-01-02", expr.string())
+		t, err = sqlparser.ParseDate(expr.string())
 	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = time.Parse("2006-01-02 15:04:05", expr.string())
+		t, err = sqlparser.ParseDateTime(expr.string())
 	case sqltypes.Time:
-		t, err = time.Parse("15:04:05", expr.string())
-		if err == nil {
-			now := time.Now()
-			// setting the date to today's date, because we use AddDate on t
-			// which is "0000-01-01 xx:xx:xx", we do minus one on the month
-			// and day to take into account the 01 in both month and day of t
-			t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
-		}
+		t, err = sqlparser.ParseTime(expr.string())
 	}
 	return
 }
@@ -258,26 +247,21 @@ func parseDate(expr *EvalResult) (t time.Time, err error) {
 // matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
 // that does not return an error.
 func matchExprWithAnyDateFormat(expr *EvalResult) (t time.Time, err error) {
-	layouts := []string{"2006-01-02", "2006-01-02 15:04:05", "15:04:05"}
-	for _, layout := range layouts {
-		t, err = time.Parse(layout, expr.string())
-		if err == nil {
-			if layout == "15:04:05" {
-				now := time.Now()
-				// setting the date to today's date, because we use AddDate on t
-				// which is "0000-01-01 xx:xx:xx", we do minus one on the month
-				// and day to take into account the 01 in both month and day of t
-				t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
-			}
-			return
-		}
+	t, err = sqlparser.ParseDate(expr.string())
+	if err == nil {
+		return
 	}
+	t, err = sqlparser.ParseDateTime(expr.string())
+	if err == nil {
+		return
+	}
+	t, err = sqlparser.ParseTime(expr.string())
 	return
 }
 
 // Date comparison based on:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-// 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
 func compareDates(l, r *EvalResult) (int, error) {
 	lTime, err := parseDate(l)
 	if err != nil {
@@ -304,7 +288,7 @@ func compareDateAndString(l, r *EvalResult) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-	case l.textual():
+	case l.isTextual():
 		rTime, err = parseDate(r)
 		if err != nil {
 			return 0, err
@@ -328,7 +312,7 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 }
 
 // More on string collations coercibility on MySQL documentation:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
 func compareStrings(l, r *EvalResult) int {
 	coll, err := mergeCollations(l, r)
 	if err != nil {

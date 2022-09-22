@@ -18,7 +18,6 @@ package vtcombo
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -28,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -50,6 +48,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
@@ -89,7 +88,6 @@ func CreateTablet(
 		Uid:  uid,
 	}
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
-	flag.Set("debug-url-prefix", fmt.Sprintf("/debug-%d", uid))
 
 	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
@@ -145,6 +143,23 @@ func CreateTablet(
 	return nil
 }
 
+// InitRoutingRules saves the routing rules into ts and reloads the vschema.
+func InitRoutingRules(
+	ctx context.Context,
+	ts *topo.Server,
+	rr *vschemapb.RoutingRules,
+) error {
+	if rr == nil {
+		return nil
+	}
+
+	if err := ts.SaveRoutingRules(ctx, rr); err != nil {
+		return err
+	}
+
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(
@@ -161,11 +176,12 @@ func InitTabletMap(
 
 	// Register the tablet manager client factory for tablet manager
 	// Do this before any tablets are created so that they respect the protocol,
-	// otherwise it defaults to grpc
+	// otherwise it defaults to grpc.
+	//
+	// main() forces the --tablet_manager_protocol flag to this value.
 	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
 		return &internalTabletManagerClient{}
 	})
-	*tmclient.TabletManagerProtocol = "internal"
 
 	// iterate through the keyspaces
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
@@ -183,9 +199,9 @@ func InitTabletMap(
 		return 0, fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
 	}
 
-	// Register the tablet dialer for tablet server
+	// Register the tablet dialer for tablet server. main() forces the --tablet_protocol
+	// flag to this value.
 	tabletconn.RegisterDialer("internal", dialer)
-	*tabletconn.TabletProtocol = "internal"
 
 	// run healthcheck on all vttablets
 	tmc := tmclient.NewTabletManagerClient()
@@ -275,19 +291,10 @@ func CreateKs(
 ) (uint32, error) {
 	keyspace := kpb.Name
 
-	// First parse the ShardingColumnType.
-	// Note if it's empty, we will return 'UNSET'.
-	sct, err := key.ParseKeyspaceIDType(kpb.ShardingColumnType)
-	if err != nil {
-		return 0, fmt.Errorf("parseKeyspaceIDType(%v) failed: %v", kpb.ShardingColumnType, err)
-	}
-
 	if kpb.ServedFrom != "" {
 		// if we have a redirect, create a completely redirected
 		// keyspace and no tablet
 		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-			ShardingColumnName: kpb.ShardingColumnName,
-			ShardingColumnType: sct,
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 				{
 					TabletType: topodatapb.TabletType_PRIMARY,
@@ -307,18 +314,14 @@ func CreateKs(
 		}
 	} else {
 		// create a regular keyspace
-		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-			ShardingColumnName: kpb.ShardingColumnName,
-			ShardingColumnType: sct,
-		}); err != nil {
+		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 		}
 
 		// iterate through the shards
 		for _, spb := range kpb.Shards {
 			shard := spb.Name
-			ts.CreateShard(ctx, keyspace, shard)
-			if err != nil {
+			if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
 				return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
 			}
 
@@ -473,12 +476,9 @@ func (itc *internalTabletConn) Begin(
 	ctx context.Context,
 	target *querypb.Target,
 	options *querypb.ExecuteOptions,
-) (int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := itc.tablet.qsc.QueryService().Begin(ctx, target, options)
-	if err != nil {
-		return 0, nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
-	}
-	return transactionID, alias, nil
+) (queryservice.TransactionState, error) {
+	state, err := itc.tablet.qsc.QueryService().Begin(ctx, target, options)
+	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // Commit is part of queryservice.QueryService
@@ -555,10 +555,10 @@ func (itc *internalTabletConn) BeginExecute(
 	bindVars map[string]*querypb.BindVariable,
 	reserveID int64,
 	options *querypb.ExecuteOptions,
-) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+) (queryservice.TransactionState, *sqltypes.Result, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	result, transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginExecute(ctx, target, preQueries, query, bindVars, reserveID, options)
-	return result, transactionID, tabletAlias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	state, result, err := itc.tablet.qsc.QueryService().BeginExecute(ctx, target, preQueries, query, bindVars, reserveID, options)
+	return state, result, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // BeginStreamExecute is part of queryservice.QueryService
@@ -571,10 +571,10 @@ func (itc *internalTabletConn) BeginStreamExecute(
 	reservedID int64,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
-) (int64, *topodatapb.TabletAlias, error) {
+) (queryservice.TransactionState, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginStreamExecute(ctx, target, preQueries, query, bindVars, reservedID, options, callback)
-	return transactionID, tabletAlias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	state, err := itc.tablet.qsc.QueryService().BeginStreamExecute(ctx, target, preQueries, query, bindVars, reservedID, options, callback)
+	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // MessageStream is part of queryservice.QueryService
@@ -602,10 +602,10 @@ func (itc *internalTabletConn) ReserveBeginExecute(
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
 	options *querypb.ExecuteOptions,
-) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	res, transactionID, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
-	return res, transactionID, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	state, result, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
+	return state, result, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // ReserveBeginStreamExecute is part of the QueryService interface.
@@ -618,10 +618,10 @@ func (itc *internalTabletConn) ReserveBeginStreamExecute(
 	bindVariables map[string]*querypb.BindVariable,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
-) (int64, int64, *topodatapb.TabletAlias, error) {
+) (queryservice.ReservedTransactionState, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	transactionID, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginStreamExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
-	return transactionID, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	state, err := itc.tablet.qsc.QueryService().ReserveBeginStreamExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
+	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // ReserveExecute is part of the QueryService interface.
@@ -633,10 +633,10 @@ func (itc *internalTabletConn) ReserveExecute(
 	bindVariables map[string]*querypb.BindVariable,
 	transactionID int64,
 	options *querypb.ExecuteOptions,
-) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+) (queryservice.ReservedState, *sqltypes.Result, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	res, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options)
-	return res, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	state, result, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options)
+	return state, result, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // ReserveStreamExecute is part of the QueryService interface.
@@ -649,10 +649,10 @@ func (itc *internalTabletConn) ReserveStreamExecute(
 	transactionID int64,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
-) (int64, *topodatapb.TabletAlias, error) {
+) (queryservice.ReservedState, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveStreamExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
-	return reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	state, err := itc.tablet.qsc.QueryService().ReserveStreamExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
+	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // Release is part of the QueryService interface.
@@ -680,25 +680,20 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context, callback func(*
 // VStream is part of queryservice.QueryService.
 func (itc *internalTabletConn) VStream(
 	ctx context.Context,
-	target *querypb.Target,
-	startPos string,
-	tableLastPKs []*binlogdatapb.TableLastPK,
-	filter *binlogdatapb.Filter,
+	request *binlogdatapb.VStreamRequest,
 	send func([]*binlogdatapb.VEvent) error,
 ) error {
-	err := itc.tablet.qsc.QueryService().VStream(ctx, target, startPos, tableLastPKs, filter, send)
+	err := itc.tablet.qsc.QueryService().VStream(ctx, request, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // VStreamRows is part of the QueryService interface.
 func (itc *internalTabletConn) VStreamRows(
 	ctx context.Context,
-	target *querypb.Target,
-	query string,
-	lastpk *querypb.QueryResult,
+	request *binlogdatapb.VStreamRowsRequest,
 	send func(*binlogdatapb.VStreamRowsResponse) error,
 ) error {
-	err := itc.tablet.qsc.QueryService().VStreamRows(ctx, target, query, lastpk, send)
+	err := itc.tablet.qsc.QueryService().VStreamRows(ctx, request, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
@@ -720,6 +715,10 @@ func (itc *internalTabletConn) VStreamResults(
 // internalTabletManagerClient implements tmclient.TabletManagerClient
 type internalTabletManagerClient struct{}
 
+func (itmc *internalTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return nil, fmt.Errorf("VDiff not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
@@ -740,14 +739,13 @@ func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topod
 func (itmc *internalTabletManagerClient) GetSchema(
 	ctx context.Context,
 	tablet *topodatapb.Tablet,
-	tables, excludeTables []string,
-	includeViews bool,
+	request *tabletmanagerdatapb.GetSchemaRequest,
 ) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.tm.GetSchema(ctx, tables, excludeTables, includeViews)
+	return t.tm.GetSchema(ctx, request)
 }
 
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
@@ -829,32 +827,24 @@ func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet
 	return t.tm.ApplySchema(ctx, change)
 }
 
-func (itmc *internalTabletManagerClient) ExecuteQuery(context.Context, *topodatapb.Tablet, []byte, int) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteQuery(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *topodatapb.Tablet, bool, []byte, int, bool, bool) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ExecuteFetchAsAllPrivs(context.Context, *topodatapb.Tablet, []byte, int, bool) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteFetchAsAllPrivs(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *topodatapb.Tablet, bool, []byte, int) (*querypb.QueryResult, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) MasterStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) PrimaryStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) MasterPosition(context.Context, *topodatapb.Tablet) (string, error) {
-	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) PrimaryPosition(context.Context, *topodatapb.Tablet) (string, error) {
@@ -881,23 +871,11 @@ func (itmc *internalTabletManagerClient) ResetReplication(context.Context, *topo
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) InitMaster(context.Context, *topodatapb.Tablet, bool) (string, error) {
-	return "", fmt.Errorf("not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) InitPrimary(context.Context, *topodatapb.Tablet, bool) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) PopulateReparentJournal(context.Context, *topodatapb.Tablet, int64, string, *topodatapb.TabletAlias, string) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) DemoteMaster(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) UndoDemoteMaster(context.Context, *topodatapb.Tablet, bool) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -909,23 +887,19 @@ func (itmc *internalTabletManagerClient) UndoDemotePrimary(context.Context, *top
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) SetMaster(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias, int64, string, bool, bool) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) SetReplicationSource(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias, int64, string, bool, bool) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(context.Context, *topodatapb.Tablet, replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
-	return nil, nil, fmt.Errorf("not implemented in vtcombo")
+func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(context.Context, *topodatapb.Tablet, replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) PromoteReplica(context.Context, *topodatapb.Tablet, bool) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tablet, int, bool) (logutil.EventStream, error) {
+func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -937,6 +911,10 @@ func (itmc *internalTabletManagerClient) Close() {
 }
 
 func (itmc *internalTabletManagerClient) ReplicationStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) FullStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -965,6 +943,10 @@ func (itmc *internalTabletManagerClient) InitReplica(context.Context, *topodatap
 }
 
 func (itmc *internalTabletManagerClient) ReplicaWasPromoted(context.Context, *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Context, *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

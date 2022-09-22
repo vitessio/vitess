@@ -48,21 +48,25 @@ var (
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
 )
 
-// BinWriter interface is used for encoding values.
-// Types like bytes.Buffer conform to this interface.
-// We expect the writer objects to be in-memory buffers.
-// So, we don't expect the write operations to fail.
-type BinWriter interface {
-	Write([]byte) (int, error)
-}
+type (
+	// BinWriter interface is used for encoding values.
+	// Types like bytes.Buffer conform to this interface.
+	// We expect the writer objects to be in-memory buffers.
+	// So, we don't expect the write operations to fail.
+	BinWriter interface {
+		Write([]byte) (int, error)
+	}
 
-// Value can store any SQL value. If the value represents
-// an integral type, the bytes are always stored as a canonical
-// representation that matches how MySQL returns such values.
-type Value struct {
-	typ querypb.Type
-	val []byte
-}
+	// Value can store any SQL value. If the value represents
+	// an integral type, the bytes are always stored as a canonical
+	// representation that matches how MySQL returns such values.
+	Value struct {
+		typ querypb.Type
+		val []byte
+	}
+
+	Row = []Value
+)
 
 // NewValue builds a Value using typ and val. If the value and typ
 // don't match, it returns an error.
@@ -83,7 +87,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
-	case IsQuoted(typ) || typ == Bit || typ == HexNum || typ == HexVal || typ == Null:
+	case IsQuoted(typ) || typ == Bit || typ == HexNum || typ == HexVal || typ == Null || typ == BitNum:
 		return MakeTrusted(typ, val), nil
 	}
 	// All other types are unsafe or invalid.
@@ -114,6 +118,11 @@ func NewHexNum(v []byte) Value {
 // NewHexVal builds a HexVal Value.
 func NewHexVal(v []byte) Value {
 	return MakeTrusted(HexVal, v)
+}
+
+// NewBitNum builds a BitNum Value.
+func NewBitNum(v []byte) Value {
+	return MakeTrusted(BitNum, v)
 }
 
 // NewInt64 builds an Int64 Value.
@@ -201,7 +210,7 @@ func NewIntegral(val string) (n Value, err error) {
 // string and []byte.
 // This function is deprecated. Use the type-specific
 // functions instead.
-func InterfaceToValue(goval interface{}) (Value, error) {
+func InterfaceToValue(goval any) (Value, error) {
 	switch goval := goval.(type) {
 	case nil:
 		return NULL, nil
@@ -246,10 +255,12 @@ func (v Value) ToBytes() ([]byte, error) {
 	switch v.typ {
 	case Expression:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes")
-	case HexVal:
+	case HexVal: // TODO: all the decode below have problem when decoding odd number of bytes. This needs to be fixed.
 		return v.decodeHexVal()
 	case HexNum:
 		return v.decodeHexNum()
+	case BitNum:
+		return v.decodeBitNum()
 	default:
 		return v.val, nil
 	}
@@ -266,7 +277,7 @@ func (v Value) ToInt64() (int64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseInt(v.ToString(), 10, 64)
+	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
 // ToFloat64 returns the value as MySQL would return it as a float64.
@@ -275,7 +286,7 @@ func (v Value) ToFloat64() (float64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseFloat(v.ToString(), 64)
+	return strconv.ParseFloat(v.RawStr(), 64)
 }
 
 // ToUint64 returns the value as MySQL would return it as a uint64.
@@ -284,7 +295,7 @@ func (v Value) ToUint64() (uint64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseUint(v.ToString(), 10, 64)
+	return strconv.ParseUint(v.RawStr(), 10, 64)
 }
 
 // ToBool returns the value as a bool value
@@ -454,7 +465,7 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 	if len(b) == 0 {
 		return fmt.Errorf("error unmarshaling empty bytes")
 	}
-	var val interface{}
+	var val any
 	var err error
 	switch b[0] {
 	case '-':
@@ -503,6 +514,26 @@ func (v *Value) decodeHexNum() ([]byte, error) {
 	}
 	hexBytes := v.val[2:]
 	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
+	if err != nil {
+		return nil, err
+	}
+	return decodedHexBytes, nil
+}
+
+// decodeBitNum decodes the SQL bit value of the form 0b101 into a byte
+// array matching what MySQL would return when querying the column where
+// an INSERT was performed with 0x5 having been specified as a value
+func (v *Value) decodeBitNum() ([]byte, error) {
+	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'b' {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
+	}
+	bitBytes := v.val[2:]
+	ui, err := strconv.ParseUint(string(bitBytes), 2, 64)
+	if err != nil {
+		return nil, err
+	}
+	hexVal := fmt.Sprintf("%x", ui)
+	decodedHexBytes, err := hex.DecodeString(hexVal)
 	if err != nil {
 		return nil, err
 	}

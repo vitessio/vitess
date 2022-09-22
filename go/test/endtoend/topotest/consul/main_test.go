@@ -112,7 +112,7 @@ func TestTopoRestart(t *testing.T) {
 
 	defer execute(t, conn, `delete from t1`)
 
-	ch := make(chan interface{})
+	ch := make(chan any)
 
 	go func() {
 		clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())

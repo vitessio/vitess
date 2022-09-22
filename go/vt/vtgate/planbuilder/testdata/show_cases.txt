@@ -53,10 +53,10 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # Show Table status with a keyspace name with a condition
-"SHOW table StatUs In user WHERE Rows > 70"
+"SHOW table StatUs In user WHERE `Rows` > 70"
 {
   "QueryType": "SHOW",
-  "Original": "SHOW table StatUs In user WHERE Rows \u003e 70",
+  "Original": "SHOW table StatUs In user WHERE `Rows` \u003e 70",
   "Instructions": {
     "OperatorType": "Send",
     "Keyspace": {
@@ -613,6 +613,159 @@ Gen4 plan same as above
     "TargetDestination": "AnyShard()",
     "Query": "show global status",
     "SingleShardOnly": true
+  }
+}
+Gen4 plan same as above
+
+# show plugins
+"show plugins"
+{
+  "QueryType": "SHOW",
+  "Original": "show plugins",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show engines
+"show engines"
+{
+  "QueryType": "SHOW",
+  "Original": "show engines",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_shards
+"show vitess_shards"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_shards",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_shards"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_tablets
+"show vitess_tablets"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_tablets",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_tablets"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_tablets with filter
+"show vitess_tablets like '-2%'"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_tablets like '-2%'",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_tablets",
+    "Filter": " like '-2%'"
+  }
+}
+Gen4 plan same as above
+
+# show vschema tables
+"show vschema tables"
+{
+  "QueryType": "SHOW",
+  "Original": "show vschema tables",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show vschema vindexes
+"show vschema vindexes"
+{
+  "QueryType": "SHOW",
+  "Original": "show vschema vindexes",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show vschema vindexes on a table
+"show vschema vindexes on user.user"
+{
+  "QueryType": "SHOW",
+  "Original": "show vschema vindexes on user.user",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show vitess target
+"show vitess_target"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_target",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_replication_status
+"show vitess_replication_status"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_replication_status",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_replication_status"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_replication_status with filter
+"show vitess_replication_status like 'x'"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_replication_status like 'x'",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_replication_status",
+    "Filter": " like 'x'"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_metadata variables
+"show vitess_metadata variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_metadata variables",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_metadata variables"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_metadata variables with filter
+"show vitess_metadata variables like 'x'"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_metadata variables like 'x'",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_metadata variables",
+    "Filter": " like 'x'"
   }
 }
 Gen4 plan same as above

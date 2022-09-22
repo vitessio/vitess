@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -50,7 +51,7 @@ func TestMultiColMap(t *testing.T) {
 	require.NoError(t, err)
 	mutiCol := vindex.(MultiColumn)
 
-	got, err := mutiCol.Map(nil, [][]sqltypes.Value{{
+	got, err := mutiCol.Map(context.Background(), nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		sqltypes.NewInt64(255), sqltypes.NewInt64(1), sqltypes.NewInt64(1),

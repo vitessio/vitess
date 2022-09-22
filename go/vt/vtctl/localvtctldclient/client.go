@@ -26,9 +26,8 @@ import (
 )
 
 var (
-	m               sync.RWMutex
-	server          vtctlservicepb.VtctldServer
-	errStreamClosed = errors.New("stream is closed for sending") // nolint (TODO:@ajm188) this will be used in a future PR, and the codegen will produce invalid code for streaming rpcs without this
+	m      sync.Mutex
+	server vtctlservicepb.VtctldServer
 )
 
 type localVtctldClient struct {
@@ -39,7 +38,7 @@ type localVtctldClient struct {
 func (client *localVtctldClient) Close() error { return nil }
 
 //go:generate -command localvtctldclient go run ../vtctldclient/codegen
-//go:generate localvtctldclient -targetpkg localvtctldclient -impl localVtctldClient -out client_gen.go -local
+//go:generate localvtctldclient --targetpkg localvtctldclient --impl localVtctldClient --out client_gen.go --local
 
 // New returns a local vtctldclient.VtctldClient that makes method calls on the
 // provided VtctldServer implementation. No network traffic takes place between
@@ -60,8 +59,8 @@ func SetServer(s vtctlservicepb.VtctldServer) {
 }
 
 func localVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 
 	if server == nil {
 		return nil, errors.New("cannot create local vtctldclient without a server; call SetServer first")

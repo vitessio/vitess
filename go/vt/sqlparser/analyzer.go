@@ -58,9 +58,10 @@ const (
 	StmtCallProc
 	StmtRevert
 	StmtShowMigrationLogs
+	StmtCommentOnly
 )
 
-//ASTToStatementType returns a StatementType from an AST stmt
+// ASTToStatementType returns a StatementType from an AST stmt
 func ASTToStatementType(stmt Statement) StatementType {
 	switch stmt.(type) {
 	case *Select, *Union:
@@ -71,7 +72,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUpdate
 	case *Delete:
 		return StmtDelete
-	case *Set:
+	case *Set, *SetTransaction:
 		return StmtSet
 	case *Show:
 		return StmtShow
@@ -111,12 +112,14 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtStream
 	case *VStream:
 		return StmtVStream
+	case *CommentOnly:
+		return StmtCommentOnly
 	default:
 		return StmtUnknown
 	}
 }
 
-//CanNormalize takes Statement and returns if the statement can be normalized.
+// CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc, *Stream: // TODO: we could merge this logic into ASTrewriter
@@ -127,22 +130,22 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	var directives CommentDirectives
+	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	case *Select:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Insert:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Update:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Delete:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Union, *Stream:
 		return true
 	default:
 		return false
 	}
-	return !directives.IsSet(DirectiveSkipQueryPlanCache)
+	return !comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
 }
 
 // MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
@@ -294,6 +297,8 @@ func (s StatementType) String() string {
 		return "FLUSH"
 	case StmtCallProc:
 		return "CALL_PROC"
+	case StmtCommentOnly:
+		return "COMMENT_ONLY"
 	default:
 		return "UNKNOWN"
 	}
@@ -308,7 +313,7 @@ func IsDML(sql string) bool {
 	return false
 }
 
-//IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
+// IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
 func IsDMLStatement(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Insert, *Update, *Delete:
@@ -391,12 +396,12 @@ func TableFromStatement(sql string) (TableName, error) {
 
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
-func GetTableName(node SimpleTableExpr) TableIdent {
+func GetTableName(node SimpleTableExpr) IdentifierCS {
 	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression
-	return NewTableIdent("")
+	return NewIdentifierCS("")
 }
 
 // IsColName returns true if the Expr is a *ColName.
@@ -447,20 +452,11 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
+// IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
 func IsLockingFunc(node Expr) bool {
-	switch p := node.(type) {
-	case *FuncExpr:
-		_, found := lockingFunctions[p.Name.Lowered()]
-		return found
+	switch node.(type) {
+	case *LockingFunc:
+		return true
 	}
 	return false
-}
-
-var lockingFunctions = map[string]interface{}{
-	"get_lock":          nil,
-	"is_free_lock":      nil,
-	"is_used_lock":      nil,
-	"release_all_locks": nil,
-	"release_lock":      nil,
 }

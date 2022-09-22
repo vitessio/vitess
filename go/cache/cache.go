@@ -19,9 +19,9 @@ package cache
 // Cache is a generic interface type for a data structure that keeps recently used
 // objects in memory and evicts them when it becomes full.
 type Cache interface {
-	Get(key string) (interface{}, bool)
-	Set(key string, val interface{}) bool
-	ForEach(callback func(interface{}) bool)
+	Get(key string) (any, bool)
+	Set(key string, val any) bool
+	ForEach(callback func(any) bool)
 
 	Delete(key string)
 	Clear()
@@ -56,7 +56,7 @@ func NewDefaultCacheImpl(cfg *Config) Cache {
 		if cfg.MaxEntries == 0 || cfg.MaxMemoryUsage == 0 {
 			return &nullCache{}
 		}
-		return NewRistrettoCache(cfg.MaxEntries, cfg.MaxMemoryUsage, func(val interface{}) int64 {
+		return NewRistrettoCache(cfg.MaxEntries, cfg.MaxMemoryUsage, func(val any) int64 {
 			return val.(cachedObject).CachedSize(true)
 		})
 
@@ -64,7 +64,7 @@ func NewDefaultCacheImpl(cfg *Config) Cache {
 		if cfg.MaxEntries == 0 {
 			return &nullCache{}
 		}
-		return NewLRUCache(cfg.MaxEntries, func(_ interface{}) int64 {
+		return NewLRUCache(cfg.MaxEntries, func(_ any) int64 {
 			return 1
 		})
 	}

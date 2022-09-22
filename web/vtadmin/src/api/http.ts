@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
 import { TabletDebugVars } from '../util/tabletDebugVars';
-import { isReadOnlyMode } from '../util/env';
+import { env, isReadOnlyMode } from '../util/env';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -41,8 +41,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
             throw new Error(`Cannot execute write request in read-only mode: ${options.method} ${endpoint}`);
         }
 
-        const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
-        const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+        const url = `${env().REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = { ...vtfetchOpts(), ...options };
 
         let response = null;
@@ -87,7 +86,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
 };
 
 export const vtfetchOpts = (): RequestInit => {
-    const credentials = process.env.REACT_APP_FETCH_CREDENTIALS;
+    const credentials = env().REACT_APP_FETCH_CREDENTIALS;
     if (credentials && credentials !== 'omit' && credentials !== 'same-origin' && credentials !== 'include') {
         throw Error(
             `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
@@ -194,6 +193,23 @@ export const fetchKeyspaces = async () =>
         },
     });
 
+export interface CreateKeyspaceParams {
+    clusterID: string;
+    options: vtctldata.ICreateKeyspaceRequest;
+}
+
+export const createKeyspace = async (params: CreateKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${params.clusterID}`, {
+        body: JSON.stringify(params.options),
+        method: 'post',
+    });
+
+    const err = pb.CreateKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.CreateKeyspaceResponse.create(result);
+};
+
 export const fetchSchemas = async () =>
     vtfetchEntities({
         endpoint: '/api/schemas',
@@ -235,12 +251,21 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
 };
 
 export interface DeleteTabletParams {
+    allowPrimary?: boolean;
     clusterID: string;
     alias: string;
 }
 
-export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: 'delete' });
+export const deleteTablet = async ({ allowPrimary, clusterID, alias }: DeleteTabletParams) => {
+    const req = new URLSearchParams();
+    req.append('cluster', clusterID);
+
+    // Do not append `allow_primary` if undefined in order to fall back to server default
+    if (typeof allowPrimary === 'boolean') {
+        req.append('allow_primary', allowPrimary.toString());
+    }
+
+    const { result } = await vtfetch(`/api/tablet/${alias}?${req}`, { method: 'delete' });
 
     const err = pb.DeleteTabletResponse.verify(result);
     if (err) throw Error(err);
@@ -248,18 +273,18 @@ export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => 
     return pb.DeleteTabletResponse.create(result);
 };
 
-export interface ReparentTabletParams {
+export interface RefreshTabletReplicationSourceParams {
     clusterID: string;
     alias: string;
 }
 
-export const reparentTablet = async ({ clusterID, alias }: ReparentTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
+export const refreshTabletReplicationSource = async ({ clusterID, alias }: RefreshTabletReplicationSourceParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/refresh_replication_source`, { method: 'put' });
 
-    const err = pb.ReparentTabletResponse.verify(result);
+    const err = pb.RefreshTabletReplicationSourceResponse.verify(result);
     if (err) throw Error(err);
 
-    return pb.ReparentTabletResponse.create(result);
+    return pb.RefreshTabletReplicationSourceResponse.create(result);
 };
 
 export interface PingTabletParams {
@@ -358,7 +383,7 @@ export interface TabletDebugVarsResponse {
 }
 
 export const fetchExperimentalTabletDebugVars = async (params: FetchTabletParams): Promise<TabletDebugVarsResponse> => {
-    if (!process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
+    if (!env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
         return Promise.resolve({ params });
     }
 
@@ -426,4 +451,112 @@ export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, 
     if (err) throw Error(err);
 
     return pb.VTExplainResponse.create(result);
+};
+
+export interface ValidateKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+    pingTablets: boolean;
+}
+
+export const validateKeyspace = async ({ clusterID, keyspace, pingTablets }: ValidateKeyspaceParams) => {
+    const body = JSON.stringify({ pingTablets });
+
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate`, { method: 'put', body });
+    const err = vtctldata.ValidateKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateKeyspaceResponse.create(result);
+};
+
+export interface ValidateSchemaKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const validateSchemaKeyspace = async ({ clusterID, keyspace }: ValidateSchemaKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate/schema`, { method: 'put' });
+    const err = vtctldata.ValidateSchemaKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateSchemaKeyspaceResponse.create(result);
+};
+
+export interface ValidateVersionKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const validateVersionKeyspace = async ({ clusterID, keyspace }: ValidateVersionKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate/version`, { method: 'put' });
+    const err = vtctldata.ValidateVersionKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateVersionKeyspaceResponse.create(result);
+};
+
+export interface FetchShardReplicationPositionsParams {
+    clusterIDs?: (string | null | undefined)[];
+    keyspaces?: (string | null | undefined)[];
+    keyspaceShards?: (string | null | undefined)[];
+}
+
+export const fetchShardReplicationPositions = async ({
+    clusterIDs = [],
+    keyspaces = [],
+    keyspaceShards = [],
+}: FetchShardReplicationPositionsParams) => {
+    const req = new URLSearchParams();
+    clusterIDs.forEach((c) => c && req.append('cluster', c));
+    keyspaces.forEach((k) => k && req.append('keyspace', k));
+    keyspaceShards.forEach((s) => s && req.append('keyspace_shard', s));
+
+    const { result } = await vtfetch(`/api/shard_replication_positions?${req}`);
+    const err = pb.GetShardReplicationPositionsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.GetShardReplicationPositionsResponse.create(result);
+};
+
+export interface ReloadSchemaParams {
+    clusterIDs?: (string | null | undefined)[];
+    concurrency?: number;
+    includePrimary?: boolean;
+    keyspaces?: (string | null | undefined)[];
+
+    // e.g., ["commerce/0"]
+    keyspaceShards?: (string | null | undefined)[];
+
+    // A list of tablet aliases; e.g., ["zone1-101", "zone1-102"]
+    tablets?: (string | null | undefined)[];
+
+    waitPosition?: string;
+}
+
+export const reloadSchema = async (params: ReloadSchemaParams) => {
+    const req = new URLSearchParams();
+
+    (params.clusterIDs || []).forEach((c) => c && req.append('cluster', c));
+    (params.keyspaces || []).forEach((k) => k && req.append('keyspace', k));
+    (params.keyspaceShards || []).forEach((k) => k && req.append('keyspaceShard', k));
+    (params.tablets || []).forEach((t) => t && req.append('tablet', t));
+
+    if (typeof params.concurrency === 'number') {
+        req.append('concurrency', params.concurrency.toString());
+    }
+
+    if (typeof params.includePrimary === 'boolean') {
+        req.append('include_primary', params.includePrimary.toString());
+    }
+
+    if (typeof params.waitPosition === 'string') {
+        req.append('wait_position', params.waitPosition);
+    }
+
+    const { result } = await vtfetch(`/api/schemas/reload?${req}`, { method: 'put' });
+
+    const err = pb.ReloadSchemasResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.ReloadSchemasResponse.create(result);
 };

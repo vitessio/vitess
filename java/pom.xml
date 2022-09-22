@@ -11,7 +11,7 @@
 
   <groupId>io.vitess</groupId>
   <artifactId>vitess-parent</artifactId>
-  <version>14.0.0-SNAPSHOT</version>
+  <version>15.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>Vitess Java Client libraries [Parent]</name>
@@ -89,7 +89,7 @@
       <dependency>
         <groupId>com.google.code.gson</groupId>
         <artifactId>gson</artifactId>
-        <version>2.8.5</version>
+        <version>2.8.9</version>
       </dependency>
       <dependency>
         <groupId>com.google.guava</groupId>

@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // shard related methods for Wrangler
@@ -167,56 +168,40 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 //
 // This takes the keyspace lock as not to interfere with resharding operations.
 func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard string, uid uint32) (err error) {
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SourceShardDelete(%v)", uid))
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// remove the source shard
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		var newSourceShards []*topodatapb.Shard_SourceShard
-		for _, ss := range si.SourceShards {
-			if ss.Uid != uid {
-				newSourceShards = append(newSourceShards, ss)
-			}
-		}
-		if len(newSourceShards) == len(si.SourceShards) {
-			return fmt.Errorf("no SourceShard with uid %v", uid)
-		}
-		si.SourceShards = newSourceShards
-		return nil
+	resp, err := wr.VtctldServer().SourceShardDelete(ctx, &vtctldatapb.SourceShardDeleteRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Uid:      uid,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	if resp.Shard == nil {
+		return fmt.Errorf("no SourceShard with uid %v", uid)
+	}
+
+	return nil
 }
 
 // SourceShardAdd will add a new SourceShard inside a shard.
 func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SourceShardAdd(%v)", uid))
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// and update the shard
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		// check the uid is not used already
-		for _, ss := range si.SourceShards {
-			if ss.Uid == uid {
-				return fmt.Errorf("uid %v is already in use", uid)
-			}
-		}
-
-		si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
-			Uid:      uid,
-			Keyspace: skeyspace,
-			Shard:    sshard,
-			KeyRange: keyRange,
-			Tables:   tables,
-		})
-		return nil
+	resp, err := wr.VtctldServer().SourceShardAdd(ctx, &vtctldatapb.SourceShardAddRequest{
+		Keyspace:       keyspace,
+		Shard:          shard,
+		Uid:            uid,
+		SourceKeyspace: skeyspace,
+		SourceShard:    sshard,
+		KeyRange:       keyRange,
+		Tables:         tables,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	if resp.Shard == nil {
+		return fmt.Errorf("uid %v is already in use", uid)
+	}
+
+	return nil
 }

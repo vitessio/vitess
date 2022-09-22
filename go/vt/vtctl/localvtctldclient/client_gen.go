@@ -23,7 +23,10 @@ import (
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
+
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
@@ -49,6 +52,108 @@ func (client *localVtctldClient) ApplySchema(ctx context.Context, in *vtctldatap
 // ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	return client.s.ApplyVSchema(ctx, in)
+}
+
+type backupStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.BackupResponse
+}
+
+func (stream *backupStreamAdapter) Recv() (*vtctldatapb.BackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *backupStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// Backup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
+	stream := &backupStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.BackupResponse, 1),
+	}
+	go func() {
+		err := client.s.Backup(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
+}
+
+type backupShardStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.BackupResponse
+}
+
+func (stream *backupShardStreamAdapter) Recv() (*vtctldatapb.BackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *backupShardStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// BackupShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+	stream := &backupShardStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.BackupResponse, 1),
+	}
+	go func() {
+		err := client.s.BackupShard(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
@@ -101,6 +206,16 @@ func (client *localVtctldClient) EmergencyReparentShard(ctx context.Context, in 
 	return client.s.EmergencyReparentShard(ctx, in)
 }
 
+// ExecuteFetchAsApp is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteFetchAsApp(ctx context.Context, in *vtctldatapb.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
+	return client.s.ExecuteFetchAsApp(ctx, in)
+}
+
+// ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
+	return client.s.ExecuteFetchAsDBA(ctx, in)
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
 	return client.s.ExecuteHook(ctx, in)
@@ -131,6 +246,11 @@ func (client *localVtctldClient) GetCellsAliases(ctx context.Context, in *vtctld
 	return client.s.GetCellsAliases(ctx, in)
 }
 
+// GetFullStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetFullStatus(ctx context.Context, in *vtctldatapb.GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetFullStatusResponse, error) {
+	return client.s.GetFullStatus(ctx, in)
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
 	return client.s.GetKeyspace(ctx, in)
@@ -139,6 +259,11 @@ func (client *localVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatap
 // GetKeyspaces is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
 	return client.s.GetKeyspaces(ctx, in)
+}
+
+// GetPermissions is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
+	return client.s.GetPermissions(ctx, in)
 }
 
 // GetRoutingRules is part of the vtctlservicepb.VtctldClient interface.
@@ -189,6 +314,11 @@ func (client *localVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
 	return client.s.GetVSchema(ctx, in)
+}
+
+// GetVersion is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetVersion(ctx context.Context, in *vtctldatapb.GetVersionRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVersionResponse, error) {
+	return client.s.GetVersion(ctx, in)
 }
 
 // GetWorkflows is part of the vtctlservicepb.VtctldClient interface.
@@ -246,6 +376,11 @@ func (client *localVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtct
 	return client.s.ReloadSchemaShard(ctx, in)
 }
 
+// RemoveBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RemoveBackup(ctx context.Context, in *vtctldatapb.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveBackupResponse, error) {
+	return client.s.RemoveBackup(ctx, in)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	return client.s.RemoveKeyspaceCell(ctx, in)
@@ -261,19 +396,65 @@ func (client *localVtctldClient) ReparentTablet(ctx context.Context, in *vtctlda
 	return client.s.ReparentTablet(ctx, in)
 }
 
+type restoreFromBackupStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.RestoreFromBackupResponse
+}
+
+func (stream *restoreFromBackupStreamAdapter) Recv() (*vtctldatapb.RestoreFromBackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *restoreFromBackupStreamAdapter) Send(msg *vtctldatapb.RestoreFromBackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+	stream := &restoreFromBackupStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.RestoreFromBackupResponse, 1),
+	}
+	go func() {
+		err := client.s.RestoreFromBackup(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
+}
+
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RunHealthCheck(ctx context.Context, in *vtctldatapb.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldatapb.RunHealthCheckResponse, error) {
 	return client.s.RunHealthCheck(ctx, in)
 }
 
-// SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldatapb.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
-	return client.s.SetKeyspaceServedFrom(ctx, in)
-}
-
-// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldatapb.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
-	return client.s.SetKeyspaceShardingInfo(ctx, in)
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldatapb.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	return client.s.SetKeyspaceDurabilityPolicy(ctx, in)
 }
 
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.
@@ -291,14 +472,39 @@ func (client *localVtctldClient) SetWritable(ctx context.Context, in *vtctldatap
 	return client.s.SetWritable(ctx, in)
 }
 
+// ShardReplicationAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationAdd(ctx context.Context, in *vtctldatapb.ShardReplicationAddRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationAddResponse, error) {
+	return client.s.ShardReplicationAdd(ctx, in)
+}
+
+// ShardReplicationFix is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldatapb.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	return client.s.ShardReplicationFix(ctx, in)
+}
+
 // ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	return client.s.ShardReplicationPositions(ctx, in)
 }
 
+// ShardReplicationRemove is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationRemove(ctx context.Context, in *vtctldatapb.ShardReplicationRemoveRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationRemoveResponse, error) {
+	return client.s.ShardReplicationRemove(ctx, in)
+}
+
 // SleepTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) SleepTablet(ctx context.Context, in *vtctldatapb.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.SleepTabletResponse, error) {
 	return client.s.SleepTablet(ctx, in)
+}
+
+// SourceShardAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardAdd(ctx context.Context, in *vtctldatapb.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardAddResponse, error) {
+	return client.s.SourceShardAdd(ctx, in)
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardDelete(ctx context.Context, in *vtctldatapb.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	return client.s.SourceShardDelete(ctx, in)
 }
 
 // StartReplication is part of the vtctlservicepb.VtctldClient interface.
@@ -336,7 +542,22 @@ func (client *localVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctl
 	return client.s.ValidateKeyspace(ctx, in)
 }
 
+// ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	return client.s.ValidateSchemaKeyspace(ctx, in)
+}
+
 // ValidateShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
 	return client.s.ValidateShard(ctx, in)
+}
+
+// ValidateVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateVSchema(ctx context.Context, in *vtctldatapb.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVSchemaResponse, error) {
+	return client.s.ValidateVSchema(ctx, in)
+}
+
+// ValidateVersionKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	return client.s.ValidateVersionKeyspace(ctx, in)
 }

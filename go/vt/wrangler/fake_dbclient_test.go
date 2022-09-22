@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-const changeMasterToPrimary = `update _vt.vreplication set tablet_types = replace(lower(convert(tablet_types using utf8mb4)), 'master', 'primary') where instr(convert(tablet_types using utf8mb4), 'master');`
-
 func verifyQueries(t *testing.T, dcs []*fakeDBClient) {
 	t.Helper()
 	for _, dc := range dcs {
@@ -82,7 +80,6 @@ func newFakeDBClient(name string) *fakeDBClient {
 			"select * from _vt.vreplication where db_name='db'":         {},
 			"select id, type, state, message from _vt.vreplication_log": {},
 			"insert into _vt.vreplication_log":                          {},
-			changeMasterToPrimary:                                       {},
 			"SELECT db_name FROM _vt.vreplication LIMIT 0":              {},
 		},
 	}

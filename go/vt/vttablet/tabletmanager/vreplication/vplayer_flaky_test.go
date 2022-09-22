@@ -18,7 +18,6 @@ package vreplication
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -38,10 +37,79 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestPlayerInvisibleColumns(t *testing.T) {
+	if !supportsInvisibleColumns() {
+		t.Skip()
+	}
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(20), id2 int invisible, pk2 int invisible, primary key(id, pk2))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(20), id2 int invisible, pk2 int invisible, primary key(id, pk2))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input       string
+		output      string
+		table       string
+		data        [][]string
+		query       string
+		queryResult [][]string
+	}{{
+		input:  "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
+		output: "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+		},
+		query: "select id, val, id2, pk2 from t1",
+		queryResult: [][]string{
+			{"1", "aaa", "10", "100"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			tcases.output,
+		}
+		expectNontxQueries(t, output)
+		time.Sleep(1 * time.Second)
+		log.Flush()
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+		if tcases.query != "" {
+			expectQueryResult(t, tcases.query, tcases.queryResult)
+		}
+	}
+
+}
+
 func TestHeartbeatFrequencyFlag(t *testing.T) {
-	origVReplicationHeartbeatUpdateInterval := *vreplicationHeartbeatUpdateInterval
+	origVReplicationHeartbeatUpdateInterval := vreplicationHeartbeatUpdateInterval
 	defer func() {
-		*vreplicationHeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
+		vreplicationHeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
 	}()
 
 	stats := binlogplayer.NewStats()
@@ -63,7 +131,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			*vreplicationHeartbeatUpdateInterval = tcase.interval
+			vreplicationHeartbeatUpdateInterval = tcase.interval
 			for _, tcount := range tcase.counts {
 				vp.numAccumulatedHeartbeats = tcount.count
 				require.Equal(t, tcount.mustUpdate, vp.mustUpdateHeartbeat())
@@ -372,9 +440,7 @@ func TestPlayerSavepoint(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into t1.*2.*",
-		"SAVEPOINT `vrepl_b`",
 		"/insert into t1.*3.*",
-		"SAVEPOINT `vrepl_a`",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -794,15 +860,17 @@ func TestPlayerFilters(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if tcase.logs != nil {
-			logch := vrLogStatsLogger.Subscribe("vrlogstats")
-			defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
-		}
-		execStatements(t, []string{tcase.input})
-		expectDBClientQueries(t, tcase.output)
-		if tcase.table != "" {
-			expectData(t, tcase.table, tcase.data)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.logs != nil {
+				logch := vrLogStatsLogger.Subscribe("vrlogstats")
+				defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
+			}
+			execStatements(t, []string{tcase.input})
+			expectDBClientQueries(t, tcase.output)
+			if tcase.table != "" {
+				expectData(t, tcase.table, tcase.data)
+			}
+		})
 	}
 }
 
@@ -1317,7 +1385,7 @@ func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
 	enableJSONColumnTesting := false
 	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// Disable tests on percona and mariadb platforms in CI since they
 	// either don't support JSON or JSON support is not enabled by default
 	if strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
 		log.Infof("Running JSON column type tests on flavor %s", flavor)
@@ -1342,6 +1410,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("create table %s.src1(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table binary_pk(b binary(4), val varbinary(4), primary key(b))",
 		fmt.Sprintf("create table %s.binary_pk(b binary(4), val varbinary(4), primary key(b))", vrepldb),
+		"create table vitess_decimal(id int, d1 decimal(8,0) default null, d2 decimal(8,0) default null, d3 decimal(8,0) default null, d4 decimal(8, 1), d5 decimal(8, 1), d6 decimal(8, 1), primary key(id))",
+		fmt.Sprintf("create table %s.vitess_decimal(id int, d1 decimal(8,0) default null, d2 decimal(8,0) default null, d3 decimal(8,0) default null, d4 decimal(8, 1), d5 decimal(8, 1), d6 decimal(8, 1), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1358,6 +1428,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("drop table %s.src1", vrepldb),
 		"drop table binary_pk",
 		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
+		"drop table vitess_decimal",
+		fmt.Sprintf("drop table %s.vitess_decimal", vrepldb),
 	})
 	if enableJSONColumnTesting {
 		execStatements(t, []string{
@@ -1407,7 +1479,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h','1','3')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h',1,'3')",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b"},
@@ -1432,6 +1504,13 @@ func TestPlayerTypes(t *testing.T) {
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "aaa"},
+		},
+	}, {
+		input:  "insert into vitess_decimal values(1, 0, 1, null, 0, 1.1, 1)",
+		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
+		table:  "vitess_decimal",
+		data: [][]string{
+			{"1", "0", "1", "", "0.0", "1.1", "1.0"},
 		},
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
@@ -1662,9 +1741,9 @@ func TestGTIDCompress(t *testing.T) {
 
 func TestPlayerStopPos(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-	*vreplicationStoreCompressedGTID = true
+	vreplicationStoreCompressedGTID = true
 	defer func() {
-		*vreplicationStoreCompressedGTID = false
+		vreplicationStoreCompressedGTID = false
 	}()
 	execStatements(t, []string{
 		"create table yes(id int, val varbinary(128), primary key(id))",
@@ -1929,8 +2008,8 @@ func TestPlayerIdleUpdate(t *testing.T) {
 
 func TestPlayerSplitTransaction(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-	flag.Set("vstream_packet_size", "10")
-	defer flag.Set("vstream_packet_size", "10000")
+	setFlag("vstream_packet_size", "10")
+	defer setFlag("vstream_packet_size", "10000")
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -2233,11 +2312,11 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 			case 0:
 				savedSize := relayLogMaxSize
 				defer func() { relayLogMaxSize = savedSize }()
-				*relayLogMaxSize = 10
+				relayLogMaxSize = 10
 			case 1:
 				savedLen := relayLogMaxItems
 				defer func() { relayLogMaxItems = savedLen }()
-				*relayLogMaxItems = 2
+				relayLogMaxItems = 2
 			}
 
 			execStatements(t, []string{
@@ -2331,9 +2410,9 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 func TestRestartOnVStreamEnd(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedDelay := *retryDelay
-	defer func() { *retryDelay = savedDelay }()
-	*retryDelay = 1 * time.Millisecond
+	savedDelay := retryDelay
+	defer func() { retryDelay = savedDelay }()
+	retryDelay = 1 * time.Millisecond
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -2374,7 +2453,6 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"/update _vt.vreplication set message='vstream ended'",
 	})
 	streamerEngine.Open()
-
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",
 	})
@@ -2715,6 +2793,7 @@ func TestGeneratedColumns(t *testing.T) {
 		}
 	}
 }
+
 func TestPlayerInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 

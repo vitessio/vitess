@@ -371,7 +371,7 @@ func TestVReplicationLogQueryPlanner(t *testing.T) {
 	})
 }
 
-func assertQueryMapsMatch(t *testing.T, expected map[string]string, actual map[string]*sqlparser.ParsedQuery, msgAndArgs ...interface{}) {
+func assertQueryMapsMatch(t *testing.T, expected map[string]string, actual map[string]*sqlparser.ParsedQuery, msgAndArgs ...any) {
 	t.Helper()
 
 	actualQueryMap := make(map[string]string, len(actual))

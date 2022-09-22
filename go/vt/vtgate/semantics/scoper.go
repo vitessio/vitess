@@ -34,16 +34,18 @@ type (
 		wScope map[*sqlparser.Select]*scope
 		scopes []*scope
 		org    originable
+		binder *binder
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
 	}
 
 	scope struct {
-		parent     *scope
-		selectStmt *sqlparser.Select
-		tables     []TableInfo
-		isUnion    bool
+		parent    *scope
+		stmt      sqlparser.Statement
+		tables    []TableInfo
+		isUnion   bool
+		joinUsing map[string]TableSet
 	}
 )
 
@@ -58,12 +60,17 @@ func newScoper() *scoper {
 func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
+	case *sqlparser.Update, *sqlparser.Delete:
+		currScope := newScope(s.currentScope())
+		s.push(currScope)
+
+		currScope.stmt = node.(sqlparser.Statement)
 	case *sqlparser.Select:
 		currScope := newScope(s.currentScope())
 		s.push(currScope)
 
 		// Needed for order by with Literal to find the Expression.
-		currScope.selectStmt = node
+		currScope.stmt = node
 
 		s.rScope[node] = currScope
 		s.wScope[node] = newScope(nil)
@@ -74,7 +81,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			// To create this special context, we create a special scope here that is then merged with
 			// the surrounding scope when we come back out from the JOIN
 			nScope := newScope(nil)
-			nScope.selectStmt = cursor.Parent().(*sqlparser.Select)
+			nScope.stmt = cursor.Parent().(*sqlparser.Select)
 			s.push(nScope)
 		}
 	case sqlparser.SelectExprs:
@@ -91,14 +98,16 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		}
 		wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
 	case sqlparser.OrderBy:
-		err := s.createSpecialScopePostProjection(cursor.Parent())
-		if err != nil {
-			return err
-		}
-		for _, order := range node {
-			lit := keepIntLiteral(order.Expr)
-			if lit != nil {
-				s.specialExprScopes[lit] = s.currentScope()
+		if isParentSelectStatement(cursor) {
+			err := s.createSpecialScopePostProjection(cursor.Parent())
+			if err != nil {
+				return err
+			}
+			for _, order := range node {
+				lit := keepIntLiteral(order.Expr)
+				if lit != nil {
+					s.specialExprScopes[lit] = s.currentScope()
+				}
 			}
 		}
 	case sqlparser.GroupBy:
@@ -117,6 +126,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 		return s.createSpecialScopePostProjection(cursor.Parent())
+	case *sqlparser.DerivedTable:
+		if node.Lateral {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lateral derived tables")
+		}
 	}
 	return nil
 }
@@ -139,7 +152,11 @@ func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
-	case *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
+	case sqlparser.OrderBy:
+		if isParentSelectStatement(cursor) {
+			s.popScope()
+		}
+	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update:
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
@@ -176,7 +193,7 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 		incomingScope := s.currentScope()
 		nScope := newScope(incomingScope)
 		nScope.tables = s.wScope[parent].tables
-		nScope.selectStmt = incomingScope.selectStmt
+		nScope.stmt = incomingScope.stmt
 		s.push(nScope)
 
 		if s.rScope[parent] != incomingScope {
@@ -189,7 +206,7 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 
 		for i, sel := range sqlparser.GetAllSelects(parent) {
 			if i == 0 {
-				nScope.selectStmt = sel
+				nScope.stmt = sel
 				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 				nScope.tables = append(nScope.tables, tableInfo)
 			}
@@ -223,12 +240,19 @@ func (s *scoper) push(sc *scope) {
 }
 
 func (s *scoper) popScope() {
+	usingMap := s.currentScope().prepareUsingMap()
+	for ts, m := range usingMap {
+		s.binder.usingJoinInfo[ts] = m
+	}
 	l := len(s.scopes) - 1
 	s.scopes = s.scopes[:l]
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{parent: parent}
+	return &scope{
+		parent:    parent,
+		joinUsing: map[string]TableSet{},
+	}
 }
 
 func (s *scope) addTable(info TableInfo) error {
@@ -249,4 +273,19 @@ func (s *scope) addTable(info TableInfo) error {
 	}
 	s.tables = append(s.tables, info)
 	return nil
+}
+
+func (s *scope) prepareUsingMap() (result map[TableSet]map[string]TableSet) {
+	result = map[TableSet]map[string]TableSet{}
+	for colName, tss := range s.joinUsing {
+		for _, ts := range tss.Constituents() {
+			m := result[ts]
+			if m == nil {
+				m = map[string]TableSet{}
+			}
+			m[colName] = tss
+			result[ts] = m
+		}
+	}
+	return
 }

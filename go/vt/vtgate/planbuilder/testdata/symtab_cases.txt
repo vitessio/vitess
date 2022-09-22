@@ -8,7 +8,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "predef2": 0
     },
@@ -39,7 +39,47 @@
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select predef2, predef3 from user join unsharded on predef2 = predef3",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0,R:0",
+    "JoinVars": {
+      "predef2": 0
+    },
+    "TableName": "`user`_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select predef2 from `user` where 1 != 1",
+        "Query": "select predef2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select predef3 from unsharded where 1 != 1",
+        "Query": "select predef3 from unsharded where predef3 = :predef2",
+        "Table": "unsharded"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
+}
 
 # predef1 is in both user and unsharded. So, it's ambiguous.
 "select predef1, predef3 from user join unsharded on predef1 = predef3"

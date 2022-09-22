@@ -28,19 +28,19 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
-const repairGroupSize = 2
+const repairGroupSize = 3
 
 func TestRepairShardHasNoGroup(t *testing.T) {
 	type data struct {
@@ -108,7 +108,7 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
-		{"raise error without bootstrap with only one reachable node", 0, "vtgr repair: unsafe to bootstrap group", []data{
+		{"raise error without bootstrap with only one reachable node", 0, "vtgr repair: fail to diagnose ShardHasNoGroup with 1 nodes", []data{
 			{"", 0, "group", true, []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
@@ -119,7 +119,7 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
 		}},
-		{"raise error when there are not enough members", 0, "vtgr repair: unsafe to bootstrap group", []data{
+		{"raise error when there are not enough members", 0, "vtgr repair: fail to diagnose ShardHasNoGroup with 1 nodes", []data{
 			{testHost, testPort0, "", true, []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
@@ -300,7 +300,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"error on one unreachable mysql", "invalid mysql instance key", 0, 0, []data{
+		{"error on one unreachable mysql", "vtgr repair: fail to diagnose ShardHasInactiveGroup with 2 nodes expecting 3", 0, 0, []data{
 			{"", 0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-11"), topodatapb.TabletType_REPLICA},
@@ -344,7 +344,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"error on two unreachable mysql", "invalid mysql instance key", 0, 0, []data{
+		{"error on two unreachable mysql", "vtgr repair: fail to diagnose ShardHasInactiveGroup with 1 nodes expecting 3", 0, 0, []data{
 			{"", 0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-11"), topodatapb.TabletType_REPLICA},

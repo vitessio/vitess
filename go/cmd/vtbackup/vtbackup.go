@@ -22,26 +22,26 @@ When run periodically for each shard, vtbackup can ensure these configurable pol
 * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
-* Running vtbackup with similar flags that would be used for a vttablet and
-  mysqlctld in the target shard to be backed up.
-* Provisioning as much disk space for vtbackup as would be given to vttablet.
-  The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
-* Running vtbackup periodically for each shard, for each backup storage location.
-* Ensuring that at most one instance runs at a time for a given pair of shard
-  and backup storage location.
-* Retrying vtbackup if it fails.
-* Alerting human operators if the failure is persistent.
+  - Running vtbackup with similar flags that would be used for a vttablet and
+    mysqlctld in the target shard to be backed up.
+  - Provisioning as much disk space for vtbackup as would be given to vttablet.
+    The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
+  - Running vtbackup periodically for each shard, for each backup storage location.
+  - Ensuring that at most one instance runs at a time for a given pair of shard
+    and backup storage location.
+  - Retrying vtbackup if it fails.
+  - Alerting human operators if the failure is persistent.
 
 The process vtbackup follows to take a new backup is as follows:
-1. Restore from the most recent backup.
-2. Start a mysqld instance (but no vttablet) from the restored data.
-3. Instruct mysqld to connect to the current shard primary and replicate any
-   transactions that are new since the last backup.
-4. Ask the primary for its current replication position and set that as the goal
-   for catching up on replication before taking the backup, so the goalposts
-   don't move.
-5. Wait until replication is caught up to the goal position or beyond.
-6. Stop mysqld and take a new backup.
+ 1. Restore from the most recent backup.
+ 2. Start a mysqld instance (but no vttablet) from the restored data.
+ 3. Instruct mysqld to connect to the current shard primary and replicate any
+    transactions that are new since the last backup.
+ 4. Ask the primary for its current replication position and set that as the goal
+    for catching up on replication before taking the backup, so the goalposts
+    don't move.
+ 5. Wait until replication is caught up to the goal position or beyond.
+ 6. Stop mysqld and take a new backup.
 
 Aside from additional replication load while vtbackup's mysqld catches up on
 new transactions, the shard should be otherwise unaffected. Existing tablets
@@ -312,7 +312,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !*allowFirstBackup {
-			return fmt.Errorf("no backup found; not starting up empty since -initial_backup flag was not enabled")
+			return fmt.Errorf("no backup found; not starting up empty since --initial_backup flag was not enabled")
 		}
 		restorePos = mysql.Position{}
 	default:
@@ -378,7 +378,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
 			break
 		}
-		if !status.ReplicationRunning() {
+		if !status.Healthy() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
@@ -634,14 +634,14 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// We need at least one backup so we can restore first, unless the user explicitly says we don't
 	if len(backups) == 0 && !*allowFirstBackup {
-		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since -initial_backup flag was not enabled")
+		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since --initial_backup flag was not enabled")
 	}
 	if lastBackup == nil {
 		if *allowFirstBackup {
 			// There's no complete backup, but we were told to take one from scratch anyway.
 			return true, nil
 		}
-		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since -initial_backup flag was not enabled")
+		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since --initial_backup flag was not enabled")
 	}
 
 	// Has it been long enough since the last complete backup to need a new one?

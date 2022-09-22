@@ -29,89 +29,158 @@ import (
 )
 
 func TestDurabilityNone(t *testing.T) {
-	err := SetDurabilityPolicy("none")
+	durability, err := GetDurabilityPolicy("none")
 	require.NoError(t, err)
 
-	promoteRule := PromotionRule(&topodatapb.Tablet{
+	promoteRule := PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_PRIMARY,
 	})
 	assert.Equal(t, promotionrule.Neutral, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, PromotionRule(durability, nil))
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_REPLICA,
 	})
 	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_RDONLY,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 0, SemiSyncAckers(nil))
-	assert.Equal(t, false, IsReplicaSemiSync(nil, nil))
+	assert.Equal(t, 0, SemiSyncAckers(durability, nil))
+	assert.Equal(t, false, IsReplicaSemiSync(durability, nil, nil))
 }
 
 func TestDurabilitySemiSync(t *testing.T) {
-	err := SetDurabilityPolicy("semi_sync")
+	durability, err := GetDurabilityPolicy("semi_sync")
 	require.NoError(t, err)
 
-	promoteRule := PromotionRule(&topodatapb.Tablet{
+	promoteRule := PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_PRIMARY,
 	})
 	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_REPLICA,
 	})
 	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_RDONLY,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 1, SemiSyncAckers(nil))
-	assert.Equal(t, true, IsReplicaSemiSync(nil, &topodatapb.Tablet{
+	assert.Equal(t, 1, SemiSyncAckers(durability, nil))
+	assert.Equal(t, true, IsReplicaSemiSync(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+		Type: topodatapb.TabletType_PRIMARY,
+	}, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_REPLICA,
 	}))
-	assert.Equal(t, false, IsReplicaSemiSync(nil, &topodatapb.Tablet{
+	assert.Equal(t, false, IsReplicaSemiSync(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+		Type: topodatapb.TabletType_PRIMARY,
+	}, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_EXPERIMENTAL,
 	}))
 }
 
 func TestDurabilityCrossCell(t *testing.T) {
-	err := SetDurabilityPolicy("cross_cell")
+	durability, err := GetDurabilityPolicy("cross_cell")
 	require.NoError(t, err)
 
-	promoteRule := PromotionRule(&topodatapb.Tablet{
+	promoteRule := PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_PRIMARY,
 	})
 	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_REPLICA,
 	})
 	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_RDONLY,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
 
-	promoteRule = PromotionRule(&topodatapb.Tablet{
+	promoteRule = PromotionRule(durability, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 1, SemiSyncAckers(nil))
-	assert.Equal(t, false, IsReplicaSemiSync(&topodatapb.Tablet{
+	assert.Equal(t, 1, SemiSyncAckers(durability, nil))
+	assert.Equal(t, false, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -122,7 +191,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 			Cell: "cell1",
 		},
 	}))
-	assert.Equal(t, true, IsReplicaSemiSync(&topodatapb.Tablet{
+	assert.Equal(t, true, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -133,7 +202,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 			Cell: "cell2",
 		},
 	}))
-	assert.Equal(t, false, IsReplicaSemiSync(&topodatapb.Tablet{
+	assert.Equal(t, false, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -147,7 +216,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 }
 
 func TestError(t *testing.T) {
-	err := SetDurabilityPolicy("unknown")
+	_, err := GetDurabilityPolicy("unknown")
 	assert.EqualError(t, err, "durability policy unknown not found")
 }
 
