@@ -186,12 +186,17 @@ func (check *ThrottlerCheck) MetricsHealth() map[string](*base.MetricHealth) {
 func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 	selfCheckTicker := time.NewTicker(selfCheckInterval)
 	go func() {
-		for range selfCheckTicker.C {
-			for metricName, metricResult := range check.AggregatedMetrics(ctx) {
-				metricName := metricName
-				metricResult := metricResult
-				go check.localCheck(ctx, metricName)
-				go check.reportAggregated(metricName, metricResult)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-selfCheckTicker.C:
+				for metricName, metricResult := range check.AggregatedMetrics(ctx) {
+					metricName := metricName
+					metricResult := metricResult
+					go check.localCheck(ctx, metricName)
+					go check.reportAggregated(metricName, metricResult)
+				}
 			}
 		}
 	}()

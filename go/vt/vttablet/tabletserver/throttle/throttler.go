@@ -141,9 +141,10 @@ type Throttler struct {
 
 	lastCheckTimeNano int64
 
-	initMutex          sync.Mutex
-	throttledAppsMutex sync.Mutex
-	tickers            [](*timer.SuspendableTicker)
+	initMutex           sync.Mutex
+	enableMutex         sync.Mutex
+	cancelEnableContext context.CancelFunc
+	throttledAppsMutex  sync.Mutex
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -195,19 +196,19 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 		throttler.recentApps = cache.New(recentAppsExpiration, time.Minute)
 		throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 
-		throttler.tickers = [](*timer.SuspendableTicker){}
 		throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval)
 
-		throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
-		throttler.initThrottleTabletTypes()
-		throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
-		throttler.check = NewThrottlerCheck(throttler)
-		throttler.initConfig()
 		throttler.check.SelfChecks(context.Background())
 	} else {
 		// Create an empty cache, just so that it isn't nil
 		throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	}
+	throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
+	throttler.initThrottleTabletTypes()
+	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+	throttler.check = NewThrottlerCheck(throttler)
+	throttler.initConfig()
+
 	return throttler
 }
 
@@ -240,9 +241,6 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
 	throttler.shard = shard
-	if throttler.env.Config().EnableLagThrottler {
-		go throttler.Operate(context.Background())
-	}
 }
 
 // initThrottler initializes config
@@ -282,6 +280,74 @@ func (throttler *Throttler) IsOpen() bool {
 	return atomic.LoadInt64(&throttler.isOpen) > 0
 }
 
+func (throttler *Throttler) IsEnabled() bool {
+	throttler.enableMutex.Lock()
+	defer throttler.enableMutex.Unlock()
+	return throttler.isEnabled
+}
+
+func (throttler *Throttler) enable(ctx context.Context) error {
+	throttler.enableMutex.Lock()
+	defer throttler.enableMutex.Unlock()
+
+	if throttler.isEnabled {
+		return nil
+	}
+	throttler.isEnabled = true
+	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
+
+	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
+	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
+	throttler.mysqlInventory = mysql.NewInventory()
+
+	// TODO(shlomi): Read from database
+	throttler.metricsQuery = replicationLagQuery
+	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
+
+	throttler.throttledApps = cache.New(cache.NoExpiration, 10*time.Second)
+	throttler.mysqlClusterThresholds = cache.New(cache.NoExpiration, 0)
+	throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup)
+	throttler.recentApps = cache.New(recentAppsExpiration, time.Minute)
+	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
+
+	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval)
+
+	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
+	throttler.check.SelfChecks(ctx)
+	throttler.Operate(ctx)
+
+	// Make a one-time request for a lease of heartbeats
+	go throttler.heartbeatWriter.RequestHeartbeats()
+
+	return nil
+}
+
+func (throttler *Throttler) maybeEnable(ctx context.Context) {
+	// TODO(shlomi): read from database
+	if throttler.env.Config().EnableLagThrottler {
+		throttler.enable(ctx)
+	}
+}
+
+func (throttler *Throttler) disable() {
+	throttler.enableMutex.Lock()
+	defer throttler.enableMutex.Unlock()
+
+	if !throttler.isEnabled {
+		return
+	}
+	throttler.isEnabled = false
+	// Create an empty cache, just so that it isn't nil
+	// this throws away the existing caches to garbage collection. The new caches will not
+	// have running tickers, so a disabled throttler does not waste any CPU
+	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
+	throttler.aggregatedMetrics = cache.New(cache.NoExpiration, 0)
+	throttler.recentApps = cache.New(cache.NoExpiration, 0)
+	throttler.nonLowPriorityAppRequestsThrottled = cache.New(cache.NoExpiration, 0)
+
+	throttler.cancelEnableContext()
+}
+
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
 	throttler.initMutex.Lock()
@@ -294,37 +360,27 @@ func (throttler *Throttler) Open() error {
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
-	for _, t := range throttler.tickers {
-		t.Resume()
-		// since we just resume now, speed up the tickers by forcng an immediate tick
-		go t.TickNow()
-	}
-	go throttler.heartbeatWriter.RequestHeartbeats()
-
+	throttler.maybeEnable(context.Background())
 	return nil
 }
 
 // Close frees resources
 func (throttler *Throttler) Close() {
-	log.Infof("Throttler - started execution of Close. Acquiring initMutex lock")
+	log.Infof("Throttler: started execution of Close. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
-	log.Infof("Throttler - acquired initMutex lock")
+	log.Infof("Throttler: acquired initMutex lock")
 	defer throttler.initMutex.Unlock()
 	if atomic.LoadInt64(&throttler.isOpen) == 0 {
-		log.Infof("Throttler - no throttler is open")
-		// not open
+		log.Infof("Throttler: throttler is not open")
 		return
 	}
-	for _, t := range throttler.tickers {
-		t.Suspend()
-	}
-	log.Infof("Throttler - finished suspending tickers")
+	throttler.disable()
 	atomic.StoreInt64(&throttler.isLeader, 0)
 
-	log.Infof("Throttler - closing pool")
+	log.Infof("Throttler: closing pool")
 	throttler.pool.Close()
 	atomic.StoreInt64(&throttler.isOpen, 0)
-	log.Infof("Throttler - finished execution of Close")
+	log.Infof("Throttler: finished execution of Close")
 }
 
 // readSelfMySQLThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
@@ -394,15 +450,12 @@ func (throttler *Throttler) isDormant() bool {
 // run the probes, colelct metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context) {
 
+	tickers := [](*timer.SuspendableTicker){}
 	addTicker := func(d time.Duration) *timer.SuspendableTicker {
-		throttler.initMutex.Lock()
-		defer throttler.initMutex.Unlock()
-
-		t := timer.NewSuspendableTicker(d, true)
-		throttler.tickers = append(throttler.tickers, t)
+		t := timer.NewSuspendableTicker(d, false)
+		tickers = append(tickers, t)
 		return t
 	}
-
 	leaderCheckTicker := addTicker(leaderCheckInterval)
 	mysqlCollectTicker := addTicker(mysqlCollectInterval)
 	mysqlDormantCollectTicker := addTicker(mysqlDormantCollectInterval)
@@ -410,89 +463,100 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 
-	for {
-		select {
-		case <-leaderCheckTicker.C:
-			{
-				func() {
-					throttler.initMutex.Lock()
-					defer throttler.initMutex.Unlock()
+	go func() {
+		defer log.Infof("Throttler: Operate terminated, tickers stopped")
+		for _, t := range tickers {
+			defer t.Stop()
+			// since we just started the tickers now, speed up the ticks by forcng an immediate tick
+			go t.TickNow()
+		}
 
-					// sparse
-					shouldBeLeader := int64(0)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-leaderCheckTicker.C:
+				{
+					func() {
+						throttler.initMutex.Lock()
+						defer throttler.initMutex.Unlock()
+
+						// sparse
+						shouldBeLeader := int64(0)
+						if atomic.LoadInt64(&throttler.isOpen) > 0 {
+							if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
+								shouldBeLeader = 1
+							}
+						}
+
+						transitionedIntoLeader := false
+						if shouldBeLeader > throttler.isLeader {
+							log.Infof("Throttler: transition into leadership")
+							transitionedIntoLeader = true
+						}
+						if shouldBeLeader < throttler.isLeader {
+							log.Infof("Throttler: transition out of leadership")
+						}
+
+						atomic.StoreInt64(&throttler.isLeader, shouldBeLeader)
+
+						if transitionedIntoLeader {
+							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
+							go mysqlRefreshTicker.TickNow()
+							go throttler.heartbeatWriter.RequestHeartbeats()
+						}
+					}()
+				}
+			case <-mysqlCollectTicker.C:
+				{
 					if atomic.LoadInt64(&throttler.isOpen) > 0 {
-						if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
-							shouldBeLeader = 1
+						// frequent
+						if !throttler.isDormant() {
+							throttler.collectMySQLMetrics(ctx)
 						}
 					}
-
-					transitionedIntoLeader := false
-					if shouldBeLeader > throttler.isLeader {
-						log.Infof("Throttler: transition into leadership")
-						transitionedIntoLeader = true
-					}
-					if shouldBeLeader < throttler.isLeader {
-						log.Infof("Throttler: transition out of leadership")
-					}
-
-					atomic.StoreInt64(&throttler.isLeader, shouldBeLeader)
-
-					if transitionedIntoLeader {
-						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
-						go mysqlRefreshTicker.TickNow()
-						go throttler.heartbeatWriter.RequestHeartbeats()
-					}
-				}()
-			}
-		case <-mysqlCollectTicker.C:
-			{
-				if atomic.LoadInt64(&throttler.isOpen) > 0 {
-					// frequent
-					if !throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx)
+				}
+			case <-mysqlDormantCollectTicker.C:
+				{
+					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+						// infrequent
+						if throttler.isDormant() {
+							throttler.collectMySQLMetrics(ctx)
+						}
 					}
 				}
-			}
-		case <-mysqlDormantCollectTicker.C:
-			{
-				if atomic.LoadInt64(&throttler.isOpen) > 0 {
-					// infrequent
-					if throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx)
+			case metric := <-throttler.mysqlThrottleMetricChan:
+				{
+					// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
+					throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
+				}
+			case <-mysqlRefreshTicker.C:
+				{
+					// sparse
+					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+						go throttler.refreshMySQLInventory(ctx)
 					}
 				}
-			}
-		case metric := <-throttler.mysqlThrottleMetricChan:
-			{
-				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-				throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
-			}
-		case <-mysqlRefreshTicker.C:
-			{
-				// sparse
-				if atomic.LoadInt64(&throttler.isOpen) > 0 {
-					go throttler.refreshMySQLInventory(ctx)
+			case probes := <-throttler.mysqlClusterProbesChan:
+				{
+					// incoming structural update, sparse, as result of refreshMySQLInventory()
+					throttler.updateMySQLClusterProbes(ctx, probes)
 				}
-			}
-		case probes := <-throttler.mysqlClusterProbesChan:
-			{
-				// incoming structural update, sparse, as result of refreshMySQLInventory()
-				throttler.updateMySQLClusterProbes(ctx, probes)
-			}
-		case <-mysqlAggregateTicker.C:
-			{
-				if atomic.LoadInt64(&throttler.isOpen) > 0 {
-					throttler.aggregateMySQLMetrics(ctx)
+			case <-mysqlAggregateTicker.C:
+				{
+					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+						throttler.aggregateMySQLMetrics(ctx)
+					}
 				}
-			}
-		case <-throttledAppsTicker.C:
-			{
-				if atomic.LoadInt64(&throttler.isOpen) > 0 {
-					go throttler.expireThrottledApps()
+			case <-throttledAppsTicker.C:
+				{
+					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+						go throttler.expireThrottledApps()
+					}
 				}
 			}
 		}
-	}
+	}()
 }
 
 func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
