@@ -207,7 +207,6 @@ type Configuration struct {
 	DiscoveryIgnoreHostnameFilters              []string          // Regexp filters to apply to prevent discovering instances of any kind
 	WebMessage                                  string            // If provided, will be shown on all web pages below the title bar
 	MaxConcurrentReplicaOperations              int               // Maximum number of concurrent operations on replicas
-	InstanceDBExecContextTimeoutSeconds         int               // Timeout on context used while calling ExecContext on instance database
 	LockShardTimeoutSeconds                     int               // Timeout on context used to lock shard. Should be a small value because we should fail-fast
 	WaitReplicasTimeoutSeconds                  int               // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
 	TopoInformationRefreshSeconds               int               // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
@@ -349,7 +348,6 @@ func newConfiguration() *Configuration {
 		DiscoveryIgnoreReplicaHostnameFilters:       []string{},
 		WebMessage:                                  "",
 		MaxConcurrentReplicaOperations:              5,
-		InstanceDBExecContextTimeoutSeconds:         30,
 		LockShardTimeoutSeconds:                     30,
 		WaitReplicasTimeoutSeconds:                  30,
 		TopoInformationRefreshSeconds:               15,
