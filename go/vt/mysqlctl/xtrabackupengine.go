@@ -61,7 +61,7 @@ var (
 	xtrabackupStreamMode = "tar"
 	xtrabackupUser       string
 	// striping mode
-	xtrabackupStripes         = uint(0)
+	xtrabackupStripes         uint
 	xtrabackupStripeBlockSize = uint(102400)
 )
 

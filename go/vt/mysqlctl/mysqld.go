@@ -63,7 +63,7 @@ var (
 	// 2. in vtctld so it can be exported to the UI (different
 	// package, that's why it's exported). That way we can disable
 	// menu items there, using features.
-	DisableActiveReparents = false
+	DisableActiveReparents bool
 
 	dbaPoolSize = 20
 	// DbaIdleTimeout is how often we will refresh the DBA connpool connections

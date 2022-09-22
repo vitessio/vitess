@@ -113,7 +113,7 @@ type BackupRestoreEngine interface {
 var BackupRestoreEngineMap = make(map[string]BackupRestoreEngine)
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtadmin", "vtbackup", "vtcombo", "vtctl", "vtctld", "vttablet", "vttestserver"} {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerBackupEngineFlags)
 	}
 }

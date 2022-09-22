@@ -59,13 +59,6 @@ var (
 	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
-	//BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
-
-	//builtinBackupProgress = flag.Duration("builtinbackup_progress", 5*time.Second, "how often to send progress updates when backing up large files")
-
-	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
-	// It can later be extended for other calls to mysqld during backup functions.
-	// Exported for testing.
 	BuiltinBackupMysqldTimeout = 10 * time.Minute
 
 	builtinBackupProgress = 5 * time.Second
