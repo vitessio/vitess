@@ -98,8 +98,8 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	/* minimal command line arguments:
-	$ vtorc -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
-	-config config/vtorc/default.json -alsologtostderr http
+	$ vtorc --topo_implementation etcd2 --topo_global_server_address localhost:2379 --topo_global_root /vitess/global
+	--config config/vtorc/default.json --alsologtostderr
 	*/
 	orc.proc = exec.Command(
 		orc.Binary,
@@ -114,14 +114,14 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr", "http")
+	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", timeNow)))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 
-	log.Infof("Running orc with command: %v", strings.Join(orc.proc.Args, " "))
+	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
 
 	err = orc.proc.Start()
 	if err != nil {
