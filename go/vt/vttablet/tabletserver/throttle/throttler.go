@@ -205,7 +205,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 
 // CheckIsReady checks if this throttler is ready to serve. If not, it returns an error
 func (throttler *Throttler) CheckIsReady() error {
-	if throttler.isEnabled && throttler.IsOpen() {
+	if throttler.IsEnabled() {
 		// all good
 		return nil
 	}
@@ -317,12 +317,6 @@ func (throttler *Throttler) disable() {
 	throttler.nonLowPriorityAppRequestsThrottled.Flush()
 
 	throttler.cancelEnableContext()
-}
-
-func (throttler *Throttler) IsOpen() bool {
-	throttler.initMutex.Lock()
-	defer throttler.initMutex.Unlock()
-	return atomic.LoadInt64(&throttler.isOpen) > 0
 }
 
 // Open opens database pool and initializes the schema
