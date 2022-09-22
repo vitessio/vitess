@@ -377,3 +377,32 @@ func TestClientInfo(t *testing.T) {
 		t.Fatalf("expected result.Info=%q, got=%q", infoPrepared, result.Info)
 	}
 }
+
+func TestBaseShowTables(t *testing.T) {
+	params := connParams
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sql := conn.BaseShowTables()
+	// An improved test would make assertions about the results. This test just
+	// makes sure there aren't any errors.
+	_, err = conn.ExecuteFetch(sql, -1, true)
+	require.NoError(t, err)
+}
+
+func TestBaseShowTablesFilePos(t *testing.T) {
+	params := connParams
+	params.Flavor = "FilePos"
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sql := conn.BaseShowTables()
+	// An improved test would make assertions about the results. This test just
+	// makes sure there aren't any errors.
+	_, err = conn.ExecuteFetch(sql, -1, true)
+	require.NoError(t, err)
+}
