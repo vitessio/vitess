@@ -74,16 +74,17 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 
 	var statusCode int
 
-	if err == base.ErrAppDenied {
+	switch {
+	case err == base.ErrAppDenied:
 		// app specifically not allowed to get metrics
 		statusCode = http.StatusExpectationFailed // 417
-	} else if err == base.ErrNoSuchMetric {
+	case err == base.ErrNoSuchMetric:
 		// not collected yet, or metric does not exist
 		statusCode = http.StatusNotFound // 404
-	} else if err != nil {
+	case err != nil:
 		// any error
 		statusCode = http.StatusInternalServerError // 500
-	} else if value > threshold {
+	case value > threshold:
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ErrThresholdExceeded
@@ -92,7 +93,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
-	} else {
+	default:
 		// all good!
 		statusCode = http.StatusOK // 200
 	}
