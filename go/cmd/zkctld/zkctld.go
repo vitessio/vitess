@@ -36,7 +36,7 @@ import (
 
 var (
 	zkCfg = "6@<hostname>:3801:3802:3803"
-	myID  = uint(0)
+	myID  uint
 )
 
 func init() {
