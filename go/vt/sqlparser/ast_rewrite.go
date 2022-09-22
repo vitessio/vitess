@@ -50,6 +50,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAlterMigration(parent, node, replacer)
 	case *AlterTable:
 		return a.rewriteRefOfAlterTable(parent, node, replacer)
+	case *AlterThrottler:
+		return a.rewriteRefOfAlterThrottler(parent, node, replacer)
 	case *AlterView:
 		return a.rewriteRefOfAlterView(parent, node, replacer)
 	case *AlterVschema:
@@ -888,6 +890,33 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAlterThrottler(parent SQLNode, node *AlterThrottler, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterThrottler).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -8811,6 +8840,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfAlterMigration(parent, node, replacer)
 	case *AlterTable:
 		return a.rewriteRefOfAlterTable(parent, node, replacer)
+	case *AlterThrottler:
+		return a.rewriteRefOfAlterThrottler(parent, node, replacer)
 	case *AlterView:
 		return a.rewriteRefOfAlterView(parent, node, replacer)
 	case *AlterVschema:

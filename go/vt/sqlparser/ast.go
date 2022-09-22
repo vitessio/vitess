@@ -474,6 +474,16 @@ type (
 		Comments Comments
 	}
 
+	// AlterThrottlerType represents the type of operation in an ALTER VITESS_THROTTLER statement
+	AlterThrottlerType int8
+
+	// AlterThrottler represents a ALTER VITESS_THROTTLER statement
+	AlterThrottler struct {
+		Type      AlterThrottlerType
+		Threshold string
+		Comments  *ParsedComments
+	}
+
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
@@ -726,6 +736,7 @@ func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}
+func (*AlterThrottler) iStatement()    {}
 func (*ShowMigrationLogs) iStatement() {}
 func (*ShowThrottledApps) iStatement() {}
 func (*DropTable) iStatement()         {}

@@ -50,6 +50,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
 		return VisitRefOfAlterTable(in, f)
+	case *AlterThrottler:
+		return VisitRefOfAlterThrottler(in, f)
 	case *AlterView:
 		return VisitRefOfAlterView(in, f)
 	case *AlterVschema:
@@ -688,6 +690,18 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAlterThrottler(in *AlterThrottler, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
@@ -4609,6 +4623,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
 		return VisitRefOfAlterTable(in, f)
+	case *AlterThrottler:
+		return VisitRefOfAlterThrottler(in, f)
 	case *AlterView:
 		return VisitRefOfAlterView(in, f)
 	case *AlterVschema:

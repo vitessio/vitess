@@ -327,6 +327,19 @@ func (node *ShowThrottledApps) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *AlterThrottler) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter vitess_throttler")
+	switch node.Type {
+	case AlterThrottlerDisableType:
+		buf.astPrintf(node, " disable")
+	case AlterThrottlerEnableType:
+		buf.astPrintf(node, " enable")
+	case AlterThrottlerParamsType:
+		buf.astPrintf(node, " threshold '%s'", node.Threshold)
+	}
+}
+
+// Format formats the node.
 func (node *OptLike) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "like %v", node.LikeTable)
 }

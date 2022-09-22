@@ -824,6 +824,13 @@ const (
 
 // AlterMigrationType constants
 const (
+	AlterThrottlerParamsType AlterThrottlerType = iota
+	AlterThrottlerDisableType
+	AlterThrottlerEnableType
+)
+
+// AlterMigrationType constants
+const (
 	RetryMigrationType AlterMigrationType = iota
 	LaunchMigrationType
 	LaunchAllMigrationType

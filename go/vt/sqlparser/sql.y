@@ -314,6 +314,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Migration tokens
 %token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+// Throttler tokens
+%token <str> VITESS_THROTTLER THRESHOLD
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -589,6 +591,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
+%type <str> threshold_opt
 %start any_command
 
 %%
@@ -2847,6 +2850,15 @@ ratio_opt:
     $$ = NewDecimalLiteral($2)
   }
 
+threshold_opt:
+  {
+    $$ = ""
+  }
+| THRESHOLD STRING
+  {
+    $$ = string($2)
+  }
+
 alter_commands_list:
   {
     $$ = nil
@@ -3277,6 +3289,29 @@ alter_statement:
       Type: UnthrottleAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_THROTTLER DISABLE
+  {
+    $$ = &AlterThrottler{
+      Type: AlterThrottlerDisableType,
+      Comments: Comments($2).Parsed(),
+    }
+  }
+| ALTER comment_opt VITESS_THROTTLER ENABLE
+  {
+    $$ = &AlterThrottler{
+      Type: AlterThrottlerEnableType,
+      Comments: Comments($2).Parsed(),
+    }
+  }
+| ALTER comment_opt VITESS_THROTTLER threshold_opt
+  {
+    $$ = &AlterThrottler{
+      Type: AlterThrottlerParamsType,
+      Threshold: $4,
+      Comments: Comments($2).Parsed(),
+    }
+  }
+
 
 partitions_options_opt:
   {
@@ -7772,6 +7807,7 @@ non_reserved_keyword:
 | TEXT
 | THAN
 | THREAD_PRIORITY
+| THRESHOLD
 | THROTTLE
 | TIES
 | TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
@@ -7819,6 +7855,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VITESS_TARGET
 | VITESS_THROTTLED_APPS
+| VITESS_THROTTLER
 | VSCHEMA
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD

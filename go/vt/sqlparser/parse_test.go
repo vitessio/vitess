@@ -2053,6 +2053,14 @@ var (
 	}, {
 		input: "alter vitess_migration throttle all expire '1h' ratio 0.7",
 	}, {
+		input: "show vitess_throttled_apps",
+	}, {
+		input: "alter vitess_throttler disable",
+	}, {
+		input: "alter vitess_throttler enable",
+	}, {
+		input: "alter vitess_throttler threshold '2s'",
+	}, {
 		input: "show warnings",
 	}, {
 		input:  "select warnings from t",
