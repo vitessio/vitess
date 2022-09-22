@@ -1495,8 +1495,20 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 
 func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, bindVars map[string]*querypb.BindVariable, qo iQueryOption, setVarComment string) bool {
 	// We do not normalize already prepared statements, by default
-	return (e.normalize && (*normalizePrepStmts || len(bindVars) == 0) && sqlparser.CanNormalize(stmt)) ||
-		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != ""
+
+	if e.normalize && (*normalizePrepStmts || len(bindVars) == 0) && sqlparser.CanNormalize(stmt) {
+		return true
+	}
+
+	if sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
+		return true
+	}
+
+	if setVarComment != "" {
+		return true
+	}
+
+	return false
 }
 
 func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (string, error) {
