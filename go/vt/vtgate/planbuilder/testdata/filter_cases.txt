@@ -6046,6 +6046,33 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# For left joins, null intolerant where conditions using `IS NOT NULL` allow outer join simplification
+"SELECT music.id FROM music LEFT OUTER JOIN user ON user.id = music.user_id WHERE music.user_id = 5 AND user.id IS NOT NULL"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON user.id = music.user_id WHERE music.user_id = 5 AND user.id IS NOT NULL",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music, `user` where 1 != 1",
+    "Query": "select music.id from music, `user` where music.user_id = 5 and `user`.id is not null and `user`.id = music.user_id",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
 # optimize ORs to IN route op codes #1
 "select col from user where id = 1 or id = 2"
 {
