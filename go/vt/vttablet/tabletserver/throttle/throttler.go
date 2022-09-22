@@ -193,6 +193,11 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 	throttler.initThrottleTabletTypes()
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 	throttler.check = NewThrottlerCheck(throttler)
+
+	// TODO(shlomi): Read from database
+	throttler.metricsQuery = replicationLagQuery
+	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
+
 	throttler.initConfig()
 
 	return throttler
@@ -392,7 +397,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 	case mysql.MetricsQueryTypeShowGlobal:
 		metric.Value, metric.Err = strconv.ParseFloat(row["Value"].ToString(), 64)
 	default:
-		metric.Err = fmt.Errorf("Unsupported metrics query type for query %s", throttler.metricsQuery)
+		metric.Err = fmt.Errorf("Unsupported metrics query type for query: %s", throttler.metricsQuery)
 	}
 
 	return metric
