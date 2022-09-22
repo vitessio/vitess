@@ -143,6 +143,12 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	select {
 	case vs.vevents <- vschema:
 	case <-vs.ctx.Done():
+	default: // if there is a pending vschema in the channel, drain it and update it with the latest one
+		select {
+		case <-vs.vevents:
+			vs.vevents <- vschema
+		default:
+		}
 	}
 }
 
