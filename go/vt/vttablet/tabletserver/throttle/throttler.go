@@ -47,12 +47,10 @@ const (
 	mysqlAggregateInterval      = 125 * time.Millisecond
 
 	aggregatedMetricsExpiration   = 5 * time.Second
-	aggregatedMetricsCleanup      = 10 * time.Second
 	throttledAppsSnapshotInterval = 5 * time.Second
 	recentAppsExpiration          = time.Hour * 24
 
 	nonDeprioritizedAppMapExpiration = time.Second
-	nonDeprioritizedAppMapInterval   = 10 * time.Second
 
 	dormantPeriod             = time.Minute
 	defaultThrottleTTLMinutes = 60
@@ -179,30 +177,18 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 		}),
 	}
 
-	if env.Config().EnableLagThrottler {
-		throttler.isEnabled = true
-		throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
+	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
+	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
+	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
+	throttler.mysqlInventory = mysql.NewInventory()
 
-		throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
-		throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
-		throttler.mysqlInventory = mysql.NewInventory()
+	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
+	throttler.mysqlClusterThresholds = cache.New(cache.NoExpiration, 0)
+	throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, 0)
+	throttler.recentApps = cache.New(recentAppsExpiration, 0)
+	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
+	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
 
-		throttler.metricsQuery = replicationLagQuery
-		throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
-
-		throttler.throttledApps = cache.New(cache.NoExpiration, 10*time.Second)
-		throttler.mysqlClusterThresholds = cache.New(cache.NoExpiration, 0)
-		throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup)
-		throttler.recentApps = cache.New(recentAppsExpiration, time.Minute)
-		throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
-
-		throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval)
-
-		throttler.check.SelfChecks(context.Background())
-	} else {
-		// Create an empty cache, just so that it isn't nil
-		throttler.throttledApps = cache.New(cache.NoExpiration, 0)
-	}
 	throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 	throttler.initThrottleTabletTypes()
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
@@ -274,12 +260,6 @@ func (throttler *Throttler) initConfig() {
 	}
 }
 
-func (throttler *Throttler) IsOpen() bool {
-	throttler.initMutex.Lock()
-	defer throttler.initMutex.Unlock()
-	return atomic.LoadInt64(&throttler.isOpen) > 0
-}
-
 func (throttler *Throttler) IsEnabled() bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
@@ -294,23 +274,10 @@ func (throttler *Throttler) enable(ctx context.Context) error {
 		return nil
 	}
 	throttler.isEnabled = true
-	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
-
-	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
-	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
-	throttler.mysqlInventory = mysql.NewInventory()
 
 	// TODO(shlomi): Read from database
 	throttler.metricsQuery = replicationLagQuery
 	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
-
-	throttler.throttledApps = cache.New(cache.NoExpiration, 10*time.Second)
-	throttler.mysqlClusterThresholds = cache.New(cache.NoExpiration, 0)
-	throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup)
-	throttler.recentApps = cache.New(recentAppsExpiration, time.Minute)
-	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
-
-	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval)
 
 	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
 	throttler.check.SelfChecks(ctx)
@@ -337,15 +304,20 @@ func (throttler *Throttler) disable() {
 		return
 	}
 	throttler.isEnabled = false
-	// Create an empty cache, just so that it isn't nil
-	// this throws away the existing caches to garbage collection. The new caches will not
-	// have running tickers, so a disabled throttler does not waste any CPU
-	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
-	throttler.aggregatedMetrics = cache.New(cache.NoExpiration, 0)
-	throttler.recentApps = cache.New(cache.NoExpiration, 0)
-	throttler.nonLowPriorityAppRequestsThrottled = cache.New(cache.NoExpiration, 0)
+
+	throttler.throttledApps.Flush()
+	throttler.aggregatedMetrics.Flush()
+	throttler.recentApps.Flush()
+	throttler.nonLowPriorityAppRequestsThrottled.Flush()
+	throttler.nonLowPriorityAppRequestsThrottled.Flush()
 
 	throttler.cancelEnableContext()
+}
+
+func (throttler *Throttler) IsOpen() bool {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+	return atomic.LoadInt64(&throttler.isOpen) > 0
 }
 
 // Open opens database pool and initializes the schema
