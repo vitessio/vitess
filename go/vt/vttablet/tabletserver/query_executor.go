@@ -184,6 +184,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execShowThrottledApps()
 	case p.PlanAlterThrottler:
 		return qre.execAlterThrottler()
+	case p.PlanShowThrottlerStatus:
+		return qre.execShowThrottlerStatus()
 	case p.PlanSet:
 		if qre.setting == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
@@ -966,6 +968,40 @@ func (qre *QueryExecutor) execAlterThrottler() (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
 	if err := qre.tsv.lagThrottler.CheckIsReady(); err == nil {
 		result.RowsAffected = 1
+	}
+	return result, nil
+}
+
+func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
+	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottlerStatus); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLER STATUS plan")
+	}
+	var enabled int32
+	if err := qre.tsv.lagThrottler.CheckIsReady(); err == nil {
+		enabled = 1
+	}
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "shard",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "enabled",
+				Type: sqltypes.Int32,
+			},
+			{
+				Name: "threshold",
+				Type: sqltypes.Float64,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarChar(qre.tsv.sm.target.Shard),
+				sqltypes.NewInt32(enabled),
+				sqltypes.NewFloat64(qre.tsv.lagThrottler.MetricsThreshold.Get()),
+			},
+		},
 	}
 	return result, nil
 }
