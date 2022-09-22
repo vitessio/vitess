@@ -161,27 +161,3 @@ func PlannedFailoverShard(ctx context.Context, r Request, api *API) *JSONRespons
 	})
 	return NewJSONResponse(result, err)
 }
-
-// DeleteShard implments the http wrapper for
-// DELETE /shard/{cluster_id}/{keyspace}/{shard}
-func DeleteShard(ctx context.Context, r Request, api *API) *JSONResponse {
-	// decoder := json.NewDecoder(r.Body)
-	// defer r.Body.Close()
-
-	// var options vtctldatapb.PlannedReparentShardRequest
-	// if err := decoder.Decode(&options); err != nil {
-	// 	return NewJSONResponse(nil, &errors.BadRequest{
-	// 		Err: err,
-	// 	})
-	// }
-
-	// vars := r.Vars()
-	// options.Keyspace = vars["keyspace"]
-	// options.Shard = vars["shard"]
-
-	// result, err := api.server.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
-	// 	ClusterId: vars["cluster_id"],
-	// 	Keyspace:
-	// })
-	return NewJSONResponse(nil, nil)
-}

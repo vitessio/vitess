@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useParams, useRouteMatch, Link } from 'react-router-dom';
+import { useParams, Link, useHistory } from 'react-router-dom';
 import { useDeleteShard, useKeyspace } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel'
@@ -16,6 +16,7 @@ interface RouteParams {
 
 const Advanced: React.FC = () => {
   const params = useParams<RouteParams>();
+  const history = useHistory();
 
   const shardName = `${params.keyspace}/${params.shard}`;
 
@@ -33,6 +34,7 @@ const Advanced: React.FC = () => {
           `Successfully deleted shard ${shardName}`,
           { autoClose: 7000 }
         );
+        history.push(`/keyspace/${params.keyspace}/${params.clusterID}/shards`);
       },
       onError: (error) => warn(`There was an error deleting shard ${shardName}: ${error}`),
     }

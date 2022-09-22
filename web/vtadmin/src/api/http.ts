@@ -575,7 +575,7 @@ export const deleteShard = async (params: DeleteShardParams) => {
   req.append('recursive', String(params.recursive))
 
 
-  const { result } = await vtfetch(`/api/shards/${params.clusterID}`, { method: 'delete' });
+  const { result } = await vtfetch(`/api/shards/${params.clusterID}?${req}`, { method: 'delete' });
 
   const err = vtctldata.DeleteShardsResponse.verify(result);
   if (err) throw Error(err);
