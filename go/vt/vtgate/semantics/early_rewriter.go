@@ -33,33 +33,19 @@ type earlyRewriter struct {
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			return nil
+		}
+		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.SelectExprs:
 		_, isSel := cursor.Parent().(*sqlparser.Select)
 		if !isSel {
 			return nil
 		}
-		currentScope := r.scoper.currentScope()
-		var selExprs sqlparser.SelectExprs
-		changed := false
-		for _, selectExpr := range node {
-			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-			if !isStarExpr {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
-			if err != nil {
-				return err
-			}
-			if !starExpanded || colNames == nil {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			selExprs = append(selExprs, colNames...)
-			changed = true
-		}
-		if changed {
-			cursor.ReplaceAndRevisit(selExprs)
+		err := r.expandStar(cursor, node)
+		if err != nil {
+			return err
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.StraightJoinType {
@@ -68,6 +54,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.Order:
 		r.clause = "order clause"
+		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
 
@@ -93,6 +80,60 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		}
 	}
 	return nil
+}
+
+func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+	currentScope := r.scoper.currentScope()
+	var selExprs sqlparser.SelectExprs
+	changed := false
+	for _, selectExpr := range node {
+		starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
+		if !isStarExpr {
+			selExprs = append(selExprs, selectExpr)
+			continue
+		}
+		starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
+		if err != nil {
+			return err
+		}
+		if !starExpanded || colNames == nil {
+			selExprs = append(selExprs, selectExpr)
+			continue
+		}
+		selExprs = append(selExprs, colNames...)
+		changed = true
+	}
+	if changed {
+		cursor.ReplaceAndRevisit(selExprs)
+	}
+	return nil
+}
+
+func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
+	sel, isSel := cursor.Parent().(*sqlparser.Select)
+	if !isSel {
+		return
+	}
+	sqlparser.Rewrite(node, func(inner *sqlparser.Cursor) bool {
+		switch col := inner.Node().(type) {
+		case *sqlparser.Subquery:
+			return false
+		case *sqlparser.ColName:
+			if !col.Qualifier.IsEmpty() {
+				return false
+			}
+			for _, e := range sel.SelectExprs {
+				ae, ok := e.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				if ae.As.Equal(col.Name) {
+					inner.Replace(ae.Expr)
+				}
+			}
+		}
+		return true
+	}, nil)
 }
 
 func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {

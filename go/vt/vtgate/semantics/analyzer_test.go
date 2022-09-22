@@ -813,6 +813,9 @@ func TestHavingBinding(t *testing.T) {
 		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
 		MergeTableSets(T1, T2),
 	}, {
+		"select t.id, sum(t2.name) as a from t, t2 group by t.id having a = 1",
+		T2,
+	}, {
 		sql:  "select u2.a, u1.a from u1, u2 having u2.a = 2",
 		deps: T2,
 	}}
