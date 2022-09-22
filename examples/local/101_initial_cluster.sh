@@ -46,14 +46,14 @@ vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-p
 ./scripts/vtorc-up.sh
 
 # Wait for all the tablets to be up and registered in the topology server
-for i in $(seq 0 200); do
+for _ in $(seq 0 200); do
 	vtctldclient GetTablets --keyspace commerce --shard 0 | wc -l | grep -q "3" && break
 	sleep 1
 done;
 vtctldclient GetTablets --keyspace commerce --shard 0 | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in commerce/0" && exit 1)
 
 # Wait for a primary tablet to be elected in the shard
-for i in $(seq 0 200); do
+for _ in $(seq 0 200); do
 	vtctldclient GetTablets --keyspace commerce --shard 0 | grep -q "primary" && break
 	sleep 1
 done;

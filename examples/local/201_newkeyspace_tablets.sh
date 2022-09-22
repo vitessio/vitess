@@ -33,14 +33,14 @@ for i in ${BASETABLETNUM}00 ${BASETABLETNUM}01 ${BASETABLETNUM}02; do
 done
 
 # Wait for all the tablets to be up and registered in the topology server
-for i in $(seq 0 200); do
+for _ in $(seq 0 200); do
 	vtctldclient GetTablets --keyspace "${KEYSPACE}" --shard "${SHARD}" | wc -l | grep -q "3" && break
 	sleep 1
 done;
 vtctldclient GetTablets --keyspace "${KEYSPACE}" --shard "${SHARD}" | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in ${KEYSPACE}/${SHARD}" && exit 1)
 
 # Wait for a primary tablet to be elected in the shard
-for i in $(seq 0 200); do
+for _ in $(seq 0 200); do
 	vtctldclient GetTablets --keyspace "${KEYSPACE}" --shard "${SHARD}" | grep -q "primary" && break
 	sleep 1
 done;

@@ -31,14 +31,14 @@ done
 
 for shard in "-80" "80-"; do
   # Wait for all the tablets to be up and registered in the topology server
-  for i in $(seq 0 200); do
+  for _ in $(seq 0 200); do
   	vtctldclient GetTablets --keyspace customer --shard $shard | wc -l | grep -q "3" && break
   	sleep 1
   done;
   vtctldclient GetTablets --keyspace customer --shard $shard | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in customer/$shard" && exit 1)
 
   # Wait for a primary tablet to be elected in the shard
-  for i in $(seq 0 200); do
+  for _ in $(seq 0 200); do
   	vtctldclient GetTablets --keyspace customer --shard $shard | grep -q "primary" && break
   	sleep 1
   done;
