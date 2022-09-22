@@ -89,6 +89,7 @@ Usage of vtexplain:
       --mysqlctl_socket string                          socket file to use for remote mysqlctl actions (empty for local actions)
       --no_scatter                                      when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize                                       Whether to enable vtgate normalization
+      --normalize_prepared_stmts                        when set to true, normalize prepared statement queries as well, if -normalize_queries is already true
       --normalize_queries                               Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
       --output-mode string                              Output in human-friendly text or json (default "text")
       --planner-version string                          Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4
