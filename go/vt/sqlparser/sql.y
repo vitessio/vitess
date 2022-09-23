@@ -490,7 +490,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
-%type <str> equal_opt table_equal_opt
+%type <str> equal_opt
 %type <TableSpec> table_spec table_column_list json_table_column_list
 %type <str> table_option_list table_option table_opt_value row_fmt_opt
 %type <indexInfo> index_info
@@ -3381,147 +3381,138 @@ table_option_list:
     $$ = string($1) + ", " + string($3)
   }
 
-table_equal_opt:
-  {
-    $$ = " "
-  }
-| '='
-  {
-    $$ = string($1)
-  }
-
 table_option:
-  AUTOEXTEND_SIZE table_equal_opt table_opt_value
+  AUTOEXTEND_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
-| AUTO_INCREMENT table_equal_opt table_opt_value
+| AUTO_INCREMENT equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
-| AVG_ROW_LENGTH table_equal_opt table_opt_value
+| AVG_ROW_LENGTH equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
-| CHARACTER SET table_equal_opt charset
+| CHARACTER SET equal_opt charset
   {
-    $$ = string($1) + " " + string($2) + $3 + $4
+    $$ = string($1) + " " + string($2) + " " + $4
   }
-| DEFAULT CHARACTER SET table_equal_opt charset
+| DEFAULT CHARACTER SET equal_opt charset
   {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + $4 + $5
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
   }
-| CHECKSUM table_equal_opt INTEGRAL
+| CHECKSUM equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| COLLATE table_equal_opt any_keyword
+| COLLATE equal_opt any_keyword
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| DEFAULT COLLATE table_equal_opt any_keyword
+| DEFAULT COLLATE equal_opt any_keyword
   {
-    $$ = string($1) + " "  + string($2) + $3 + string($4)
+    $$ = string($1) + " "  + string($2) + " " + string($4)
   }
-| COMMENT_KEYWORD table_equal_opt STRING
+| COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = string($1) + $2 + "'" + string($3) + "'"
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| COMPRESSION table_equal_opt STRING
+| COMPRESSION equal_opt STRING
   {
-    $$ = string($1) + $2 + "'" + string($3) + "'"
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| CONNECTION table_equal_opt STRING
+| CONNECTION equal_opt STRING
   {
-    $$ = string($1) + $2 + "'" + string($3) + "'"
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| DATA DIRECTORY table_equal_opt STRING
+| DATA DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + $3 + "'" + string($4) + "'"
+    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
   }
-| INDEX DIRECTORY table_equal_opt STRING
+| INDEX DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + $3 + "'" + string($4) + "'"
+    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
   }
-| DELAY_KEY_WRITE table_equal_opt INTEGRAL
+| DELAY_KEY_WRITE equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| ENCRYPTION table_equal_opt STRING
+| ENCRYPTION equal_opt STRING
   {
-    $$ = string($1) + $2 + "'" + string($3) + "'"
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| ENGINE table_equal_opt any_keyword
+| ENGINE equal_opt any_keyword
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| ENGINE_ATTRIBUTE table_equal_opt STRING
+| ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + $2 + "'" + string($3) + "'"
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| INSERT_METHOD table_equal_opt NO
+| INSERT_METHOD equal_opt NO
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| INSERT_METHOD table_equal_opt FIRST
+| INSERT_METHOD equal_opt FIRST
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| INSERT_METHOD table_equal_opt LAST
+| INSERT_METHOD equal_opt LAST
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| KEY_BLOCK_SIZE table_equal_opt table_opt_value
+| KEY_BLOCK_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
-| MAX_ROWS table_equal_opt table_opt_value
+| MAX_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
-| MIN_ROWS table_equal_opt table_opt_value
+| MIN_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
-| PACK_KEYS table_equal_opt INTEGRAL
+| PACK_KEYS equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| PASSWORD table_equal_opt STRING
+| PASSWORD equal_opt STRING
   {
-    $$ = string($1) + $2 + "'" + string($3) + "'"
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| ROW_FORMAT table_equal_opt row_fmt_opt
+| ROW_FORMAT equal_opt row_fmt_opt
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
 | START TRANSACTION
   {
     $$ = string($1) + " "  + string($2)
   }
-| SECONDARY_ENGINE_ATTRIBUTE table_equal_opt STRING
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + $2 + "'" + string($3) + "'"
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| STATS_AUTO_RECALC table_equal_opt DEFAULT
+| STATS_AUTO_RECALC equal_opt DEFAULT
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| STATS_AUTO_RECALC table_equal_opt INTEGRAL
+| STATS_AUTO_RECALC equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| STATS_PERSISTENT table_equal_opt DEFAULT
+| STATS_PERSISTENT equal_opt DEFAULT
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| STATS_PERSISTENT table_equal_opt INTEGRAL
+| STATS_PERSISTENT equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + string($3)
+    $$ = string($1) + " " + string($3)
   }
-| STATS_SAMPLE_PAGES table_equal_opt table_opt_value
+| STATS_SAMPLE_PAGES equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
 | TABLESPACE table_opt_value
   {
@@ -3539,9 +3530,9 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
-| UNION table_equal_opt table_opt_value
+| UNION equal_opt table_opt_value
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + " " + $3
   }
 
 table_opt_value:
@@ -3598,7 +3589,60 @@ any_keyword:
 | non_reserved_keyword
 | reserved_keyword
 
-//partition_option_list:
+// TODO: partition options for table creation will parse, but do nothing for now
+//partition_options:
+//  {
+//    $$ = ""
+//  }
+//| PARTITION BY partition_option parition_num_opt subpartition_opt
+//  {
+//    $$ = ""
+//  }
+//| partition_definitions
+//  {
+//    $$ = $1.Name.String()
+//  }
+//
+//partition_option:
+//  linear_opt HASH openb value_expression closeb
+//  {
+//    $$ = string($1) + string($2)
+//  }
+//| linear_opt KEY openb column_list closeb
+//  {
+//    $$ = string($1) + string($2)
+//  }
+//| linear_opt KEY ALGORITHM '=' INTEGRAL openb column_list closeb
+//  {
+//    $$ = string($1) + string($2) + string($3) + string($4) + string($5)
+//  }
+//| RANGE value_expression
+//  {
+//    $$ = string($1)
+//  }
+//| RANGE COLUMNS openb column_list closeb
+//  {
+//    $$ = string($1) + string($2)
+//  }
+//| LIST value_expression
+//  {
+//    $$ = string($1)
+//  }
+//| LIST COLUMNS openb column_list closeb
+// {
+//   $$ = string($1) + string($2)
+// }
+//
+//linear_opt:
+//  {
+//    $$ = ""
+//  }
+//| LINEAR
+//  {
+//    $$ = string($1)
+//  }
+
+
 
 
 constraint_symbol_opt:
