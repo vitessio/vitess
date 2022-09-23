@@ -51,6 +51,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -92,7 +93,9 @@ var (
 	follow           = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
 	parallel         = flag.Int("parallel", 1, "number of tests to run in parallel")
 	skipBuild        = flag.Bool("skip-build", false, "skip running 'make build'. Assumes pre-existing binaries exist")
-
+	partialKeyspace  = flag.Bool("partial-keyspace", false, "add a second keyspace for sharded tests and mark first shard as moved to this keyspace in the shard routing rules")
+	// `go run test.go --dry-run --skip-build` to quickly test this file and see what tests will run
+	dryRun      = flag.Bool("dry-run", false, "For each test to be run, it will output the test attributes, but NOT run the tests. Useful while debugging changes to test.go (this file)")
 	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
 )
 
@@ -164,6 +167,11 @@ func (t *Test) hasAnyTag(want []string) bool {
 // dataDir is the VTDATAROOT to use for this run.
 // returns the combined stdout+stderr and error.
 func (t *Test) run(dir, dataDir string) ([]byte, error) {
+	if *dryRun {
+		fmt.Printf("Will run in dir %s(%s): %+v\n", dir, dataDir, t)
+		t.pass++
+		return nil, nil
+	}
 	testCmd := t.Command
 	if len(testCmd) == 0 {
 		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
@@ -175,6 +183,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
 			testCmd = append(testCmd, t.Args...)
+		}
+		if *partialKeyspace {
+			testCmd = append(testCmd, "--partial-keyspace")
 		}
 		testCmd = append(testCmd, extraArgs...)
 		if *docker {
@@ -253,6 +264,40 @@ func (t *Test) logf(format string, v ...any) {
 	}
 }
 
+func loadOneConfig(fileName string) (*Config, error) {
+	config2 := &Config{}
+	configData, err := os.ReadFile(fileName)
+	if err != nil {
+		log.Fatalf("Can't read config file %s: %v", fileName, err)
+		return nil, err
+	}
+	if err := json.Unmarshal(configData, config2); err != nil {
+		log.Fatalf("Can't parse config file: %v", err)
+		return nil, err
+	}
+	return config2, nil
+
+}
+
+// Get test configs.
+func loadConfig() (*Config, error) {
+	config := &Config{Tests: make(map[string]*Test)}
+	matches, _ := filepath.Glob("test/config*.json")
+	for _, configFile := range matches {
+		config2, err := loadOneConfig(configFile)
+		if err != nil {
+			return nil, err
+		}
+		if config2 == nil {
+			log.Fatalf("could not load config file: %s", configFile)
+		}
+		for key, val := range config2.Tests {
+			config.Tests[key] = val
+		}
+	}
+	return config, nil
+}
+
 func main() {
 	flag.Usage = func() {
 		os.Stderr.WriteString(usage)
@@ -294,19 +339,14 @@ func main() {
 	log.SetOutput(io.MultiWriter(os.Stderr, logFile))
 	log.Printf("Output directory: %v", outDir)
 
-	// Get test configs.
-	configData, err := os.ReadFile(configFileName)
-	if err != nil {
-		log.Fatalf("Can't read config file: %v", err)
-	}
-	var config Config
-	if err := json.Unmarshal(configData, &config); err != nil {
-		log.Fatalf("Can't parse config file: %v", err)
+	var config *Config
+	if config, err = loadConfig(); err != nil {
+		log.Fatalf("Could not load test config: %+v", err)
 	}
 
 	flavors := []string{"local"}
 
-	if *docker {
+	if *docker && !*dryRun {
 		log.Printf("Bootstrap flavor(s): %v", *flavor)
 
 		flavors = strings.Split(*flavor, ",")
@@ -339,7 +379,7 @@ func main() {
 	// Pick the tests to run.
 	var testArgs []string
 	testArgs, extraArgs = splitArgs(flag.Args(), "--")
-	tests := selectedTests(testArgs, &config)
+	tests := selectedTests(testArgs, config)
 
 	// Duplicate tests for run count.
 	if *runCount > 1 {
@@ -369,7 +409,7 @@ func main() {
 
 	vtRoot := "."
 	tmpDir := ""
-	if *docker {
+	if *docker && !*dryRun {
 		// Copy working repo to tmpDir.
 		// This doesn't work outside Docker since it messes up GOROOT.
 		tmpDir, err = os.MkdirTemp(os.TempDir(), "vt_")

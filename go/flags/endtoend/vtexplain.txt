@@ -35,6 +35,7 @@ Usage of vtexplain:
       --emit_stats                                      If set, emit stats to push-based monitoring and stats backends
       --enable_direct_ddl                               Allow users to submit direct DDL statements (default true)
       --enable_online_ddl                               Allow users to submit, review and control Online DDL (default true)
+      --enable_partial_keyspace_migration               (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable_set_var                                  This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
       --enable_system_settings                          This will enable the system settings to be changed per session at the database connection level (default true)
       --execution-mode string                           The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")

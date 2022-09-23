@@ -26,9 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"context"
 
@@ -97,6 +98,8 @@ var (
 
 	enableSchemaChangeSignal = flag.Bool("schema_change_signal", true, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
+
+	enableShardRouting = flag.Bool("enable_partial_keyspace_migration", false, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -303,7 +306,7 @@ func Init(
 	}
 
 	initAPI(gw.hc)
-
+	planbuilder.EnableShardRoutingFlag(*enableShardRouting)
 	return rpcVTGate
 }
 

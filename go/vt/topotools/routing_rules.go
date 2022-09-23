@@ -18,6 +18,8 @@ package topotools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -55,4 +57,40 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 	}
 
 	return ts.SaveRoutingRules(ctx, rrs)
+}
+
+// GetShardRoutingRules fetches shard routing rules from the topology server and returns a
+// mapping of fromKeyspace.Shard=>toKeyspace.
+func GetShardRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
+	rrs, err := ts.GetShardRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rules := make(map[string]string, len(rrs.Rules))
+	for _, rr := range rrs.Rules {
+		rules[fmt.Sprintf("%s.%s", rr.FromKeyspace, rr.Shard)] = rr.ToKeyspace
+	}
+
+	return rules, nil
+}
+
+// SaveShardRoutingRules converts a mapping of fromKeyspace.Shard=>toKeyspace into a
+// vschemapb.ShardRoutingRules protobuf message and saves it in the topology.
+func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]string) error {
+	log.Infof("Saving shard routing rules %v\n", srr)
+
+	srs := &vschemapb.ShardRoutingRules{Rules: make([]*vschemapb.ShardRoutingRule, 0, len(srr))}
+	for from, to := range srr {
+		arr := strings.Split(from, ".")
+		fromKeyspace := arr[0]
+		shard := arr[1]
+		srs.Rules = append(srs.Rules, &vschemapb.ShardRoutingRule{
+			FromKeyspace: fromKeyspace,
+			ToKeyspace:   to,
+			Shard:        shard,
+		})
+	}
+
+	return ts.SaveShardRoutingRules(ctx, srs)
 }
