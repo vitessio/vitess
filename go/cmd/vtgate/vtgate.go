@@ -45,7 +45,7 @@ var (
 	tabletTypesToWait, plannerVersion, plannerVersionDeprecated string
 )
 
-func RegisterFlags(fs *pflag.FlagSet) {
+func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&cell, "cell", cell, "cell to use")
 	fs.StringVar(&tabletTypesToWait, "tablet_types_to_wait", tabletTypesToWait, "wait till connected for specified tablet types during Gateway initialization")
 	fs.StringVar(&plannerVersion, "planner-version", plannerVersion, "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
@@ -61,7 +61,7 @@ func init() {
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
-	servenv.OnParseFor("vtgate", RegisterFlags)
+	servenv.OnParse(registerFlags)
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag

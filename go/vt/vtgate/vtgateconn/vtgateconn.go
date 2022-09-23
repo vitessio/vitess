@@ -36,13 +36,13 @@ import (
 // VtgateProtocol defines the RPC implementation used for connecting to vtgate.
 var VtgateProtocol = "grpc"
 
-func RegisterFlags(fs *pflag.FlagSet) {
+func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&VtgateProtocol, "vtgate_protocol", VtgateProtocol, "how to talk to vtgate")
 }
 
 func init() {
-	servenv.OnParseFor("vttablet", RegisterFlags)
-	servenv.OnParseFor("vtclient", RegisterFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+	servenv.OnParseFor("vtclient", registerFlags)
 }
 
 // VTGateConn is the client API object to talk to vtgate.
