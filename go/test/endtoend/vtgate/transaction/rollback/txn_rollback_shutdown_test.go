@@ -80,11 +80,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			panic(err)
 		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -112,19 +108,12 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	want := ""
 
 	// Make a new mysql connection to vtGate
-	vtParams = mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams = clusterInstance.GetVTParams(keyspaceName)
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	vtParams = mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-
+	vtParams = clusterInstance.GetVTParams(keyspaceName)
 	// Verify that rollback worked
 	qr := utils.Exec(t, conn2, "select id from buffer where msg='mark'")
 	got := fmt.Sprintf("%v", qr.Rows)

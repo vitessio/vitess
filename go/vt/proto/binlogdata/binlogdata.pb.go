@@ -99,31 +99,31 @@ func (OnDDLAction) EnumDescriptor() ([]byte, []int) {
 type VReplicationWorkflowType int32
 
 const (
-	VReplicationWorkflowType_MATERIALIZE       VReplicationWorkflowType = 0
-	VReplicationWorkflowType_MOVETABLES        VReplicationWorkflowType = 1
-	VReplicationWorkflowType_CREATELOOKUPINDEX VReplicationWorkflowType = 2
-	VReplicationWorkflowType_MIGRATE           VReplicationWorkflowType = 3
-	VReplicationWorkflowType_RESHARD           VReplicationWorkflowType = 4
-	VReplicationWorkflowType_ONLINEDDL         VReplicationWorkflowType = 5
+	VReplicationWorkflowType_Materialize       VReplicationWorkflowType = 0
+	VReplicationWorkflowType_MoveTables        VReplicationWorkflowType = 1
+	VReplicationWorkflowType_CreateLookupIndex VReplicationWorkflowType = 2
+	VReplicationWorkflowType_Migrate           VReplicationWorkflowType = 3
+	VReplicationWorkflowType_Reshard           VReplicationWorkflowType = 4
+	VReplicationWorkflowType_OnlineDDL         VReplicationWorkflowType = 5
 )
 
 // Enum value maps for VReplicationWorkflowType.
 var (
 	VReplicationWorkflowType_name = map[int32]string{
-		0: "MATERIALIZE",
-		1: "MOVETABLES",
-		2: "CREATELOOKUPINDEX",
-		3: "MIGRATE",
-		4: "RESHARD",
-		5: "ONLINEDDL",
+		0: "Materialize",
+		1: "MoveTables",
+		2: "CreateLookupIndex",
+		3: "Migrate",
+		4: "Reshard",
+		5: "OnlineDDL",
 	}
 	VReplicationWorkflowType_value = map[string]int32{
-		"MATERIALIZE":       0,
-		"MOVETABLES":        1,
-		"CREATELOOKUPINDEX": 2,
-		"MIGRATE":           3,
-		"RESHARD":           4,
-		"ONLINEDDL":         5,
+		"Materialize":       0,
+		"MoveTables":        1,
+		"CreateLookupIndex": 2,
+		"Migrate":           3,
+		"Reshard":           4,
+		"OnlineDDL":         5,
 	}
 )
 
@@ -152,6 +152,53 @@ func (x VReplicationWorkflowType) Number() protoreflect.EnumNumber {
 // Deprecated: Use VReplicationWorkflowType.Descriptor instead.
 func (VReplicationWorkflowType) EnumDescriptor() ([]byte, []int) {
 	return file_binlogdata_proto_rawDescGZIP(), []int{1}
+}
+
+// VReplicationWorkflowSubType define types of vreplication workflows.
+type VReplicationWorkflowSubType int32
+
+const (
+	VReplicationWorkflowSubType_None    VReplicationWorkflowSubType = 0
+	VReplicationWorkflowSubType_Partial VReplicationWorkflowSubType = 1
+)
+
+// Enum value maps for VReplicationWorkflowSubType.
+var (
+	VReplicationWorkflowSubType_name = map[int32]string{
+		0: "None",
+		1: "Partial",
+	}
+	VReplicationWorkflowSubType_value = map[string]int32{
+		"None":    0,
+		"Partial": 1,
+	}
+)
+
+func (x VReplicationWorkflowSubType) Enum() *VReplicationWorkflowSubType {
+	p := new(VReplicationWorkflowSubType)
+	*p = x
+	return p
+}
+
+func (x VReplicationWorkflowSubType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (VReplicationWorkflowSubType) Descriptor() protoreflect.EnumDescriptor {
+	return file_binlogdata_proto_enumTypes[2].Descriptor()
+}
+
+func (VReplicationWorkflowSubType) Type() protoreflect.EnumType {
+	return &file_binlogdata_proto_enumTypes[2]
+}
+
+func (x VReplicationWorkflowSubType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use VReplicationWorkflowSubType.Descriptor instead.
+func (VReplicationWorkflowSubType) EnumDescriptor() ([]byte, []int) {
+	return file_binlogdata_proto_rawDescGZIP(), []int{2}
 }
 
 // VEventType enumerates the event types. Many of these types
@@ -248,11 +295,11 @@ func (x VEventType) String() string {
 }
 
 func (VEventType) Descriptor() protoreflect.EnumDescriptor {
-	return file_binlogdata_proto_enumTypes[2].Descriptor()
+	return file_binlogdata_proto_enumTypes[3].Descriptor()
 }
 
 func (VEventType) Type() protoreflect.EnumType {
-	return &file_binlogdata_proto_enumTypes[2]
+	return &file_binlogdata_proto_enumTypes[3]
 }
 
 func (x VEventType) Number() protoreflect.EnumNumber {
@@ -261,7 +308,7 @@ func (x VEventType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VEventType.Descriptor instead.
 func (VEventType) EnumDescriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{2}
+	return file_binlogdata_proto_rawDescGZIP(), []int{3}
 }
 
 // MigrationType specifies the type of migration for the Journal.
@@ -295,11 +342,11 @@ func (x MigrationType) String() string {
 }
 
 func (MigrationType) Descriptor() protoreflect.EnumDescriptor {
-	return file_binlogdata_proto_enumTypes[3].Descriptor()
+	return file_binlogdata_proto_enumTypes[4].Descriptor()
 }
 
 func (MigrationType) Type() protoreflect.EnumType {
-	return &file_binlogdata_proto_enumTypes[3]
+	return &file_binlogdata_proto_enumTypes[4]
 }
 
 func (x MigrationType) Number() protoreflect.EnumNumber {
@@ -308,7 +355,7 @@ func (x MigrationType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MigrationType.Descriptor instead.
 func (MigrationType) EnumDescriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{3}
+	return file_binlogdata_proto_rawDescGZIP(), []int{4}
 }
 
 type BinlogTransaction_Statement_Category int32
@@ -366,11 +413,11 @@ func (x BinlogTransaction_Statement_Category) String() string {
 }
 
 func (BinlogTransaction_Statement_Category) Descriptor() protoreflect.EnumDescriptor {
-	return file_binlogdata_proto_enumTypes[4].Descriptor()
+	return file_binlogdata_proto_enumTypes[5].Descriptor()
 }
 
 func (BinlogTransaction_Statement_Category) Type() protoreflect.EnumType {
-	return &file_binlogdata_proto_enumTypes[4]
+	return &file_binlogdata_proto_enumTypes[5]
 }
 
 func (x BinlogTransaction_Statement_Category) Number() protoreflect.EnumNumber {
@@ -412,11 +459,11 @@ func (x Filter_FieldEventMode) String() string {
 }
 
 func (Filter_FieldEventMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_binlogdata_proto_enumTypes[5].Descriptor()
+	return file_binlogdata_proto_enumTypes[6].Descriptor()
 }
 
 func (Filter_FieldEventMode) Type() protoreflect.EnumType {
-	return &file_binlogdata_proto_enumTypes[5]
+	return &file_binlogdata_proto_enumTypes[6]
 }
 
 func (x Filter_FieldEventMode) Number() protoreflect.EnumNumber {
@@ -2975,34 +3022,38 @@ var file_binlogdata_proto_rawDesc = []byte{
 	0x58, 0x45, 0x43, 0x10, 0x02, 0x12, 0x0f, 0x0a, 0x0b, 0x45, 0x58, 0x45, 0x43, 0x5f, 0x49, 0x47,
 	0x4e, 0x4f, 0x52, 0x45, 0x10, 0x03, 0x2a, 0x7b, 0x0a, 0x18, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69,
 	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x54, 0x79,
-	0x70, 0x65, 0x12, 0x0f, 0x0a, 0x0b, 0x4d, 0x41, 0x54, 0x45, 0x52, 0x49, 0x41, 0x4c, 0x49, 0x5a,
-	0x45, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x4d, 0x4f, 0x56, 0x45, 0x54, 0x41, 0x42, 0x4c, 0x45,
-	0x53, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x43, 0x52, 0x45, 0x41, 0x54, 0x45, 0x4c, 0x4f, 0x4f,
-	0x4b, 0x55, 0x50, 0x49, 0x4e, 0x44, 0x45, 0x58, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x4d, 0x49,
-	0x47, 0x52, 0x41, 0x54, 0x45, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x45, 0x53, 0x48, 0x41,
-	0x52, 0x44, 0x10, 0x04, 0x12, 0x0d, 0x0a, 0x09, 0x4f, 0x4e, 0x4c, 0x49, 0x4e, 0x45, 0x44, 0x44,
-	0x4c, 0x10, 0x05, 0x2a, 0xf9, 0x01, 0x0a, 0x0a, 0x56, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79,
-	0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12,
-	0x08, 0x0a, 0x04, 0x47, 0x54, 0x49, 0x44, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x45, 0x47,
-	0x49, 0x4e, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x4f, 0x4d, 0x4d, 0x49, 0x54, 0x10, 0x03,
-	0x12, 0x0c, 0x0a, 0x08, 0x52, 0x4f, 0x4c, 0x4c, 0x42, 0x41, 0x43, 0x4b, 0x10, 0x04, 0x12, 0x07,
-	0x0a, 0x03, 0x44, 0x44, 0x4c, 0x10, 0x05, 0x12, 0x0a, 0x0a, 0x06, 0x49, 0x4e, 0x53, 0x45, 0x52,
-	0x54, 0x10, 0x06, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x45, 0x50, 0x4c, 0x41, 0x43, 0x45, 0x10, 0x07,
-	0x12, 0x0a, 0x0a, 0x06, 0x55, 0x50, 0x44, 0x41, 0x54, 0x45, 0x10, 0x08, 0x12, 0x0a, 0x0a, 0x06,
-	0x44, 0x45, 0x4c, 0x45, 0x54, 0x45, 0x10, 0x09, 0x12, 0x07, 0x0a, 0x03, 0x53, 0x45, 0x54, 0x10,
-	0x0a, 0x12, 0x09, 0x0a, 0x05, 0x4f, 0x54, 0x48, 0x45, 0x52, 0x10, 0x0b, 0x12, 0x07, 0x0a, 0x03,
-	0x52, 0x4f, 0x57, 0x10, 0x0c, 0x12, 0x09, 0x0a, 0x05, 0x46, 0x49, 0x45, 0x4c, 0x44, 0x10, 0x0d,
-	0x12, 0x0d, 0x0a, 0x09, 0x48, 0x45, 0x41, 0x52, 0x54, 0x42, 0x45, 0x41, 0x54, 0x10, 0x0e, 0x12,
-	0x09, 0x0a, 0x05, 0x56, 0x47, 0x54, 0x49, 0x44, 0x10, 0x0f, 0x12, 0x0b, 0x0a, 0x07, 0x4a, 0x4f,
-	0x55, 0x52, 0x4e, 0x41, 0x4c, 0x10, 0x10, 0x12, 0x0b, 0x0a, 0x07, 0x56, 0x45, 0x52, 0x53, 0x49,
-	0x4f, 0x4e, 0x10, 0x11, 0x12, 0x0a, 0x0a, 0x06, 0x4c, 0x41, 0x53, 0x54, 0x50, 0x4b, 0x10, 0x12,
-	0x12, 0x0d, 0x0a, 0x09, 0x53, 0x41, 0x56, 0x45, 0x50, 0x4f, 0x49, 0x4e, 0x54, 0x10, 0x13, 0x2a,
-	0x27, 0x0a, 0x0d, 0x4d, 0x69, 0x67, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x79, 0x70, 0x65,
-	0x12, 0x0a, 0x0a, 0x06, 0x54, 0x41, 0x42, 0x4c, 0x45, 0x53, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06,
-	0x53, 0x48, 0x41, 0x52, 0x44, 0x53, 0x10, 0x01, 0x42, 0x29, 0x5a, 0x27, 0x76, 0x69, 0x74, 0x65,
-	0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f,
-	0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x62, 0x69, 0x6e, 0x6c, 0x6f, 0x67, 0x64,
-	0x61, 0x74, 0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x70, 0x65, 0x12, 0x0f, 0x0a, 0x0b, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a,
+	0x65, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x4d, 0x6f, 0x76, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65,
+	0x73, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x4c, 0x6f, 0x6f,
+	0x6b, 0x75, 0x70, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x4d, 0x69,
+	0x67, 0x72, 0x61, 0x74, 0x65, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x65, 0x73, 0x68, 0x61,
+	0x72, 0x64, 0x10, 0x04, 0x12, 0x0d, 0x0a, 0x09, 0x4f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x44, 0x44,
+	0x4c, 0x10, 0x05, 0x2a, 0x34, 0x0a, 0x1b, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x75, 0x62, 0x54, 0x79,
+	0x70, 0x65, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x6f, 0x6e, 0x65, 0x10, 0x00, 0x12, 0x0b, 0x0a, 0x07,
+	0x50, 0x61, 0x72, 0x74, 0x69, 0x61, 0x6c, 0x10, 0x01, 0x2a, 0xf9, 0x01, 0x0a, 0x0a, 0x56, 0x45,
+	0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e,
+	0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x47, 0x54, 0x49, 0x44, 0x10, 0x01, 0x12,
+	0x09, 0x0a, 0x05, 0x42, 0x45, 0x47, 0x49, 0x4e, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x4f,
+	0x4d, 0x4d, 0x49, 0x54, 0x10, 0x03, 0x12, 0x0c, 0x0a, 0x08, 0x52, 0x4f, 0x4c, 0x4c, 0x42, 0x41,
+	0x43, 0x4b, 0x10, 0x04, 0x12, 0x07, 0x0a, 0x03, 0x44, 0x44, 0x4c, 0x10, 0x05, 0x12, 0x0a, 0x0a,
+	0x06, 0x49, 0x4e, 0x53, 0x45, 0x52, 0x54, 0x10, 0x06, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x45, 0x50,
+	0x4c, 0x41, 0x43, 0x45, 0x10, 0x07, 0x12, 0x0a, 0x0a, 0x06, 0x55, 0x50, 0x44, 0x41, 0x54, 0x45,
+	0x10, 0x08, 0x12, 0x0a, 0x0a, 0x06, 0x44, 0x45, 0x4c, 0x45, 0x54, 0x45, 0x10, 0x09, 0x12, 0x07,
+	0x0a, 0x03, 0x53, 0x45, 0x54, 0x10, 0x0a, 0x12, 0x09, 0x0a, 0x05, 0x4f, 0x54, 0x48, 0x45, 0x52,
+	0x10, 0x0b, 0x12, 0x07, 0x0a, 0x03, 0x52, 0x4f, 0x57, 0x10, 0x0c, 0x12, 0x09, 0x0a, 0x05, 0x46,
+	0x49, 0x45, 0x4c, 0x44, 0x10, 0x0d, 0x12, 0x0d, 0x0a, 0x09, 0x48, 0x45, 0x41, 0x52, 0x54, 0x42,
+	0x45, 0x41, 0x54, 0x10, 0x0e, 0x12, 0x09, 0x0a, 0x05, 0x56, 0x47, 0x54, 0x49, 0x44, 0x10, 0x0f,
+	0x12, 0x0b, 0x0a, 0x07, 0x4a, 0x4f, 0x55, 0x52, 0x4e, 0x41, 0x4c, 0x10, 0x10, 0x12, 0x0b, 0x0a,
+	0x07, 0x56, 0x45, 0x52, 0x53, 0x49, 0x4f, 0x4e, 0x10, 0x11, 0x12, 0x0a, 0x0a, 0x06, 0x4c, 0x41,
+	0x53, 0x54, 0x50, 0x4b, 0x10, 0x12, 0x12, 0x0d, 0x0a, 0x09, 0x53, 0x41, 0x56, 0x45, 0x50, 0x4f,
+	0x49, 0x4e, 0x54, 0x10, 0x13, 0x2a, 0x27, 0x0a, 0x0d, 0x4d, 0x69, 0x67, 0x72, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0a, 0x0a, 0x06, 0x54, 0x41, 0x42, 0x4c, 0x45, 0x53,
+	0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x53, 0x48, 0x41, 0x52, 0x44, 0x53, 0x10, 0x01, 0x42, 0x29,
+	0x5a, 0x27, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65,
+	0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x62,
+	0x69, 0x6e, 0x6c, 0x6f, 0x67, 0x64, 0x61, 0x74, 0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -3017,113 +3068,114 @@ func file_binlogdata_proto_rawDescGZIP() []byte {
 	return file_binlogdata_proto_rawDescData
 }
 
-var file_binlogdata_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_binlogdata_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
 var file_binlogdata_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_binlogdata_proto_goTypes = []interface{}{
 	(OnDDLAction)(0),                          // 0: binlogdata.OnDDLAction
 	(VReplicationWorkflowType)(0),             // 1: binlogdata.VReplicationWorkflowType
-	(VEventType)(0),                           // 2: binlogdata.VEventType
-	(MigrationType)(0),                        // 3: binlogdata.MigrationType
-	(BinlogTransaction_Statement_Category)(0), // 4: binlogdata.BinlogTransaction.Statement.Category
-	(Filter_FieldEventMode)(0),                // 5: binlogdata.Filter.FieldEventMode
-	(*Charset)(nil),                           // 6: binlogdata.Charset
-	(*BinlogTransaction)(nil),                 // 7: binlogdata.BinlogTransaction
-	(*StreamKeyRangeRequest)(nil),             // 8: binlogdata.StreamKeyRangeRequest
-	(*StreamKeyRangeResponse)(nil),            // 9: binlogdata.StreamKeyRangeResponse
-	(*StreamTablesRequest)(nil),               // 10: binlogdata.StreamTablesRequest
-	(*StreamTablesResponse)(nil),              // 11: binlogdata.StreamTablesResponse
-	(*CharsetConversion)(nil),                 // 12: binlogdata.CharsetConversion
-	(*Rule)(nil),                              // 13: binlogdata.Rule
-	(*Filter)(nil),                            // 14: binlogdata.Filter
-	(*BinlogSource)(nil),                      // 15: binlogdata.BinlogSource
-	(*RowChange)(nil),                         // 16: binlogdata.RowChange
-	(*RowEvent)(nil),                          // 17: binlogdata.RowEvent
-	(*FieldEvent)(nil),                        // 18: binlogdata.FieldEvent
-	(*ShardGtid)(nil),                         // 19: binlogdata.ShardGtid
-	(*VGtid)(nil),                             // 20: binlogdata.VGtid
-	(*KeyspaceShard)(nil),                     // 21: binlogdata.KeyspaceShard
-	(*Journal)(nil),                           // 22: binlogdata.Journal
-	(*VEvent)(nil),                            // 23: binlogdata.VEvent
-	(*MinimalTable)(nil),                      // 24: binlogdata.MinimalTable
-	(*MinimalSchema)(nil),                     // 25: binlogdata.MinimalSchema
-	(*VStreamRequest)(nil),                    // 26: binlogdata.VStreamRequest
-	(*VStreamResponse)(nil),                   // 27: binlogdata.VStreamResponse
-	(*VStreamRowsRequest)(nil),                // 28: binlogdata.VStreamRowsRequest
-	(*VStreamRowsResponse)(nil),               // 29: binlogdata.VStreamRowsResponse
-	(*LastPKEvent)(nil),                       // 30: binlogdata.LastPKEvent
-	(*TableLastPK)(nil),                       // 31: binlogdata.TableLastPK
-	(*VStreamResultsRequest)(nil),             // 32: binlogdata.VStreamResultsRequest
-	(*VStreamResultsResponse)(nil),            // 33: binlogdata.VStreamResultsResponse
-	(*BinlogTransaction_Statement)(nil),       // 34: binlogdata.BinlogTransaction.Statement
-	nil,                                       // 35: binlogdata.Rule.ConvertEnumToTextEntry
-	nil,                                       // 36: binlogdata.Rule.ConvertCharsetEntry
-	(*query.EventToken)(nil),                  // 37: query.EventToken
-	(*topodata.KeyRange)(nil),                 // 38: topodata.KeyRange
-	(topodata.TabletType)(0),                  // 39: topodata.TabletType
-	(*query.Row)(nil),                         // 40: query.Row
-	(*query.Field)(nil),                       // 41: query.Field
-	(*vtrpc.CallerID)(nil),                    // 42: vtrpc.CallerID
-	(*query.VTGateCallerID)(nil),              // 43: query.VTGateCallerID
-	(*query.Target)(nil),                      // 44: query.Target
-	(*query.QueryResult)(nil),                 // 45: query.QueryResult
+	(VReplicationWorkflowSubType)(0),          // 2: binlogdata.VReplicationWorkflowSubType
+	(VEventType)(0),                           // 3: binlogdata.VEventType
+	(MigrationType)(0),                        // 4: binlogdata.MigrationType
+	(BinlogTransaction_Statement_Category)(0), // 5: binlogdata.BinlogTransaction.Statement.Category
+	(Filter_FieldEventMode)(0),                // 6: binlogdata.Filter.FieldEventMode
+	(*Charset)(nil),                           // 7: binlogdata.Charset
+	(*BinlogTransaction)(nil),                 // 8: binlogdata.BinlogTransaction
+	(*StreamKeyRangeRequest)(nil),             // 9: binlogdata.StreamKeyRangeRequest
+	(*StreamKeyRangeResponse)(nil),            // 10: binlogdata.StreamKeyRangeResponse
+	(*StreamTablesRequest)(nil),               // 11: binlogdata.StreamTablesRequest
+	(*StreamTablesResponse)(nil),              // 12: binlogdata.StreamTablesResponse
+	(*CharsetConversion)(nil),                 // 13: binlogdata.CharsetConversion
+	(*Rule)(nil),                              // 14: binlogdata.Rule
+	(*Filter)(nil),                            // 15: binlogdata.Filter
+	(*BinlogSource)(nil),                      // 16: binlogdata.BinlogSource
+	(*RowChange)(nil),                         // 17: binlogdata.RowChange
+	(*RowEvent)(nil),                          // 18: binlogdata.RowEvent
+	(*FieldEvent)(nil),                        // 19: binlogdata.FieldEvent
+	(*ShardGtid)(nil),                         // 20: binlogdata.ShardGtid
+	(*VGtid)(nil),                             // 21: binlogdata.VGtid
+	(*KeyspaceShard)(nil),                     // 22: binlogdata.KeyspaceShard
+	(*Journal)(nil),                           // 23: binlogdata.Journal
+	(*VEvent)(nil),                            // 24: binlogdata.VEvent
+	(*MinimalTable)(nil),                      // 25: binlogdata.MinimalTable
+	(*MinimalSchema)(nil),                     // 26: binlogdata.MinimalSchema
+	(*VStreamRequest)(nil),                    // 27: binlogdata.VStreamRequest
+	(*VStreamResponse)(nil),                   // 28: binlogdata.VStreamResponse
+	(*VStreamRowsRequest)(nil),                // 29: binlogdata.VStreamRowsRequest
+	(*VStreamRowsResponse)(nil),               // 30: binlogdata.VStreamRowsResponse
+	(*LastPKEvent)(nil),                       // 31: binlogdata.LastPKEvent
+	(*TableLastPK)(nil),                       // 32: binlogdata.TableLastPK
+	(*VStreamResultsRequest)(nil),             // 33: binlogdata.VStreamResultsRequest
+	(*VStreamResultsResponse)(nil),            // 34: binlogdata.VStreamResultsResponse
+	(*BinlogTransaction_Statement)(nil),       // 35: binlogdata.BinlogTransaction.Statement
+	nil,                                       // 36: binlogdata.Rule.ConvertEnumToTextEntry
+	nil,                                       // 37: binlogdata.Rule.ConvertCharsetEntry
+	(*query.EventToken)(nil),                  // 38: query.EventToken
+	(*topodata.KeyRange)(nil),                 // 39: topodata.KeyRange
+	(topodata.TabletType)(0),                  // 40: topodata.TabletType
+	(*query.Row)(nil),                         // 41: query.Row
+	(*query.Field)(nil),                       // 42: query.Field
+	(*vtrpc.CallerID)(nil),                    // 43: vtrpc.CallerID
+	(*query.VTGateCallerID)(nil),              // 44: query.VTGateCallerID
+	(*query.Target)(nil),                      // 45: query.Target
+	(*query.QueryResult)(nil),                 // 46: query.QueryResult
 }
 var file_binlogdata_proto_depIdxs = []int32{
-	34, // 0: binlogdata.BinlogTransaction.statements:type_name -> binlogdata.BinlogTransaction.Statement
-	37, // 1: binlogdata.BinlogTransaction.event_token:type_name -> query.EventToken
-	38, // 2: binlogdata.StreamKeyRangeRequest.key_range:type_name -> topodata.KeyRange
-	6,  // 3: binlogdata.StreamKeyRangeRequest.charset:type_name -> binlogdata.Charset
-	7,  // 4: binlogdata.StreamKeyRangeResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
-	6,  // 5: binlogdata.StreamTablesRequest.charset:type_name -> binlogdata.Charset
-	7,  // 6: binlogdata.StreamTablesResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
-	35, // 7: binlogdata.Rule.convert_enum_to_text:type_name -> binlogdata.Rule.ConvertEnumToTextEntry
-	36, // 8: binlogdata.Rule.convert_charset:type_name -> binlogdata.Rule.ConvertCharsetEntry
-	13, // 9: binlogdata.Filter.rules:type_name -> binlogdata.Rule
-	5,  // 10: binlogdata.Filter.field_event_mode:type_name -> binlogdata.Filter.FieldEventMode
-	39, // 11: binlogdata.BinlogSource.tablet_type:type_name -> topodata.TabletType
-	38, // 12: binlogdata.BinlogSource.key_range:type_name -> topodata.KeyRange
-	14, // 13: binlogdata.BinlogSource.filter:type_name -> binlogdata.Filter
+	35, // 0: binlogdata.BinlogTransaction.statements:type_name -> binlogdata.BinlogTransaction.Statement
+	38, // 1: binlogdata.BinlogTransaction.event_token:type_name -> query.EventToken
+	39, // 2: binlogdata.StreamKeyRangeRequest.key_range:type_name -> topodata.KeyRange
+	7,  // 3: binlogdata.StreamKeyRangeRequest.charset:type_name -> binlogdata.Charset
+	8,  // 4: binlogdata.StreamKeyRangeResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
+	7,  // 5: binlogdata.StreamTablesRequest.charset:type_name -> binlogdata.Charset
+	8,  // 6: binlogdata.StreamTablesResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
+	36, // 7: binlogdata.Rule.convert_enum_to_text:type_name -> binlogdata.Rule.ConvertEnumToTextEntry
+	37, // 8: binlogdata.Rule.convert_charset:type_name -> binlogdata.Rule.ConvertCharsetEntry
+	14, // 9: binlogdata.Filter.rules:type_name -> binlogdata.Rule
+	6,  // 10: binlogdata.Filter.field_event_mode:type_name -> binlogdata.Filter.FieldEventMode
+	40, // 11: binlogdata.BinlogSource.tablet_type:type_name -> topodata.TabletType
+	39, // 12: binlogdata.BinlogSource.key_range:type_name -> topodata.KeyRange
+	15, // 13: binlogdata.BinlogSource.filter:type_name -> binlogdata.Filter
 	0,  // 14: binlogdata.BinlogSource.on_ddl:type_name -> binlogdata.OnDDLAction
-	40, // 15: binlogdata.RowChange.before:type_name -> query.Row
-	40, // 16: binlogdata.RowChange.after:type_name -> query.Row
-	16, // 17: binlogdata.RowEvent.row_changes:type_name -> binlogdata.RowChange
-	41, // 18: binlogdata.FieldEvent.fields:type_name -> query.Field
-	31, // 19: binlogdata.ShardGtid.table_p_ks:type_name -> binlogdata.TableLastPK
-	19, // 20: binlogdata.VGtid.shard_gtids:type_name -> binlogdata.ShardGtid
-	3,  // 21: binlogdata.Journal.migration_type:type_name -> binlogdata.MigrationType
-	19, // 22: binlogdata.Journal.shard_gtids:type_name -> binlogdata.ShardGtid
-	21, // 23: binlogdata.Journal.participants:type_name -> binlogdata.KeyspaceShard
-	2,  // 24: binlogdata.VEvent.type:type_name -> binlogdata.VEventType
-	17, // 25: binlogdata.VEvent.row_event:type_name -> binlogdata.RowEvent
-	18, // 26: binlogdata.VEvent.field_event:type_name -> binlogdata.FieldEvent
-	20, // 27: binlogdata.VEvent.vgtid:type_name -> binlogdata.VGtid
-	22, // 28: binlogdata.VEvent.journal:type_name -> binlogdata.Journal
-	30, // 29: binlogdata.VEvent.last_p_k_event:type_name -> binlogdata.LastPKEvent
-	41, // 30: binlogdata.MinimalTable.fields:type_name -> query.Field
-	24, // 31: binlogdata.MinimalSchema.tables:type_name -> binlogdata.MinimalTable
-	42, // 32: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	43, // 33: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	44, // 34: binlogdata.VStreamRequest.target:type_name -> query.Target
-	14, // 35: binlogdata.VStreamRequest.filter:type_name -> binlogdata.Filter
-	31, // 36: binlogdata.VStreamRequest.table_last_p_ks:type_name -> binlogdata.TableLastPK
-	23, // 37: binlogdata.VStreamResponse.events:type_name -> binlogdata.VEvent
-	42, // 38: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	43, // 39: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	44, // 40: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
-	45, // 41: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
-	41, // 42: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
-	41, // 43: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
-	40, // 44: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
-	40, // 45: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
-	31, // 46: binlogdata.LastPKEvent.table_last_p_k:type_name -> binlogdata.TableLastPK
-	45, // 47: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
-	42, // 48: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	43, // 49: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	44, // 50: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
-	41, // 51: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
-	40, // 52: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
-	4,  // 53: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
-	6,  // 54: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
-	12, // 55: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
+	41, // 15: binlogdata.RowChange.before:type_name -> query.Row
+	41, // 16: binlogdata.RowChange.after:type_name -> query.Row
+	17, // 17: binlogdata.RowEvent.row_changes:type_name -> binlogdata.RowChange
+	42, // 18: binlogdata.FieldEvent.fields:type_name -> query.Field
+	32, // 19: binlogdata.ShardGtid.table_p_ks:type_name -> binlogdata.TableLastPK
+	20, // 20: binlogdata.VGtid.shard_gtids:type_name -> binlogdata.ShardGtid
+	4,  // 21: binlogdata.Journal.migration_type:type_name -> binlogdata.MigrationType
+	20, // 22: binlogdata.Journal.shard_gtids:type_name -> binlogdata.ShardGtid
+	22, // 23: binlogdata.Journal.participants:type_name -> binlogdata.KeyspaceShard
+	3,  // 24: binlogdata.VEvent.type:type_name -> binlogdata.VEventType
+	18, // 25: binlogdata.VEvent.row_event:type_name -> binlogdata.RowEvent
+	19, // 26: binlogdata.VEvent.field_event:type_name -> binlogdata.FieldEvent
+	21, // 27: binlogdata.VEvent.vgtid:type_name -> binlogdata.VGtid
+	23, // 28: binlogdata.VEvent.journal:type_name -> binlogdata.Journal
+	31, // 29: binlogdata.VEvent.last_p_k_event:type_name -> binlogdata.LastPKEvent
+	42, // 30: binlogdata.MinimalTable.fields:type_name -> query.Field
+	25, // 31: binlogdata.MinimalSchema.tables:type_name -> binlogdata.MinimalTable
+	43, // 32: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	44, // 33: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	45, // 34: binlogdata.VStreamRequest.target:type_name -> query.Target
+	15, // 35: binlogdata.VStreamRequest.filter:type_name -> binlogdata.Filter
+	32, // 36: binlogdata.VStreamRequest.table_last_p_ks:type_name -> binlogdata.TableLastPK
+	24, // 37: binlogdata.VStreamResponse.events:type_name -> binlogdata.VEvent
+	43, // 38: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	44, // 39: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	45, // 40: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
+	46, // 41: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
+	42, // 42: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
+	42, // 43: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
+	41, // 44: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
+	41, // 45: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
+	32, // 46: binlogdata.LastPKEvent.table_last_p_k:type_name -> binlogdata.TableLastPK
+	46, // 47: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
+	43, // 48: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	44, // 49: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	45, // 50: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
+	42, // 51: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
+	41, // 52: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
+	5,  // 53: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
+	7,  // 54: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
+	13, // 55: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
 	56, // [56:56] is the sub-list for method output_type
 	56, // [56:56] is the sub-list for method input_type
 	56, // [56:56] is the sub-list for extension type_name
@@ -3491,7 +3543,7 @@ func file_binlogdata_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_binlogdata_proto_rawDesc,
-			NumEnums:      6,
+			NumEnums:      7,
 			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,

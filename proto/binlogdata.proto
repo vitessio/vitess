@@ -205,12 +205,18 @@ enum OnDDLAction {
 
 // VReplicationWorkflowType define types of vreplication workflows.
 enum VReplicationWorkflowType {
-  MATERIALIZE = 0;
-  MOVETABLES = 1;
-  CREATELOOKUPINDEX = 2;
-  MIGRATE = 3;
-  RESHARD = 4;
-  ONLINEDDL = 5;
+  Materialize = 0;
+  MoveTables = 1;
+  CreateLookupIndex = 2;
+  Migrate = 3;
+  Reshard = 4;
+  OnlineDDL = 5;
+}
+
+// VReplicationWorkflowSubType define types of vreplication workflows.
+enum VReplicationWorkflowSubType {
+  None = 0;
+  Partial = 1;
 }
 
 // BinlogSource specifies the source  and filter parameters for

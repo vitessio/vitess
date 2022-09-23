@@ -31411,6 +31411,9 @@ export namespace vschema {
 
         /** SrvVSchema routing_rules */
         routing_rules?: (vschema.IRoutingRules|null);
+
+        /** SrvVSchema shard_routing_rules */
+        shard_routing_rules?: (vschema.IShardRoutingRules|null);
     }
 
     /** Represents a SrvVSchema. */
@@ -31427,6 +31430,9 @@ export namespace vschema {
 
         /** SrvVSchema routing_rules. */
         public routing_rules?: (vschema.IRoutingRules|null);
+
+        /** SrvVSchema shard_routing_rules. */
+        public shard_routing_rules?: (vschema.IShardRoutingRules|null);
 
         /**
          * Creates a new SrvVSchema instance using the specified properties.
@@ -31494,6 +31500,198 @@ export namespace vschema {
 
         /**
          * Converts this SrvVSchema to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ShardRoutingRules. */
+    interface IShardRoutingRules {
+
+        /** ShardRoutingRules rules */
+        rules?: (vschema.IShardRoutingRule[]|null);
+    }
+
+    /** Represents a ShardRoutingRules. */
+    class ShardRoutingRules implements IShardRoutingRules {
+
+        /**
+         * Constructs a new ShardRoutingRules.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IShardRoutingRules);
+
+        /** ShardRoutingRules rules. */
+        public rules: vschema.IShardRoutingRule[];
+
+        /**
+         * Creates a new ShardRoutingRules instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardRoutingRules instance
+         */
+        public static create(properties?: vschema.IShardRoutingRules): vschema.ShardRoutingRules;
+
+        /**
+         * Encodes the specified ShardRoutingRules message. Does not implicitly {@link vschema.ShardRoutingRules.verify|verify} messages.
+         * @param message ShardRoutingRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IShardRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardRoutingRules message, length delimited. Does not implicitly {@link vschema.ShardRoutingRules.verify|verify} messages.
+         * @param message ShardRoutingRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IShardRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardRoutingRules message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardRoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.ShardRoutingRules;
+
+        /**
+         * Decodes a ShardRoutingRules message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardRoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.ShardRoutingRules;
+
+        /**
+         * Verifies a ShardRoutingRules message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardRoutingRules message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardRoutingRules
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.ShardRoutingRules;
+
+        /**
+         * Creates a plain object from a ShardRoutingRules message. Also converts values to other types if specified.
+         * @param message ShardRoutingRules
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.ShardRoutingRules, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardRoutingRules to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ShardRoutingRule. */
+    interface IShardRoutingRule {
+
+        /** ShardRoutingRule from_keyspace */
+        from_keyspace?: (string|null);
+
+        /** ShardRoutingRule to_keyspace */
+        to_keyspace?: (string|null);
+
+        /** ShardRoutingRule shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a ShardRoutingRule. */
+    class ShardRoutingRule implements IShardRoutingRule {
+
+        /**
+         * Constructs a new ShardRoutingRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IShardRoutingRule);
+
+        /** ShardRoutingRule from_keyspace. */
+        public from_keyspace: string;
+
+        /** ShardRoutingRule to_keyspace. */
+        public to_keyspace: string;
+
+        /** ShardRoutingRule shard. */
+        public shard: string;
+
+        /**
+         * Creates a new ShardRoutingRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardRoutingRule instance
+         */
+        public static create(properties?: vschema.IShardRoutingRule): vschema.ShardRoutingRule;
+
+        /**
+         * Encodes the specified ShardRoutingRule message. Does not implicitly {@link vschema.ShardRoutingRule.verify|verify} messages.
+         * @param message ShardRoutingRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IShardRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardRoutingRule message, length delimited. Does not implicitly {@link vschema.ShardRoutingRule.verify|verify} messages.
+         * @param message ShardRoutingRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IShardRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardRoutingRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardRoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.ShardRoutingRule;
+
+        /**
+         * Decodes a ShardRoutingRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardRoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.ShardRoutingRule;
+
+        /**
+         * Verifies a ShardRoutingRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardRoutingRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardRoutingRule
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.ShardRoutingRule;
+
+        /**
+         * Creates a plain object from a ShardRoutingRule message. Also converts values to other types if specified.
+         * @param message ShardRoutingRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.ShardRoutingRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardRoutingRule to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -31833,6 +32031,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings target_time_zone */
         target_time_zone?: (string|null);
+
+        /** MaterializeSettings source_shards */
+        source_shards?: (string[]|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -31876,6 +32077,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings target_time_zone. */
         public target_time_zone: string;
+
+        /** MaterializeSettings source_shards. */
+        public source_shards: string[];
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -33407,6 +33611,192 @@ export namespace vtctldata {
 
         /**
          * Converts this ApplyRoutingRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplyShardRoutingRulesRequest. */
+    interface IApplyShardRoutingRulesRequest {
+
+        /** ApplyShardRoutingRulesRequest shard_routing_rules */
+        shard_routing_rules?: (vschema.IShardRoutingRules|null);
+
+        /** ApplyShardRoutingRulesRequest skip_rebuild */
+        skip_rebuild?: (boolean|null);
+
+        /** ApplyShardRoutingRulesRequest rebuild_cells */
+        rebuild_cells?: (string[]|null);
+    }
+
+    /** Represents an ApplyShardRoutingRulesRequest. */
+    class ApplyShardRoutingRulesRequest implements IApplyShardRoutingRulesRequest {
+
+        /**
+         * Constructs a new ApplyShardRoutingRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyShardRoutingRulesRequest);
+
+        /** ApplyShardRoutingRulesRequest shard_routing_rules. */
+        public shard_routing_rules?: (vschema.IShardRoutingRules|null);
+
+        /** ApplyShardRoutingRulesRequest skip_rebuild. */
+        public skip_rebuild: boolean;
+
+        /** ApplyShardRoutingRulesRequest rebuild_cells. */
+        public rebuild_cells: string[];
+
+        /**
+         * Creates a new ApplyShardRoutingRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyShardRoutingRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IApplyShardRoutingRulesRequest): vtctldata.ApplyShardRoutingRulesRequest;
+
+        /**
+         * Encodes the specified ApplyShardRoutingRulesRequest message. Does not implicitly {@link vtctldata.ApplyShardRoutingRulesRequest.verify|verify} messages.
+         * @param message ApplyShardRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyShardRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyShardRoutingRulesRequest message, length delimited. Does not implicitly {@link vtctldata.ApplyShardRoutingRulesRequest.verify|verify} messages.
+         * @param message ApplyShardRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyShardRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyShardRoutingRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyShardRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyShardRoutingRulesRequest;
+
+        /**
+         * Decodes an ApplyShardRoutingRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyShardRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyShardRoutingRulesRequest;
+
+        /**
+         * Verifies an ApplyShardRoutingRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyShardRoutingRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyShardRoutingRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyShardRoutingRulesRequest;
+
+        /**
+         * Creates a plain object from an ApplyShardRoutingRulesRequest message. Also converts values to other types if specified.
+         * @param message ApplyShardRoutingRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyShardRoutingRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyShardRoutingRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplyShardRoutingRulesResponse. */
+    interface IApplyShardRoutingRulesResponse {
+    }
+
+    /** Represents an ApplyShardRoutingRulesResponse. */
+    class ApplyShardRoutingRulesResponse implements IApplyShardRoutingRulesResponse {
+
+        /**
+         * Constructs a new ApplyShardRoutingRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyShardRoutingRulesResponse);
+
+        /**
+         * Creates a new ApplyShardRoutingRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyShardRoutingRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IApplyShardRoutingRulesResponse): vtctldata.ApplyShardRoutingRulesResponse;
+
+        /**
+         * Encodes the specified ApplyShardRoutingRulesResponse message. Does not implicitly {@link vtctldata.ApplyShardRoutingRulesResponse.verify|verify} messages.
+         * @param message ApplyShardRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyShardRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyShardRoutingRulesResponse message, length delimited. Does not implicitly {@link vtctldata.ApplyShardRoutingRulesResponse.verify|verify} messages.
+         * @param message ApplyShardRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyShardRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyShardRoutingRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyShardRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyShardRoutingRulesResponse;
+
+        /**
+         * Decodes an ApplyShardRoutingRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyShardRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyShardRoutingRulesResponse;
+
+        /**
+         * Verifies an ApplyShardRoutingRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyShardRoutingRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyShardRoutingRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyShardRoutingRulesResponse;
+
+        /**
+         * Creates a plain object from an ApplyShardRoutingRulesResponse message. Also converts values to other types if specified.
+         * @param message ApplyShardRoutingRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyShardRoutingRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyShardRoutingRulesResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -38903,6 +39293,180 @@ export namespace vtctldata {
 
         /**
          * Converts this GetShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetShardRoutingRulesRequest. */
+    interface IGetShardRoutingRulesRequest {
+    }
+
+    /** Represents a GetShardRoutingRulesRequest. */
+    class GetShardRoutingRulesRequest implements IGetShardRoutingRulesRequest {
+
+        /**
+         * Constructs a new GetShardRoutingRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetShardRoutingRulesRequest);
+
+        /**
+         * Creates a new GetShardRoutingRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetShardRoutingRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IGetShardRoutingRulesRequest): vtctldata.GetShardRoutingRulesRequest;
+
+        /**
+         * Encodes the specified GetShardRoutingRulesRequest message. Does not implicitly {@link vtctldata.GetShardRoutingRulesRequest.verify|verify} messages.
+         * @param message GetShardRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetShardRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetShardRoutingRulesRequest message, length delimited. Does not implicitly {@link vtctldata.GetShardRoutingRulesRequest.verify|verify} messages.
+         * @param message GetShardRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetShardRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetShardRoutingRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetShardRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetShardRoutingRulesRequest;
+
+        /**
+         * Decodes a GetShardRoutingRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetShardRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetShardRoutingRulesRequest;
+
+        /**
+         * Verifies a GetShardRoutingRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetShardRoutingRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetShardRoutingRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetShardRoutingRulesRequest;
+
+        /**
+         * Creates a plain object from a GetShardRoutingRulesRequest message. Also converts values to other types if specified.
+         * @param message GetShardRoutingRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetShardRoutingRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetShardRoutingRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetShardRoutingRulesResponse. */
+    interface IGetShardRoutingRulesResponse {
+
+        /** GetShardRoutingRulesResponse shard_routing_rules */
+        shard_routing_rules?: (vschema.IShardRoutingRules|null);
+    }
+
+    /** Represents a GetShardRoutingRulesResponse. */
+    class GetShardRoutingRulesResponse implements IGetShardRoutingRulesResponse {
+
+        /**
+         * Constructs a new GetShardRoutingRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetShardRoutingRulesResponse);
+
+        /** GetShardRoutingRulesResponse shard_routing_rules. */
+        public shard_routing_rules?: (vschema.IShardRoutingRules|null);
+
+        /**
+         * Creates a new GetShardRoutingRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetShardRoutingRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IGetShardRoutingRulesResponse): vtctldata.GetShardRoutingRulesResponse;
+
+        /**
+         * Encodes the specified GetShardRoutingRulesResponse message. Does not implicitly {@link vtctldata.GetShardRoutingRulesResponse.verify|verify} messages.
+         * @param message GetShardRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetShardRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetShardRoutingRulesResponse message, length delimited. Does not implicitly {@link vtctldata.GetShardRoutingRulesResponse.verify|verify} messages.
+         * @param message GetShardRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetShardRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetShardRoutingRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetShardRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetShardRoutingRulesResponse;
+
+        /**
+         * Decodes a GetShardRoutingRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetShardRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetShardRoutingRulesResponse;
+
+        /**
+         * Verifies a GetShardRoutingRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetShardRoutingRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetShardRoutingRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetShardRoutingRulesResponse;
+
+        /**
+         * Creates a plain object from a GetShardRoutingRulesResponse message. Also converts values to other types if specified.
+         * @param message GetShardRoutingRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetShardRoutingRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetShardRoutingRulesResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -49382,12 +49946,18 @@ export namespace binlogdata {
 
     /** VReplicationWorkflowType enum. */
     enum VReplicationWorkflowType {
-        MATERIALIZE = 0,
-        MOVETABLES = 1,
-        CREATELOOKUPINDEX = 2,
-        MIGRATE = 3,
-        RESHARD = 4,
-        ONLINEDDL = 5
+        Materialize = 0,
+        MoveTables = 1,
+        CreateLookupIndex = 2,
+        Migrate = 3,
+        Reshard = 4,
+        OnlineDDL = 5
+    }
+
+    /** VReplicationWorkflowSubType enum. */
+    enum VReplicationWorkflowSubType {
+        None = 0,
+        Partial = 1
     }
 
     /** Properties of a BinlogSource. */

@@ -76,10 +76,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(KeyspaceName)
 		return m.Run()
 	}()
 	os.Exit(exitCode)
