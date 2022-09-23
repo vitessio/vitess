@@ -38,9 +38,9 @@ import (
 )
 
 type topoFlags struct {
-	cells     string
-	keyspaces string
-	shards    string
+	cells     []string
+	keyspaces []string
+	shards    []string
 	replicas  int
 	rdonly    int
 }
@@ -55,7 +55,7 @@ var (
 	topo      topoFlags
 )
 
-func RegisterFlags(fs *pflag.FlagSet) {
+func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&basePort, "port", 0,
 		"Port to use for vtcombo. If this is 0, a random port will be chosen.")
 
@@ -127,10 +127,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&mycnf, "extra_my_cnf", "",
 		"extra files to add to the config, separated by ':'")
 
-	fs.StringVar(&topo.cells, "cells", "test", "Comma separated list of cells")
-	fs.StringVar(&topo.keyspaces, "keyspaces", "test_keyspace",
+	fs.StringSliceVar(&topo.cells, "cells", []string{"test"}, "Comma separated list of cells")
+	fs.StringSliceVar(&topo.keyspaces, "keyspaces", []string{"test_keyspace"},
 		"Comma separated list of keyspaces")
-	fs.StringVar(&topo.shards, "num_shards", "2",
+	fs.StringSliceVar(&topo.shards, "num_shards", []string{"2"},
 		"Comma separated shard count (one per keyspace)")
 	fs.IntVar(&topo.replicas, "replica_count", 2,
 		"Replica tablets per shard (includes primary)")
@@ -167,15 +167,15 @@ func RegisterFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	servenv.OnParseFor("vttestserver", RegisterFlags)
+	servenv.OnParseFor("vttestserver", registerFlags)
 }
 
 func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 	topo := &vttestpb.VTTestTopology{}
-	topo.Cells = strings.Split(t.cells, ",")
+	topo.Cells = t.cells
 
-	keyspaces := strings.Split(t.keyspaces, ",")
-	shardCounts := strings.Split(t.shards, ",")
+	keyspaces := t.keyspaces
+	shardCounts := t.shards
 	if len(keyspaces) != len(shardCounts) {
 		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
 	}
