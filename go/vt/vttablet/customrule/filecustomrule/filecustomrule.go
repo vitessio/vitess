@@ -46,7 +46,6 @@ func registerFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	servenv.OnParseFor("rulesctl", registerFlags)
 	servenv.OnParseFor("vttablet", registerFlags)
 }
 
