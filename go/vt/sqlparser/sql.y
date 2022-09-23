@@ -316,7 +316,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
 %token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
 %token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
-%token <bytes> COMPACT
+%token <bytes> COMPACT LIST HASH PARTITIONS SUBPARTITION SUBPARTITIONS
 
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
@@ -493,6 +493,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list json_table_column_list
 %type <str> table_option_list table_option table_opt_value row_fmt_opt
+%type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
@@ -2234,10 +2235,10 @@ create_table_prefix:
   }
 
 table_spec:
-  '(' table_column_list ')' table_option_list
+  '(' table_column_list ')' table_option_list partition_options
   {
     $$ = $2
-    $$.Options = $4
+    $$.Options = $4 + $5
   }
 
 table_column_list:
@@ -3590,60 +3591,94 @@ any_keyword:
 | reserved_keyword
 
 // TODO: partition options for table creation will parse, but do nothing for now
-//partition_options:
-//  {
-//    $$ = ""
-//  }
-//| PARTITION BY partition_option parition_num_opt subpartition_opt
-//  {
-//    $$ = ""
-//  }
-//| partition_definitions
-//  {
-//    $$ = $1.Name.String()
-//  }
-//
-//partition_option:
-//  linear_opt HASH openb value_expression closeb
-//  {
-//    $$ = string($1) + string($2)
-//  }
-//| linear_opt KEY openb column_list closeb
-//  {
-//    $$ = string($1) + string($2)
-//  }
-//| linear_opt KEY ALGORITHM '=' INTEGRAL openb column_list closeb
-//  {
-//    $$ = string($1) + string($2) + string($3) + string($4) + string($5)
-//  }
-//| RANGE value_expression
-//  {
-//    $$ = string($1)
-//  }
-//| RANGE COLUMNS openb column_list closeb
-//  {
-//    $$ = string($1) + string($2)
-//  }
-//| LIST value_expression
-//  {
-//    $$ = string($1)
-//  }
-//| LIST COLUMNS openb column_list closeb
-// {
-//   $$ = string($1) + string($2)
-// }
-//
-//linear_opt:
-//  {
-//    $$ = ""
-//  }
-//| LINEAR
-//  {
-//    $$ = string($1)
-//  }
+partition_options:
+  {
+    $$ = ""
+  }
+| PARTITION BY partition_option partition_num_opt subpartition_opt
+  {
+    $$ = string($1) + " " + string($2) + $3 + $4 + $5
+  }
+| PARTITION BY partition_option partition_num_opt subpartition_opt partition_definitions
+  {
+    $$ = string($1) + " " + string($2) + $3 + $4 + $5 + "part defs"
+  }
+| partition_definitions
+  {
+    $$ = "part defs"
+  }
 
+partition_option:
+  linear_partition_opt
+  {
+    $$ = $1
+  }
+| RANGE value
+  {
+    $$ = string($1)
+  }
+| RANGE COLUMNS openb column_list closeb
+  {
+    $$ = string($1) + string($2)
+  }
+| LIST value
+  {
+    $$ = string($1)
+  }
+| LIST COLUMNS openb column_list closeb
+ {
+   $$ = string($1) + string($2)
+ }
 
+linear_partition_opt:
+  linear_opt HASH openb value_expression closeb
+  {
+    $$ = $1 + string($2)
+  }
+| linear_opt KEY openb column_list closeb
+  {
+    $$ = $1 + string($2)
+  }
+| linear_opt KEY ALGORITHM '=' INTEGRAL openb column_list closeb
+  {
+    $$ = $1 + string($2) + string($3) + string($4) + string($5)
+  }
 
+linear_opt:
+  {
+    $$ = ""
+  }
+| LINEAR
+  {
+    $$ = string($1)
+  }
+
+partition_num_opt:
+  {
+    $$ = ""
+  }
+| PARTITIONS INTEGRAL
+  {
+    $$ = string($1) + string($2)
+  }
+
+subpartition_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITION BY linear_partition_opt subpartition_num_opt
+  {
+    $$ = string($1) + " " + string($2) + " " + $3
+  }
+
+subpartition_num_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITIONS INTEGRAL
+  {
+    $$ = string($1) + string($2)
+  }
 
 constraint_symbol_opt:
   {
@@ -7568,6 +7603,7 @@ non_reserved_keyword:
 | GLOBAL
 | GRANTS
 | HANDLER
+| HASH
 | HISTOGRAM
 | HISTORY
 | HOSTS
@@ -7587,6 +7623,7 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINESTRING
+| LIST
 | LOCAL
 | LOCKED
 | LOGS
@@ -7627,6 +7664,7 @@ non_reserved_keyword:
 | ORGANIZATION
 | OTHERS
 | PACK_KEYS
+| PARTITIONS
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -7683,6 +7721,8 @@ non_reserved_keyword:
 | STREAM
 | SUBCLASS_ORIGIN
 | SUBJECT
+| SUBPARTITION
+| SUBPARTITIONS
 | TABLES
 | TABLESPACE
 | TABLE_NAME
