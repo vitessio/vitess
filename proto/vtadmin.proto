@@ -120,6 +120,8 @@ service VTAdmin {
     // tablets in one or more clusters, depending on the request fields (see
     // ReloadSchemasRequest for details).
     rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
+    // ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+    rpc ReloadSchemaShard(ReloadSchemaShardRequest) returns (ReloadSchemaShardResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
     // SetReadOnly sets the tablet to read-only mode.
@@ -685,6 +687,20 @@ message ReloadSchemasResponse {
     // operation. It is only set when the request mandates Tablets mode (see
     // ReloadSchemasRequest).
     repeated TabletResult tablet_results = 3;
+}
+
+message ReloadSchemaShardRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string shard = 3;
+  string wait_position = 4;
+  bool include_primary = 5;
+
+  uint32 concurrency = 6;
+}
+
+message ReloadSchemaShardResponse {
+  repeated logutil.Event events = 1;
 }
 
 message RefreshTabletReplicationSourceRequest {

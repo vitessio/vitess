@@ -1,12 +1,15 @@
 import React, { useState } from 'react'
 import { useParams, Link, useHistory } from 'react-router-dom';
-import { useDeleteShard, useKeyspace } from '../../../hooks/api';
+import { useDeleteShard, useKeyspace, useReloadSchemaShard, useTablets } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel'
 import { success, warn } from '../../Snackbar';
 import { UseMutationResult } from 'react-query';
 import Toggle from '../../toggle/Toggle';
 import { Label } from '../../inputs/Label';
+import { TextInput } from '../../TextInput';
+import { NumberInput } from '../../NumberInput';
+import { Select } from '../../inputs/Select';
 
 interface RouteParams {
   clusterID: string;
@@ -23,7 +26,17 @@ const Advanced: React.FC = () => {
   useDocumentTitle(`${shardName} (${params.clusterID})`);
 
   const { data: keyspace, ...kq } = useKeyspace({ clusterID: params.clusterID, name: params.keyspace });
+  const { data: tablets = [] } = useTablets();
 
+  const tabletsInCluster = tablets
+    .filter(
+      (t) =>
+        t.cluster?.id === params.clusterID &&
+        t.tablet?.keyspace === params.keyspace &&
+        t.tablet?.shard === params.shard
+    )
+
+  // deleteShard parameters
   const [evenIfServing, setEvenIfServing] = useState(false)
   const [recursive, setRecursive] = useState(false)
   const deleteShardMutation = useDeleteShard(
@@ -39,6 +52,25 @@ const Advanced: React.FC = () => {
       onError: (error) => warn(`There was an error deleting shard ${shardName}: ${error}`),
     }
   );
+
+  // reloadSchemaShard parameters
+  const [waitPosition, setWaitPosition] = useState<string | undefined>(undefined)
+  const [includePrimary, setIncludePrimary] = useState(false)
+  const [concurrency, setConcurrency] = useState<number | undefined>(undefined)
+  const reloadSchemaShardMutation = useReloadSchemaShard(
+    { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, includePrimary, waitPosition, concurrency },
+    {
+      onSuccess: (result) => {
+        success(
+          `Successfully reloaded shard ${shardName}`,
+          { autoClose: 7000 }
+        );
+      },
+      onError: (error) => warn(`There was an error reloading shard ${shardName}: ${error}`),
+    }
+  );
+  // externallyReparent parameters
+  const [tablet, setTablet] = useState('')
 
   if (kq.error) {
     return (
@@ -62,8 +94,84 @@ const Advanced: React.FC = () => {
       </div>
       <div className="pt-4">
         <div className="my-8">
+          <h3 className="mb-4">Reload</h3>
+          <div>
+            <ActionPanel
+              description={
+                <>
+                  Reloads the schema on all tablets in shard <span className="font-bold">{shardName}</span>. This is done on a best-effort basis.
+                </>
+              }
+              documentationLink="https://vitess.io/docs/reference/programs/vtctldclient/vtctldclient_reloadschemashard/"
+              loadingText="Reloading schema shard..."
+              loadedText="Reload"
+              mutation={reloadSchemaShardMutation as UseMutationResult}
+              title="Reload Schema Shard"
+              body={
+                <>
+                  <p className="text-base">
+                    <strong>Wait Position</strong> <br />
+                    Allows scheduling a schema reload to occur after a given DDL has replicated to this server, by specifying a replication position to wait for. Leave empty to trigger the reload immediately.
+                  </p>
+                  <div className="w-1/3">
+                    <TextInput value={waitPosition} onChange={(e) => setWaitPosition(e.target.value)} />
+                  </div>
+                  <div className="mt-2">
+                    <Label label="Concurrency" /> <br />
+                    Number of tablets to reload in parallel. Set to zero for unbounded concurrency. (Default 10)
+                    <div className="w-1/3 mt-4">
+                      <NumberInput value={concurrency} onChange={e => setConcurrency(parseInt(e.target.value))} />
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <div className="flex items-center">
+                      <Toggle
+                        className="mr-2"
+                        enabled={includePrimary}
+                        onChange={() => setIncludePrimary(!includePrimary)}
+                      />
+                      <Label label="Include Primary" />
+                    </div>
+                    When set, also reloads the primary tablet.
+                  </div>
+                </>
+              }
+            />
+          </div>
+        </div>
+      </div>
+      <div className="pt-4">
+        <div className="my-8">
           <h3 className="mb-4">Change</h3>
           <div>
+            <ActionPanel
+              description={
+                <>
+                  Changes metadata in the topology service to acknowledge a shard primary change performed by an external tool.
+                </>
+              }
+              documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#tabletexternallyreparented"
+              loadingText="Reparenting..."
+              loadedText="Reparent"
+              mutation={deleteShardMutation as UseMutationResult}
+              title="Externally Reparent"
+              body={
+                <>
+                  <div className="mt-2">
+                    <div className="flex items-center">
+                      <Select
+                        onChange={t => setTablet(t as string)}
+                        label="Tablet"
+                        items={tabletsInCluster.map(t => `${t.tablet?.alias?.cell}-${t.tablet?.alias?.uid}`)}
+                        selectedItem={tablet}
+                        placeholder="Tablet"
+                        description="This chosen tablet will be considered the shard master (by Vitess won't change the replication setup)."
+                      />
+                    </div>
+                  </div>
+                </>
+              }
+            />
             <ActionPanel
               confirmationValue={shardName}
               description={
@@ -71,7 +179,7 @@ const Advanced: React.FC = () => {
                   Delete shard <span className="font-bold">{shardName}</span>. In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard.
                 </>
               }
-              documentationLink="https://vitess.io/docs/14.0/reference/programs/vtctl/shards/#deleteshard"
+              documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#deleteshard"
               loadingText="Deleting..."
               loadedText="Delete"
               mutation={deleteShardMutation as UseMutationResult}

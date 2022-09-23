@@ -61,6 +61,7 @@ import {
     createKeyspace,
     reloadSchema,
     deleteShard,
+    reloadSchemaShard,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -456,3 +457,15 @@ export const useDeleteShard = (
         return deleteShard(params);
     }, options);
 };
+
+/**
+ * useReloadSchemaShard is a mutate hook that reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+ */
+export const useReloadSchemaShard = (
+  params: Parameters<typeof reloadSchemaShard>[0],
+  options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>
+) => {
+  return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>(() => {
+    return reloadSchemaShard(params);
+  }, options);
+}

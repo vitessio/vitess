@@ -582,3 +582,37 @@ export const deleteShard = async (params: DeleteShardParams) => {
 
   return vtctldata.DeleteShardsResponse.create(result);
 };
+
+export interface ReloadSchemaShardParams {
+  clusterID: string
+  keyspace: string
+  shard: string
+
+  waitPosition?: string
+  includePrimary: boolean
+  concurrency?: number
+}
+
+export const reloadSchemaShard = async (params: ReloadSchemaShardParams) => {
+  const body: Record<string, string | boolean | number> = {
+    'include_primary': params.includePrimary
+  }
+
+  if (params.waitPosition) {
+    body.wait_position = params.waitPosition
+  }
+
+  if (params.concurrency) {
+    body.concurrency = params.concurrency
+  }
+
+  const { result } = await vtfetch(`/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/reload_schema_shard`, {
+    method: 'put',
+    body: JSON.stringify(body)
+  })
+
+  const err = pb.ReloadSchemaShardResponse.verify(result)
+  if (err) throw Error(err)
+
+  return pb.ReloadSchemaShardResponse.create(result)
+}
