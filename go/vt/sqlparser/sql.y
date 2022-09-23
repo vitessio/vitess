@@ -3107,7 +3107,7 @@ index_option_list:
   }
 
 index_option:
-  USING ID
+  USING any_keyword // TODO: should be restricted
   {
     $$ = &IndexOption{Name: string($1), Using: string($2)}
   }
@@ -3597,11 +3597,11 @@ partition_options:
   }
 | PARTITION BY partition_option partition_num_opt subpartition_opt
   {
-    $$ = string($1) + " " + string($2) + $3 + $4 + $5
+    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5
   }
 | PARTITION BY partition_option partition_num_opt subpartition_opt openb partition_definitions closeb
   {
-    $$ = string($1) + " " + string($2) + $3 + $4 + $5 + "part defs"
+    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5 + "(partition_definitions)"
   }
 
 partition_option:
@@ -3611,33 +3611,37 @@ partition_option:
   }
 | RANGE openb any_keyword closeb
   {
-    $$ = string($1)
+    $$ = string($1) + " (" + string($3) + ")"
   }
 | RANGE COLUMNS openb column_list closeb
   {
-    $$ = string($1) + string($2)
+    $$ = string($1) + " " + string($2) + " (column_list)"
   }
 | LIST openb any_keyword closeb
   {
-    $$ = string($1)
+    $$ = string($1) + " (" + string($3) + ")"
   }
 | LIST COLUMNS openb column_list closeb
  {
-   $$ = string($1) + string($2)
+   $$ = string($1) + " " + string($2) + " (column_list)"
  }
 
 linear_partition_opt:
-  linear_opt HASH openb value_expression closeb
+  linear_opt HASH openb value closeb
   {
-    $$ = $1 + string($2)
+    $$ = $1 + string($2) + " (value)"
+  }
+| linear_opt HASH openb ID closeb
+  {
+    $$ = $1 + string($2) + " (" + string($4) + ")"
   }
 | linear_opt KEY openb column_list closeb
   {
-    $$ = $1 + string($2)
+    $$ = $1 + string($2) + " (column_list)"
   }
 | linear_opt KEY ALGORITHM '=' INTEGRAL openb column_list closeb
   {
-    $$ = $1 + string($2) + string($3) + string($4) + string($5)
+    $$ = $1 + string($2) + " " + string($3) + " " + string($5) + " (column_list)"
   }
 
 linear_opt:
@@ -3646,7 +3650,7 @@ linear_opt:
   }
 | LINEAR
   {
-    $$ = string($1)
+    $$ = string($1) + " "
   }
 
 partition_num_opt:
@@ -3655,7 +3659,7 @@ partition_num_opt:
   }
 | PARTITIONS INTEGRAL
   {
-    $$ = string($1) + string($2)
+    $$ = string($1) + " " + string($2) + " "
   }
 
 subpartition_opt:
@@ -3664,7 +3668,7 @@ subpartition_opt:
   }
 | SUBPARTITION BY linear_partition_opt subpartition_num_opt
   {
-    $$ = string($1) + " " + string($2) + " " + $3
+    $$ = string($1) + " " + string($2) + " " + $3 + " " + $4
   }
 
 subpartition_num_opt:
@@ -3673,7 +3677,7 @@ subpartition_num_opt:
   }
 | SUBPARTITIONS INTEGRAL
   {
-    $$ = string($1) + string($2)
+    $$ = string($1) + " " + string($2) + " "
   }
 
 constraint_symbol_opt:

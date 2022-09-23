@@ -4865,6 +4865,117 @@ func TestCreateTable(t *testing.T) {
 			"	a bigint not null\n" +
 			")",
 	},
+
+		// partition options
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY RANGE (store_id) (\n" +
+				"PARTITION p0 VALUES LESS THAN (6),\n" +
+				"PARTITION p1 VALUES LESS THAN (11),\n" +
+				"PARTITION p2 VALUES LESS THAN (16),\n" +
+				"PARTITION p3 VALUES LESS THAN (21)\n" +
+				")",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY RANGE (store_id)(partition_definitions)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY HASH ('values')",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY HASH (value)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY HASH (col)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY HASH (col)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR HASH (col)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR HASH (col)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY KEY (col)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY KEY (column_list)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY KEY ALGORITHM = 7 (col)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY KEY ALGORITHM 7 (column_list)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR KEY ALGORITHM = 7 (col)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR KEY ALGORITHM 7 (column_list)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY RANGE (column)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY RANGE (column)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY RANGE COLUMNS (c1, c2, c3)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY RANGE COLUMNS (column_list)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LIST (column)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LIST (column)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LIST COLUMNS (c1, c2, c3)",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LIST COLUMNS (column_list)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR HASH (a) PARTITIONS 20",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR HASH (a)PARTITIONS 20 ",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR HASH (a) PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
+			output: "create table t (\n" +
+				"\ti int\n)" +
+				"PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+		},
 	}
 	for _, tcase := range testCases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -4874,7 +4985,7 @@ func TestCreateTable(t *testing.T) {
 				return
 			}
 			if got, want := String(tree.(*DDL)), tcase.output; got != want {
-				t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+				t.Errorf("Parse(%s):\nGot:%s\nWant:%s", tcase.input, got, want)
 			}
 		})
 	}
