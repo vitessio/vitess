@@ -3377,6 +3377,10 @@ table_option_list:
   {
     $$ = " " + string($1)
   }
+//| table_option_list table_option
+//  {
+//    $$ = " " + string($1)
+//  }
 | table_option_list ',' table_option
   {
     $$ = string($1) + ", " + string($3)
@@ -3532,6 +3536,158 @@ table_option:
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
 | UNION equal_opt table_opt_value
+  {
+    $$ = string($1) + " " + $3
+  }
+| AUTOEXTEND_SIZE equal_opt table_opt_value table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| AUTO_INCREMENT equal_opt table_opt_value table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| AVG_ROW_LENGTH equal_opt table_opt_value table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| CHARACTER SET equal_opt charset table_option
+  {
+    $$ = string($1) + " " + string($2) + " " + $4
+  }
+| DEFAULT CHARACTER SET equal_opt charset table_option
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
+  }
+| CHECKSUM equal_opt INTEGRAL table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| COLLATE equal_opt any_keyword table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| DEFAULT COLLATE equal_opt any_keyword table_option
+  {
+    $$ = string($1) + " "  + string($2) + " " + string($4)
+  }
+| COMMENT_KEYWORD equal_opt STRING table_option
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| COMPRESSION equal_opt STRING table_option
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| CONNECTION equal_opt STRING table_option
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| DATA DIRECTORY equal_opt STRING table_option
+  {
+    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+  }
+| INDEX DIRECTORY equal_opt STRING table_option
+  {
+    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+  }
+| DELAY_KEY_WRITE equal_opt INTEGRAL table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| ENCRYPTION equal_opt STRING table_option
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| ENGINE equal_opt any_keyword table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| ENGINE_ATTRIBUTE equal_opt STRING table_option
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| INSERT_METHOD equal_opt NO table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| INSERT_METHOD equal_opt FIRST table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| INSERT_METHOD equal_opt LAST table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| KEY_BLOCK_SIZE equal_opt table_opt_value table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| MAX_ROWS equal_opt table_opt_value table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| MIN_ROWS equal_opt table_opt_value table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| PACK_KEYS equal_opt INTEGRAL table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| PASSWORD equal_opt STRING table_option
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| ROW_FORMAT equal_opt row_fmt_opt table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| START TRANSACTION table_option
+  {
+    $$ = string($1) + " "  + string($2)
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING table_option
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| STATS_AUTO_RECALC equal_opt DEFAULT table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_AUTO_RECALC equal_opt INTEGRAL table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_PERSISTENT equal_opt DEFAULT table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_PERSISTENT equal_opt INTEGRAL table_option
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_SAMPLE_PAGES equal_opt table_opt_value table_option
+  {
+    $$ = string($1) + " " + $3
+  }
+| TABLESPACE table_opt_value table_option
+  {
+    $$ = string($1) + $2
+  }
+| TABLESPACE any_keyword table_option
+    {
+      $$ = string($1) + " "  + string($2)
+    }
+| TABLESPACE any_keyword STORAGE DISK table_option
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+  }
+| TABLESPACE any_keyword STORAGE MEMORY table_option
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+  }
+| UNION equal_opt table_opt_value table_option
   {
     $$ = string($1) + " " + $3
   }
