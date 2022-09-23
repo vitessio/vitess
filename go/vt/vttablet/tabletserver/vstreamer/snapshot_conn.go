@@ -47,6 +47,17 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
+	// Rotate the binary logs to limit the GTID auto positioning overhead.
+	// This is needed as the currently open binary log (which can be up to 1G in size
+	// by default) will need to be scanned and empty GTID events will be streamed for
+	// those GTIDs in the log that we are skipping. In total, this can add a lot of
+	// overhead on both the mysqld instance and the tablet.
+	// Rotating the log ensures that we are processing a fresh binary log that will
+	// be minimal in size and GTID events.
+	if _, err = conn.ExecuteFetch("FLUSH BINARY LOGS", 1, false); err != nil {
+		return "", err
+	}
+
 	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
 	if err != nil {
 		// session_track_gtids = START_GTID unsupported or cannot execute. Resort to LOCK-based snapshot
