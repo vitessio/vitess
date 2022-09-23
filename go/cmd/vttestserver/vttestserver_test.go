@@ -310,6 +310,7 @@ var clusterKeyspaces = []string{
 }
 
 func startCluster(flags ...string) (vttest.LocalCluster, error) {
+	os.Args = []string{"vttestserver"}
 	schemaDirArg := "--schema_dir=data/schema"
 	tabletHostname := "--tablet_hostname=localhost"
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
