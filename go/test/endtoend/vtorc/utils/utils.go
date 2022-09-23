@@ -339,6 +339,9 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet
 	// reset the binlog
 	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
 	require.NoError(t, err)
+	// set read-only to true
+	_, err = RunSQL(t, "SET GLOBAL read_only = ON", vttablet, "")
+	require.NoError(t, err)
 
 	// start the vttablet
 	err = vttablet.VttabletProcess.Setup()
@@ -914,9 +917,20 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 	return false
 }
 
-// CheckForSuccessfulRecoveryCount checks that the given recovery name's count of successful runs matches the count expected
-func CheckForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName string, countExpected int) {
+// WaitForSuccessfulRecoveryCount waits until the given recovery name's count of successful runs matches the count expected
+func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName string, countExpected int) {
 	t.Helper()
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+		successCount := successfulRecoveriesMap[recoveryName]
+		if successCount == countExpected {
+			return
+		}
+		time.Sleep(time.Second)
+	}
 	vars := vtorcInstance.GetVars()
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
 	successCount := successfulRecoveriesMap[recoveryName]

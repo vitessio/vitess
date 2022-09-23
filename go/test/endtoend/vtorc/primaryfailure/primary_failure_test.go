@@ -42,7 +42,7 @@ func TestDownPrimary(t *testing.T) {
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.CheckForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
 
 	// find the replica and rdonly tablets
 	var replica, rdonly *cluster.Vttablet
@@ -73,7 +73,7 @@ func TestDownPrimary(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
-	utils.CheckForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
 }
 
 // Failover should not be cross data centers, according to the configuration file
