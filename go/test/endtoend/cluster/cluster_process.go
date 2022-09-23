@@ -1060,6 +1060,7 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *
 		LogDir:       cluster.TmpDirectory,
 		Config:       config,
 		WebPort:      cluster.GetAndReservePort(),
+		Port:         cluster.GetAndReservePort(),
 	}
 }
 

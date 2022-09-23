@@ -913,3 +913,12 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 	}
 	return false
 }
+
+// CheckForSuccessfulRecoveryCount checks that the given recovery name's count of successful runs matches the count expected
+func CheckForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName string, countExpected int) {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+	successCount := successfulRecoveriesMap[recoveryName]
+	assert.EqualValues(t, countExpected, successCount)
+}
