@@ -1,0 +1,26 @@
+Usage of vtctlclient:
+      --action_timeout duration                timeout for the total command (default 1h0m0s)
+      --alsologtostderr                        log to standard error as well as files
+      --emit_stats                             If set, emit stats to push-based monitoring and stats backends
+      --grpc_auth_static_client_creds string   when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
+  -h, --help                                   display usage and exit
+      --log_backtrace_at traceLocation         when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                         If non-empty, write log files in this directory
+      --log_rotate_max_size uint               size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logtostderr                            log to standard error instead of files
+      --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --server string                          server to use for connection
+      --stats_backend string                   The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string        List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags string               Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string            Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration             Interval between emitting stats to all registered backends (default 1m0s)
+      --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
+  -v, --v Level                                log level for V logs
+      --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging
+      --vtctl_client_protocol string           the protocol to use to talk to the vtctl server (default "grpc")
+      --vtctld_grpc_ca string                  the server ca to use to validate servers when connecting
+      --vtctld_grpc_cert string                the cert to use to connect
+      --vtctld_grpc_crl string                 the server crl to use to validate server certificates when connecting
+      --vtctld_grpc_key string                 the key to use to connect
+      --vtctld_grpc_server_name string         the server name to use to validate server certificate
