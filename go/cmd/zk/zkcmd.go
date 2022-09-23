@@ -33,6 +33,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"github.com/spf13/pflag"
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"
@@ -133,15 +135,13 @@ func init() {
 	}
 }
 
-var (
-	server = flag.String("server", "", "server(s) to connect to")
-)
-
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
 	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
+	servenv.ParseFlags("zkcmd")
+	server := fs.String("server", "", "server(s) to connect to")
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
