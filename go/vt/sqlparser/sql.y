@@ -315,7 +315,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // Table options
 %token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
 %token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
-%token <bytes> STATS_SAMPLE_PAGES TABLESPACE_NAME STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
+%token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
 %token <bytes> COMPACT
 
 // Match
@@ -3527,15 +3527,15 @@ table_option:
   {
     $$ = string($1) + $2
   }
-| TABLESPACE TABLESPACE_NAME
+| TABLESPACE any_keyword
     {
       $$ = string($1) + " "  + string($2)
     }
-| TABLESPACE TABLESPACE_NAME STORAGE DISK
+| TABLESPACE any_keyword STORAGE DISK
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
-| TABLESPACE TABLESPACE_NAME STORAGE MEMORY
+| TABLESPACE any_keyword STORAGE MEMORY
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
@@ -3597,6 +3597,8 @@ any_keyword:
   ID
 | non_reserved_keyword
 | reserved_keyword
+
+//partition_option_list:
 
 
 constraint_symbol_opt:

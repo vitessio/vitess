@@ -564,7 +564,6 @@ var keywords = map[string]int{
 	"table_name":                    TABLE_NAME,
 	"tables":                        TABLES,
 	"tablespace":                    TABLESPACE,
-	"tablespace_name":               TABLESPACE_NAME,
 	"terminated":                    TERMINATED,
 	"temporary":                     TEMPORARY,
 	"temptable":                     TEMPTABLE,
