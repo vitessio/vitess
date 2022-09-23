@@ -213,7 +213,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> AND
 %right <bytes> NOT '!'
 %left <bytes> BETWEEN CASE WHEN THEN ELSE ELSEIF END
-%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN '0' '1'
 %nonassoc  UNBOUNDED // ideally should have same precedence as IDENT
 %nonassoc ID NULL PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING
 %left <bytes> '|'
@@ -243,7 +243,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD MODIFY CHANGE
 %token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <bytes> FIRST AFTER
+%token <bytes> FIRST AFTER LAST
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
@@ -315,7 +315,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // Table options
 %token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
 %token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
-%token <bytes> STATS_SAMPLE_PAGES INNODB ASCII_BIN TABLESPACE_NAME STORAGE DISK
+%token <bytes> STATS_SAMPLE_PAGES TABLESPACE_NAME STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
+%token <bytes> COMPACT
 
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
@@ -491,7 +492,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> name_opt
 %type <str> equal_opt table_equal_opt
 %type <TableSpec> table_spec table_column_list json_table_column_list
-%type <str> table_option_list table_option table_opt_value
+%type <str> table_option_list table_option table_opt_value row_fmt_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
@@ -537,6 +538,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <privilegeLevel> grant_privilege_level
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
+%type <bytes> any_keyword
 
 %start any_command
 
@@ -3409,57 +3411,65 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + $4 + $5
   }
-| CHECKSUM table_equal_opt table_opt_value
+| CHECKSUM table_equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
   }
-| COLLATE table_equal_opt table_opt_value
+| COLLATE table_equal_opt any_keyword
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
   }
-| DEFAULT COLLATE table_equal_opt table_opt_value
+| DEFAULT COLLATE table_equal_opt any_keyword
   {
-    $$ = string($1) + " "  + string($2) + $3 + $4
+    $$ = string($1) + " "  + string($2) + $3 + string($4)
   }
-| COMMENT_KEYWORD table_equal_opt table_opt_value
+| COMMENT_KEYWORD table_equal_opt STRING
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + "'" + string($3) + "'"
   }
-| COMPRESSION table_equal_opt table_opt_value
+| COMPRESSION table_equal_opt STRING
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + "'" + string($3) + "'"
   }
-| CONNECTION table_equal_opt table_opt_value
+| CONNECTION table_equal_opt STRING
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + "'" + string($3) + "'"
   }
-| DATA DIRECTORY table_equal_opt table_opt_value
+| DATA DIRECTORY table_equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + $3 + $4
+    $$ = string($1) + " "  + string($2) + $3 + "'" + string($4) + "'"
   }
-| INDEX DIRECTORY table_equal_opt table_opt_value
+| INDEX DIRECTORY table_equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + $3 + $4
+    $$ = string($1) + " "  + string($2) + $3 + "'" + string($4) + "'"
   }
-| DELAY_KEY_WRITE table_equal_opt table_opt_value
+| DELAY_KEY_WRITE table_equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
   }
-| ENCRYPTION table_equal_opt table_opt_value
+| ENCRYPTION table_equal_opt STRING
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + "'" + string($3) + "'"
   }
-| ENGINE table_equal_opt table_opt_value
+| ENGINE table_equal_opt any_keyword
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
   }
-| ENGINE_ATTRIBUTE table_equal_opt table_opt_value
+| ENGINE_ATTRIBUTE table_equal_opt STRING
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + "'" + string($3) + "'"
   }
-| INSERT_METHOD table_equal_opt table_opt_value
+| INSERT_METHOD table_equal_opt NO
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
+  }
+| INSERT_METHOD table_equal_opt FIRST
+  {
+    $$ = string($1) + $2 + string($3)
+  }
+| INSERT_METHOD table_equal_opt LAST
+  {
+    $$ = string($1) + $2 + string($3)
   }
 | KEY_BLOCK_SIZE table_equal_opt table_opt_value
   {
@@ -3473,15 +3483,15 @@ table_option:
   {
     $$ = string($1) + $2 + $3
   }
-| PACK_KEYS table_equal_opt table_opt_value
+| PACK_KEYS table_equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
   }
-| PASSWORD table_equal_opt table_opt_value
+| PASSWORD table_equal_opt STRING
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + "'" + string($3) + "'"
   }
-| ROW_FORMAT table_equal_opt table_opt_value
+| ROW_FORMAT table_equal_opt row_fmt_opt
   {
     $$ = string($1) + $2 + $3
   }
@@ -3489,17 +3499,25 @@ table_option:
   {
     $$ = string($1) + " "  + string($2)
   }
-| SECONDARY_ENGINE_ATTRIBUTE table_equal_opt table_opt_value
+| SECONDARY_ENGINE_ATTRIBUTE table_equal_opt STRING
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + "'" + string($3) + "'"
   }
-| STATS_AUTO_RECALC table_equal_opt table_opt_value
+| STATS_AUTO_RECALC table_equal_opt DEFAULT
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
   }
-| STATS_PERSISTENT table_equal_opt table_opt_value
+| STATS_AUTO_RECALC table_equal_opt INTEGRAL
   {
-    $$ = string($1) + $2 + $3
+    $$ = string($1) + $2 + string($3)
+  }
+| STATS_PERSISTENT table_equal_opt DEFAULT
+  {
+    $$ = string($1) + $2 + string($3)
+  }
+| STATS_PERSISTENT table_equal_opt INTEGRAL
+  {
+    $$ = string($1) + $2 + string($3)
   }
 | STATS_SAMPLE_PAGES table_equal_opt table_opt_value
   {
@@ -3514,6 +3532,10 @@ table_option:
       $$ = string($1) + " "  + string($2)
     }
 | TABLESPACE TABLESPACE_NAME STORAGE DISK
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+  }
+| TABLESPACE TABLESPACE_NAME STORAGE MEMORY
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
@@ -3536,10 +3558,6 @@ table_opt_value:
   {
     $$ = string($1)
   }
-| INNODB
-  {
-    $$ = string($1)
-  }
 | EVENT
   {
     $$ = string($1)
@@ -3548,22 +3566,37 @@ table_opt_value:
   {
     $$ = string($1)
   }
-| BINARY
+
+row_fmt_opt:
+  DEFAULT
   {
     $$ = string($1)
   }
-| ASCII_BIN
+| DYNAMIC
   {
     $$ = string($1)
   }
-| NO
+| FIXED
   {
     $$ = string($1)
   }
-| DEFAULT
+| COMPRESSED
   {
     $$ = string($1)
   }
+| REDUNDANT
+  {
+    $$ = string($1)
+  }
+| COMPACT
+  {
+    $$ = string($1)
+  }
+
+any_keyword:
+  ID
+| non_reserved_keyword
+| reserved_keyword
 
 
 constraint_symbol_opt:
@@ -7502,6 +7535,7 @@ non_reserved_keyword:
 | JSON
 | KEY_BLOCK_SIZE
 | LANGUAGE
+| LAST
 | LAST_INSERT_ID
 | LESS
 | LEVEL
