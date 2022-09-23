@@ -84,7 +84,6 @@ Usage of vttestserver:
       --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly. (default 1000)
       --mysql_bind_host string                                           which host to bind vtgate mysql listener to (default "localhost")
       --mysql_only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
-      --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_version string                                      MySQL server version to advertise.
       --mysqlctl_client_protocol string                                  the protocol to use to talk to the mysqlctl server (default "grpc")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
