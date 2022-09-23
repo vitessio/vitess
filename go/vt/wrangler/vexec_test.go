@@ -87,13 +87,13 @@ func TestVExec(t *testing.T) {
 	var result *sqltypes.Result
 	var testCases []*TestCase
 	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message|cell|tablet_types",
-		"int64|varchar|varchar|varchar|varchar"),
-		"1|keyspace:\"source\" shard:\"0\" filter:{rules:{match:\"t1\"}}|||",
+		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
+		"int64|varchar|varchar|varchar|varchar|int64|int64"),
+		"1|keyspace:\"source\" shard:\"0\" filter:{rules:{match:\"t1\"}}||||0|0",
 	)
 	testCases = append(testCases, &TestCase{
 		name:   "select",
-		query:  "select id, source, message, cell, tablet_types from _vt.vreplication",
+		query:  "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication",
 		result: result,
 	})
 	result = &sqltypes.Result{
@@ -242,6 +242,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"ComponentThrottled": "",
 					"Message": "",
 					"Tags": "",
+					"WorkflowType": "Materialize",
+					"WorkflowSubType": "None",
 					"CopyState": [
 						{
 							"Table": "t1",
@@ -281,6 +283,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"ComponentThrottled": "",
 					"Message": "",
 					"Tags": "",
+					"WorkflowType": "Materialize",
+					"WorkflowSubType": "None",
 					"CopyState": [
 						{
 							"Table": "t1",
