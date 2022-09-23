@@ -60,7 +60,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtadmin", "vtbackup", "vtcombo", "vtctl", "vtctld", "vttablet", "vttestserver"} {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtexplain"} {
 		servenv.OnParseFor(cmd, registerMyCnfFlags)
 	}
 }

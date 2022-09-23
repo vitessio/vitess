@@ -73,7 +73,7 @@ var (
 
 	// PoolDynamicHostnameResolution is whether we should retry DNS resolution of hostname targets
 	// and reconnect if necessary
-	PoolDynamicHostnameResolution = time.Duration(0)
+	PoolDynamicHostnameResolution time.Duration
 
 	mycnfTemplateFile string
 	socketFile        string
@@ -103,7 +103,7 @@ type Mysqld struct {
 }
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtadmin", "vtbackup", "vtcombo", "vtctl", "vtctld", "vttablet", "vttestserver"} {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtexplain"} {
 		servenv.OnParseFor(cmd, registerMySQLDFlags)
 	}
 }
