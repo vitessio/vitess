@@ -182,7 +182,7 @@ func run() (*results, error) {
 	}
 
 	c := vitessdriver.Configuration{
-		Protocol:  vtgateconn.VtgateProtocol,
+		Protocol:  vtgateconn.GetVTGateProtocol(),
 		Address:   *server,
 		Target:    *targetString,
 		Streaming: *streaming,
