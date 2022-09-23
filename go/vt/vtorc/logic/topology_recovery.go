@@ -23,34 +23,27 @@ import (
 	"math/rand"
 	goos "os"
 	"strings"
-	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vtorc/attributes"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
 	"vitess.io/vitess/go/vt/vtorc/os"
 	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
-
-var countPendingRecoveries int64
 
 type RecoveryType string
 
@@ -76,6 +69,8 @@ var (
 		FixPrimaryRecoveryName,
 		FixReplicaRecoveryName,
 	}
+
+	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
 
 	// recoveriesCounter counts the number of recoveries that VTOrc has performed
 	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
@@ -229,32 +224,8 @@ func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
 	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
 }
 
-var recoverDeadIntermediatePrimaryCounter = metrics.NewCounter()
-var recoverDeadIntermediatePrimarySuccessCounter = metrics.NewCounter()
-var recoverDeadIntermediatePrimaryFailureCounter = metrics.NewCounter()
-var recoverDeadCoPrimaryCounter = metrics.NewCounter()
-var recoverDeadCoPrimarySuccessCounter = metrics.NewCounter()
-var recoverDeadCoPrimaryFailureCounter = metrics.NewCounter()
-var countPendingRecoveriesGauge = metrics.NewGauge()
-
 func init() {
-	_ = metrics.Register("recover.dead_intermediate_primary.start", recoverDeadIntermediatePrimaryCounter)
-	_ = metrics.Register("recover.dead_intermediate_primary.success", recoverDeadIntermediatePrimarySuccessCounter)
-	_ = metrics.Register("recover.dead_intermediate_primary.fail", recoverDeadIntermediatePrimaryFailureCounter)
-	_ = metrics.Register("recover.dead_co_primary.start", recoverDeadCoPrimaryCounter)
-	_ = metrics.Register("recover.dead_co_primary.success", recoverDeadCoPrimarySuccessCounter)
-	_ = metrics.Register("recover.dead_co_primary.fail", recoverDeadCoPrimaryFailureCounter)
-	_ = metrics.Register("recover.pending", countPendingRecoveriesGauge)
-
 	go initializeTopologyRecoveryPostConfiguration()
-
-	ometrics.OnMetricsTick(func() {
-		countPendingRecoveriesGauge.Update(getCountPendingRecoveries())
-	})
-}
-
-func getCountPendingRecoveries() int64 {
-	return atomic.LoadInt64(&countPendingRecoveries)
 }
 
 func initializeTopologyRecoveryPostConfiguration() {
@@ -999,8 +970,8 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
 // It executes the function synchronuously
 func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	atomic.AddInt64(&countPendingRecoveries, 1)
-	defer atomic.AddInt64(&countPendingRecoveries, -1)
+	countPendingRecoveries.Add(1)
+	defer countPendingRecoveries.Add(-1)
 
 	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, &analysisEntry.AnalyzedInstanceKey)
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
