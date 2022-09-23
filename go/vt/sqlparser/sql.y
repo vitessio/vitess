@@ -3397,127 +3397,127 @@ table_option:
   {
     $$ = string($1) + $2 + $3
   }
-  | AVG_ROW_LENGTH table_equal_opt table_opt_value
+| AVG_ROW_LENGTH table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | CHARACTER SET table_equal_opt charset
+| CHARACTER SET table_equal_opt charset
   {
     $$ = string($1) + " " + string($2) + $3 + $4
   }
-  | DEFAULT CHARACTER SET table_equal_opt charset
+| DEFAULT CHARACTER SET table_equal_opt charset
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + $4 + $5
   }
-  | CHECKSUM table_equal_opt table_opt_value
+| CHECKSUM table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | COLLATE table_equal_opt table_opt_value
+| COLLATE table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | DEFAULT COLLATE table_equal_opt table_opt_value
+| DEFAULT COLLATE table_equal_opt table_opt_value
   {
     $$ = string($1) + " "  + string($2) + $3 + $4
   }
-  | COMMENT_KEYWORD table_equal_opt table_opt_value
+| COMMENT_KEYWORD table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | COMPRESSION table_equal_opt table_opt_value
+| COMPRESSION table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | CONNECTION table_equal_opt table_opt_value
+| CONNECTION table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | DATA DIRECTORY table_equal_opt table_opt_value
+| DATA DIRECTORY table_equal_opt table_opt_value
   {
     $$ = string($1) + " "  + string($2) + $3 + $4
   }
-  | INDEX DIRECTORY table_equal_opt table_opt_value
-    {
-      $$ = string($1) + " "  + string($2) + $3 + $4
-    }
-  | DELAY_KEY_WRITE table_equal_opt table_opt_value
+| INDEX DIRECTORY table_equal_opt table_opt_value
+  {
+    $$ = string($1) + " "  + string($2) + $3 + $4
+  }
+| DELAY_KEY_WRITE table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | ENCRYPTION table_equal_opt table_opt_value
+| ENCRYPTION table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | ENGINE table_equal_opt table_opt_value
+| ENGINE table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | ENGINE_ATTRIBUTE table_equal_opt table_opt_value
+| ENGINE_ATTRIBUTE table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | INSERT_METHOD table_equal_opt table_opt_value
+| INSERT_METHOD table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | KEY_BLOCK_SIZE table_equal_opt table_opt_value
+| KEY_BLOCK_SIZE table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | MAX_ROWS table_equal_opt table_opt_value
+| MAX_ROWS table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | MIN_ROWS table_equal_opt table_opt_value
+| MIN_ROWS table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | PACK_KEYS table_equal_opt table_opt_value
+| PACK_KEYS table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | PASSWORD table_equal_opt table_opt_value
+| PASSWORD table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | ROW_FORMAT table_equal_opt table_opt_value
+| ROW_FORMAT table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | START TRANSACTION
+| START TRANSACTION
   {
     $$ = string($1) + " "  + string($2)
   }
-  | SECONDARY_ENGINE_ATTRIBUTE table_equal_opt table_opt_value
+| SECONDARY_ENGINE_ATTRIBUTE table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | STATS_AUTO_RECALC table_equal_opt table_opt_value
+| STATS_AUTO_RECALC table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | STATS_PERSISTENT table_equal_opt table_opt_value
+| STATS_PERSISTENT table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | STATS_SAMPLE_PAGES table_equal_opt table_opt_value
+| STATS_SAMPLE_PAGES table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
-  | TABLESPACE table_opt_value
+| TABLESPACE table_opt_value
   {
     $$ = string($1) + $2
   }
-  | TABLESPACE TABLESPACE_NAME
+| TABLESPACE TABLESPACE_NAME
     {
       $$ = string($1) + " "  + string($2)
     }
-  | TABLESPACE TABLESPACE_NAME STORAGE DISK
-      {
-        $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
-      }
-  | UNION table_equal_opt table_opt_value
+| TABLESPACE TABLESPACE_NAME STORAGE DISK
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+  }
+| UNION table_equal_opt table_opt_value
   {
     $$ = string($1) + $2 + $3
   }
