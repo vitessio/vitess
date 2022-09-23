@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -57,6 +58,33 @@ const (
 	PrimaryRecovery             RecoveryType = "PrimaryRecovery"
 	CoPrimaryRecovery           RecoveryType = "CoPrimaryRecovery"
 	IntermediatePrimaryRecovery RecoveryType = "IntermediatePrimaryRecovery"
+
+	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
+	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
+	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
+	CheckAndRecoverLockedSemiSyncPrimaryRecoveryName string = "CheckAndRecoverLockedSemiSyncPrimary"
+	ElectNewPrimaryRecoveryName                      string = "ElectNewPrimary"
+	FixPrimaryRecoveryName                           string = "FixPrimary"
+	FixReplicaRecoveryName                           string = "FixReplica"
+)
+
+var (
+	actionableRecoveriesNames = []string{
+		RecoverDeadPrimaryRecoveryName,
+		RecoverPrimaryHasPrimaryRecoveryName,
+		ElectNewPrimaryRecoveryName,
+		FixPrimaryRecoveryName,
+		FixReplicaRecoveryName,
+	}
+
+	// recoveriesCounter counts the number of recoveries that VTOrc has performed
+	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+
+	// recoveriesSuccessfulCounter counts the number of successful recoveries that VTOrc has performed
+	recoveriesSuccessfulCounter = stats.NewCountersWithSingleLabel("SuccessfulRecoveries", "Count of the different successful recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+
+	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
+	recoveriesFailureCounter = stats.NewCountersWithSingleLabel("FailedRecoveries", "Count of the different failed recoveries performed", "RecoveryType", actionableRecoveriesNames...)
 )
 
 // recoveryFunction is the code of the recovery function to be used
@@ -907,6 +935,31 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 	}
 }
 
+// getRecoverFunctionName gets the recovery function name for the given code.
+// This name is used for metrics
+func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
+	switch recoveryFunctionCode {
+	case noRecoveryFunc:
+		return ""
+	case recoverGenericProblemFunc:
+		return CheckAndRecoverGenericProblemRecoveryName
+	case recoverDeadPrimaryFunc:
+		return RecoverDeadPrimaryRecoveryName
+	case recoverPrimaryHasPrimaryFunc:
+		return RecoverPrimaryHasPrimaryRecoveryName
+	case recoverLockedSemiSyncPrimaryFunc:
+		return CheckAndRecoverLockedSemiSyncPrimaryRecoveryName
+	case electNewPrimaryFunc:
+		return ElectNewPrimaryRecoveryName
+	case fixPrimaryFunc:
+		return FixPrimaryRecoveryName
+	case fixReplicaFunc:
+		return FixReplicaRecoveryName
+	default:
+		return ""
+	}
+}
+
 // isClusterWideRecovery returns whether the given recovery is a cluster-wide recovery or not
 func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
@@ -1068,6 +1121,13 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	recoveryAttempted, topologyRecovery, err = getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry, candidateInstanceKey, forceInstanceRecovery, skipProcesses)
 	if !recoveryAttempted {
 		return recoveryAttempted, topologyRecovery, err
+	}
+	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+	recoveriesCounter.Add(recoveryName, 1)
+	if err != nil {
+		recoveriesFailureCounter.Add(recoveryName, 1)
+	} else {
+		recoveriesSuccessfulCounter.Add(recoveryName, 1)
 	}
 	if topologyRecovery == nil {
 		return recoveryAttempted, topologyRecovery, err
