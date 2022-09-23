@@ -56,7 +56,6 @@ type columnVindex struct {
 func TestRunsVschemaMigrations(t *testing.T) {
 	args := os.Args
 	conf := config
-	os.Args = []string{"vttestserver"}
 	defer resetFlags(args, conf)
 
 	cluster, err := startCluster()
@@ -75,7 +74,6 @@ func TestRunsVschemaMigrations(t *testing.T) {
 func TestPersistentMode(t *testing.T) {
 	args := os.Args
 	conf := config
-	os.Args = []string{"vttestserver"}
 	defer resetFlags(args, conf)
 
 	dir := t.TempDir()
@@ -129,7 +127,6 @@ func TestPersistentMode(t *testing.T) {
 func TestForeignKeysAndDDLModes(t *testing.T) {
 	args := os.Args
 	conf := config
-	os.Args = []string{"vttestserver"}
 	defer resetFlags(args, conf)
 
 	cluster, err := startCluster("--foreign_key_mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
@@ -185,7 +182,6 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 func TestCanGetKeyspaces(t *testing.T) {
 	args := os.Args
 	conf := config
-	os.Args = []string{"vttestserver"}
 	defer resetFlags(args, conf)
 
 	cluster, err := startCluster()
@@ -198,7 +194,6 @@ func TestCanGetKeyspaces(t *testing.T) {
 func TestExternalTopoServerConsul(t *testing.T) {
 	args := os.Args
 	conf := config
-	os.Args = []string{"vttestserver"}
 	defer resetFlags(args, conf)
 
 	// Start a single consul in the background.
@@ -225,7 +220,6 @@ func TestExternalTopoServerConsul(t *testing.T) {
 func TestMtlsAuth(t *testing.T) {
 	args := os.Args
 	conf := config
-	os.Args = []string{"vttestserver"}
 	defer resetFlags(args, conf)
 
 	// Our test root.
@@ -265,7 +259,6 @@ func TestMtlsAuth(t *testing.T) {
 func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	args := os.Args
 	conf := config
-	os.Args = []string{"vttestserver"}
 	defer resetFlags(args, conf)
 
 	// Our test root.
@@ -317,6 +310,7 @@ var clusterKeyspaces = []string{
 }
 
 func startCluster(flags ...string) (vttest.LocalCluster, error) {
+	os.Args = []string{"vttestserver"}
 	schemaDirArg := "--schema_dir=data/schema"
 	tabletHostname := "--tablet_hostname=localhost"
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
