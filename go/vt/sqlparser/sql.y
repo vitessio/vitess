@@ -3599,13 +3599,9 @@ partition_options:
   {
     $$ = string($1) + " " + string($2) + $3 + $4 + $5
   }
-| PARTITION BY partition_option partition_num_opt subpartition_opt partition_definitions
+| PARTITION BY partition_option partition_num_opt subpartition_opt openb partition_definitions closeb
   {
     $$ = string($1) + " " + string($2) + $3 + $4 + $5 + "part defs"
-  }
-| partition_definitions
-  {
-    $$ = "part defs"
   }
 
 partition_option:
@@ -3613,7 +3609,7 @@ partition_option:
   {
     $$ = $1
   }
-| RANGE value
+| RANGE openb any_keyword closeb
   {
     $$ = string($1)
   }
@@ -3621,7 +3617,7 @@ partition_option:
   {
     $$ = string($1) + string($2)
   }
-| LIST value
+| LIST openb any_keyword closeb
   {
     $$ = string($1)
   }
