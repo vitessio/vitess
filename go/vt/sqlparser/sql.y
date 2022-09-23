@@ -3399,10 +3399,19 @@ table_option:
   {
     $$ = string($1) + " " + $3
   }
+| CHARSET equal_opt charset
+  {
+    $$ = string($1) + " " + string($3) + " "
+  }
+| DEFAULT CHARSET equal_opt charset
+  {
+    $$ = string($1) + " " + string($2) + " " + $3
+  }
 | CHARACTER SET equal_opt charset
   {
     $$ = string($1) + " " + string($2) + " " + $4
   }
+
 | DEFAULT CHARACTER SET equal_opt charset
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
@@ -3551,6 +3560,14 @@ table_option:
   {
     $$ = string($1) + " " + $3
   }
+| CHARSET equal_opt charset table_option
+  {
+    $$ = string($1) + " " + string($3) + " " + $4
+  }
+| DEFAULT CHARSET equal_opt charset table_option
+  {
+    $$ = string($1) + " " + string($2) + " " + $3 + $4
+  }
 | CHARACTER SET equal_opt charset table_option
   {
     $$ = string($1) + " " + string($2) + " " + $4
@@ -3676,9 +3693,9 @@ table_option:
     $$ = string($1) + $2
   }
 | TABLESPACE any_keyword table_option
-    {
-      $$ = string($1) + " "  + string($2)
-    }
+  {
+    $$ = string($1) + " "  + string($2)
+  }
 | TABLESPACE any_keyword STORAGE DISK table_option
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
