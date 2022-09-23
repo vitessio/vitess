@@ -34,10 +34,10 @@ import (
 )
 
 // VtgateProtocol defines the RPC implementation used for connecting to vtgate.
-var VtgateProtocol string
+var VtgateProtocol = "grpc"
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&VtgateProtocol, "vtgate_protocol", "grpc", "how to talk to vtgate")
+	fs.StringVar(&VtgateProtocol, "vtgate_protocol", VtgateProtocol, "how to talk to vtgate")
 }
 
 func init() {

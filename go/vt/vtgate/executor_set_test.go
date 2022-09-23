@@ -267,7 +267,7 @@ func TestExecutorSet(t *testing.T) {
 
 func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
-	*sysVarSetEnabled = true
+	sysVarSetEnabled = true
 
 	returnResult := func(columnName, typ, value string) *sqltypes.Result {
 		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ), value)

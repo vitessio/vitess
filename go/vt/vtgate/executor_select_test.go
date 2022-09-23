@@ -159,7 +159,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "57000"
-	*setVarEnabled = true
+	setVarEnabled = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -195,9 +195,9 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "80000"
-	*setVarEnabled = false
+	setVarEnabled = false
 	defer func() {
-		*setVarEnabled = true
+		setVarEnabled = true
 	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
