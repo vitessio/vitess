@@ -1459,8 +1459,8 @@ func TestParseConnAttrs(t *testing.T) {
 }
 
 func TestServerFlush(t *testing.T) {
-	defer func(saved time.Duration) { *mysqlServerFlushDelay = saved }(*mysqlServerFlushDelay)
-	*mysqlServerFlushDelay = 10 * time.Millisecond
+	defer func(saved time.Duration) { mysqlServerFlushDelay = saved }(mysqlServerFlushDelay)
+	mysqlServerFlushDelay = 10 * time.Millisecond
 
 	th := &testHandler{}
 
@@ -1485,8 +1485,8 @@ func TestServerFlush(t *testing.T) {
 
 	flds, err := c.Fields()
 	require.NoError(t, err)
-	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
-		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), (*mysqlServerFlushDelay).String(), want.String())
+	if duration, want := time.Since(start), 20*time.Millisecond; duration < mysqlServerFlushDelay || duration > want {
+		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), (mysqlServerFlushDelay).String(), want.String())
 	}
 	want1 := []*querypb.Field{{
 		Name: "result",

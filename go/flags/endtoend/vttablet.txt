@@ -284,7 +284,6 @@ Usage of vttablet:
       --mycnf_slow_log_path string                                       mysql slow query log path
       --mycnf_socket_file string                                         mysql socket file
       --mycnf_tmp_dir string                                             mysql tmp directory
-      --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_version string                                      MySQL server version to advertise.
       --mysqlctl_client_protocol string                                  the protocol to use to talk to the mysqlctl server (default "grpc")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
