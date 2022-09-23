@@ -55,7 +55,10 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 	// Rotating the log ensures that we are processing a fresh binary log that will
 	// be minimal in size and GTID events.
 	if _, err = conn.ExecuteFetch("FLUSH BINARY LOGS", 1, false); err != nil {
-		return "", err
+		// This is a best effort operation meant to lower overhead and improve performance.
+		// Thus it should not be required, nor cause the vstream operation to fail.
+		log.Warningf("Failed to flush binary logs in order to lessen overhead and improve performance of a VStream using query %q: %v",
+			query, err)
 	}
 
 	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
