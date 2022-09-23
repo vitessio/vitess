@@ -22,11 +22,12 @@ package topocustomrule
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -37,8 +38,11 @@ import (
 
 var (
 	// Commandline flag to specify rule cell and path.
-	ruleCell = flag.String("topocustomrule_cell", "global", "topo cell for customrules file.")
-	rulePath = flag.String("topocustomrule_path", "", "path for customrules file. Disabled if empty.")
+	ruleCell = "global"
+	rulePath string
+
+	//ruleCell = flag.String("topocustomrule_cell", "global", "topo cell for customrules file.")
+	//rulePath = flag.String("topocustomrule_path", "", "path for customrules file. Disabled if empty.")
 )
 
 // topoCustomRuleSource is topo based custom rule source name
@@ -70,6 +74,17 @@ type topoCustomRule struct {
 
 	// stopped is set when stop() is called. It is a protection for race conditions.
 	stopped bool
+}
+
+func init() {
+	for _, cmd := range []string{"vttablet"} {
+		servenv.OnParseFor(cmd, registerTopoCustomRuleFlags)
+	}
+}
+
+func registerTopoCustomRuleFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&ruleCell, "topocustomrule_cell", ruleCell, "topo cell for customrules file.")
+	fs.StringVar(&rulePath, "topocustomrule_path", rulePath, "path for customrules file. Disabled if empty.")
 }
 
 func newTopoCustomRule(qsc tabletserver.Controller, cell, filePath string) (*topoCustomRule, error) {
@@ -188,10 +203,10 @@ func (cr *topoCustomRule) oneWatch() error {
 
 // activateTopoCustomRules activates topo dynamic custom rule mechanism.
 func activateTopoCustomRules(qsc tabletserver.Controller) {
-	if *rulePath != "" {
+	if rulePath != "" {
 		qsc.RegisterQueryRuleSource(topoCustomRuleSource)
 
-		cr, err := newTopoCustomRule(qsc, *ruleCell, *rulePath)
+		cr, err := newTopoCustomRule(qsc, ruleCell, rulePath)
 		if err != nil {
 			log.Fatalf("cannot start TopoCustomRule: %v", err)
 		}
