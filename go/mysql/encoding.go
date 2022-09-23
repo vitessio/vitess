@@ -281,3 +281,17 @@ func readLenEncStringAsBytes(data []byte, pos int) ([]byte, int, bool) {
 	}
 	return data[pos : pos+s], pos + s, true
 }
+
+func readLenEncStringAsBytesCopy(data []byte, pos int) ([]byte, int, bool) {
+	size, pos, ok := readLenEncInt(data, pos)
+	if !ok {
+		return nil, 0, false
+	}
+	s := int(size)
+	if pos+s-1 >= len(data) {
+		return nil, 0, false
+	}
+	result := make([]byte, size)
+	copy(result, data[pos:pos+s])
+	return result, pos + s, true
+}
