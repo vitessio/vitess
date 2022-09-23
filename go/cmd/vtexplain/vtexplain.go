@@ -22,8 +22,8 @@ import (
 	"os"
 
 	"vitess.io/vitess/go/vt/env"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
@@ -89,6 +89,7 @@ func init() {
 			return false
 		},
 	})
+	servenv.OnParseFor("vtexplain", vschemaacl.RegisterSchemaACLFlags)
 }
 
 // getFileParam returns a string containing either flag is not "",
@@ -120,7 +121,6 @@ func main() {
 	defer logutil.Flush()
 
 	servenv.ParseFlags("vtexplain")
-
 	err := parseAndRun()
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
