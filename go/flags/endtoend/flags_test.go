@@ -56,6 +56,9 @@ var (
 	//go:embed vtctldclient.txt
 	vtctldclientTxt string
 
+	//go:embed vttestserver.txt
+	vttestserverTxt string
+
 	helpOutput = map[string]string{
 		"vtexplain":    vtexplainTxt,
 		"vtgate":       vtgateTxt,
@@ -65,6 +68,7 @@ var (
 		"vtctlclient":  vtctlclientTxt,
 		"vtctldclient": vtctldclientTxt,
 		"vtorc":        vtorcTxt,
+		"vttestserver": vttestserverTxt,
 	}
 )
 

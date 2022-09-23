@@ -144,32 +144,50 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 	if !vrw.Exists() {
 		stateInfo = append(stateInfo, WorkflowStateNotCreated)
 	} else {
-		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
-			s = "All Reads Switched"
-		} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
-			s = "Reads Not Switched"
-		} else {
-			stateInfo = append(stateInfo, "Reads partially switched")
-			if len(ws.ReplicaCellsNotSwitched) == 0 {
-				s += "All Replica Reads Switched"
-			} else if len(ws.ReplicaCellsSwitched) == 0 {
-				s += "Replica not switched"
+		if !vrw.ts.isPartialMigration { // shard level traffic switching is all or nothing
+			if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
+				s = "All Reads Switched"
+			} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
+				s = "Reads Not Switched"
 			} else {
-				s += "Replica switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+				stateInfo = append(stateInfo, "Reads partially switched")
+				if len(ws.ReplicaCellsNotSwitched) == 0 {
+					s += "All Replica Reads Switched"
+				} else if len(ws.ReplicaCellsSwitched) == 0 {
+					s += "Replica not switched"
+				} else {
+					s += "Replica switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+				}
+				stateInfo = append(stateInfo, s)
+				s = ""
+				if len(ws.RdonlyCellsNotSwitched) == 0 {
+					s += "All Rdonly Reads Switched"
+				} else if len(ws.RdonlyCellsSwitched) == 0 {
+					s += "Rdonly not switched"
+				} else {
+					s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
+				}
 			}
 			stateInfo = append(stateInfo, s)
-			s = ""
-			if len(ws.RdonlyCellsNotSwitched) == 0 {
-				s += "All Rdonly Reads Switched"
-			} else if len(ws.RdonlyCellsSwitched) == 0 {
-				s += "Rdonly not switched"
-			} else {
-				s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
-			}
 		}
-		stateInfo = append(stateInfo, s)
 		if ws.WritesSwitched {
 			stateInfo = append(stateInfo, "Writes Switched")
+		} else if vrw.ts.isPartialMigration {
+			if ws.WritesPartiallySwitched {
+				// For partial migrations, the traffic switching is all or nothing
+				// at the shard level, so reads are effectively switched on the
+				// shard when writes are switched.
+				sourceShards := vrw.ts.SourceShards()
+				switchedShards := make([]string, len(sourceShards))
+				for i, sourceShard := range sourceShards {
+					switchedShards[i] = sourceShard.ShardName()
+				}
+				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(switchedShards, ",")))
+				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(switchedShards, ",")))
+			} else {
+				stateInfo = append(stateInfo, "Reads Not Switched")
+				stateInfo = append(stateInfo, "Writes Not Switched")
+			}
 		} else {
 			stateInfo = append(stateInfo, "Writes Not Switched")
 		}
@@ -410,7 +428,8 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	log.Infof("In VReplicationWorkflow.initMoveTables() for %+v", vrw)
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
-		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys, vrw.params.SourceTimeZone)
+		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
+		vrw.params.SourceTimeZone, vrw.params.SourceShards)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
