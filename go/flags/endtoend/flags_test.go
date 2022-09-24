@@ -47,12 +47,20 @@ var (
 	//go:embed vtctld.txt
 	vtctldTxt string
 
+	//go:embed vtorc.txt
+	vtorcTxt string
+
+	//go:embed vttestserver.txt
+	vttestserverTxt string
+
 	helpOutput = map[string]string{
-		"vtexplain": vtexplainTxt,
-		"vtgate":    vtgateTxt,
-		"vtgr":      vtgrTxt,
-		"vttablet":  vttabletTxt,
-		"vtctld":    vtctldTxt,
+		"vtexplain":    vtexplainTxt,
+		"vtgate":       vtgateTxt,
+		"vtgr":         vtgrTxt,
+		"vttablet":     vttabletTxt,
+		"vtctld":       vtctldTxt,
+		"vtorc":        vtorcTxt,
+		"vttestserver": vttestserverTxt,
 	}
 )
 

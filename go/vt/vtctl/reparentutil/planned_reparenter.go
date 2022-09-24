@@ -184,6 +184,21 @@ func (pr *PlannedReparenter) preflightChecks(
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not in the shard", primaryElectAliasStr)
 	}
 
+	// PRS is only meant to be called when all the tablets are healthy.
+	// So we assume that all the tablets are reachable and check if the primary elect will be able
+	// to make progress if it is promoted. This is needed because sometimes users may ask to promote
+	// a tablet which can never make progress. For example, let's say the user has a durability policy
+	// where they require 2 semi-sync acks but from cross-cell replicas.
+	// Let's say they have 3 replicas A in zone 1 and B and C in zone 2. In this case, A is the only
+	// eligible primary elect. Both B and C won't be able to make forward progress if they are promoted.
+	var tabletsReachable []*topodatapb.Tablet
+	for _, info := range tabletMap {
+		tabletsReachable = append(tabletsReachable, info.Tablet)
+	}
+	if !canEstablishForTablet(opts.durability, newPrimaryTabletInfo.Tablet, tabletsReachable) {
+		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v won't be able to make forward progress on promotion", primaryElectAliasStr)
+	}
+
 	ev.NewPrimary = proto.Clone(newPrimaryTabletInfo.Tablet).(*topodatapb.Tablet)
 
 	return false, nil

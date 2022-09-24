@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -42,8 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to the client.")
 
 const (
 	// connBufferSize is how much we buffer for reading and
@@ -309,7 +306,7 @@ func (c *Conn) getWriter() (w io.Writer, unget func()) {
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
 	c.stopFlushTimer()
-	c.flushTimer = time.AfterFunc(*mysqlServerFlushDelay, func() {
+	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
 		c.bufMu.Lock()
 		defer c.bufMu.Unlock()
 

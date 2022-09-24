@@ -17,20 +17,15 @@ limitations under the License.
 package mysql
 
 import (
-	"flag"
+	"context"
 	"math/rand"
 	"net"
 	"strings"
 	"testing"
-
-	"context"
 )
 
+// Override the default here to test with different values.
 var testReadConnBufferSize = connBufferSize
-
-func init() {
-	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", connBufferSize, "buffer size for reads from connections in tests")
-}
 
 const benchmarkQueryPrefix = "benchmark "
 
