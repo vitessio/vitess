@@ -1026,6 +1026,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vstream_flush_binlog": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVStreamFlushBinlog"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vstream_failover": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamFailover"],

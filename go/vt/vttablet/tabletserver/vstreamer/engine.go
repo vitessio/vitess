@@ -97,6 +97,7 @@ type Engine struct {
 	errorCounts               *stats.CountersWithSingleLabel
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
+	vstreamerFlushBinlogs     *stats.Counter
 
 	throttlerClient *throttle.Client
 }
@@ -133,6 +134,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vstreamersCreated:         env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
 		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
+		vstreamerFlushBinlogs:     env.Exporter().NewCounter("VStreamerFlushBinlogs", "Number of times we've issued a FLUSH BINARY LOGS when starting a vstream"),
 	}
 	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })

@@ -291,7 +291,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
-	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+	gtid, flushedLog, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+	if flushedLog {
+		rs.vse.vstreamerFlushBinlogs.Add(1)
+	}
 	if err != nil {
 		return err
 	}

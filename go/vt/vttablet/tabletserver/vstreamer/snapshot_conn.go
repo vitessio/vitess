@@ -26,6 +26,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// byte size for the current binary log at which point we should
+// attempt to rotate it before starting the snapshot query.
+const binlogRotateSize = int64(1024 * 1024 * 64) // 64MiB
+
 // snapshotConn is wrapper on mysql.Conn capable of
 // reading a table along with a gtid snapshot.
 type snapshotConn struct {
@@ -46,18 +50,20 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
-func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
-	// Rotate the binary logs to limit the GTID auto positioning overhead.
-	// This is needed as the currently open binary log (which can be up to 1G in size
+func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, flushedLog bool, err error) {
+	// Rotate the binary logs if needed to limit the GTID auto positioning overhead.
+	// This may be needed as the currently open binary log (which can be up to 1G in size
 	// by default) will need to be scanned and empty GTID events will be streamed for
 	// those GTIDs in the log that we are skipping. In total, this can add a lot of
 	// overhead on both the mysqld instance and the tablet.
-	// Rotating the log ensures that we are processing a fresh binary log that will
-	// be minimal in size and GTID events.
-	if _, err = conn.ExecuteFetch("FLUSH BINARY LOGS", 1, false); err != nil {
+	// Rotating the log when it's above a certain size ensures that we are processing
+	// a relatively small binary log that will be minimal in size and GTID events.
+	// We only attempt to rotate it if the current log is of any significant size to
+	// avoid too many unecessary rotations.
+	if flushedLog, err = conn.limitOpenBinlogSize(binlogRotateSize); err != nil {
 		// This is a best effort operation meant to lower overhead and improve performance.
-		// Thus it should not be required, nor cause the vstream operation to fail.
-		log.Warningf("Failed to flush binary logs in order to lessen overhead and improve performance of a VStream using query %q: %v",
+		// Thus it should not be required, nor cause the operation to fail.
+		log.Warningf("Failed in attempt to potentially flush binary logs in order to lessen overhead and improve performance of a VStream using query %q: %v",
 			query, err)
 	}
 
@@ -70,12 +76,12 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 		gtid, err = conn.startSnapshotWithConsistentGTID(ctx)
 	}
 	if err != nil {
-		return "", err
+		return "", flushedLog, err
 	}
 	if err := conn.ExecuteStreamFetch(query); err != nil {
-		return "", err
+		return "", flushedLog, err
 	}
-	return gtid, nil
+	return gtid, flushedLog, nil
 }
 
 // snapshot performs the snapshotting.
@@ -152,4 +158,31 @@ func (conn *snapshotConn) Close() {
 
 func mysqlConnect(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
 	return cp.Connect(ctx)
+}
+
+// limitOpenBinlogSize will rotate the binary log if the current binary
+// log is greater than the specified max size in bytes.
+func (conn *snapshotConn) limitOpenBinlogSize(maxBinlogSize int64) (bool, error) {
+	flushedLog := false
+	// Output: https://dev.mysql.com/doc/refman/en/show-binary-logs.html
+	res, err := conn.ExecuteFetch("SHOW BINARY LOGS", -1, false)
+	if err != nil {
+		return flushedLog, err
+	}
+	if res == nil || len(res.Rows) == 0 {
+		return flushedLog, fmt.Errorf("SHOW BINARY LOGS returned no rows")
+	}
+	// the current log will be the last one in the results
+	curLogIdx := len(res.Rows) - 1
+	curLogSize, err := res.Rows[curLogIdx][1].ToInt64()
+	if err != nil {
+		return flushedLog, err
+	}
+	if curLogSize > maxBinlogSize {
+		if _, err = conn.ExecuteFetch("FLUSH BINARY LOGS", 0, false); err != nil {
+			return flushedLog, err
+		}
+		flushedLog = true
+	}
+	return flushedLog, nil
 }

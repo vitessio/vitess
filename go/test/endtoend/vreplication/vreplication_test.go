@@ -250,6 +250,89 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	testVStreamCellFlag(t)
 }
 
+func TestVStreamFlushBinlog(t *testing.T) {
+	defaultCellName := "zone1"
+	allCells := []string{defaultCellName}
+	allCellNames = defaultCellName
+	workflow := "test_vstream_p2c"
+	shard := "0"
+	vc = NewVitessCluster(t, "TestVStreamBinlogFlush", allCells, mainClusterConfig)
+	defaultCell = vc.Cells[defaultCellName]
+
+	require.NotNil(t, vc)
+	// Keep the cluster processes minimal to deal with CI resource constraints.
+	// This also makes it easier to confirm the behavior as we know exactly
+	// what tablets will be involved.
+	defaultReplicas = 0
+	defaultRdonly = 0
+	defer func() { defaultReplicas = 1 }()
+
+	defer vc.TearDown(t)
+
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
+		t.Fatal(err)
+	}
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t, vc)
+
+	insertInitialData(t)
+
+	tables := "product,customer,merchant,orders"
+	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, tables)
+	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
+
+	// So far, we should not have rotated any binlogs
+	flushCount := int64(sourceTab.GetVars()["VStreamerFlushBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(0), "VStreamerFlushBinlogs should be 0")
+
+	// Generate a lot of binlog events; target size should be
+	// > vstreamer.binlogRotateSize (64MiB).
+	targetBinlogSize := int64(1024 * 1024 * 64)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', repeat('A', 65000), now())"
+	for i := 100; i < 5000; i++ {
+		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i), -1, false)
+		require.NoError(t, err)
+		require.Greater(t, res.RowsAffected, uint64(0))
+
+		if i%100 == 0 {
+			res, err := sourceTab.QueryTablet("show binary logs", sourceKs, false)
+			require.NoError(t, err)
+			require.NotNil(t, res)
+			require.Greater(t, len(res.Rows), 0)
+			lastRow := res.Rows[len(res.Rows)-1]
+			size, err := lastRow[1].ToInt64()
+			require.NoError(t, err)
+			if size > targetBinlogSize {
+				break
+			}
+		}
+	}
+
+	// Now we should rotate the binary logs ONE time on the source, even
+	// though we're opening up multiple result streams (1 per table).
+	runVDiffsSideBySide = false
+	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
+	flushCount = int64(sourceTab.GetVars()["VStreamerFlushBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(1), "VStreamerFlushBinlogs should now be 1")
+
+	// Now if we do another vdiff, we should NOT rotate the binlogs again
+	// as we haven't been generating a lot of new binlog events.
+	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
+	flushCount = int64(sourceTab.GetVars()["VStreamerFlushBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(1), "VStreamerFlushBinlogs should still be 1")
+}
+
 func testVStreamCellFlag(t *testing.T) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
