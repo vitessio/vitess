@@ -415,6 +415,20 @@ export namespace vtadmin {
         public plannedFailoverShard(request: vtadmin.IPlannedFailoverShardRequest): Promise<vtadmin.PlannedFailoverShardResponse>;
 
         /**
+         * Calls RebuildKeyspaceGraph.
+         * @param request RebuildKeyspaceGraphRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RebuildKeyspaceGraphResponse
+         */
+        public rebuildKeyspaceGraph(request: vtadmin.IRebuildKeyspaceGraphRequest, callback: vtadmin.VTAdmin.RebuildKeyspaceGraphCallback): void;
+
+        /**
+         * Calls RebuildKeyspaceGraph.
+         * @param request RebuildKeyspaceGraphRequest message or plain object
+         * @returns Promise
+         */
+        public rebuildKeyspaceGraph(request: vtadmin.IRebuildKeyspaceGraphRequest): Promise<vtadmin.RebuildKeyspaceGraphResponse>;
+
+        /**
          * Calls RefreshState.
          * @param request RefreshStateRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and RefreshStateResponse
@@ -455,6 +469,20 @@ export namespace vtadmin {
          * @returns Promise
          */
         public reloadSchemas(request: vtadmin.IReloadSchemasRequest): Promise<vtadmin.ReloadSchemasResponse>;
+
+        /**
+         * Calls RemoveKeyspaceCell.
+         * @param request RemoveKeyspaceCellRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RemoveKeyspaceCellResponse
+         */
+        public removeKeyspaceCell(request: vtadmin.IRemoveKeyspaceCellRequest, callback: vtadmin.VTAdmin.RemoveKeyspaceCellCallback): void;
+
+        /**
+         * Calls RemoveKeyspaceCell.
+         * @param request RemoveKeyspaceCellRequest message or plain object
+         * @returns Promise
+         */
+        public removeKeyspaceCell(request: vtadmin.IRemoveKeyspaceCellRequest): Promise<vtadmin.RemoveKeyspaceCellResponse>;
 
         /**
          * Calls RunHealthCheck.
@@ -796,6 +824,13 @@ export namespace vtadmin {
         type PlannedFailoverShardCallback = (error: (Error|null), response?: vtadmin.PlannedFailoverShardResponse) => void;
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#rebuildKeyspaceGraph}.
+         * @param error Error, if any
+         * @param [response] RebuildKeyspaceGraphResponse
+         */
+        type RebuildKeyspaceGraphCallback = (error: (Error|null), response?: vtadmin.RebuildKeyspaceGraphResponse) => void;
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#refreshState}.
          * @param error Error, if any
          * @param [response] RefreshStateResponse
@@ -815,6 +850,13 @@ export namespace vtadmin {
          * @param [response] ReloadSchemasResponse
          */
         type ReloadSchemasCallback = (error: (Error|null), response?: vtadmin.ReloadSchemasResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#removeKeyspaceCell}.
+         * @param error Error, if any
+         * @param [response] RemoveKeyspaceCellResponse
+         */
+        type RemoveKeyspaceCellCallback = (error: (Error|null), response?: vtadmin.RemoveKeyspaceCellResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#runHealthCheck}.
@@ -7122,6 +7164,204 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a RebuildKeyspaceGraphRequest. */
+    interface IRebuildKeyspaceGraphRequest {
+
+        /** RebuildKeyspaceGraphRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** RebuildKeyspaceGraphRequest keyspace */
+        keyspace?: (string|null);
+
+        /** RebuildKeyspaceGraphRequest cells */
+        cells?: (string[]|null);
+
+        /** RebuildKeyspaceGraphRequest allow_partial */
+        allow_partial?: (boolean|null);
+    }
+
+    /** Represents a RebuildKeyspaceGraphRequest. */
+    class RebuildKeyspaceGraphRequest implements IRebuildKeyspaceGraphRequest {
+
+        /**
+         * Constructs a new RebuildKeyspaceGraphRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRebuildKeyspaceGraphRequest);
+
+        /** RebuildKeyspaceGraphRequest cluster_id. */
+        public cluster_id: string;
+
+        /** RebuildKeyspaceGraphRequest keyspace. */
+        public keyspace: string;
+
+        /** RebuildKeyspaceGraphRequest cells. */
+        public cells: string[];
+
+        /** RebuildKeyspaceGraphRequest allow_partial. */
+        public allow_partial: boolean;
+
+        /**
+         * Creates a new RebuildKeyspaceGraphRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RebuildKeyspaceGraphRequest instance
+         */
+        public static create(properties?: vtadmin.IRebuildKeyspaceGraphRequest): vtadmin.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphRequest message. Does not implicitly {@link vtadmin.RebuildKeyspaceGraphRequest.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRebuildKeyspaceGraphRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphRequest message, length delimited. Does not implicitly {@link vtadmin.RebuildKeyspaceGraphRequest.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRebuildKeyspaceGraphRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RebuildKeyspaceGraphRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RebuildKeyspaceGraphRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Verifies a RebuildKeyspaceGraphRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RebuildKeyspaceGraphRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RebuildKeyspaceGraphRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Creates a plain object from a RebuildKeyspaceGraphRequest message. Also converts values to other types if specified.
+         * @param message RebuildKeyspaceGraphRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RebuildKeyspaceGraphRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RebuildKeyspaceGraphRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RebuildKeyspaceGraphResponse. */
+    interface IRebuildKeyspaceGraphResponse {
+
+        /** RebuildKeyspaceGraphResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a RebuildKeyspaceGraphResponse. */
+    class RebuildKeyspaceGraphResponse implements IRebuildKeyspaceGraphResponse {
+
+        /**
+         * Constructs a new RebuildKeyspaceGraphResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRebuildKeyspaceGraphResponse);
+
+        /** RebuildKeyspaceGraphResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new RebuildKeyspaceGraphResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RebuildKeyspaceGraphResponse instance
+         */
+        public static create(properties?: vtadmin.IRebuildKeyspaceGraphResponse): vtadmin.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphResponse message. Does not implicitly {@link vtadmin.RebuildKeyspaceGraphResponse.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRebuildKeyspaceGraphResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphResponse message, length delimited. Does not implicitly {@link vtadmin.RebuildKeyspaceGraphResponse.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRebuildKeyspaceGraphResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RebuildKeyspaceGraphResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RebuildKeyspaceGraphResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Verifies a RebuildKeyspaceGraphResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RebuildKeyspaceGraphResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RebuildKeyspaceGraphResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Creates a plain object from a RebuildKeyspaceGraphResponse message. Also converts values to other types if specified.
+         * @param message RebuildKeyspaceGraphResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RebuildKeyspaceGraphResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RebuildKeyspaceGraphResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RefreshStateRequest. */
     interface IRefreshStateRequest {
 
@@ -8032,6 +8272,210 @@ export namespace vtadmin {
 
         /**
          * Converts this RefreshTabletReplicationSourceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RemoveKeyspaceCellRequest. */
+    interface IRemoveKeyspaceCellRequest {
+
+        /** RemoveKeyspaceCellRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** RemoveKeyspaceCellRequest keyspace */
+        keyspace?: (string|null);
+
+        /** RemoveKeyspaceCellRequest cell */
+        cell?: (string|null);
+
+        /** RemoveKeyspaceCellRequest force */
+        force?: (boolean|null);
+
+        /** RemoveKeyspaceCellRequest recursive */
+        recursive?: (boolean|null);
+    }
+
+    /** Represents a RemoveKeyspaceCellRequest. */
+    class RemoveKeyspaceCellRequest implements IRemoveKeyspaceCellRequest {
+
+        /**
+         * Constructs a new RemoveKeyspaceCellRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRemoveKeyspaceCellRequest);
+
+        /** RemoveKeyspaceCellRequest cluster_id. */
+        public cluster_id: string;
+
+        /** RemoveKeyspaceCellRequest keyspace. */
+        public keyspace: string;
+
+        /** RemoveKeyspaceCellRequest cell. */
+        public cell: string;
+
+        /** RemoveKeyspaceCellRequest force. */
+        public force: boolean;
+
+        /** RemoveKeyspaceCellRequest recursive. */
+        public recursive: boolean;
+
+        /**
+         * Creates a new RemoveKeyspaceCellRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RemoveKeyspaceCellRequest instance
+         */
+        public static create(properties?: vtadmin.IRemoveKeyspaceCellRequest): vtadmin.RemoveKeyspaceCellRequest;
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellRequest message. Does not implicitly {@link vtadmin.RemoveKeyspaceCellRequest.verify|verify} messages.
+         * @param message RemoveKeyspaceCellRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRemoveKeyspaceCellRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellRequest message, length delimited. Does not implicitly {@link vtadmin.RemoveKeyspaceCellRequest.verify|verify} messages.
+         * @param message RemoveKeyspaceCellRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRemoveKeyspaceCellRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RemoveKeyspaceCellRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RemoveKeyspaceCellRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RemoveKeyspaceCellRequest;
+
+        /**
+         * Decodes a RemoveKeyspaceCellRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RemoveKeyspaceCellRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RemoveKeyspaceCellRequest;
+
+        /**
+         * Verifies a RemoveKeyspaceCellRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RemoveKeyspaceCellRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RemoveKeyspaceCellRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RemoveKeyspaceCellRequest;
+
+        /**
+         * Creates a plain object from a RemoveKeyspaceCellRequest message. Also converts values to other types if specified.
+         * @param message RemoveKeyspaceCellRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RemoveKeyspaceCellRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RemoveKeyspaceCellRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RemoveKeyspaceCellResponse. */
+    interface IRemoveKeyspaceCellResponse {
+
+        /** RemoveKeyspaceCellResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a RemoveKeyspaceCellResponse. */
+    class RemoveKeyspaceCellResponse implements IRemoveKeyspaceCellResponse {
+
+        /**
+         * Constructs a new RemoveKeyspaceCellResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRemoveKeyspaceCellResponse);
+
+        /** RemoveKeyspaceCellResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new RemoveKeyspaceCellResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RemoveKeyspaceCellResponse instance
+         */
+        public static create(properties?: vtadmin.IRemoveKeyspaceCellResponse): vtadmin.RemoveKeyspaceCellResponse;
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellResponse message. Does not implicitly {@link vtadmin.RemoveKeyspaceCellResponse.verify|verify} messages.
+         * @param message RemoveKeyspaceCellResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRemoveKeyspaceCellResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellResponse message, length delimited. Does not implicitly {@link vtadmin.RemoveKeyspaceCellResponse.verify|verify} messages.
+         * @param message RemoveKeyspaceCellResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRemoveKeyspaceCellResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RemoveKeyspaceCellResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RemoveKeyspaceCellResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RemoveKeyspaceCellResponse;
+
+        /**
+         * Decodes a RemoveKeyspaceCellResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RemoveKeyspaceCellResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RemoveKeyspaceCellResponse;
+
+        /**
+         * Verifies a RemoveKeyspaceCellResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RemoveKeyspaceCellResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RemoveKeyspaceCellResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RemoveKeyspaceCellResponse;
+
+        /**
+         * Creates a plain object from a RemoveKeyspaceCellResponse message. Also converts values to other types if specified.
+         * @param message RemoveKeyspaceCellResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RemoveKeyspaceCellResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RemoveKeyspaceCellResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
