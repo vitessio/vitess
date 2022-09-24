@@ -50,6 +50,11 @@ func GetVTGateProtocol() string {
 	return vtgateProtocol
 }
 
+// SetVTGateProtocol set the protocol to be used to connect to vtgate.
+func SetVTGateProtocol(protocol string) {
+	vtgateProtocol = protocol
+}
+
 // VTGateConn is the client API object to talk to vtgate.
 // It can support concurrent sessions.
 // It is constructed using the Dial method.

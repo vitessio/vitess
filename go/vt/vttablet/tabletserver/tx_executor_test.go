@@ -411,10 +411,11 @@ func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string)
 
 func TestExecutorResolveTransaction(t *testing.T) {
 	protocol := "resolveTest"
-	var save string
-	save, vtgateconn.VtgateProtocol = vtgateconn.VtgateProtocol, protocol
-	defer func() { vtgateconn.VtgateProtocol = save }()
-
+	oldValue := vtgateconn.GetVTGateProtocol()
+	vtgateconn.SetVTGateProtocol(protocol)
+	defer func() {
+		vtgateconn.SetVTGateProtocol(oldValue)
+	}()
 	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
 		return &FakeVTGateConn{
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},

@@ -60,7 +60,7 @@ var (
 func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName string, config *tabletenv.TabletConfig) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
-	vtgateconn.VtgateProtocol = protocol
+	vtgateconn.SetVTGateProtocol(protocol)
 	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
 		return &txResolver{
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
