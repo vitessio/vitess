@@ -318,8 +318,6 @@ func startCluster(flags ...string) (vttest.LocalCluster, error) {
 	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
 	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 	os.Args = append(os.Args, flags...)
-	fmt.Printf(">>>>>>>>>>>>>>>>>>>>>>>>>>>> args: %+v\n", os.Args)
-	log.Flush()
 	return runCluster()
 }
 
