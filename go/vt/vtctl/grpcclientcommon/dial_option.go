@@ -30,6 +30,7 @@ var cert, key, ca, crl, name string
 
 func init() {
 	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vttestserver", registerFlags)
 }
 
 func registerFlags(fs *pflag.FlagSet) {

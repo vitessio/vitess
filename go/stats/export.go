@@ -41,11 +41,13 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var emitStats bool
-var statsEmitPeriod = 60 * time.Second
-var statsBackend string
-var combineDimensions string
-var dropVariables string
+var (
+	emitStats         bool
+	statsEmitPeriod   = 60 * time.Second
+	statsBackend      string
+	combineDimensions string
+	dropVariables     string
+)
 
 // CommonTags is a comma-separated list of common tags for stats backends
 var CommonTags string
