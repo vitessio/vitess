@@ -653,6 +653,9 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string) *cluster.VttabletProcess {
 	for _, cell := range vc.Cells {
 		keyspace := cell.Keyspaces[ksName]
+		if keyspace == nil {
+			continue
+		}
 		for _, shard := range keyspace.Shards {
 			if shard.Name != shardName {
 				continue
