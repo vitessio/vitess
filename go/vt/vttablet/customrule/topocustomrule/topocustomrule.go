@@ -40,9 +40,6 @@ var (
 	// Commandline flag to specify rule cell and path.
 	ruleCell = "global"
 	rulePath string
-
-	//ruleCell = flag.String("topocustomrule_cell", "global", "topo cell for customrules file.")
-	//rulePath = flag.String("topocustomrule_path", "", "path for customrules file. Disabled if empty.")
 )
 
 // topoCustomRuleSource is topo based custom rule source name
@@ -74,12 +71,6 @@ type topoCustomRule struct {
 
 	// stopped is set when stop() is called. It is a protection for race conditions.
 	stopped bool
-}
-
-func init() {
-	for _, cmd := range []string{"vttablet"} {
-		servenv.OnParseFor(cmd, registerTopoCustomRuleFlags)
-	}
 }
 
 func registerTopoCustomRuleFlags(fs *pflag.FlagSet) {
@@ -217,5 +208,8 @@ func activateTopoCustomRules(qsc tabletserver.Controller) {
 }
 
 func init() {
+	for _, cmd := range []string{"vttablet"} {
+		servenv.OnParseFor(cmd, registerTopoCustomRuleFlags)
+	}
 	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, activateTopoCustomRules)
 }
