@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
+
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
@@ -78,6 +80,7 @@ func init() {
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
+	servenv.OnParseFor("vtcombo", vschemaacl.RegisterSchemaACLFlags)
 }
 
 func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {

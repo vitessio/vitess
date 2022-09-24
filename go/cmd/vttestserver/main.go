@@ -28,6 +28,8 @@ import (
 	"sync"
 	"syscall"
 
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
+
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -165,6 +167,7 @@ func init() {
 	flag.StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
 	flag.StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
 	flag.StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
+
 }
 
 func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
@@ -219,6 +222,7 @@ func parseFlags() (env vttest.Environment, err error) {
 		servenv.RegisterGRPCServerFlags()
 		servenv.RegisterGRPCServerAuthFlags()
 		servenv.RegisterServiceMapFlag()
+		servenv.OnParseFor("vttestserver", vschemaacl.RegisterSchemaACLFlags)
 		servenv.ParseFlags("vttestserver")
 
 		// Move all pflag flags back to the goflag CommandLine.
