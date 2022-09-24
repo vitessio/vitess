@@ -100,25 +100,6 @@ const (
 )
 
 var (
-	// vtbackup-specific flags
-	/*minBackupInterval   = flag.Duration("min_backup_interval", 0, "Only take a new backup if it's been at least this long since the most recent backup.")
-	minRetentionTime    = flag.Duration("min_retention_time", 0, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
-	minRetentionCount   = flag.Int("min_retention_count", 1, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
-	initialBackup       = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
-	allowFirstBackup    = flag.Bool("allow_first_backup", false, "Allow this job to take the first backup of an existing shard.")
-	restartBeforeBackup = flag.Bool("restart_before_backup", false, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
-	// vttablet-like flags
-	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
-	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
-	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
-	concurrency        = flag.Int("concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
-	// mysqlctld-like flags
-	mysqlPort     = flag.Int("mysql_port", 3306, "mysql port")
-	mysqlSocket   = flag.String("mysql_socket", "", "path to the mysql socket")
-	mysqlTimeout  = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
-	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
-	detachedMode  = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")*/
-
 	minBackupInterval   time.Duration
 	minRetentionTime    time.Duration
 	minRetentionCount   = 1
@@ -158,13 +139,15 @@ func registerVtbackupFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run backups detached from the terminal")
 }
 
+func init() {
+	servenv.OnParseFor("vtbackup", registerVtbackupFlags)
+}
+
 func main() {
 	defer exit.Recover()
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
-
-	servenv.OnParseFor("vtbackup", registerVtbackupFlags)
-
+	servenv.ParseFlags("vtbackup")
 	if detachedMode {
 		// this method will call os.Exit and kill this process
 		cmd.DetachFromTerminalAndExit()
@@ -222,6 +205,7 @@ func main() {
 }
 
 func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
+	time.Sleep(10 * time.Second)
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
