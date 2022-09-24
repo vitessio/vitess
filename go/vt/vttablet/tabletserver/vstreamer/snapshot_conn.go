@@ -49,7 +49,7 @@ func init() {
 }
 
 func registerSnapshotConnFlags(fs *pflag.FlagSet) {
-	fs.Int64Var(&binlogRotationThreshold, "vstream_binlog_rotation_threshold", binlogRotationThreshold, "Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer)")
+	fs.Int64Var(&binlogRotationThreshold, "vstream-binlog-rotation-threshold", binlogRotationThreshold, "Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer)")
 }
 
 func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn, error) {
