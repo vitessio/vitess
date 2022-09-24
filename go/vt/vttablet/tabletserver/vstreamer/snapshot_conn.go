@@ -28,7 +28,7 @@ import (
 
 // byte size for the current binary log at which point we should
 // attempt to rotate it before starting the snapshot query.
-const binlogRotateSize = int64(1024 * 1024 * 64) // 64MiB
+const binlogRotateSize = int64(64 * 1024 * 1024) // 64MiB
 
 // snapshotConn is wrapper on mysql.Conn capable of
 // reading a table along with a gtid snapshot.
@@ -51,9 +51,9 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, flushedLog bool, err error) {
-	// Rotate the binary logs if needed to limit the GTID auto positioning overhead.
-	// This may be needed as the currently open binary log (which can be up to 1G in size
-	// by default) will need to be scanned and empty GTID events will be streamed for
+	// Rotate the binary log if needed to limit the GTID auto positioning overhead.
+	// This may be needed as the currently open binary log (which can be up to 1G in
+	// size by default) will need to be scanned and empty events will be streamed for
 	// those GTIDs in the log that we are skipping. In total, this can add a lot of
 	// overhead on both the mysqld instance and the tablet.
 	// Rotating the log when it's above a certain size ensures that we are processing

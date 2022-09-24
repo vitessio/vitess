@@ -257,18 +257,14 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	workflow := "test_vstream_p2c"
 	shard := "0"
 	vc = NewVitessCluster(t, "TestVStreamBinlogFlush", allCells, mainClusterConfig)
+	require.NotNil(t, vc)
+	defer vc.TearDown(t)
 	defaultCell = vc.Cells[defaultCellName]
 
-	require.NotNil(t, vc)
-	// Keep the cluster processes minimal to deal with CI resource constraints.
+	// Keep the cluster processes minimal (no rdonly and no replica tablets)
+	// to deal with CI resource constraints.
 	// This also makes it easier to confirm the behavior as we know exactly
 	// what tablets will be involved.
-	defaultReplicas = 0
-	defaultRdonly = 0
-	defer func() { defaultReplicas = 1 }()
-
-	defer vc.TearDown(t)
-
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -279,16 +275,17 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	verifyClusterHealth(t, vc)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t, vc)
+	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
 
 	insertInitialData(t)
 
 	tables := "product,customer,merchant,orders"
 	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, tables)
+	// Wait until we get through the copy phase...
 	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
 
 	// So far, we should not have rotated any binlogs
@@ -297,7 +294,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 
 	// Generate a lot of binlog events; target size should be
 	// > vstreamer.binlogRotateSize (64MiB).
-	targetBinlogSize := int64(1024 * 1024 * 64)
+	targetBinlogSize := int64(64 * 1024 * 1024)
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', repeat('A', 65000), now())"
 	for i := 100; i < 5000; i++ {
