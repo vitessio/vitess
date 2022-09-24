@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 var (
@@ -292,9 +293,8 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	flushCount := int64(sourceTab.GetVars()["VStreamerFlushBinlogs"].(float64))
 	require.Equal(t, flushCount, int64(0), "VStreamerFlushBinlogs should be 0")
 
-	// Generate a lot of binlog events; target size should be
-	// > vstreamer.binlogRotateSize (64MiB).
-	targetBinlogSize := int64(64 * 1024 * 1024)
+	// Generate a lot of binlog event bytes
+	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 16
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', repeat('A', 65000), now())"
 	for i := 100; i < 5000; i++ {
