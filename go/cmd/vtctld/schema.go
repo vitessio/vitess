@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -35,7 +36,7 @@ var (
 	schemaChangeDir             string
 	schemaChangeController      string
 	schemaChangeUser            string
-	schemaChangeCheckInterval   = 60
+	schemaChangeCheckInterval   = flagutil.NewDurationOrIntVar("schema_change_check_interval", time.Minute, time.Second)
 	schemaChangeReplicasTimeout = wrangler.DefaultWaitReplicasTimeout
 )
 
@@ -45,7 +46,7 @@ func init() {
 		fs.StringVar(&schemaChangeController, "schema_change_controller", schemaChangeController, "Schema change controller is responsible for finding schema changes and responding to schema change events.")
 		fs.StringVar(&schemaChangeUser, "schema_change_user", schemaChangeUser, "The user who schema changes are submitted on behalf of.")
 
-		fs.IntVar(&schemaChangeCheckInterval, "schema_change_check_interval", schemaChangeCheckInterval, "How often the schema change dir is checked for schema changes, in seconds.")
+		fs.Var(schemaChangeCheckInterval, "schema_change_check_interval", "How often the schema change dir is checked for schema changes (deprecated: if passed as a bare integer, the duration will be in seconds).")
 		fs.DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
 	})
 }
@@ -53,11 +54,11 @@ func init() {
 func initSchema() {
 	// Start schema manager service if needed.
 	if schemaChangeDir != "" {
-		interval := 60
-		if schemaChangeCheckInterval > 0 {
-			interval = schemaChangeCheckInterval
+		interval := time.Minute
+		if schemaChangeCheckInterval.Value() > time.Duration(0) {
+			interval = schemaChangeCheckInterval.Value()
 		}
-		timer := timer.NewTimer(time.Duration(interval) * time.Second)
+		timer := timer.NewTimer(interval)
 		controllerFactory, err :=
 			schemamanager.GetControllerFactory(schemaChangeController)
 		if err != nil {
