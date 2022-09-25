@@ -213,7 +213,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> AND
 %right <bytes> NOT '!'
 %left <bytes> BETWEEN CASE WHEN THEN ELSE ELSEIF END
-%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN '0' '1'
+%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
 %nonassoc  UNBOUNDED // ideally should have same precedence as IDENT
 %nonassoc ID NULL PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING
 %left <bytes> '|'
