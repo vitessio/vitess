@@ -194,8 +194,8 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 
 // shutdownVttablets shuts down all the vttablets and removes them from the topology
 func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
-	// demote the primary tablet if there is
-	err := demotePrimaryTablet(clusterInfo.Ts)
+	// reset the shard primary
+	err := resetShardPrimary(clusterInfo.Ts)
 	if err != nil {
 		return err
 	}
@@ -203,11 +203,6 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 	for _, vttablet := range clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		// we need to stop a vttablet only if it is not shutdown
 		if !vttablet.VttabletProcess.IsShutdown() {
-			// wait for primary tablet to demote. For all others, it will not wait
-			err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
-			if err != nil {
-				return err
-			}
 			// Stop the vttablets
 			err := vttablet.VttabletProcess.TearDown()
 			if err != nil {
@@ -224,10 +219,10 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 	return nil
 }
 
-// demotePrimaryTablet demotes the primary tablet for our shard
-func demotePrimaryTablet(ts *topo.Server) (err error) {
+// resetShardPrimary resets the shard's primary
+func resetShardPrimary(ts *topo.Server) (err error) {
 	// lock the shard
-	ctx, unlock, lockErr := ts.LockShard(context.Background(), keyspaceName, shardName, "demotePrimaryTablet-vtorc-endtoend-test")
+	ctx, unlock, lockErr := ts.LockShard(context.Background(), keyspaceName, shardName, "resetShardPrimary-vtorc-endtoend-test")
 	if lockErr != nil {
 		return lockErr
 	}
@@ -236,7 +231,6 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 	// update the shard record's primary
 	if _, err = ts.UpdateShardFields(ctx, keyspaceName, shardName, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = nil
-		si.SetPrimaryTermStartTime(time.Now())
 		return nil
 	}); err != nil {
 		return err
