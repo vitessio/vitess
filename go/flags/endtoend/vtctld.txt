@@ -112,11 +112,11 @@ Usage of vtctld:
       --s3_backup_storage_bucket string                                  S3 bucket to use for backups.
       --s3_backup_storage_root string                                    root prefix for all backup-related object names.
       --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
-      --schema_change_check_interval int                                 this value decides how often we check schema change dir, in seconds (default 60)
-      --schema_change_controller string                                  schema change controller is responsible for finding schema changes and responding to schema change events
-      --schema_change_dir string                                         directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change
-      --schema_change_replicas_timeout duration                          how long to wait for replicas to receive the schema change (default 10s)
-      --schema_change_user string                                        The user who submits this schema change.
+      --schema_change_check_interval int                                 How often the schema change dir is checked for schema changes, in seconds. (default 60)
+      --schema_change_controller string                                  Schema change controller is responsible for finding schema changes and responding to schema change events.
+      --schema_change_dir string                                         Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.
+      --schema_change_replicas_timeout duration                          How long to wait for replicas to receive a schema change. (default 10s)
+      --schema_change_user string                                        The user who schema changes are submitted on behalf of.
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
