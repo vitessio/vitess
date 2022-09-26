@@ -116,6 +116,7 @@ type cmdFunc func(ctx context.Context, subFlags *flag.FlagSet, args []string) er
 
 var cmdMap map[string]cmdFunc
 var zconn *zk2topo.ZkConn
+var server string
 
 func init() {
 	cmdMap = map[string]cmdFunc{
@@ -136,11 +137,9 @@ func init() {
 }
 
 func main() {
-	time.Sleep(30 * time.Second)
 	defer exit.Recover()
 	defer logutil.Flush()
 	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
-	server := fs.String("server", "", "server(s) to connect to")
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
@@ -168,7 +167,7 @@ func main() {
 	}()
 
 	// Connect to the server.
-	zconn = zk2topo.Connect(*server)
+	zconn = zk2topo.Connect(server)
 
 	// Run the command.
 	if err := cmd(ctx, subFlags, args); err != nil {
@@ -681,6 +680,9 @@ var charPermMap map[string]int32
 var permCharMap map[int32]string
 
 func init() {
+	servenv.OnParseFor("zkcmd", func(fs *pflag.FlagSet) {
+		fs.StringVar(&server, "server", server, "server(s) to connect to")
+	})
 	charPermMap = map[string]int32{
 		"r": zk.PermRead,
 		"w": zk.PermWrite,
