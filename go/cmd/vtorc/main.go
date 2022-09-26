@@ -25,6 +25,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/vtorc/logic"
+
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	vtlog "vitess.io/vitess/go/vt/log"
@@ -106,6 +108,8 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	logic.RegisterFlags(fs)
+	app.RegisterFlags(fs)
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })

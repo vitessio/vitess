@@ -125,7 +125,7 @@ func acceptSignals() {
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
 				_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
-				timeout := time.After(*shutdownWaitTime)
+				timeout := time.After(shutdownWaitTime)
 				func() {
 					for {
 						count := atomic.LoadInt32(&shardsLockCounter)

@@ -17,7 +17,6 @@
 package app
 
 import (
-	"flag"
 	"io/ioutil"
 	golog "log"
 	"net"
@@ -25,6 +24,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -44,11 +45,15 @@ import (
 
 const discoveryMetricsName = "DISCOVERY_METRICS"
 
-// TODO(sougou): see if this can be embedded.
-var webDir = flag.String("orc_web_dir", "web/vtorc", "VTOrc http file location")
+var webDir = "web/vtorc"
 
 var sslPEMPassword []byte
 var discoveryMetrics *collection.Collection
+
+// RegisterFlags registers the flags required by VTOrc
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&webDir, "orc_web_dir", webDir, "VTOrc http file location")
+}
 
 // HTTP starts serving
 func HTTP(continuousDiscovery bool) {
@@ -107,11 +112,11 @@ func standardHTTP(continuousDiscovery bool) {
 	m.Use(gzip.All())
 	// Render html templates from templates directory
 	m.Use(render.Renderer(render.Options{
-		Directory:       *webDir,
+		Directory:       webDir,
 		Layout:          "templates/layout",
 		HTMLContentType: "text/html",
 	}))
-	m.Use(martini.Static(path.Join(*webDir, "public"), martini.StaticOptions{Prefix: config.Config.URLPrefix}))
+	m.Use(martini.Static(path.Join(webDir, "public"), martini.StaticOptions{Prefix: config.Config.URLPrefix}))
 	if config.Config.UseMutualTLS {
 		m.Use(ssl.VerifyOUs(config.Config.SSLValidOUs))
 	}

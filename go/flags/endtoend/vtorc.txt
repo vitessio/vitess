@@ -38,7 +38,7 @@ Usage of vtorc:
       --purge_logs_interval duration             how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration        time to wait for a remote operation (default 30s)
       --security_policy string                   the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --shutdown_wait_time duration              maximum time to wait for vtorc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
+      --shutdown_wait_time duration              Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
   -s, --sibling string                           sibling instance, host_fqdn[:port]
       --skip-continuous-registration             Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load
       --skip-unresolve                           Do not unresolve a host name

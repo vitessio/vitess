@@ -19,16 +19,16 @@ package logic
 import (
 	"context"
 	"errors"
-	"flag"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
 
@@ -44,12 +44,18 @@ import (
 var (
 	ts                *topo.Server
 	tmc               tmclient.TabletManagerClient
-	clustersToWatch   = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	shutdownWaitTime  = flag.Duration("shutdown_wait_time", 30*time.Second, "maximum time to wait for vtorc to release all the locks that it is holding before shutting down on SIGTERM")
+	clustersToWatch   = ""
+	shutdownWaitTime  = 30 * time.Second
 	shardsLockCounter int32
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
+
+// RegisterFlags registers the flags required by VTOrc
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	fs.DurationVar(&shutdownWaitTime, "shutdown_wait_time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
+}
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
@@ -80,7 +86,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 	if !IsLeaderOrActive() {
 		return
 	}
-	if *clustersToWatch == "" { // all known clusters
+	if clustersToWatch == "" { // all known clusters
 		ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer cancel()
 		cells, err := ts.GetKnownCells(ctx)
@@ -103,7 +109,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 	} else {
 		// Parse input and build list of keyspaces / shards
 		var keyspaceShards []*topo.KeyspaceShard
-		inputs := strings.Split(*clustersToWatch, ",")
+		inputs := strings.Split(clustersToWatch, ",")
 		for _, ks := range inputs {
 			if strings.Contains(ks, "/") {
 				// This is a keyspace/shard specification
@@ -129,7 +135,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 			}
 		}
 		if len(keyspaceShards) == 0 {
-			log.Errorf("Found no keyspaceShards for input: %v", *clustersToWatch)
+			log.Errorf("Found no keyspaceShards for input: %v", clustersToWatch)
 			return
 		}
 		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
