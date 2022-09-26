@@ -10808,7 +10808,7 @@ yydefault:
 //line sql.y:2239
 		{
 			yyVAL.TableSpec = yyDollar[2].TableSpec
-			yyVAL.TableSpec.Options = yyDollar[4].str + yyDollar[5].str
+			yyVAL.TableSpec.Options = yyDollar[4].str + " " + yyDollar[5].str
 		}
 	case 392:
 		yyDollar = yyS[yypt-1 : yypt+1]

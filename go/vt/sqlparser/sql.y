@@ -539,7 +539,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <privilegeLevel> grant_privilege_level
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
-%type <bytes> any_keyword
+%type <bytes> any_identifier
 
 %start any_command
 
@@ -2238,7 +2238,7 @@ table_spec:
   '(' table_column_list ')' table_option_list partition_options
   {
     $$ = $2
-    $$.Options = $4 + $5
+    $$.Options = $4 + " " + $5
   }
 
 table_column_list:
@@ -3107,7 +3107,7 @@ index_option_list:
   }
 
 index_option:
-  USING any_keyword // TODO: should be restricted
+  USING any_identifier // TODO: should be restricted
   {
     $$ = &IndexOption{Name: string($1), Using: string($2)}
   }
@@ -3415,11 +3415,11 @@ table_option:
   {
     $$ = string($1) + " " + string($3)
   }
-| COLLATE equal_opt any_keyword
+| COLLATE equal_opt any_identifier
   {
     $$ = string($1) + " " + string($3)
   }
-| DEFAULT COLLATE equal_opt any_keyword
+| DEFAULT COLLATE equal_opt any_identifier
   {
     $$ = string($1) + " "  + string($2) + " " + string($4)
   }
@@ -3451,7 +3451,7 @@ table_option:
   {
     $$ = string($1) + " " + "'" + string($3) + "'"
   }
-| ENGINE equal_opt any_keyword
+| ENGINE equal_opt any_identifier
   {
     $$ = string($1) + " " + string($3)
   }
@@ -3527,15 +3527,15 @@ table_option:
   {
     $$ = string($1) + $2
   }
-| TABLESPACE any_keyword
+| TABLESPACE any_identifier
     {
       $$ = string($1) + " "  + string($2)
     }
-| TABLESPACE any_keyword STORAGE DISK
+| TABLESPACE any_identifier STORAGE DISK
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
-| TABLESPACE any_keyword STORAGE MEMORY
+| TABLESPACE any_identifier STORAGE MEMORY
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
@@ -3593,7 +3593,7 @@ row_fmt_opt:
     $$ = string($1)
   }
 
-any_keyword:
+any_identifier:
   ID
 | non_reserved_keyword
 | reserved_keyword
@@ -3617,7 +3617,7 @@ partition_option:
   {
     $$ = $1
   }
-| RANGE openb any_keyword closeb
+| RANGE openb any_identifier closeb
   {
     $$ = string($1) + " (" + string($3) + ")"
   }
@@ -3625,7 +3625,7 @@ partition_option:
   {
     $$ = string($1) + " " + string($2) + " (column_list)"
   }
-| LIST openb any_keyword closeb
+| LIST openb any_identifier closeb
   {
     $$ = string($1) + " (" + string($3) + ")"
   }
