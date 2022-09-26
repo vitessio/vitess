@@ -170,13 +170,6 @@ type Configuration struct {
 	RecoverPrimaryClusterFilters                []string          // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	RecoverIntermediatePrimaryClusterFilters    []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	ProcessesShellCommand                       string            // Shell that executes command scripts
-	OnFailureDetectionProcesses                 []string          // Processes to execute when detecting a failover scenario (before making a decision whether to failover or not). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {autoPrimaryRecovery}, {autoIntermediatePrimaryRecovery}
-	PreFailoverProcesses                        []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
-	PostFailoverProcesses                       []string          // Processes to execute after doing a failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
-	PostUnsuccessfulFailoverProcesses           []string          // Processes to execute after a not-completely-successful failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
-	PostPrimaryFailoverProcesses                []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
-	PostIntermediatePrimaryFailoverProcesses    []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
-	PostTakePrimaryProcesses                    []string          // Processes to execute after a successful Take-Primary event has taken place
 	CoPrimaryRecoveryMustPromoteOtherCoPrimary  bool              // When 'false', anything can get promoted (and candidates are prefered over others). When 'true', vtorc will promote the other co-primary or else fail
 	DetachLostReplicasAfterPrimaryFailover      bool              // Should replicas that are not to be lost in primary recovery (i.e. were more up-to-date than promoted replica) be forcibly detached
 	ApplyMySQLPromotionAfterPrimaryFailover     bool              // Should vtorc take upon itself to apply MySQL primary promotion: set read_only=0, detach replication, etc.
@@ -304,13 +297,6 @@ func newConfiguration() *Configuration {
 		RecoverPrimaryClusterFilters:                []string{"*"},
 		RecoverIntermediatePrimaryClusterFilters:    []string{},
 		ProcessesShellCommand:                       "bash",
-		OnFailureDetectionProcesses:                 []string{},
-		PreFailoverProcesses:                        []string{},
-		PostPrimaryFailoverProcesses:                []string{},
-		PostIntermediatePrimaryFailoverProcesses:    []string{},
-		PostFailoverProcesses:                       []string{},
-		PostUnsuccessfulFailoverProcesses:           []string{},
-		PostTakePrimaryProcesses:                    []string{},
 		CoPrimaryRecoveryMustPromoteOtherCoPrimary:  true,
 		DetachLostReplicasAfterPrimaryFailover:      true,
 		ApplyMySQLPromotionAfterPrimaryFailover:     true,

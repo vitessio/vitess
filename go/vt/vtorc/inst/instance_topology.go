@@ -18,7 +18,6 @@ package inst
 
 import (
 	"fmt"
-	goos "os"
 	"regexp"
 	"sort"
 	"strings"
@@ -29,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/external/golib/util"
-	"vitess.io/vitess/go/vt/vtorc/os"
 	math "vitess.io/vitess/go/vt/vtorc/util"
 )
 
@@ -1404,40 +1402,6 @@ func TakeSiblings(instanceKey *InstanceKey) (instance *Instance, takenSiblings i
 	return instance, len(relocatedReplicas), err
 }
 
-// Created this function to allow a hook to be called after a successful TakePrimary event
-func TakePrimaryHook(successor *Instance, demoted *Instance) {
-	if demoted == nil {
-		return
-	}
-	if successor == nil {
-		return
-	}
-	successorKey := successor.Key
-	demotedKey := demoted.Key
-	env := goos.Environ()
-
-	env = append(env, fmt.Sprintf("ORC_SUCCESSOR_HOST=%s", successorKey))
-	env = append(env, fmt.Sprintf("ORC_FAILED_HOST=%s", demotedKey))
-
-	successorStr := fmt.Sprintf("%v", successorKey)
-	demotedStr := fmt.Sprintf("%v", demotedKey)
-
-	processCount := len(config.Config.PostTakePrimaryProcesses)
-	for i, command := range config.Config.PostTakePrimaryProcesses {
-		fullDescription := fmt.Sprintf("PostTakePrimaryProcesses hook %d of %d", i+1, processCount)
-		log.Infof("Take-Primary: PostTakePrimaryProcesses: Calling %+s", fullDescription)
-		start := time.Now()
-		if err := os.CommandRun(command, env, successorStr, demotedStr); err == nil {
-			info := fmt.Sprintf("Completed %s in %v", fullDescription, time.Since(start))
-			log.Infof("Take-Primary: %s", info)
-		} else {
-			info := fmt.Sprintf("Execution of PostTakePrimaryProcesses failed in %v with error: %v", time.Since(start), err)
-			log.Errorf("Take-Primary: %s", info)
-		}
-	}
-
-}
-
 // TakePrimary will move an instance up the chain and cause its primary to become its replica.
 // It's almost a role change, just that other replicas of either 'instance' or its primary are currently unaffected
 // (they continue replicate without change)
@@ -1511,14 +1475,6 @@ Cleanup:
 		return instance, err
 	}
 	_ = AuditOperation("take-primary", instanceKey, fmt.Sprintf("took primary: %+v", primaryInstance.Key))
-
-	// Created this to enable a custom hook to be called after a TakePrimary success.
-	// This only runs if there is a hook configured in vtorc.conf.json
-	demoted := primaryInstance
-	successor := instance
-	if config.Config.PostTakePrimaryProcesses != nil {
-		TakePrimaryHook(successor, demoted)
-	}
 
 	return instance, err
 }

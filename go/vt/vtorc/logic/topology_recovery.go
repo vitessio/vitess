@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	goos "os"
 	"strings"
 	"time"
 
@@ -39,8 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/attributes"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	"vitess.io/vitess/go/vt/vtorc/os"
-	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -254,137 +251,6 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 		topologyRecovery.IsSuccessful = true
 	}
 	return writeResolveRecovery(topologyRecovery)
-}
-
-// prepareCommand replaces agreed-upon placeholders with analysis data
-func prepareCommand(command string, topologyRecovery *TopologyRecovery) (result string, async bool) {
-	analysisEntry := &topologyRecovery.AnalysisEntry
-	command = strings.TrimSpace(command)
-	if strings.HasSuffix(command, "&") {
-		command = strings.TrimRight(command, "&")
-		async = true
-	}
-	command = strings.Replace(command, "{failureType}", string(analysisEntry.Analysis), -1)
-	command = strings.Replace(command, "{instanceType}", string(analysisEntry.GetAnalysisInstanceType()), -1)
-	command = strings.Replace(command, "{isPrimary}", fmt.Sprintf("%t", analysisEntry.IsPrimary), -1)
-	command = strings.Replace(command, "{isCoPrimary}", fmt.Sprintf("%t", analysisEntry.IsCoPrimary), -1)
-	command = strings.Replace(command, "{failureDescription}", analysisEntry.Description, -1)
-	command = strings.Replace(command, "{command}", analysisEntry.CommandHint, -1)
-	command = strings.Replace(command, "{failedHost}", analysisEntry.AnalyzedInstanceKey.Hostname, -1)
-	command = strings.Replace(command, "{failedPort}", fmt.Sprintf("%d", analysisEntry.AnalyzedInstanceKey.Port), -1)
-	command = strings.Replace(command, "{failureCluster}", analysisEntry.ClusterDetails.ClusterName, -1)
-	command = strings.Replace(command, "{failureClusterDomain}", analysisEntry.ClusterDetails.ClusterDomain, -1)
-	command = strings.Replace(command, "{countReplicas}", fmt.Sprintf("%d", analysisEntry.CountReplicas), -1)
-	command = strings.Replace(command, "{isDowntimed}", fmt.Sprint(analysisEntry.IsDowntimed), -1)
-	command = strings.Replace(command, "{autoPrimaryRecovery}", fmt.Sprint(analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery), -1)
-	command = strings.Replace(command, "{autoIntermediatePrimaryRecovery}", fmt.Sprint(analysisEntry.ClusterDetails.HasAutomatedIntermediatePrimaryRecovery), -1)
-	command = strings.Replace(command, "{orchestratorHost}", process.ThisHostname, -1)
-	command = strings.Replace(command, "{vtorcHost}", process.ThisHostname, -1)
-	command = strings.Replace(command, "{recoveryUID}", topologyRecovery.UID, -1)
-
-	command = strings.Replace(command, "{isSuccessful}", fmt.Sprint(topologyRecovery.SuccessorKey != nil), -1)
-	if topologyRecovery.SuccessorKey != nil {
-		command = strings.Replace(command, "{successorHost}", topologyRecovery.SuccessorKey.Hostname, -1)
-		command = strings.Replace(command, "{successorPort}", fmt.Sprintf("%d", topologyRecovery.SuccessorKey.Port), -1)
-		// As long as SucesssorKey != nil, we replace {successorAlias}.
-		// If SucessorAlias is "", it's fine. We'll replace {successorAlias} with "".
-		command = strings.Replace(command, "{successorAlias}", topologyRecovery.SuccessorAlias, -1)
-	}
-
-	command = strings.Replace(command, "{lostReplicas}", topologyRecovery.LostReplicas.ToCommaDelimitedList(), -1)
-	command = strings.Replace(command, "{countLostReplicas}", fmt.Sprintf("%d", len(topologyRecovery.LostReplicas)), -1)
-	command = strings.Replace(command, "{replicaHosts}", analysisEntry.Replicas.ToCommaDelimitedList(), -1)
-
-	return command, async
-}
-
-// applyEnvironmentVariables sets the relevant environment variables for a recovery
-func applyEnvironmentVariables(topologyRecovery *TopologyRecovery) []string {
-	analysisEntry := &topologyRecovery.AnalysisEntry
-	env := goos.Environ()
-	env = append(env, fmt.Sprintf("ORC_FAILURE_TYPE=%s", string(analysisEntry.Analysis)))
-	env = append(env, fmt.Sprintf("ORC_INSTANCE_TYPE=%s", string(analysisEntry.GetAnalysisInstanceType())))
-	env = append(env, fmt.Sprintf("ORC_IS_PRIMARY=%t", analysisEntry.IsPrimary))
-	env = append(env, fmt.Sprintf("ORC_IS_CO_PRIMARY=%t", analysisEntry.IsCoPrimary))
-	env = append(env, fmt.Sprintf("ORC_FAILURE_DESCRIPTION=%s", analysisEntry.Description))
-	env = append(env, fmt.Sprintf("ORC_COMMAND=%s", analysisEntry.CommandHint))
-	env = append(env, fmt.Sprintf("ORC_FAILED_HOST=%s", analysisEntry.AnalyzedInstanceKey.Hostname))
-	env = append(env, fmt.Sprintf("ORC_FAILED_PORT=%d", analysisEntry.AnalyzedInstanceKey.Port))
-	env = append(env, fmt.Sprintf("ORC_FAILURE_CLUSTER=%s", analysisEntry.ClusterDetails.ClusterName))
-	env = append(env, fmt.Sprintf("ORC_FAILURE_CLUSTER_DOMAIN=%s", analysisEntry.ClusterDetails.ClusterDomain))
-	env = append(env, fmt.Sprintf("ORC_COUNT_REPLICAS=%d", analysisEntry.CountReplicas))
-	env = append(env, fmt.Sprintf("ORC_IS_DOWNTIMED=%v", analysisEntry.IsDowntimed))
-	env = append(env, fmt.Sprintf("ORC_AUTO_PRIMARY_RECOVERY=%v", analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery))
-	env = append(env, fmt.Sprintf("ORC_AUTO_INTERMEDIATE_PRIMARY_RECOVERY=%v", analysisEntry.ClusterDetails.HasAutomatedIntermediatePrimaryRecovery))
-	env = append(env, fmt.Sprintf("ORC_ORCHESTRATOR_HOST=%s", process.ThisHostname))
-	env = append(env, fmt.Sprintf("ORC_VTORC_HOST=%s", process.ThisHostname))
-	env = append(env, fmt.Sprintf("ORC_IS_SUCCESSFUL=%v", (topologyRecovery.SuccessorKey != nil)))
-	env = append(env, fmt.Sprintf("ORC_LOST_REPLICAS=%s", topologyRecovery.LostReplicas.ToCommaDelimitedList()))
-	env = append(env, fmt.Sprintf("ORC_REPLICA_HOSTS=%s", analysisEntry.Replicas.ToCommaDelimitedList()))
-	env = append(env, fmt.Sprintf("ORC_RECOVERY_UID=%s", topologyRecovery.UID))
-
-	if topologyRecovery.SuccessorKey != nil {
-		env = append(env, fmt.Sprintf("ORC_SUCCESSOR_HOST=%s", topologyRecovery.SuccessorKey.Hostname))
-		env = append(env, fmt.Sprintf("ORC_SUCCESSOR_PORT=%d", topologyRecovery.SuccessorKey.Port))
-		// As long as SucesssorKey != nil, we replace {successorAlias}.
-		// If SucessorAlias is "", it's fine. We'll replace {successorAlias} with "".
-		env = append(env, fmt.Sprintf("ORC_SUCCESSOR_ALIAS=%s", topologyRecovery.SuccessorAlias))
-	}
-
-	return env
-}
-
-func executeProcess(command string, env []string, topologyRecovery *TopologyRecovery, fullDescription string) (err error) {
-	// Log the command to be run and record how long it takes as this may be useful
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Running %s: %s", fullDescription, command))
-	start := time.Now()
-	var info string
-	if err = os.CommandRun(command, env); err == nil {
-		info = fmt.Sprintf("Completed %s in %v", fullDescription, time.Since(start))
-	} else {
-		info = fmt.Sprintf("Execution of %s failed in %v with error: %v", fullDescription, time.Since(start), err)
-		log.Errorf(info)
-	}
-	_ = AuditTopologyRecovery(topologyRecovery, info)
-	return err
-}
-
-// executeProcesses executes a list of processes
-func executeProcesses(processes []string, description string, topologyRecovery *TopologyRecovery, failOnError bool) (err error) {
-	if len(processes) == 0 {
-		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("No %s hooks to run", description))
-		return nil
-	}
-
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Running %d %s hooks", len(processes), description))
-	for i, command := range processes {
-		command, async := prepareCommand(command, topologyRecovery)
-		env := applyEnvironmentVariables(topologyRecovery)
-
-		fullDescription := fmt.Sprintf("%s hook %d of %d", description, i+1, len(processes))
-		if async {
-			fullDescription = fmt.Sprintf("%s (async)", fullDescription)
-		}
-		if async {
-			// Ignore errors
-			go func() {
-				_ = executeProcess(command, env, topologyRecovery, fullDescription)
-			}()
-		} else {
-			if cmdErr := executeProcess(command, env, topologyRecovery, fullDescription); cmdErr != nil {
-				if failOnError {
-					_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Not running further %s hooks", description))
-					return cmdErr
-				}
-				if err == nil {
-					// Keep first error encountered
-					err = cmdErr
-				}
-			}
-		}
-	}
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("done running %s hooks", description))
-	return err
 }
 
 func PrimaryFailoverGeographicConstraintSatisfied(analysisEntry *inst.ReplicationAnalysis, suggestedInstance *inst.Instance) (satisfied bool, dissatisfiedReason string) {
@@ -667,11 +533,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 		}
 
 		_ = attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
-
-		if !skipProcesses {
-			// Execute post primary-failover processes
-			_ = executeProcesses(config.Config.PostPrimaryFailoverProcesses, "PostPrimaryFailoverProcesses", topologyRecovery, false)
-		}
 	}
 }
 
@@ -804,12 +665,7 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnal
 		return false, false, nil
 	}
 	log.Infof("topology_recovery: detected %+v failure on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
-	// Execute on-detection processes
-	if skipProcesses {
-		return true, false, nil
-	}
-	err = executeProcesses(config.Config.OnFailureDetectionProcesses, "OnFailureDetectionProcesses", NewTopologyRecovery(analysisEntry), true)
-	return true, true, err
+	return true, false, nil
 }
 
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
@@ -1119,16 +975,6 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery
 		// that we just completed because we would be using stale data.
 		DiscoverInstance(analysisEntry.AnalyzedInstanceKey, true)
-	}
-	if !skipProcesses {
-		if topologyRecovery.SuccessorKey == nil {
-			// Execute general unsuccessful post failover processes
-			_ = executeProcesses(config.Config.PostUnsuccessfulFailoverProcesses, "PostUnsuccessfulFailoverProcesses", topologyRecovery, false)
-		} else {
-			// Execute general post failover processes
-			_, _ = inst.EndDowntime(topologyRecovery.SuccessorKey)
-			_ = executeProcesses(config.Config.PostFailoverProcesses, "PostFailoverProcesses", topologyRecovery, false)
-		}
 	}
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Waiting for %d postponed functions", topologyRecovery.PostponedFunctionsContainer.Len()))
 	topologyRecovery.Wait()
