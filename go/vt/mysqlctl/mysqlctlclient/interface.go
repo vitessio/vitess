@@ -19,15 +19,13 @@ limitations under the License.
 package mysqlctlclient
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var protocol = "grpc"

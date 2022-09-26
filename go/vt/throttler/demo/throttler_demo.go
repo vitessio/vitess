@@ -68,12 +68,14 @@ var (
 	replicaDegrationDuration = 10 * time.Second
 )
 
-func registerDemoFlags() {
-	pflag.Int64Var(&rate, "rate", rate, "maximum rate of the throttled demo server at the start")
-	pflag.DurationVar(&duration, "duration", duration, "total duration the demo runs")
-	pflag.DurationVar(&lagUpdateInterval, "lag_update_interval", lagUpdateInterval, "interval at which the current replication lag will be broadcast to the throttler")
-	pflag.DurationVar(&replicaDegrationInterval, "replica_degration_interval", replicaDegrationInterval, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for -reparent_duration and the replication lag might go up)")
-	pflag.DurationVar(&replicaDegrationDuration, "replica_degration_duration", replicaDegrationDuration, "duration a simulated degration should take")
+const flagSetName = "throttler_demo"
+
+func registerDemoFlags(fs *pflag.FlagSet) {
+	fs.Int64Var(&rate, "rate", rate, "maximum rate of the throttled demo server at the start")
+	fs.DurationVar(&duration, "duration", duration, "total duration the demo runs")
+	fs.DurationVar(&lagUpdateInterval, "lag_update_interval", lagUpdateInterval, "interval at which the current replication lag will be broadcast to the throttler")
+	fs.DurationVar(&replicaDegrationInterval, "replica_degration_interval", replicaDegrationInterval, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for -reparent_duration and the replication lag might go up)")
+	fs.DurationVar(&replicaDegrationDuration, "replica_degration_duration", replicaDegrationDuration, "duration a simulated degration should take")
 }
 
 // primary simulates an *unthrottled* MySQL primary which replicates every
@@ -297,7 +299,7 @@ func (c *client) StatsUpdate(ts *discovery.TabletHealth) {
 }
 
 func main() {
-	servenv.ParseFlags("throttler_demo")
+	servenv.ParseFlags(flagSetName)
 
 	go servenv.RunDefault()
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -321,5 +323,5 @@ func init() {
 	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
-	registerDemoFlags()
+	servenv.OnParseFor(flagSetName, registerDemoFlags)
 }
