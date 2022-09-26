@@ -217,18 +217,15 @@ func TestBackupTransformImpl(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
-	log.Errorf("Inserting data...")
 	// insert data in primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 
-	log.Errorf("Verifying backup...")
 	// validate backup_list, expecting 1 backup available
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[0]
 
-	log.Errorf("Validating manifest...")
 	// validate that MANIFEST has TransformHook
 	// every file should start with 'header'
 	validateManifestFile(t, backupLocation)
@@ -370,13 +367,13 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 
 // verifyInitialReplication generates a record on the primary and verifies that the record
 // exists on all tablets in the shard. We also check the PRIMARY as with lossless semi-sync
-// it's possible that a GTID is applied on a replica but not the source.
+// it's possible that a GTID is applied on a replica but not (yet) on the source:
+//   http://my-replication-life.blogspot.com/2013/09/loss-less-semi-synchronous-replication.html
 func verifyInitialReplication(t *testing.T) {
 	// confirm that semi-sync is enabled for the replica tablets
 	healthyReplicaCount := 0
 	for _, tablet := range testTablets {
 		if tablet.Type == "replica" {
-			t.Logf("verifying replica semi-sync status on %s tablet...", tablet.Alias)
 			verifySemiSyncStatus(t, tablet, "ON")
 			healthyReplicaCount++
 		}
@@ -389,12 +386,10 @@ func verifyInitialReplication(t *testing.T) {
 
 	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
-	t.Logf("Inserting test record on primary tablet...")
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	require.Nil(t, err)
 
 	for _, tablet := range testTablets {
-		t.Logf("Verifying that test record exists on the %s tablet's mysqld...", tablet.Alias)
 		cluster.VerifyRowsInTablet(t, tablet, keyspaceName, 1)
 	}
 }
