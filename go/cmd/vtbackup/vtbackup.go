@@ -140,7 +140,7 @@ func registerVtbackupFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	servenv.OnParseFor("vtbackup", registerVtbackupFlags)
+	servenv.OnParse(registerVtbackupFlags)
 }
 
 func main() {
@@ -205,7 +205,6 @@ func main() {
 }
 
 func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
-	time.Sleep(10 * time.Second)
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
