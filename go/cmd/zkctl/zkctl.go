@@ -46,9 +46,19 @@ Commands:
 var (
 	// Reason for nolint : Used in line 54 (stdin = bufio.NewReader(os.Stdin)) in the init function
 	stdin *bufio.Reader //nolint
+	zkCfg = "6@<hostname>:3801:3802:3803"
+	myID  uint
 )
 
+func registerZkctlFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&zkCfg, "zk.cfg", zkCfg,
+		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
+	fs.UintVar(&myID, "zk.myid", myID,
+		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
+
+}
 func init() {
+	servenv.OnParse(registerZkctlFlags)
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
 		Epilogue: func(w io.Writer) { fmt.Fprint(w, usage) },
 	})
@@ -60,24 +70,11 @@ func main() {
 	defer logutil.Flush()
 
 	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
-	servenv.ParseFlags("zkctl")
-
-	zkCfg := fs.String("zk.cfg", "6@<hostname>:3801:3802:3803",
-		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
-	myID := flag.Uint("zk.myid", 0,
-		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
-
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
-	_flag.Parse(fs)
-	args := _flag.Args()
+	servenv.ParseFlags("zkctl")
 
-	if len(args) == 0 {
-		flag.Usage()
-		exit.Return(1)
-	}
-
-	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
+	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
 	action := _flag.Arg(0)
