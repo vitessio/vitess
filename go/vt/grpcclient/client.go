@@ -51,6 +51,7 @@ var (
 		"vtbench",
 		"vtclient",
 		"vtctl",
+		"vtctlclient",
 		"vtctld",
 		"vtgate",
 		"vtgateclienttest",
