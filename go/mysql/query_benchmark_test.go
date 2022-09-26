@@ -29,18 +29,31 @@ var testReadConnBufferSize = connBufferSize
 
 const benchmarkQueryPrefix = "benchmark "
 
-func benchmarkQuery(b *testing.B, threads int, query string) {
+type mkListenerCfg func(AuthServer, Handler) ListenerConfig
+
+func mkDefaultListenerCfg(authServer AuthServer, handler Handler) ListenerConfig {
+	return ListenerConfig{
+		Protocol:           "tcp",
+		Address:            "127.0.0.1:",
+		AuthServer:         authServer,
+		Handler:            handler,
+		ConnReadBufferSize: testReadConnBufferSize,
+	}
+}
+
+func mkReadBufferPoolingCfg(authServer AuthServer, handler Handler) ListenerConfig {
+	cfg := mkDefaultListenerCfg(authServer, handler)
+	cfg.ConnBufferPooling = true
+	return cfg
+}
+
+func benchmarkQuery(b *testing.B, threads int, query string, mkCfg mkListenerCfg) {
 	th := &testHandler{}
 
 	authServer := NewAuthServerNone()
 
-	lCfg := ListenerConfig{
-		Protocol:           "tcp",
-		Address:            "127.0.0.1:",
-		AuthServer:         authServer,
-		Handler:            th,
-		ConnReadBufferSize: testReadConnBufferSize,
-	}
+	lCfg := mkCfg(authServer, th)
+
 	l, err := NewListenerWithConfig(lCfg)
 	if err != nil {
 		b.Fatalf("NewListener failed: %v", err)
@@ -102,13 +115,35 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 // executes M queries on them, then closes them.
 // It is meant as a somewhat real load test.
 func BenchmarkParallelShortQueries(b *testing.B) {
-	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select rows")
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select rows", mkDefaultListenerCfg)
 }
 
 func BenchmarkParallelMediumQueries(b *testing.B) {
-	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize))
+	benchmarkQuery(
+		b,
+		10,
+		benchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize),
+		mkDefaultListenerCfg,
+	)
 }
 
 func BenchmarkParallelRandomQueries(b *testing.B) {
-	benchmarkQuery(b, 10, "")
+	benchmarkQuery(b, 10, "", mkDefaultListenerCfg)
+}
+
+func BenchmarkParallelShortQueriesWithReadBufferPooling(b *testing.B) {
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select rows", mkReadBufferPoolingCfg)
+}
+
+func BenchmarkParallelMediumQueriesWithReadBufferPooling(b *testing.B) {
+	benchmarkQuery(
+		b,
+		10,
+		benchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize),
+		mkReadBufferPoolingCfg,
+	)
+}
+
+func BenchmarkParallelRandomQueriesWithReadBufferPooling(b *testing.B) {
+	benchmarkQuery(b, 10, "", mkReadBufferPoolingCfg)
 }
