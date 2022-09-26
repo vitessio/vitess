@@ -24,17 +24,15 @@ import (
 	"os/exec"
 	"sync"
 
-	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/servenv"
-
 	"github.com/google/shlex"
 	"github.com/klauspost/compress/zstd"
 	"github.com/klauspost/pgzip"
 	"github.com/pierrec/lz4"
 	"github.com/planetscale/pargzip"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -48,9 +46,9 @@ const (
 
 var (
 	compressionLevel = 1
-	// switch which compressor/decompressor to use
+	// CompressionEngineName specifies which compressor/decompressor to use
 	CompressionEngineName = "pargzip"
-	// use and external command to decompress the backups
+	// ExternalCompressorCmd / ExternalDecompressorCmd specify the external commands compress/decompress the backups
 	ExternalCompressorCmd   string
 	ExternalCompressorExt   string
 	ExternalDecompressorCmd string
