@@ -64,9 +64,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	config.RuntimeCLIFlags.Statement = &emptyVal
 	config.RuntimeCLIFlags.GrabElection = &falseVal
 	config.RuntimeCLIFlags.SkipContinuousRegistration = &falseVal
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = &falseVal
-	config.RuntimeCLIFlags.IgnoreRaftSetup = &falseVal
-	config.RuntimeCLIFlags.Tag = &emptyVal
 	config.MarkConfigurationLoaded()
 
 	go func() {

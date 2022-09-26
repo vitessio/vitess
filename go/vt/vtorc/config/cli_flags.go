@@ -28,8 +28,6 @@ type CLIFlags struct {
 	PromotionRule              *string
 	ConfiguredVersion          string
 	SkipContinuousRegistration *bool
-	EnableDatabaseUpdate       *bool
-	IgnoreRaftSetup            *bool
 	Tag                        *string
 }
 
