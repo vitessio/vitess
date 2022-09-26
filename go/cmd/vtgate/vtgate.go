@@ -27,6 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -34,10 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -56,7 +54,6 @@ func init() {
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
-	servenv.OnParseFor("vtgate", vschemaacl.RegisterSchemaACLFlags)
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag

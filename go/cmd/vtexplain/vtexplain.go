@@ -21,15 +21,13 @@ import (
 	"fmt"
 	"os"
 
-	"vitess.io/vitess/go/vt/env"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtexplain"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
@@ -89,7 +87,6 @@ func init() {
 			return false
 		},
 	})
-	servenv.OnParseFor("vtexplain", vschemaacl.RegisterSchemaACLFlags)
 }
 
 // getFileParam returns a string containing either flag is not "",

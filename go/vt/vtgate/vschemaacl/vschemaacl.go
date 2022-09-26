@@ -21,6 +21,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -42,6 +44,13 @@ var (
 // command-line arguments.
 func RegisterSchemaACLFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&AuthorizedDDLUsers, "vschema_ddl_authorized_users", AuthorizedDDLUsers, "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+}
+
+func init() {
+	// register flag
+	for _, cmd := range []string{"vtexplain", "vtcombo", "vtgate", "vtgateclienttest"} {
+		servenv.OnParseFor(cmd, RegisterSchemaACLFlags)
+	}
 }
 
 // Init parses the users option and sets allowAll / acl accordingly
