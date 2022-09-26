@@ -156,13 +156,6 @@ type Configuration struct {
 	SSLValidOUs                                 []string          // Valid organizational units when using mutual TLS
 	StatusEndpoint                              string            // Override the status endpoint.  Defaults to '/api/status'
 	StatusOUVerify                              bool              // If true, try to verify OUs when Mutual TLS is on.  Defaults to false
-	AgentPollMinutes                            uint              // Minutes between agent polling
-	UnseenAgentForgetHours                      uint              // Number of hours after which an unseen agent is forgotten
-	StaleSeedFailMinutes                        uint              // Number of minutes after which a stale (no progress) seed is considered failed.
-	SeedAcceptableBytesDiff                     int64             // Difference in bytes between seed source & target data size that is still considered as successful copy
-	SeedWaitSecondsBeforeSend                   int64             // Number of seconds for waiting before start send data command on agent
-	BinlogEventsChunkSize                       int               // Chunk size (X) for SHOW BINLOG|RELAYLOG EVENTS LIMIT ?,X statements. Smaller means less locking and mroe work to be done
-	ReduceReplicationAnalysisCount              bool              // When true, replication analysis will only report instances where possibility of handled problems is possible in the first place (e.g. will not report most leaf nodes, that are mostly uninteresting). When false, provides an entry for every known instance
 	FailureDetectionPeriodBlockMinutes          int               // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 	RecoveryPeriodBlockMinutes                  int               // (supported for backwards compatibility but please use newer `RecoveryPeriodBlockSeconds` instead) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
 	RecoveryPeriodBlockSeconds                  int               // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
@@ -282,13 +275,6 @@ func newConfiguration() *Configuration {
 		SSLPrivateKeyFile:                           "",
 		SSLCertFile:                                 "",
 		SSLCAFile:                                   "",
-		AgentPollMinutes:                            60,
-		UnseenAgentForgetHours:                      6,
-		StaleSeedFailMinutes:                        60,
-		SeedAcceptableBytesDiff:                     8192,
-		SeedWaitSecondsBeforeSend:                   2,
-		BinlogEventsChunkSize:                       10000,
-		ReduceReplicationAnalysisCount:              true,
 		FailureDetectionPeriodBlockMinutes:          60,
 		RecoveryPeriodBlockMinutes:                  60,
 		RecoveryPeriodBlockSeconds:                  3600,
