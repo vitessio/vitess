@@ -641,7 +641,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	if cluster.HasPartialKeyspaces {
-		cluster.VtGateExtraArgs = append(cluster.VtGateExtraArgs, "--enable_partial_keyspace_migration")
+		cluster.VtGateExtraArgs = append(cluster.VtGateExtraArgs, "--enable-partial-keyspace-migration")
 	}
 	vtgateInstance := *cluster.NewVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
