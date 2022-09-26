@@ -169,7 +169,6 @@ type Configuration struct {
 	RecoveryIgnoreHostnameFilters               []string          // Recovery analysis will completely ignore hosts matching given patterns
 	RecoverPrimaryClusterFilters                []string          // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	RecoverIntermediatePrimaryClusterFilters    []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
-	ProcessesShellCommand                       string            // Shell that executes command scripts
 	CoPrimaryRecoveryMustPromoteOtherCoPrimary  bool              // When 'false', anything can get promoted (and candidates are prefered over others). When 'true', vtorc will promote the other co-primary or else fail
 	DetachLostReplicasAfterPrimaryFailover      bool              // Should replicas that are not to be lost in primary recovery (i.e. were more up-to-date than promoted replica) be forcibly detached
 	ApplyMySQLPromotionAfterPrimaryFailover     bool              // Should vtorc take upon itself to apply MySQL primary promotion: set read_only=0, detach replication, etc.
@@ -296,7 +295,6 @@ func newConfiguration() *Configuration {
 		RecoveryIgnoreHostnameFilters:               []string{},
 		RecoverPrimaryClusterFilters:                []string{"*"},
 		RecoverIntermediatePrimaryClusterFilters:    []string{},
-		ProcessesShellCommand:                       "bash",
 		CoPrimaryRecoveryMustPromoteOtherCoPrimary:  true,
 		DetachLostReplicasAfterPrimaryFailover:      true,
 		ApplyMySQLPromotionAfterPrimaryFailover:     true,
