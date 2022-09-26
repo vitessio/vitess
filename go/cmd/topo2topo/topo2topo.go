@@ -18,11 +18,8 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
-
-	"vitess.io/vitess/go/vt/servenv"
 
 	"github.com/spf13/pflag"
 
@@ -30,11 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/helpers"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 func main() {
@@ -42,11 +37,10 @@ func main() {
 	defer logutil.Flush()
 
 	fs := pflag.NewFlagSet("topo2topo", pflag.ExitOnError)
-	servenv.ParseFlags("topo2topo")
 	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
-	fromImplementation := fs.String("from_implementation", "", "topology implementation to copy data from")
+	fromImplementation := fs.String("from_implementation", "abc", "topology implementation to copy data from")
 	fromServerAddress := fs.String("from_server", "", "topology server address to copy data from")
 	fromRoot := fs.String("from_root", "", "topology server root to copy data from")
 	toImplementation := fs.String("to_implementation", "", "topology implementation to copy data to")
@@ -58,13 +52,7 @@ func main() {
 	doShardReplications := fs.Bool("do-shard-replications", false, "copies the shard replication information")
 	doTablets := fs.Bool("do-tablets", false, "copies the tablet information")
 	doRoutingRules := fs.Bool("do-routing-rules", false, "copies the routing rules")
-
-	_flag.Parse(fs)
-	args := _flag.Args()
-	if len(args) != 0 {
-		flag.Usage()
-		log.Exitf("topo2topo doesn't take any parameter.")
-	}
+	servenv.ParseFlags("topo2topo")
 
 	fromTS, err := topo.OpenServer(*fromImplementation, *fromServerAddress, *fromRoot)
 	if err != nil {
