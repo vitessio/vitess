@@ -184,7 +184,6 @@ Usage of vtctld:
       --vtgate_grpc_crl string                                           the server crl to use to validate server certificates when connecting
       --vtgate_grpc_key string                                           the key to use to connect
       --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
-      --vtgate_protocol string                                           how to talk to vtgate (default "grpc")
       --web_dir string                                                   NOT USED, here for backward compatibility
       --web_dir2 string                                                  NOT USED, here for backward compatibility
       --workflow_manager_disable strings                                 comma separated list of workflow types to disable
