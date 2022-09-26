@@ -324,9 +324,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	disabledRedoLog := false
 	if mysqld.CanDisableRedoLog() {
 		if err := mysqld.DisableRedoLog(ctx); err != nil {
-			return fmt.Errorf("error disabling redo logging: %v", err)
+			log.Warningf("error disabling redo logging: %v", err)
+		} else {
+			disabledRedoLog = true
 		}
-		disabledRedoLog = true
 	}
 
 	// We have restored a backup. Now start replication.

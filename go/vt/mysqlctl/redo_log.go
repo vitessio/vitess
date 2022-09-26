@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 func (mysqld *Mysqld) CanDisableRedoLog() bool {
@@ -46,12 +47,13 @@ func (mysqld *Mysqld) IsRedoLogEnabled(ctx context.Context) (bool, error) {
 		// that mysqld is using non-InnoDB engine.
 		return false, fmt.Errorf("mysqld >= 8.0.21 required to inspect redo_log status")
 	}
-	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW GLOBAL STATUS LIKE 'Innodb_redo_log_enabled'")
+	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'")
 	if err != nil {
 		return false, err
 	}
 	if len(qr.Rows) != 1 {
-		return false, errors.New("no Innodb_redo_log_enabled variable in mysql")
+		return false, errors.New("no innodb_redo_log_enabled status value found")
 	}
-	return qr.Rows[0][1].ToString() == "ON", nil
+	value := strings.ToLower(qr.Rows[0][0].ToString())
+	return (value == "on" || value == "1"), nil
 }
