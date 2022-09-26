@@ -243,7 +243,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD MODIFY CHANGE
 %token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <bytes> FIRST AFTER
+%token <bytes> FIRST AFTER LAST
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
@@ -311,6 +311,12 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // Table functions
 %token <bytes> JSON_TABLE PATH
+
+// Table options
+%token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
+%token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
+%token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
+%token <bytes> COMPACT LIST HASH PARTITIONS SUBPARTITION SUBPARTITIONS
 
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
@@ -486,7 +492,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list json_table_column_list
-%type <str> table_option_list table_option table_opt_value
+%type <str> table_option_list table_option table_opt_value row_fmt_opt
+%type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
@@ -532,6 +539,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <privilegeLevel> grant_privilege_level
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
+%type <bytes> any_identifier
 
 %start any_command
 
@@ -2227,10 +2235,10 @@ create_table_prefix:
   }
 
 table_spec:
-  '(' table_column_list ')' table_option_list
+  '(' table_column_list ')' table_option_list partition_options
   {
     $$ = $2
-    $$.Options = $4
+    $$.Options = $4 + $5
   }
 
 table_column_list:
@@ -3099,7 +3107,7 @@ index_option_list:
   }
 
 index_option:
-  USING ID
+  USING any_identifier // TODO: should be restricted
   {
     $$ = &IndexOption{Name: string($1), Using: string($2)}
   }
@@ -3365,37 +3373,179 @@ table_option_list:
   {
     $$ = ""
   }
-| table_option
+| table_option_list table_option
   {
-    $$ = " " + string($1)
+    $$ = $1 + " " + string($2)
   }
 | table_option_list ',' table_option
   {
     $$ = string($1) + ", " + string($3)
   }
 
-// rather than explicitly parsing the various keywords for table options,
-// just accept any number of keywords, IDs, strings, numbers, and '='
 table_option:
-  table_opt_value
+  AUTOEXTEND_SIZE equal_opt table_opt_value
   {
-    $$ = $1
+    $$ = string($1) + " " + $3
   }
-| table_option table_opt_value
+| AUTO_INCREMENT equal_opt table_opt_value
   {
-    $$ = $1 + " " + $2
+    $$ = string($1) + " " + $3
   }
-| table_option '=' table_opt_value
+| AVG_ROW_LENGTH equal_opt table_opt_value
   {
-    $$ = $1 + "=" + $3
+    $$ = string($1) + " " + $3
+  }
+| CHARSET equal_opt charset
+  {
+    $$ = string($1) + " " + string($3) + " "
+  }
+| DEFAULT CHARSET equal_opt charset
+  {
+    $$ = string($1) + " " + string($2) + " " + $3
+  }
+| CHARACTER SET equal_opt charset
+  {
+    $$ = string($1) + " " + string($2) + " " + $4
+  }
+| DEFAULT CHARACTER SET equal_opt charset
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
+  }
+| CHECKSUM equal_opt INTEGRAL
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| COLLATE equal_opt any_identifier
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| DEFAULT COLLATE equal_opt any_identifier
+  {
+    $$ = string($1) + " "  + string($2) + " " + string($4)
+  }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| COMPRESSION equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| CONNECTION equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| DATA DIRECTORY equal_opt STRING
+  {
+    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+  }
+| INDEX DIRECTORY equal_opt STRING
+  {
+    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+  }
+| DELAY_KEY_WRITE equal_opt INTEGRAL
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| ENCRYPTION equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| ENGINE equal_opt any_identifier
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| INSERT_METHOD equal_opt NO
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| INSERT_METHOD equal_opt FIRST
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| INSERT_METHOD equal_opt LAST
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| KEY_BLOCK_SIZE equal_opt table_opt_value
+  {
+    $$ = string($1) + " " + $3
+  }
+| MAX_ROWS equal_opt table_opt_value
+  {
+    $$ = string($1) + " " + $3
+  }
+| MIN_ROWS equal_opt table_opt_value
+  {
+    $$ = string($1) + " " + $3
+  }
+| PACK_KEYS equal_opt INTEGRAL
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| PASSWORD equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| ROW_FORMAT equal_opt row_fmt_opt
+  {
+    $$ = string($1) + " " + $3
+  }
+| START TRANSACTION
+  {
+    $$ = string($1) + " "  + string($2)
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
+  }
+| STATS_AUTO_RECALC equal_opt DEFAULT
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_AUTO_RECALC equal_opt INTEGRAL
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_PERSISTENT equal_opt DEFAULT
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_PERSISTENT equal_opt INTEGRAL
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| STATS_SAMPLE_PAGES equal_opt table_opt_value
+  {
+    $$ = string($1) + " " + $3
+  }
+| TABLESPACE table_opt_value
+  {
+    $$ = string($1) + $2
+  }
+| TABLESPACE any_identifier
+    {
+      $$ = string($1) + " "  + string($2)
+    }
+| TABLESPACE any_identifier STORAGE DISK
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+  }
+| TABLESPACE any_identifier STORAGE MEMORY
+  {
+    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+  }
+| UNION equal_opt table_opt_value
+  {
+    $$ = string($1) + " " + $3
   }
 
 table_opt_value:
-  reserved_sql_id
-  {
-    $$ = $1.String()
-  }
-| STRING
+  STRING
   {
     $$ = "'" + string($1) + "'"
   }
@@ -3417,6 +3567,126 @@ table_opt_value:
     $$ = string($1)
   }
 
+row_fmt_opt:
+  DEFAULT
+  {
+    $$ = string($1)
+  }
+| DYNAMIC
+  {
+    $$ = string($1)
+  }
+| FIXED
+  {
+    $$ = string($1)
+  }
+| COMPRESSED
+  {
+    $$ = string($1)
+  }
+| REDUNDANT
+  {
+    $$ = string($1)
+  }
+| COMPACT
+  {
+    $$ = string($1)
+  }
+
+any_identifier:
+  ID
+| non_reserved_keyword
+| reserved_keyword
+
+// TODO: partition options for table creation will parse, but do nothing for now
+partition_options:
+  {
+    $$ = ""
+  }
+| PARTITION BY partition_option partition_num_opt subpartition_opt
+  {
+    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5
+  }
+| PARTITION BY partition_option partition_num_opt subpartition_opt openb partition_definitions closeb
+  {
+    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5 + "(partition_definitions)"
+  }
+
+partition_option:
+  linear_partition_opt
+  {
+    $$ = $1
+  }
+| RANGE openb any_identifier closeb
+  {
+    $$ = string($1) + " (" + string($3) + ")"
+  }
+| RANGE COLUMNS openb column_list closeb
+  {
+    $$ = string($1) + " " + string($2) + " (column_list)"
+  }
+| LIST openb any_identifier closeb
+  {
+    $$ = string($1) + " (" + string($3) + ")"
+  }
+| LIST COLUMNS openb column_list closeb
+ {
+   $$ = string($1) + " " + string($2) + " (column_list)"
+ }
+
+linear_partition_opt:
+  linear_opt HASH openb value closeb
+  {
+    $$ = $1 + string($2) + " (value)"
+  }
+| linear_opt HASH openb ID closeb
+  {
+    $$ = $1 + string($2) + " (" + string($4) + ")"
+  }
+| linear_opt KEY openb column_list closeb
+  {
+    $$ = $1 + string($2) + " (column_list)"
+  }
+| linear_opt KEY ALGORITHM '=' INTEGRAL openb column_list closeb
+  {
+    $$ = $1 + string($2) + " " + string($3) + " " + string($5) + " (column_list)"
+  }
+
+linear_opt:
+  {
+    $$ = ""
+  }
+| LINEAR
+  {
+    $$ = string($1) + " "
+  }
+
+partition_num_opt:
+  {
+    $$ = ""
+  }
+| PARTITIONS INTEGRAL
+  {
+    $$ = string($1) + " " + string($2) + " "
+  }
+
+subpartition_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITION BY linear_partition_opt subpartition_num_opt
+  {
+    $$ = string($1) + " " + string($2) + " " + $3 + " " + $4
+  }
+
+subpartition_num_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITIONS INTEGRAL
+  {
+    $$ = string($1) + " " + string($2) + " "
+  }
 
 constraint_symbol_opt:
   {
@@ -7272,6 +7542,7 @@ non_reserved_keyword:
 | ARRAY
 | AUTHENTICATION
 | AUTO_INCREMENT
+| AVG_ROW_LENGTH
 | BEGIN
 | SERIAL
 | BIT
@@ -7281,6 +7552,7 @@ non_reserved_keyword:
 | CATALOG_NAME
 | CHANNEL
 | CHARSET
+| CHECKSUM
 | CIPHER
 | CLASS_ORIGIN
 | CLIENT
@@ -7289,6 +7561,7 @@ non_reserved_keyword:
 | COLUMNS
 | COLUMN_NAME
 | COMMIT
+| COMPRESSION
 | COMMITTED
 | CONNECTION
 | COMPONENT
@@ -7304,8 +7577,11 @@ non_reserved_keyword:
 | DAY
 | DEFINER
 | DEFINITION
+| DELAY_KEY_WRITE
 | DESCRIPTION
+| DIRECTORY
 | DISABLE
+| DISK
 | DUMPFILE
 | DUPLICATE
 | ENABLE
@@ -7314,6 +7590,7 @@ non_reserved_keyword:
 | ENFORCED
 | ENGINE
 | ENGINES
+| ENGINE_ATTRIBUTE
 | ENUM
 | ERROR
 | ERRORS
@@ -7334,12 +7611,14 @@ non_reserved_keyword:
 | GLOBAL
 | GRANTS
 | HANDLER
+| HASH
 | HISTOGRAM
 | HISTORY
 | HOSTS
 | INACTIVE
 | INDEXES
 | INITIAL
+| INSERT_METHOD
 | INVISIBLE
 | INVOKER
 | ISOLATION
@@ -7347,10 +7626,12 @@ non_reserved_keyword:
 | JSON
 | KEY_BLOCK_SIZE
 | LANGUAGE
+| LAST
 | LAST_INSERT_ID
 | LESS
 | LEVEL
 | LINESTRING
+| LIST
 | LOCAL
 | LOCKED
 | LOGS
@@ -7360,10 +7641,12 @@ non_reserved_keyword:
 | MASTER_ZSTD_COMPRESSION_LEVEL
 | MAX_CONNECTIONS_PER_HOUR
 | MAX_QUERIES_PER_HOUR
+| MAX_ROWS
 | MAX_UPDATES_PER_HOUR
 | MAX_USER_CONNECTIONS
 | MERGE
 | MESSAGE_TEXT
+| MIN_ROWS
 | MODE
 | MODIFY
 | MULTILINESTRING
@@ -7388,6 +7671,8 @@ non_reserved_keyword:
 | ORDINALITY
 | ORGANIZATION
 | OTHERS
+| PACK_KEYS
+| PARTITIONS
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -7417,10 +7702,12 @@ non_reserved_keyword:
 | ROLE
 | ROLLBACK
 | ROUTINE
+| ROW_FORMAT
 | SAVEPOINT
 | SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
+| SECONDARY_ENGINE_ATTRIBUTE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
 | SECURITY
@@ -7435,9 +7722,15 @@ non_reserved_keyword:
 | SRID
 | START
 | STATUS
+| STATS_AUTO_RECALC
+| STATS_PERSISTENT
+| STATS_SAMPLE_PAGES
+| STORAGE
 | STREAM
 | SUBCLASS_ORIGIN
 | SUBJECT
+| SUBPARTITION
+| SUBPARTITIONS
 | TABLES
 | TABLESPACE
 | TABLE_NAME
