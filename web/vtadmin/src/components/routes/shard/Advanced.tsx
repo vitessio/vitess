@@ -163,6 +163,7 @@ const Advanced: React.FC = () => {
                   Changes metadata in the topology service to acknowledge a shard primary change performed by an external tool.
                 </>
               }
+              disabled={tablet === '' || !tablet}
               documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#tabletexternallyreparented"
               loadingText="Reparenting..."
               loadedText="Reparent"
