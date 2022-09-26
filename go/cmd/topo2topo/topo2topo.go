@@ -32,6 +32,38 @@ import (
 	"vitess.io/vitess/go/vt/topo/helpers"
 )
 
+var (
+	fromImplementation  string
+	fromServerAddress   string
+	fromRoot            string
+	toImplementation    string
+	toServerAddress     string
+	toRoot              string
+	compare             bool
+	doKeyspaces         bool
+	doShards            bool
+	doShardReplications bool
+	doTablets           bool
+	doRoutingRules      bool
+)
+
+func init() {
+	servenv.OnParseFor("topo2topo", func(fs *pflag.FlagSet) {
+		fs.StringVar(&fromImplementation, "from_implementation", fromImplementation, "topology implementation to copy data from")
+		fs.StringVar(&fromServerAddress, "from_server", fromServerAddress, "topology server address to copy data from")
+		fs.StringVar(&fromRoot, "from_root", fromRoot, "topology server root to copy data from")
+		fs.StringVar(&toImplementation, "to_implementation", toImplementation, "topology implementation to copy data to")
+		fs.StringVar(&toServerAddress, "to_server", toServerAddress, "topology server address to copy data to")
+		fs.StringVar(&toRoot, "to_root", toRoot, "topology server root to copy data to")
+		fs.BoolVar(&compare, "compare", compare, "compares data between topologies")
+		fs.BoolVar(&doKeyspaces, "do-keyspaces", doKeyspaces, "copies the keyspace information")
+		fs.BoolVar(&doShards, "do-shards", doShards, "copies the shard information")
+		fs.BoolVar(&doShardReplications, "do-shard-replications", doShardReplications, "copies the shard replication information")
+		fs.BoolVar(&doTablets, "do-tablets", doTablets, "copies the tablet information")
+		fs.BoolVar(&doRoutingRules, "do-routing-rules", doRoutingRules, "copies the routing rules")
+	})
+}
+
 func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
@@ -40,36 +72,25 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
-	fromImplementation := fs.String("from_implementation", "", "topology implementation to copy data from")
-	fromServerAddress := fs.String("from_server", "", "topology server address to copy data from")
-	fromRoot := fs.String("from_root", "", "topology server root to copy data from")
-	toImplementation := fs.String("to_implementation", "", "topology implementation to copy data to")
-	toServerAddress := fs.String("to_server", "", "topology server address to copy data to")
-	toRoot := fs.String("to_root", "", "topology server root to copy data to")
-	compare := fs.Bool("compare", false, "compares data between topologies")
-	doKeyspaces := fs.Bool("do-keyspaces", false, "copies the keyspace information")
-	doShards := fs.Bool("do-shards", false, "copies the shard information")
-	doShardReplications := fs.Bool("do-shard-replications", false, "copies the shard replication information")
-	doTablets := fs.Bool("do-tablets", false, "copies the tablet information")
-	doRoutingRules := fs.Bool("do-routing-rules", false, "copies the routing rules")
+
 	servenv.ParseFlags("topo2topo")
 
-	fromTS, err := topo.OpenServer(*fromImplementation, *fromServerAddress, *fromRoot)
+	fromTS, err := topo.OpenServer(fromImplementation, fromServerAddress, fromRoot)
 	if err != nil {
 		log.Exitf("Cannot open 'from' topo %v: %v", fromImplementation, err)
 	}
-	toTS, err := topo.OpenServer(*toImplementation, *toServerAddress, *toRoot)
+	toTS, err := topo.OpenServer(toImplementation, toServerAddress, toRoot)
 	if err != nil {
 		log.Exitf("Cannot open 'to' topo %v: %v", toImplementation, err)
 	}
 
 	ctx := context.Background()
 
-	if *compare {
-		compareTopos(ctx, fromTS, toTS, *doKeyspaces, *doShards, *doShardReplications, *doTablets)
+	if compare {
+		compareTopos(ctx, fromTS, toTS, doKeyspaces, doShards, doShardReplications, doTablets)
 		return
 	}
-	copyTopos(ctx, fromTS, toTS, *doKeyspaces, *doShards, *doShardReplications, *doTablets, *doRoutingRules)
+	copyTopos(ctx, fromTS, toTS, doKeyspaces, doShards, doShardReplications, doTablets, doRoutingRules)
 }
 
 func copyTopos(ctx context.Context, fromTS, toTS *topo.Server, doKeyspaces bool, doShards bool, doShardReplications bool, doTablets bool, doRoutingRules bool) {
