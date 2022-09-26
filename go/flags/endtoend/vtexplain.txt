@@ -46,7 +46,6 @@ Usage of vtexplain:
       --log_queries_to_file string                      Enable query logging to the specified file
       --log_rotate_max_size uint                        size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                     log to standard error instead of files
-      --master_connect_retry duration                   Deprecated, use -replication_connect_retry (default 10s)
       --message_stream_grace_period duration            the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --mysql-server-pool-conn-read-buffers             If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls              If set, the server will allow the use of a clear text password over non-SSL connections.

@@ -23,6 +23,7 @@
 - The deprecated `--mem-profile-rate` flag has been removed. Please use `--pprof=mem` instead.
 - The deprecated `--mutex-profile-fraction` flag has been removed. Please use `--pprof=mutex` instead.
 - The deprecated vtgate/vtexplain/vtcombo flag `--planner_version` has been removed. Please use `--planner-version` instead.
+- The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
 
 #### Vindex Interface
 
