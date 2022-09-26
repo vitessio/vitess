@@ -4976,6 +4976,24 @@ func TestCreateTable(t *testing.T) {
 				"\ti int\n)" +
 				"PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
 		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
+				"engine = innodb\n" +
+				"auto_increment 123,\n" +
+				"avg_row_length 1,\n" +
+				"default character set utf8mb4\n" +
+				"PARTITION BY LINEAR HASH (a) " +
+				"PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
+			output: "create table t (\n" +
+				"\ti int\n) " +
+				"engine innodb " +
+				"auto_increment 123,\n" +
+				"  avg_row_length 1,\n" +
+				"  default character set utf8mb4" +
+				"PARTITION BY LINEAR HASH (a)" +
+				"PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+		},
 	}
 	for _, tcase := range testCases {
 		t.Run(tcase.input, func(t *testing.T) {

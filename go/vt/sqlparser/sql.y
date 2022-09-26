@@ -2238,7 +2238,7 @@ table_spec:
   '(' table_column_list ')' table_option_list partition_options
   {
     $$ = $2
-    $$.Options = $4 + " " + $5
+    $$.Options = $4 + $5
   }
 
 table_column_list:
