@@ -50,6 +50,12 @@ var (
 	//go:embed vtorc.txt
 	vtorcTxt string
 
+	//go:embed vtctlclient.txt
+	vtctlclientTxt string
+
+	//go:embed vtctldclient.txt
+	vtctldclientTxt string
+
 	//go:embed vttestserver.txt
 	vttestserverTxt string
 
@@ -59,6 +65,8 @@ var (
 		"vtgr":         vtgrTxt,
 		"vttablet":     vttabletTxt,
 		"vtctld":       vtctldTxt,
+		"vtctlclient":  vtctlclientTxt,
+		"vtctldclient": vtctldclientTxt,
 		"vtorc":        vtorcTxt,
 		"vttestserver": vttestserverTxt,
 	}
@@ -71,6 +79,7 @@ func TestHelpOutput(t *testing.T) {
 			cmd := exec.Command(binary, args...)
 			output := bytes.Buffer{}
 			cmd.Stderr = &output
+			cmd.Stdout = &output
 			err := cmd.Run()
 			require.NoError(t, err)
 			utils.MustMatch(t, helptext, output.String())
