@@ -263,15 +263,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			defer mu.Unlock()
 
 			// Don't append more rows if row count is exceeded.
-			if ignoreMaxMemoryRows || len(qr.Rows) <= *maxMemoryRows {
+			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
 				qr.AppendResult(innerqr)
 			}
 			return newInfo, nil
 		},
 	)
 
-	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
-		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
+	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
+		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}
 	}
 
 	return qr, allErrors.GetErrors()

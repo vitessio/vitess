@@ -66,6 +66,13 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 - --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 
+### New command line flags and behavior
+
+#### vtgate --mysql-server-pool-conn-read-buffers
+
+`--mysql-server-pool-conn-read-buffers` enables pooling of buffers used to read from incoming
+connections, similar to the way pooling happens for write buffers. Defaults to off.
+
 ### VDiff2
 
 We introduced the ability to resume a VDiff2 workflow:

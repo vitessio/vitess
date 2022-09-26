@@ -20,6 +20,8 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -34,6 +36,7 @@ import (
 // vtorc as a separate process for testing
 type VTOrcProcess struct {
 	VtctlProcess
+	Port       int
 	LogDir     string
 	ExtraArgs  []string
 	ConfigPath string
@@ -107,6 +110,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
+		"--port", fmt.Sprintf("%d", orc.Port),
 		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
@@ -156,4 +160,25 @@ func (orc *VTOrcProcess) TearDown() error {
 		orc.proc = nil
 		return <-orc.exit
 	}
+}
+
+// GetVars gets the variables exported on the /debug/vars page of VTOrc
+func (orc *VTOrcProcess) GetVars() map[string]any {
+	varsURL := fmt.Sprintf("http://localhost:%d/debug/vars", orc.Port)
+	resp, err := http.Get(varsURL)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		resultMap := make(map[string]any)
+		respByte, _ := io.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			return nil
+		}
+		return resultMap
+	}
+	return nil
 }

@@ -188,13 +188,13 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
 func (vc *vcursorImpl) MaxMemoryRows() int {
-	return *maxMemoryRows
+	return maxMemoryRows
 }
 
 // ExceedsMaxMemoryRows returns a boolean indicating whether the maxMemoryRows value has been exceeded.
 // Returns false if the max memory rows override directive is set to true.
 func (vc *vcursorImpl) ExceedsMaxMemoryRows(numRows int) bool {
-	return !vc.ignoreMaxMemoryRows && numRows > *maxMemoryRows
+	return !vc.ignoreMaxMemoryRows && numRows > maxMemoryRows
 }
 
 // SetIgnoreMaxMemoryRows sets the ignoreMaxMemoryRows value.
@@ -600,7 +600,7 @@ func (vc *vcursorImpl) ResolveDestinations(ctx context.Context, keyspace string,
 	if err != nil {
 		return nil, nil, err
 	}
-	if *enableShardRouting {
+	if enableShardRouting {
 		rss, err = vc.fixupPartiallyMovedShards(rss)
 		if err != nil {
 			return nil, nil, err
@@ -614,7 +614,7 @@ func (vc *vcursorImpl) ResolveDestinationsMultiCol(ctx context.Context, keyspace
 	if err != nil {
 		return nil, nil, err
 	}
-	if *enableShardRouting {
+	if enableShardRouting {
 		rss, err = vc.fixupPartiallyMovedShards(rss)
 		if err != nil {
 			return nil, nil, err
@@ -846,7 +846,7 @@ func (vc *vcursorImpl) SetCommitOrder(co vtgatepb.CommitOrder) {
 
 // GetDBDDLPluginName implements the VCursor interface
 func (vc *vcursorImpl) GetDBDDLPluginName() string {
-	return *dbDDLPlugin
+	return dbDDLPlugin
 }
 
 // KeyspaceAvailable implements the VCursor interface
@@ -888,10 +888,7 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 
 // ForeignKeyMode implements the VCursor interface
 func (vc *vcursorImpl) ForeignKeyMode() string {
-	if foreignKeyMode == nil {
-		return ""
-	}
-	return strings.ToLower(*foreignKeyMode)
+	return strings.ToLower(foreignKeyMode)
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
@@ -1006,7 +1003,7 @@ func (vc *vcursorImpl) SetExec(ctx context.Context, name string, value string) e
 }
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
-	return sqlparser.IsMySQL80AndAbove() && *setVarEnabled
+	return sqlparser.IsMySQL80AndAbove() && setVarEnabled
 }
 
 func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {

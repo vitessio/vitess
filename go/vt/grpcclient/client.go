@@ -53,7 +53,6 @@ var (
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vtgateclienttest",
 		"vtgr",
@@ -63,16 +62,17 @@ var (
 	}
 )
 
-func registerFlags(fs *pflag.FlagSet) {
+func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&keepaliveTime, "grpc_keepalive_time", keepaliveTime, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
 	fs.DurationVar(&keepaliveTimeout, "grpc_keepalive_timeout", keepaliveTimeout, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	fs.IntVar(&initialConnWindowSize, "grpc_initial_conn_window_size", initialConnWindowSize, "gRPC initial connection window size")
 	fs.IntVar(&initialWindowSize, "grpc_initial_window_size", initialWindowSize, "gRPC initial window size")
+	fs.StringVar(&compression, "grpc_compression", compression, "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
 }
 
 func init() {
 	for _, cmd := range grpcclientBinaries {
-		servenv.OnParseFor(cmd, registerFlags)
+		servenv.OnParseFor(cmd, RegisterFlags)
 	}
 }
 

@@ -359,7 +359,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vttablet",
 	} {
@@ -373,7 +372,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vtgateclienttest",
 		"vtgr",
