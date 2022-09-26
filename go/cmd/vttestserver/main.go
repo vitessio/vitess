@@ -27,8 +27,6 @@ import (
 	"sync"
 	"syscall"
 
-	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -220,7 +218,6 @@ func parseFlags() (env vttest.Environment, err error) {
 		servenv.RegisterGRPCServerFlags()
 		servenv.RegisterGRPCServerAuthFlags()
 		servenv.RegisterServiceMapFlag()
-		servenv.OnParseFor("vttestserver", vschemaacl.RegisterSchemaACLFlags)
 	})
 
 	servenv.ParseFlags("vttestserver")
