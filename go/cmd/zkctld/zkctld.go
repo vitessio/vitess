@@ -41,7 +41,6 @@ var (
 
 func init() {
 	servenv.OnParseFor("zkctld", registerServerFlags)
-	servenv.ParseFlags("zkctld")
 }
 
 func registerServerFlags(fs *pflag.FlagSet) {
@@ -55,6 +54,7 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
+	servenv.ParseFlags("zkctld")
 	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
