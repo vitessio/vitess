@@ -50,7 +50,7 @@ var (
 )
 
 // CommonTags is a comma-separated list of common tags for stats backends
-var CommonTags string
+var CommonTags []string
 
 func init() {
 	registerFlags()
@@ -62,7 +62,7 @@ func registerFlags() {
 	pflag.StringVar(&statsBackend, "stats_backend", statsBackend, "The name of the registered push-based monitoring/stats backend to use")
 	pflag.StringVar(&combineDimensions, "stats_combine_dimensions", combineDimensions, `List of dimensions to be combined into a single "all" value in exported stats vars`)
 	pflag.StringVar(&dropVariables, "stats_drop_variables", dropVariables, `Variables to be dropped from the list of exported variables.`)
-	pflag.StringVar(&CommonTags, "stats_common_tags", CommonTags, `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
+	pflag.StringSliceVar(&CommonTags, "stats_common_tags", CommonTags, `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
 
 }
 
@@ -341,10 +341,9 @@ func isVarDropped(name string) bool {
 // ParseCommonTags parses a comma-separated string into map of tags
 // If you want to global service values like host, service name, git revision, etc,
 // this is the place to do it.
-func ParseCommonTags(s string) map[string]string {
-	inputs := strings.Split(s, ",")
+func ParseCommonTags(tagMapString []string) map[string]string {
 	tags := make(map[string]string)
-	for _, input := range inputs {
+	for _, input := range tagMapString {
 		if strings.Contains(input, ":") {
 			tag := strings.Split(input, ":")
 			tags[strings.TrimSpace(tag[0])] = strings.TrimSpace(tag[1])
