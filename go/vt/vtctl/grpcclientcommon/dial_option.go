@@ -29,13 +29,13 @@ import (
 var cert, key, ca, crl, name string
 
 func init() {
-	servenv.OnParseFor("vtctl", registerFlags)
-	servenv.OnParseFor("vttestserver", registerFlags)
-	servenv.OnParseFor("vtctlclient", registerFlags)
-	servenv.OnParseFor("vtctldclient", registerFlags)
+	servenv.OnParseFor("vtctl", RegisterFlags)
+	servenv.OnParseFor("vttestserver", RegisterFlags)
+	servenv.OnParseFor("vtctlclient", RegisterFlags)
+	servenv.OnParseFor("vtctldclient", RegisterFlags)
 }
 
-func registerFlags(fs *pflag.FlagSet) {
+func RegisterFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&cert, "vtctld_grpc_cert", cert, "the cert to use to connect")
 	fs.StringVar(&key, "vtctld_grpc_key", key, "the key to use to connect")
 	fs.StringVar(&ca, "vtctld_grpc_ca", ca, "the server ca to use to validate servers when connecting")
