@@ -3944,14 +3944,18 @@ Gen4 plan same as above
   "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE (user.name = 'Trent Reznor' OR music.genre = 'pop') AND music.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "Scatter",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
-    "Query": "select music.id from music left join `user` on music.user_id = `user`.id where (`user`.`name` = 'Trent Reznor' or music.genre = 'pop') and music.user_id = 5",
-    "Table": "`user`, music"
+    "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 5 and (`user`.`name` = 'Trent Reznor' or music.genre = 'pop')",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
   }
 }
 Gen4 plan same as above
@@ -4044,11 +4048,7 @@ Gen4 plan same as above
       "INT64(10)"
     ],
     "Vindex": "user_index"
-  },
-  "TablesUsed": [
-    "user.music",
-    "user.user"
-  ]
+  }
 }
 Gen4 plan same as above
 
