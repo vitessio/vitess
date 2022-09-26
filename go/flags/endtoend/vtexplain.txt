@@ -48,6 +48,7 @@ Usage of vtexplain:
       --logtostderr                                     log to standard error instead of files
       --master_connect_retry duration                   Deprecated, use -replication_connect_retry (default 10s)
       --message_stream_grace_period duration            the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
+      --mysql-server-pool-conn-read-buffers             If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls              If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                   Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_default_workload string                   Default session workload (OLTP, OLAP, DBA) (default "OLTP")

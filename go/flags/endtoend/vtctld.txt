@@ -92,7 +92,6 @@ Usage of vtctld:
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
-      --online_ddl_check_interval duration                               deprecated. Will be removed in next Vitess version (default 0s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb_uri string                                              URI of opentsdb /api/put method
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
@@ -112,11 +111,11 @@ Usage of vtctld:
       --s3_backup_storage_bucket string                                  S3 bucket to use for backups.
       --s3_backup_storage_root string                                    root prefix for all backup-related object names.
       --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
-      --schema_change_check_interval int                                 this value decides how often we check schema change dir, in seconds (default 60)
-      --schema_change_controller string                                  schema change controller is responsible for finding schema changes and responding to schema change events
-      --schema_change_dir string                                         directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change
-      --schema_change_replicas_timeout duration                          how long to wait for replicas to receive the schema change (default 10s)
-      --schema_change_user string                                        The user who submits this schema change.
+      --schema_change_check_interval duration                            How often the schema change dir is checked for schema changes (deprecated: if passed as a bare integer, the duration will be in seconds). (default 1m0s)
+      --schema_change_controller string                                  Schema change controller is responsible for finding schema changes and responding to schema change events.
+      --schema_change_dir string                                         Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.
+      --schema_change_replicas_timeout duration                          How long to wait for replicas to receive a schema change. (default 10s)
+      --schema_change_user string                                        The user who schema changes are submitted on behalf of.
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
@@ -187,7 +186,7 @@ Usage of vtctld:
       --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
       --web_dir string                                                   NOT USED, here for backward compatibility
       --web_dir2 string                                                  NOT USED, here for backward compatibility
-      --workflow_manager_disable StringList                              comma separated list of workflow types to disable
+      --workflow_manager_disable strings                                 comma separated list of workflow types to disable
       --workflow_manager_init                                            Initialize the workflow manager in this vtctld instance.
       --workflow_manager_use_election                                    if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.
       --xbstream_restore_flags string                                    flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
