@@ -20,9 +20,12 @@ package vtctld
 
 import (
 	"context"
-	"flag"
 	"net/http"
 	"strings"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/discovery"
@@ -37,28 +40,35 @@ import (
 )
 
 var (
-	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
-	enableUI            = flag.Bool("enable_vtctld_ui", true, "If true, the vtctld web interface will be enabled. Default is true.")
-	_                   = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
-	sanitizeLogMessages = flag.Bool("vtctld_sanitize_log_messages", false, "When true, vtctld sanitizes logging.")
-
-	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
-	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
-
-	// deprecated, only here for backwards compatibility:
-	deprecatedOnlineDDLCheckInterval = flag.Duration("online_ddl_check_interval", 0, "deprecated. Will be removed in next Vitess version")
+	enableRealtimeStats = false
+	enableUI            = true
+	durabilityPolicy    = "none"
+	sanitizeLogMessages = false
+	webDir              string
+	webDir2             string
 )
 
 const (
 	appPrefix = "/app/"
 )
 
+func init() {
+	for _, cmd := range []string{"vtcombo", "vtctld"} {
+		servenv.OnParseFor(cmd, registerVtctldFlags)
+	}
+}
+
+func registerVtctldFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&enableRealtimeStats, "enable_realtime_stats", enableRealtimeStats, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
+	fs.BoolVar(&enableUI, "enable_vtctld_ui", enableUI, "If true, the vtctld web interface will be enabled. Default is true.")
+	fs.StringVar(&durabilityPolicy, "durability_policy", durabilityPolicy, "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
+	fs.StringVar(&webDir, "web_dir", webDir, "NOT USED, here for backward compatibility")
+	fs.StringVar(&webDir2, "web_dir2", webDir2, "NOT USED, here for backward compatibility")
+}
+
 // InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) error {
-	if *deprecatedOnlineDDLCheckInterval != 0 {
-		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions. It is currently unused.")
-	}
-
 	actionRepo := NewActionRepository(ts)
 
 	// keyspace actions
@@ -140,16 +150,16 @@ func InitVtctld(ts *topo.Server) error {
 		http.Redirect(w, r, appPrefix, http.StatusFound)
 	})
 
-	http.Handle(appPrefix, staticContentHandler(*enableUI))
+	http.Handle(appPrefix, staticContentHandler(enableUI))
 
 	var healthCheck discovery.HealthCheck
-	if *enableRealtimeStats {
+	if enableRealtimeStats {
 		ctx := context.Background()
 		cells, err := ts.GetKnownCells(ctx)
 		if err != nil {
 			log.Errorf("Failed to get the list of known cells, failed to instantiate the healthcheck at startup: %v", err)
 		} else {
-			healthCheck = discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, *localCell, strings.Join(cells, ","))
+			healthCheck = discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, localCell, strings.Join(cells, ","))
 		}
 	}
 
