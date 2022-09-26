@@ -146,9 +146,6 @@ Flags:
       --replication_connect_retry duration              how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
       --security_policy string                          the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                                   server to use for connection (required)
-      --srv_topo_cache_refresh duration                 how frequently to refresh the topology for cached entries (default 1s)
-      --srv_topo_cache_ttl duration                     how long to use cached entries for topology (default 1s)
-      --srv_topo_timeout duration                       topo server timeout (default 5s)
       --stats_backend string                            The name of the registered push-based monitoring/stats backend to use
       --stats_combine_dimensions string                 List of dimensions to be combined into a single "all" value in exported stats vars
       --stats_common_tags string                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
