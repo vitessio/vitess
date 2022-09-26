@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
 	_flag "vitess.io/vitess/go/internal/flag"
 )
