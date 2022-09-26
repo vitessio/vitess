@@ -616,3 +616,22 @@ export const reloadSchemaShard = async (params: ReloadSchemaShardParams) => {
 
   return pb.ReloadSchemaShardResponse.create(result)
 }
+
+export interface TabletExternallyPromotedParams {
+  alias: string
+  clusterIDs: string[]
+}
+
+export const tabletExternallyPromoted = async (params: TabletExternallyPromotedParams) => {
+  const req = new URLSearchParams();
+  req.append('cluster', params.clusterIDs[0])
+
+  const { result } = await vtfetch(`/api/tablet/${params.alias}/externally_promoted?${req}`, {
+    method: 'post'
+  })
+
+  const err = pb.TabletExternallyPromotedResponse.verify(result)
+  if (err) throw Error(err)
+
+  return pb.TabletExternallyPromotedResponse.create(result)
+}

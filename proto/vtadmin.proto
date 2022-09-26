@@ -776,6 +776,11 @@ message TabletExternallyPromotedResponse {
     topodata.TabletAlias old_primary = 5;
 }
 
+message TabletExternallyReparentedRequest {
+  topodata.TabletAlias alias = 1;
+  repeated string cluster_ids = 2;
+}
+
 message ValidateKeyspaceRequest {
     string cluster_id = 1;
     string keyspace = 2;

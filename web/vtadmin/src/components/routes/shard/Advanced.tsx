@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useParams, Link, useHistory } from 'react-router-dom';
-import { useDeleteShard, useKeyspace, useReloadSchemaShard, useTablets } from '../../../hooks/api';
+import { useDeleteShard, useKeyspace, useReloadSchemaShard, useTabletExternallyPromoted, useTablets } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel'
 import { success, warn } from '../../Snackbar';
@@ -10,7 +10,7 @@ import { Label } from '../../inputs/Label';
 import { TextInput } from '../../TextInput';
 import { NumberInput } from '../../NumberInput';
 import { Select } from '../../inputs/Select';
-
+import { formatAlias } from '../../../util/tablets'
 interface RouteParams {
   clusterID: string;
   keyspace: string;
@@ -69,8 +69,21 @@ const Advanced: React.FC = () => {
       onError: (error) => warn(`There was an error reloading shard ${shardName}: ${error}`),
     }
   );
+
   // externallyReparent parameters
   const [tablet, setTablet] = useState('')
+  const externallyPromoteMutation = useTabletExternallyPromoted(
+    { alias: tablet, clusterIDs: [params.clusterID] },
+    {
+      onSuccess: (result) => {
+        success(
+          `Successfully promoted tablet ${tablet}`,
+          { autoClose: 7000 }
+        );
+      },
+      onError: (error) => warn(`There was an error promoting tablet ${tablet}: ${error}`),
+    }
+  );
 
   if (kq.error) {
     return (
@@ -153,7 +166,7 @@ const Advanced: React.FC = () => {
               documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#tabletexternallyreparented"
               loadingText="Reparenting..."
               loadedText="Reparent"
-              mutation={deleteShardMutation as UseMutationResult}
+              mutation={externallyPromoteMutation as UseMutationResult}
               title="Externally Reparent"
               body={
                 <>
@@ -162,10 +175,10 @@ const Advanced: React.FC = () => {
                       <Select
                         onChange={t => setTablet(t as string)}
                         label="Tablet"
-                        items={tabletsInCluster.map(t => `${t.tablet?.alias?.cell}-${t.tablet?.alias?.uid}`)}
+                        items={tabletsInCluster.map(t => formatAlias(t.tablet?.alias))}
                         selectedItem={tablet}
                         placeholder="Tablet"
-                        description="This chosen tablet will be considered the shard master (by Vitess won't change the replication setup)."
+                        description="This chosen tablet will be considered the shard master (but Vitess won't change the replication setup)."
                       />
                     </div>
                   </div>

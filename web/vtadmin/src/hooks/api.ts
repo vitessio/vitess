@@ -62,6 +62,7 @@ import {
     reloadSchema,
     deleteShard,
     reloadSchemaShard,
+    tabletExternallyPromoted,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -467,5 +468,19 @@ export const useReloadSchemaShard = (
 ) => {
   return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>(() => {
     return reloadSchemaShard(params);
+  }, options);
+}
+
+/**
+ * useTabletExternallyPromoted is a mutate hook that changes metadata in the topology server to
+ * acknowledge a shard primary change performed by an external tool (e.g.
+ * orchestrator).
+ */
+export const useTabletExternallyPromoted = (
+  params: Parameters<typeof tabletExternallyPromoted>[0],
+  options?: UseMutationOptions<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>
+) => {
+  return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>(() => {
+    return tabletExternallyPromoted(params);
   }, options);
 }
