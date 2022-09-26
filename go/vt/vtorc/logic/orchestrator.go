@@ -360,7 +360,7 @@ func ContinuousDiscovery() {
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	instancePollTick := time.Tick(instancePollSecondsDuration())
 	caretakingTick := time.Tick(time.Minute)
-	recoveryTick := time.Tick(time.Duration(config.RecoveryPollSeconds) * time.Second)
+	recoveryTick := time.Tick(time.Duration(config.Config.RecoveryPollSeconds) * time.Second)
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time

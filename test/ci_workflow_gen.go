@@ -54,7 +54,7 @@ const (
 
 	// An empty string will cause the default non platform specific template
 	// to be used.
-	clusterTestTemplateFormatStr = "templates/cluster_endtoend_test%s.tpl"
+	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
 	unitTestSelfHostedDatabases   = ""
@@ -68,11 +68,13 @@ var (
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"vtctlbackup_sharded_clustertest_heavy",
+		"12",
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"vtgate_general_heavy",
 		"vtbackup_transform",
+		"18",
 		"xb_backup",
 		"21",
 		"22",
@@ -123,11 +125,11 @@ var (
 		"vtorc",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
+		"vtgate_partial_keyspace",
 	}
 
 	clusterSelfHostedList = []string{
-		"12",
-		"18",
+		"vtorc",
 	}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
@@ -152,6 +154,7 @@ type clusterTest struct {
 	MakeTools, InstallXtraBackup bool
 	Docker                       bool
 	LimitResourceUsage           bool
+	PartialKeyspace              bool
 }
 
 type selfHostedTest struct {
@@ -201,7 +204,7 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
-	generateClusterWorkflows(clusterList, clusterTestTemplateFormatStr)
+	generateClusterWorkflows(clusterList, clusterTestTemplate)
 	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
 	// tests that will use self-hosted runners
@@ -348,15 +351,19 @@ func generateClusterWorkflows(list []string, tpl string) {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
 				test.Name = test.Name + " " + string(mysqlVersion)
 			}
-			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
-			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
-			template := tpl
-			if test.Platform != "" {
-				template = fmt.Sprintf(tpl, "_"+test.Platform)
-			} else if strings.Contains(template, "%s") {
-				template = fmt.Sprintf(tpl, "")
+			if strings.Contains(test.Shard, "partial_keyspace") {
+				test.PartialKeyspace = true
 			}
-			err := writeFileFromTemplate(template, path, test)
+
+			workflowPath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
+			templateFileName := tpl
+			if test.Platform != "" {
+				templateFileName = fmt.Sprintf(tpl, "_"+test.Platform)
+			} else if strings.Contains(templateFileName, "%s") {
+				templateFileName = fmt.Sprintf(tpl, "")
+			}
+			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
+			err := writeFileFromTemplate(templateFileName, workflowPath, test)
 			if err != nil {
 				log.Print(err)
 			}
@@ -418,8 +425,12 @@ func writeFileFromTemplate(templateFile, path string, test any) error {
 	if err != nil {
 		return fmt.Errorf("Error creating file: %s\n", err)
 	}
-	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
-	f.WriteString(mergeBlankLines(buf))
+	if _, err := f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n"); err != nil {
+		return err
+	}
+	if _, err := f.WriteString(mergeBlankLines(buf)); err != nil {
+		return err
+	}
 	fmt.Printf("Generated %s\n", path)
 	return nil
 }

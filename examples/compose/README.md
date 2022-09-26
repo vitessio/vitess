@@ -152,6 +152,9 @@ vitess/examples/compose$ ./lvtctl.sh Help
 
 - vtorc web ui:
   http://localhost:13000
+
+- vtorc debug ui:
+  http://localhost:13200
   
 - Stream querylog
   `curl -S localhost:15099/debug/querylog`

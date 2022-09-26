@@ -18,15 +18,15 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"io"
 	"log/syslog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
@@ -42,29 +42,29 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
-	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
-	_            = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	waitTime     = 24 * time.Hour
+	detachedMode bool
 )
 
 func init() {
-	logger := logutil.NewConsoleLogger()
-	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
-		Preface: func(w io.Writer) {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		logger := logutil.NewConsoleLogger()
+		fs.SetOutput(logutil.NewLoggerWriter(logger))
+		fs.Usage = func() {
 			logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
 			logger.Printf("\nThe global optional parameters are:\n")
-		},
-		Epilogue: func(w io.Writer) {
+
+			logger.Printf("%s\n", fs.FlagUsages())
+
 			logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
 			vtctl.PrintAllCommands(logger)
-		},
+		}
+
+		fs.DurationVar(&waitTime, "wait-time", waitTime, "time to wait on an action")
+		fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run vtcl detached from the terminal")
 	})
 }
 
@@ -83,7 +83,7 @@ func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
-	if *detachedMode {
+	if detachedMode {
 		// this method will call os.Exit and kill this process
 		cmd.DetachFromTerminalAndExit()
 	}
@@ -109,7 +109,7 @@ func main() {
 
 	vtctl.WorkflowManager = workflow.NewManager(ts)
 
-	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
 
 	// (TODO:ajm188) <Begin backwards compatibility support>.
@@ -163,7 +163,7 @@ func main() {
 		cancel()
 		switch err {
 		case vtctl.ErrUnknownCommand:
-			flag.Usage()
+			pflag.Usage()
 			exit.Return(1)
 		case nil:
 			// keep going

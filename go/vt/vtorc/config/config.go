@@ -42,19 +42,14 @@ var configurationLoaded = make(chan bool)
 
 const (
 	HealthPollSeconds                     = 1
-	RaftHealthPollSeconds                 = 10
-	RecoveryPollSeconds                   = 1
 	ActiveNodeExpireSeconds               = 5
-	BinlogFileHistoryDays                 = 1
 	MaintenanceOwner                      = "vtorc"
 	AuditPageSize                         = 20
 	MaintenancePurgeDays                  = 7
 	MySQLTopologyMaxPoolConnections       = 3
 	MaintenanceExpireMinutes              = 10
-	AgentHTTPTimeoutSeconds               = 60
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
-	SelectTrueQuery                       = "select 1"
 )
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -91,20 +86,20 @@ type Configuration struct {
 	DefaultRaftPort                             int      // if a RaftNodes entry does not specify port, use this one
 	RaftNodes                                   []string // Raft nodes to make initial connection with
 	ExpectFailureAnalysisConcensus              bool
-	MySQLOrchestratorHost                       string
-	MySQLOrchestratorMaxPoolConnections         int // The maximum size of the connection pool to the VTOrc backend.
-	MySQLOrchestratorPort                       uint
-	MySQLOrchestratorDatabase                   string
-	MySQLOrchestratorUser                       string
-	MySQLOrchestratorPassword                   string
-	MySQLOrchestratorCredentialsConfigFile      string   // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
-	MySQLOrchestratorSSLPrivateKeyFile          string   // Private key file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLOrchestratorSSLCertFile                string   // Certificate PEM file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLOrchestratorSSLCAFile                  string   // Certificate Authority PEM file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLOrchestratorSSLSkipVerify              bool     // If true, do not strictly validate mutual TLS certs for the VTOrc mysql instances
-	MySQLOrchestratorUseMutualTLS               bool     // Turn on TLS authentication with the VTOrc MySQL instance
-	MySQLOrchestratorReadTimeoutSeconds         int      // Number of seconds before backend mysql read operation is aborted (driver-side)
-	MySQLOrchestratorRejectReadOnly             bool     // Reject read only connections https://github.com/go-sql-driver/mysql#rejectreadonly
+	MySQLVTOrcHost                              string
+	MySQLVTOrcMaxPoolConnections                int // The maximum size of the connection pool to the VTOrc backend.
+	MySQLVTOrcPort                              uint
+	MySQLVTOrcDatabase                          string
+	MySQLVTOrcUser                              string
+	MySQLVTOrcPassword                          string
+	MySQLVTOrcCredentialsConfigFile             string   // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
+	MySQLVTOrcSSLPrivateKeyFile                 string   // Private key file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLVTOrcSSLCertFile                       string   // Certificate PEM file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLVTOrcSSLCAFile                         string   // Certificate Authority PEM file used to authenticate with the VTOrc mysql instance with TLS
+	MySQLVTOrcSSLSkipVerify                     bool     // If true, do not strictly validate mutual TLS certs for the VTOrc mysql instances
+	MySQLVTOrcUseMutualTLS                      bool     // Turn on TLS authentication with the VTOrc MySQL instance
+	MySQLVTOrcReadTimeoutSeconds                int      // Number of seconds before backend mysql read operation is aborted (driver-side)
+	MySQLVTOrcRejectReadOnly                    bool     // Reject read only connections https://github.com/go-sql-driver/mysql#rejectreadonly
 	MySQLConnectTimeoutSeconds                  int      // Number of seconds before connection is aborted (driver-side)
 	MySQLDiscoveryReadTimeoutSeconds            int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for discovery queries.
 	MySQLTopologyReadTimeoutSeconds             int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for all but discovery queries.
@@ -227,6 +222,8 @@ type Configuration struct {
 	InstanceDBExecContextTimeoutSeconds         int               // Timeout on context used while calling ExecContext on instance database
 	LockShardTimeoutSeconds                     int               // Timeout on context used to lock shard. Should be a small value because we should fail-fast
 	WaitReplicasTimeoutSeconds                  int               // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
+	TopoInformationRefreshSeconds               int               // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds                         int               // Timer duration on which VTOrc recovery analysis runs
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -259,14 +256,14 @@ func newConfiguration() *Configuration {
 		DefaultRaftPort:                             10008,
 		RaftNodes:                                   []string{},
 		ExpectFailureAnalysisConcensus:              true,
-		MySQLOrchestratorMaxPoolConnections:         128, // limit concurrent conns to backend DB
-		MySQLOrchestratorPort:                       3306,
+		MySQLVTOrcMaxPoolConnections:                128, // limit concurrent conns to backend DB
+		MySQLVTOrcPort:                              3306,
 		MySQLTopologyUseMutualTLS:                   false,
 		MySQLTopologyUseMixedTLS:                    true,
-		MySQLOrchestratorUseMutualTLS:               false,
+		MySQLVTOrcUseMutualTLS:                      false,
 		MySQLConnectTimeoutSeconds:                  2,
-		MySQLOrchestratorReadTimeoutSeconds:         30,
-		MySQLOrchestratorRejectReadOnly:             false,
+		MySQLVTOrcReadTimeoutSeconds:                30,
+		MySQLVTOrcRejectReadOnly:                    false,
 		MySQLDiscoveryReadTimeoutSeconds:            10,
 		MySQLTopologyReadTimeoutSeconds:             600,
 		MySQLConnectionLifetimeSeconds:              0,
@@ -378,32 +375,34 @@ func newConfiguration() *Configuration {
 		InstanceDBExecContextTimeoutSeconds:         30,
 		LockShardTimeoutSeconds:                     30,
 		WaitReplicasTimeoutSeconds:                  30,
+		TopoInformationRefreshSeconds:               15,
+		RecoveryPollSeconds:                         1,
 	}
 }
 
 func (config *Configuration) postReadAdjustments() error {
-	if config.MySQLOrchestratorCredentialsConfigFile != "" {
+	if config.MySQLVTOrcCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLOrchestratorCredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLVTOrcCredentialsConfigFile)
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Infof("Parsed vtorc credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
-			config.MySQLOrchestratorUser = mySQLConfig.Client.User
-			config.MySQLOrchestratorPassword = mySQLConfig.Client.Password
+			log.Infof("Parsed vtorc credentials from %s", config.MySQLVTOrcCredentialsConfigFile)
+			config.MySQLVTOrcUser = mySQLConfig.Client.User
+			config.MySQLVTOrcPassword = mySQLConfig.Client.Password
 		}
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLOrchestratorPassword)
+		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLVTOrcPassword)
 		if len(submatch) > 1 {
-			config.MySQLOrchestratorPassword = os.Getenv(submatch[1])
+			config.MySQLVTOrcPassword = os.Getenv(submatch[1])
 		}
 	}
 	if config.MySQLTopologyCredentialsConfigFile != "" {

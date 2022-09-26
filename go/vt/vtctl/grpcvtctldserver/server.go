@@ -178,6 +178,32 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	return resp, nil
 }
 
+// ApplyShardRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldatapb.ApplyShardRoutingRulesRequest) (*vtctldatapb.ApplyShardRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyShardRoutingRules")
+	defer span.Finish()
+
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
+
+	if err := s.ts.SaveShardRoutingRules(ctx, req.ShardRoutingRules); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.ApplyShardRoutingRulesResponse{}
+
+	if req.SkipRebuild {
+		log.Warningf("Skipping rebuild of SrvVSchema as requested, you will need to run RebuildVSchemaGraph for changes to take effect")
+		return resp, nil
+	}
+
+	if err := s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
+		return nil, vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
+	}
+
+	return resp, nil
+}
+
 // ApplySchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
@@ -1351,6 +1377,21 @@ func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.Get
 
 	return &vtctldatapb.GetRoutingRulesResponse{
 		RoutingRules: rr,
+	}, nil
+}
+
+// GetShardRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetShardRoutingRules(ctx context.Context, req *vtctldatapb.GetShardRoutingRulesRequest) (*vtctldatapb.GetShardRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShardRoutingRules")
+	defer span.Finish()
+
+	srr, err := s.ts.GetShardRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetShardRoutingRulesResponse{
+		ShardRoutingRules: srr,
 	}, nil
 }
 
