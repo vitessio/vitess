@@ -93,7 +93,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Contains(t, primaryInstance.InstanceAlias, "zone1")
 	assert.NotEqual(t, 0, primaryInstance.ServerID)
 	assert.Greater(t, len(primaryInstance.ServerUUID), 10)
-	assert.Contains(t, primaryInstance.Version, "8.0")
+	assert.Regexp(t, "[58].[70].*", primaryInstance.Version)
 	assert.NotEmpty(t, primaryInstance.VersionComment)
 	assert.False(t, primaryInstance.ReadOnly)
 	assert.True(t, primaryInstance.LogBinEnabled)
