@@ -64,8 +64,8 @@ var (
 	rate                     = int64(1000)
 	duration                 = 600 * time.Second
 	lagUpdateInterval        = 5 * time.Second
-	replicaDegrationInterval = 0 * time.Second
 	replicaDegrationDuration = 10 * time.Second
+	replicaDegrationInterval time.Duration
 )
 
 const flagSetName = "throttler_demo"
