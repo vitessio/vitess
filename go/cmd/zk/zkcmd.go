@@ -136,23 +136,18 @@ func init() {
 }
 
 func main() {
+	time.Sleep(30 * time.Second)
 	defer exit.Recover()
 	defer logutil.Flush()
-
 	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
-	servenv.ParseFlags("zkcmd")
 	server := fs.String("server", "", "server(s) to connect to")
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
 		Epilogue: func(w io.Writer) { fmt.Fprint(w, doc) },
 	})
-	_flag.Parse(fs)
+	servenv.ParseFlags("zkcmd")
 	args := _flag.Args()
-	if len(args) == 0 {
-		flag.Usage()
-		exit.Return(1)
-	}
 
 	cmdName := args[0]
 	args = args[1:]
