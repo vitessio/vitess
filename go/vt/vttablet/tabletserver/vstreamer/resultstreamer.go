@@ -74,7 +74,7 @@ func (rs *resultStreamer) Stream() error {
 	defer conn.Close()
 	gtid, rotatedLog, err := conn.streamWithSnapshot(rs.ctx, rs.tableName.String(), rs.query)
 	if rotatedLog {
-		rs.vse.vstreamerFlushBinlogs.Add(1)
+		rs.vse.vstreamerFlushedBinlogs.Add(1)
 	}
 	if err != nil {
 		return err

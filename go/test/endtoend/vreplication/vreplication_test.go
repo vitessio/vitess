@@ -290,8 +290,8 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
 
 	// So far, we should not have rotated any binlogs
-	flushCount := int64(sourceTab.GetVars()["VStreamerFlushBinlogs"].(float64))
-	require.Equal(t, flushCount, int64(0), "VStreamerFlushBinlogs should be 0")
+	flushCount := int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(0), "VStreamerFlushedBinlogs should be 0")
 
 	// Generate a lot of binlog event bytes
 	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 16
@@ -320,14 +320,14 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	// though we're opening up multiple result streams (1 per table).
 	runVDiffsSideBySide = false
 	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
-	flushCount = int64(sourceTab.GetVars()["VStreamerFlushBinlogs"].(float64))
-	require.Equal(t, flushCount, int64(1), "VStreamerFlushBinlogs should now be 1")
+	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should now be 1")
 
 	// Now if we do another vdiff, we should NOT rotate the binlogs again
 	// as we haven't been generating a lot of new binlog events.
 	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
-	flushCount = int64(sourceTab.GetVars()["VStreamerFlushBinlogs"].(float64))
-	require.Equal(t, flushCount, int64(1), "VStreamerFlushBinlogs should still be 1")
+	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
 }
 
 func testVStreamCellFlag(t *testing.T) {
