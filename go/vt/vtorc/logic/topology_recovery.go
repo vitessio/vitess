@@ -1313,6 +1313,7 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 // It will point old primary at the newly promoted primary at the correct coordinates.
 // All of this is accomplished via PlannedReparentShard operation. It is an idempotent operation, look at its documentation for more detail
 func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey) (topologyRecovery *TopologyRecovery, err error) {
+	log.Infof("GracefulPrimaryTakeover for shard %v", clusterName)
 	clusterPrimaries, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
@@ -1321,6 +1322,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
 	}
 	clusterPrimary := clusterPrimaries[0]
+	log.Infof("GracefulPrimaryTakeover for shard %v, current primary - %v", clusterName, clusterPrimary.InstanceAlias)
 
 	analysisEntry, err := forceAnalysisEntry(clusterName, inst.GraceFulPrimaryTakeover, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {
