@@ -40,7 +40,7 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
-	fromImplementation := fs.String("from_implementation", "abc", "topology implementation to copy data from")
+	fromImplementation := fs.String("from_implementation", "", "topology implementation to copy data from")
 	fromServerAddress := fs.String("from_server", "", "topology server address to copy data from")
 	fromRoot := fs.String("from_root", "", "topology server root to copy data from")
 	toImplementation := fs.String("to_implementation", "", "topology implementation to copy data to")
