@@ -954,7 +954,6 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBa
 		initalBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
-
 }
 
 // GetAndReservePort gives port for required process
