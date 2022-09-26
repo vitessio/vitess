@@ -730,6 +730,28 @@ func MakeAPICall(t *testing.T, url string) (status int, response string) {
 	return res.StatusCode, body
 }
 
+// MakeAPICallRetry is used to make an API call and retry if we see a 500 - Cannot deduce cluster primary output. This happens when we haven't
+// finished refreshing information after a ClusterHasNoPrimary recovery and call GracefulPrimaryTakeover. This leads to us seeing no Primary tablet
+// in the database of VTOrc. This is ephemeral though, because we will refresh the new-primary's information as part of the ClusterHasNoPrimary recovery flow.
+func MakeAPICallRetry(t *testing.T, url string) (status int, response string) {
+	t.Helper()
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for api to work")
+			return
+		default:
+			status, response = MakeAPICall(t, url)
+			if status == 500 && strings.Contains(response, "Cannot deduce cluster primary") {
+				time.Sleep(1 * time.Second)
+				break
+			}
+			return status, response
+		}
+	}
+}
+
 // SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
 // It creates a cluster with 4 tablets, one of which is a Replica
 func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
