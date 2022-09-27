@@ -149,7 +149,7 @@ const Advanced: React.FC = () => {
         <>
           <div className="mt-8 mb-4">{dialogDescription}</div>
           <div className="mb-2 font-bold">Log</div>
-          <div className="bg-gray-100 p-4 overflow-x-scroll">
+          <div className="bg-gray-100 p-4 overflow-scroll max-h-[200px]">
             {events.map(e => (
               <div className="font-mono text-sm whitespace-nowrap">[{new Date(e.time?.seconds as number * 1000).toISOString()} {e.file}:{e.line}] {e.value}</div>
             ))}
