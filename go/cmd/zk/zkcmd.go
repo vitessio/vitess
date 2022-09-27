@@ -33,8 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/servenv"
-
 	"github.com/spf13/pflag"
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"
@@ -42,6 +40,7 @@ import (
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/zk2topo"
 	"vitess.io/vitess/go/vt/vtctl"
 
@@ -680,7 +679,7 @@ var charPermMap map[string]int32
 var permCharMap map[int32]string
 
 func init() {
-	servenv.OnParseFor("zkcmd", func(fs *pflag.FlagSet) {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.StringVar(&server, "server", server, "server(s) to connect to")
 	})
 	charPermMap = map[string]int32{
