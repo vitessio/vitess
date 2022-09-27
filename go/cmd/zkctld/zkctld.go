@@ -24,13 +24,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"vitess.io/vitess/go/vt/servenv"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/zkctl"
 )
 
@@ -40,10 +39,10 @@ var (
 )
 
 func init() {
-	servenv.OnParseFor("zkctld", registerServerFlags)
+	servenv.OnParse(registerFlags)
 }
 
-func registerServerFlags(fs *pflag.FlagSet) {
+func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&zkCfg, "zk.cfg", zkCfg,
 		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
 	fs.UintVar(&myID, "zk.myid", myID,
