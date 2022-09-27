@@ -32,106 +32,106 @@ import { ShardTablets } from './ShardTablets';
 import Advanced from './Advanced';
 
 interface RouteParams {
-  clusterID: string;
-  keyspace: string;
-  shard: string;
+    clusterID: string;
+    keyspace: string;
+    shard: string;
 }
 
 export const Shard = () => {
-  const params = useParams<RouteParams>();
-  const { path, url } = useRouteMatch();
+    const params = useParams<RouteParams>();
+    const { path, url } = useRouteMatch();
 
-  const shardName = `${params.keyspace}/${params.shard}`;
+    const shardName = `${params.keyspace}/${params.shard}`;
 
-  useDocumentTitle(`${shardName} (${params.clusterID})`);
+    useDocumentTitle(`${shardName} (${params.clusterID})`);
 
-  const { data: keyspace, ...kq } = useKeyspace({ clusterID: params.clusterID, name: params.keyspace });
+    const { data: keyspace, ...kq } = useKeyspace({ clusterID: params.clusterID, name: params.keyspace });
 
-  if (kq.error) {
+    if (kq.error) {
+        return (
+            <div className={style.placeholder}>
+                <span className={style.errorEmoji}>😰</span>
+                <h1>An error occurred</h1>
+                <code>{(kq.error as any).response?.error?.message || kq.error?.message}</code>
+                <p>
+                    <Link to="/keyspaces">← All keyspaces</Link>
+                </p>
+            </div>
+        );
+    }
+
+    if (!kq.isLoading && !keyspace) {
+        return (
+            <div className={style.placeholder}>
+                <span className={style.errorEmoji}>😖</span>
+                <h1>Keyspace not found</h1>
+                <p>
+                    <Link to="/keyspaces">← All keyspaces</Link>
+                </p>
+            </div>
+        );
+    }
+
+    let shard = null;
+    if (keyspace?.shards && params.shard in keyspace.shards) {
+        shard = keyspace.shards[params.shard];
+    }
+
+    if (!kq.isLoading && !shard) {
+        return (
+            <div className={style.placeholder}>
+                <span className={style.errorEmoji}>😖</span>
+                <h1>Shard not found</h1>
+                <p>
+                    <KeyspaceLink clusterID={params.clusterID} name={params.keyspace}>
+                        ← All shards in {params.keyspace}
+                    </KeyspaceLink>
+                </p>
+            </div>
+        );
+    }
+
     return (
-      <div className={style.placeholder}>
-        <span className={style.errorEmoji}>😰</span>
-        <h1>An error occurred</h1>
-        <code>{(kq.error as any).response?.error?.message || kq.error?.message}</code>
-        <p>
-          <Link to="/keyspaces">← All keyspaces</Link>
-        </p>
-      </div>
-    );
-  }
+        <div>
+            <WorkspaceHeader>
+                <NavCrumbs>
+                    <Link to="/keyspaces">Keyspaces</Link>
+                    <KeyspaceLink clusterID={params.clusterID} name={params.keyspace}>
+                        {params.keyspace}
+                    </KeyspaceLink>
+                </NavCrumbs>
 
-  if (!kq.isLoading && !keyspace) {
-    return (
-      <div className={style.placeholder}>
-        <span className={style.errorEmoji}>😖</span>
-        <h1>Keyspace not found</h1>
-        <p>
-          <Link to="/keyspaces">← All keyspaces</Link>
-        </p>
-      </div>
-    );
-  }
+                <WorkspaceTitle className="font-mono">{shardName}</WorkspaceTitle>
 
-  let shard = null;
-  if (keyspace?.shards && params.shard in keyspace.shards) {
-    shard = keyspace.shards[params.shard];
-  }
+                <div className={style.headingMeta}>
+                    <span>
+                        Cluster: <code>{params.clusterID}</code>
+                    </span>
+                </div>
+            </WorkspaceHeader>
 
-  if (!kq.isLoading && !shard) {
-    return (
-      <div className={style.placeholder}>
-        <span className={style.errorEmoji}>😖</span>
-        <h1>Shard not found</h1>
-        <p>
-          <KeyspaceLink clusterID={params.clusterID} name={params.keyspace}>
-            ← All shards in {params.keyspace}
-          </KeyspaceLink>
-        </p>
-      </div>
-    );
-  }
+            <ContentContainer>
+                <TabContainer>
+                    <Tab text="Tablets" to={`${url}/tablets`} />
+                    <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="Advanced" to={`${url}/advanced`} />
+                </TabContainer>
 
-  return (
-    <div>
-      <WorkspaceHeader>
-        <NavCrumbs>
-          <Link to="/keyspaces">Keyspaces</Link>
-          <KeyspaceLink clusterID={params.clusterID} name={params.keyspace}>
-            {params.keyspace}
-          </KeyspaceLink>
-        </NavCrumbs>
+                <Switch>
+                    <Route path={`${path}/tablets`}>
+                        <ShardTablets {...params} />
+                    </Route>
 
-        <WorkspaceTitle className="font-mono">{shardName}</WorkspaceTitle>
+                    <Route path={`${path}/json`}>{shard && <Code code={JSON.stringify(shard, null, 2)} />}</Route>
+                    <Route path={`${path}/advanced`}>
+                        <Advanced />
+                    </Route>
+                    <Redirect from={path} to={`${path}/tablets`} />
+                </Switch>
+            </ContentContainer>
 
-        <div className={style.headingMeta}>
-          <span>
-            Cluster: <code>{params.clusterID}</code>
-          </span>
+            {/* TODO skeleton placeholder */}
+            {!!kq.isLoading && <div className={style.placeholder}>Loading</div>}
         </div>
-      </WorkspaceHeader>
-
-      <ContentContainer>
-        <TabContainer>
-          <Tab text="Tablets" to={`${url}/tablets`} />
-          <Tab text="JSON" to={`${url}/json`} />
-          <Tab text="Advanced" to={`${url}/advanced`} />
-        </TabContainer>
-
-        <Switch>
-          <Route path={`${path}/tablets`}>
-            <ShardTablets {...params} />
-          </Route>
-
-          <Route path={`${path}/json`}>{shard && <Code code={JSON.stringify(shard, null, 2)} />}</Route>
-          <Route path={`${path}/advanced`}>
-            <Advanced />
-          </Route>
-          <Redirect from={path} to={`${path}/tablets`} />
-        </Switch>
-      </ContentContainer>
-
-      {/* TODO skeleton placeholder */}
-      {!!kq.isLoading && <div className={style.placeholder}>Loading</div>}
-    </div>
-  );
+    );
 };

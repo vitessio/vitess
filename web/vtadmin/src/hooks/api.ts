@@ -456,7 +456,7 @@ export const useReloadSchema = (
  * useDeleteShard is a mutate hook that deletes a shard in a keyspace.
  */
 export const useDeleteShard = (
-  params: Parameters<typeof deleteShard>[0],
+    params: Parameters<typeof deleteShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof deleteShard>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof deleteShard>>, Error>(() => {
@@ -481,13 +481,13 @@ export const useRebuildKeyspaceGraph = (
  * useReloadSchemaShard is a mutate hook that reloads the schema on all tablets in a shard. This is done on a best-effort basis.
  */
 export const useReloadSchemaShard = (
-  params: Parameters<typeof reloadSchemaShard>[0],
-  options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>
+    params: Parameters<typeof reloadSchemaShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>
 ) => {
-  return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>(() => {
-    return reloadSchemaShard(params);
-  }, options);
-}
+    return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>(() => {
+        return reloadSchemaShard(params);
+    }, options);
+};
 
 /**
  * useTabletExternallyPromoted is a mutate hook that changes metadata in the topology server to
@@ -495,13 +495,13 @@ export const useReloadSchemaShard = (
  * orchestrator).
  */
 export const useTabletExternallyPromoted = (
-  params: Parameters<typeof tabletExternallyPromoted>[0],
-  options?: UseMutationOptions<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>
+    params: Parameters<typeof tabletExternallyPromoted>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>
 ) => {
-  return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>(() => {
-    return tabletExternallyPromoted(params);
-  }, options);
-}
+    return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>(() => {
+        return tabletExternallyPromoted(params);
+    }, options);
+};
 
 /**
  * usePlannedFailoverShard reparents the shard to a new primary that can either be explicitly specified, or chosen by Vitess.
@@ -509,27 +509,27 @@ export const useTabletExternallyPromoted = (
  * See https://vitess.io/docs/reference/programs/vtctl/shards/#plannedreparentshard
  */
 export const usePlannedFailoverShard = (
-  params: Parameters<typeof plannedFailoverShard>[0],
-  options?: UseMutationOptions<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>
+    params: Parameters<typeof plannedFailoverShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>
 ) => {
-  return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>(() => {
-    return plannedFailoverShard(params);
-  }, options);
-}
+    return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>(() => {
+        return plannedFailoverShard(params);
+    }, options);
+};
 
 /**
  * useEmergencyFailoverShard reparents the shard to the new primary. Assumes the old primary is dead and not responding.
  * This calls EmergencyReparentShard in vtctlservice
  * See https://vitess.io/docs/reference/programs/vtctl/shards/#emergencyreparentshard
  */
- export const useEmergencyFailoverShard = (
-  params: Parameters<typeof emergencyFailoverShard>[0],
-  options?: UseMutationOptions<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>
+export const useEmergencyFailoverShard = (
+    params: Parameters<typeof emergencyFailoverShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>
 ) => {
-  return useMutation<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>(() => {
-    return emergencyFailoverShard(params);
-  }, options);
-}
+    return useMutation<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>(() => {
+        return emergencyFailoverShard(params);
+    }, options);
+};
 
 /**
  * useRemoveKeyspaceCell is a mutate hook that removes a keyspace cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
