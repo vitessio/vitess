@@ -506,7 +506,22 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 	}
 
 	defer func() {
-		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
+		var created, altered, dropped []string
+
+		switch ddlStmt := qre.plan.FullStmt.(type) {
+		case *sqlparser.CreateTable:
+			created = append(created, ddlStmt.Table.Name.String())
+
+		case *sqlparser.AlterTable:
+			altered = append(altered, ddlStmt.Table.Name.String())
+
+		case *sqlparser.DropTable:
+			for _, tableName := range ddlStmt.FromTables {
+				dropped = append(dropped, tableName.Name.String())
+			}
+		}
+
+		if err := qre.tsv.se.ReloadEx(qre.ctx, created, altered, dropped); err != nil {
 			log.Errorf("failed to reload schema %v", err)
 		}
 	}()

@@ -194,7 +194,7 @@ func (se *Engine) Open() error {
 	}
 	se.notifiers = make(map[string]notifier)
 
-	if err := se.reload(ctx); err != nil {
+	if err := se.reload(ctx, nil, nil, nil); err != nil {
 		return err
 	}
 	if !se.SkipMetaCheck {
@@ -286,7 +286,14 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 func (se *Engine) Reload(ctx context.Context) error {
-	return se.ReloadAt(ctx, mysql.Position{})
+	return se.ReloadEx(ctx, nil, nil, nil)
+}
+
+// ReloadEx reloads the schema info from the db.
+// The table names specified in the created, altered and dropped parameters are updated.
+// If all of the created, altered and dropped parameters are nil, then any tables that have changed since the last load are updated.
+func (se *Engine) ReloadEx(ctx context.Context, created, altered, dropped []string) error {
+	return se.ReloadAtEx(ctx, mysql.Position{}, created, altered, dropped)
 }
 
 // ReloadAt reloads the schema info from the db.
@@ -294,6 +301,15 @@ func (se *Engine) Reload(ctx context.Context) error {
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
+	return se.ReloadAtEx(ctx, pos, nil, nil, nil)
+}
+
+// ReloadAtEx reloads the schema info from the lists of created, altered and dropped tables.
+// The table names specified in the created, altered and dropped parameters are updated.
+// If all of the created, altered and dropped parameters are nil, then any tables that have changed since the last load are updated.
+// It maintains the position at which the schema was reloaded and if the same position is provided
+// (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
+func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, created, altered, dropped []string) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
@@ -304,15 +320,17 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 		log.V(2).Infof("ReloadAt: found cached schema at %s", mysql.EncodePosition(pos))
 		return nil
 	}
-	if err := se.reload(ctx); err != nil {
+	if err := se.reload(ctx, created, altered, dropped); err != nil {
 		return err
 	}
 	se.reloadAtPos = pos
 	return nil
 }
 
-// reload reloads the schema. It can also be used to initialize it.
-func (se *Engine) reload(ctx context.Context) error {
+// reload reloads the schema. It can also be used to initialize it. If any of
+// the created, altered or dropped lists are present, performs a partial
+// (faster) reload. Otherwise, performs a full schema reload.
+func (se *Engine) reload(ctx context.Context, created, altered, dropped []string) error {
 	defer func() {
 		se.env.LogError()
 	}()
@@ -332,82 +350,104 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
-	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
-	if err != nil {
-		return err
-	}
-
-	err = se.updateInnoDBRowsRead(ctx, conn)
-	if err != nil {
-		return err
-	}
 
 	rec := concurrency.AllErrorRecorder{}
-	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
-	curTables := map[string]bool{"dual": true}
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
 	changedTables := make(map[string]*Table)
-	// created and altered contain the names of created and altered tables for broadcast.
-	var created, altered []string
-	for _, row := range tableData.Rows {
-		tableName := row[0].ToString()
-		curTables[tableName] = true
-		createTime, _ := evalengine.ToInt64(row[2])
-		fileSize, _ := evalengine.ToUint64(row[4])
-		allocatedSize, _ := evalengine.ToUint64(row[5])
 
-		// publish the size metrics
-		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
-		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
-
-		// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
-		// We also record the last time the schema was loaded (`se.lastChange`). Both are in seconds. We reload a table only when:
-		//   1. A table's underlying mysql metadata has changed: `se.lastChange >= createTime`. This can happen if a table was directly altered.
-		//      Note that we also reload if `se.lastChange == createTime` since it is possible, especially in unit tests,
-		//      that a table might be changed multiple times within the same second.
-		//
-		//   2. A table was swapped in by Online DDL: `createTime != tbl.CreateTime`. When an Online DDL migration is completed the temporary table is
-		//      renamed to the table being altered. `se.lastChange` is updated every time the schema is reloaded (default: 30m).
-		//      Online DDL can take hours. So it is possible that the `create_time` of the temporary table is before se.lastChange. Hence,
-		//      #1 will not identify the renamed table as a changed one.
-		tbl, isInTablesMap := se.tables[tableName]
-		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
-			tbl.FileSize = fileSize
-			tbl.AllocatedSize = allocatedSize
-			continue
+	// partial reload
+	if created != nil || altered != nil || dropped != nil {
+		for _, tableName := range append(created, altered...) {
+			log.V(2).Infof("Reading schema for table: %s", tableName)
+			table, err := LoadTable(conn, se.cp.DBName(), tableName, "")
+			if err != nil {
+				rec.RecordError(err)
+				continue
+			}
+			// Obtaining the values to set table.FileSize,
+			// table.AllocatedSize and table.CreateTime and push
+			// metrics would be too slow, so instead we just leave
+			// them unset until the next async run of this
+			// function, which does a full reload.
+			changedTables[tableName] = table
 		}
-
-		log.V(2).Infof("Reading schema for table: %s", tableName)
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[3].ToString())
+	} else { // full reload
+		tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
 		if err != nil {
-			rec.RecordError(err)
-			continue
+			return err
 		}
-		table.FileSize = fileSize
-		table.AllocatedSize = allocatedSize
-		table.CreateTime = createTime
-		changedTables[tableName] = table
-		if isInTablesMap {
-			altered = append(altered, tableName)
-		} else {
-			created = append(created, tableName)
+
+		err = se.updateInnoDBRowsRead(ctx, conn)
+		if err != nil {
+			return err
 		}
-	}
-	if rec.HasErrors() {
-		return rec.Error()
+
+		// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
+		curTables := map[string]bool{"dual": true}
+		// created and altered contain the names of created and altered tables for broadcast.
+		for _, row := range tableData.Rows {
+			tableName := row[0].ToString()
+			curTables[tableName] = true
+			createTime, _ := evalengine.ToInt64(row[2])
+			fileSize, _ := evalengine.ToUint64(row[4])
+			allocatedSize, _ := evalengine.ToUint64(row[5])
+
+			// publish the size metrics
+			se.tableFileSizeGauge.Set(tableName, int64(fileSize))
+			se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
+
+			// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
+			// We also record the last time the schema was loaded (`se.lastChange`). Both are in seconds. We reload a table only when:
+			//   1. A table's underlying mysql metadata has changed: `se.lastChange >= createTime`. This can happen if a table was directly altered.
+			//      Note that we also reload if `se.lastChange == createTime` since it is possible, especially in unit tests,
+			//      that a table might be changed multiple times within the same second.
+			//
+			//   2. A table was swapped in by Online DDL: `createTime != tbl.CreateTime`. When an Online DDL migration is completed the temporary table is
+			//      renamed to the table being altered. `se.lastChange` is updated every time the schema is reloaded (default: 30m).
+			//      Online DDL can take hours. So it is possible that the `create_time` of the temporary table is before se.lastChange. Hence,
+			//      #1 will not identify the renamed table as a changed one.
+			tbl, isInTablesMap := se.tables[tableName]
+			if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
+				tbl.FileSize = fileSize
+				tbl.AllocatedSize = allocatedSize
+				continue
+			}
+
+			log.V(2).Infof("Reading schema for table: %s", tableName)
+			table, err := LoadTable(conn, se.cp.DBName(), tableName, row[3].ToString())
+			if err != nil {
+				rec.RecordError(err)
+				continue
+			}
+			table.FileSize = fileSize
+			table.AllocatedSize = allocatedSize
+			table.CreateTime = createTime
+			changedTables[tableName] = table
+			if isInTablesMap {
+				altered = append(altered, tableName)
+			} else {
+				created = append(created, tableName)
+			}
+		}
+		if rec.HasErrors() {
+			return rec.Error()
+		}
+
+		// Compute and handle dropped tables.
+		for tableName := range se.tables {
+			if !curTables[tableName] {
+				dropped = append(dropped, tableName)
+				// We can't actually delete the label from the stats, but we can set it to 0.
+				// Many monitoring tools will drop zero-valued metrics.
+				se.tableFileSizeGauge.Reset(tableName)
+				se.tableAllocatedSizeGauge.Reset(tableName)
+			}
+		}
 	}
 
-	// Compute and handle dropped tables.
-	var dropped []string
-	for tableName := range se.tables {
-		if !curTables[tableName] {
-			dropped = append(dropped, tableName)
-			delete(se.tables, tableName)
-			// We can't actually delete the label from the stats, but we can set it to 0.
-			// Many monitoring tools will drop zero-valued metrics.
-			se.tableFileSizeGauge.Reset(tableName)
-			se.tableAllocatedSizeGauge.Reset(tableName)
-		}
+	for _, tableName := range dropped {
+		log.V(2).Infof("Removing schema for dropped table: %s", tableName)
+		delete(se.tables, tableName)
 	}
 
 	// Populate PKColumns for changed tables.
