@@ -23,6 +23,8 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -199,9 +201,10 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 
 	help, _ := localCluster.ShowVtbackupHelp()
 	if !initialBackup && strings.Contains(string(help), "--keep-temporary-files") {
-		// vtbackup should first disable and then enable the redo log.
+		// vtbackup should first disable and then enable the redo log on MySQL >= 8.0.21.
 		var disabledRedoLog int
 		var enabledRedoLog int
+		var gte8021 bool
 
 		errorFile, err := os.OpenFile(mysqlErrorLog, os.O_RDONLY, 0644)
 		require.Nil(t, err, "failed to open mysql error log: %v", err)
@@ -210,6 +213,25 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 		scanner := bufio.NewScanner(bufio.NewReader(errorFile))
 		for scanner.Scan() {
 			text := scanner.Text()
+
+			// MY-010931
+			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_server_startup_msg
+			if strings.Contains(text, "MY-010931") {
+				r, err := regexp.Compile(`Version: '([0-9]+)\.([0-9]+)\.([0-9]+)'`)
+				require.Nil(t, err)
+				v := r.FindStringSubmatch(text)
+				require.Equal(t, 4, len(v))
+				ver := mysqlctl.ServerVersion{}
+				ver.Major, err = strconv.Atoi(string(v[1]))
+				require.Nil(t, err)
+				ver.Minor, err = strconv.Atoi(string(v[2]))
+				require.Nil(t, err)
+				ver.Patch, err = strconv.Atoi(string(v[3]))
+				require.Nil(t, err)
+				gte8021 = ver.Major > 8 ||
+					ver.Major == 8 && ver.Minor > 0 ||
+					ver.Major == 8 && ver.Minor == 0 && ver.Patch >= 21
+			}
 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
@@ -228,8 +250,13 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 			require.Nil(t, err)
 		}
 
-		require.Equal(t, 1, disabledRedoLog)
-		require.Equal(t, 1, enabledRedoLog)
+		if gte8021 {
+			require.Equal(t, 1, disabledRedoLog)
+			require.Equal(t, 1, enabledRedoLog)
+		} else {
+			require.Equal(t, 0, disabledRedoLog)
+			require.Equal(t, 0, enabledRedoLog)
+		}
 	}
 }
 
