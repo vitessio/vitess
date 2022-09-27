@@ -32,6 +32,9 @@ import (
 )
 
 var (
+	//go:embed vtaclcheck.txt
+	vtaclcheckTxt string
+
 	//go:embed vtexplain.txt
 	vtexplainTxt string
 
@@ -60,6 +63,7 @@ var (
 	vttestserverTxt string
 
 	helpOutput = map[string]string{
+		"vtaclcheck":   vtaclcheckTxt,
 		"vtexplain":    vtexplainTxt,
 		"vtgate":       vtgateTxt,
 		"vtgr":         vtgrTxt,
