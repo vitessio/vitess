@@ -113,7 +113,7 @@ type FileEntry struct {
 }
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtexplain"} {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
 		servenv.OnParseFor(cmd, registerBuiltinBackupEngineFlags)
 	}
 }

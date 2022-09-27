@@ -17,7 +17,6 @@ Usage of vtgate:
       --dbddl_plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl_strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
-      --disable_local_gateway                                            deprecated: if specified, this process will not route any queries to local tablets in the local cell
       --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
@@ -79,6 +78,7 @@ Usage of vtgate:
       --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --min_number_serving_vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
+      --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_auth_server_static_file string                             JSON File to read the users/passwords from.
