@@ -183,7 +183,10 @@ visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
+	go run ./go/tools/asthelpergen/main \
+		--in ./go/vt/sqlparser \
+		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
+		--except "*ColName"
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
