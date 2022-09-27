@@ -165,7 +165,6 @@ func (builtinUcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 type builtinCharLength struct{}
 
 func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	var cnt int64
 	inarg := &args[0]
 	t := inarg.typeof()
 
@@ -174,19 +173,23 @@ func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *Eva
 		return
 	}
 
-	coll := collations.Local().LookupByID(inarg.Collation())
+	coll := collations.Local().LookupByID(inarg.collation().Collation)
 
 	if sqltypes.IsNumber(t) {
 		inarg.makeTextualAndConvert(env.DefaultCollation)
-		cnt = int64(len(inarg.value().Raw()))
+		cnt := int64(len(inarg.value().Raw()))
+		result.setInt64(cnt)
 	} else if cla, ok := coll.(collations.CharLengthAwareCollation); ok {
 		raw := inarg.value().Raw()
-		cnt = int64(cla.CharLen(raw))
+		cnt := int64(cla.CharLen(raw))
+		if cnt == -1 {
+			throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
+		}
+		result.setInt64(cnt)
 	} else {
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}
 
-	result.setInt64(cnt)
 }
 
 func (builtinCharLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -218,7 +221,7 @@ func (builtinCharacterLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.
 	return sqltypes.Int64, f
 }
 
-type builtinLength struct{}
+type builtinOctetLength struct{}
 
 func (builtinOctetLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
@@ -239,7 +242,7 @@ func (builtinOctetLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type
 	return sqltypes.Int64, f
 }
 
-type builtinOctetLength struct{}
+type builtinLength struct{}
 
 func (builtinLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]

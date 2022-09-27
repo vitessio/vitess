@@ -166,7 +166,10 @@ func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, match
 }
 
 func (c *Collation_unicode_general_ci) CharLen(src []byte) int {
-	return len(src) / 2
+	if cla, ok := c.Charset().(charset.CharLengthAwareCharset); ok {
+		return cla.CharLen(src)
+	}
+	return -1
 }
 
 type Collation_unicode_bin struct {
@@ -372,5 +375,8 @@ func collationBinary(left, right []byte, rightPrefix bool) int {
 }
 
 func (c *Collation_unicode_bin) CharLen(src []byte) int {
-	return len(src) / 2
+	if cla, ok := c.Charset().(charset.CharLengthAwareCharset); ok {
+		return cla.CharLen(src)
+	}
+	return -1
 }

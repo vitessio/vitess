@@ -29,6 +29,11 @@ import (
 
 const RuneError = utf8.RuneError
 
+type CharLengthAwareCharset interface {
+	Charset
+	CharLen([]byte) int
+}
+
 type Charset = types.Charset
 
 // 8-bit encodings

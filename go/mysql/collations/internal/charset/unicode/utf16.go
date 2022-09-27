@@ -91,6 +91,10 @@ func (Charset_utf16be) SupportsSupplementaryChars() bool {
 	return true
 }
 
+func (Charset_utf16be) CharLen(src []byte) int {
+	return len(src) / 2
+}
+
 type Charset_utf16le struct{}
 
 func (Charset_utf16le) Name() string {
@@ -149,6 +153,10 @@ func (Charset_utf16le) SupportsSupplementaryChars() bool {
 	return true
 }
 
+func (Charset_utf16le) CharLen(src []byte) int {
+	return len(src) / 2
+}
+
 type Charset_ucs2 struct{}
 
 func (Charset_ucs2) Name() string {
@@ -184,4 +192,8 @@ func (Charset_ucs2) DecodeRune(p []byte) (rune, int) {
 
 func (Charset_ucs2) SupportsSupplementaryChars() bool {
 	return false
+}
+
+func (Charset_ucs2) CharLen(src []byte) int {
+	return len(src) / 2
 }
