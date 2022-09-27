@@ -12,7 +12,7 @@ Usage of vttablet:
       --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
       --backup_storage_hook string                                       if set, we send the contents of the backup files through this hook.
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
-      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression (default 2)
+      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --binlog_host string                                               PITR restore parameter: hostname/IP of binlog server.
       --binlog_password string                                           PITR restore parameter: password of binlog server.
       --binlog_player_grpc_ca string                                     the server ca to use to validate servers when connecting
@@ -27,12 +27,12 @@ Usage of vttablet:
       --binlog_ssl_key string                                            PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
       --binlog_ssl_server_name string                                    PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in --binlog_host).
       --binlog_user string                                               PITR restore parameter: username of binlog server.
-      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
-      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files (default 5s)
+      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
-      --compression-level int                                            what level to pass to the compressor (default 1)
+      --compression-level int                                            what level to pass to the compressor. (default 1)
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
@@ -200,9 +200,9 @@ Usage of vttablet:
       --enable_tx_throttler                                              If true replication-lag-based throttling on transactions will be enabled.
       --enforce-tableacl-config                                          if this flag is true, vttablet will fail to start if a valid tableacl config does not exist
       --enforce_strict_trans_tables                                      If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
-      --external-compressor string                                       command with arguments to use when compressing a backup
-      --external-compressor-extension string                             extension to use when using an external compressor
-      --external-decompressor string                                     command with arguments to use when decompressing a backup
+      --external-compressor string                                       command with arguments to use when compressing a backup.
+      --external-compressor-extension string                             extension to use when using an external compressor.
+      --external-decompressor string                                     command with arguments to use when decompressing a backup.
       --file_backup_storage_root string                                  Root directory for the file backup storage.
       --filecustomrules string                                           file based custom rule path
       --filecustomrules_watch                                            set up a watch on the target file and reload query rules when it changes
@@ -297,7 +297,7 @@ Usage of vttablet:
       --orc_timeout duration                                             Timeout for calls to Orchestrator's HTTP API. (default 30s)
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pitr_gtid_lookup_timeout duration                                PITR restore parameter: timeout for fetching gtid from timestamp. (default 1m0s)
-      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
+      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pt-osc-path string                                               override default pt-online-schema-change binary full path
