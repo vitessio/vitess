@@ -86,22 +86,32 @@ import (
 */
 
 var (
-	// connection flags
-	host       = flag.String("host", "", "vtgate host(s) in the form 'host1,host2,...'")
-	port       = flag.Int("port", 0, "vtgate port")
-	unixSocket = flag.String("unix_socket", "", "vtgate unix socket")
-	protocol   = flag.String("protocol", "mysql", "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
-	user       = flag.String("user", "", "username to connect using mysql (password comes from the db-credentials-file)")
-	db         = flag.String("db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
-
-	// test flags
-	deadline = flag.Duration("deadline", 5*time.Minute, "maximum duration for the test run (default 5 minutes)")
-	sql      = flag.String("sql", "", "sql statement to execute")
-	threads  = flag.Int("threads", 2, "number of parallel threads to run")
-	count    = flag.Int("count", 1000, "number of queries per thread")
+	host, unixSocket, user, db, sql string
+	port                            int
+	protocol                        = "mysql"
+	deadline                        = 5 * time.Minute
+	threads                         = 2
+	count                           = 1000
 )
 
+func initFlags() {
+	pflag.StringVar(&host, "host", "", "vtgate host(s) in the form 'host1,host2,...'")
+	pflag.IntVar(&port, "port", 0, "vtgate port")
+	pflag.StringVar(&unixSocket, "unix_socket", "", "vtgate unix socket")
+	pflag.StringVar(&protocol, "protocol", protocol, "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
+	pflag.StringVar(&user, "user", "", "username to connect using mysql (password comes from the db-credentials-file)")
+	pflag.StringVar(&db, "db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
+
+	pflag.DurationVar(&deadline, "deadline", deadline, "maximum duration for the test run (default 5 minutes)")
+	pflag.StringVar(&sql, "sql", "", "sql statement to execute")
+	pflag.IntVar(&threads, "threads", threads, "number of parallel threads to run")
+	pflag.IntVar(&count, "count", count, "number of queries per thread")
+}
+
 func main() {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		initFlags()
+	})
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
 
@@ -116,7 +126,7 @@ func main() {
 	_flag.Parse(fs)
 
 	clientProto := vtbench.MySQL
-	switch *protocol {
+	switch protocol {
 	case "", "mysql":
 		clientProto = vtbench.MySQL
 	case "grpc-vtgate":
@@ -124,51 +134,51 @@ func main() {
 	case "grpc-vttablet":
 		clientProto = vtbench.GRPCVttablet
 	default:
-		log.Exitf("invalid client protocol %s", *protocol)
+		log.Exitf("invalid client protocol %s", protocol)
 	}
 
-	if (*host != "" || *port != 0) && *unixSocket != "" {
+	if (host != "" || port != 0) && unixSocket != "" {
 		log.Exitf("can't specify both host:port and unix_socket")
 	}
 
-	if *host != "" && *port == 0 {
+	if host != "" && port == 0 {
 		log.Exitf("must specify port when using host")
 	}
 
-	if *host == "" && *port != 0 {
+	if host == "" && port != 0 {
 		log.Exitf("must specify host when using port")
 	}
 
-	if *host == "" && *port == 0 && *unixSocket == "" {
+	if host == "" && port == 0 && unixSocket == "" {
 		log.Exitf("vtbench requires either host/port or unix_socket")
 	}
 
-	if *sql == "" {
+	if sql == "" {
 		log.Exitf("must specify sql")
 	}
 
 	var password string
 	if clientProto == vtbench.MySQL {
 		var err error
-		_, password, err = dbconfigs.GetCredentialsServer().GetUserAndPassword(*user)
+		_, password, err = dbconfigs.GetCredentialsServer().GetUserAndPassword(user)
 		if err != nil {
-			log.Exitf("error reading password for user %v from file: %v", *user, err)
+			log.Exitf("error reading password for user %v from file: %v", user, err)
 		}
 	}
 
 	connParams := vtbench.ConnParams{
-		Hosts:      strings.Split(*host, ","),
-		Port:       *port,
-		UnixSocket: *unixSocket,
+		Hosts:      strings.Split(host, ","),
+		Port:       port,
+		UnixSocket: unixSocket,
 		Protocol:   clientProto,
-		DB:         *db,
-		Username:   *user,
+		DB:         db,
+		Username:   user,
 		Password:   password,
 	}
 
-	b := vtbench.NewBench(*threads, *count, connParams, *sql)
+	b := vtbench.NewBench(threads, count, connParams, sql)
 
-	ctx, cancel := context.WithTimeout(context.Background(), *deadline)
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 
 	fmt.Printf("Initializing test with %s protocol / %d threads / %d iterations\n",
