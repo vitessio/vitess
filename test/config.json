@@ -111,7 +111,7 @@
 		},
 		"backup_only": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -120,7 +120,7 @@
 		},
 		"backup_transform": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
