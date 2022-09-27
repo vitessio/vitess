@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package gracefultakeover
+package api
 
 import (
 	"fmt"
@@ -32,13 +32,13 @@ func TestMain(m *testing.M) {
 	var cellInfos []*utils.CellInfo
 	cellInfos = append(cellInfos, &utils.CellInfo{
 		CellName:    utils.Cell1,
-		NumReplicas: 6,
-		NumRdonly:   2,
+		NumReplicas: 2,
+		NumRdonly:   0,
 		UIDBase:     100,
 	})
 	cellInfos = append(cellInfos, &utils.CellInfo{
 		CellName:    utils.Cell2,
-		NumReplicas: 2,
+		NumReplicas: 0,
 		NumRdonly:   0,
 		UIDBase:     200,
 	})
