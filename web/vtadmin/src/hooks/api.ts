@@ -63,6 +63,7 @@ import {
     deleteShard,
     reloadSchemaShard,
     tabletExternallyPromoted,
+    plannedFailoverShard,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -482,5 +483,19 @@ export const useTabletExternallyPromoted = (
 ) => {
   return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>(() => {
     return tabletExternallyPromoted(params);
+  }, options);
+}
+
+/**
+ * usePlannedFailoverShard reparents the shard to a new primary that can either be explicitly specified, or chosen by Vitess.
+ * This calls PlannedReparentShard in vtctlservice
+ * See https://vitess.io/docs/reference/programs/vtctl/shards/#plannedreparentshard
+ */
+export const usePlannedFailoverShard = (
+  params: Parameters<typeof plannedFailoverShard>[0],
+  options?: UseMutationOptions<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>
+) => {
+  return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>(() => {
+    return plannedFailoverShard(params);
   }, options);
 }

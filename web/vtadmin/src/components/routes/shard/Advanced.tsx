@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useParams, Link, useHistory } from 'react-router-dom';
-import { useDeleteShard, useKeyspace, useReloadSchemaShard, useTabletExternallyPromoted, useTablets } from '../../../hooks/api';
+import { useDeleteShard, useKeyspace, usePlannedFailoverShard, useReloadSchemaShard, useTabletExternallyPromoted, useTablets } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel'
 import { success, warn } from '../../Snackbar';
@@ -71,7 +71,7 @@ const Advanced: React.FC = () => {
   );
 
   // externallyReparent parameters
-  const [tablet, setTablet] = useState('')
+  const [tablet, setTablet] = useState<string | undefined>(undefined)
   const externallyPromoteMutation = useTabletExternallyPromoted(
     { alias: tablet, clusterIDs: [params.clusterID] },
     {
@@ -82,6 +82,21 @@ const Advanced: React.FC = () => {
         );
       },
       onError: (error) => warn(`There was an error promoting tablet ${tablet}: ${error}`),
+    }
+  );
+
+  // plannedReparent parameters
+  const [plannedReparentTablet, setPlannedReparentTablet] = useState<string | undefined>(undefined)
+  const plannedReparentMutation = usePlannedFailoverShard(
+    { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, tablet: plannedReparentTablet },
+    {
+      onSuccess: (result) => {
+        success(
+          `Successfully reparented shard ${params.shard} with tablet ${plannedReparentTablet}`,
+          { autoClose: 7000 }
+        );
+      },
+      onError: (error) => warn(`There was an error reparenting shard ${params.shard} with ${plannedReparentTablet}: ${error}`),
     }
   );
 
@@ -163,7 +178,7 @@ const Advanced: React.FC = () => {
                   Changes metadata in the topology service to acknowledge a shard primary change performed by an external tool.
                 </>
               }
-              disabled={tablet === '' || !tablet}
+              disabled={!tablet}
               documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#tabletexternallyreparented"
               loadingText="Reparenting..."
               loadedText="Reparent"
@@ -231,6 +246,37 @@ const Advanced: React.FC = () => {
       <div className="pt-4">
         <div className="my-8">
           <h3 className="mb-4">Reparent</h3>
+          <div>
+            <ActionPanel
+              description={
+                <>
+                  Reparents the shard to a new primary that can either be explicitly specified, or chosen by Vitess.
+                </>
+              }
+              disabled={!plannedReparentTablet}
+              documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#plannedreparentshard"
+              loadingText="Reparenting..."
+              loadedText="Reparent"
+              mutation={plannedReparentMutation as UseMutationResult}
+              title="Planned Reparent"
+              body={
+                <>
+                  <div className="mt-2">
+                    <div className="flex items-center">
+                      <Select
+                        onChange={t => setPlannedReparentTablet(t as string)}
+                        label="Tablet"
+                        items={tabletsInCluster.map(t => formatAlias(t.tablet?.alias))}
+                        selectedItem={plannedReparentTablet}
+                        placeholder="Tablet"
+                        description="This tablet will be the new primary for this shard."
+                      />
+                    </div>
+                  </div>
+                </>
+              }
+            />
+          </div>
         </div>
       </div>
     </>

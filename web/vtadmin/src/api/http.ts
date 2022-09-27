@@ -618,7 +618,7 @@ export const reloadSchemaShard = async (params: ReloadSchemaShardParams) => {
 }
 
 export interface TabletExternallyPromotedParams {
-  alias: string
+  alias?: string
   clusterIDs: string[]
 }
 
@@ -634,4 +634,25 @@ export const tabletExternallyPromoted = async (params: TabletExternallyPromotedP
   if (err) throw Error(err)
 
   return pb.TabletExternallyPromotedResponse.create(result)
+}
+
+export interface PlannedFailoverShardParams {
+  clusterID: string
+  keyspace: string
+  shard: string
+  tablet?: string
+}
+
+export const plannedFailoverShard = async (params: PlannedFailoverShardParams) => {
+  const body: { new_primary?: string } = {}
+  if (params.tablet) body['new_primary'] = params.tablet
+  const { result } = await vtfetch(`/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/planned_failover`, {
+    method: 'post',
+    body: JSON.stringify(body)
+  })
+
+  const err = pb.PlannedFailoverShardResponse.verify(result)
+  if (err) throw Error(err)
+
+  return pb.PlannedFailoverShardResponse.create(result)
 }
