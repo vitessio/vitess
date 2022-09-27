@@ -136,7 +136,6 @@ Flags:
       --log_err_stacks                                  log stack traces for errors
       --log_rotate_max_size uint                        size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                     log to standard error instead of files
-      --master_connect_retry duration                   Deprecated, use -replication_connect_retry (default 10s)
       --mysql_server_version string                     MySQL server version to advertise.
       --mysqlctl_client_protocol string                 the protocol to use to talk to the mysqlctl server (default "grpc")
       --mysqlctl_mycnf_template string                  template file to use for generating the my.cnf file during server init

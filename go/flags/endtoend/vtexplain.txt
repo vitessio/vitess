@@ -46,7 +46,6 @@ Usage of vtexplain:
       --log_queries_to_file string                      Enable query logging to the specified file
       --log_rotate_max_size uint                        size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                     log to standard error instead of files
-      --master_connect_retry duration                   Deprecated, use -replication_connect_retry (default 10s)
       --message_stream_grace_period duration            the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --mysql-server-pool-conn-read-buffers             If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls              If set, the server will allow the use of a clear text password over non-SSL connections.
@@ -74,7 +73,6 @@ Usage of vtexplain:
       --normalize                                       Whether to enable vtgate normalization
       --output-mode string                              Output in human-friendly text or json (default "text")
       --planner-version string                          Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4
-      --planner_version string                          Deprecated flag. Use planner-version instead
       --pool_hostname_resolve_interval duration         if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --pprof strings                                   enable profiling
       --proxy_protocol                                  Enable HAProxy PROXY protocol on MySQL listener socket

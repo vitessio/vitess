@@ -77,8 +77,6 @@ var (
 	mycnfTemplateFile string
 	socketFile        string
 
-	// Deprecated
-	masterConnectRetry      = 10 * time.Second
 	replicationConnectRetry = 10 * time.Second
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
@@ -116,7 +114,6 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&PoolDynamicHostnameResolution, "pool_hostname_resolve_interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 	fs.StringVar(&mycnfTemplateFile, "mysqlctl_mycnf_template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	fs.StringVar(&socketFile, "mysqlctl_socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
-	fs.DurationVar(&masterConnectRetry, "master_connect_retry", masterConnectRetry, "Deprecated, use -replication_connect_retry")
 	fs.DurationVar(&replicationConnectRetry, "replication_connect_retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 }
 
