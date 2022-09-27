@@ -10,7 +10,8 @@ import { Label } from '../../inputs/Label';
 import { TextInput } from '../../TextInput';
 import { NumberInput } from '../../NumberInput';
 import { Select } from '../../inputs/Select';
-import { formatAlias } from '../../../util/tablets'
+import { formatAlias, formatDisplayType } from '../../../util/tablets'
+import { vtadmin } from '../../../proto/vtadmin';
 interface RouteParams {
   clusterID: string;
   keyspace: string;
@@ -36,6 +37,7 @@ const Advanced: React.FC = () => {
         t.tablet?.shard === params.shard
     )
 
+  console.log(tabletsInCluster)
   // deleteShard parameters
   const [evenIfServing, setEvenIfServing] = useState(false)
   const [recursive, setRecursive] = useState(false)
@@ -71,24 +73,24 @@ const Advanced: React.FC = () => {
   );
 
   // externallyReparent parameters
-  const [tablet, setTablet] = useState<string | undefined>(undefined)
+  const [tablet, setTablet] = useState<vtadmin.Tablet | null>(null)
   const externallyPromoteMutation = useTabletExternallyPromoted(
-    { alias: tablet, clusterIDs: [params.clusterID] },
+    { alias: formatAlias(tablet?.tablet?.alias) as string, clusterIDs: [params.clusterID] },
     {
       onSuccess: (result) => {
         success(
-          `Successfully promoted tablet ${tablet}`,
+          `Successfully promoted tablet ${formatAlias(tablet?.tablet?.alias)}`,
           { autoClose: 7000 }
         );
       },
-      onError: (error) => warn(`There was an error promoting tablet ${tablet}: ${error}`),
+      onError: (error) => warn(`There was an error promoting tablet ${formatAlias(tablet?.tablet?.alias)}: ${error}`),
     }
   );
 
   // plannedReparent parameters
-  const [plannedReparentTablet, setPlannedReparentTablet] = useState<string | undefined>(undefined)
+  const [plannedReparentTablet, setPlannedReparentTablet] = useState<vtadmin.Tablet | null>(null)
   const plannedReparentMutation = usePlannedFailoverShard(
-    { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, tablet: plannedReparentTablet },
+    { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, tablet: formatAlias(plannedReparentTablet?.tablet?.alias) as string },
     {
       onSuccess: (result) => {
         success(
@@ -189,9 +191,10 @@ const Advanced: React.FC = () => {
                   <div className="mt-2">
                     <div className="flex items-center">
                       <Select
-                        onChange={t => setTablet(t as string)}
+                        onChange={t => setTablet(t as vtadmin.Tablet)}
                         label="Tablet"
-                        items={tabletsInCluster.map(t => formatAlias(t.tablet?.alias))}
+                        renderItem={(t: vtadmin.Tablet) => `${formatAlias(t.tablet?.alias)} (${formatDisplayType(t)})`}
+                        items={tabletsInCluster}
                         selectedItem={tablet}
                         placeholder="Tablet"
                         description="This chosen tablet will be considered the shard master (but Vitess won't change the replication setup)."
@@ -264,9 +267,10 @@ const Advanced: React.FC = () => {
                   <div className="mt-2">
                     <div className="flex items-center">
                       <Select
-                        onChange={t => setPlannedReparentTablet(t as string)}
+                        onChange={t => setPlannedReparentTablet(t as vtadmin.Tablet)}
                         label="Tablet"
-                        items={tabletsInCluster.map(t => formatAlias(t.tablet?.alias))}
+                        items={tabletsInCluster}
+                        renderItem={(t: vtadmin.Tablet) => `${formatAlias(t.tablet?.alias)} (${formatDisplayType(t)})`}
                         selectedItem={plannedReparentTablet}
                         placeholder="Tablet"
                         description="This tablet will be the new primary for this shard."
