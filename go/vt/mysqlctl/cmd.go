@@ -24,12 +24,43 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.
 func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, *Mycnf, error) {
 	mycnf := NewMycnf(tabletUID, mysqlPort)
+
+	// Choose a random MySQL server-id, since this is a fresh data dir.
+	// We don't want to use the tablet UID as the MySQL server-id,
+	// because reusing server-ids is not safe.
+	//
+	// For example, if a tablet comes back with an empty data dir, it will restore
+	// from backup and then connect to the primary. But if this tablet has the same
+	// server-id as before, and if this tablet was recently a primary, then it can
+	// lose data by skipping binlog events due to replicate-same-server-id=FALSE,
+	// which is the default setting.
+	if err := mycnf.RandomizeMysqlServerID(); err != nil {
+		return nil, nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
+	}
+	if mysqlSocket != "" {
+		mycnf.SocketFile = mysqlSocket
+	}
+
+	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile)
+	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
+}
+
+// CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
+// installation that hasn't been set up yet.
+func CreateMysqldAndMycnfFromFlags(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, *Mycnf, error) {
+	log.Info("Creating mycnf from flags")
+	mycnf, err := NewMycnfFromFlags(tabletUID, mysqlPort)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create mycnf: %v", err)
+	}
+
 	// Choose a random MySQL server-id, since this is a fresh data dir.
 	// We don't want to use the tablet UID as the MySQL server-id,
 	// because reusing server-ids is not safe.

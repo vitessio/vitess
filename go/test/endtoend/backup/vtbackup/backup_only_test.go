@@ -17,23 +17,26 @@ limitations under the License.
 package vtbackup
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -76,6 +79,7 @@ func TestTabletInitialBackup(t *testing.T) {
 
 	tearDown(t, true)
 }
+
 func TestTabletBackupOnly(t *testing.T) {
 	// Test Backup Flow
 	//    TestTabletBackupOnly will:
@@ -127,36 +131,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// backup the replica
 	log.Infof("taking backup %s", time.Now())
-	// before backup, check the number of enable/disable redo_log messages
-	result, err := replica1.VttabletProcess.QueryTablet(
-		`SELECT COUNT(error_code) FROM performance_schema.error_log
-		 WHERE error_code IN ('MY-013600', 'MY-013601');`,
-		keyspaceName,
-		false,
-	)
-	require.Nil(t, err)
-	initialRedoLogEvents, err := strconv.ParseInt(
-		result.Rows[0][0].ToString(),
-		10,
-		64,
-	)
-	require.Nil(t, err)
 	vtBackup(t, false, true)
-	// during backup, innodb error log should be disabled before replication
-	// starts and then enabled after replication is stops
-	result, err = replica1.VttabletProcess.QueryTablet(
-		`SELECT error_code FROM performance_schema.error_log
-		 WHERE error_code IN ('MY-013600', 'MY-013601');`,
-		keyspaceName,
-		false,
-	)
-	require.Nil(t, err)
-	require.Equal(t, initialRedoLogEvents+2, len(result.Rows))
-	lastCodes := result.Rows[len(result.Rows)-2]
-	// MY-013600: https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-	require.Equal(t, "MY-013600", lastCodes[0].ToString())
-	// MY-013601: https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-	require.Equal(t, "MY-013601", lastCodes[0].ToString())
 	log.Infof("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
@@ -182,7 +157,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// check that the restored replica has the right local_metadata
-	result, err = replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")
+	result, err := replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")
 	require.Nil(t, err)
 	require.NotNil(t, result)
 	require.NotEmpty(t, result.Rows)
@@ -200,14 +175,61 @@ func firstBackupTest(t *testing.T, tabletType string) {
 }
 
 func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
+	tabletAlias, err := topotools.RandomTabletAlias("vtbackup_test")
+	require.Nil(t, err)
+	tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
+	defer os.RemoveAll(tabletDir)
+	mysqlErrorLog := path.Join(tabletDir, "error.log")
+
 	// Take the back using vtbackup executable
-	extraArgs := []string{"--allow_first_backup", "--db-credentials-file", dbCredentialFile}
+	extraArgs := []string{
+		"--allow_first_backup",
+		"--db-credentials-file", dbCredentialFile,
+		"--tablet-path", topoproto.TabletAliasString(tabletAlias),
+		"--keep-temporary-files",
+		"--mycnf_error_log_path", mysqlErrorLog,
+	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
+
 	log.Infof("starting backup tablet %s", time.Now())
-	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
+
+	if !initialBackup {
+		// vtbackup should first disable and then enable the redo log.
+		var disabledRedoLog int
+		var enabledRedoLog int
+
+		errorFile, err := os.OpenFile(mysqlErrorLog, os.O_RDONLY, 0644)
+		require.Nil(t, err, "failed to open mysql error log: %v", err)
+		defer errorFile.Close()
+
+		scanner := bufio.NewScanner(bufio.NewReader(errorFile))
+		for scanner.Scan() {
+			text := scanner.Text()
+
+			// MY-013600
+			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
+			if strings.Contains(text, "MY-013600") {
+				disabledRedoLog++
+			}
+
+			// MY-013601
+			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
+			if strings.Contains(text, "MY-013601") {
+				enabledRedoLog++
+			}
+		}
+
+		if !errors.Is(err, io.EOF) {
+			require.Nil(t, err)
+		}
+
+		require.Equal(t, 1, disabledRedoLog)
+		require.Equal(t, 1, enabledRedoLog)
+	}
 }
 
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
@@ -290,7 +312,6 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
-
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
@@ -311,7 +332,6 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 		err = tablet.MysqlctlProcess.Start()
 		require.Nil(t, err)
 	}
-
 }
 
 func tearDown(t *testing.T, initMysql bool) {

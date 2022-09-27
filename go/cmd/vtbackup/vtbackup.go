@@ -59,11 +59,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"flag"
 	"fmt"
-	"math"
-	"math/big"
 	"os"
 	"os/signal"
 	"strings"
@@ -83,6 +80,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -115,12 +113,14 @@ var (
 	allowFirstBackup = flag.Bool("allow_first_backup", false, "Allow this job to take the first backup of an existing shard.")
 
 	restartBeforeBackup = flag.Bool("restart_before_backup", false, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
+	keepTemporaryFiles  = flag.Bool("keep-temporary-files", false, "Retain temporary files and directories after exit.")
 
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
 	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	concurrency        = flag.Int("concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
+	tabletPath         = flag.String("tablet-path", "", "tablet alias")
 
 	// mysqlctld-like flags
 	mysqlPort     = flag.Int("mysql_port", 3306, "mysql port")
@@ -194,33 +194,28 @@ func main() {
 }
 
 func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
-	// This is an imaginary tablet alias. The value doesn't matter for anything,
-	// except that we generate a random UID to ensure the target backup
-	// directory is unique if multiple vtbackup instances are launched for the
-	// same shard, at exactly the same second, pointed at the same backup
-	// storage location.
-	bigN, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	tabletAlias, err := getTabletAlias()
 	if err != nil {
-		return fmt.Errorf("can't generate random tablet UID: %v", err)
-	}
-	tabletAlias := &topodatapb.TabletAlias{
-		Cell: "vtbackup",
-		Uid:  uint32(bigN.Uint64()),
+		return fmt.Errorf("failed to get tablet alias: %v", err)
 	}
 
 	// Clean up our temporary data dir if we exit for any reason, to make sure
 	// every invocation of vtbackup starts with a clean slate, and it does not
 	// accumulate garbage (and run out of disk space) if it's restarted.
 	tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
-	defer func() {
-		log.Infof("Removing temporary tablet directory: %v", tabletDir)
-		if err := os.RemoveAll(tabletDir); err != nil {
-			log.Warningf("Failed to remove temporary tablet directory: %v", err)
-		}
-	}()
+	if !*keepTemporaryFiles {
+		defer func() {
+			log.Infof("Removing temporary tablet directory: %v", tabletDir)
+			if err := os.RemoveAll(tabletDir); err != nil {
+				log.Warningf("Failed to remove temporary tablet directory: %v", err)
+			}
+		}()
+	} else {
+		log.Infof("Will retain temporary tablet directory: %v", tabletDir)
+	}
 
 	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, *mysqlSocket, int32(*mysqlPort))
+	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnfFromFlags(tabletAlias.Uid, *mysqlSocket, int32(*mysqlPort))
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
@@ -709,4 +704,16 @@ func checkBackupComplete(ctx context.Context, backup backupstorage.BackupHandle)
 
 	log.Infof("Found complete backup %v taken at position %v", backup.Name(), manifest.Position.String())
 	return nil
+}
+
+func getTabletAlias() (*topodatapb.TabletAlias, error) {
+	if *tabletPath != "" {
+		tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse --tablet-path: %v", err)
+		}
+		return tabletAlias, nil
+	}
+
+	return topotools.RandomTabletAlias("vtbackup")
 }
