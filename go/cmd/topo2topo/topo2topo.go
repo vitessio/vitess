@@ -48,7 +48,7 @@ var (
 )
 
 func init() {
-	servenv.OnParseFor("topo2topo", func(fs *pflag.FlagSet) {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.StringVar(&fromImplementation, "from_implementation", fromImplementation, "topology implementation to copy data from")
 		fs.StringVar(&fromServerAddress, "from_server", fromServerAddress, "topology server address to copy data from")
 		fs.StringVar(&fromRoot, "from_root", fromRoot, "topology server root to copy data from")
@@ -87,13 +87,13 @@ func main() {
 	ctx := context.Background()
 
 	if compare {
-		compareTopos(ctx, fromTS, toTS, doKeyspaces, doShards, doShardReplications, doTablets)
+		compareTopos(ctx, fromTS, toTS)
 		return
 	}
-	copyTopos(ctx, fromTS, toTS, doKeyspaces, doShards, doShardReplications, doTablets, doRoutingRules)
+	copyTopos(ctx, fromTS, toTS)
 }
 
-func copyTopos(ctx context.Context, fromTS, toTS *topo.Server, doKeyspaces bool, doShards bool, doShardReplications bool, doTablets bool, doRoutingRules bool) {
+func copyTopos(ctx context.Context, fromTS, toTS *topo.Server) {
 	if doKeyspaces {
 		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
@@ -111,7 +111,7 @@ func copyTopos(ctx context.Context, fromTS, toTS *topo.Server, doKeyspaces bool,
 	}
 }
 
-func compareTopos(ctx context.Context, fromTS, toTS *topo.Server, doKeyspaces bool, doShards bool, doShardReplications bool, doTablets bool) {
+func compareTopos(ctx context.Context, fromTS, toTS *topo.Server) {
 	var err error
 	if doKeyspaces {
 		err = helpers.CompareKeyspaces(ctx, fromTS, toTS)
