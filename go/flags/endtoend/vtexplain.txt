@@ -32,7 +32,6 @@ Usage of vtexplain:
       --external-compressor string                      command with arguments to use when compressing a backup.
       --external-compressor-extension string            extension to use when using an external compressor.
       --external-decompressor string                    command with arguments to use when decompressing a backup.
-      --grpc_auth_static_client_creds string            when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
   -h, --help                                            display usage and exit
       --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                     keep logs for this long (using mtime) (zero to keep forever)
