@@ -20,11 +20,11 @@ Usage of vtgate:
       --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
+      --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
       --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
       --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
-      --enable_partial_keyspace_migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable_set_var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
       --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --foreign_key_mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")

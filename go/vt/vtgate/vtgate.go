@@ -43,7 +43,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
@@ -115,7 +114,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&defaultDDLStrategy, "ddl_strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	fs.StringVar(&dbDDLPlugin, "dbddl_plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	fs.BoolVar(&noScatter, "no_scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
-	fs.BoolVar(&enableShardRouting, "enable_partial_keyspace_migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
+	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 	fs.DurationVar(&healthCheckRetryDelay, "healthcheck_retry_delay", healthCheckRetryDelay, "health check retry delay")
 	fs.DurationVar(&healthCheckTimeout, "healthcheck_timeout", healthCheckTimeout, "the health check timeout period")
 	fs.IntVar(&maxPayloadSize, "max_payload_size", maxPayloadSize, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
@@ -339,7 +338,6 @@ func Init(
 	}
 
 	initAPI(gw.hc)
-	planbuilder.EnableShardRoutingFlag(enableShardRouting)
 	return rpcVTGate
 }
 

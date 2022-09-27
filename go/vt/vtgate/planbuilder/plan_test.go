@@ -538,6 +538,10 @@ type vschemaWrapper struct {
 	version       plancontext.PlannerVersion
 }
 
+func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {
+	return false
+}
+
 func (vw *vschemaWrapper) GetVSchema() *vindexes.VSchema {
 	return vw.v
 }
