@@ -11,7 +11,8 @@ import { TextInput } from '../../TextInput';
 import { NumberInput } from '../../NumberInput';
 import { Select } from '../../inputs/Select';
 import { formatAlias, formatDisplayType } from '../../../util/tablets'
-import { vtadmin } from '../../../proto/vtadmin';
+import { logutil, vtadmin } from '../../../proto/vtadmin';
+import Dialog from '../../dialog/Dialog';
 interface RouteParams {
   clusterID: string;
   keyspace: string;
@@ -29,6 +30,12 @@ const Advanced: React.FC = () => {
   const { data: keyspace, ...kq } = useKeyspace({ clusterID: params.clusterID, name: params.keyspace });
   const { data: tablets = [] } = useTablets();
 
+  // dialog parameters
+  const [isOpen, setIsOpen] = useState(false)
+  const [dialogTitle, setDialogTitle] = useState('')
+  const [dialogDescription, setDialogDescription] = useState('')
+  const [events, setEvents] = useState<logutil.IEvent[]>([])
+
   const tabletsInCluster = tablets
     .filter(
       (t) =>
@@ -37,7 +44,6 @@ const Advanced: React.FC = () => {
         t.tablet?.shard === params.shard
     )
 
-  console.log(tabletsInCluster)
   // deleteShard parameters
   const [evenIfServing, setEvenIfServing] = useState(false)
   const [recursive, setRecursive] = useState(false)
@@ -90,13 +96,13 @@ const Advanced: React.FC = () => {
   // plannedReparent parameters
   const [plannedReparentTablet, setPlannedReparentTablet] = useState<vtadmin.Tablet | null>(null)
   const plannedReparentMutation = usePlannedFailoverShard(
-    { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, tablet: formatAlias(plannedReparentTablet?.tablet?.alias) as string },
+    { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, new_primary: plannedReparentTablet as vtadmin.Tablet },
     {
       onSuccess: (result) => {
-        success(
-          `Successfully reparented shard ${params.shard} with tablet ${plannedReparentTablet}`,
-          { autoClose: 7000 }
-        );
+        setDialogTitle(`Planned Reparent`)
+        setDialogDescription(`Successfully reparented shard ${params.shard} with tablet ${formatAlias(plannedReparentTablet?.tablet?.alias)}.`)
+        setIsOpen(true)
+        setEvents(result.events)
       },
       onError: (error) => warn(`There was an error reparenting shard ${params.shard} with ${plannedReparentTablet}: ${error}`),
     }
@@ -117,6 +123,24 @@ const Advanced: React.FC = () => {
 
   return (
     <>
+      <Dialog
+        className="min-w-[500px]"
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        title={dialogTitle}
+        hideCancel
+        confirmText='Dismiss'
+      >
+        <>
+          <div className="mt-8 mb-4">{dialogDescription}</div>
+          <div className="mb-2 font-bold">Log</div>
+          <div className="bg-gray-100 p-4 overflow-x-scroll">
+            {events.map(e => (
+              <div className="font-mono text-sm whitespace-nowrap">[{new Date(e.time?.seconds as number * 1000).toISOString()} {e.file}:{e.line}] {e.value}</div>
+            ))}
+          </div>
+        </>
+      </Dialog>
       <div className="pt-4">
         <div className="my-8">
           <h3 className="mb-4">Status</h3>

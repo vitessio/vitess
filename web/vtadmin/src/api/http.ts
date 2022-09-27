@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
+import { vtadmin as pb, vtadmin, vtctldata } from '../proto/vtadmin';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
@@ -640,12 +640,13 @@ export interface PlannedFailoverShardParams {
   clusterID: string
   keyspace: string
   shard: string
-  tablet?: string
+  new_primary?: vtadmin.Tablet
 }
 
 export const plannedFailoverShard = async (params: PlannedFailoverShardParams) => {
-  const body: { new_primary?: string } = {}
-  if (params.tablet) body['new_primary'] = params.tablet
+  const body: Partial<pb.PlannedFailoverShardRequest["options"]> = {}
+  if (params.new_primary) body['new_primary'] = params.new_primary.tablet?.alias
+
   const { result } = await vtfetch(`/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/planned_failover`, {
     method: 'post',
     body: JSON.stringify(body)
