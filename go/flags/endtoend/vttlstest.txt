@@ -1,4 +1,4 @@
-vttlstest is a tool for generating test certificates and keys for TLS tests.
+vttlstest is a tool for generating test certificates, keys, and related artifacts for TLS tests.
 
 Usage:
   vttlstest [command]
@@ -14,6 +14,6 @@ Available Commands:
 
 Flags:
   -h, --help          help for vttlstest
-      --root string   root directory for certificates and keys (default ".")
+      --root string   root directory for all artifacts (default ".")
 
 Use "vttlstest [command] --help" for more information about a command.

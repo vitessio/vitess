@@ -28,57 +28,67 @@ var (
 	root       = "."
 	parent     = "ca"
 	serial     = "01"
-	commonName = ""
+	commonName string
 
 	rootCmd = &cobra.Command{
 		Use:   "vttlstest",
-		Short: "vttlstest is a tool for generating test certificates and keys for TLS tests.",
-		Long:  "vttlstest is a tool for generating test certificates and keys for TLS tests.",
+		Short: "vttlstest is a tool for generating test certificates, keys, and related artifacts for TLS tests.",
+		Long:  "vttlstest is a tool for generating test certificates, keys, and related artifacts for TLS tests.",
 	}
 
 	createCACmd = &cobra.Command{
-		Use:   "CreateCA",
-		Short: "Create certificate authority",
-		Long:  "Create certificate authority",
-		Args:  cobra.NoArgs,
-		Run:   runCreateCA,
+		Use:                   "CreateCA [--root <dir>] <name>",
+		DisableFlagsInUseLine: true,
+		Example:               "CreateCA --root /tmp",
+		Short:                 "Create certificate authority",
+		Long:                  "Create certificate authority",
+		Args:                  cobra.NoArgs,
+		Run:                   runCreateCA,
 	}
 
 	createIntermediateCACmd = &cobra.Command{
-		Use:   "CreateIntermediateCA",
-		Short: "Create intermediate certificate authority",
-		Long:  "Create intermediate certificate authority",
-		Args:  cobra.ExactArgs(1),
-		Run:   runCreateIntermediateCA,
+		Use:                   "CreateIntermediateCA [--root <dir>] [--parent <name>] [--serial <serial>] [--common-name <CN>] <CA name>",
+		DisableFlagsInUseLine: true,
+		Example:               "CreateIntermediateCA --root /tmp --parent ca mail.mycoolsite.com",
+		Short:                 "Create intermediate certificate authority",
+		Long:                  "Create intermediate certificate authority",
+		Args:                  cobra.ExactArgs(1),
+		Run:                   runCreateIntermediateCA,
 	}
 
 	createCRLCmd = &cobra.Command{
-		Use:   "CreateCRL",
-		Short: "Create certificate revocation list",
-		Long:  "Create certificate revocation list",
-		Args:  cobra.ExactArgs(1),
-		Run:   runCreateCRL,
+		Use:                   "CreateCRL [--root <dir>] <server>",
+		DisableFlagsInUseLine: true,
+		Example:               "CreateCRL --root /tmp mail.mycoolsite.com",
+		Short:                 "Create certificate revocation list",
+		Long:                  "Create certificate revocation list",
+		Args:                  cobra.ExactArgs(1),
+		Run:                   runCreateCRL,
 	}
 
 	createSignedCertCmd = &cobra.Command{
-		Use:   "CreateSignedCert",
-		Short: "Create signed certificate",
-		Long:  "Create signed certificate",
-		Args:  cobra.ExactArgs(1),
-		Run:   runCreateSignedCert,
+		Use:                   "CreateSignedCert [--root <dir>] [--parent <name>] [--serial <serial>] [--common-name <CN>] <cert name>",
+		DisableFlagsInUseLine: true,
+		Example:               "CreateSignedCert --root /tmp --common-name mail.mysite.com --parent mail.mycoolsite.com postman1",
+		Short:                 "Create signed certificate",
+		Long:                  "Create signed certificate",
+		Args:                  cobra.ExactArgs(1),
+		Run:                   runCreateSignedCert,
 	}
 
 	revokeCertCmd = &cobra.Command{
-		Use:   "RevokeCert",
-		Short: "Revoke a certificate",
-		Long:  "Revoke a certificate",
-		Args:  cobra.ExactArgs(1),
-		Run:   runRevokeCert,
+		Use:                   "RevokeCert [--root <dir>] [--parent <name>] <cert name>",
+		DisableFlagsInUseLine: true,
+		Example:               "RevokeCert --root /tmp --parent mail.mycoolsite.com postman1",
+		Short:                 "Revoke a certificate",
+		Long:                  "Revoke a certificate",
+		Args:                  cobra.ExactArgs(1),
+		Run:                   runRevokeCert,
 	}
 )
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&root, "root", root, "root directory for certificates and keys")
+	rootCmd.PersistentFlags().StringVar(&root, "root", root, "root directory for all artifacts")
 
 	rootCmd.AddCommand(createCACmd)
 	rootCmd.AddCommand(createIntermediateCACmd)
