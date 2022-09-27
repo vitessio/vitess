@@ -1073,7 +1073,7 @@ Gen4 error: unsupported: '*' expression in cross-shard query
       "Sharded": true
     },
     "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
-    "Query": "select id, count(*) as c from `user` where id = 1 group by id having c = 10",
+    "Query": "select id, count(*) as c from `user` where id = 1 group by id having count(*) = 10",
     "Table": "`user`",
     "Values": [
       "INT64(1)"
@@ -3388,7 +3388,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a = 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a = 10",
+    "Predicate": ":0 = 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3423,7 +3423,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a = '1'",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a = '1'",
+    "Predicate": ":0 = '1'",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3458,7 +3458,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a != 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a != 10",
+    "Predicate": ":0 != 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3493,7 +3493,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a != '1'",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a != '1'",
+    "Predicate": ":0 != '1'",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3528,7 +3528,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003e 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a \u003e 10",
+    "Predicate": ":0 \u003e 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3563,7 +3563,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003e= 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a \u003e= 10",
+    "Predicate": ":0 \u003e= 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3598,7 +3598,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003c 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a \u003c 10",
+    "Predicate": ":0 \u003c 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3633,7 +3633,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003c= 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a \u003c= 10",
+    "Predicate": ":0 \u003c= 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3668,7 +3668,7 @@ Gen4 plan same as above
   "Original": "select col, count(*) a from user group by col having a \u003c= 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a \u003c= 10",
+    "Predicate": ":1 \u003c= 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3712,7 +3712,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "a = 1.00",
+        "Predicate": ":0 = 1.00",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4913,7 +4913,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "fooSum + :2 = 42",
+        "Predicate": ":1 + :2 = 42",
         "Inputs": [
           {
             "OperatorType": "Aggregate",

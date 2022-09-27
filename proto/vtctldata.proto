@@ -90,7 +90,7 @@ message MaterializeSettings {
   // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
   // and to the SourceTimeZone in reverse workflows
   string target_time_zone = 11;
-
+  repeated string source_shards = 12;
 }
 
 /* Data types for VtctldServer */
@@ -200,6 +200,21 @@ message ApplyRoutingRulesRequest {
 }
 
 message ApplyRoutingRulesResponse {
+}
+
+message ApplyShardRoutingRulesRequest {
+  vschema.ShardRoutingRules shard_routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyShardRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyShardRoutingRulesResponse {
 }
 
 message ApplySchemaRequest {
@@ -546,7 +561,7 @@ message GetCellsAliasesRequest {
 }
 
 message GetCellsAliasesResponse {
-  map<string,topodata.CellsAlias> aliases = 1;
+  map<string, topodata.CellsAlias> aliases = 1;
 }
 
 message GetFullStatusRequest {
@@ -622,17 +637,24 @@ message GetShardResponse {
   Shard shard = 1;
 }
 
+message GetShardRoutingRulesRequest {
+}
+
+message GetShardRoutingRulesResponse {
+  vschema.ShardRoutingRules shard_routing_rules = 1;
+}
+
 message GetSrvKeyspaceNamesRequest {
   repeated string cells = 1;
 }
 
 message GetSrvKeyspaceNamesResponse {
-    // Names is a mapping of cell name to a list of SrvKeyspace names.
-    map<string, NameList> names = 1;
+  // Names is a mapping of cell name to a list of SrvKeyspace names.
+  map<string, NameList> names = 1;
 
-    message NameList {
-      repeated string names = 1;
-    }
+  message NameList {
+    repeated string names = 1;
+  }
 }
 
 message GetSrvKeyspacesRequest {
@@ -659,7 +681,7 @@ message GetSrvVSchemasRequest {
   repeated string cells = 2;
 }
 
-message GetSrvVSchemasResponse {  
+message GetSrvVSchemasResponse {
   // SrvVSchemas is a mapping of cell name to SrvVSchema
   map<string, vschema.SrvVSchema> srv_v_schemas = 1;
 }

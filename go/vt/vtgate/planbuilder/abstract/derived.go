@@ -50,7 +50,7 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 		return nil, err
 	}
 
-	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
+	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	if err != nil {
 		return nil, err
 	}

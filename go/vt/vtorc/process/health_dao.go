@@ -84,8 +84,8 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 		if config.Config.IsSQLite() {
 			dbBackend = config.Config.SQLite3DataFile
 		} else {
-			dbBackend = fmt.Sprintf("%s:%d", config.Config.MySQLOrchestratorHost,
-				config.Config.MySQLOrchestratorPort)
+			dbBackend = fmt.Sprintf("%s:%d", config.Config.MySQLVTOrcHost,
+				config.Config.MySQLVTOrcPort)
 		}
 		sqlResult, err := db.ExecVTOrc(`
 			insert ignore into node_health

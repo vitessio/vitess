@@ -37,7 +37,6 @@ export interface ActionPanelProps {
   warnings?: React.ReactNodeArray;
   body?: React.ReactNode;
 }
-
 /**
  * ActionPanel is a panel used for initiating mutations on entity pages.
  * When rendering multiple ActionPanel components, ensure they are in
@@ -82,6 +81,16 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
         </a>
       </div>
       <p className="text-base mt-0">{description}</p>
+
+      {warnings.map(
+        (warning, i) =>
+          warning && (
+            <div className="text-danger flex items-center" key={i}>
+              <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
+              {warning}
+            </div>
+          )
+      )}
 
       {warnings.map(
         (warning, i) =>

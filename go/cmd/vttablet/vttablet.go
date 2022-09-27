@@ -20,8 +20,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"flag"
 	"os"
+	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -45,14 +47,23 @@ import (
 )
 
 var (
-	enforceTableACLConfig        = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
-	tableACLConfig               = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
-	tableACLConfigReloadInterval = flag.Duration("table-acl-config-reload-interval", 0, "Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload")
-	tabletPath                   = flag.String("tablet-path", "", "tablet alias")
-	tabletConfig                 = flag.String("tablet_config", "", "YAML file config for tablet")
+	enforceTableACLConfig        bool
+	tableACLConfig               string
+	tableACLConfigReloadInterval time.Duration
+	tabletPath                   string
+	tabletConfig                 string
 
 	tm *tabletmanager.TabletManager
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&enforceTableACLConfig, "enforce-tableacl-config", enforceTableACLConfig, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
+	fs.StringVar(&tableACLConfig, "table-acl-config", tableACLConfig, "path to table access checker config file; send SIGHUP to reload this file")
+	fs.DurationVar(&tableACLConfigReloadInterval, "table-acl-config-reload-interval", tableACLConfigReloadInterval, "Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload")
+	fs.StringVar(&tabletPath, "tablet-path", tabletPath, "tablet alias")
+	fs.StringVar(&tabletConfig, "tablet_config", tabletConfig, "YAML file config for tablet")
+
+}
 
 func init() {
 	servenv.RegisterDefaultFlags()
@@ -60,6 +71,7 @@ func init() {
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
+	servenv.OnParseFor("vttablet", registerFlags)
 }
 
 func main() {
@@ -69,10 +81,10 @@ func main() {
 	servenv.ParseFlags("vttablet")
 	servenv.Init()
 
-	if *tabletPath == "" {
+	if tabletPath == "" {
 		log.Exit("--tablet-path required")
 	}
-	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
+	tabletAlias, err := topoproto.ParseTabletAlias(tabletPath)
 	if err != nil {
 		log.Exitf("failed to parse --tablet-path: %v", err)
 	}
@@ -134,17 +146,17 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 		log.Exitf("invalid config: %v", err)
 	}
 
-	if *tabletConfig != "" {
-		bytes, err := os.ReadFile(*tabletConfig)
+	if tabletConfig != "" {
+		bytes, err := os.ReadFile(tabletConfig)
 		if err != nil {
-			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
+			log.Exitf("error reading config file %s: %v", tabletConfig, err)
 		}
 		if err := yaml2.Unmarshal(bytes, config); err != nil {
 			log.Exitf("error parsing config file %s: %v", bytes, err)
 		}
 	}
 	gotBytes, _ := yaml2.Marshal(config)
-	log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
+	log.Infof("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes)
 
 	var mycnf *mysqlctl.Mycnf
 	var socketFile string
@@ -192,10 +204,10 @@ func extractOnlineDDL() error {
 }
 
 func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) *tabletserver.TabletServer {
-	if *tableACLConfig != "" {
+	if tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
-	} else if *enforceTableACLConfig {
+	} else if enforceTableACLConfig {
 		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 	// creates and registers the query service
@@ -205,6 +217,6 @@ func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletA
 		addStatusParts(qsc)
 	})
 	servenv.OnClose(qsc.StopService)
-	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig, *tableACLConfigReloadInterval)
+	qsc.InitACL(tableACLConfig, enforceTableACLConfig, tableACLConfigReloadInterval)
 	return qsc
 }

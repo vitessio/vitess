@@ -145,7 +145,7 @@ func TestExpandStar(t *testing.T) {
 		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b",
 	}, {
 		sql:    "select * from t1 join t5 using (b) having b = 12",
-		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b having b = 12",
+		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b having t1.b = 12",
 	}, {
 		sql:    "select 1 from t1 join t5 using (b) having b = 12",
 		expSQL: "select 1 from t1 join t5 where t1.b = t5.b having t1.b = 12",
@@ -288,6 +288,35 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}, {
 		sql:    "select id from t1 order by 1 collate utf8_general_ci",
 		expSQL: "select id from t1 order by id collate utf8_general_ci asc",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement := ast.(*sqlparser.Select)
+			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+}
+
+func TestHavingByColumnName(t *testing.T) {
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+		expErr string
+	}{{
+		sql:    "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
+		expSQL: "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

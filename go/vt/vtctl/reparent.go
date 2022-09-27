@@ -64,7 +64,7 @@ func init() {
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
+	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
@@ -82,7 +82,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
+	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
@@ -106,7 +106,7 @@ func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
+	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
@@ -150,7 +150,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 }
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
+	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 

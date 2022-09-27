@@ -26,8 +26,11 @@ SHARD=80-c0 CELL=zone1 KEYSPACE=main TABLET_UID=400 ./scripts/vttablet-up.sh
 CELL=zone1 TABLET_UID=500 ./scripts/mysqlctl-up.sh
 SHARD=c0- CELL=zone1 KEYSPACE=main TABLET_UID=500 ./scripts/vttablet-up.sh
 
-# set primary
-vtctldclient InitShardPrimary --force main/-40 zone1-200
-vtctldclient InitShardPrimary --force main/40-80 zone1-300
-vtctldclient InitShardPrimary --force main/80-c0 zone1-400
-vtctldclient InitShardPrimary --force main/c0- zone1-500
+for shard in "-40" "40-80" "80-c0" "c0-"; do
+  # Wait for a primary tablet to be elected in the shard
+  for _ in $(seq 0 200); do
+  	vtctldclient GetTablets --keyspace main --shard $shard | grep -q "primary" && break
+  	sleep 1
+  done;
+  vtctldclient GetTablets --keyspace main --shard $shard | grep "primary" || (echo "Timed out waiting for primary to be elected in main/$shard" && exit 1)
+done;

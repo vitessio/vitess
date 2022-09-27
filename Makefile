@@ -183,15 +183,18 @@ visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
+	go run ./go/tools/asthelpergen/main \
+		--in ./go/vt/sqlparser \
+		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
+		--except "*ColName"
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
-		-in ./go/... \
-	  	-gen vitess.io/vitess/go/pools.Setting \
-	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
-	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
-	  	-gen vitess.io/vitess/go/sqltypes.Result
+		--in ./go/... \
+		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
+		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
+		--gen vitess.io/vitess/go/sqltypes.Result
 
 astfmtgen:
 	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...

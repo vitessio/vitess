@@ -101,6 +101,8 @@ type VTAdminClient interface {
 	// shard primary's cell as promotion candidates unless NewPrimary is
 	// explicitly provided in the request.
 	PlannedFailoverShard(ctx context.Context, in *PlannedFailoverShardRequest, opts ...grpc.CallOption) (*PlannedFailoverShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	RebuildKeyspaceGraph(ctx context.Context, in *RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*RebuildKeyspaceGraphResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -112,6 +114,8 @@ type VTAdminClient interface {
 	ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error)
 	// ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
 	ReloadSchemaShard(ctx context.Context, in *ReloadSchemaShardRequest, opts ...grpc.CallOption) (*ReloadSchemaShardResponse, error)
+	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+	RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -409,6 +413,15 @@ func (c *vTAdminClient) PlannedFailoverShard(ctx context.Context, in *PlannedFai
 	return out, nil
 }
 
+func (c *vTAdminClient) RebuildKeyspaceGraph(ctx context.Context, in *RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*RebuildKeyspaceGraphResponse, error) {
+	out := new(RebuildKeyspaceGraphResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RebuildKeyspaceGraph", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error) {
 	out := new(RefreshStateResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RefreshState", in, out, opts...)
@@ -439,6 +452,15 @@ func (c *vTAdminClient) ReloadSchemas(ctx context.Context, in *ReloadSchemasRequ
 func (c *vTAdminClient) ReloadSchemaShard(ctx context.Context, in *ReloadSchemaShardRequest, opts ...grpc.CallOption) (*ReloadSchemaShardResponse, error) {
 	out := new(ReloadSchemaShardResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReloadSchemaShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error) {
+	out := new(RemoveKeyspaceCellResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RemoveKeyspaceCell", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -617,6 +639,8 @@ type VTAdminServer interface {
 	// shard primary's cell as promotion candidates unless NewPrimary is
 	// explicitly provided in the request.
 	PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	RebuildKeyspaceGraph(context.Context, *RebuildKeyspaceGraphRequest) (*RebuildKeyspaceGraphResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -628,6 +652,8 @@ type VTAdminServer interface {
 	ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error)
 	// ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
 	ReloadSchemaShard(context.Context, *ReloadSchemaShardRequest) (*ReloadSchemaShardResponse, error)
+	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+	RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -754,6 +780,9 @@ func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest
 func (UnimplementedVTAdminServer) PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PlannedFailoverShard not implemented")
 }
+func (UnimplementedVTAdminServer) RebuildKeyspaceGraph(context.Context, *RebuildKeyspaceGraphRequest) (*RebuildKeyspaceGraphResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RebuildKeyspaceGraph not implemented")
+}
 func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshState not implemented")
 }
@@ -765,6 +794,9 @@ func (UnimplementedVTAdminServer) ReloadSchemas(context.Context, *ReloadSchemasR
 }
 func (UnimplementedVTAdminServer) ReloadSchemaShard(context.Context, *ReloadSchemaShardRequest) (*ReloadSchemaShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemaShard not implemented")
+}
+func (UnimplementedVTAdminServer) RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -1313,6 +1345,24 @@ func _VTAdmin_PlannedFailoverShard_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_RebuildKeyspaceGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebuildKeyspaceGraphRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RebuildKeyspaceGraph(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RebuildKeyspaceGraph",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RebuildKeyspaceGraph(ctx, req.(*RebuildKeyspaceGraphRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RefreshStateRequest)
 	if err := dec(in); err != nil {
@@ -1381,6 +1431,24 @@ func _VTAdmin_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).ReloadSchemaShard(ctx, req.(*ReloadSchemaShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveKeyspaceCellRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RemoveKeyspaceCell(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RemoveKeyspaceCell",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RemoveKeyspaceCell(ctx, req.(*RemoveKeyspaceCellRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1685,6 +1753,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_PlannedFailoverShard_Handler,
 		},
 		{
+			MethodName: "RebuildKeyspaceGraph",
+			Handler:    _VTAdmin_RebuildKeyspaceGraph_Handler,
+		},
+		{
 			MethodName: "RefreshState",
 			Handler:    _VTAdmin_RefreshState_Handler,
 		},
@@ -1699,6 +1771,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReloadSchemaShard",
 			Handler:    _VTAdmin_ReloadSchemaShard_Handler,
+		},
+		{
+			MethodName: "RemoveKeyspaceCell",
+			Handler:    _VTAdmin_RemoveKeyspaceCell_Handler,
 		},
 		{
 			MethodName: "RunHealthCheck",

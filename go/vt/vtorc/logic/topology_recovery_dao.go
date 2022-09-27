@@ -351,7 +351,7 @@ func ExpireBlockedRecoveries() error {
 				from blocked_topology_recovery
 				where
 					last_blocked_timestamp < NOW() - interval ? second
-			`, (config.RecoveryPollSeconds * 2),
+			`, config.Config.RecoveryPollSeconds*2,
 	)
 	if err != nil {
 		log.Error(err)
