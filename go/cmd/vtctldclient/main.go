@@ -43,6 +43,7 @@ func main() {
 	// hack to get rid of an "ERROR: logging before flag.Parse"
 	args := os.Args[:]
 	os.Args = os.Args[:1]
+	servenv.ParseFlags("vtctldclient")
 	flag.Parse()
 	os.Args = args
 
