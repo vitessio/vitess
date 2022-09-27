@@ -4979,6 +4979,14 @@ func TestCreateTable(t *testing.T) {
 		{
 			input: "create table t (\n" +
 				"\ti int\n)" +
+				"ROW_FORMAT=DYNAMIC",
+			output: "create table t (\n" +
+				"\ti int\n) " +
+				"ROW_FORMAT DYNAMIC",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n)" +
 				"engine = innodb\n" +
 				"auto_increment 123,\n" +
 				"avg_row_length 1,\n" +
