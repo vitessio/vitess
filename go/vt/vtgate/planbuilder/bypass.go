@@ -26,16 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var enableShardRouting bool
-
-func EnableShardRoutingFlag(val bool) {
-	enableShardRouting = val
-}
-
-func IsShardRoutingEnabled() bool {
-	return enableShardRouting
-}
-
 func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
@@ -48,7 +38,7 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", vschema.TargetString())
 		}
 	case key.DestinationShard:
-		if !IsShardRoutingEnabled() {
+		if !vschema.IsShardRoutingEnabled() {
 			break
 		}
 		shard := string(dest)
