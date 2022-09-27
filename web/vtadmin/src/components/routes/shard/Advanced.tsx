@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useParams, Link, useHistory } from 'react-router-dom';
-import { useDeleteShard, useKeyspace, usePlannedFailoverShard, useReloadSchemaShard, useTabletExternallyPromoted, useTablets } from '../../../hooks/api';
+import { useDeleteShard, useEmergencyFailoverShard, useKeyspace, usePlannedFailoverShard, useReloadSchemaShard, useTabletExternallyPromoted, useTablets } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel'
 import { success, warn } from '../../Snackbar';
@@ -99,12 +99,27 @@ const Advanced: React.FC = () => {
     { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, new_primary: plannedReparentTablet as vtadmin.Tablet },
     {
       onSuccess: (result) => {
-        setDialogTitle(`Planned Reparent`)
-        setDialogDescription(`Successfully reparented shard ${params.shard} with tablet ${formatAlias(plannedReparentTablet?.tablet?.alias)}.`)
+        setDialogTitle(`Planned Failover`)
+        setDialogDescription(`Successfully failed over shard ${params.shard} to tablet ${formatAlias(plannedReparentTablet?.tablet?.alias)}.`)
         setIsOpen(true)
         setEvents(result.events)
       },
-      onError: (error) => warn(`There was an error reparenting shard ${params.shard} with ${plannedReparentTablet}: ${error}`),
+      onError: (error) => warn(`There was an error failing over shard ${params.shard} to ${plannedReparentTablet}: ${error}`),
+    }
+  );
+
+  // emergencyReparent parameters
+  const [emergencyReparentTablet, setEmergencyReparentTablet] = useState<vtadmin.Tablet | null>(null)
+  const emergencyReparentMutation = useEmergencyFailoverShard(
+    { clusterID: params.clusterID, keyspace: params.keyspace, shard: params.shard, new_primary: emergencyReparentTablet as vtadmin.Tablet },
+    {
+      onSuccess: (result) => {
+        setDialogTitle(`Emergency Failover`)
+        setDialogDescription(`Successfully failed over ${params.shard} to tablet ${formatAlias(emergencyReparentTablet?.tablet?.alias)}.`)
+        setIsOpen(true)
+        setEvents(result.events)
+      },
+      onError: (error) => warn(`There was an error failing over shard ${params.shard} to ${formatAlias(emergencyReparentTablet?.tablet?.alias)}: ${error}`),
     }
   );
 
@@ -282,10 +297,10 @@ const Advanced: React.FC = () => {
               }
               disabled={!plannedReparentTablet}
               documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#plannedreparentshard"
-              loadingText="Reparenting..."
-              loadedText="Reparent"
+              loadingText="Failing over..."
+              loadedText="Failover"
               mutation={plannedReparentMutation as UseMutationResult}
-              title="Planned Reparent"
+              title="Planned Failover"
               body={
                 <>
                   <div className="mt-2">
@@ -296,6 +311,36 @@ const Advanced: React.FC = () => {
                         items={tabletsInCluster}
                         renderItem={(t: vtadmin.Tablet) => `${formatAlias(t.tablet?.alias)} (${formatDisplayType(t)})`}
                         selectedItem={plannedReparentTablet}
+                        placeholder="Tablet"
+                        description="This tablet will be the new primary for this shard."
+                      />
+                    </div>
+                  </div>
+                </>
+              }
+            />
+            <ActionPanel
+              description={
+                <>
+                  Reparents the shard to the new primary. Assumes the old primary is dead and not responding.
+                </>
+              }
+              disabled={!emergencyReparentTablet}
+              documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#emergencyreparentshard"
+              loadingText="Failing over..."
+              loadedText="Failover"
+              mutation={emergencyReparentMutation as UseMutationResult}
+              title="Emergency Failover"
+              body={
+                <>
+                  <div className="mt-2">
+                    <div className="flex items-center">
+                      <Select
+                        onChange={t => setEmergencyReparentTablet(t as vtadmin.Tablet)}
+                        label="Tablet"
+                        items={tabletsInCluster}
+                        renderItem={(t: vtadmin.Tablet) => `${formatAlias(t.tablet?.alias)} (${formatDisplayType(t)})`}
+                        selectedItem={emergencyReparentTablet}
                         placeholder="Tablet"
                         description="This tablet will be the new primary for this shard."
                       />

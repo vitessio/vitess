@@ -657,3 +657,26 @@ export const plannedFailoverShard = async (params: PlannedFailoverShardParams) =
 
   return pb.PlannedFailoverShardResponse.create(result)
 }
+
+export interface EmergencyFailoverShardParams {
+  clusterID: string
+  keyspace: string
+  shard: string
+  new_primary?: vtadmin.Tablet
+}
+
+export const emergencyFailoverShard = async (params: EmergencyFailoverShardParams) => {
+  const body: Partial<pb.PlannedFailoverShardRequest["options"]> = {}
+  if (params.new_primary) body['new_primary'] = params.new_primary.tablet?.alias
+
+  const { result } = await vtfetch(`/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/emergency_failover`, {
+    method: 'post',
+    body: JSON.stringify(body)
+  })
+
+  const err = pb.EmergencyFailoverShardResponse.verify(result)
+  if (err) throw Error(err)
+
+  return pb.EmergencyFailoverShardResponse.create(result)
+}
+
