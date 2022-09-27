@@ -119,7 +119,7 @@ var (
 	detachedMode  bool
 )
 
-func registerVtbackupFlags(fs *pflag.FlagSet) {
+func registerFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&minBackupInterval, "min_backup_interval", minBackupInterval, "Only take a new backup if it's been at least this long since the most recent backup.")
 	fs.DurationVar(&minRetentionTime, "min_retention_time", minRetentionTime, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
 	fs.IntVar(&minRetentionCount, "min_retention_count", minRetentionCount, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
@@ -140,7 +140,7 @@ func registerVtbackupFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	servenv.OnParse(registerVtbackupFlags)
+	servenv.OnParse(registerFlags)
 }
 
 func main() {
