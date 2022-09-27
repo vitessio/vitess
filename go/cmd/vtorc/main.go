@@ -25,6 +25,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/vtorc/server"
+
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	vtlog "vitess.io/vitess/go/vt/log"
@@ -183,6 +185,7 @@ Please update your scripts before the next version, when this will begin to brea
 
 	go app.HTTP(*discovery)
 
+	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {
 		addStatusParts()
 	})
