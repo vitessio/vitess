@@ -26,23 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
-// nolint
-var doc = `
-vttlstest is a tool for generating test certificates and keys for TLS tests.
-
-To create a toplevel CA, use:
-  $ vttlstest --root /tmp CreateCA
-
-To create an intermediate CA, use:
-  $ vttlstest --root /tmp CreateIntermediateCA servers
-
-To create a leaf certificate, use:
-  $ vttlstest --root /tmp CreateSignedCert --parent servers server
-
-To get help on a command, use:
-  $ vttlstest <command> --help
-`
-
 type cmdFunc func(subFlags *flag.FlagSet, args []string)
 
 var (
@@ -59,15 +42,13 @@ func init() {
 		"RevokeCert":           cmdRevokeCert,
 	}
 
-	servenv.OnParseFor("vttlstest", func(fs *flag.FlagSet) {
+	servenv.OnParse(func(fs *flag.FlagSet) {
 		fs.StringVar(&root, "root", root, "root directory for certificates and keys")
 	})
 }
 
 func cmdCreateCA(subFlags *flag.FlagSet, args []string) {
-	if err := subFlags.Parse(args); err != nil {
-		log.Fatalf("Error parsing flags: %v", err)
-	}
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() > 0 {
 		log.Fatalf("CreateCA command doesn't take any parameter")
 	}
@@ -76,10 +57,7 @@ func cmdCreateCA(subFlags *flag.FlagSet, args []string) {
 }
 
 func cmdCreateCRL(subFlags *flag.FlagSet, args []string) {
-	if err := subFlags.Parse(args); err != nil {
-		log.Fatalf("error parsing flags: %v", err)
-	}
-
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("CreateCRL command takes a single CA name as a parameter")
 	}
@@ -91,9 +69,7 @@ func cmdCreateCRL(subFlags *flag.FlagSet, args []string) {
 func cmdRevokeCert(subFlags *flag.FlagSet, args []string) {
 	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
 
-	if err := subFlags.Parse(args); err != nil {
-		log.Fatalf("Error parsing flags: %v", err)
-	}
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("RevokeCert command takes a single name as a parameter")
 	}
@@ -107,9 +83,7 @@ func cmdCreateIntermediateCA(subFlags *flag.FlagSet, args []string) {
 	serial := subFlags.String("serial", "01", "Serial number for the certificate to create. Should be different for two certificates with the same parent.")
 	commonName := subFlags.String("common_name", "", "Common name for the certificate. If empty, uses the name.")
 
-	if err := subFlags.Parse(args); err != nil {
-		log.Fatalf("Error parsing flags: %v", err)
-	}
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("CreateIntermediateCA command takes a single name as a parameter")
 	}
@@ -127,9 +101,7 @@ func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 	serial := subFlags.String("serial", "01", "Serial number for the certificate to create. Should be different for two certificates with the same parent.")
 	commonName := subFlags.String("common_name", "", "Common name for the certificate. If empty, uses the name.")
 
-	if err := subFlags.Parse(args); err != nil {
-		log.Fatalf("Error parsing flags: %v", err)
-	}
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("CreateSignedCert command takes a single name as a parameter")
 	}
@@ -145,12 +117,12 @@ func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
+
 	args := servenv.ParseFlagsWithArgs("vttlstest")
 	if len(args) == 0 {
 		flag.Usage()
 		exit.Return(1)
 	}
-
 	cmdName := args[0]
 	args = args[1:]
 	cmd, ok := cmdMap[cmdName]
