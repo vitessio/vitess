@@ -52,7 +52,7 @@ var (
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
-	fs.BoolVar(&useEffectiveGroups, "grpc_use_effective_groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
+	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
 }
 
 func init() {

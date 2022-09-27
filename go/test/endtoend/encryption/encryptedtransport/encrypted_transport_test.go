@@ -252,7 +252,7 @@ func useEffectiveGroups(t *testing.T, ctx context.Context) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller's groups
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid", "--grpc_use_effective_groups"}
+	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid", "--grpc-use-effective-groups"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
