@@ -48,33 +48,11 @@ type (
 func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
-		switch {
-		case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
-			return leftToRightSolve(ctx, op)
-		default:
-			return greedySolve(ctx, op)
-		}
+		return optimizeQueryGraph(ctx, op)
 	case *abstract.Join:
-		opInner, err := CreatePhysicalOperator(ctx, op.LHS)
-		if err != nil {
-			return nil, err
-		}
-		opOuter, err := CreatePhysicalOperator(ctx, op.RHS)
-		if err != nil {
-			return nil, err
-		}
-		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		return optimizeJoin(ctx, op)
 	case *abstract.Derived:
-		opInner, err := CreatePhysicalOperator(ctx, op.Inner)
-		if err != nil {
-			return nil, err
-		}
-		return &Derived{
-			Source:        opInner,
-			Query:         op.Sel,
-			Alias:         op.Alias,
-			ColumnAliases: op.ColumnAliases,
-		}, nil
+		return optimizeDerived(ctx, op)
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
 	case *abstract.Vindex:
@@ -82,31 +60,69 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
 	case *abstract.Filter:
-		src, err := CreatePhysicalOperator(ctx, op.Source)
-		if err != nil {
-			return nil, err
-		}
-
-		filter := &Filter{
-			Predicates: op.Predicates,
-		}
-
-		if route, ok := src.(*Route); ok {
-			// let's push the filter into the route
-			filter.Source = route.Source
-			route.Source = filter
-			return route, nil
-		}
-
-		filter.Source = src
-
-		return filter, nil
+		return optimizeFilter(ctx, op)
 	case *abstract.Update:
 		return createPhysicalOperatorFromUpdate(ctx, op)
 	case *abstract.Delete:
 		return createPhysicalOperatorFromDelete(ctx, op)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
+	}
+}
+
+func optimizeFilter(ctx *plancontext.PlanningContext, op *abstract.Filter) (abstract.PhysicalOperator, error) {
+	src, err := CreatePhysicalOperator(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := &Filter{
+		Predicates: op.Predicates,
+	}
+
+	if route, ok := src.(*Route); ok {
+		// let's push the filter into the route
+		filter.Source = route.Source
+		route.Source = filter
+		return route, nil
+	}
+
+	filter.Source = src
+
+	return filter, nil
+}
+
+func optimizeDerived(ctx *plancontext.PlanningContext, op *abstract.Derived) (abstract.PhysicalOperator, error) {
+	opInner, err := CreatePhysicalOperator(ctx, op.Inner)
+	if err != nil {
+		return nil, err
+	}
+	return &Derived{
+		Source:        opInner,
+		Query:         op.Sel,
+		Alias:         op.Alias,
+		ColumnAliases: op.ColumnAliases,
+	}, nil
+}
+
+func optimizeJoin(ctx *plancontext.PlanningContext, op *abstract.Join) (abstract.PhysicalOperator, error) {
+	opInner, err := CreatePhysicalOperator(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	opOuter, err := CreatePhysicalOperator(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+	return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+}
+
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+	switch {
+	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
+		return leftToRightSolve(ctx, op)
+	default:
+		return greedySolve(ctx, op)
 	}
 }
 
