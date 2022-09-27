@@ -1,0 +1,10 @@
+Usage of vttlstest:
+      --alsologtostderr                  log to standard error as well as files
+  -h, --help                             display usage and exit
+      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                   If non-empty, write log files in this directory
+      --logtostderr                      log to standard error instead of files
+      --root string                      root directory for certificates and keys (default ".")
+      --stderrthreshold severity         logs at or above this threshold go to stderr (default 1)
+  -v, --v Level                          log level for V logs
+      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
