@@ -44,6 +44,9 @@ var (
 	//go:embed vttablet.txt
 	vttabletTxt string
 
+	//go:embed vttlstest.txt
+	vttlstestTxt string
+
 	//go:embed vtctld.txt
 	vtctldTxt string
 
@@ -64,6 +67,7 @@ var (
 		"vtgate":       vtgateTxt,
 		"vtgr":         vtgrTxt,
 		"vttablet":     vttabletTxt,
+		"vttlstest":    vttlstestTxt,
 		"vtctld":       vtctldTxt,
 		"vtctlclient":  vtctlclientTxt,
 		"vtctldclient": vtctldclientTxt,
