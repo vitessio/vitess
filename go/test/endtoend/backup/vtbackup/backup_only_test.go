@@ -197,7 +197,8 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
 
-	if !initialBackup {
+	help, _ := localCluster.ShowVtbackupHelp()
+	if !initialBackup && strings.Contains(string(help), "--keep-temporary-files") {
 		// vtbackup should first disable and then enable the redo log.
 		var disabledRedoLog int
 		var enabledRedoLog int

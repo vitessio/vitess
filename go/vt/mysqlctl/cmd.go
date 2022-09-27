@@ -24,7 +24,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
@@ -54,11 +53,10 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32)
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.
-func CreateMysqldAndMycnfFromFlags(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, *Mycnf, error) {
-	log.Info("Creating mycnf from flags")
-	mycnf, err := NewMycnfFromFlags(tabletUID, mysqlPort)
+func CreateMysqldAndMycnfFromSources(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, *Mycnf, error) {
+	mycnf, err := NewMycnfFromSources(tabletUID, mysqlPort)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create mycnf: %v", err)
+		return nil, nil, err
 	}
 
 	// Choose a random MySQL server-id, since this is a fresh data dir.

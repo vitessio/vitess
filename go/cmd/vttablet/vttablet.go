@@ -154,7 +154,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 	// This also means that backup and restore will not be allowed.
 	if !config.DB.HasGlobalSettings() {
 		var err error
-		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid, 0); err != nil {
+		if mycnf, err = mysqlctl.NewMycnfFromSources(tabletAlias.Uid, 0); err != nil {
 			log.Exitf("mycnf read failed: %v", err)
 		}
 		socketFile = mycnf.SocketFile

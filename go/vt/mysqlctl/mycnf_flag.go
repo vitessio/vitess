@@ -17,11 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"errors"
 	"flag"
-	"os"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // This file handles using command line flags to create a Mycnf object.
@@ -79,45 +75,10 @@ func RegisterFlags() {
 
 // NewMycnfFromFlags creates a Mycnf object from command-line flags.
 //
-// 1. First, create a Mycnf object from NewMycnf.
-// 2. Then, merge in any values from mycnf files.
-//   - If --mycnf_file is specified, used that. Return an error if the
-//     file does not exist or cannot be read.
-//   - Otherwise, use a default mycnf file directived from the tablet UID.
-//     Return an error if the file exists but cannot be read.
-//
-// 3. Then, merge in any provided command-line flags.
-//
 // RegisterFlags should have been called before calling
 // this, otherwise we'll panic.
-func NewMycnfFromFlags(tabletUID uint32, mysqlPort int32) (*Mycnf, error) {
-	var cnfs []*Mycnf
-
-	cnfs = append(cnfs, NewMycnf(tabletUID, mysqlPort))
-
-	// Get a Mycnf file.
-	file := NewMycnf(tabletUID, 0)
-	var path string
-	if *flagMycnfFile == "" {
-		path = MycnfFile(tabletUID)
-		log.Infof("No mycnf_server_id, no mycnf-file specified, using default config for server id %v: %v", tabletUID, path)
-	} else {
-		path = *flagMycnfFile
-		log.Infof("No mycnf_server_id specified, using mycnf-file file: %v", path)
-	}
-	file.Path = path
-	file, err := ReadMycnf(file)
-	if err != nil {
-		if *flagMycnfFile != "" || !errors.Is(err, os.ErrNotExist) {
-			log.Errorf("Failed to read mycnf file: %v", err)
-			return nil, err
-		}
-		log.Errorf("File does not exist: %s", path)
-	} else {
-		cnfs = append(cnfs, file)
-	}
-
-	cnfs = append(cnfs, &Mycnf{
+func NewMycnfFromFlags(tabletUID uint32) *Mycnf {
+	return &Mycnf{
 		ServerID:              uint32(*flagServerID),
 		MysqlPort:             int32(*flagMysqlPort),
 		DataDir:               *flagDataDir,
@@ -135,7 +96,5 @@ func NewMycnfFromFlags(tabletUID uint32, mysqlPort int32) (*Mycnf, error) {
 		PidFile:               *flagPidFile,
 		TmpDir:                *flagTmpDir,
 		SecureFilePriv:        *flagSecureFilePriv,
-	})
-
-	return merge(cnfs...), nil
+	}
 }
