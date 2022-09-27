@@ -37,7 +37,7 @@ var (
 	}
 
 	createCACmd = &cobra.Command{
-		Use:                   "CreateCA [--root <dir>] <name>",
+		Use:                   "CreateCA [--root <dir>]",
 		DisableFlagsInUseLine: true,
 		Example:               "CreateCA --root /tmp",
 		Short:                 "Create certificate authority",
