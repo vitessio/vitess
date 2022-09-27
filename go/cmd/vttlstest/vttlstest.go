@@ -17,16 +17,33 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
+	"os"
+
 	flag "github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
 type cmdFunc func(subFlags *flag.FlagSet, args []string)
+
+const doc = `
+ vttlstest is a tool for generating test certificates and keys for TLS tests.
+
+To create a toplevel CA, use:
+  $ vttlstest [--root <dir>] CreateCA
+To create an intermediate CA, use:
+  $ vttlstest [--root <dir>] [--parent <name>] [--serial <serial num>] [--common-name <name>] CreateIntermediateCA <name>
+To create a certficate revocation list, use:
+  $ vttlstest [--root <dir>] CreateCRL <server>
+To create a leaf certificate, use:
+  $ vttlstest [--root <dir>] [--parent <parent CA name>] [--serial <serial num>] [--common-name <name>] CreateSignedCert <cert name>
+To revoke a certificate, use:
+  $ vttlstest [--root <directory>] [--parent <name>] RevokeCert <name>
+`
 
 var (
 	cmdMap map[string]cmdFunc
@@ -36,8 +53,8 @@ var (
 func init() {
 	cmdMap = map[string]cmdFunc{
 		"CreateCA":             cmdCreateCA,
-		"CreateCRL":            cmdCreateCRL,
 		"CreateIntermediateCA": cmdCreateIntermediateCA,
+		"CreateCRL":            cmdCreateCRL,
 		"CreateSignedCert":     cmdCreateSignedCert,
 		"RevokeCert":           cmdRevokeCert,
 	}
@@ -48,44 +65,30 @@ func init() {
 }
 
 func cmdCreateCA(subFlags *flag.FlagSet, args []string) {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: vttlstest [--root <directory>] CreateCA\n")
+		os.Exit(1)
+	}
 	_ = subFlags.Parse(args)
 	if subFlags.NArg() > 0 {
-		log.Fatalf("CreateCA command doesn't take any parameter")
+		flag.Usage()
 	}
 
 	tlstest.CreateCA(root)
 }
 
-func cmdCreateCRL(subFlags *flag.FlagSet, args []string) {
-	_ = subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		log.Fatalf("CreateCRL command takes a single CA name as a parameter")
-	}
-
-	ca := subFlags.Arg(0)
-	tlstest.CreateCRL(root, ca)
-}
-
-func cmdRevokeCert(subFlags *flag.FlagSet, args []string) {
-	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
-
-	_ = subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		log.Fatalf("RevokeCert command takes a single name as a parameter")
-	}
-
-	name := subFlags.Arg(0)
-	tlstest.RevokeCertAndRegenerateCRL(root, *parent, name)
-}
-
 func cmdCreateIntermediateCA(subFlags *flag.FlagSet, args []string) {
 	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
 	serial := subFlags.String("serial", "01", "Serial number for the certificate to create. Should be different for two certificates with the same parent.")
-	commonName := subFlags.String("common_name", "", "Common name for the certificate. If empty, uses the name.")
+	commonName := subFlags.String("common-name", "", "Common name for the certificate. If empty, uses the name.")
 
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: vttlstest [--root <dir>] [--parent <parent CA name>] [--serial <serial num>] [--common-name <name>] CreateIntermediateCA <CA name>\n")
+		os.Exit(1)
+	}
 	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("CreateIntermediateCA command takes a single name as a parameter")
+		flag.Usage()
 	}
 
 	name := subFlags.Arg(0)
@@ -96,14 +99,32 @@ func cmdCreateIntermediateCA(subFlags *flag.FlagSet, args []string) {
 	tlstest.CreateIntermediateCA(root, *parent, *serial, name, *commonName)
 }
 
+func cmdCreateCRL(subFlags *flag.FlagSet, args []string) {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: vttlstest [--root <directory>] CreateCRL <CA name>\n")
+		os.Exit(1)
+	}
+	_ = subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		flag.Usage()
+	}
+
+	ca := subFlags.Arg(0)
+	tlstest.CreateCRL(root, ca)
+}
+
 func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
 	serial := subFlags.String("serial", "01", "Serial number for the certificate to create. Should be different for two certificates with the same parent.")
-	commonName := subFlags.String("common_name", "", "Common name for the certificate. If empty, uses the name.")
+	commonName := subFlags.String("common-name", "", "Common name for the certificate. If empty, uses the name.")
 
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: vttlstest [--root <dir>] [--parent <parent CA name>] [--serial <serial num>] [--common-name <name>] CreateSignedCert <cert name>\n")
+		os.Exit(1)
+	}
 	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("CreateSignedCert command takes a single name as a parameter")
+		flag.Usage()
 	}
 
 	name := subFlags.Arg(0)
@@ -114,22 +135,47 @@ func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 	tlstest.CreateSignedCert(root, *parent, *serial, name, *commonName)
 }
 
+func cmdRevokeCert(subFlags *flag.FlagSet, args []string) {
+	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: vttlstest [--root <directory>] [--parent <parent cert name>] RevokeCert <cert name>\n")
+		os.Exit(1)
+	}
+	_ = subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		flag.Usage()
+	}
+
+	name := subFlags.Arg(0)
+	tlstest.RevokeCertAndRegenerateCRL(root, *parent, name)
+}
+
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	args := servenv.ParseFlagsWithArgs("vttlstest")
-	if len(args) == 0 {
-		flag.Usage()
-		exit.Return(1)
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprint(os.Stderr, doc)
+		fmt.Fprintln(os.Stderr)
+		flag.PrintDefaults()
+		os.Exit(1)
 	}
+
+	if len(os.Args) == 1 {
+		flag.Usage()
+	}
+
+	args := servenv.ParseFlagsWithArgs("vttlstest")
 	cmdName := args[0]
 	args = args[1:]
 	cmd, ok := cmdMap[cmdName]
 	if !ok {
-		log.Fatalf("Unknown command %v", cmdName)
+		fmt.Fprintf(os.Stderr, "Unknown command: %v\n\n", cmdName)
+		flag.Usage()
 	}
-	subFlags := flag.NewFlagSet(cmdName, flag.ExitOnError)
+	subFlags := flag.NewFlagSet(cmdName, flag.ContinueOnError)
 
 	// Run the command.
 	cmd(subFlags, args)

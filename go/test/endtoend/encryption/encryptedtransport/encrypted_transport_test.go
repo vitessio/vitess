@@ -344,7 +344,7 @@ func createIntermediateCA(ca string, serial string, name string, commonName stri
 		"CreateIntermediateCA", "--",
 		"--parent", ca,
 		"--serial", serial,
-		"--common_name", commonName,
+		"--common-name", commonName,
 		name)
 	return tmpProcess.Run()
 }
@@ -357,7 +357,7 @@ func createSignedCert(ca string, serial string, name string, commonName string) 
 		"CreateSignedCert", "--",
 		"--parent", ca,
 		"--serial", serial,
-		"--common_name", commonName,
+		"--common-name", commonName,
 		name)
 	return tmpProcess.Run()
 }
