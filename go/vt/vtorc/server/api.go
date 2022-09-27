@@ -93,9 +93,15 @@ func returnAsJSON(response http.ResponseWriter, stuff any) {
 
 // problemsAPIHandler is the handler for the problemsAPI endpoint
 func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
+	// This api also supports filtering by shard and keyspace provided.
+	// Currently, both of them have to be provided in order to filter the instances.
+	// Once we split the cluster_name field into keyspace and shard, we can support
+	// filtering just by keyspace as well.
 	shard := request.URL.Query().Get("shard")
 	keyspace := request.URL.Query().Get("keyspace")
 	clusterName := ""
+	// Override the cluster name to filter by only when both the parameters
+	// are specified and not empty
 	if keyspace != "" && shard != "" {
 		clusterName = inst.GetClusterNameFromKeyspaceAndShard(keyspace, shard)
 	}
