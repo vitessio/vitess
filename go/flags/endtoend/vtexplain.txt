@@ -6,18 +6,12 @@ Usage of vtexplain:
       --backup_storage_block_size int                   if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup_storage_compress                         if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
       --backup_storage_hook string                      if set, we send the contents of the backup files through this hook.
-      --backup_storage_number_blocks int                if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --backup_storage_number_blocks int                if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression (default 2)
       --batch-interval duration                         Interval between logical time slots. (default 10ms)
-<<<<<<< HEAD
-      --binlog_player_protocol string                   the protocol to download binlogs from a vttablet (default "grpc")
-      --builtinbackup_mysqld_timeout duration           how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
-      --builtinbackup_progress duration                 how often to send progress updates when backing up large files. (default 5s)
-=======
       --builtinbackup_mysqld_timeout duration           how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
       --builtinbackup_progress duration                 how often to send progress updates when backing up large files (default 5s)
->>>>>>> cb9a67cbed... Update help output
       --compression-engine-name string                  compressor engine used for compression. (default "pargzip")
-      --compression-level int                           what level to pass to the compressor. (default 1)
+      --compression-level int                           what level to pass to the compressor (default 1)
       --db-credentials-file string                      db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                    db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
       --db-credentials-vault-addr string                URL to Vault server
@@ -35,9 +29,9 @@ Usage of vtexplain:
       --default_tablet_type topodatapb.TabletType       The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --disable_active_reparents                        if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --execution-mode string                           The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
-      --external-compressor string                      command with arguments to use when compressing a backup.
-      --external-compressor-extension string            extension to use when using an external compressor.
-      --external-decompressor string                    command with arguments to use when decompressing a backup.
+      --external-compressor string                      command with arguments to use when compressing a backup
+      --external-compressor-extension string            extension to use when using an external compressor
+      --external-decompressor string                    command with arguments to use when decompressing a backup
       --grpc_auth_static_client_creds string            when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
   -h, --help                                            display usage and exit
       --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
@@ -50,6 +44,7 @@ Usage of vtexplain:
       --log_queries_to_file string                      Enable query logging to the specified file
       --log_rotate_max_size uint                        size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                     log to standard error instead of files
+      --master_connect_retry duration                   Deprecated, use -replication_connect_retry (default 10s)
       --message_stream_grace_period duration            the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --mysql-server-pool-conn-read-buffers             If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls              If set, the server will allow the use of a clear text password over non-SSL connections.
@@ -76,7 +71,8 @@ Usage of vtexplain:
       --normalize                                       Whether to enable vtgate normalization
       --output-mode string                              Output in human-friendly text or json (default "text")
       --planner-version string                          Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4
-      --pool_hostname_resolve_interval duration         if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
+      --planner_version string                          Deprecated flag. Use planner-version instead
+      --pool_hostname_resolve_interval duration         if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
       --pprof strings                                   enable profiling
       --proxy_protocol                                  Enable HAProxy PROXY protocol on MySQL listener socket
       --purge_logs_interval duration                    how often try to remove old logs (default 1h0m0s)

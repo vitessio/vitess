@@ -14,21 +14,14 @@ Usage of vtctld:
       --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
       --backup_storage_hook string                                       if set, we send the contents of the backup files through this hook.
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
-<<<<<<< HEAD
-      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
-      --binlog_player_protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
-      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
-      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
-=======
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression (default 2)
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files (default 5s)
->>>>>>> cb9a67cbed... Update help output
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
-      --compression-level int                                            what level to pass to the compressor. (default 1)
+      --compression-level int                                            what level to pass to the compressor (default 1)
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
@@ -49,9 +42,9 @@ Usage of vtctld:
       --durability_policy string                                         type of durability to enforce. Default is none. Other values are dictated by registered plugins (default "none")
       --enable_realtime_stats                                            Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.
       --enable_vtctld_ui                                                 If true, the vtctld web interface will be enabled. Default is true. (default true)
-      --external-compressor string                                       command with arguments to use when compressing a backup.
-      --external-compressor-extension string                             extension to use when using an external compressor.
-      --external-decompressor string                                     command with arguments to use when decompressing a backup.
+      --external-compressor string                                       command with arguments to use when compressing a backup
+      --external-compressor-extension string                             extension to use when using an external compressor
+      --external-decompressor string                                     command with arguments to use when decompressing a backup
       --file_backup_storage_root string                                  Root directory for the file backup storage.
       --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
@@ -91,6 +84,7 @@ Usage of vtctld:
       --log_err_stacks                                                   log stack traces for errors
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
+      --master_connect_retry duration                                    Deprecated, use -replication_connect_retry (default 10s)
       --mysql_server_version string                                      MySQL server version to advertise.
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
@@ -98,7 +92,7 @@ Usage of vtctld:
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb_uri string                                              URI of opentsdb /api/put method
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
-      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
+      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
