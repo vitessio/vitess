@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -30,6 +29,8 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/spf13/pflag"
 )
 
 type (
@@ -488,28 +489,31 @@ func groupAndStringifyPullRequest(pr []prInfo) (string, error) {
 }
 
 func main() {
-	from := flag.String("from", "", "from sha/tag/branch")
-	to := flag.String("to", "HEAD", "to sha/tag/branch")
-	versionName := flag.String("version", "", "name of the version (has to be the following format: v11.0.0)")
-	summaryFile := flag.String("summary", "", "readme file on which there is a summary of the release")
-	flag.Parse()
+	var (
+		from, to, versionName, summaryFile string
+	)
+	pflag.StringVar(&from, "from", "", "from sha/tag/branch")
+	pflag.StringVar(&to, "to", "HEAD", "to sha/tag/branch")
+	pflag.StringVar(&versionName, "version", "", "name of the version (has to be the following format: v11.0.0)")
+	pflag.StringVar(&summaryFile, "summary", "", "readme file on which there is a summary of the release")
+	pflag.Parse()
 
 	// The -version flag must be of a valid format.
 	rx := regexp.MustCompile(`v(\d+)\.(\d+)\.(\d+)`)
 	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
-	versionMatch := rx.FindStringSubmatch(*versionName)
+	versionMatch := rx.FindStringSubmatch(versionName)
 	if len(versionMatch) != 4 {
-		log.Fatal("The -version flag must be set using a valid format. Format: 'vX.X.X'.")
+		log.Fatal("The --version flag must be set using a valid format. Format: 'vX.X.X'.")
 	}
 
 	releaseNotes := releaseNote{
-		Version:           *versionName,
+		Version:           versionName,
 		VersionUnderscore: fmt.Sprintf("%s_%s_%s", versionMatch[1], versionMatch[2], versionMatch[3]), // v14.0.0 -> 14_0_0, this is used to format filenames.
 	}
 
 	// summary of the release
-	if *summaryFile != "" {
-		summary, err := releaseSummary(*summaryFile)
+	if summaryFile != "" {
+		summary, err := releaseSummary(summaryFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -517,7 +521,7 @@ func main() {
 	}
 
 	// known issues
-	knownIssues, err := loadKnownIssues(*versionName)
+	knownIssues, err := loadKnownIssues(versionName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -528,7 +532,7 @@ func main() {
 	releaseNotes.KnownIssues = knownIssuesStr
 
 	// changelog with pull requests
-	prs, authorCommits, commits, err := loadMergedPRs(*from, *to)
+	prs, authorCommits, commits, err := loadMergedPRs(from, to)
 	if err != nil {
 		log.Fatal(err)
 	}
