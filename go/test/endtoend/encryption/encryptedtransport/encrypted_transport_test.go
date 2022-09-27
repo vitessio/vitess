@@ -340,8 +340,8 @@ func createIntermediateCA(ca string, serial string, name string, commonName stri
 	log.Infof("Creating intermediate signed cert and key %s", commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
+		"CreateIntermediateCA",
 		"--root", certDirectory,
-		"CreateIntermediateCA", "--",
 		"--parent", ca,
 		"--serial", serial,
 		"--common-name", commonName,
@@ -353,8 +353,8 @@ func createSignedCert(ca string, serial string, name string, commonName string) 
 	log.Infof("Creating signed cert and key %s", commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
+		"CreateSignedCert",
 		"--root", certDirectory,
-		"CreateSignedCert", "--",
 		"--parent", ca,
 		"--serial", serial,
 		"--common-name", commonName,

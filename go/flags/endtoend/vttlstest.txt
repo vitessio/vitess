@@ -1,36 +1,19 @@
-Usage of vttlstest:
+vttlstest is a tool for generating test certificates and keys for TLS tests.
 
- vttlstest is a tool for generating test certificates and keys for TLS tests.
+Usage:
+  vttlstest [command]
 
-To create a toplevel CA, use:
-  $ vttlstest --root /tmp CreateCA
-To create an intermediate CA, use:
-  $ vttlstest --root /tmp CreateIntermediateCA servers
-To create a leaf certificate, use:
-  $ vttlstest --root /tmp CreateSignedCert --parent servers server
-To get help on a command, use:
-  $ vttlstest <command> --help
+Available Commands:
+  CreateCA             Create certificate authority
+  CreateCRL            Create certificate revocation list
+  CreateIntermediateCA Create intermediate certificate authority
+  CreateSignedCert     Create signed certificate
+  RevokeCert           Revoke a certificate
+  completion           Generate the autocompletion script for the specified shell
+  help                 Help about any command
 
-      --alsologtostderr                   log to standard error as well as files
-      --emit_stats                        If set, emit stats to push-based monitoring and stats backends
-  -h, --help                              display usage and exit
-      --keep_logs duration                keep logs for this long (using ctime) (zero to keep forever)
-      --keep_logs_by_mtime duration       keep logs for this long (using mtime) (zero to keep forever)
-      --log_backtrace_at traceLocation    when logging hits line file:N, emit a stack trace (default :0)
-      --log_dir string                    If non-empty, write log files in this directory
-      --log_err_stacks                    log stack traces for errors
-      --log_rotate_max_size uint          size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --logtostderr                       log to standard error instead of files
-      --pprof strings                     enable profiling
-      --purge_logs_interval duration      how often try to remove old logs (default 1h0m0s)
-      --root string                       root directory for certificates and keys (default ".")
-      --security_policy string            the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --stats_backend string              The name of the registered push-based monitoring/stats backend to use
-      --stats_combine_dimensions string   List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats_common_tags string          Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
-      --stats_drop_variables string       Variables to be dropped from the list of exported variables.
-      --stats_emit_period duration        Interval between emitting stats to all registered backends (default 1m0s)
-      --stderrthreshold severity          logs at or above this threshold go to stderr (default 1)
-  -v, --v Level                           log level for V logs
-      --version                           print binary version
-      --vmodule moduleSpec                comma-separated list of pattern=N settings for file-filtered logging
+Flags:
+  -h, --help          help for vttlstest
+      --root string   root directory for certificates and keys (default ".")
+
+Use "vttlstest [command] --help" for more information about a command.
