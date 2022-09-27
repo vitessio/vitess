@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -32,36 +34,37 @@ import (
 func checkTryLock(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace: %v", err)
+		require.Fail(t, "CreateKeyspace fail", err.Error())
 	}
 
 	conn, err := ts.ConnForCell(context.Background(), topo.GlobalCell)
 	if err != nil {
-		t.Fatalf("ConnForCell(global) failed: %v", err)
+		require.Fail(t, "ConnForCell(global) failed", err.Error())
 	}
 
-	t.Log("===      checkLockTimeout")
+	t.Log("===      checkTryLockTimeout")
 	checkTryLockTimeout(ctx, t, conn)
 
-	t.Log("===      checkLockMissing")
+	t.Log("===      checkTryLockMissing")
 	checkTryLockMissing(ctx, t, conn)
 
-	t.Log("===      checkLockUnblocks")
+	t.Log("===      checkTryLockUnblocks")
 	checkTryLockUnblocks(ctx, t, conn)
 }
 
+// checkTryLockTimeout test the non-blocking nature of TryLock
 func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	lockDescriptor, err := conn.TryLock(ctx, keyspacePath, "")
 	if err != nil {
-		t.Fatalf("TryLock: %v", err)
+		require.Fail(t, "TryLock failed", err.Error())
 	}
 
 	// We have the lock, list the keyspace directory.
 	// It should not contain anything, except Ephemeral files.
 	entries, err := conn.ListDir(ctx, keyspacePath, true /*full*/)
 	if err != nil {
-		t.Fatalf("Listdir(%v) failed: %v", keyspacePath, err)
+		require.Fail(t, "ListDir failed: %v", err.Error())
 	}
 	for _, e := range entries {
 		if e.Name == "Keyspace" {
@@ -75,13 +78,13 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 		p := path.Join(keyspacePath, e.Name)
 		entries, err := conn.ListDir(ctx, p, true /*full*/)
 		if err != nil {
-			t.Fatalf("Listdir(%v) failed: %v", p, err)
+			require.Fail(t, "ListDir failed", err.Error())
 		}
 		for _, e := range entries {
 			if e.Ephemeral {
 				t.Logf("skipping ephemeral node %v in %v", e, p)
 			} else {
-				t.Errorf("Entry in %v has non-ephemeral DirEntry: %v", p, e)
+				require.Fail(t, "non-ephemeral DirEntry")
 			}
 		}
 	}
@@ -89,7 +92,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	// test we can't take the lock again
 	fastCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	if _, err := conn.TryLock(fastCtx, keyspacePath, "again"); !topo.IsErrType(err, topo.NodeExists) {
-		t.Fatalf("TryLock(again): %v", err)
+		require.Fail(t, "TryLock failed", err.Error())
 	}
 	cancel()
 
@@ -100,7 +103,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 		cancel()
 	}()
 	if _, err := conn.TryLock(interruptCtx, keyspacePath, "interrupted"); !topo.IsErrType(err, topo.NodeExists) {
-		t.Fatalf("TryLock(interrupted): %v", err)
+		require.Fail(t, "TryLock failed", err.Error())
 	}
 
 	if err := lockDescriptor.Check(ctx); err != nil {
@@ -108,31 +111,32 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	}
 
 	if err := lockDescriptor.Unlock(ctx); err != nil {
-		t.Fatalf("Unlock(): %v", err)
+		require.Fail(t, "Unlock failed", err.Error())
 	}
 
 	// test we can't unlock again
 	if err := lockDescriptor.Unlock(ctx); err == nil {
-		t.Fatalf("Unlock(again) worked")
+		require.Fail(t, "Unlock failed", err.Error())
 	}
 }
 
-// checkLockMissing makes sure we can't lock a non-existing directory.
+// checkTryLockMissing makes sure we can't lock a non-existing directory.
 func checkTryLockMissing(ctx context.Context, t *testing.T, conn topo.Conn) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace_666")
 	if _, err := conn.TryLock(ctx, keyspacePath, "missing"); err == nil {
-		t.Fatalf("TryLock(test_keyspace_666) worked for non-existing keyspace")
+		require.Fail(t, "TryLock(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
 
-// checkLockUnblocks makes sure that a routine waiting on a lock
-// is unblocked when another routine frees the lock
+// unlike 'checkLockUnblocks', checkTryLockUnblocks will not block on other client but instead
+// keep retrying until it gets the lock.
 func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	unblock := make(chan struct{})
 	finished := make(chan struct{})
 
-	// As soon as we're unblocked, we try to lock the keyspace.
+	// TryLock will keep getting NodeExists until lockDescriptor2 unlock itself.
+	// It will not wait but immediately return with NodeExists error.
 	go func() {
 		<-unblock
 		waitUntil := time.Now().Add(10 * time.Second)
@@ -140,12 +144,12 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 			lockDescriptor, err := conn.TryLock(ctx, keyspacePath, "unblocks")
 			if err != nil {
 				if !topo.IsErrType(err, topo.NodeExists) {
-					t.Errorf("expected nonode exists during trylock")
+					require.Fail(t, "expected node exists during trylock", err.Error())
 				}
 				time.Sleep(1 * time.Second)
 			} else {
 				if err = lockDescriptor.Unlock(ctx); err != nil {
-					t.Errorf("Unlock(test_keyspace): %v", err)
+					require.Fail(t, "Unlock(test_keyspace) failed", err.Error())
 				}
 				close(finished)
 				break
@@ -156,7 +160,7 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 	// Lock the keyspace.
 	lockDescriptor2, err := conn.TryLock(ctx, keyspacePath, "")
 	if err != nil {
-		t.Fatalf("Lock(test_keyspace) failed: %v", err)
+		require.Fail(t, "Lock(test_keyspace) failed", err.Error())
 	}
 
 	// unblock the go routine so it starts waiting
@@ -166,13 +170,13 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 	time.Sleep(5 * time.Second)
 
 	if err = lockDescriptor2.Unlock(ctx); err != nil {
-		t.Fatalf("Unlock(test_keyspace): %v", err)
+		require.Fail(t, "Unlock(test_keyspace) failed", err.Error())
 	}
 
 	timeout := time.After(10 * time.Second)
 	select {
 	case <-finished:
 	case <-timeout:
-		t.Fatalf("unlocking timed out")
+		require.Fail(t, "unlocking timed out")
 	}
 }

@@ -114,7 +114,7 @@ type Conn interface {
 	Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 
 	// TryLock provides exactly same functionality as 'Lock', the only difference is
-	// it tires its best to be unblocking call. Unblocking is the best effort though. Depends
+	// it tires its best to be non-blocking call. Non-blocking is the best effort though. Depends
 	// on implementation it might result in blocking client (for some scenario) just like any other
 	// Lock call for concurrent operations. If there is already lock exists for dirPath then TryLock
 	// unlike Lock will return immediately with error 'lock already exists'.

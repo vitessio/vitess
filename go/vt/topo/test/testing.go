@@ -81,7 +81,7 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	checkLock(t, ts)
 	ts.Close()
 
-	t.Log("=== checkLock")
+	t.Log("=== checkTryLock")
 	ts = factory()
 	checkTryLock(t, ts)
 	ts.Close()

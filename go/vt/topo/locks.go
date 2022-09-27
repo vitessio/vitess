@@ -353,9 +353,12 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 // - an unlock method
 // - an error if anything failed.
 
-// TryLockShard is different then LockShard. It is unblocking which means
-// if there is already a lock at globalcell level for a given shard then instead
+// TryLockShard is different than LockShard. It is non-blocking (best effort) which means
+// if there is already a lock at Global-cell level for a given shard then instead
 // of waiting (block) on that shard it returns immediately with error Lock already acquired.
+// It is the best effort because there is a possibility that we find there is no lock but by the
+// time we try to acquire lock someone else get it before, in this case client will block until
+// the former one releases the lock or current client call times out.
 //
 // We are currently only using this method to lock actions that would
 // impact each-other. Most changes of the Shard object are done by
@@ -365,6 +368,13 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 //   - InitShardPrimary
 //   - PlannedReparentShard
 //   - EmergencyReparentShard
+//
+// * any vtorc recovery e.g
+//   - RecoverDeadPrimary
+//   - ElectNewPrimary
+//   - FixPrimary
+//
+// * before any replication repair from replication manager
 //
 // * operations that we don't want to conflict with re-parenting:
 //   - DeleteTablet when it's the shard's current primary
@@ -468,7 +478,7 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 }
 
 // tryLockShard will lock the shard in the topology server.
-// It is unblocking call for blocking call lockshard instead.
+// It is non-blocking call for blocking call lockshard instead.
 // UnlockShard should be called if this returns no error.
 func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)

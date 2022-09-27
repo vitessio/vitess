@@ -125,7 +125,7 @@ type etcdLockDescriptor struct {
 
 // TryLock is part of the topo.Conn interface.
 // TryLock provides exactly same functionality as 'Lock', the only difference is
-// it tires its best to be unblocking call. Unblocking is the best effort though.
+// it tires its best to be non-blocking call. Non-blocking is the best effort though.
 // If there is already lock exists for dirPath then TryLock
 // unlike Lock will return immediately with error 'lock already exists'.
 func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
