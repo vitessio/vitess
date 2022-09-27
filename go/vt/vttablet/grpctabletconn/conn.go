@@ -58,12 +58,15 @@ func registerFlags(fs *pflag.FlagSet) {
 
 func init() {
 	tabletconn.RegisterDialer(protocolName, DialTablet)
-
-	servenv.OnParseFor("vtbench", registerFlags)
-	servenv.OnParseFor("vtctl", registerFlags)
-	servenv.OnParseFor("vtctld", registerFlags)
-	servenv.OnParseFor("vtgate", registerFlags)
-	servenv.OnParseFor("vttablet", registerFlags)
+	for _, cmd := range []string{
+		"vtbench",
+		"vtctl",
+		"vtctld",
+		"vtgate",
+		"vttablet",
+	} {
+		servenv.OnParseFor(cmd, registerFlags)
+	}
 }
 
 // gRPCQueryClient implements a gRPC implementation for QueryService
