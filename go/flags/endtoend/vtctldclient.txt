@@ -154,7 +154,7 @@ Flags:
   -v, --v Level                                         log level for V logs
       --version                                         print binary version
       --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging
-      --vtctl_client_protocol string                    the protocol to use to talk to the vtctl server (default "grpc")
+      --vtctl_client_protocol string                    Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld_grpc_ca string                           the server ca to use to validate servers when connecting
       --vtctld_grpc_cert string                         the cert to use to connect
       --vtctld_grpc_crl string                          the server crl to use to validate server certificates when connecting
