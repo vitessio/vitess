@@ -47,8 +47,7 @@ func RegisterSchemaACLFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	// register flag
-	for _, cmd := range []string{"vtexplain", "vtcombo", "vtgate", "vtgateclienttest"} {
+	for _, cmd := range []string{"vtcombo", "vtgate", "vtgateclienttest"} {
 		servenv.OnParseFor(cmd, RegisterSchemaACLFlags)
 	}
 }
