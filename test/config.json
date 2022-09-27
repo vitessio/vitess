@@ -111,7 +111,7 @@
 		},
 		"backup_only": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -120,7 +120,7 @@
 		},
 		"backup_transform": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -996,7 +996,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 2,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -1005,7 +1005,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 2,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_partialmovetables": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTables"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_basic": {
@@ -1024,6 +1033,15 @@
 			"Manual": false,
 			"Shard": "vreplication_basic",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vstream_flush_binlog": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVStreamFlushBinlog"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_failover": {

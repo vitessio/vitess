@@ -65,12 +65,12 @@ const defaultConsumeDelay = 1 * time.Second
 const aclErrorMessageLog = "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io"
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, user *string) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, user string) *Tracker {
 	ctx := context.Background()
 	// Set the caller on the context if the user is provided.
 	// This user that will be sent down to vttablet calls.
-	if user != nil && *user != "" {
-		ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID(*user))
+	if user != "" {
+		ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID(user))
 	}
 
 	return &Tracker{

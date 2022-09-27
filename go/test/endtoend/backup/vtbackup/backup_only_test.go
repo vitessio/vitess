@@ -140,8 +140,8 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	// eventhough we change the value of compression it won't effect
 	// decompression since it gets its value from MANIFEST file, created
 	// as part of backup.
-	*mysqlctl.CompressionEngineName = "lz4"
-	defer func() { *mysqlctl.CompressionEngineName = "pgzip" }()
+	mysqlctl.CompressionEngineName = "lz4"
+	defer func() { mysqlctl.CompressionEngineName = "pgzip" }()
 	// now bring up the other replica, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
@@ -271,9 +271,8 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 	err = tablet.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
-	// Empty the dir
-	err = os.RemoveAll(tablet.VttabletProcess.Directory)
-	require.Nil(t, err)
+	// Clear out the previous data
+	tablet.MysqlctlProcess.CleanupFiles(tablet.TabletUID)
 
 	if initMysql {
 		// Init the Mysql

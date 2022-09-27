@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -42,8 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to the client.")
 
 const (
 	// connBufferSize is how much we buffer for reading and
@@ -232,6 +229,8 @@ var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 // writersPool is used for pooling bufio.Writer objects.
 var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
+var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, connBufferSize) }}
+
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
@@ -254,9 +253,19 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		closed:      sync2.NewAtomicBool(false),
 		PrepareData: make(map[uint32]*PrepareData),
 	}
+
 	if listener.connReadBufferSize > 0 {
-		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		var buf *bufio.Reader
+		if listener.connBufferPooling {
+			buf = readersPool.Get().(*bufio.Reader)
+			buf.Reset(conn)
+		} else {
+			buf = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		}
+
+		c.bufferedReader = buf
 	}
+
 	return c
 }
 
@@ -289,6 +298,14 @@ func (c *Conn) endWriterBuffering() error {
 	return c.bufferedWriter.Flush()
 }
 
+func (c *Conn) returnReader() {
+	if c.bufferedReader == nil {
+		return
+	}
+	c.bufferedReader.Reset(nil)
+	readersPool.Put(c.bufferedReader)
+}
+
 // getWriter returns the current writer. It may be either
 // the original connection or a wrapper. The returned unget
 // function must be invoked after the writing is finished.
@@ -309,7 +326,7 @@ func (c *Conn) getWriter() (w io.Writer, unget func()) {
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
 	c.stopFlushTimer()
-	c.flushTimer = time.AfterFunc(*mysqlServerFlushDelay, func() {
+	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
 		c.bufMu.Lock()
 		defer c.bufMu.Unlock()
 

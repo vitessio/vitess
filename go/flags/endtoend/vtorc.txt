@@ -6,7 +6,6 @@ Usage of vtorc:
       --config string                            config file name
   -d, --destination string                       destination instance, host_fqdn[:port] (synonym to -s)
       --discovery                                auto discovery mode (default true)
-      --emit_stats                               If set, emit stats to push-based monitoring and stats backends
       --enable-database-update                   Enable database update, overrides SkipVTOrcDatabaseUpdate
       --grab-election                            Grab leadership (only applies to continuous mode)
       --grpc_auth_static_client_creds string     when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
@@ -28,7 +27,6 @@ Usage of vtorc:
       --log_err_stacks                           log stack traces for errors
       --log_rotate_max_size uint                 size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                              log to standard error instead of files
-      --mysql_server_flush_delay duration        Delay after which buffered response will be flushed to the client. (default 100ms)
       --noop                                     Dry run; do not perform destructing operations
       --onclose_timeout duration                 wait no more than this for OnClose handlers before stopping (default 1ns)
       --onterm_timeout duration                  wait no more than this for OnTermSync handlers before stopping (default 10s)
@@ -46,11 +44,6 @@ Usage of vtorc:
       --skip-unresolve                           Do not unresolve a host name
       --skip-unresolve-check                     Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname
       --statement string                         Statement/hint
-      --stats_backend string                     The name of the registered push-based monitoring/stats backend to use
-      --stats_combine_dimensions string          List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats_common_tags string                 Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
-      --stats_drop_variables string              Variables to be dropped from the list of exported variables.
-      --stats_emit_period duration               Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                 logs at or above this threshold go to stderr (default 1)
       --tablet_manager_grpc_ca string            the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string          the cert to use to connect

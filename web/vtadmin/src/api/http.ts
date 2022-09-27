@@ -560,3 +560,70 @@ export const reloadSchema = async (params: ReloadSchemaParams) => {
 
     return pb.ReloadSchemasResponse.create(result);
 };
+
+export interface RebuildKeyspaceGraphParams {
+    clusterID: string;
+    keyspace: string;
+
+    // A comma-separated list of cells, eg. "zone1,zone2"
+    cells?: string;
+
+    allowPartial?: boolean;
+}
+
+export const rebuildKeyspaceGraph = async (params: RebuildKeyspaceGraphParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/rebuild_keyspace_graph`, {
+        method: 'put',
+        body: JSON.stringify({ cells: params.cells, allow_partial: params.allowPartial }),
+    });
+    const err = pb.RebuildKeyspaceGraphRequest.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RebuildKeyspaceGraphResponse.create(result);
+};
+
+export interface RemoveKeyspaceCellParams {
+    clusterID: string;
+    keyspace: string;
+    cell: string;
+    force: boolean;
+    recursive: boolean;
+}
+
+export const removeKeyspaceCell = async (params: RemoveKeyspaceCellParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/remove_keyspace_cell`, {
+        method: 'put',
+        body: JSON.stringify({ cell: params.cell, force: params.force, recursive: params.recursive }),
+    });
+    const err = pb.RemoveKeyspaceCellRequest.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RemoveKeyspaceCellResponse.create(result);
+};
+
+export interface CreateShardParams {
+    keyspace: string;
+    clusterID: string;
+
+    // shardName is the name of the shard to create. E.g. "-" or "-80".
+    shard_name: string;
+
+    // force treats an attempt to create a shard that already exists as a
+    // non-error.
+    force?: boolean;
+
+    // IncludeParent creates the parent keyspace as an empty BASE keyspace, if it
+    // doesn't already exist.
+    include_parent?: boolean;
+}
+
+export const createShard = async (params: CreateShardParams) => {
+    const { result } = await vtfetch(`/api/shards/${params.clusterID}`, {
+        method: 'post',
+        body: JSON.stringify(params),
+    });
+    const err = pb.CreateShardRequest.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.CreateShardResponse.create(result);
+};

@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -64,6 +65,7 @@ var (
 	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
 	forcePortStart     = flag.Int("force-port-start", 0, "force assigning ports based on this seed")
 	forceBaseTabletUID = flag.Int("force-base-tablet-uid", 0, "force assigning tablet ports based on this seed")
+	partialKeyspace    = flag.Bool("partial-keyspace", false, "add a second keyspace for sharded tests and mark first shard as moved to this keyspace in the shard routing rules")
 
 	// PerfTest controls whether to run the slower end-to-end tests that check the system's performance
 	PerfTest = flag.Bool("perf-test", false, "include end-to-end performance tests")
@@ -122,6 +124,8 @@ type LocalProcessCluster struct {
 
 	context.Context
 	context.CancelFunc
+
+	HasPartialKeyspaces bool
 }
 
 // Vttablet stores the properties needed to start a vttablet process
@@ -252,6 +256,44 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly)
 }
 
+func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+
+	cluster.HasPartialKeyspaces = true
+	routedKeyspace := &Keyspace{
+		Name:      fmt.Sprintf("%s_routed", keyspace.Name),
+		SchemaSQL: keyspace.SchemaSQL,
+		VSchema:   keyspace.VSchema,
+	}
+
+	err = cluster.startKeyspace(*routedKeyspace, shardNames, replicaCount, rdonly, customizers...)
+	if err != nil {
+		return err
+	}
+	shardRoutingRulesTemplate := `{"rules":[{"from_keyspace":"%s","to_keyspace":"%s","shards":"%s"}]}`
+	shardRoutingRules := fmt.Sprintf(shardRoutingRulesTemplate, keyspace.Name, routedKeyspace.Name, movedShard)
+	cmd := exec.Command("vtctldclient", "--server",
+		net.JoinHostPort("localhost", strconv.Itoa(cluster.VtctldProcess.GrpcPort)),
+		"ApplyShardRoutingRules", "--rules", shardRoutingRules)
+	_, err = cmd.Output()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+	err = cluster.startKeyspace(keyspace, shardNames, replicaCount, rdonly, customizers...)
+	if err != nil {
+		return err
+	}
+
+	if *partialKeyspace && len(shardNames) > 1 {
+		movedShard := shardNames[0]
+		return cluster.startPartialKeyspace(keyspace, shardNames, movedShard, replicaCount, rdonly, customizers...)
+	}
+	return nil
+}
+
 // StartKeyspace starts required number of shard and the corresponding tablets
 // keyspace : struct containing keyspace name, Sqlschema to apply, VSchema to apply
 // shardName : list of shard names
@@ -259,7 +301,7 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 // rdonly: whether readonly tablets needed
 // customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
 // after they're created.
-func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
 	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
@@ -598,6 +640,9 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
+	if cluster.HasPartialKeyspaces {
+		cluster.VtGateExtraArgs = append(cluster.VtGateExtraArgs, "--enable-partial-keyspace-migration")
+	}
 	vtgateInstance := *cluster.NewVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
 	log.Infof("Starting vtgate on port %d", vtgateInstance.Port)
@@ -629,6 +674,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
 	go cluster.CtrlCHandler()
+
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
 	cluster.VtGatePlannerVersion = defaultVtGatePlannerVersion
@@ -1060,6 +1106,7 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *
 		LogDir:       cluster.TmpDirectory,
 		Config:       config,
 		WebPort:      cluster.GetAndReservePort(),
+		Port:         cluster.GetAndReservePort(),
 	}
 }
 
@@ -1146,4 +1193,17 @@ func (cluster *LocalProcessCluster) PrintMysqlctlLogFiles() {
 			log.Errorf(string(logOut))
 		}
 	}
+}
+
+// GetVTParams returns mysql.ConnParams with host and port only for regular tests enabling global routing,
+// and also dbname if we are testing for a cluster with a partially moved keyspace
+func (cluster *LocalProcessCluster) GetVTParams(dbname string) mysql.ConnParams {
+	params := mysql.ConnParams{
+		Host: cluster.Hostname,
+		Port: cluster.VtgateMySQLPort,
+	}
+	if cluster.HasPartialKeyspaces {
+		params.DbName = dbname
+	}
+	return params
 }

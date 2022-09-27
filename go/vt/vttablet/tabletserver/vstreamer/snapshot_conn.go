@@ -19,18 +19,37 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// If the current binary log is greater than this byte size, we
+// will attempt to rotate it before starting a GTID snapshot
+// based stream.
+// Default is 64MiB.
+var binlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
+
 // snapshotConn is wrapper on mysql.Conn capable of
-// reading a table along with a gtid snapshot.
+// reading a table along with a GTID snapshot.
 type snapshotConn struct {
 	*mysql.Conn
 	cp dbconfigs.Connector
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerSnapshotConnFlags)
+	servenv.OnParseFor("vttablet", registerSnapshotConnFlags)
+}
+
+func registerSnapshotConnFlags(fs *pflag.FlagSet) {
+	fs.Int64Var(&binlogRotationThreshold, "vstream-binlog-rotation-threshold", binlogRotationThreshold, "Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer)")
 }
 
 func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn, error) {
@@ -45,8 +64,24 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 }
 
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
-// It returns the gtid of the time when the snapshot was taken.
-func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
+// It returns the GTID set from the time when the snapshot was taken.
+func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, rotatedLog bool, err error) {
+	// Rotate the binary log if needed to limit the GTID auto positioning overhead.
+	// This may be needed as the currently open binary log (which can be up to 1G in
+	// size by default) will need to be scanned and empty events will be streamed for
+	// those GTIDs in the log that we are skipping. In total, this can add a lot of
+	// overhead on both the mysqld instance and the tablet.
+	// Rotating the log when it's above a certain size ensures that we are processing
+	// a relatively small binary log that will be minimal in size and GTID events.
+	// We only attempt to rotate it if the current log is of any significant size to
+	// avoid too many unecessary rotations.
+	if rotatedLog, err = conn.limitOpenBinlogSize(); err != nil {
+		// This is a best effort operation meant to lower overhead and improve performance.
+		// Thus it should not be required, nor cause the operation to fail.
+		log.Warningf("Failed in attempt to potentially flush binary logs in order to lessen overhead and improve performance of a VStream using query %q: %v",
+			query, err)
+	}
+
 	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
 	if err != nil {
 		// session_track_gtids = START_GTID unsupported or cannot execute. Resort to LOCK-based snapshot
@@ -56,12 +91,12 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 		gtid, err = conn.startSnapshotWithConsistentGTID(ctx)
 	}
 	if err != nil {
-		return "", err
+		return "", rotatedLog, err
 	}
 	if err := conn.ExecuteStreamFetch(query); err != nil {
-		return "", err
+		return "", rotatedLog, err
 	}
-	return gtid, nil
+	return gtid, rotatedLog, nil
 }
 
 // snapshot performs the snapshotting.
@@ -138,4 +173,45 @@ func (conn *snapshotConn) Close() {
 
 func mysqlConnect(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
 	return cp.Connect(ctx)
+}
+
+// limitOpenBinlogSize will rotate the binary log if the current binary
+// log is greater than binlogRotationThreshold.
+func (conn *snapshotConn) limitOpenBinlogSize() (bool, error) {
+	rotatedLog := false
+	// Output: https://dev.mysql.com/doc/refman/en/show-binary-logs.html
+	res, err := conn.ExecuteFetch("SHOW BINARY LOGS", -1, false)
+	if err != nil {
+		return rotatedLog, err
+	}
+	if res == nil || len(res.Rows) == 0 {
+		return rotatedLog, fmt.Errorf("SHOW BINARY LOGS returned no rows")
+	}
+	// the current log will be the last one in the results
+	curLogIdx := len(res.Rows) - 1
+	curLogSize, err := res.Rows[curLogIdx][1].ToInt64()
+	if err != nil {
+		return rotatedLog, err
+	}
+	if curLogSize > atomic.LoadInt64(&binlogRotationThreshold) {
+		if _, err = conn.ExecuteFetch("FLUSH BINARY LOGS", 0, false); err != nil {
+			return rotatedLog, err
+		}
+		rotatedLog = true
+	}
+	return rotatedLog, nil
+}
+
+// GetBinlogRotationThreshold returns the current byte size at which a VStreamer
+// will attempt to rotate the binary log before starting a GTID snapshot based
+// stream (e.g. a ResultStreamer or RowStreamer).
+func GetBinlogRotationThreshold() int64 {
+	return atomic.LoadInt64(&binlogRotationThreshold)
+}
+
+// SetBinlogRotationThreshold sets the byte size at which a VStreamer will
+// attempt to rotate the binary log before starting a GTID snapshot based
+// stream (e.g. a ResultStreamer or RowStreamer).
+func SetBinlogRotationThreshold(threshold int64) {
+	atomic.StoreInt64(&binlogRotationThreshold, threshold)
 }

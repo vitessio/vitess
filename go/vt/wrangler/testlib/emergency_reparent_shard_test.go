@@ -180,7 +180,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
 	waitReplicaTimeout := time.Second * 2
 	err := vp.Run([]string{"EmergencyReparentShard", "-wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
 		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})

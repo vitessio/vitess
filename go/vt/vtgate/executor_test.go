@@ -58,9 +58,9 @@ import (
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
-	save := *warnMemoryRows
-	*warnMemoryRows = 3
-	defer func() { *warnMemoryRows = save }()
+	save := warnMemoryRows
+	warnMemoryRows = 3
+	defer func() { warnMemoryRows = save }()
 
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
@@ -81,9 +81,9 @@ func TestExecutorResultsExceeded(t *testing.T) {
 }
 
 func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
-	save := *maxMemoryRows
-	*maxMemoryRows = 3
-	defer func() { *maxMemoryRows = save }()
+	save := maxMemoryRows
+	maxMemoryRows = 3
+	defer func() { maxMemoryRows = save }()
 
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
@@ -1344,7 +1344,7 @@ func TestExecutorDDLFk(t *testing.T) {
 		for _, fkMode := range []string{"allow", "disallow"} {
 			t.Run(stmt+fkMode, func(t *testing.T) {
 				sbc.ExecCount.Set(0)
-				*foreignKeyMode = fkMode
+				foreignKeyMode = fkMode
 				_, err := executor.Execute(ctx, mName, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
 				if fkMode == "allow" {
 					require.NoError(t, err)
@@ -1980,13 +1980,13 @@ func TestDebugVSchema(t *testing.T) {
 }
 
 func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
-	saveMax := *maxPayloadSize
-	saveWarn := *warnPayloadSize
-	*maxPayloadSize = 10
-	*warnPayloadSize = 5
+	saveMax := maxPayloadSize
+	saveWarn := warnPayloadSize
+	maxPayloadSize = 10
+	warnPayloadSize = 5
 	defer func() {
-		*maxPayloadSize = saveMax
-		*warnPayloadSize = saveWarn
+		maxPayloadSize = saveMax
+		warnPayloadSize = saveWarn
 	}()
 
 	executor, _, _, _ := createExecutorEnv()
@@ -2017,7 +2017,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
-	*maxPayloadSize = 1000
+	maxPayloadSize = 1000
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
 		assert.Equal(t, nil, err, "err should be nil")

@@ -194,8 +194,8 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 
 // shutdownVttablets shuts down all the vttablets and removes them from the topology
 func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
-	// demote the primary tablet if there is
-	err := demotePrimaryTablet(clusterInfo.Ts)
+	// reset the shard primary
+	err := resetShardPrimary(clusterInfo.Ts)
 	if err != nil {
 		return err
 	}
@@ -203,11 +203,6 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 	for _, vttablet := range clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		// we need to stop a vttablet only if it is not shutdown
 		if !vttablet.VttabletProcess.IsShutdown() {
-			// wait for primary tablet to demote. For all others, it will not wait
-			err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
-			if err != nil {
-				return err
-			}
 			// Stop the vttablets
 			err := vttablet.VttabletProcess.TearDown()
 			if err != nil {
@@ -224,10 +219,10 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 	return nil
 }
 
-// demotePrimaryTablet demotes the primary tablet for our shard
-func demotePrimaryTablet(ts *topo.Server) (err error) {
+// resetShardPrimary resets the shard's primary
+func resetShardPrimary(ts *topo.Server) (err error) {
 	// lock the shard
-	ctx, unlock, lockErr := ts.LockShard(context.Background(), keyspaceName, shardName, "demotePrimaryTablet-vtorc-endtoend-test")
+	ctx, unlock, lockErr := ts.LockShard(context.Background(), keyspaceName, shardName, "resetShardPrimary-vtorc-endtoend-test")
 	if lockErr != nil {
 		return lockErr
 	}
@@ -236,7 +231,6 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 	// update the shard record's primary
 	if _, err = ts.UpdateShardFields(ctx, keyspaceName, shardName, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = nil
-		si.SetPrimaryTermStartTime(time.Now())
 		return nil
 	}); err != nil {
 		return err
@@ -338,6 +332,9 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet
 	require.NoError(t, err)
 	// reset the binlog
 	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
+	require.NoError(t, err)
+	// set read-only to true
+	_, err = RunSQL(t, "SET GLOBAL read_only = ON", vttablet, "")
 	require.NoError(t, err)
 
 	// start the vttablet
@@ -733,6 +730,28 @@ func MakeAPICall(t *testing.T, url string) (status int, response string) {
 	return res.StatusCode, body
 }
 
+// MakeAPICallRetry is used to make an API call and retry if we see a 500 - Cannot deduce cluster primary output. This happens when we haven't
+// finished refreshing information after a ClusterHasNoPrimary recovery and call GracefulPrimaryTakeover. This leads to us seeing no Primary tablet
+// in the database of VTOrc. This is ephemeral though, because we will refresh the new-primary's information as part of the ClusterHasNoPrimary recovery flow.
+func MakeAPICallRetry(t *testing.T, url string) (status int, response string) {
+	t.Helper()
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for api to work")
+			return
+		default:
+			status, response = MakeAPICall(t, url)
+			if status == 500 && strings.Contains(response, "Cannot deduce cluster primary") {
+				time.Sleep(1 * time.Second)
+				break
+			}
+			return status, response
+		}
+	}
+}
+
 // SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
 // It creates a cluster with 4 tablets, one of which is a Replica
 func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
@@ -912,4 +931,24 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 		time.Sleep(time.Second)
 	}
 	return false
+}
+
+// WaitForSuccessfulRecoveryCount waits until the given recovery name's count of successful runs matches the count expected
+func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName string, countExpected int) {
+	t.Helper()
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+		successCount := successfulRecoveriesMap[recoveryName]
+		if successCount == countExpected {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+	successCount := successfulRecoveriesMap[recoveryName]
+	assert.EqualValues(t, countExpected, successCount)
 }
