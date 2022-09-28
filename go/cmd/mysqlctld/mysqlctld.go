@@ -62,7 +62,7 @@ func init() {
 		fs.UintVar(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
 		fs.DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
-		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld instance initialization")
+		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
 	})
 }
 

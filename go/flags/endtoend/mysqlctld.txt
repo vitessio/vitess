@@ -78,7 +78,7 @@ Usage of mysqlctld:
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
   -h, --help                                                             display usage and exit
-      --init_db_sql_file string                                          Path to .sql file to run after mysqld instance initialization
+      --init_db_sql_file string                                          Path to .sql file to run after mysqld initialization
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
