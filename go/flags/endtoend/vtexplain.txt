@@ -32,7 +32,6 @@ Usage of vtexplain:
       --external-compressor string                      command with arguments to use when compressing a backup.
       --external-compressor-extension string            extension to use when using an external compressor.
       --external-decompressor string                    command with arguments to use when decompressing a backup.
-      --grpc_auth_static_client_creds string            when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
   -h, --help                                            display usage and exit
       --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                     keep logs for this long (using mtime) (zero to keep forever)
@@ -96,7 +95,6 @@ Usage of vtexplain:
       --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema string                                  Identifies the VTGate routing schema
       --vschema-file string                             Identifies the VTGate routing schema file
-      --vschema_ddl_authorized_users string             List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --xbstream_restore_flags string                   flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup_backup_flags string                  flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup_prepare_flags string                 flags to pass to prepare command. These should be space separated and will be added to the end of the command
