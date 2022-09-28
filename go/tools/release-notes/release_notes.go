@@ -490,12 +490,13 @@ func groupAndStringifyPullRequest(pr []prInfo) (string, error) {
 
 func main() {
 	var (
-		from, to, versionName, summaryFile string
+		from, versionName, summaryFile string
+		to                             = "HEAD"
 	)
-	pflag.StringVar(&from, "from", "", "from sha/tag/branch")
-	pflag.StringVar(&to, "to", "HEAD", "to sha/tag/branch")
-	pflag.StringVar(&versionName, "version", "", "name of the version (has to be the following format: v11.0.0)")
-	pflag.StringVar(&summaryFile, "summary", "", "readme file on which there is a summary of the release")
+	pflag.StringVarP(&from, "from", "f", "", "from sha/tag/branch")
+	pflag.StringVarP(&to, "to", to, "t", "to sha/tag/branch")
+	pflag.StringVarP(&versionName, "version", "v", "", "name of the version (has to be the following format: v11.0.0)")
+	pflag.StringVarP(&summaryFile, "summary", "s", "", "readme file on which there is a summary of the release")
 	pflag.Parse()
 
 	// The -version flag must be of a valid format.
