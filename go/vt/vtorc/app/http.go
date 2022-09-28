@@ -136,9 +136,7 @@ func standardHTTP(continuousDiscovery bool) {
 	}
 
 	log.Info("Registering endpoints")
-	http.HTTPapi.URLPrefix = config.Config.URLPrefix
 	http.HTTPWeb.URLPrefix = config.Config.URLPrefix
-	http.HTTPapi.RegisterRequests(m)
 	http.HTTPWeb.RegisterRequests(m)
 
 	// Serve
