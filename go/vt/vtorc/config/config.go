@@ -19,7 +19,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -57,14 +56,10 @@ const (
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	ListenAddress                              string // Where vtorc HTTP should listen for TCP
-	ListenSocket                               string // Where vtorc HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
-	HTTPAdvertise                              string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
 	MySQLTopologyUser                          string // The user VTOrc will use to connect to MySQL instances
 	MySQLTopologyPassword                      string // The password VTOrc will use to connect to MySQL instances
 	MySQLReplicaUser                           string // User to set on replica MySQL instances while configuring replication settings on them. If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
 	MySQLReplicaPassword                       string // Password to set on replica MySQL instances while configuring replication settings on them.
-	MySQLTopologyCredentialsConfigFile         string // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
 	MySQLTopologySSLPrivateKeyFile             string // Private key file used to authenticate with a Topology mysql instance with TLS
 	MySQLTopologySSLCertFile                   string // Certificate PEM file used to authenticate with a Topology mysql instance with TLS
 	MySQLTopologySSLCAFile                     string // Certificate Authority PEM file used to authenticate with a Topology mysql instance with TLS
@@ -187,9 +182,6 @@ var readFileNames []string
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		ListenAddress:                              ":3000",
-		ListenSocket:                               "",
-		HTTPAdvertise:                              "",
 		StatusEndpoint:                             DefaultStatusAPIEndpoint,
 		StatusOUVerify:                             false,
 		BackendDB:                                  "sqlite",
@@ -308,22 +300,6 @@ func (config *Configuration) postReadAdjustments() error {
 			config.MySQLVTOrcPassword = os.Getenv(submatch[1])
 		}
 	}
-	if config.MySQLTopologyCredentialsConfigFile != "" {
-		mySQLConfig := struct {
-			Client struct {
-				User     string
-				Password string
-			}
-		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLTopologyCredentialsConfigFile)
-		if err != nil {
-			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
-		} else {
-			log.Infof("Parsed topology credentials from %s", config.MySQLTopologyCredentialsConfigFile)
-			config.MySQLTopologyUser = mySQLConfig.Client.User
-			config.MySQLTopologyPassword = mySQLConfig.Client.Password
-		}
-	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
@@ -351,26 +327,8 @@ func (config *Configuration) postReadAdjustments() error {
 		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite3")
 	}
 
-	if config.HTTPAdvertise != "" {
-		u, err := url.Parse(config.HTTPAdvertise)
-		if err != nil {
-			return fmt.Errorf("Failed parsing HTTPAdvertise %s: %s", config.HTTPAdvertise, err.Error())
-		}
-		if u.Scheme == "" {
-			return fmt.Errorf("If specified, HTTPAdvertise must include scheme (http:// or https://)")
-		}
-		if u.Hostname() == "" {
-			return fmt.Errorf("If specified, HTTPAdvertise must include host name")
-		}
-		if u.Port() == "" {
-			return fmt.Errorf("If specified, HTTPAdvertise must include port number")
-		}
-		if u.Path != "" {
-			return fmt.Errorf("If specified, HTTPAdvertise must not specify a path")
-		}
-		if config.InstanceWriteBufferSize <= 0 {
-			config.BufferInstanceWrites = false
-		}
+	if config.InstanceWriteBufferSize <= 0 {
+		config.BufferInstanceWrites = false
 	}
 	return nil
 }
