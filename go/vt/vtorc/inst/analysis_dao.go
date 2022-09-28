@@ -779,36 +779,3 @@ func ExpireInstanceAnalysisChangelog() error {
 	}
 	return err
 }
-
-// ReadReplicationAnalysisChangelog
-func ReadReplicationAnalysisChangelog() (res [](*ReplicationAnalysisChangelog), err error) {
-	query := `
-		select
-      hostname,
-      port,
-			analysis_timestamp,
-			analysis
-		from
-			database_instance_analysis_changelog
-		order by
-			hostname, port, changelog_id
-		`
-	analysisChangelog := &ReplicationAnalysisChangelog{}
-	err = db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
-		key := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-
-		if !analysisChangelog.AnalyzedInstanceKey.Equals(&key) {
-			analysisChangelog = &ReplicationAnalysisChangelog{AnalyzedInstanceKey: key, Changelog: []string{}}
-			res = append(res, analysisChangelog)
-		}
-		analysisEntry := fmt.Sprintf("%s;%s,", m.GetString("analysis_timestamp"), m.GetString("analysis"))
-		analysisChangelog.Changelog = append(analysisChangelog.Changelog, analysisEntry)
-
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
-}

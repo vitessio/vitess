@@ -30,14 +30,6 @@ const topologyConcurrency = 128
 
 var topologyConcurrencyChan = make(chan bool, topologyConcurrency)
 
-type OperationGTIDHint string
-
-const (
-	GTIDHintDeny    OperationGTIDHint = "NoGTID"
-	GTIDHintNeutral OperationGTIDHint = "GTIDHintNeutral"
-	GTIDHintForce   OperationGTIDHint = "GTIDHintForce"
-)
-
 // ExecInstance executes a given query on the given MySQL topology instance
 func ExecInstance(instanceKey *InstanceKey, query string, args ...any) (sql.Result, error) {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
