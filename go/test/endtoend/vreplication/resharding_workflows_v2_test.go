@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -259,6 +260,8 @@ func TestBasicV2Workflows(t *testing.T) {
 	log.Flush()
 }
 
+const lockHoldTimeout = 5 * time.Minute
+
 // TestPartialMoveTables tests partial move tables by moving just one shard
 // 80- from customer to customer2.
 func TestPartialMoveTables(t *testing.T) {
@@ -302,6 +305,7 @@ func TestPartialMoveTables(t *testing.T) {
 		"customer", workflowActionCreate, "", shard, "")
 	require.NoError(t, err)
 	targetTab1 = vc.getPrimaryTablet(t, moveToKs, shard)
+	sourceTab1 := vc.getPrimaryTablet(t, "customer", shard)
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
 	vdiff1(t, ksWf, "")
 
@@ -315,15 +319,29 @@ func TestPartialMoveTables(t *testing.T) {
 	applyShardRoutingRules(t, emptyRules)
 	require.Equal(t, emptyRules, getShardRoutingRules(t))
 
-	// switch all traffic
-	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
+	lockConn, err := sourceTab1.LockTable("customer", "customer", lockHoldTimeout)
+	require.NoError(t, err)
+	require.NotNil(t, lockConn)
+
+	moveTablesTimeout := "60s"
+
+	// switch all traffic, should fail since we hold a table lock
+	switchTrafficArgs := []string{"MoveTables", "--", "--timeout", moveTablesTimeout, "--max_replication_lag_allowed=2542087h", "SwitchTraffic", "customer2.partial"}
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(switchTrafficArgs...)
+	require.Errorf(t, err, fmt.Sprintf("%s: %s: %s", time.Now().String(), err, output))
+	require.Equal(t, emptyRules, getShardRoutingRules(t))
+
+	// switch all traffic, should succeed
+	lockConn.Close()
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput(switchTrafficArgs...)
+	require.NoError(t, err, fmt.Sprintf("%s: %s: %s", time.Now().String(), err, output))
 	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow customer2.partial\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 		shard, shard)
-	require.Equal(t, expectedSwitchOutput, lastOutput)
+	require.Equal(t, expectedSwitchOutput, output)
 
 	// Confirm global routing rules -- everything should still be routed
 	// to the source side, customer, globally.
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
 	result := gjson.Get(output, "rules")
 	result.ForEach(func(attributeKey, attributeValue gjson.Result) bool {

@@ -187,7 +187,18 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.Equal(t, row.AsString("dt2", ""), qrTargetUSPacific.Named().Rows[i].AsString("dt2", ""))
 		require.Equal(t, row.AsString("ts1", ""), qrTargetUSPacific.Named().Rows[i].AsString("ts1", ""))
 	}
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "SwitchTraffic", ksWorkflow)
+
+	lockConn, err := productTab.LockTable("datze", sourceKs, lockHoldTimeout)
+	require.NoError(t, err)
+	require.NotNil(t, lockConn)
+
+	moveTablesTimeout := "60s"
+	switchTrafficArgs := []string{"MoveTables", "--", "--timeout", moveTablesTimeout, "SwitchTraffic", ksWorkflow}
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput(switchTrafficArgs...)
+	require.Error(t, err, output)
+
+	lockConn.Close()
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput(switchTrafficArgs...)
 	require.NoError(t, err, output)
 
 	qr, err := productTab.QueryTablet(fmt.Sprintf("select * from _vt.vreplication where workflow='%s_reverse'", workflow), "", false)

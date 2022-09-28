@@ -391,6 +391,22 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
+// LockTable locks the specified table and return the connection with the lock.
+// Used for failing SwitchWrites which needs to lock tables to complete.
+func (vttablet *VttabletProcess) LockTable(table, keyspace string, timeout time.Duration) (*mysql.Conn, error) {
+	query := fmt.Sprintf("lock tables %s write", table)
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	dbParams.ConnectTimeoutMs = uint64(timeout.Milliseconds())
+	conn, err := vttablet.conn(&dbParams)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := executeQuery(conn, query); err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",

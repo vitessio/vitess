@@ -549,8 +549,12 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCycles)
 			// Doing this twice with a pause in-between to catch any writes that may have raced in between
 			// the tablet's deny list check and the first mysqld side table lock.
+
+			// while locking tables wait only till the timeout provided
+			shortCtx, shortCtxCancel := context.WithTimeout(ctx, timeout)
+			defer shortCtxCancel()
 			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
-				if err := ts.executeLockTablesOnSource(ctx); err != nil {
+				if err := ts.executeLockTablesOnSource(shortCtx); err != nil {
 					ts.Logger().Errorf("Failed to execute LOCK TABLES (attempt %d of %d) on sources: %v", cnt, lockTablesCycles, err)
 					sw.cancelMigration(ctx, sm)
 					return 0, nil, err
@@ -1141,6 +1145,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		ts.Logger().Infof("UpdateSourceDeniedTables for %s, allowWrites %t", source.GetPrimary().AliasString(), access == allowWrites)
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
 		}); err != nil {
