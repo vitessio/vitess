@@ -59,10 +59,11 @@ const (
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
-	RoutingRules   map[string]*RoutingRule `json:"routing_rules"`
-	uniqueTables   map[string]*Table
-	uniqueVindexes map[string]Vindex
-	Keyspaces      map[string]*KeyspaceSchema `json:"keyspaces"`
+	RoutingRules      map[string]*RoutingRule `json:"routing_rules"`
+	uniqueTables      map[string]*Table
+	uniqueVindexes    map[string]Vindex
+	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
+	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
 }
 
 // RoutingRule represents one routing rule.
@@ -198,6 +199,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
 	buildRoutingRule(source, vschema)
+	buildShardRoutingRule(source, vschema)
 	return vschema
 }
 
@@ -526,6 +528,16 @@ outer:
 	}
 }
 
+func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	if source.ShardRoutingRules == nil || len(source.ShardRoutingRules.Rules) == 0 {
+		return
+	}
+	vschema.ShardRoutingRules = make(map[string]string)
+	for _, rule := range source.ShardRoutingRules.Rules {
+		vschema.ShardRoutingRules[getShardRoutingRulesKey(rule.FromKeyspace, rule.Shard)] = rule.ToKeyspace
+	}
+}
+
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
 // from that keyspace are searched. If the specified keyspace is unsharded
 // and no tables matched, it's considered valid: FindTable will construct a table
@@ -649,6 +661,21 @@ func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspace)
 	}
 	return ks.Vindexes[name], nil
+}
+
+func getShardRoutingRulesKey(keyspace, shard string) string {
+	return fmt.Sprintf("%s.%s", keyspace, shard)
+}
+
+// FindRoutedShard looks up shard routing rules and returns the target keyspace if applicable
+func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) {
+	if len(vschema.ShardRoutingRules) == 0 {
+		return keyspace, nil
+	}
+	if ks, ok := vschema.ShardRoutingRules[getShardRoutingRulesKey(keyspace, shard)]; ok {
+		return ks, nil
+	}
+	return keyspace, nil
 }
 
 // ByCost provides the interface needed for ColumnVindexes to
