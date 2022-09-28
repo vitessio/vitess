@@ -1,0 +1,3 @@
+Usage of zk:
+      --help            display usage and exit
+      --server string   server(s) to connect to
