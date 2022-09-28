@@ -21,6 +21,7 @@ import { Select } from '../../inputs/Select';
 import { formatAlias, formatDisplayType } from '../../../util/tablets';
 import { logutil, vtadmin } from '../../../proto/vtadmin';
 import Dialog from '../../dialog/Dialog';
+import EventLogEntry from './EventLogEntry';
 interface RouteParams {
     clusterID: string;
     keyspace: string;
@@ -180,11 +181,8 @@ const Advanced: React.FC = () => {
                     <div className="mt-8 mb-4">{dialogDescription}</div>
                     <div className="mb-2 font-bold">Log</div>
                     <div className="bg-gray-100 p-4 overflow-scroll max-h-[200px]">
-                        {events.map((e) => (
-                            <div className="font-mono text-sm whitespace-nowrap">
-                                [{new Date((e.time?.seconds as number) * 1000).toISOString()} {e.file}:{e.line}]{' '}
-                                {e.value}
-                            </div>
+                        {events.map((e, i) => (
+                            <EventLogEntry event={e} key={`${i}_event_log`} />
                         ))}
                     </div>
                 </>
@@ -265,10 +263,10 @@ const Advanced: React.FC = () => {
                             }
                             disabled={!tablet}
                             documentationLink="https://vitess.io/docs/reference/programs/vtctl/shards/#tabletexternallyreparented"
-                            loadingText="Reparenting..."
-                            loadedText="Reparent"
+                            loadingText="Failing over..."
+                            loadedText="Failover"
                             mutation={externallyPromoteMutation as UseMutationResult}
-                            title="Externally Reparent"
+                            title="External Failover"
                             body={
                                 <>
                                     <div className="mt-2">

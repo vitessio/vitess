@@ -672,7 +672,7 @@ export interface EmergencyFailoverShardParams {
 
 export const emergencyFailoverShard = async (params: EmergencyFailoverShardParams) => {
     const body: Partial<pb.PlannedFailoverShardRequest['options']> = {};
-    if (params.new_primary) body['new_primary'] = params.new_primary.tablet?.alias;
+    if (params.new_primary && params.new_primary.tablet?.alias) body['new_primary'] = params.new_primary.tablet?.alias;
 
     const { result } = await vtfetch(
         `/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/emergency_failover`,

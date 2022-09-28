@@ -137,7 +137,7 @@ export const Select = <T,>({
     return (
         <div className={containerClass}>
             <Label {...getLabelProps()} label={label} />
-            <div className="mt-[-4px] mb-4">{description}</div>
+            {!!description && <div className="mt-[-4px] mb-4">{description}</div>}
             <button
                 type="button"
                 {...getToggleButtonProps()}
