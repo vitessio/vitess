@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -114,52 +113,38 @@ type Configuration struct {
 	AuditToSyslog                              bool     // If true, audit messages are written to syslog
 	AuditToBackendDB                           bool     // If true, audit messages are written to the backend DB's `audit` table (default: true)
 	AuditPurgeDays                             uint     // Days after which audit entries are purged from the database
-	RemoveTextFromHostnameDisplay              string   // Text to strip off the hostname on cluster/clusters pages
 	ReadOnly                                   bool
-	AccessTokenUseExpirySeconds                uint              // Time by which an issued token must be used
-	AccessTokenExpiryMinutes                   uint              // Time after which HTTP access token expires
-	ClusterNameToAlias                         map[string]string // map between regex matching cluster name to a human friendly alias
-	DetectClusterAliasQuery                    string            // Optional query (executed on topology instance) that returns the alias of a cluster. Query will only be executed on cluster primary (though until the topology's primary is resovled it may execute on other/all replicas). If provided, must return one row, one column
-	DetectClusterDomainQuery                   string            // Optional query (executed on topology instance) that returns the VIP/CNAME/Alias/whatever domain name for the primary of this cluster. Query will only be executed on cluster primary (though until the topology's primary is resovled it may execute on other/all replicas). If provided, must return one row, one column
-	DetectInstanceAliasQuery                   string            // Optional query (executed on topology instance) that returns the alias of an instance. If provided, must return one row, one column
-	DetectPromotionRuleQuery                   string            // Optional query (executed on topology instance) that returns the promotion rule of an instance. If provided, must return one row, one column.
-	DataCenterPattern                          string            // Regexp pattern with one group, extracting the datacenter name from the hostname
-	RegionPattern                              string            // Regexp pattern with one group, extracting the region name from the hostname
-	PhysicalEnvironmentPattern                 string            // Regexp pattern with one group, extracting physical environment info from hostname (e.g. combination of datacenter & prod/dev env)
-	DetectDataCenterQuery                      string            // Optional query (executed on topology instance) that returns the data center of an instance. If provided, must return one row, one column. Overrides DataCenterPattern and useful for installments where DC cannot be inferred by hostname
-	DetectRegionQuery                          string            // Optional query (executed on topology instance) that returns the region of an instance. If provided, must return one row, one column. Overrides RegionPattern and useful for installments where Region cannot be inferred by hostname
-	DetectPhysicalEnvironmentQuery             string            // Optional query (executed on topology instance) that returns the physical environment of an instance. If provided, must return one row, one column. Overrides PhysicalEnvironmentPattern and useful for installments where env cannot be inferred by hostname
-	DetectSemiSyncEnforcedQuery                string            // Optional query (executed on topology instance) to determine whether semi-sync is fully enforced for primary writes (async fallback is not allowed under any circumstance). If provided, must return one row, one column, value 0 or 1.
-	SupportFuzzyPoolHostnames                  bool              // Should "submit-pool-instances" command be able to pass list of fuzzy instances (fuzzy means non-fqdn, but unique enough to recognize). Defaults 'true', implies more queries on backend db
-	InstancePoolExpiryMinutes                  uint              // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
-	PromotionIgnoreHostnameFilters             []string          // VTOrc will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
-	UseSSL                                     bool              // Use SSL on the server web port
-	UseMutualTLS                               bool              // When "true" Use mutual TLS for the server's web and API connections
-	SSLSkipVerify                              bool              // When using SSL, should we ignore SSL certification error
-	SSLPrivateKeyFile                          string            // Name of SSL private key file, applies only when UseSSL = true
-	SSLCertFile                                string            // Name of SSL certification file, applies only when UseSSL = true
-	SSLCAFile                                  string            // Name of the Certificate Authority file, applies only when UseSSL = true
-	SSLValidOUs                                []string          // Valid organizational units when using mutual TLS
-	StatusEndpoint                             string            // Override the status endpoint.  Defaults to '/api/status'
-	StatusOUVerify                             bool              // If true, try to verify OUs when Mutual TLS is on.  Defaults to false
-	FailureDetectionPeriodBlockMinutes         int               // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
-	RecoveryPeriodBlockMinutes                 int               // (supported for backwards compatibility but please use newer `RecoveryPeriodBlockSeconds` instead) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
-	RecoveryPeriodBlockSeconds                 int               // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
-	RecoveryIgnoreHostnameFilters              []string          // Recovery analysis will completely ignore hosts matching given patterns
-	RecoverPrimaryClusterFilters               []string          // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
-	RecoverIntermediatePrimaryClusterFilters   []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
-	PreventCrossDataCenterPrimaryFailover      bool              // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	OSCIgnoreHostnameFilters                   []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
-	URLPrefix                                  string            // URL prefix to run vtorc on non-root web path, e.g. /vtorc to put it behind nginx.
-	DiscoveryIgnoreReplicaHostnameFilters      []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
-	DiscoveryIgnorePrimaryHostnameFilters      []string          // Regexp filters to apply to prevent auto-discovering a primary. Usage: pointing your primary temporarily to replicate seom data from external host
-	DiscoveryIgnoreHostnameFilters             []string          // Regexp filters to apply to prevent discovering instances of any kind
-	WebMessage                                 string            // If provided, will be shown on all web pages below the title bar
-	MaxConcurrentReplicaOperations             int               // Maximum number of concurrent operations on replicas
-	LockShardTimeoutSeconds                    int               // Timeout on context used to lock shard. Should be a small value because we should fail-fast
-	WaitReplicasTimeoutSeconds                 int               // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
-	TopoInformationRefreshSeconds              int               // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds                        int               // Timer duration on which VTOrc recovery analysis runs
+	AccessTokenUseExpirySeconds                uint     // Time by which an issued token must be used
+	AccessTokenExpiryMinutes                   uint     // Time after which HTTP access token expires
+	DetectClusterDomainQuery                   string   // Optional query (executed on topology instance) that returns the VIP/CNAME/Alias/whatever domain name for the primary of this cluster. Query will only be executed on cluster primary (though until the topology's primary is resovled it may execute on other/all replicas). If provided, must return one row, one column
+	DetectInstanceAliasQuery                   string   // Optional query (executed on topology instance) that returns the alias of an instance. If provided, must return one row, one column
+	DataCenterPattern                          string   // Regexp pattern with one group, extracting the datacenter name from the hostname
+	RegionPattern                              string   // Regexp pattern with one group, extracting the region name from the hostname
+	PhysicalEnvironmentPattern                 string   // Regexp pattern with one group, extracting physical environment info from hostname (e.g. combination of datacenter & prod/dev env)
+	DetectDataCenterQuery                      string   // Optional query (executed on topology instance) that returns the data center of an instance. If provided, must return one row, one column. Overrides DataCenterPattern and useful for installments where DC cannot be inferred by hostname
+	DetectRegionQuery                          string   // Optional query (executed on topology instance) that returns the region of an instance. If provided, must return one row, one column. Overrides RegionPattern and useful for installments where Region cannot be inferred by hostname
+	DetectPhysicalEnvironmentQuery             string   // Optional query (executed on topology instance) that returns the physical environment of an instance. If provided, must return one row, one column. Overrides PhysicalEnvironmentPattern and useful for installments where env cannot be inferred by hostname
+	DetectSemiSyncEnforcedQuery                string   // Optional query (executed on topology instance) to determine whether semi-sync is fully enforced for primary writes (async fallback is not allowed under any circumstance). If provided, must return one row, one column, value 0 or 1.
+	SupportFuzzyPoolHostnames                  bool     // Should "submit-pool-instances" command be able to pass list of fuzzy instances (fuzzy means non-fqdn, but unique enough to recognize). Defaults 'true', implies more queries on backend db
+	InstancePoolExpiryMinutes                  uint     // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
+	PromotionIgnoreHostnameFilters             []string // VTOrc will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
+	FailureDetectionPeriodBlockMinutes         int      // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
+	RecoveryPeriodBlockMinutes                 int      // (supported for backwards compatibility but please use newer `RecoveryPeriodBlockSeconds` instead) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
+	RecoveryPeriodBlockSeconds                 int      // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
+	RecoveryIgnoreHostnameFilters              []string // Recovery analysis will completely ignore hosts matching given patterns
+	RecoverPrimaryClusterFilters               []string // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
+	RecoverIntermediatePrimaryClusterFilters   []string // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
+	PreventCrossDataCenterPrimaryFailover      bool     // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
+	OSCIgnoreHostnameFilters                   []string // OSC replicas recommendation will ignore replica hostnames matching given patterns
+	DiscoveryIgnoreReplicaHostnameFilters      []string // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
+	DiscoveryIgnorePrimaryHostnameFilters      []string // Regexp filters to apply to prevent auto-discovering a primary. Usage: pointing your primary temporarily to replicate seom data from external host
+	DiscoveryIgnoreHostnameFilters             []string // Regexp filters to apply to prevent discovering instances of any kind
+	WebMessage                                 string   // If provided, will be shown on all web pages below the title bar
+	MaxConcurrentReplicaOperations             int      // Maximum number of concurrent operations on replicas
+	LockShardTimeoutSeconds                    int      // Timeout on context used to lock shard. Should be a small value because we should fail-fast
+	WaitReplicasTimeoutSeconds                 int      // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
+	TopoInformationRefreshSeconds              int      // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds                        int      // Timer duration on which VTOrc recovery analysis runs
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -174,8 +159,6 @@ var readFileNames []string
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		StatusEndpoint:                             DefaultStatusAPIEndpoint,
-		StatusOUVerify:                             false,
 		SQLite3DataFile:                            "file::memory:?mode=memory&cache=shared",
 		MySQLVTOrcMaxPoolConnections:               128, // limit concurrent conns to backend DB
 		MySQLVTOrcPort:                             3306,
@@ -217,15 +200,11 @@ func newConfiguration() *Configuration {
 		AuditToSyslog:                              false,
 		AuditToBackendDB:                           false,
 		AuditPurgeDays:                             7,
-		RemoveTextFromHostnameDisplay:              "",
 		ReadOnly:                                   false,
 		AccessTokenUseExpirySeconds:                60,
 		AccessTokenExpiryMinutes:                   1440,
-		ClusterNameToAlias:                         make(map[string]string),
-		DetectClusterAliasQuery:                    "",
 		DetectClusterDomainQuery:                   "",
 		DetectInstanceAliasQuery:                   "",
-		DetectPromotionRuleQuery:                   "",
 		DataCenterPattern:                          "",
 		PhysicalEnvironmentPattern:                 "",
 		DetectDataCenterQuery:                      "",
@@ -234,13 +213,6 @@ func newConfiguration() *Configuration {
 		SupportFuzzyPoolHostnames:                  true,
 		InstancePoolExpiryMinutes:                  60,
 		PromotionIgnoreHostnameFilters:             []string{},
-		UseSSL:                                     false,
-		UseMutualTLS:                               false,
-		SSLValidOUs:                                []string{},
-		SSLSkipVerify:                              false,
-		SSLPrivateKeyFile:                          "",
-		SSLCertFile:                                "",
-		SSLCAFile:                                  "",
 		FailureDetectionPeriodBlockMinutes:         60,
 		RecoveryPeriodBlockMinutes:                 60,
 		RecoveryPeriodBlockSeconds:                 3600,
@@ -249,7 +221,6 @@ func newConfiguration() *Configuration {
 		RecoverIntermediatePrimaryClusterFilters:   []string{},
 		PreventCrossDataCenterPrimaryFailover:      false,
 		OSCIgnoreHostnameFilters:                   []string{},
-		URLPrefix:                                  "",
 		DiscoveryIgnoreReplicaHostnameFilters:      []string{},
 		WebMessage:                                 "",
 		MaxConcurrentReplicaOperations:             5,
@@ -299,13 +270,6 @@ func (config *Configuration) postReadAdjustments() error {
 		// The code does not consider RecoveryPeriodBlockMinutes anymore, but RecoveryPeriodBlockMinutes
 		// still supported in config file for backwards compatibility
 		config.RecoveryPeriodBlockSeconds = config.RecoveryPeriodBlockMinutes * 60
-	}
-
-	if config.URLPrefix != "" {
-		// Ensure the prefix starts with "/" and has no trailing one.
-		config.URLPrefix = strings.TrimLeft(config.URLPrefix, "/")
-		config.URLPrefix = strings.TrimRight(config.URLPrefix, "/")
-		config.URLPrefix = "/" + config.URLPrefix
 	}
 
 	if config.IsSQLite() && config.SQLite3DataFile == "" {
