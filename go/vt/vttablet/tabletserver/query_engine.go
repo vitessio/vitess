@@ -436,15 +436,25 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 
 // getQuery fetches the plan and makes it the most recent.
 func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
-	if cacheResult, ok := qe.plans.Get(sql); ok {
-		return cacheResult.(*TabletPlan)
+	cacheResult, ok := qe.plans.Get(sql)
+	if !ok {
+		return nil
+	}
+	plan, ok := cacheResult.(*TabletPlan)
+	if ok {
+		return plan
 	}
 	return nil
 }
 
 func (qe *QueryEngine) getConnSetting(key string) *pools.Setting {
-	if cacheResult, ok := qe.plans.Get(key); ok {
-		return cacheResult.(*pools.Setting)
+	cacheResult, ok := qe.plans.Get(key)
+	if !ok {
+		return nil
+	}
+	plan, ok := cacheResult.(*pools.Setting)
+	if ok {
+		return plan
 	}
 	return nil
 }
