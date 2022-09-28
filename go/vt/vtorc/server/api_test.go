@@ -26,6 +26,9 @@ func TestGetACLPermissionLevelForAPI(t *testing.T) {
 			apiEndpoint: replicationAnalysisAPI,
 			want:        acl.MONITORING,
 		}, {
+			apiEndpoint: healthAPI,
+			want:        acl.MONITORING,
+		}, {
 			apiEndpoint: "gibberish",
 			want:        acl.ADMIN,
 		},

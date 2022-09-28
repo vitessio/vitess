@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
+	"vitess.io/vitess/go/vt/vtorc/process"
 )
 
 // vtorcAPI struct is created to implement the Handler interface to register
@@ -39,6 +40,7 @@ const (
 	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
 	replicationAnalysisAPI     = "/api/replication-analysis"
+	healthAPI                  = "/debug/health"
 )
 
 var (
@@ -48,6 +50,7 @@ var (
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		replicationAnalysisAPI,
+		healthAPI,
 	}
 )
 
@@ -61,12 +64,14 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 	}
 
 	switch apiPath {
-	case problemsAPI:
-		problemsAPIHandler(response, request)
 	case disableGlobalRecoveriesAPI:
 		disableGlobalRecoveriesAPIHandler(response)
 	case enableGlobalRecoveriesAPI:
 		enableGlobalRecoveriesAPIHandler(response)
+	case healthAPI:
+		healthAPIHandler(response, request)
+	case problemsAPI:
+		problemsAPIHandler(response, request)
 	case replicationAnalysisAPI:
 		replicationAnalysisAPIHandler(response, request)
 	default:
@@ -84,6 +89,8 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
 	case replicationAnalysisAPI:
+		return acl.MONITORING
+	case healthAPI:
 		return acl.MONITORING
 	}
 	return acl.ADMIN
@@ -174,6 +181,16 @@ func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.R
 	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
 	// Currently inst.ReplicationAnalysis doesn't store the tablet alias, but once it does we can filter on that too
 	returnAsJSON(response, analysis)
+}
+
+// healthAPIHandler is the handler for the healthAPI endpoint
+func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
+	health, err := process.HealthTest()
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	returnAsJSON(response, health)
 }
 
 // writePlainTextResponse writes a plain text response to the writer.
