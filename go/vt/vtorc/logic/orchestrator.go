@@ -420,7 +420,6 @@ func ContinuousDiscovery() {
 					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
-					go process.ExpireAccessTokens()
 					go process.ExpireAvailableNodes()
 					go ExpireFailureDetectionHistory()
 					go ExpireTopologyRecoveryHistory()

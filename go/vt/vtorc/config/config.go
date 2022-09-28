@@ -87,7 +87,6 @@ type Configuration struct {
 	MySQLConnectionLifetimeSeconds             int      // Number of seconds the mysql driver will keep database connection alive before recycling it
 	DefaultInstancePort                        int      // In case port was not specified on command line
 	DiscoverByShowSlaveHosts                   bool     // Attempt SHOW SLAVE HOSTS before PROCESSLIST
-	UseSuperReadOnly                           bool     // Should vtorc super_read_only any time it sets read_only
 	InstancePollSeconds                        uint     // Number of seconds between instance reads
 	InstanceWriteBufferSize                    int      // Instance write buffer size (max number of instances to flush in one INSERT ODKU)
 	BufferInstanceWrites                       bool     // Set to 'true' for write-optimization on backend table (compromise: writes can be stale and overwrite non stale data)
@@ -113,9 +112,6 @@ type Configuration struct {
 	AuditToSyslog                              bool     // If true, audit messages are written to syslog
 	AuditToBackendDB                           bool     // If true, audit messages are written to the backend DB's `audit` table (default: true)
 	AuditPurgeDays                             uint     // Days after which audit entries are purged from the database
-	ReadOnly                                   bool
-	AccessTokenUseExpirySeconds                uint     // Time by which an issued token must be used
-	AccessTokenExpiryMinutes                   uint     // Time after which HTTP access token expires
 	DetectClusterDomainQuery                   string   // Optional query (executed on topology instance) that returns the VIP/CNAME/Alias/whatever domain name for the primary of this cluster. Query will only be executed on cluster primary (though until the topology's primary is resovled it may execute on other/all replicas). If provided, must return one row, one column
 	DetectInstanceAliasQuery                   string   // Optional query (executed on topology instance) that returns the alias of an instance. If provided, must return one row, one column
 	DataCenterPattern                          string   // Regexp pattern with one group, extracting the datacenter name from the hostname
@@ -135,12 +131,9 @@ type Configuration struct {
 	RecoverPrimaryClusterFilters               []string // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	RecoverIntermediatePrimaryClusterFilters   []string // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	PreventCrossDataCenterPrimaryFailover      bool     // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	OSCIgnoreHostnameFilters                   []string // OSC replicas recommendation will ignore replica hostnames matching given patterns
 	DiscoveryIgnoreReplicaHostnameFilters      []string // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
 	DiscoveryIgnorePrimaryHostnameFilters      []string // Regexp filters to apply to prevent auto-discovering a primary. Usage: pointing your primary temporarily to replicate seom data from external host
 	DiscoveryIgnoreHostnameFilters             []string // Regexp filters to apply to prevent discovering instances of any kind
-	WebMessage                                 string   // If provided, will be shown on all web pages below the title bar
-	MaxConcurrentReplicaOperations             int      // Maximum number of concurrent operations on replicas
 	LockShardTimeoutSeconds                    int      // Timeout on context used to lock shard. Should be a small value because we should fail-fast
 	WaitReplicasTimeoutSeconds                 int      // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
 	TopoInformationRefreshSeconds              int      // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
@@ -180,7 +173,6 @@ func newConfiguration() *Configuration {
 		UnseenInstanceForgetHours:                  240,
 		SnapshotTopologiesIntervalHours:            0,
 		DiscoverByShowSlaveHosts:                   false,
-		UseSuperReadOnly:                           false,
 		DiscoveryMaxConcurrency:                    300,
 		DiscoveryQueueCapacity:                     100000,
 		DiscoveryQueueMaxStatisticsSize:            120,
@@ -200,9 +192,6 @@ func newConfiguration() *Configuration {
 		AuditToSyslog:                              false,
 		AuditToBackendDB:                           false,
 		AuditPurgeDays:                             7,
-		ReadOnly:                                   false,
-		AccessTokenUseExpirySeconds:                60,
-		AccessTokenExpiryMinutes:                   1440,
 		DetectClusterDomainQuery:                   "",
 		DetectInstanceAliasQuery:                   "",
 		DataCenterPattern:                          "",
@@ -220,10 +209,7 @@ func newConfiguration() *Configuration {
 		RecoverPrimaryClusterFilters:               []string{"*"},
 		RecoverIntermediatePrimaryClusterFilters:   []string{},
 		PreventCrossDataCenterPrimaryFailover:      false,
-		OSCIgnoreHostnameFilters:                   []string{},
 		DiscoveryIgnoreReplicaHostnameFilters:      []string{},
-		WebMessage:                                 "",
-		MaxConcurrentReplicaOperations:             5,
 		LockShardTimeoutSeconds:                    30,
 		WaitReplicasTimeoutSeconds:                 30,
 		TopoInformationRefreshSeconds:              15,

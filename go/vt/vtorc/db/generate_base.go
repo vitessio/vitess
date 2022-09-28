@@ -666,29 +666,6 @@ var generateSQLBase = []string{
 		CREATE INDEX last_seen_idx_database_instance_binlog_files_history ON database_instance_binlog_files_history (last_seen)
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS access_token (
-			access_token_id bigint unsigned not null auto_increment,
-			public_token varchar(128) NOT NULL,
-			secret_token varchar(128) NOT NULL,
-			generated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			generated_by varchar(128) CHARACTER SET utf8 NOT NULL,
-			is_acquired tinyint unsigned NOT NULL DEFAULT '0',
-			PRIMARY KEY (access_token_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
-		DROP INDEX public_token_idx ON access_token
-	`,
-	`
-		CREATE UNIQUE INDEX public_token_uidx_access_token ON access_token (public_token)
-	`,
-	`
-		DROP INDEX generated_at_idx ON access_token
-	`,
-	`
-		CREATE INDEX generated_at_idx_access_token ON access_token (generated_at)
-	`,
-	`
 		CREATE TABLE IF NOT EXISTS database_instance_recent_relaylog_history (
 			hostname varchar(128) NOT NULL,
 			port smallint(5) unsigned NOT NULL,
