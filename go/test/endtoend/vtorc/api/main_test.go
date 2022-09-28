@@ -33,7 +33,7 @@ func TestMain(m *testing.M) {
 	cellInfos = append(cellInfos, &utils.CellInfo{
 		CellName:    utils.Cell1,
 		NumReplicas: 2,
-		NumRdonly:   0,
+		NumRdonly:   1,
 		UIDBase:     100,
 	})
 	cellInfos = append(cellInfos, &utils.CellInfo{
