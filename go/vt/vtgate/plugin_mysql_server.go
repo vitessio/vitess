@@ -75,6 +75,8 @@ var (
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
+	mysqlConnBufferPooling = flag.Bool("mysql-server-pool-conn-read-buffers", false, "If set, the server will pool incoming connection read buffers")
+
 	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "OLTP", "Default session workload (OLTP, OLAP, DBA)")
 	mysqlDefaultWorkload     int32
 
@@ -355,9 +357,9 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 				// The collation field of ExecuteOption is set right before an execution.
 			},
 			Autocommit:           true,
-			DDLStrategy:          *defaultDDLStrategy,
+			DDLStrategy:          defaultDDLStrategy,
 			SessionUUID:          u.String(),
-			EnableSystemSettings: *sysVarSetEnabled,
+			EnableSystemSettings: sysVarSetEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
@@ -433,7 +435,16 @@ func initMySQLProtocol() {
 	var err error
 	vtgateHandle = newVtgateHandler(rpcVTGate)
 	if *mysqlServerPort >= 0 {
-		mysqlListener, err = mysql.NewListener(*mysqlTCPVersion, net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vtgateHandle, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, *mysqlProxyProtocol)
+		mysqlListener, err = mysql.NewListener(
+			*mysqlTCPVersion,
+			net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)),
+			authServer,
+			vtgateHandle,
+			*mysqlConnReadTimeout,
+			*mysqlConnWriteTimeout,
+			*mysqlProxyProtocol,
+			*mysqlConnBufferPooling,
+		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
@@ -476,7 +487,17 @@ func initMySQLProtocol() {
 // newMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
 // to clean it up.
 func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mysql.Handler) (*mysql.Listener, error) {
-	listener, err := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, false)
+	listener, err := mysql.NewListener(
+		"unix",
+		address,
+		authServer,
+		handler,
+		*mysqlConnReadTimeout,
+		*mysqlConnWriteTimeout,
+		false,
+		*mysqlConnBufferPooling,
+	)
+
 	switch err := err.(type) {
 	case nil:
 		return listener, nil
@@ -497,7 +518,16 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			log.Errorf("Couldn't remove existent socket file: %s", address)
 			return nil, err
 		}
-		listener, listenerErr := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, false)
+		listener, listenerErr := mysql.NewListener(
+			"unix",
+			address,
+			authServer,
+			handler,
+			*mysqlConnReadTimeout,
+			*mysqlConnWriteTimeout,
+			false,
+			*mysqlConnBufferPooling,
+		)
 		return listener, listenerErr
 	default:
 		return nil, err

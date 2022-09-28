@@ -105,11 +105,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
+		vtParams = clusterInstance.GetVTParams(sKs)
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, sKs, sSchemaSQL, uSchemaSQL)
 		if err != nil {

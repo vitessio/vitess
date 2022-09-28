@@ -66,3 +66,21 @@ func TestRoutingRulesErrors(t *testing.T) {
 		assert.Error(t, err, "expected error from GetRoutingRules, got rules=%v", rules)
 	})
 }
+
+func TestShardRoutingRulesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+
+	srr := map[string]string{
+		"ks1.shard1": "ks2",
+		"ks3.shard2": "ks4",
+	}
+
+	err := SaveShardRoutingRules(ctx, ts, srr)
+	require.NoError(t, err, "could not save shard routing rules to topo %v", err)
+
+	roundtripRules, err := GetShardRoutingRules(ctx, ts)
+	require.NoError(t, err, "could not fetch shard routing rules from topo: %v", err)
+
+	assert.Equal(t, srr, roundtripRules)
+}

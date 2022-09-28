@@ -12,7 +12,7 @@ Usage of vttablet:
       --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
       --backup_storage_hook string                                       if set, we send the contents of the backup files through this hook.
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
-      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression (default 2)
+      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --binlog_host string                                               PITR restore parameter: hostname/IP of binlog server.
       --binlog_password string                                           PITR restore parameter: password of binlog server.
       --binlog_player_grpc_ca string                                     the server ca to use to validate servers when connecting
@@ -27,12 +27,12 @@ Usage of vttablet:
       --binlog_ssl_key string                                            PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
       --binlog_ssl_server_name string                                    PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in --binlog_host).
       --binlog_user string                                               PITR restore parameter: username of binlog server.
-      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
-      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files (default 5s)
+      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
-      --compression-level int                                            what level to pass to the compressor (default 1)
+      --compression-level int                                            what level to pass to the compressor. (default 1)
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
@@ -182,7 +182,6 @@ Usage of vttablet:
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
       --disable-replication-manager                                      Disable replication manager to prevent replication repairs.
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
-      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
       --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
       --enable-lag-throttler                                             Synonym to -enable_lag_throttler
@@ -200,9 +199,9 @@ Usage of vttablet:
       --enable_tx_throttler                                              If true replication-lag-based throttling on transactions will be enabled.
       --enforce-tableacl-config                                          if this flag is true, vttablet will fail to start if a valid tableacl config does not exist
       --enforce_strict_trans_tables                                      If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
-      --external-compressor string                                       command with arguments to use when compressing a backup
-      --external-compressor-extension string                             extension to use when using an external compressor
-      --external-decompressor string                                     command with arguments to use when decompressing a backup
+      --external-compressor string                                       command with arguments to use when compressing a backup.
+      --external-compressor-extension string                             extension to use when using an external compressor.
+      --external-decompressor string                                     command with arguments to use when decompressing a backup.
       --file_backup_storage_root string                                  Root directory for the file backup storage.
       --filecustomrules string                                           file based custom rule path
       --filecustomrules_watch                                            set up a watch on the target file and reload query rules when it changes
@@ -263,7 +262,6 @@ Usage of vttablet:
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
-      --master_connect_retry duration                                    Deprecated, use -replication_connect_retry (default 10s)
       --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --migration_check_interval duration                                Interval between migration checks (default 1m0s)
       --mycnf-file string                                                path to my.cnf, if reading all config params from there
@@ -284,9 +282,7 @@ Usage of vttablet:
       --mycnf_slow_log_path string                                       mysql slow query log path
       --mycnf_socket_file string                                         mysql socket file
       --mycnf_tmp_dir string                                             mysql tmp directory
-      --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_version string                                      MySQL server version to advertise.
-      --mysqlctl_client_protocol string                                  the protocol to use to talk to the mysqlctl server (default "grpc")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
@@ -299,7 +295,7 @@ Usage of vttablet:
       --orc_timeout duration                                             Timeout for calls to Orchestrator's HTTP API. (default 30s)
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pitr_gtid_lookup_timeout duration                                PITR restore parameter: timeout for fetching gtid from timestamp. (default 1m0s)
-      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
+      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pt-osc-path string                                               override default pt-online-schema-change binary full path
@@ -372,17 +368,12 @@ Usage of vttablet:
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
-      --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
-      --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats_common_tags string                                         Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
-      --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
-      --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
       --stream_health_buffer_size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-acl-config string                                          path to table access checker config file; send SIGHUP to reload this file
-      --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload (default 0s)
+      --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload
       --table_gc_lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included) (default "hold,purge,evac,drop")
       --tablet-path string                                               tablet alias
       --tablet_config string                                             YAML file config for tablet
@@ -465,6 +456,7 @@ Usage of vttablet:
       --vreplication_retry_delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
       --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of _vt.vreplication
       --vreplication_tablet_type string                                  comma separated list of tablet types used as a source (default "in_order:REPLICA,PRIMARY")
+      --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)
       --vstream_dynamic_packet_size                                      Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance. (default true)
       --vstream_packet_size int                                          Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount. (default 250000)
       --vtctld_addr string                                               address of a vtctld instance

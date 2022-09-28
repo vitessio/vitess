@@ -404,10 +404,6 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	// Therefore, we have elected to always reset the replication parameters whenever we try to set the source host port
 	// Since there is no real overhead, but it makes this function robust enough to also handle failures like these.
 	cmds = append(cmds, conn.ResetReplicationParametersCommands()...)
-	// If flag value is same as default, check deprecated flag value
-	if *replicationConnectRetry == 10*time.Second && *masterConnectRetry != *replicationConnectRetry {
-		*replicationConnectRetry = *masterConnectRetry
-	}
 	smc := conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if replicationStartAfter {

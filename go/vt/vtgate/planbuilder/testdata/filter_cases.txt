@@ -5965,6 +5965,114 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# For left joins, where conditions using both sides of the join are not pulled into the join conditions
+"SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE (user.name = 'Trent Reznor' OR music.genre = 'pop') AND music.user_id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE (user.name = 'Trent Reznor' OR music.genre = 'pop') AND music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
+    "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 5 and (`user`.`name` = 'Trent Reznor' or music.genre = 'pop')",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
+# For left joins, where conditions using both sides of the join are not pulled into the join conditions (swapped order)
+"SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND (user.name = 'Trent Reznor' OR music.genre = 'pop')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND (user.name = 'Trent Reznor' OR music.genre = 'pop')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
+    "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 5 and (`user`.`name` = 'Trent Reznor' or music.genre = 'pop')",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
+# For left joins, null intolerant where conditions using both sides of the join are transformed to inner joins
+"SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.componist = user.name"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.componist = user.name",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music, `user` where 1 != 1",
+    "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.componist = `user`.`name`",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
+# For left joins, null intolerant where conditions using `IS NOT NULL` allow outer join simplification
+"SELECT music.id FROM music LEFT OUTER JOIN user ON user.id = music.user_id WHERE music.user_id = 5 AND user.id IS NOT NULL"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON user.id = music.user_id WHERE music.user_id = 5 AND user.id IS NOT NULL",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music, `user` where 1 != 1",
+    "Query": "select music.id from music, `user` where music.user_id = 5 and `user`.id is not null and `user`.id = music.user_id",
+    "Table": "`user`, music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
 # optimize ORs to IN route op codes #1
 "select col from user where id = 1 or id = 2"
 {
