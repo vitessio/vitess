@@ -19,11 +19,13 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
 // vtorcAPI struct is created to implement the Handler interface to register
@@ -33,13 +35,17 @@ import (
 type vtorcAPI struct{}
 
 const (
-	problemsAPI = "/api/problems"
+	problemsAPI                = "/api/problems"
+	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
+	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
 )
 
 var (
 	apiHandler    = &vtorcAPI{}
 	vtorcAPIPaths = []string{
 		problemsAPI,
+		disableGlobalRecoveriesAPI,
+		enableGlobalRecoveriesAPI,
 	}
 )
 
@@ -55,6 +61,10 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 	switch apiPath {
 	case problemsAPI:
 		problemsAPIHandler(response, request)
+	case disableGlobalRecoveriesAPI:
+		disableGlobalRecoveriesAPIHandler(response)
+	case enableGlobalRecoveriesAPI:
+		enableGlobalRecoveriesAPIHandler(response)
 	default:
 		// This should be unreachable. Any endpoint which isn't registered is automatically redirected to /debug/status.
 		// This code will only be reachable if we register an API but don't handle it here. That will be a bug.
@@ -67,6 +77,8 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 	switch apiEndpoint {
 	case problemsAPI:
 		return acl.MONITORING
+	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
+		return acl.ADMIN
 	}
 	return acl.ADMIN
 }
@@ -111,4 +123,32 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	returnAsJSON(response, instances)
+}
+
+// disableGlobalRecoveriesAPIHandler is the handler for the disableGlobalRecoveriesAPI endpoint
+func disableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
+	err := logic.DisableRecovery()
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writePlainTextResponse(response, "Global recoveries disabled", http.StatusOK)
+}
+
+// enableGlobalRecoveriesAPIHandler is the handler for the enableGlobalRecoveriesAPI endpoint
+func enableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
+	err := logic.EnableRecovery()
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writePlainTextResponse(response, "Global recoveries enabled", http.StatusOK)
+}
+
+// writePlainTextResponse writes a plain text response to the writer.
+func writePlainTextResponse(w http.ResponseWriter, message string, code int) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+	_, _ = fmt.Fprintln(w, message)
 }
