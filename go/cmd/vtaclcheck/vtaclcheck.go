@@ -35,8 +35,9 @@ func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.StringVar(&aclFile, "acl-file", aclFile, "The path of the JSON ACL file to check")
 		fs.StringVar(&staticAuthFile, "static-auth-file", staticAuthFile, "The path of the auth_server_static JSON file to check")
+		
+		fs.SetOutput(logutil.NewLoggerWriter(logger))
 	})
-	pflag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
 }
 
 func main() {
