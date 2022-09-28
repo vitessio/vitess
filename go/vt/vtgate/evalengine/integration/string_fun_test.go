@@ -39,11 +39,13 @@ var cases = []string{
 	"999999999999999999999999",
 	"-999999999999999999999999",
 	"_latin1 X'ÂÄÌå'",
-	"_dec8 X'ÒòÅå'",
+	"_dec8 'ÒòÅå'",
 	"_binary 'Müller' ",
-	"_utf8 X'abcABCÅå'",
-	"_gbk X'天气不错'",
-	"_utf16 X'ÂÄÌ'",
+	"_utf8mb4 'abcABCÅå'",
+	"_utf8mb3 'abcABCÅå'",
+	"_utf16 'AabcÅå'",
+	"_utf32 'AabcÅå'",
+	"_ucs2 'AabcÅå'",
 }
 
 func TestBuiltinLowerandLcase(t *testing.T) {

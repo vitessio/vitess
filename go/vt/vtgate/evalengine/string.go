@@ -167,6 +167,7 @@ type builtinCharLength struct{}
 func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
 	t := inarg.typeof()
+	raw := inarg.value().Raw()
 
 	if inarg.isNull() {
 		result.setNull()
@@ -179,13 +180,8 @@ func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *Eva
 		inarg.makeTextualAndConvert(env.DefaultCollation)
 		cnt := int64(len(inarg.value().Raw()))
 		result.setInt64(cnt)
-	} else if cla, ok := coll.(collations.CharLengthAwareCollation); ok {
-		raw := inarg.value().Raw()
-		cnt := int64(cla.CharLen(raw))
-		if cnt == -1 {
-			throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
-		}
-		result.setInt64(cnt)
+	} else if cnt := collations.CharLen(coll, raw); cnt >= 0 {
+		result.setInt64(int64(cnt))
 	} else {
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}

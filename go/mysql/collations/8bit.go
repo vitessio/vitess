@@ -131,13 +131,6 @@ func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
 	return dst
 }
 
-func (c *Collation_8bit_bin) CharLen(src []byte) int {
-	if cla, ok := c.Charset().(charset.CharLengthAwareCharset); ok {
-		return cla.CharLen(src)
-	}
-	return -1
-}
-
 type Collation_8bit_simple_ci struct {
 	id   ID
 	name string
@@ -267,13 +260,6 @@ func (c *Collation_8bit_simple_ci) ToUpper(dst, src []byte) []byte {
 	return dst
 }
 
-func (c *Collation_8bit_simple_ci) CharLen(src []byte) int {
-	if cla, ok := c.Charset().(charset.CharLengthAwareCharset); ok {
-		return cla.CharLen(src)
-	}
-	return -1
-}
-
 type Collation_binary struct{}
 
 func (c *Collation_binary) Init() {}
@@ -342,11 +328,4 @@ func (c *Collation_binary) ToLower(dst, raw []byte) []byte {
 func (c *Collation_binary) ToUpper(dst, raw []byte) []byte {
 	dst = append(dst, raw...)
 	return dst
-}
-
-func (c *Collation_binary) CharLen(src []byte) int {
-	if cla, ok := c.Charset().(charset.CharLengthAwareCharset); ok {
-		return cla.CharLen(src)
-	}
-	return -1
 }

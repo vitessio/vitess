@@ -236,13 +236,6 @@ func (c *Collation_utf8mb4_uca_0900) ToUpper(dst, src []byte) []byte {
 	return dst
 }
 
-func (c *Collation_utf8mb4_uca_0900) CharLen(src []byte) int {
-	if cla, ok := c.Charset().(charset.CharLengthAwareCharset); ok {
-		return cla.CharLen(src)
-	}
-	return -1
-}
-
 type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) Init() {}
@@ -300,13 +293,6 @@ func (c *Collation_utf8mb4_0900_bin) ToLower(dst, src []byte) []byte {
 func (c *Collation_utf8mb4_0900_bin) ToUpper(dst, src []byte) []byte {
 	dst = append(dst, bytes.ToUpper(src)...)
 	return dst
-}
-
-func (c *Collation_utf8mb4_0900_bin) CharLen(src []byte) int {
-	if cla, ok := c.Charset().(charset.CharLengthAwareCharset); ok {
-		return cla.CharLen(src)
-	}
-	return -1
 }
 
 type Collation_uca_legacy struct {

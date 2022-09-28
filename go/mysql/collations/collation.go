@@ -22,11 +22,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
-type CharLengthAwareCollation interface {
-	Collation
-	CharLen(src []byte) int
-}
-
 // CaseAwareCollation implements lowercase and uppercase conventions for collations.
 type CaseAwareCollation interface {
 	Collation
@@ -199,4 +194,12 @@ func Validate(collation Collation, input []byte) bool {
 // appended to `dst` and returned.
 func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
 	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
+}
+
+// Return the number of codepoints in the given collation
+func CharLen(collation Collation, input []byte) int {
+	if cla, ok := collation.Charset().(charset.CharLengthAwareCharset); ok {
+		return cla.CharLen(input)
+	}
+	return -1
 }
