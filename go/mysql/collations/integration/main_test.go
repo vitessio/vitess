@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -34,9 +35,12 @@ import (
 
 var (
 	connParams mysql.ConnParams
+	waitmysql  bool
 )
 
-var waitmysql = pflag.Bool("waitmysql", false, "")
+func init() {
+	pflag.BoolVar(&waitmysql, "waitmysql", waitmysql, "")
+}
 
 func mysqlconn(t *testing.T) *mysql.Conn {
 	conn, err := mysql.Connect(context.Background(), &connParams)
@@ -56,7 +60,7 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 }
 
 func TestMain(m *testing.M) {
-	pflag.Parse()
+	flag.ParseFlagsForTest()
 
 	exitCode := func() int {
 		// Launch MySQL.
@@ -90,7 +94,7 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 
-		if *waitmysql {
+		if waitmysql {
 			debugMysql()
 		}
 		return m.Run()

@@ -32,6 +32,9 @@ import (
 )
 
 var (
+	//go:embed vtaclcheck.txt
+	vtaclcheckTxt string
+
 	//go:embed vtexplain.txt
 	vtexplainTxt string
 
@@ -62,10 +65,14 @@ var (
 	//go:embed vttestserver.txt
 	vttestserverTxt string
 
+	//go:embed zkctld.txt
+	zkctldTxt string
+
 	//go:embed zkctl.txt
 	zkctlTxt string
 
 	helpOutput = map[string]string{
+		"vtaclcheck":   vtaclcheckTxt,
 		"vtexplain":    vtexplainTxt,
 		"vtgate":       vtgateTxt,
 		"vtgr":         vtgrTxt,
@@ -76,6 +83,7 @@ var (
 		"vtctldclient": vtctldclientTxt,
 		"vtorc":        vtorcTxt,
 		"vttestserver": vttestserverTxt,
+		"zkctld":       zkctldTxt,
 		"zkctl":        zkctlTxt,
 	}
 )

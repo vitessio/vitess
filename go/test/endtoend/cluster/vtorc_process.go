@@ -182,3 +182,16 @@ func (orc *VTOrcProcess) GetVars() map[string]any {
 	}
 	return nil
 }
+
+// MakeAPICall makes an API call on the given endpoint of VTOrc
+func (orc *VTOrcProcess) MakeAPICall(endpoint string) (status int, response string, err error) {
+	url := fmt.Sprintf("http://localhost:%d/%s", orc.Port, endpoint)
+	resp, err := http.Get(url)
+	if err != nil {
+		return resp.StatusCode, "", err
+	}
+	defer resp.Body.Close()
+
+	respByte, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(respByte), err
+}

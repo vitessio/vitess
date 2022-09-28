@@ -18,7 +18,7 @@ package testlib
 
 import (
 	"bytes"
-	"flag"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -56,7 +56,14 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 	// Register all vtctl commands
 	servenvInitialized.Do(func() {
 		// make sure we use the right protocol
-		flag.Set("vtctl_client_protocol", "grpc")
+		fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+		vtctlclient.RegisterFlags(fs)
+
+		err := fs.Parse([]string{
+			"--vtctl_client_protocol",
+			"grpc",
+		})
+		require.NoError(t, err, "failed to set `--vtctl_client_protocol=%s`", "grpc")
 
 		servenv.FireRunHooks()
 	})

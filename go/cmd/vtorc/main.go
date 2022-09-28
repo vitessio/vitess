@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/app"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/server"
 )
 
 var (
@@ -183,6 +184,7 @@ Please update your scripts before the next version, when this will begin to brea
 
 	go app.HTTP(*discovery)
 
+	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {
 		addStatusParts()
 	})
