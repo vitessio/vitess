@@ -32,6 +32,9 @@ import (
 )
 
 var (
+	//go:embed mysqlctld.txt
+	mysqlctldTxt string
+
 	//go:embed vtexplain.txt
 	vtexplainTxt string
 
@@ -63,6 +66,7 @@ var (
 	vttestserverTxt string
 
 	helpOutput = map[string]string{
+		"mysqlctld":    mysqlctldTxt,
 		"vtexplain":    vtexplainTxt,
 		"vtgate":       vtgateTxt,
 		"vtgr":         vtgrTxt,
