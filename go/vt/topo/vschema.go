@@ -130,3 +130,38 @@ func (ts *Server) GetRoutingRules(ctx context.Context) (*vschemapb.RoutingRules,
 	}
 	return rr, nil
 }
+
+// SaveShardRoutingRules saves the shard routing rules into the topo.
+func (ts *Server) SaveShardRoutingRules(ctx context.Context, shardRoutingRules *vschemapb.ShardRoutingRules) error {
+	data, err := proto.Marshal(shardRoutingRules)
+	if err != nil {
+		return err
+	}
+
+	if len(data) == 0 {
+		if err := ts.globalCell.Delete(ctx, ShardRoutingRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
+			return err
+		}
+		return nil
+	}
+
+	_, err = ts.globalCell.Update(ctx, ShardRoutingRulesFile, data, nil)
+	return err
+}
+
+// GetShardRoutingRules fetches the shard routing rules from the topo.
+func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRoutingRules, error) {
+	srr := &vschemapb.ShardRoutingRules{}
+	data, _, err := ts.globalCell.Get(ctx, ShardRoutingRulesFile)
+	if err != nil {
+		if IsErrType(err, NoNode) {
+			return srr, nil
+		}
+		return nil, err
+	}
+	err = proto.Unmarshal(data, srr)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "invalid shard routing rules: %q", data)
+	}
+	return srr, nil
+}

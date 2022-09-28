@@ -1,0 +1,157 @@
+{
+  "Tests": {
+    "vtgate_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": []
+    },
+    "vtgate_sequence_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sequence"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 1,
+      "Tags": []
+    },
+    "errs_as_warns_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 1,
+      "Tags": []
+    },
+    "vtgate_transaction_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 1,
+      "Tags": []
+    },
+    "vtgate_transaction_rollback_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/rollback"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 1,
+      "Tags": []
+    },
+    "vtgate_transaction_single_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/single"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 1,
+      "Tags": []
+    },
+    "vtgate_transaction_partial_exec_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/partialfailure"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 1,
+      "Tags": []
+    },
+    "vtgate_queries_aggregation_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/aggregation"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": []
+    },
+    "vtgate_queries_foundrows_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/foundrows"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": []
+    },
+    "vtgate_queries_informationschema_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/informationschema"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": []
+    },
+    "vtgate_queries_misc_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/misc"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 1,
+      "Tags": []
+    },
+    "vtgate_queries_normalize_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/normalize"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": []
+    },
+    "vtgate_queries_orderby_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby", "-timeout", "20m"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": ["upgrade_downgrade_query_serving_queries"]
+    },
+    "vtgate_queries_subquery_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery", "-timeout", "20m"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": ["upgrade_downgrade_query_serving_queries"]
+    },
+    "vtgate_queries_union_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/union", "-timeout", "20m"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": ["upgrade_downgrade_query_serving_queries"]
+    },
+    "vtgate_queries_insert_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": []
+    },
+    "vtgate_queries_vtexplain_partial_keyspace": {
+      "File": "unused.go",
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vtexplain"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_partial_keyspace",
+      "RetryMax": 2,
+      "Tags": []
+    }
+  }
+}

@@ -183,7 +183,10 @@ visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
+	go run ./go/tools/asthelpergen/main \
+		--in ./go/vt/sqlparser \
+		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
+		--except "*ColName"
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
@@ -488,7 +491,7 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"
+	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh

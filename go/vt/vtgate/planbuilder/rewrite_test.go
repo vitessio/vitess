@@ -120,10 +120,10 @@ func TestHavingRewrite(t *testing.T) {
 		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
 	}, {
 		input:  "select count(*) k from t1 where x = 1 or y = 2 having a = 1 and k = 1",
-		output: "select count(*) as k from t1 where (x = 1 or y = 2) and a = 1 having k = 1",
+		output: "select count(*) as k from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
 	}, {
 		input:  "select count(*) k from t1 having k = 10",
-		output: "select count(*) as k from t1 having k = 10",
+		output: "select count(*) as k from t1 having count(*) = 10",
 	}, {
 		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
 		output: "select 1 from t1 where :__sq_has_values1 = 1 and x in ::__sq1",

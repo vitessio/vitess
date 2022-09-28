@@ -345,6 +345,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}/rebuild_keyspace_graph", httpAPI.Adapt(vtadminhttp.RebuildKeyspaceGraph)).Name("API.RebuildKeyspaceGraph").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}/remove_keyspace_cell", httpAPI.Adapt(vtadminhttp.RemoveKeyspaceCell)).Name("API.RemoveKeyspaceCell").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate", httpAPI.Adapt(vtadminhttp.ValidateKeyspace)).Name("API.ValidateKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/schema", httpAPI.Adapt(vtadminhttp.ValidateSchemaKeyspace)).Name("API.ValidateSchemaKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/version", httpAPI.Adapt(vtadminhttp.ValidateVersionKeyspace)).Name("API.ValidateVersionKeyspace").Methods("PUT", "OPTIONS")
@@ -1424,6 +1426,35 @@ func (api *API) PlannedFailoverShard(ctx context.Context, req *vtadminpb.Planned
 	return c.PlannedFailoverShard(ctx, req.Options)
 }
 
+// RebuildKeyspaceGraph is a part of the vtadminpb.VTAdminServer interface.
+func (api *API) RebuildKeyspaceGraph(ctx context.Context, req *vtadminpb.RebuildKeyspaceGraphRequest) (*vtadminpb.RebuildKeyspaceGraphResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RebuildKeyspaceGraph")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	_, err = c.Vtctld.RebuildKeyspaceGraph(ctx, &vtctldatapb.RebuildKeyspaceGraphRequest{
+		Keyspace:     req.Keyspace,
+		AllowPartial: req.AllowPartial,
+		Cells:        req.Cells,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.RebuildKeyspaceGraphResponse{
+		Status: "ok",
+	}, nil
+}
+
 // RefreshState is part of the vtadminpb.VTAdminServer interface.
 func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateRequest) (*vtadminpb.RefreshStateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.RefreshState")
@@ -1501,6 +1532,36 @@ func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasR
 	}
 
 	return &resp, nil
+}
+
+// RemoveKeyspaceCell is a part of the vtadminpb.VTAdminServer interface.
+func (api *API) RemoveKeyspaceCell(ctx context.Context, req *vtadminpb.RemoveKeyspaceCellRequest) (*vtadminpb.RemoveKeyspaceCellResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RemoveKeyspaceCell")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	_, err = c.Vtctld.RemoveKeyspaceCell(ctx, &vtctldatapb.RemoveKeyspaceCellRequest{
+		Keyspace:  req.Keyspace,
+		Cell:      req.Cell,
+		Force:     req.Force,
+		Recursive: req.Recursive,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.RemoveKeyspaceCellResponse{
+		Status: "ok",
+	}, nil
 }
 
 // RunHealthCheck is part of the vtadminpb.VTAdminServer interface.

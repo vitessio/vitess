@@ -135,10 +135,10 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		// migrater buildMigrationTargets
 		env.tmc.setVRResults(
 			primary.tablet,
-			"select id, source, message, cell, tablet_types from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
+			"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types",
-				"int64|varchar|varchar|varchar|varchar"),
+				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
+				"int64|varchar|varchar|varchar|varchar|int64|int64"),
 				rows...,
 			),
 		)

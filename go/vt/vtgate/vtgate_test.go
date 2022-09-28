@@ -72,7 +72,7 @@ func init() {
 }
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
-	*transactionMode = "MULTI"
+	transactionMode = "MULTI"
 	Init(context.Background(), hcVTGateTest, newSandboxForCells([]string{"aa"}), "aa", nil, querypb.ExecuteOptions_Gen4)
 
 	*mysqlServerPort = 0
