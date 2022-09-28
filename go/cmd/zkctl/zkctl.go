@@ -61,20 +61,18 @@ func main() {
 	defer logutil.Flush()
 
 	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
-	log.RegisterFlags(fs)
-	logutil.RegisterFlags(fs)
-	servenv.ParseFlags("zkctl")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, usage)
 	}
 
-	args := fs.Args()
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	args := servenv.ParseFlagsWithArgs("zkctl")
+
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, usage)
-		pflag.Usage()
+		fs.Usage()
 		exit.Return(1)
 	}
-
 	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
@@ -91,6 +89,7 @@ func main() {
 		err = zkd.Teardown()
 	default:
 		log.Errorf("invalid action: %v", action)
+		log.Errorf(usage)
 		exit.Return(1)
 	}
 	if err != nil {
