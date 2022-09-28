@@ -116,7 +116,7 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 {{- range $component := $type.Components }} 
 #### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
- * {{ $prInfo.Title }} #{{ $prInfo.Number }}
+ * {{ $prInfo.Title }} [#{{ $prInfo.Number }}](https://github.com/vitessio/vitess/pull/{{ $prInfo.Number }})
 {{- end }}
 {{- end }}
 {{- end }}
@@ -495,7 +495,7 @@ func main() {
 	flag.Parse()
 
 	// The -version flag must be of a valid format.
-	rx := regexp.MustCompile("v([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+	rx := regexp.MustCompile(`v([0-9]+)\.([0-9]+)\.([0-9]+)`)
 	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
 	versionMatch := rx.FindStringSubmatch(*versionName)
 	if len(versionMatch) != 4 {
