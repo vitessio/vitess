@@ -421,3 +421,26 @@ func TestInfiniteSessions(t *testing.T) {
 			client.Commit())
 	}
 }
+
+func TestSetQueriesMultipleWays(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Release()
+	_, err := client.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute("set sql_safe_updates = 1", nil)
+	require.NoError(t, err)
+
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client2 := framework.NewClient()
+	_, err = client2.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
+	require.NoError(t, err)
+
+	// this should not panic.
+	_, err = client.Execute("set sql_safe_updates = 1", nil)
+	require.NoError(t, err)
+}

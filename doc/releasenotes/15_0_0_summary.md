@@ -22,6 +22,8 @@
 - The deprecated `--cpu_profile` flag has been removed. Please use the `--pprof` flag instead.
 - The deprecated `--mem-profile-rate` flag has been removed. Please use `--pprof=mem` instead.
 - The deprecated `--mutex-profile-fraction` flag has been removed. Please use `--pprof=mutex` instead.
+- The deprecated vtgate/vtexplain/vtcombo flag `--planner_version` has been removed. Please use `--planner-version` instead.
+- The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
 
 #### Vindex Interface
 
@@ -65,6 +67,13 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 - --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+
+### New command line flags and behavior
+
+#### vtgate --mysql-server-pool-conn-read-buffers
+
+`--mysql-server-pool-conn-read-buffers` enables pooling of buffers used to read from incoming
+connections, similar to the way pooling happens for write buffers. Defaults to off.
 
 ### VDiff2
 

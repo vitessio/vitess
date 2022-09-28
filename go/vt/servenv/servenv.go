@@ -264,7 +264,7 @@ var (
 	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
 )
 
-// OnParse registers a callback function to register flags on the flagset that
+// OnParse registers a callback function to register flags on the flagset that are
 // used by any caller of servenv.Parse or servenv.ParseWithArgs.
 func OnParse(f func(fs *pflag.FlagSet)) {
 	flagHooksM.Lock()
@@ -358,7 +358,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vttablet",
 	} {
@@ -372,7 +371,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vtgateclienttest",
 		"vtgr",

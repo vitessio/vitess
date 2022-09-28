@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -31,20 +30,26 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 // The default values used by these flags cannot be taken from wrangler and
 // actionnode modules, as we don't want to depend on them at all.
 var (
-	actionTimeout = flag.Duration("action_timeout", time.Hour, "timeout for the total command")
-	server        = flag.String("server", "", "server to use for connection")
+	actionTimeout = time.Hour
+	server        string
 )
+
+func init() {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		fs.DurationVar(&actionTimeout, "action_timeout", actionTimeout, "timeout for the total command")
+		fs.StringVar(&server, "server", server, "server to use for connection")
+	})
+}
 
 // checkDeprecations runs quick and dirty checks to see whether any command or flag are deprecated.
 // For any depracated command or flag, the function issues a warning message.
@@ -72,9 +77,7 @@ func checkDeprecations(args []string) {
 func main() {
 	defer exit.Recover()
 
-	fs := pflag.NewFlagSet("vtctlclient", pflag.ExitOnError)
-	log.RegisterFlags(fs)
-	_flag.Parse(fs)
+	args := servenv.ParseFlagsWithArgs("vtctlclient")
 
 	closer := trace.StartTracing("vtctlclient")
 	defer trace.LogErrorsWhenClosing(closer)
@@ -82,28 +85,26 @@ func main() {
 	logger := logutil.NewConsoleLogger()
 
 	// We can't do much without a --server flag
-	if *server == "" {
+	if server == "" {
 		log.Error(errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 	defer cancel()
 
-	checkDeprecations(flag.Args())
+	checkDeprecations(args)
 
-	err := vtctlclient.RunCommandAndWait(
-		ctx, *server, _flag.Args(),
-		func(e *logutilpb.Event) {
-			logutil.LogEvent(logger, e)
-		})
+	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
+		logutil.LogEvent(logger, e)
+	})
 	if err != nil {
 		if strings.Contains(err.Error(), "flag: help requested") {
 			return
 		}
 
 		errStr := strings.Replace(err.Error(), "remote error: ", "", -1)
-		fmt.Printf("%s Error: %s\n", _flag.Arg(0), errStr)
+		fmt.Printf("%s Error: %s\n", args[0], errStr)
 		log.Error(err)
 		os.Exit(1)
 	}

@@ -17,11 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -120,10 +121,10 @@ func TestVtclient(t *testing.T) {
 	}
 
 	// Change ErrorHandling from ExitOnError to panicking.
-	flag.CommandLine.Init("vtclient_test.go", flag.PanicOnError)
+	pflag.CommandLine.Init("vtclient_test.go", pflag.PanicOnError)
 	for _, q := range queries {
 		// Run main function directly and not as external process. To achieve this,
-		// overwrite os.Args which is used by flag.Parse().
+		// overwrite os.Args which is used by pflag.Parse().
 		os.Args = []string{"vtclient_test.go", "--server", vtgateAddr}
 		os.Args = append(os.Args, q.args...)
 

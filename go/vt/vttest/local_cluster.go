@@ -87,9 +87,6 @@ type Config struct {
 	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
 	PlannerVersion string
 
-	// PlannerVersionDeprecated is deprecated and should not be used
-	PlannerVersionDeprecated string
-
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 

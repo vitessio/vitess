@@ -17,6 +17,7 @@ limitations under the License.
 package framework
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -28,8 +29,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -61,7 +60,7 @@ var (
 func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName string, config *tabletenv.TabletConfig) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
-	*vtgateconn.VtgateProtocol = protocol
+	vtgateconn.SetVTGateProtocol(protocol)
 	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
 		return &txResolver{
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},

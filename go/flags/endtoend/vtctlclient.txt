@@ -1,0 +1,41 @@
+Usage of vtctlclient:
+      --action_timeout duration                timeout for the total command (default 1h0m0s)
+      --alsologtostderr                        log to standard error as well as files
+      --datadog-agent-host string              host to send spans to. if empty, no tracing will be done
+      --datadog-agent-port string              port to send spans to. if empty, no tracing will be done
+      --grpc_auth_static_client_creds string   When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc_compression string                Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
+      --grpc_enable_tracing                    Enable gRPC tracing.
+      --grpc_initial_conn_window_size int      gRPC initial connection window size
+      --grpc_initial_window_size int           gRPC initial window size
+      --grpc_keepalive_time duration           After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
+      --grpc_keepalive_timeout duration        After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --grpc_max_message_size int              Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc_prometheus                        Enable gRPC monitoring with Prometheus.
+  -h, --help                                   display usage and exit
+      --jaeger-agent-host string               host and port to send spans to. if empty, no tracing will be done
+      --keep_logs duration                     keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration            keep logs for this long (using mtime) (zero to keep forever)
+      --log_backtrace_at traceLocation         when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                         If non-empty, write log files in this directory
+      --log_err_stacks                         log stack traces for errors
+      --log_rotate_max_size uint               size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logtostderr                            log to standard error instead of files
+      --pprof strings                          enable profiling
+      --purge_logs_interval duration           how often try to remove old logs (default 1h0m0s)
+      --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --server string                          server to use for connection
+      --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
+      --tracer string                          tracing service to use (default "noop")
+      --tracing-enable-logging                 whether to enable logging in the tracing service
+      --tracing-sampling-rate float            sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-type string           sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+  -v, --v Level                                log level for V logs
+      --version                                print binary version
+      --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging
+      --vtctl_client_protocol string           Protocol to use to talk to the vtctl server. (default "grpc")
+      --vtctld_grpc_ca string                  the server ca to use to validate servers when connecting
+      --vtctld_grpc_cert string                the cert to use to connect
+      --vtctld_grpc_crl string                 the server crl to use to validate server certificates when connecting
+      --vtctld_grpc_key string                 the key to use to connect
+      --vtctld_grpc_server_name string         the server name to use to validate server certificate

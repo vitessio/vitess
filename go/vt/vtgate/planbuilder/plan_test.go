@@ -538,6 +538,10 @@ type vschemaWrapper struct {
 	version       plancontext.PlannerVersion
 }
 
+func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {
+	return false
+}
+
 func (vw *vschemaWrapper) GetVSchema() *vindexes.VSchema {
 	return vw.v
 }
@@ -710,6 +714,10 @@ func (vw *vschemaWrapper) currentDb() string {
 		ksName = vw.keyspace.Name
 	}
 	return ksName
+}
+
+func (vw *vschemaWrapper) FindRoutedShard(keyspace, shard string) (string, error) {
+	return "", nil
 }
 
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, render bool) {

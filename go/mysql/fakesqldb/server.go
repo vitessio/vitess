@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -182,7 +183,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -417,7 +418,8 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	}
 	// Nothing matched.
 	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
-	log.Errorf("Query not found: %s", query)
+	log.Errorf("Query not found: %s:%s", query, debug.Stack())
+
 	return err
 }
 
