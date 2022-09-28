@@ -702,16 +702,16 @@ func generateVtgate(opts vtOptions) string {
       - "15306:%[3]d"
     command: ["sh", "-c", "/script/run-forever.sh /vt/bin/vtgate \
         %[4]s \
-        -logtostderr=true \
-        -port %[1]d \
-        -grpc_port %[2]d \
-        -mysql_server_port %[3]d \
-        -mysql_auth_server_impl none \
-        -cell %[5]s \
-        -cells_to_watch %[5]s \
-        -tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
-        -service_map 'grpc-vtgateservice' \
-        -normalize_queries=true \
+        --logtostderr=true \
+        --port %[1]d \
+        --grpc_port %[2]d \
+        --mysql_server_port %[3]d \
+        --mysql_auth_server_impl none \
+        --cell %[5]s \
+        --cells_to_watch %[5]s \
+        --tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
+        --service_map 'grpc-vtgateservice' \
+        --normalize_queries=true \
         "]
     volumes:
       - .:/script

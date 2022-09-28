@@ -159,7 +159,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "57000"
-	*setVarEnabled = true
+	setVarEnabled = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -195,9 +195,9 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "80000"
-	*setVarEnabled = false
+	setVarEnabled = false
 	defer func() {
-		*setVarEnabled = true
+		setVarEnabled = true
 	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -2926,6 +2926,33 @@ func TestSelectLock(t *testing.T) {
 	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
+}
+
+func TestLockReserve(t *testing.T) {
+	// no connection should be reserved for these queries.
+	tcases := []string{
+		"select is_free_lock('lock name') from dual",
+		"select is_used_lock('lock name') from dual",
+		"select release_all_locks() from dual",
+		"select release_lock('lock name') from dual",
+	}
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	for _, sql := range tcases {
+		t.Run(sql, func(t *testing.T) {
+			_, err := exec(executor, session, sql)
+			require.NoError(t, err)
+			require.Nil(t, session.LockSession)
+		})
+	}
+
+	// get_lock should reserve a connection.
+	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
+	require.NoError(t, err)
+	require.NotNil(t, session.LockSession)
+
 }
 
 func TestSelectFromInformationSchema(t *testing.T) {

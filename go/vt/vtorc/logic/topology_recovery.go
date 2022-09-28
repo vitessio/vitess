@@ -23,33 +23,27 @@ import (
 	"math/rand"
 	goos "os"
 	"strings"
-	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vtorc/attributes"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
 	"vitess.io/vitess/go/vt/vtorc/os"
 	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
-
-var countPendingRecoveries int64
 
 type RecoveryType string
 
@@ -57,6 +51,35 @@ const (
 	PrimaryRecovery             RecoveryType = "PrimaryRecovery"
 	CoPrimaryRecovery           RecoveryType = "CoPrimaryRecovery"
 	IntermediatePrimaryRecovery RecoveryType = "IntermediatePrimaryRecovery"
+
+	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
+	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
+	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
+	CheckAndRecoverLockedSemiSyncPrimaryRecoveryName string = "CheckAndRecoverLockedSemiSyncPrimary"
+	ElectNewPrimaryRecoveryName                      string = "ElectNewPrimary"
+	FixPrimaryRecoveryName                           string = "FixPrimary"
+	FixReplicaRecoveryName                           string = "FixReplica"
+)
+
+var (
+	actionableRecoveriesNames = []string{
+		RecoverDeadPrimaryRecoveryName,
+		RecoverPrimaryHasPrimaryRecoveryName,
+		ElectNewPrimaryRecoveryName,
+		FixPrimaryRecoveryName,
+		FixReplicaRecoveryName,
+	}
+
+	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
+
+	// recoveriesCounter counts the number of recoveries that VTOrc has performed
+	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+
+	// recoveriesSuccessfulCounter counts the number of successful recoveries that VTOrc has performed
+	recoveriesSuccessfulCounter = stats.NewCountersWithSingleLabel("SuccessfulRecoveries", "Count of the different successful recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+
+	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
+	recoveriesFailureCounter = stats.NewCountersWithSingleLabel("FailedRecoveries", "Count of the different failed recoveries performed", "RecoveryType", actionableRecoveriesNames...)
 )
 
 // recoveryFunction is the code of the recovery function to be used
@@ -201,32 +224,8 @@ func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
 	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
 }
 
-var recoverDeadIntermediatePrimaryCounter = metrics.NewCounter()
-var recoverDeadIntermediatePrimarySuccessCounter = metrics.NewCounter()
-var recoverDeadIntermediatePrimaryFailureCounter = metrics.NewCounter()
-var recoverDeadCoPrimaryCounter = metrics.NewCounter()
-var recoverDeadCoPrimarySuccessCounter = metrics.NewCounter()
-var recoverDeadCoPrimaryFailureCounter = metrics.NewCounter()
-var countPendingRecoveriesGauge = metrics.NewGauge()
-
 func init() {
-	_ = metrics.Register("recover.dead_intermediate_primary.start", recoverDeadIntermediatePrimaryCounter)
-	_ = metrics.Register("recover.dead_intermediate_primary.success", recoverDeadIntermediatePrimarySuccessCounter)
-	_ = metrics.Register("recover.dead_intermediate_primary.fail", recoverDeadIntermediatePrimaryFailureCounter)
-	_ = metrics.Register("recover.dead_co_primary.start", recoverDeadCoPrimaryCounter)
-	_ = metrics.Register("recover.dead_co_primary.success", recoverDeadCoPrimarySuccessCounter)
-	_ = metrics.Register("recover.dead_co_primary.fail", recoverDeadCoPrimaryFailureCounter)
-	_ = metrics.Register("recover.pending", countPendingRecoveriesGauge)
-
 	go initializeTopologyRecoveryPostConfiguration()
-
-	ometrics.OnMetricsTick(func() {
-		countPendingRecoveriesGauge.Update(getCountPendingRecoveries())
-	})
-}
-
-func getCountPendingRecoveries() int64 {
-	return atomic.LoadInt64(&countPendingRecoveries)
 }
 
 func initializeTopologyRecoveryPostConfiguration() {
@@ -907,6 +906,31 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 	}
 }
 
+// getRecoverFunctionName gets the recovery function name for the given code.
+// This name is used for metrics
+func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
+	switch recoveryFunctionCode {
+	case noRecoveryFunc:
+		return ""
+	case recoverGenericProblemFunc:
+		return CheckAndRecoverGenericProblemRecoveryName
+	case recoverDeadPrimaryFunc:
+		return RecoverDeadPrimaryRecoveryName
+	case recoverPrimaryHasPrimaryFunc:
+		return RecoverPrimaryHasPrimaryRecoveryName
+	case recoverLockedSemiSyncPrimaryFunc:
+		return CheckAndRecoverLockedSemiSyncPrimaryRecoveryName
+	case electNewPrimaryFunc:
+		return ElectNewPrimaryRecoveryName
+	case fixPrimaryFunc:
+		return FixPrimaryRecoveryName
+	case fixReplicaFunc:
+		return FixReplicaRecoveryName
+	default:
+		return ""
+	}
+}
+
 // isClusterWideRecovery returns whether the given recovery is a cluster-wide recovery or not
 func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
@@ -946,8 +970,8 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
 // It executes the function synchronuously
 func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	atomic.AddInt64(&countPendingRecoveries, 1)
-	defer atomic.AddInt64(&countPendingRecoveries, -1)
+	countPendingRecoveries.Add(1)
+	defer countPendingRecoveries.Add(-1)
 
 	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, &analysisEntry.AnalyzedInstanceKey)
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
@@ -1068,6 +1092,13 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	recoveryAttempted, topologyRecovery, err = getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry, candidateInstanceKey, forceInstanceRecovery, skipProcesses)
 	if !recoveryAttempted {
 		return recoveryAttempted, topologyRecovery, err
+	}
+	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+	recoveriesCounter.Add(recoveryName, 1)
+	if err != nil {
+		recoveriesFailureCounter.Add(recoveryName, 1)
+	} else {
+		recoveriesSuccessfulCounter.Add(recoveryName, 1)
 	}
 	if topologyRecovery == nil {
 		return recoveryAttempted, topologyRecovery, err
@@ -1282,6 +1313,7 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 // It will point old primary at the newly promoted primary at the correct coordinates.
 // All of this is accomplished via PlannedReparentShard operation. It is an idempotent operation, look at its documentation for more detail
 func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey) (topologyRecovery *TopologyRecovery, err error) {
+	log.Infof("GracefulPrimaryTakeover for shard %v", clusterName)
 	clusterPrimaries, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
@@ -1290,6 +1322,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
 	}
 	clusterPrimary := clusterPrimaries[0]
+	log.Infof("GracefulPrimaryTakeover for shard %v, current primary - %v", clusterName, clusterPrimary.InstanceAlias)
 
 	analysisEntry, err := forceAnalysisEntry(clusterName, inst.GraceFulPrimaryTakeover, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {

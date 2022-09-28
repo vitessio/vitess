@@ -30,24 +30,41 @@ package stats
 import (
 	"bytes"
 	"expvar"
-	"flag"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
-var emitStats = flag.Bool("emit_stats", false, "If set, emit stats to push-based monitoring and stats backends")
-var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
-var statsBackend = flag.String("stats_backend", "", "The name of the registered push-based monitoring/stats backend to use")
-var combineDimensions = flag.String("stats_combine_dimensions", "", `List of dimensions to be combined into a single "all" value in exported stats vars`)
-var dropVariables = flag.String("stats_drop_variables", "", `Variables to be dropped from the list of exported variables.`)
+var (
+	emitStats         bool
+	statsEmitPeriod   = 60 * time.Second
+	statsBackend      string
+	combineDimensions string
+	dropVariables     string
+)
 
 // CommonTags is a comma-separated list of common tags for stats backends
-var CommonTags = flag.String("stats_common_tags", "", `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
+var CommonTags []string
+
+func init() {
+	registerFlags()
+}
+
+func registerFlags() {
+	pflag.BoolVar(&emitStats, "emit_stats", emitStats, "If set, emit stats to push-based monitoring and stats backends")
+	pflag.DurationVar(&statsEmitPeriod, "stats_emit_period", statsEmitPeriod, "Interval between emitting stats to all registered backends")
+	pflag.StringVar(&statsBackend, "stats_backend", statsBackend, "The name of the registered push-based monitoring/stats backend to use")
+	pflag.StringVar(&combineDimensions, "stats_combine_dimensions", combineDimensions, `List of dimensions to be combined into a single "all" value in exported stats vars`)
+	pflag.StringVar(&dropVariables, "stats_drop_variables", dropVariables, `Variables to be dropped from the list of exported variables.`)
+	pflag.StringSliceVar(&CommonTags, "stats_common_tags", CommonTags, `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
+
+}
 
 // StatsAllStr is the consolidated name if a dimension gets combined.
 const StatsAllStr = "all"
@@ -134,10 +151,10 @@ func RegisterPushBackend(name string, backend PushBackend) {
 		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
 	}
 	pushBackends[name] = backend
-	if *emitStats {
+	if emitStats {
 		// Start a single goroutine to emit stats periodically
 		once.Do(func() {
-			go emitToBackend(statsEmitPeriod)
+			go emitToBackend(&statsEmitPeriod)
 		})
 	}
 }
@@ -148,15 +165,15 @@ func emitToBackend(emitPeriod *time.Duration) {
 	ticker := time.NewTicker(*emitPeriod)
 	defer ticker.Stop()
 	for range ticker.C {
-		backend, ok := pushBackends[*statsBackend]
+		backend, ok := pushBackends[statsBackend]
 		if !ok {
-			log.Errorf("No PushBackend registered with name %s", *statsBackend)
+			log.Errorf("No PushBackend registered with name %s", statsBackend)
 			return
 		}
 		err := backend.PushAll()
 		if err != nil {
 			// TODO(aaijazi): This might cause log spam...
-			log.Warningf("Pushing stats to backend %v failed: %v", *statsBackend, err)
+			log.Warningf("Pushing stats to backend %v failed: %v", statsBackend, err)
 		}
 	}
 }
@@ -272,7 +289,7 @@ func IsDimensionCombined(name string) bool {
 	defer varsMu.Unlock()
 
 	if combinedDimensions == nil {
-		dims := strings.Split(*combineDimensions, ",")
+		dims := strings.Split(combineDimensions, ",")
 		combinedDimensions = make(map[string]bool, len(dims))
 		for _, dim := range dims {
 			if dim == "" {
@@ -309,7 +326,7 @@ func isVarDropped(name string) bool {
 	defer varsMu.Unlock()
 
 	if droppedVars == nil {
-		dims := strings.Split(*dropVariables, ",")
+		dims := strings.Split(dropVariables, ",")
 		droppedVars = make(map[string]bool, len(dims))
 		for _, dim := range dims {
 			if dim == "" {
@@ -324,10 +341,9 @@ func isVarDropped(name string) bool {
 // ParseCommonTags parses a comma-separated string into map of tags
 // If you want to global service values like host, service name, git revision, etc,
 // this is the place to do it.
-func ParseCommonTags(s string) map[string]string {
-	inputs := strings.Split(s, ",")
+func ParseCommonTags(tagMapString []string) map[string]string {
 	tags := make(map[string]string)
-	for _, input := range inputs {
+	for _, input := range tagMapString {
 		if strings.Contains(input, ":") {
 			tag := strings.Split(input, ":")
 			tags[strings.TrimSpace(tag[0])] = strings.TrimSpace(tag[1])

@@ -1193,7 +1193,7 @@ func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlpar
 		if err != nil {
 			return nil, err
 		}
-		rewritten, err := semantics.RewriteDerivedExpression(expr, tblInfo)
+		rewritten, err := semantics.RewriteDerivedTableExpression(expr, tblInfo)
 		if err != nil {
 			return nil, err
 		}
