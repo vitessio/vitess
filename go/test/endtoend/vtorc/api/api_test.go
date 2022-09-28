@@ -75,6 +75,11 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Empty(t, resp)
 	})
 
+	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
+	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		return response != "[]"
+	})
+
 	t.Run("Disable Recoveries API", func(t *testing.T) {
 		// Disable recoveries of VTOrc
 		status, resp := utils.MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
