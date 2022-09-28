@@ -159,19 +159,6 @@ func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	return result, nil
 }
 
-// TypePaths are the packages
-type TypePaths []string
-
-func (t *TypePaths) String() string {
-	return fmt.Sprintf("%v", *t)
-}
-
-// Set adds the package path
-func (t *TypePaths) Set(path string) error {
-	*t = append(*t, path)
-	return nil
-}
-
 // VerifyFilesOnDisk compares the generated results from the codegen against the files that
 // currently exist on disk and returns any mismatches
 func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {

@@ -3027,7 +3027,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a = 0x01",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "a = 0x01",
+    "Predicate": ":0 = 0x01",
     "Inputs": [
       {
         "OperatorType": "Aggregate",

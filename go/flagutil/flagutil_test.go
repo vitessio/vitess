@@ -20,6 +20,10 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStringList(t *testing.T) {
@@ -103,5 +107,55 @@ func TestStringMap(t *testing.T) {
 		if vs := v.String(); vs != want.in {
 			t.Errorf("v.String(): want %#v, got %#v", want.in, vs)
 		}
+	}
+}
+
+func TestDurationOrIntVar(t *testing.T) {
+	getflag := func() *DurationOrIntVar { return NewDurationOrIntVar("test-flag", time.Minute, time.Second) }
+
+	tests := []struct {
+		name    string
+		arg     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{
+			name: "duration format",
+			arg:  "1h",
+			want: time.Hour,
+		},
+		{
+			name: "legacy format",
+			arg:  "10",
+			want: 10 * time.Second,
+		},
+		{
+			name:    "invalid",
+			arg:     "this is not a duration or an int",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name: "default value",
+			arg:  "",
+			want: time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		flag := getflag()
+		if tt.arg == "" {
+			assert.Equal(t, tt.want, flag.Value())
+			return
+		}
+
+		err := flag.Set(tt.arg)
+		if tt.wantErr {
+			assert.Error(t, err)
+			return
+		}
+
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, flag.Value())
 	}
 }

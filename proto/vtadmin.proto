@@ -111,6 +111,8 @@ service VTAdmin {
     // shard primary's cell as promotion candidates unless NewPrimary is
     // explicitly provided in the request.
     rpc PlannedFailoverShard(PlannedFailoverShardRequest) returns (PlannedFailoverShardResponse) {};
+    // RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+    rpc RebuildKeyspaceGraph(RebuildKeyspaceGraphRequest) returns (RebuildKeyspaceGraphResponse) {};
     // RefreshState reloads the tablet record on the specified tablet.
     rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
     // RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -120,6 +122,8 @@ service VTAdmin {
     // tablets in one or more clusters, depending on the request fields (see
     // ReloadSchemasRequest for details).
     rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
+    // RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+    rpc RemoveKeyspaceCell(RemoveKeyspaceCellRequest) returns (RemoveKeyspaceCellResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
     // SetReadOnly sets the tablet to read-only mode.
@@ -584,6 +588,17 @@ message PlannedFailoverShardResponse {
     repeated logutil.Event events = 5;
 }
 
+message RebuildKeyspaceGraphRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  repeated string cells = 3;
+  bool allow_partial = 4;
+}
+
+message RebuildKeyspaceGraphResponse {
+  string status = 1;
+}
+
 message RefreshStateRequest {
     topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
@@ -697,6 +712,18 @@ message RefreshTabletReplicationSourceResponse {
     string shard = 2;
     topodata.TabletAlias primary = 3;
     Cluster cluster = 4;
+}
+
+message RemoveKeyspaceCellRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string cell = 3;
+  bool force = 4;
+  bool recursive = 5;
+}
+
+message RemoveKeyspaceCellResponse {
+  string status = 1;
 }
 
 message RunHealthCheckRequest {

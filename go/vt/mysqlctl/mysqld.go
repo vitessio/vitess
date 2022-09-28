@@ -28,7 +28,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -41,42 +40,44 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/config"
+	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
+	"vitess.io/vitess/go/vt/servenv"
+
+	vtenv "vitess.io/vitess/go/vt/env"
 )
 
 var (
+
 	// DisableActiveReparents is a flag to disable active
 	// reparents for safety reasons. It is used in three places:
 	// 1. in this file to skip registering the commands.
 	// 2. in vtctld so it can be exported to the UI (different
 	// package, that's why it's exported). That way we can disable
 	// menu items there, using features.
-	DisableActiveReparents = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	DisableActiveReparents bool
 
-	dbaPoolSize = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
+	dbaPoolSize = 20
 	// DbaIdleTimeout is how often we will refresh the DBA connpool connections
-	DbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
-	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
-	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
+	DbaIdleTimeout = time.Minute
+	appPoolSize    = 40
+	appIdleTimeout = time.Minute
 
 	// PoolDynamicHostnameResolution is whether we should retry DNS resolution of hostname targets
 	// and reconnect if necessary
-	PoolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	PoolDynamicHostnameResolution time.Duration
 
-	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
-	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	mycnfTemplateFile string
+	socketFile        string
 
-	// Deprecated
-	masterConnectRetry      = flag.Duration("master_connect_retry", 10*time.Second, "Deprecated, use -replication_connect_retry")
-	replicationConnectRetry = flag.Duration("replication_connect_retry", 10*time.Second, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+	replicationConnectRetry = 10 * time.Second
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
@@ -98,6 +99,24 @@ type Mysqld struct {
 	cancelWaitCmd chan struct{}
 }
 
+func init() {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
+		servenv.OnParseFor(cmd, registerMySQLDFlags)
+	}
+}
+
+func registerMySQLDFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	fs.IntVar(&dbaPoolSize, "dba_pool_size", dbaPoolSize, "Size of the connection pool for dba connections")
+	fs.DurationVar(&DbaIdleTimeout, "dba_idle_timeout", DbaIdleTimeout, "Idle timeout for dba connections")
+	fs.IntVar(&appPoolSize, "app_pool_size", appPoolSize, "Size of the connection pool for app connections")
+	fs.DurationVar(&appIdleTimeout, "app_idle_timeout", appIdleTimeout, "Idle timeout for app connections")
+	fs.DurationVar(&PoolDynamicHostnameResolution, "pool_hostname_resolve_interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	fs.StringVar(&mycnfTemplateFile, "mysqlctl_mycnf_template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
+	fs.StringVar(&socketFile, "mysqlctl_socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
+	fs.DurationVar(&replicationConnectRetry, "replication_connect_retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+}
+
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
 func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
@@ -106,11 +125,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *DbaIdleTimeout, *PoolDynamicHostnameResolution)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", dbaPoolSize, DbaIdleTimeout, PoolDynamicHostnameResolution)
 	result.dbaPool.Open(dbcfgs.DbaWithDB())
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *PoolDynamicHostnameResolution)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", appPoolSize, appIdleTimeout, PoolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*
@@ -250,9 +269,9 @@ func ParseVersionString(version string) (flavor MySQLFlavor, ver ServerVersion, 
 // network and no grant tables.
 func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// Execute as remote action on mysqlctld if requested.
-	if *socketFile != "" {
-		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile)
+	if socketFile != "" {
+		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -319,9 +338,9 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 // the dba user.
 func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	// Execute as remote action on mysqlctld if requested.
-	if *socketFile != "" {
-		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile)
+	if socketFile != "" {
+		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -484,9 +503,9 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	log.Infof("Mysqld.Shutdown")
 
 	// Execute as remote action on mysqlctld if requested.
-	if *socketFile != "" {
-		log.Infof("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile)
+	if socketFile != "" {
+		log.Infof("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -790,10 +809,10 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
-	if *mycnfTemplateFile != "" {
-		data, err := os.ReadFile(*mycnfTemplateFile)
+	if mycnfTemplateFile != "" {
+		data, err := os.ReadFile(mycnfTemplateFile)
 		if err != nil {
-			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", *mycnfTemplateFile)
+			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", mycnfTemplateFile)
 		}
 		return string(data) // use only specified template
 	}
@@ -861,9 +880,9 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 // Should be called from a stable replica, server_id is not regenerated.
 func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	// Execute as remote action on mysqlctld if requested.
-	if *socketFile != "" {
-		log.Infof("executing Mysqld.RefreshConfig() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile)
+	if socketFile != "" {
+		log.Infof("executing Mysqld.RefreshConfig() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -919,9 +938,9 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	log.Infof("Mysqld.ReinitConfig")
 
 	// Execute as remote action on mysqlctld if requested.
-	if *socketFile != "" {
-		log.Infof("executing Mysqld.ReinitConfig() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile)
+	if socketFile != "" {
+		log.Infof("executing Mysqld.ReinitConfig() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}

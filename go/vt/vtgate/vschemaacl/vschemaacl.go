@@ -17,15 +17,18 @@ limitations under the License.
 package vschemaacl
 
 import (
-	"flag"
 	"strings"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
 	// AuthorizedDDLUsers specifies the users that can perform ddl operations
-	AuthorizedDDLUsers = flag.String("vschema_ddl_authorized_users", "", "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+	AuthorizedDDLUsers string
 
 	// ddlAllowAll is true if the special value of "*" was specified
 	allowAll bool
@@ -34,19 +37,34 @@ var (
 	acl map[string]struct{}
 )
 
+// RegisterSchemaACLFlags installs log flags on the given FlagSet.
+//
+// `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs)? which
+// calls this function, or call this function directly before parsing
+// command-line arguments.
+func RegisterSchemaACLFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&AuthorizedDDLUsers, "vschema_ddl_authorized_users", AuthorizedDDLUsers, "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+}
+
+func init() {
+	for _, cmd := range []string{"vtcombo", "vtgate", "vtgateclienttest"} {
+		servenv.OnParseFor(cmd, RegisterSchemaACLFlags)
+	}
+}
+
 // Init parses the users option and sets allowAll / acl accordingly
 func Init() {
 	acl = make(map[string]struct{})
 	allowAll = false
 
-	if *AuthorizedDDLUsers == "%" {
+	if AuthorizedDDLUsers == "%" {
 		allowAll = true
 		return
-	} else if *AuthorizedDDLUsers == "" {
+	} else if AuthorizedDDLUsers == "" {
 		return
 	}
 
-	for _, user := range strings.Split(*AuthorizedDDLUsers, ",") {
+	for _, user := range strings.Split(AuthorizedDDLUsers, ",") {
 		user = strings.TrimSpace(user)
 		acl[user] = struct{}{}
 	}

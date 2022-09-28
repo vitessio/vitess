@@ -106,12 +106,11 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vreplication.framework_test", "test")
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
-	setFlag("binlog_player_protocol", "test")
-
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
 }
 
 func TestMain(m *testing.M) {
+	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
 		var err error

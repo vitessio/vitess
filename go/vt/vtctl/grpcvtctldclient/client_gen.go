@@ -47,6 +47,15 @@ func (client *gRPCVtctldClient) AddCellsAlias(ctx context.Context, in *vtctldata
 	return client.c.AddCellsAlias(ctx, in, opts...)
 }
 
+// ApplyShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyShardRoutingRules(ctx context.Context, in *vtctldatapb.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyShardRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplyShardRoutingRules(ctx, in, opts...)
+}
+
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	if client.c == nil {
@@ -297,6 +306,15 @@ func (client *gRPCVtctldClient) GetRoutingRules(ctx context.Context, in *vtctlda
 	}
 
 	return client.c.GetRoutingRules(ctx, in, opts...)
+}
+
+// GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetShardRoutingRules(ctx context.Context, in *vtctldatapb.GetShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetShardRoutingRules(ctx, in, opts...)
 }
 
 // GetSchema is part of the vtctlservicepb.VtctldClient interface.
