@@ -104,8 +104,9 @@ func RegisterVTOrcAPIEndpoints() {
 }
 
 // returnAsJSON returns the argument received on the resposeWriter as a json object
-func returnAsJSON(response http.ResponseWriter, stuff any) {
+func returnAsJSON(response http.ResponseWriter, code int, stuff any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	response.WriteHeader(code)
 	buf, err := json.MarshalIndent(stuff, "", " ")
 	if err != nil {
 		_, _ = response.Write([]byte(err.Error()))
@@ -135,7 +136,7 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	returnAsJSON(response, instances)
+	returnAsJSON(response, http.StatusOK, instances)
 }
 
 // disableGlobalRecoveriesAPIHandler is the handler for the disableGlobalRecoveriesAPI endpoint
@@ -180,7 +181,7 @@ func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.R
 
 	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
 	// Currently inst.ReplicationAnalysis doesn't store the tablet alias, but once it does we can filter on that too
-	returnAsJSON(response, analysis)
+	returnAsJSON(response, http.StatusOK, analysis)
 }
 
 // healthAPIHandler is the handler for the healthAPI endpoint
@@ -190,7 +191,11 @@ func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	returnAsJSON(response, health)
+	code := http.StatusOK
+	if !health.Healthy {
+		code = http.StatusInternalServerError
+	}
+	returnAsJSON(response, code, health)
 }
 
 // writePlainTextResponse writes a plain text response to the writer.
