@@ -53,9 +53,7 @@ import (
 )
 
 const (
-	backendDBConcurrency       = 20
-	retryInstanceFunctionCount = 5
-	retryInterval              = 500 * time.Millisecond
+	backendDBConcurrency = 20
 )
 
 var instanceReadChan = make(chan bool, backendDBConcurrency)
@@ -208,34 +206,6 @@ func logReadTopologyInstanceError(instanceKey *InstanceKey, hint string, err err
 // backend.
 func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
 	return ReadTopologyInstanceBufferable(instanceKey, false, nil)
-}
-
-func RetryInstanceFunction(f func() (*Instance, error)) (instance *Instance, err error) {
-	for i := 0; i < retryInstanceFunctionCount; i++ {
-		if instance, err = f(); err == nil {
-			return instance, nil
-		}
-	}
-	return instance, err
-}
-
-// expectReplicationThreadsState expects both replication threads to be running, or both to be not running.
-// Specifically, it looks for both to be "Yes" or for both to be "No".
-func expectReplicationThreadsState(instanceKey *InstanceKey, expectedState ReplicationThreadState) (expectationMet bool, err error) {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
-	if err != nil {
-		return false, err
-	}
-	err = sqlutils.QueryRowsMap(db, "show slave status", func(m sqlutils.RowMap) error {
-		ioThreadState := ReplicationThreadStateFromStatus(m.GetString("Slave_IO_Running"))
-		sqlThreadState := ReplicationThreadStateFromStatus(m.GetString("Slave_SQL_Running"))
-
-		if ioThreadState == expectedState && sqlThreadState == expectedState {
-			expectationMet = true
-		}
-		return nil
-	})
-	return expectationMet, err
 }
 
 // ReadTopologyInstanceBufferable connects to a topology MySQL instance

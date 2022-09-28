@@ -162,9 +162,6 @@ type Configuration struct {
 	RecoverPrimaryClusterFilters               []string          // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	RecoverIntermediatePrimaryClusterFilters   []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	PreventCrossDataCenterPrimaryFailover      bool              // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	PreventCrossRegionPrimaryFailover          bool              // When true (default: false), cross-region primary failover are not allowed, vtorc will do all it can to only fail over within same region, or else not fail over at all.
-	PrimaryFailoverDetachReplicaPrimaryHost    bool              // Should vtorc issue a detach-replica-primary-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'.
-	PostponeReplicaRecoveryOnLagMinutes        uint              // On crash recovery, replicas that are lagging more than given minutes are only resurrected late in the recovery process, after primary/IM has been elected and processes executed. Value of 0 disables this feature
 	OSCIgnoreHostnameFilters                   []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
 	URLPrefix                                  string            // URL prefix to run vtorc on non-root web path, e.g. /vtorc to put it behind nginx.
 	DiscoveryIgnoreReplicaHostnameFilters      []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
@@ -274,9 +271,6 @@ func newConfiguration() *Configuration {
 		RecoverPrimaryClusterFilters:               []string{"*"},
 		RecoverIntermediatePrimaryClusterFilters:   []string{},
 		PreventCrossDataCenterPrimaryFailover:      false,
-		PreventCrossRegionPrimaryFailover:          false,
-		PrimaryFailoverDetachReplicaPrimaryHost:    false,
-		PostponeReplicaRecoveryOnLagMinutes:        0,
 		OSCIgnoreHostnameFilters:                   []string{},
 		URLPrefix:                                  "",
 		DiscoveryIgnoreReplicaHostnameFilters:      []string{},

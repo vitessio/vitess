@@ -412,47 +412,6 @@ func (instance *Instance) IsDescendantOf(other *Instance) bool {
 	return false
 }
 
-// CanReplicateFrom uses heursitics to decide whether this instacne can practically replicate from other instance.
-// Checks are made to binlog format, version number, binary logs etc.
-func (instance *Instance) CanReplicateFrom(other *Instance) (bool, error) {
-	if instance.Key.Equals(&other.Key) {
-		return false, fmt.Errorf("instance cannot replicate from itself: %+v", instance.Key)
-	}
-	if !other.LogBinEnabled {
-		return false, fmt.Errorf("instance does not have binary logs enabled: %+v", other.Key)
-	}
-	if other.IsReplica() {
-		if !other.LogReplicationUpdatesEnabled {
-			return false, fmt.Errorf("instance does not have log_slave_updates enabled: %+v", other.Key)
-		}
-		// OK for a primary to not have log_slave_updates
-		// Not OK for a replica, for it has to relay the logs.
-	}
-	if instance.IsSmallerMajorVersion(other) && !instance.IsBinlogServer() {
-		return false, fmt.Errorf("instance %+v has version %s, which is lower than %s on %+v ", instance.Key, instance.Version, other.Version, other.Key)
-	}
-	if instance.LogBinEnabled && instance.LogReplicationUpdatesEnabled {
-		if instance.IsSmallerBinlogFormat(other) {
-			return false, fmt.Errorf("Cannot replicate from %+v binlog format on %+v to %+v on %+v", other.BinlogFormat, other.Key, instance.BinlogFormat, instance.Key)
-		}
-	}
-	if config.Config.VerifyReplicationFilters {
-		if other.HasReplicationFilters && !instance.HasReplicationFilters {
-			return false, fmt.Errorf("%+v has replication filters", other.Key)
-		}
-	}
-	if instance.ServerID == other.ServerID && !instance.IsBinlogServer() {
-		return false, fmt.Errorf("Identical server id: %+v, %+v both have %d", other.Key, instance.Key, instance.ServerID)
-	}
-	if instance.ServerUUID == other.ServerUUID && instance.ServerUUID != "" && !instance.IsBinlogServer() {
-		return false, fmt.Errorf("Identical server UUID: %+v, %+v both have %s", other.Key, instance.Key, instance.ServerUUID)
-	}
-	if instance.SQLDelay < other.SQLDelay && int64(other.SQLDelay) > int64(config.Config.ReasonableMaintenanceReplicationLagSeconds) {
-		return false, fmt.Errorf("%+v has higher SQL_Delay (%+v seconds) than %+v does (%+v seconds)", other.Key, other.SQLDelay, instance.Key, instance.SQLDelay)
-	}
-	return true, nil
-}
-
 // HasReasonableMaintenanceReplicationLag returns true when the replica lag is reasonable, and maintenance operations should have a green light to go.
 func (instance *Instance) HasReasonableMaintenanceReplicationLag() bool {
 	// replicas with SQLDelay are a special case
