@@ -736,38 +736,13 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 
 type mergeFunc func(a, b *Route) (*Route, error)
 
-// makeRoute return the input as a Route.
-// if the input is a Derived operator and has a Route as its source,
-// we push the Derived inside the Route and return it.
-func makeRoute(j abstract.PhysicalOperator) *Route {
-	route, ok := j.(*Route)
-	if ok {
-		return route
-	}
-
-	derived, ok := j.(*Derived)
-	if !ok {
-		return nil
-	}
-	dp := derived.Clone().(*Derived)
-
-	route = makeRoute(dp.Source)
-	if route == nil {
-		return nil
-	}
-
-	derived.Source = route.Source
-	route.Source = derived
-	return route
-}
-
 func operatorsToRoutes(a, b abstract.PhysicalOperator) (*Route, *Route) {
-	aRoute := makeRoute(a)
-	if aRoute == nil {
+	aRoute, ok := a.(*Route)
+	if !ok {
 		return nil, nil
 	}
-	bRoute := makeRoute(b)
-	if bRoute == nil {
+	bRoute, ok := b.(*Route)
+	if !ok {
 		return nil, nil
 	}
 	return aRoute, bRoute
