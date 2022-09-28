@@ -96,7 +96,6 @@ Usage of vtexplain:
       --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema string                                  Identifies the VTGate routing schema
       --vschema-file string                             Identifies the VTGate routing schema file
-      --vschema_ddl_authorized_users string             List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --xbstream_restore_flags string                   flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup_backup_flags string                  flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup_prepare_flags string                 flags to pass to prepare command. These should be space separated and will be added to the end of the command
