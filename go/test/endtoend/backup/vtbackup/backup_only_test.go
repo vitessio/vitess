@@ -217,8 +217,7 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 			// MY-010931
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_server_startup_msg
 			if strings.Contains(text, "MY-010931") {
-				fmt.Println("MY-010931", text)
-				r, err := regexp.Compile(`Version: '([0-9]+)\.([0-9]+)\.([0-9]+)'`)
+				r, err := regexp.Compile(`Version: '([0-9]+)\.([0-9]+)\.([0-9]+).*'`) // .* is for -xx (e.g. Percona)
 				require.Nil(t, err)
 				v := r.FindStringSubmatch(text)
 				require.Equal(t, 4, len(v))
