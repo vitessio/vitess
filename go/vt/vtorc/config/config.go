@@ -33,7 +33,6 @@ var (
 
 const (
 	LostInRecoveryDowntimeSeconds int = 60 * 60 * 24 * 365
-	DefaultStatusAPIEndpoint          = "/api/status"
 )
 
 var configurationLoaded = make(chan bool)
@@ -125,7 +124,6 @@ type Configuration struct {
 	InstancePoolExpiryMinutes                  uint     // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
 	PromotionIgnoreHostnameFilters             []string // VTOrc will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
 	FailureDetectionPeriodBlockMinutes         int      // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
-	RecoveryPeriodBlockMinutes                 int      // (supported for backwards compatibility but please use newer `RecoveryPeriodBlockSeconds` instead) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
 	RecoveryPeriodBlockSeconds                 int      // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
 	RecoveryIgnoreHostnameFilters              []string // Recovery analysis will completely ignore hosts matching given patterns
 	RecoverPrimaryClusterFilters               []string // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
@@ -203,7 +201,6 @@ func newConfiguration() *Configuration {
 		InstancePoolExpiryMinutes:                  60,
 		PromotionIgnoreHostnameFilters:             []string{},
 		FailureDetectionPeriodBlockMinutes:         60,
-		RecoveryPeriodBlockMinutes:                 60,
 		RecoveryPeriodBlockSeconds:                 3600,
 		RecoveryIgnoreHostnameFilters:              []string{},
 		RecoverPrimaryClusterFilters:               []string{"*"},
@@ -251,15 +248,8 @@ func (config *Configuration) postReadAdjustments() error {
 		}
 	}
 
-	if config.RecoveryPeriodBlockSeconds == 0 && config.RecoveryPeriodBlockMinutes > 0 {
-		// RecoveryPeriodBlockSeconds is a newer addition that overrides RecoveryPeriodBlockMinutes
-		// The code does not consider RecoveryPeriodBlockMinutes anymore, but RecoveryPeriodBlockMinutes
-		// still supported in config file for backwards compatibility
-		config.RecoveryPeriodBlockSeconds = config.RecoveryPeriodBlockMinutes * 60
-	}
-
 	if config.IsSQLite() && config.SQLite3DataFile == "" {
-		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite3")
+		return fmt.Errorf("SQLite3DataFile must be set")
 	}
 
 	if config.InstanceWriteBufferSize <= 0 {
