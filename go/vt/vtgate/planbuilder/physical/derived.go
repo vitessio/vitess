@@ -113,7 +113,10 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 }
 
 // IsMergeable is not a great name for this function. Suggestions for a better one are welcome!
-// This function will return false if it has to run on the vtgate side, and so can't be merged with subqueries
+// This function will return false if the derived table inside it has to run on the vtgate side, and so can't be merged with subqueries
+// This logic can also be used to check if this is a derived table that can be had on the left hand side of a vtgate join.
+// Since vtgate joins are always nested loop joins, we can't execute them on the RHS
+// if they do some things, like LIMIT or GROUP BY on wrong columns
 func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	validVindex := func(expr sqlparser.Expr) bool {
 		sc := findColumnVindex(ctx, d, expr)

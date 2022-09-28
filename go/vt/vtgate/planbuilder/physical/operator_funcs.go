@@ -220,9 +220,6 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 		if len(columns) == 0 {
 			return op, nil, nil
 		}
-		//proj := &Projection{
-		//	Source: op,
-		//}
 		for _, col := range columns {
 			i, err := op.findOutputColumn(col)
 			if err != nil {
