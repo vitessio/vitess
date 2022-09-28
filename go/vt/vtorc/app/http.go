@@ -136,9 +136,7 @@ func standardHTTP(continuousDiscovery bool) {
 	}
 
 	log.Info("Registering endpoints")
-	http.HTTPapi.URLPrefix = config.Config.URLPrefix
 	http.HTTPWeb.URLPrefix = config.Config.URLPrefix
-	http.HTTPapi.RegisterRequests(m)
 	http.HTTPWeb.RegisterRequests(m)
 
 	// Serve
@@ -171,5 +169,5 @@ func standardHTTP(continuousDiscovery bool) {
 			log.Fatal(err)
 		}
 	}
-	log.Info("Web server started")
+	log.Info("Web server closed")
 }

@@ -161,6 +161,7 @@ func TestStandalone(t *testing.T) {
 
 	assertInsertedRowsExist(ctx, t, conn, idStart, rowCount)
 	assertTabletsPresent(t)
+	assertTransactionalityAndRollbackObeyed(ctx, t, conn, idStart)
 }
 
 func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {
@@ -287,4 +288,48 @@ func assertTabletsPresent(t *testing.T) {
 	assert.Equal(t, 3, numDash80)
 	assert.Equal(t, 3, num80Dash)
 	assert.NotZero(t, numRouted)
+}
+
+func assertTransactionalityAndRollbackObeyed(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart int) {
+	cur := conn.Session(ks1+":80-@primary", &querypb.ExecuteOptions{})
+
+	i := idStart + 1
+	msg := "test"
+	bindVariables := map[string]*querypb.BindVariable{
+		"id":          {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
+		"msg":         {Type: querypb.Type_VARCHAR, Value: []byte(msg)},
+		"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
+	}
+	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
+	_, err := cur.Execute(ctx, query, bindVariables)
+	require.Nil(t, err)
+
+	bindVariables = map[string]*querypb.BindVariable{
+		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg)},
+	}
+	res, err := cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables)
+	require.Nil(t, err)
+	require.Equal(t, 1, len(res.Rows))
+
+	_, err = cur.Execute(ctx, "begin", nil)
+	require.Nil(t, err)
+
+	msg2 := msg + "2"
+	bindVariables = map[string]*querypb.BindVariable{
+		"id":  {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
+		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg2)},
+	}
+	query = "update test_table set msg = :msg where id = :id"
+	_, err = cur.Execute(ctx, query, bindVariables)
+	require.Nil(t, err)
+
+	_, err = cur.Execute(ctx, "rollback", nil)
+	require.Nil(t, err)
+
+	bindVariables = map[string]*querypb.BindVariable{
+		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg2)},
+	}
+	res, err = cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables)
+	require.Nil(t, err)
+	require.Equal(t, 0, len(res.Rows))
 }

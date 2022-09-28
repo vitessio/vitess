@@ -45,6 +45,8 @@ service Vtctld {
   rpc ApplyRoutingRules(vtctldata.ApplyRoutingRulesRequest) returns (vtctldata.ApplyRoutingRulesResponse) {};
   // ApplySchema applies a schema to a keyspace.
   rpc ApplySchema(vtctldata.ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
+  // ApplyShardRoutingRules applies the VSchema shard routing rules.
+  rpc ApplyShardRoutingRules(vtctldata.ApplyShardRoutingRulesRequest) returns (vtctldata.ApplyShardRoutingRulesResponse) {};
   // ApplyVSchema applies a vschema to a keyspace.
   rpc ApplyVSchema(vtctldata.ApplyVSchemaRequest) returns (vtctldata.ApplyVSchemaResponse) {};
   // Backup uses the BackupEngine and BackupStorage services on the specified
@@ -120,6 +122,8 @@ service Vtctld {
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
+  // GetShardRoutingRules returns the VSchema shard routing rules.
+  rpc GetShardRoutingRules(vtctldata.GetShardRoutingRulesRequest) returns (vtctldata.GetShardRoutingRulesResponse) {};
   // GetSrvKeyspaceNames returns a mapping of cell name to the keyspaces served
   // in that cell.
   rpc GetSrvKeyspaceNames(vtctldata.GetSrvKeyspaceNamesRequest) returns (vtctldata.GetSrvKeyspaceNamesResponse) {};

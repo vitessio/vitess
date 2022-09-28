@@ -67,17 +67,18 @@ const (
 
 // Filenames for all object types.
 const (
-	CellInfoFile         = "CellInfo"
-	CellsAliasFile       = "CellsAlias"
-	KeyspaceFile         = "Keyspace"
-	ShardFile            = "Shard"
-	VSchemaFile          = "VSchema"
-	ShardReplicationFile = "ShardReplication"
-	TabletFile           = "Tablet"
-	SrvVSchemaFile       = "SrvVSchema"
-	SrvKeyspaceFile      = "SrvKeyspace"
-	RoutingRulesFile     = "RoutingRules"
-	ExternalClustersFile = "ExternalClusters"
+	CellInfoFile          = "CellInfo"
+	CellsAliasFile        = "CellsAlias"
+	KeyspaceFile          = "Keyspace"
+	ShardFile             = "Shard"
+	VSchemaFile           = "VSchema"
+	ShardReplicationFile  = "ShardReplication"
+	TabletFile            = "Tablet"
+	SrvVSchemaFile        = "SrvVSchema"
+	SrvKeyspaceFile       = "SrvKeyspace"
+	RoutingRulesFile      = "RoutingRules"
+	ExternalClustersFile  = "ExternalClusters"
+	ShardRoutingRulesFile = "ShardRoutingRules"
 )
 
 // Path for all object types.

@@ -143,7 +143,7 @@ func (ts *Server) DeleteSrvVSchema(ctx context.Context, cell string) error {
 	return conn.Delete(ctx, nodePath, nil)
 }
 
-// RebuildVSchema rebuilds the SrvVSchema for the provided cell list
+// RebuildSrvVSchema rebuilds the SrvVSchema for the provided cell list
 // (or all cells if cell list is empty).
 func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 	// get the actual list of cells
@@ -199,6 +199,12 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 		return fmt.Errorf("GetRoutingRules failed: %v", err)
 	}
 	srvVSchema.RoutingRules = rr
+
+	srr, err := ts.GetShardRoutingRules(ctx)
+	if err != nil {
+		return fmt.Errorf("GetShardRoutingRules failed: %v", err)
+	}
+	srvVSchema.ShardRoutingRules = srr
 
 	// now save the SrvVSchema in all cells in parallel
 	for _, cell := range cells {

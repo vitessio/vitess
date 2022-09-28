@@ -20,6 +20,8 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -34,6 +36,7 @@ import (
 // vtorc as a separate process for testing
 type VTOrcProcess struct {
 	VtctlProcess
+	Port       int
 	LogDir     string
 	ExtraArgs  []string
 	ConfigPath string
@@ -98,8 +101,8 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	/* minimal command line arguments:
-	$ vtorc -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
-	-config config/vtorc/default.json -alsologtostderr http
+	$ vtorc --topo_implementation etcd2 --topo_global_server_address localhost:2379 --topo_global_root /vitess/global
+	--config config/vtorc/default.json --alsologtostderr
 	*/
 	orc.proc = exec.Command(
 		orc.Binary,
@@ -107,6 +110,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
+		"--port", fmt.Sprintf("%d", orc.Port),
 		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
@@ -114,14 +118,14 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr", "http")
+	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", timeNow)))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 
-	log.Infof("Running orc with command: %v", strings.Join(orc.proc.Args, " "))
+	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
 
 	err = orc.proc.Start()
 	if err != nil {
@@ -156,4 +160,38 @@ func (orc *VTOrcProcess) TearDown() error {
 		orc.proc = nil
 		return <-orc.exit
 	}
+}
+
+// GetVars gets the variables exported on the /debug/vars page of VTOrc
+func (orc *VTOrcProcess) GetVars() map[string]any {
+	varsURL := fmt.Sprintf("http://localhost:%d/debug/vars", orc.Port)
+	resp, err := http.Get(varsURL)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		resultMap := make(map[string]any)
+		respByte, _ := io.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			return nil
+		}
+		return resultMap
+	}
+	return nil
+}
+
+// MakeAPICall makes an API call on the given endpoint of VTOrc
+func (orc *VTOrcProcess) MakeAPICall(endpoint string) (status int, response string, err error) {
+	url := fmt.Sprintf("http://localhost:%d/%s", orc.Port, endpoint)
+	resp, err := http.Get(url)
+	if err != nil {
+		return resp.StatusCode, "", err
+	}
+	defer resp.Body.Close()
+
+	respByte, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(respByte), err
 }

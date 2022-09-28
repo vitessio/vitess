@@ -128,18 +128,18 @@ func SetupMySQLTopologyTLS(uri string) (string, error) {
 // Modify the supplied URI to call the TLS config
 func SetupMySQLVTOrcTLS(uri string) (string, error) {
 	if !vtorcTLSConfigured {
-		tlsConfig, err := ssl.NewTLSConfig(config.Config.MySQLOrchestratorSSLCAFile, !config.Config.MySQLOrchestratorSSLSkipVerify)
+		tlsConfig, err := ssl.NewTLSConfig(config.Config.MySQLVTOrcSSLCAFile, !config.Config.MySQLVTOrcSSLSkipVerify)
 		// Drop to TLS 1.0 for talking to MySQL
 		tlsConfig.MinVersion = tls.VersionTLS10
 		if err != nil {
 			log.Fatalf("Can't create TLS configuration for VTOrc connection %s: %s", uri, err)
 			return "", err
 		}
-		tlsConfig.InsecureSkipVerify = config.Config.MySQLOrchestratorSSLSkipVerify
-		if (!config.Config.MySQLOrchestratorSSLSkipVerify) &&
-			config.Config.MySQLOrchestratorSSLCertFile != "" &&
-			config.Config.MySQLOrchestratorSSLPrivateKeyFile != "" {
-			if err = ssl.AppendKeyPair(tlsConfig, config.Config.MySQLOrchestratorSSLCertFile, config.Config.MySQLOrchestratorSSLPrivateKeyFile); err != nil {
+		tlsConfig.InsecureSkipVerify = config.Config.MySQLVTOrcSSLSkipVerify
+		if (!config.Config.MySQLVTOrcSSLSkipVerify) &&
+			config.Config.MySQLVTOrcSSLCertFile != "" &&
+			config.Config.MySQLVTOrcSSLPrivateKeyFile != "" {
+			if err = ssl.AppendKeyPair(tlsConfig, config.Config.MySQLVTOrcSSLCertFile, config.Config.MySQLVTOrcSSLPrivateKeyFile); err != nil {
 				log.Fatalf("Can't setup TLS key pairs for %s: %s", uri, err)
 				return "", err
 			}

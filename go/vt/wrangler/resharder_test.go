@@ -34,8 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN'"
-const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values `
+const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
+const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type\) values `
 const eol = "$"
 
 func TestResharderOneToMany(t *testing.T) {
@@ -93,14 +93,14 @@ func TestResharderOneToMany(t *testing.T) {
 				200,
 				insertPrefix+
 					`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '`+
-					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+eol,
+					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+eol,
 				&sqltypes.Result{},
 			)
 			env.tmc.expectVRQuery(
 				210,
 				insertPrefix+
 					`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '`+
-					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+eol,
+					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+eol,
 				&sqltypes.Result{},
 			)
 			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
@@ -134,8 +134,8 @@ func TestResharderManyToOne(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-80\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\).*`+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"80-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-80\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"80-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -167,15 +167,15 @@ func TestResharderManyToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-40\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\).*`+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-40\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -221,14 +221,14 @@ func TestResharderOneRefTable(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -274,14 +274,14 @@ func TestReshardStopFlags(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -336,18 +336,18 @@ func TestResharderOneRefStream(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	refRow := `\('t1', 'keyspace:\\"ks1\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\"}}', '', [0-9]*, [0-9]*, 'cell1', 'primary,replica', [0-9]*, 0, 'Stopped', 'vt_ks'\)`
+	refRow := `\('t1', 'keyspace:\\"ks1\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\"}}', '', [0-9]*, [0-9]*, 'cell1', 'primary,replica', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\).*`+
 			refRow+eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\).*`+
 			refRow+eol,
 		&sqltypes.Result{},
 	)
@@ -417,14 +417,14 @@ func TestResharderNoRefStream(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -461,14 +461,14 @@ func TestResharderCopySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0\)`+
 			eol,
 		&sqltypes.Result{},
 	)

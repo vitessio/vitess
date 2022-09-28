@@ -141,7 +141,7 @@ func TestTracking(t *testing.T) {
 		t.Run(fmt.Sprintf("%d - %s", i, tcase.tName), func(t *testing.T) {
 			sbc := sandboxconn.NewSandboxConn(tablet)
 			ch := make(chan *discovery.TabletHealth)
-			tracker := NewTracker(ch, nil)
+			tracker := NewTracker(ch, "")
 			tracker.consumeDelay = 1 * time.Millisecond
 			tracker.Start()
 			defer tracker.Stop()
@@ -210,7 +210,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, nil)
+	tracker := NewTracker(ch, "")
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()

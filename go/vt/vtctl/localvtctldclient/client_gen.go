@@ -44,6 +44,11 @@ func (client *localVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtct
 	return client.s.ApplyRoutingRules(ctx, in)
 }
 
+// ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ApplyShardRoutingRules(ctx context.Context, in *vtctldatapb.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyShardRoutingRulesResponse, error) {
+	return client.s.ApplyShardRoutingRules(ctx, in)
+}
+
 // ApplySchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplySchema(ctx context.Context, in *vtctldatapb.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplySchemaResponse, error) {
 	return client.s.ApplySchema(ctx, in)
@@ -269,6 +274,11 @@ func (client *localVtctldClient) GetPermissions(ctx context.Context, in *vtctlda
 // GetRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetRoutingRules(ctx context.Context, in *vtctldatapb.GetRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetRoutingRulesResponse, error) {
 	return client.s.GetRoutingRules(ctx, in)
+}
+
+// GetRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetShardRoutingRules(ctx context.Context, in *vtctldatapb.GetShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardRoutingRulesResponse, error) {
+	return client.s.GetShardRoutingRules(ctx, in)
 }
 
 // GetSchema is part of the vtctlservicepb.VtctldClient interface.

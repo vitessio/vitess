@@ -20,9 +20,12 @@ limitations under the License.
 package throttlerclient
 
 import (
-	"flag"
 	"fmt"
 	"log"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"context"
 
@@ -30,7 +33,15 @@ import (
 )
 
 // protocol specifics which RPC client implementation should be used.
-var protocol = flag.String("throttler_client_protocol", "grpc", "the protocol to use to talk to the integrated throttler service")
+var protocol = "grpc"
+
+func init() {
+	servenv.OnParseFor("vttablet", registerFlags)
+}
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&protocol, "throttler_client_protocol", protocol, "the protocol to use to talk to the integrated throttler service")
+}
 
 // Client defines the generic RPC interface for the throttler service.
 type Client interface {
@@ -80,9 +91,9 @@ func RegisterFactory(name string, factory Factory) {
 
 // New will return a client for the selected RPC implementation.
 func New(addr string) (Client, error) {
-	factory, ok := factories[*protocol]
+	factory, ok := factories[protocol]
 	if !ok {
-		return nil, fmt.Errorf("unknown throttler client protocol: %v", *protocol)
+		return nil, fmt.Errorf("unknown throttler client protocol: %v", protocol)
 	}
 	return factory(addr)
 }

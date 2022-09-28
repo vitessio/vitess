@@ -22,6 +22,8 @@
 - The deprecated `--cpu_profile` flag has been removed. Please use the `--pprof` flag instead.
 - The deprecated `--mem-profile-rate` flag has been removed. Please use `--pprof=mem` instead.
 - The deprecated `--mutex-profile-fraction` flag has been removed. Please use `--pprof=mutex` instead.
+- The deprecated vtgate/vtexplain/vtcombo flag `--planner_version` has been removed. Please use `--planner-version` instead.
+- The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
 
 #### Vindex Interface
 
@@ -65,6 +67,13 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 - --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+
+### New command line flags and behavior
+
+#### vtgate --mysql-server-pool-conn-read-buffers
+
+`--mysql-server-pool-conn-read-buffers` enables pooling of buffers used to read from incoming
+connections, similar to the way pooling happens for write buffers. Defaults to off.
 
 ### VDiff2
 
@@ -254,3 +263,66 @@ send semi-sync ACKs. This ensures that any committed write exists in at least 2 
 #### FORMAT=vtexplain
 
 With this new `explain` format, you can get an output that is very similar to the command line `vtexplain` app, but from a running `vtgate`, through a MySQL query.
+
+### VTOrc
+
+#### Configuration Renames
+
+VTOrc configurations that had `Orchestrator` as a substring have been renamed to have `VTOrc` instead. The old configuration won't 
+work in this release. So if backward compatibility is desired, then before upgrading it is suggested to duplicate the old configurations
+and also set them for the new configurations.
+
+VTOrc ignores the configurations that it doesn't understand. So new configurations can be added while running the previous release.
+After the upgrade, the old configurations can be dropped.
+
+|           Old Configuration            |        New Configuration        |
+|:--------------------------------------:|:-------------------------------:|
+|         MySQLOrchestratorHost          |         MySQLVTOrcHost          |
+|  MySQLOrchestratorMaxPoolConnections   |  MySQLVTOrcMaxPoolConnections   |
+|         MySQLOrchestratorPort          |         MySQLVTOrcPort          |
+|       MySQLOrchestratorDatabase        |       MySQLVTOrcDatabase        |
+|         MySQLOrchestratorUser          |         MySQLVTOrcUser          |
+|       MySQLOrchestratorPassword        |       MySQLVTOrcPassword        |
+| MySQLOrchestratorCredentialsConfigFile | MySQLVTOrcCredentialsConfigFile |
+|   MySQLOrchestratorSSLPrivateKeyFile   |   MySQLVTOrcSSLPrivateKeyFile   |
+|      MySQLOrchestratorSSLCertFile      |      MySQLVTOrcSSLCertFile      |
+|       MySQLOrchestratorSSLCAFile       |       MySQLVTOrcSSLCAFile       |
+|     MySQLOrchestratorSSLSkipVerify     |     MySQLVTOrcSSLSkipVerify     |
+|     MySQLOrchestratorUseMutualTLS      |     MySQLVTOrcUseMutualTLS      |
+|  MySQLOrchestratorReadTimeoutSeconds   |  MySQLVTOrcReadTimeoutSeconds   |
+|    MySQLOrchestratorRejectReadOnly     |    MySQLVTOrcRejectReadOnly     |
+
+
+For example, if you have the following configuration -
+```json
+{
+  "MySQLOrchestratorHost": "host"
+}
+```
+then, you should change it to
+```json
+{
+  "MySQLOrchestratorHost": "host",
+  "MySQLVTOrcHost": "host"
+}
+```
+while still on the old release. After changing the configuration, you can upgrade vitess.
+After upgrading, the old configurations can be dropped - 
+```json
+{
+  "MySQLVTOrcHost": "host"
+}
+```
+
+#### Default Configuration Files
+
+The default files that VTOrc searches for configurations in have also changed from `"/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json"` to
+`"/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json"`.
+
+#### Debug Pages in VTOrc
+
+Like the other vitess binaries (`vtgate`, `vttablet`), now `vtorc` also takes a `--port` flag, on which it 
+displays the `/debug` pages including `/debug/status` and variables it tracks on `/debug/vars`.
+
+This change is backward compatible and opt-in by default. Not specifying the flag works like it used to with
+VTOrc running without displaying these pages.
