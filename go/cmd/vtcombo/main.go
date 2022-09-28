@@ -118,7 +118,6 @@ func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
 
 func main() {
 	defer exit.Recover()
-
 	// flag parsing
 	var globalFlags *pflag.FlagSet
 	dbconfigs.RegisterFlags(dbconfigs.All...)
