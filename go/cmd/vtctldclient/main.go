@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 )
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
 	grpccommon.RegisterFlags(command.Root.PersistentFlags())
 	grpcclientcommon.RegisterFlags(command.Root.PersistentFlags())
 	servenv.RegisterMySQLServerFlags(command.Root.PersistentFlags())
+	vtctlclient.RegisterFlags(command.Root.PersistentFlags())
 
 	// hack to get rid of an "ERROR: logging before flag.Parse"
 	args := os.Args[:]

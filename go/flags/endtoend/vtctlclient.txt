@@ -3,7 +3,7 @@ Usage of vtctlclient:
       --alsologtostderr                        log to standard error as well as files
       --datadog-agent-host string              host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string              port to send spans to. if empty, no tracing will be done
-      --grpc_auth_static_client_creds string   when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
+      --grpc_auth_static_client_creds string   When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                    Enable gRPC tracing.
       --grpc_initial_conn_window_size int      gRPC initial connection window size
@@ -33,7 +33,7 @@ Usage of vtctlclient:
   -v, --v Level                                log level for V logs
       --version                                print binary version
       --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging
-      --vtctl_client_protocol string           the protocol to use to talk to the vtctl server (default "grpc")
+      --vtctl_client_protocol string           Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld_grpc_ca string                  the server ca to use to validate servers when connecting
       --vtctld_grpc_cert string                the cert to use to connect
       --vtctld_grpc_crl string                 the server crl to use to validate server certificates when connecting
