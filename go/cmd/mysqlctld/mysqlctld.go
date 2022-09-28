@@ -58,11 +58,11 @@ func init() {
 	// mysqlctld only starts and stops mysql, only needs dba.
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	servenv.OnParse(func(fs *pflag.FlagSet) {
-		fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
-		fs.UintVar(&tabletUID, "tablet_uid", tabletUID, "tablet uid")
-		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
-		fs.DurationVar(&waitTime, "wait_time", waitTime, "how long to wait for mysqld startup or shutdown")
-		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "path to .sql file to run after mysql_install_db")
+		fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
+		fs.UintVar(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
+		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
+		fs.DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
+		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld instance initialization")
 	})
 }
 
