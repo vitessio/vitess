@@ -917,6 +917,11 @@ func (a *application) rewriteRefOfAlterThrottler(parent SQLNode, node *AlterThro
 			return true
 		}
 	}
+	if !a.rewriteRefOfLiteral(node, node.Threshold, func(newNode, parent SQLNode) {
+		parent.(*AlterThrottler).Threshold = newNode.(*Literal)
+	}) {
+		return false
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*AlterThrottler).Comments = newNode.(*ParsedComments)
 	}) {

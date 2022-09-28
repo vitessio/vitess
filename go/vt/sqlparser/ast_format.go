@@ -328,14 +328,14 @@ func (node *ShowThrottledApps) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AlterThrottler) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "alter vitess_throttler")
+	buf.astPrintf(node, "alter %vvitess_throttler", node.Comments)
 	switch node.Type {
 	case AlterThrottlerDisableType:
 		buf.astPrintf(node, " disable")
 	case AlterThrottlerEnableType:
 		buf.astPrintf(node, " enable")
 	case AlterThrottlerParamsType:
-		buf.astPrintf(node, " threshold '%s'", node.Threshold)
+		buf.astPrintf(node, " threshold %v", node.Threshold)
 	}
 }
 

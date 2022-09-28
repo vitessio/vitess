@@ -1679,8 +1679,8 @@ func EqualsRefOfAlterThrottler(a, b *AlterThrottler) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Threshold == b.Threshold &&
-		a.Type == b.Type &&
+	return a.Type == b.Type &&
+		EqualsRefOfLiteral(a.Threshold, b.Threshold) &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 

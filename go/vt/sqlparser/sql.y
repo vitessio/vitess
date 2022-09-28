@@ -591,7 +591,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
-%type <str> threshold_opt
+%type <literal> threshold_opt
 %start any_command
 
 %%
@@ -2852,11 +2852,15 @@ ratio_opt:
 
 threshold_opt:
   {
-    $$ = ""
+    $$ = nil
   }
-| THRESHOLD STRING
+| THRESHOLD INTEGRAL
   {
-    $$ = string($2)
+    $$ = NewIntLiteral($2)
+  }
+| THRESHOLD DECIMAL
+  {
+    $$ = NewDecimalLiteral($2)
   }
 
 alter_commands_list:

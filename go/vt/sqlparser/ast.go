@@ -485,7 +485,7 @@ type (
 	// AlterThrottler represents a ALTER VITESS_THROTTLER statement
 	AlterThrottler struct {
 		Type      AlterThrottlerType
-		Threshold string
+		Threshold *Literal
 		Comments  *ParsedComments
 	}
 

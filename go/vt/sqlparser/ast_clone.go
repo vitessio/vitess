@@ -661,6 +661,7 @@ func CloneRefOfAlterThrottler(n *AlterThrottler) *AlterThrottler {
 		return nil
 	}
 	out := *n
+	out.Threshold = CloneRefOfLiteral(n.Threshold)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }

@@ -706,6 +706,9 @@ func VisitRefOfAlterThrottler(in *AlterThrottler, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfLiteral(in.Threshold, f); err != nil {
+		return err
+	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}

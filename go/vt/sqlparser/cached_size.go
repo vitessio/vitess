@@ -251,10 +251,10 @@ func (cached *AlterThrottler) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
-	// field Threshold string
-	size += hack.RuntimeAllocSize(int64(len(cached.Threshold)))
+	// field Threshold *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.Threshold.CachedSize(true)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
 	return size
