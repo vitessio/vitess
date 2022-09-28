@@ -134,14 +134,16 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 	server = pflag.String("server", "", "server(s) to connect to")
-
-	// handling case of --help, -help & -h
+	// handling case of --help & -h
 	args := os.Args[1:]
 	var help bool
-	if args[0] == "-h" {
-		pflag.BoolVarP(&help, "help", "h", false, "display usage and exit")
-	} else if args[0] == "--help" || args[0] == "-help" {
-		pflag.BoolVar(&help, "help", false, "display usage and exit")
+	pflag.BoolVarP(&help, "help", "h", false, "display usage and exit")
+	log.RegisterFlags(pflag.CommandLine)
+	logutil.RegisterFlags(pflag.CommandLine)
+
+	pflag.CommandLine.Usage = func() {
+		fmt.Fprintf(os.Stderr, doc)
+		pflag.Usage()
 	}
 
 	pflag.Parse()
@@ -154,8 +156,7 @@ func main() {
 	// if no zk command is provided after --server then we need to print doc & usage both
 	args = pflag.Args()
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, doc)
-		pflag.Usage()
+		pflag.CommandLine.Usage()
 		exit.Return(1)
 	}
 	cmdName := args[0]
@@ -164,7 +165,7 @@ func main() {
 	if !ok {
 		log.Exitf("Unknown command %v", cmdName)
 	}
-	subFlags := pflag.NewFlagSet(cmdName, pflag.ExitOnError)
+	subFlags := pflag.NewFlagSet(cmdName, pflag.ContinueOnError)
 
 	// Create a context for the command, cancel it if we get a signal.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -197,9 +198,9 @@ func isZkFile(path string) bool {
 }
 
 func cmdWait(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
-	var (
-		exitIfExists = subFlags.Bool("e", false, "exit if the path already exists")
-	)
+
+	var exitIfExists *bool
+	subFlags.BoolVarP(exitIfExists, "exit", "e", false, "exit if the path already exists")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -289,11 +290,16 @@ func cmdWatch(ctx context.Context, subFlags *pflag.FlagSet, args []string) error
 
 func cmdLs(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		longListing      = subFlags.Bool("l", false, "long listing")
-		directoryListing = subFlags.Bool("d", false, "list directory instead of contents")
-		force            = subFlags.Bool("f", false, "no warning on nonexistent node")
-		recursiveListing = subFlags.Bool("R", false, "recursive listing")
+		longListing      *bool
+		directoryListing *bool
+		force            *bool
+		recursiveListing *bool
 	)
+	subFlags.BoolVarP(longListing, "longlisting", "l", false, "long listing")
+	subFlags.BoolVarP(directoryListing, "directorylisting", "d", false, "list directory instead of contents")
+	subFlags.BoolVarP(force, "force", "f", false, "no warning on nonexistent node")
+	subFlags.BoolVarP(recursiveListing, "recursivelisting", "R", false, "recursive listing")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -422,9 +428,12 @@ func fmtPath(stat *zk.Stat, zkPath string, showFullPath bool, longListing bool) 
 
 func cmdTouch(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		createParents = subFlags.Bool("p", false, "create parents")
-		touchOnly     = subFlags.Bool("c", false, "touch only - don't create")
+		createParents *bool
+		touchOnly     *bool
 	)
+
+	subFlags.BoolVarP(createParents, "createparent", "p", false, "create parents")
+	subFlags.BoolVarP(touchOnly, "touchonly", "c", false, "touch only - don't create")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -469,10 +478,14 @@ func cmdTouch(ctx context.Context, subFlags *pflag.FlagSet, args []string) error
 
 func cmdRm(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		force             = subFlags.Bool("f", false, "no warning on nonexistent node")
-		recursiveDelete   = subFlags.Bool("r", false, "recursive delete")
-		forceAndRecursive = subFlags.Bool("rf", false, "shorthand for -r -f")
+		force             *bool
+		recursiveDelete   *bool
+		forceAndRecursive *bool
 	)
+	subFlags.BoolVarP(force, "force", "f", false, "no warning on nonexistent node")
+	subFlags.BoolVarP(recursiveDelete, "recursivedelete", "r", false, "recursive delete")
+	subFlags.BoolVarP(forceAndRecursive, "forceandrecursive", "rf", false, "shorthand for -r -f")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -536,10 +549,14 @@ func cmdAddAuth(ctx context.Context, subFlags *pflag.FlagSet, args []string) err
 
 func cmdCat(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		longListing = subFlags.Bool("l", false, "long listing")
-		force       = subFlags.Bool("f", false, "no warning on nonexistent node")
-		decodeProto = subFlags.Bool("p", false, "decode proto files and display them as text")
+		longListing *bool
+		force       *bool
+		decodeProto *bool
 	)
+	subFlags.BoolVarP(longListing, "longListing", "l", false, "long listing")
+	subFlags.BoolVarP(force, "force", "f", false, "no warning on nonexistent node")
+	subFlags.BoolVarP(decodeProto, "decodeProto", "p", false, "decode proto files and display them as text")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -592,9 +609,9 @@ func cmdCat(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 }
 
 func cmdEdit(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
-	var (
-		force = subFlags.Bool("f", false, "no warning on nonexistent node")
-	)
+	var force *bool
+	subFlags.BoolVarP(force, "force", "f", false, "no warning on nonexistent node")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -651,9 +668,9 @@ func cmdEdit(ctx context.Context, subFlags *pflag.FlagSet, args []string) error 
 }
 
 func cmdStat(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
-	var (
-		force = subFlags.Bool("f", false, "no warning on nonexistent node")
-	)
+	var force *bool
+	subFlags.BoolVarP(force, "force", "f", false, "no warning on nonexistent node")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
