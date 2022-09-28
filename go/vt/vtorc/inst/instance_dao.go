@@ -299,7 +299,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	if err != nil {
 		goto Cleanup
 	}
-	instance.ClusterName = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
+	instance.ClusterName = GetClusterNameFromKeyspaceAndShard(tablet.Keyspace, tablet.Shard)
 
 	fullStatus, err = FullStatus(*instanceKey)
 	if err != nil {
@@ -733,6 +733,11 @@ Cleanup:
 	_ = UpdateInstanceLastChecked(&instance.Key, partialSuccess)
 	latency.Stop("backend")
 	return nil, err
+}
+
+// GetClusterNameFromKeyspaceAndShard returns the cluster name from keyspace and shard
+func GetClusterNameFromKeyspaceAndShard(keyspace, shard string) string {
+	return fmt.Sprintf("%v:%v", keyspace, shard)
 }
 
 func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
