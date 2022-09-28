@@ -97,12 +97,77 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *abstract.Derived) (ab
 	if err != nil {
 		return nil, err
 	}
+
+	innerRoute, ok := opInner.(*Route)
+	if !ok {
+		return buildDerivedOp(op, opInner), nil
+	}
+
+	derived := &Derived{
+		Source:        innerRoute.Source,
+		Query:         op.Sel,
+		Alias:         op.Alias,
+		ColumnAliases: op.ColumnAliases,
+	}
+
+	if innerRoute.RouteOpCode == engine.EqualUnique {
+		// no need to check anything if we are sure that we will only hit a single shard
+	} else {
+		if op.Sel.GetLimit() != nil {
+			// we can't merge if we have a LIMIT or OFFSET - we need to get all the results and check the limits
+			// before we can move the results to the outer query
+			return buildDerivedOp(op, opInner), nil
+		}
+
+		sel, isSel := op.Sel.(*sqlparser.Select)
+		if !isSel {
+			// TODO: not sure what to do if the outer subquery is an UNION. need more thinking
+			return buildDerivedOp(op, opInner), nil
+		}
+
+		if !isGroupByOK(ctx, sel.GroupBy, derived) {
+			return buildDerivedOp(op, opInner), nil
+		}
+
+		if len(sel.GroupBy) == 0 {
+			// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
+			// but if we don't have groupings, we need to check if there are aggregations that will mess with us
+			for _, expr := range sel.SelectExprs {
+				if sqlparser.ContainsAggregation(expr) {
+					return buildDerivedOp(op, opInner), nil
+				}
+			}
+		}
+	}
+
+	innerRoute.Source = derived
+	return innerRoute, nil
+}
+
+func isGroupByOK(ctx *plancontext.PlanningContext, gb sqlparser.GroupBy, derived *Derived) bool {
+	if len(gb) == 0 {
+		return true
+	}
+
+	// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
+	// by checking that one of the grouping expressions used is a unique single column vindex.
+	// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
+	for _, expr := range gb {
+		sc := findColumnVindex(ctx, derived, expr)
+		if sc.IsUnique() {
+			return true
+		}
+	}
+	return false
+}
+
+func buildDerivedOp(op *abstract.Derived, opInner abstract.PhysicalOperator) *Derived {
 	return &Derived{
 		Source:        opInner,
 		Query:         op.Sel,
 		Alias:         op.Alias,
 		ColumnAliases: op.ColumnAliases,
-	}, nil
+	}
 }
 
 func optimizeJoin(ctx *plancontext.PlanningContext, op *abstract.Join) (abstract.PhysicalOperator, error) {
@@ -883,7 +948,7 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 	return rVindex == lVindex
 }
 
-func findColumnVindex(ctx *plancontext.PlanningContext, a *Route, exp sqlparser.Expr) vindexes.SingleColumn {
+func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOperator, exp sqlparser.Expr) vindexes.SingleColumn {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
@@ -1148,7 +1213,8 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 		// rows as early as possible making join cheaper on the vtgate level.
 		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
 		singleSideDeps := false
-		if depsForExpr.IsSolvedBy(node.LHS.TableID()) {
+		lhsTables := node.LHS.TableID()
+		if depsForExpr.IsSolvedBy(lhsTables) {
 			lhsPreds = append(lhsPreds, expr)
 			singleSideDeps = true
 		}
@@ -1161,7 +1227,7 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 			continue
 		}
 
-		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, node.LHS.TableID())
+		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, lhsTables)
 		if err != nil {
 			return nil, err
 		}
