@@ -292,7 +292,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> ENCRYPTION
 
 // Functions
-%token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURRENT_USER
+%token <bytes> CURRENT_TIMESTAMP NOW DATABASE CURRENT_DATE CURRENT_USER
 %token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
@@ -474,7 +474,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> char_length_opt length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
-%type <str> charset_opt collate_opt
+%type <str> charset_opt character_set collate_opt collate
 %type <boolean> default_keyword_opt
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
@@ -1960,13 +1960,17 @@ declare_statement:
   {
     $$ = &Declare{Handler: &DeclareHandler{Action: $2, ConditionValues: $5, Statement: $6}}
   }
-| DECLARE reserved_sql_id_list column_type
+| DECLARE reserved_sql_id_list column_type charset_opt collate_opt
   {
+    $3.Charset = $4
+    $3.Collate = $5
     $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: $3}}
   }
-| DECLARE reserved_sql_id_list column_type DEFAULT value_expression
+| DECLARE reserved_sql_id_list column_type charset_opt collate_opt DEFAULT value_expression
   {
-    $3.Default = $5
+    $3.Charset = $4
+    $3.Collate = $5
+    $3.Default = $7
     $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: $3}}
   }
 
@@ -2361,8 +2365,8 @@ column_type_options:
   {
     opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2370,8 +2374,35 @@ column_type_options:
   {
     opt := ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
+| column_type_options character_set
+  {
+    opt := ColumnType{Charset: $2}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
+| column_type_options collate
+  {
+    opt := ColumnType{Collate: $2}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
+| column_type_options BINARY
+  {
+    opt := ColumnType{BinaryCollate: true}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2379,8 +2410,8 @@ column_type_options:
   {
     opt := ColumnType{Default: $2}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2388,8 +2419,8 @@ column_type_options:
   {
     opt := ColumnType{OnUpdate: $2}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2397,8 +2428,8 @@ column_type_options:
   {
     opt := ColumnType{Autoincrement: $2, sawai: true}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2406,8 +2437,8 @@ column_type_options:
   {
     opt := ColumnType{KeyOpt: $2}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2415,8 +2446,8 @@ column_type_options:
   {
     opt := ColumnType{Comment: $2}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2424,8 +2455,8 @@ column_type_options:
   {
     opt := ColumnType{GeneratedExpr: $4, Stored: $6}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2433,8 +2464,8 @@ column_type_options:
   {
     opt := ColumnType{GeneratedExpr: $6, Stored: $8}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2442,8 +2473,8 @@ column_type_options:
   {
     opt := ColumnType{SRID: NewIntVal($3)}
     if err := $1.merge(opt); err != nil {
-    	yylex.Error(err.Error())
-    	return 1
+      yylex.Error(err.Error())
+      return 1
     }
     $$ = $1
   }
@@ -2585,13 +2616,13 @@ time_type:
   }
 
 char_type:
-  CHAR char_length_opt charset_opt collate_opt
+  CHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+    $$ = ColumnType{Type: string($1), Length: $2}
   }
-| CHARACTER char_length_opt charset_opt collate_opt
+| CHARACTER char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+    $$ = ColumnType{Type: string($1), Length: $2}
   }
 | NATIONAL CHAR char_length_opt
   {
@@ -2605,13 +2636,13 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| VARCHAR char_length_opt charset_opt collate_opt
+| VARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+    $$ = ColumnType{Type: string($1), Length: $2}
   }
-| CHARACTER VARYING char_length_opt charset_opt collate_opt
+| CHARACTER VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3, Charset: $4, Collate: $5}
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | NVARCHAR char_length_opt
   {
@@ -2633,29 +2664,29 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| TEXT charset_opt collate_opt
+| TEXT
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1)}
   }
-| TINYTEXT charset_opt collate_opt
+| TINYTEXT
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1)}
   }
-| MEDIUMTEXT charset_opt collate_opt
+| MEDIUMTEXT
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1)}
   }
-| LONGTEXT charset_opt collate_opt
+| LONGTEXT
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1)}
   }
-| LONG charset_opt collate_opt
+| LONG
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1)}
   }
-| LONG VARCHAR charset_opt collate_opt
+| LONG VARCHAR
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Charset: $3, Collate: $4}
+    $$ = ColumnType{Type: string($1) + " " + string($2)}
   }
 | BLOB
   {
@@ -2677,62 +2708,14 @@ char_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
-| ENUM '(' enum_values ')' charset_opt collate_opt
+| ENUM '(' enum_values ')'
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
+    $$ = ColumnType{Type: string($1), EnumValues: $3}
   }
 // need set_values / SetValues ?
-| SET '(' enum_values ')' charset_opt collate_opt
+| SET '(' enum_values ')'
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
-  }
-| CHAR char_length_opt charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
-  }
-| CHARACTER char_length_opt charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
-  }
-| VARCHAR char_length_opt charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
-  }
-| CHARACTER VARYING char_length_opt charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3, Charset: $4, BinaryCollate: true}
-  }
-| TEXT charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
-  }
-| TINYTEXT charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
-  }
-| MEDIUMTEXT charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
-  }
-| LONGTEXT charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
-  }
-| LONG charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
-  }
-| LONG VARCHAR charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Charset: $3, BinaryCollate: true}
-  }
-| ENUM '(' enum_values ')' charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, BinaryCollate: true}
-  }
-| SET '(' enum_values ')' charset_opt BINARY
-  {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, BinaryCollate: true}
+    $$ = ColumnType{Type: string($1), EnumValues: $3}
   }
 
 spatial_type:
@@ -2802,7 +2785,6 @@ char_length_opt:
     $$ = NewValArg($2)
   }
 
-
 float_length_opt:
   {
     $$ = LengthScaleOption{}
@@ -2856,9 +2838,63 @@ zero_fill_opt:
   }
 
 column_default:
-  DEFAULT value_expression
+  DEFAULT value
   {
     $$ = $2
+  }
+| DEFAULT '-' value
+  {
+    if num, ok := $3.(*SQLVal); ok && num.Type == IntVal {
+      // Handle double negative
+      if num.Val[0] == '-' {
+        num.Val = num.Val[1:]
+        $$ = num
+      } else {
+        $$ = NewIntVal(append([]byte("-"), num.Val...))
+      }
+    } else {
+      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $3}
+    }
+  }
+| DEFAULT boolean_value
+  {
+    $$ = $2
+  }
+| DEFAULT CURRENT_TIMESTAMP func_parens_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2))}
+  }
+| DEFAULT CURRENT_TIMESTAMP openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
+  }
+| DEFAULT LOCALTIME func_parens_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2))}
+  }
+| DEFAULT LOCALTIME openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
+  }
+| DEFAULT LOCALTIMESTAMP func_parens_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2))}
+  }
+| DEFAULT LOCALTIMESTAMP openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
+  }
+| DEFAULT NOW openb closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2))}
+  }
+| DEFAULT NOW openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
+  }
+| DEFAULT openb value_expression closeb
+  {
+    $$ = &ParenExpr{$3}
   }
 
 on_update:
@@ -2877,7 +2913,13 @@ charset_opt:
   {
     $$ = ""
   }
-| CHARACTER SET ID
+| character_set
+  {
+    $$ = $1
+  }
+
+character_set:
+  CHARACTER SET ID
   {
     $$ = string($3)
   }
@@ -2890,7 +2932,13 @@ collate_opt:
   {
     $$ = ""
   }
-| COLLATE ID
+| collate
+  {
+    $$ = $1
+  }
+
+collate:
+  COLLATE ID
   {
     $$ = string($2)
   }
@@ -7663,6 +7711,7 @@ non_reserved_keyword:
 | NETWORK_NAMESPACE
 | NEVER
 | NO
+| NOW
 | NOWAIT
 | NULLS
 | NVARCHAR

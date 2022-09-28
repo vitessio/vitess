@@ -430,6 +430,7 @@ var keywords = map[string]int{
 	"no_write_to_binlog":            NO_WRITE_TO_BINLOG,
 	"none":                          NONE,
 	"not":                           NOT,
+	"now":                           NOW,
 	"nowait":                        NOWAIT,
 	"nth_value":                     NTH_VALUE,
 	"ntile":                         NTILE,

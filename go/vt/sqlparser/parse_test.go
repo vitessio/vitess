@@ -2527,8 +2527,8 @@ var (
 			input:  "CREATE TABLE mytable (h int DEFAULT (date_format(now(),_utf8mb4'%Y')))",
 			output: "create table mytable (\n\th int default (date_format(now(), _utf8mb4 '%Y'))\n)",
 		}, {
-			input:  "CREATE TABLE mytable (pk int NOT NULL, col2 varchar(20) NOT NULL DEFAULT sometext, PRIMARY KEY (pk), CONSTRAINT status CHECK (col2 like _utf8mb4'%sometext%'))",
-			output: "create table mytable (\n\tpk int not null,\n\tcol2 varchar(20) not null default sometext,\n\tPRIMARY KEY (pk),\n\tconstraint status check (col2 like _utf8mb4 '%sometext%')\n)",
+			input:  "CREATE TABLE mytable (pk int NOT NULL, col2 varchar(20) NOT NULL DEFAULT 'sometext', PRIMARY KEY (pk), CONSTRAINT status CHECK (col2 like _utf8mb4'%sometext%'))",
+			output: "create table mytable (\n\tpk int not null,\n\tcol2 varchar(20) not null default 'sometext',\n\tPRIMARY KEY (pk),\n\tconstraint status check (col2 like _utf8mb4 '%sometext%')\n)",
 		}, {
 			input:  "create table t (pk int not null, primary key `pk_id` (`pk`))",
 			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
@@ -2631,6 +2631,18 @@ var (
 		}, {
 			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 1234",
 			output: "alter table t modify column col1 (\n\tcol1 POINT not null srid 1234 default (POINT(1, 2))\n)",
+		}, {
+			input:  "ALTER TABLE t modify col1 varchar(255) NOT NULL COLLATE 'utf8mb4_0900_ai_ci'",
+			output: "alter table t modify column col1 (\n\tcol1 varchar(255) collate utf8mb4_0900_ai_ci not null\n)",
+		}, {
+			input:  "ALTER TABLE t modify col1 varchar(255) COLLATE 'utf8mb4_0900_ai_ci' NOT NULL",
+			output: "alter table t modify column col1 (\n\tcol1 varchar(255) collate utf8mb4_0900_ai_ci not null\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 DOUBLE DEFAULT -1.1)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 DOUBLE default -1.1\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 BIGINT DEFAULT -1)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 BIGINT default -1\n)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -3393,7 +3405,7 @@ func TestInvalid(t *testing.T) {
 		err:   "cannot include ON UPDATE more than once at position 144",
 	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
-		err:   "cannot include DEFAULT more than once at position 129",
+		err:   "cannot include DEFAULT more than once at position 128",
 	}, {
 		input: "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		err:   "syntax error at position 22 near 'not'",
@@ -3414,7 +3426,7 @@ func TestInvalid(t *testing.T) {
 		err:   "cannot include ON UPDATE more than once at position 147",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
-		err:   "cannot include DEFAULT more than once at position 132",
+		err:   "cannot include DEFAULT more than once at position 131",
 	}, {
 		input: "alter table t add (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		err:   "syntax error at position 25 near 'not'",
@@ -4687,38 +4699,6 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
 	}, {
-		// test utc_timestamp with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default utc_timestamp,\n" +
-			"	time2 timestamp default utc_timestamp(),\n" +
-			"	time3 timestamp default utc_timestamp on update utc_timestamp,\n" +
-			"	time4 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
-			"	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default utc_timestamp(),\n" +
-			"	time2 timestamp default utc_timestamp(),\n" +
-			"	time3 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
-			"	time4 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
-			"	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)\n" +
-			")",
-	}, {
-		// test utc_time with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default utc_time,\n" +
-			"	time2 timestamp default utc_time(),\n" +
-			"	time3 timestamp default utc_time on update utc_time,\n" +
-			"	time4 timestamp default utc_time() on update utc_time(),\n" +
-			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default utc_time(),\n" +
-			"	time2 timestamp default utc_time(),\n" +
-			"	time3 timestamp default utc_time() on update utc_time(),\n" +
-			"	time4 timestamp default utc_time() on update utc_time(),\n" +
-			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
-			")",
-	}, {
 		// test inline check constraint
 		input: "create table t (\n" +
 			"	a int,\n" +
@@ -4780,20 +4760,6 @@ func TestCreateTable(t *testing.T) {
 			"	primary key (a, b)\n" +
 			")",
 	}, {
-		// test utc_date with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default utc_date,\n" +
-			"	time2 timestamp default utc_date(),\n" +
-			"	time3 timestamp default utc_date on update utc_date,\n" +
-			"	time4 timestamp default utc_date() on update utc_date()\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default utc_date(),\n" +
-			"	time2 timestamp default utc_date(),\n" +
-			"	time3 timestamp default utc_date() on update utc_date(),\n" +
-			"	time4 timestamp default utc_date() on update utc_date()\n" +
-			")",
-	}, {
 		// test localtime with and without ()
 		input: "create table t (\n" +
 			"	time1 timestamp default localtime,\n" +
@@ -4824,36 +4790,6 @@ func TestCreateTable(t *testing.T) {
 			"	time3 timestamp default localtimestamp() on update localtimestamp(),\n" +
 			"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
 			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
-			")",
-	}, {
-		// test current_date with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default current_date,\n" +
-			"	time2 timestamp default current_date(),\n" +
-			"	time3 timestamp default current_date on update current_date,\n" +
-			"	time4 timestamp default current_date() on update current_date()\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default current_date(),\n" +
-			"	time2 timestamp default current_date(),\n" +
-			"	time3 timestamp default current_date() on update current_date(),\n" +
-			"	time4 timestamp default current_date() on update current_date()\n" +
-			")",
-	}, {
-		// test current_time with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default current_time,\n" +
-			"	time2 timestamp default current_time(),\n" +
-			"	time3 timestamp default current_time on update current_time,\n" +
-			"	time4 timestamp default current_time() on update current_time(),\n" +
-			"	time5 timestamp(2) default current_time(2) on update current_time(2)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default current_time(),\n" +
-			"	time2 timestamp default current_time(),\n" +
-			"	time3 timestamp default current_time() on update current_time(),\n" +
-			"	time4 timestamp default current_time() on update current_time(),\n" +
-			"	time5 timestamp(2) default current_time(2) on update current_time(2)\n" +
 			")",
 	}, {
 		input: "create table t (\n" +
