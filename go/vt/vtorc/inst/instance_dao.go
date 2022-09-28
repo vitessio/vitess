@@ -440,22 +440,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 	}
 
-	if config.Config.ReplicationLagQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			if err := db.QueryRow(config.Config.ReplicationLagQuery).Scan(&instance.ReplicationLagSeconds); err == nil {
-				if instance.ReplicationLagSeconds.Valid && instance.ReplicationLagSeconds.Int64 < 0 {
-					log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
-					instance.ReplicationLagSeconds.Int64 = 0
-				}
-			} else {
-				instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
-				_ = logReadTopologyInstanceError(instanceKey, "ReplicationLagQuery", err)
-			}
-		}()
-	}
-
 	instanceFound = true
 
 	// -------------------------------------------------------------------------

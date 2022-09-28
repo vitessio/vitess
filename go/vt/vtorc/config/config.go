@@ -67,8 +67,7 @@ type Configuration struct {
 	MySQLTopologyUseMutualTLS                  bool   // Turn on TLS authentication with the Topology MySQL instances
 	MySQLTopologyUseMixedTLS                   bool   // Mixed TLS and non-TLS authentication with the Topology MySQL instances
 	TLSCacheTTLFactor                          uint   // Factor of InstancePollSeconds that we set as TLS info cache expiry
-	BackendDB                                  string // EXPERIMENTAL: type of backend db; either "mysql" or "sqlite3"
-	SQLite3DataFile                            string // when BackendDB == "sqlite3", full path to sqlite3 datafile
+	SQLite3DataFile                            string // full path to sqlite3 datafile
 	MySQLVTOrcHost                             string
 	MySQLVTOrcMaxPoolConnections               int // The maximum size of the connection pool to the VTOrc backend.
 	MySQLVTOrcPort                             uint
@@ -88,7 +87,6 @@ type Configuration struct {
 	MySQLTopologyReadTimeoutSeconds            int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for all but discovery queries.
 	MySQLConnectionLifetimeSeconds             int      // Number of seconds the mysql driver will keep database connection alive before recycling it
 	DefaultInstancePort                        int      // In case port was not specified on command line
-	ReplicationLagQuery                        string   // custom query to check on replica lg (e.g. heartbeat table). Must return a single row with a single numeric column, which is the lag.
 	DiscoverByShowSlaveHosts                   bool     // Attempt SHOW SLAVE HOSTS before PROCESSLIST
 	UseSuperReadOnly                           bool     // Should vtorc super_read_only any time it sets read_only
 	InstancePollSeconds                        uint     // Number of seconds between instance reads
@@ -118,12 +116,6 @@ type Configuration struct {
 	AuditPurgeDays                             uint     // Days after which audit entries are purged from the database
 	RemoveTextFromHostnameDisplay              string   // Text to strip off the hostname on cluster/clusters pages
 	ReadOnly                                   bool
-	AuthenticationMethod                       string            // Type of autherntication to use, if any. "" for none, "basic" for BasicAuth, "multi" for advanced BasicAuth, "proxy" for forwarded credentials via reverse proxy, "token" for token based access
-	HTTPAuthUser                               string            // Username for HTTP Basic authentication (blank disables authentication)
-	HTTPAuthPassword                           string            // Password for HTTP Basic authentication
-	AuthUserHeader                             string            // HTTP header indicating auth user, when AuthenticationMethod is "proxy"
-	PowerAuthUsers                             []string          // On AuthenticationMethod == "proxy", list of users that can make changes. All others are read-only.
-	PowerAuthGroups                            []string          // list of unix groups the authenticated user must be a member of to make changes.
 	AccessTokenUseExpirySeconds                uint              // Time by which an issued token must be used
 	AccessTokenExpiryMinutes                   uint              // Time after which HTTP access token expires
 	ClusterNameToAlias                         map[string]string // map between regex matching cluster name to a human friendly alias
@@ -184,7 +176,6 @@ func newConfiguration() *Configuration {
 	return &Configuration{
 		StatusEndpoint:                             DefaultStatusAPIEndpoint,
 		StatusOUVerify:                             false,
-		BackendDB:                                  "sqlite",
 		SQLite3DataFile:                            "file::memory:?mode=memory&cache=shared",
 		MySQLVTOrcMaxPoolConnections:               128, // limit concurrent conns to backend DB
 		MySQLVTOrcPort:                             3306,
@@ -228,12 +219,6 @@ func newConfiguration() *Configuration {
 		AuditPurgeDays:                             7,
 		RemoveTextFromHostnameDisplay:              "",
 		ReadOnly:                                   false,
-		AuthenticationMethod:                       "",
-		HTTPAuthUser:                               "",
-		HTTPAuthPassword:                           "",
-		AuthUserHeader:                             "X-Forwarded-User",
-		PowerAuthUsers:                             []string{"*"},
-		PowerAuthGroups:                            []string{},
 		AccessTokenUseExpirySeconds:                60,
 		AccessTokenExpiryMinutes:                   1440,
 		ClusterNameToAlias:                         make(map[string]string),
@@ -333,12 +318,14 @@ func (config *Configuration) postReadAdjustments() error {
 	return nil
 }
 
+// TODO: Simplify the callers and delete this function
 func (config *Configuration) IsSQLite() bool {
-	return strings.Contains(config.BackendDB, "sqlite")
+	return true
 }
 
+// TODO: Simplify the callers and delete this function
 func (config *Configuration) IsMySQL() bool {
-	return config.BackendDB == "mysql" || config.BackendDB == ""
+	return false
 }
 
 // read reads configuration from given file, or silently skips if the file does not exist.
