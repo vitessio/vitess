@@ -18,16 +18,16 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/grpccommon"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -37,9 +37,6 @@ import (
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	// Import and register the gRPC tabletconn client
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 /*
@@ -94,36 +91,34 @@ var (
 	count                           = 1000
 )
 
-func initFlags() {
-	pflag.StringVar(&host, "host", "", "vtgate host(s) in the form 'host1,host2,...'")
-	pflag.IntVar(&port, "port", 0, "vtgate port")
-	pflag.StringVar(&unixSocket, "unix_socket", "", "vtgate unix socket")
-	pflag.StringVar(&protocol, "protocol", protocol, "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
-	pflag.StringVar(&user, "user", "", "username to connect using mysql (password comes from the db-credentials-file)")
-	pflag.StringVar(&db, "db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
+func initFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&host, "host", "", "vtgate host(s) in the form 'host1,host2,...'")
+	fs.IntVar(&port, "port", 0, "vtgate port")
+	fs.StringVar(&unixSocket, "unix_socket", "", "vtgate unix socket")
+	fs.StringVar(&protocol, "protocol", protocol, "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
+	fs.StringVar(&user, "user", "", "username to connect using mysql (password comes from the db-credentials-file)")
+	fs.StringVar(&db, "db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
 
-	pflag.DurationVar(&deadline, "deadline", deadline, "maximum duration for the test run (default 5 minutes)")
-	pflag.StringVar(&sql, "sql", "", "sql statement to execute")
-	pflag.IntVar(&threads, "threads", threads, "number of parallel threads to run")
-	pflag.IntVar(&count, "count", count, "number of queries per thread")
-}
+	fs.DurationVar(&deadline, "deadline", deadline, "maximum duration for the test run (default 5 minutes)")
+	fs.StringVar(&sql, "sql", "", "sql statement to execute")
+	fs.IntVar(&threads, "threads", threads, "number of parallel threads to run")
+	fs.IntVar(&count, "count", count, "number of queries per thread")
 
-func main() {
-	servenv.OnParse(func(fs *pflag.FlagSet) {
-		initFlags()
-	})
-	logger := logutil.NewConsoleLogger()
-	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-
-	defer exit.Recover()
-
-	flag.Lookup("logtostderr").Value.Set("true")
-	fs := pflag.NewFlagSet("vtbench", pflag.ExitOnError)
 	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	servenv.RegisterMySQLServerFlags(fs)
-	_flag.Parse(fs)
+}
+
+func main() {
+	servenv.OnParseFor("vtbench", func(fs *pflag.FlagSet) {
+		initFlags(fs)
+		_ = fs.Set("logtostderr", "true")
+	})
+
+	servenv.ParseFlags("vtbench")
+
+	defer exit.Recover()
 
 	clientProto := vtbench.MySQL
 	switch protocol {
