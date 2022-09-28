@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -109,4 +110,44 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 		return -1, nil
 	}
 	return 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", name.Name.String())
+}
+
+// IsMergeable is not a great name for this function. Suggestions for a better one are welcome!
+// This function will return false if it has to run on the vtgate side, and so can't be merged with subqueries
+func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
+	validVindex := func(expr sqlparser.Expr) bool {
+		sc := findColumnVindex(ctx, d, expr)
+		return sc != nil && sc.IsUnique()
+	}
+
+	if d.Query.GetLimit() != nil {
+		return false
+	}
+
+	sel, ok := d.Query.(*sqlparser.Select)
+	if !ok {
+		return false
+	}
+
+	if len(sel.GroupBy) > 0 {
+		// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
+		// by checking that one of the grouping expressions used is a unique single column vindex.
+		// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
+		for _, gb := range sel.GroupBy {
+			if validVindex(gb) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
+	// but if we don't have groupings, we need to check if there are aggregations that will mess with us
+	for _, expr := range sel.SelectExprs {
+		if sqlparser.ContainsAggregation(expr) {
+			return false
+		}
+	}
+
+	return true
 }
