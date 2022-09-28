@@ -41,33 +41,37 @@ var (
 	vschemaFileFlag    string
 	ksShardMapFlag     string
 	ksShardMapFileFlag string
-	numShards          int
-	executionMode      string
 	replicationMode    string
 	normalize          bool
-	outputMode         string
 	dbName             string
 	plannerVersionStr  string
+
+	numShards     = 2
+	executionMode = "multi"
+	outputMode    = "text"
 )
 
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&sqlFlag, "sql", "", "A list of semicolon-delimited SQL commands to analyze")
+	fs.StringVar(&sqlFileFlag, "sql-file", "", "Identifies the file that contains the SQL commands to analyze")
+	fs.StringVar(&schemaFlag, "schema", "", "The SQL table schema")
+	fs.StringVar(&schemaFileFlag, "schema-file", "", "Identifies the file that contains the SQL table schema")
+	fs.StringVar(&vschemaFlag, "vschema", "", "Identifies the VTGate routing schema")
+	fs.StringVar(&vschemaFileFlag, "vschema-file", "", "Identifies the VTGate routing schema file")
+	fs.StringVar(&ksShardMapFlag, "ks-shard-map", "", "JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace")
+	fs.StringVar(&ksShardMapFileFlag, "ks-shard-map-file", "", "File containing json blob of keyspace name -> shard name -> ShardReference object")
+	fs.StringVar(&replicationMode, "replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
+	fs.BoolVar(&normalize, "normalize", false, "Whether to enable vtgate normalization")
+	fs.StringVar(&dbName, "dbname", "", "Optional database target to override normal routing")
+	fs.StringVar(&plannerVersionStr, "planner-version", "", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+
+	fs.IntVar(&numShards, "shards", numShards, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
+	fs.StringVar(&executionMode, "execution-mode", executionMode, "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
+	fs.StringVar(&outputMode, "output-mode", outputMode, "Output in human-friendly text or json")
+}
+
 func init() {
-	servenv.OnParse(func(fs *pflag.FlagSet) {
-		fs.StringVar(&sqlFlag, "sql", "", "A list of semicolon-delimited SQL commands to analyze")
-		fs.StringVar(&sqlFileFlag, "sql-file", "", "Identifies the file that contains the SQL commands to analyze")
-		fs.StringVar(&schemaFlag, "schema", "", "The SQL table schema")
-		fs.StringVar(&schemaFileFlag, "schema-file", "", "Identifies the file that contains the SQL table schema")
-		fs.StringVar(&vschemaFlag, "vschema", "", "Identifies the VTGate routing schema")
-		fs.StringVar(&vschemaFileFlag, "vschema-file", "", "Identifies the VTGate routing schema file")
-		fs.StringVar(&ksShardMapFlag, "ks-shard-map", "", "JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace")
-		fs.StringVar(&ksShardMapFileFlag, "ks-shard-map-file", "", "File containing json blob of keyspace name -> shard name -> ShardReference object")
-		fs.IntVar(&numShards, "shards", 2, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
-		fs.StringVar(&executionMode, "execution-mode", "multi", "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
-		fs.StringVar(&replicationMode, "replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
-		fs.BoolVar(&normalize, "normalize", false, "Whether to enable vtgate normalization")
-		fs.StringVar(&outputMode, "output-mode", "text", "Output in human-friendly text or json")
-		fs.StringVar(&dbName, "dbname", "", "Optional database target to override normal routing")
-		fs.StringVar(&plannerVersionStr, "planner-version", "", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
-	})
+	servenv.OnParse(registerFlags)
 }
 
 // getFileParam returns a string containing either flag is not "",
