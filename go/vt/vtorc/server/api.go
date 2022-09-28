@@ -38,6 +38,7 @@ const (
 	problemsAPI                = "/api/problems"
 	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
+	replicationAnalysisAPI     = "/api/replication-analysis"
 )
 
 var (
@@ -46,6 +47,7 @@ var (
 		problemsAPI,
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
+		replicationAnalysisAPI,
 	}
 )
 
@@ -65,6 +67,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		disableGlobalRecoveriesAPIHandler(response)
 	case enableGlobalRecoveriesAPI:
 		enableGlobalRecoveriesAPIHandler(response)
+	case replicationAnalysisAPI:
+		replicationAnalysisAPIHandler(response, request)
 	default:
 		// This should be unreachable. Any endpoint which isn't registered is automatically redirected to /debug/status.
 		// This code will only be reachable if we register an API but don't handle it here. That will be a bug.
@@ -79,6 +83,8 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 		return acl.MONITORING
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
+	case replicationAnalysisAPI:
+		return acl.MONITORING
 	}
 	return acl.ADMIN
 }
@@ -143,6 +149,31 @@ func enableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
 		return
 	}
 	writePlainTextResponse(response, "Global recoveries enabled", http.StatusOK)
+}
+
+// replicationAnalysisAPIHandler is the handler for the replicationAnalysisAPI endpoint
+func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.Request) {
+	// This api also supports filtering by shard and keyspace provided.
+	// Currently, both of them have to be provided in order to filter the replication analysis.
+	// Once we split the cluster_name field into keyspace and shard, we can support
+	// filtering just by keyspace as well.
+	shard := request.URL.Query().Get("shard")
+	keyspace := request.URL.Query().Get("keyspace")
+	clusterName := ""
+	// Override the cluster name to filter by only when both the parameters
+	// are specified and not empty
+	if keyspace != "" && shard != "" {
+		clusterName = inst.GetClusterNameFromKeyspaceAndShard(keyspace, shard)
+	}
+	analysis, err := inst.GetReplicationAnalysis(clusterName, &inst.ReplicationAnalysisHints{})
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
+	// Currently inst.ReplicationAnalysis doesn't store the tablet alias, but once it does we can filter on that too
+	returnAsJSON(response, analysis)
 }
 
 // writePlainTextResponse writes a plain text response to the writer.
