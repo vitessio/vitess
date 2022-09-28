@@ -24,9 +24,9 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	"vitess.io/vitess/go/vt/vtorc/app"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/server"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -65,10 +65,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	config.RuntimeCLIFlags.GrabElection = &falseVal
 	config.RuntimeCLIFlags.SkipContinuousRegistration = &falseVal
 	config.MarkConfigurationLoaded()
-
-	go func() {
-		app.HTTP(true)
-	}()
+	server.StartVTOrcDiscovery()
 
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, primary, "should have elected a primary")

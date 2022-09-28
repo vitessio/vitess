@@ -32,7 +32,6 @@ import (
 	vtlog "vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtorc/app"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/server"
@@ -109,7 +108,7 @@ func main() {
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	logic.RegisterFlags(fs)
-	app.RegisterFlags(fs)
+	server.RegisterFlags(fs)
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
@@ -118,7 +117,6 @@ func main() {
 	os.Args = os.Args[0:1]
 
 	configFile := fs.String("config", "", "config file name")
-	discovery := fs.Bool("discovery", true, "auto discovery mode")
 	config.RuntimeCLIFlags.SkipUnresolve = fs.Bool("skip-unresolve", false, "Do not unresolve a host name")
 	config.RuntimeCLIFlags.SkipUnresolveCheck = fs.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
 	config.RuntimeCLIFlags.Noop = fs.Bool("noop", false, "Dry run; do not perform destructing operations")
@@ -173,7 +171,7 @@ Please update your scripts before the next version, when this will begin to brea
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	go app.HTTP(*discovery)
+	server.StartVTOrcDiscovery()
 
 	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {
