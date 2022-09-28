@@ -57,7 +57,7 @@ import (
 var (
 	transactionMode    = "MULTI"
 	normalizeQueries   = true
-	normalizePrepStmts = true
+	normalizePrepStmts = false
 	streamBufferSize   = 32 * 1024
 
 	terseErrors bool
