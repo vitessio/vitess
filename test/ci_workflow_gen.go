@@ -30,7 +30,7 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "mysql57, mariadb103, mysql80, mariadb102"
+	unitTestDatabases = "mysql57, mariadb103, mysql80"
 
 	// An empty string will cause the default non platform specific template
 	// to be used.
