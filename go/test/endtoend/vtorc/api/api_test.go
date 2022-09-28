@@ -68,6 +68,13 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Contains(t, resp, `"Healthy": true,`)
 	})
 
+	t.Run("Liveness API", func(t *testing.T) {
+		// Check that VTOrc is live
+		status, resp := utils.MakeAPICall(t, vtorc, "/debug/liveness")
+		assert.Equal(t, 200, status)
+		assert.Empty(t, resp)
+	})
+
 	t.Run("Disable Recoveries API", func(t *testing.T) {
 		// Disable recoveries of VTOrc
 		status, resp := utils.MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
