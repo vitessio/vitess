@@ -62,12 +62,12 @@ func main() {
 	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
-	servenv.ParseFlagsWithArgs("zkctl")
+	args := servenv.ParseFlagsWithArgs("zkctl")
 
 	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
-	action := pflag.Arg(0)
+	action := args[0]
 	var err error
 	switch action {
 	case "init":
