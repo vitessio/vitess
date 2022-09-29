@@ -82,39 +82,6 @@ func getMySQLURI() string {
 	return mysqlURI
 }
 
-// OpenDiscovery returns a DB instance to access a topology instance.
-// It has lower read timeout than OpenTopology and is intended to
-// be used with low-latency discovery queries.
-func OpenDiscovery(host string, port int) (*sql.DB, error) {
-	return openTopology(host, port, config.Config.MySQLDiscoveryReadTimeoutSeconds)
-}
-
-func openTopology(host string, port int, readTimeout int) (db *sql.DB, err error) {
-	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
-		config.Config.MySQLTopologyUser,
-		config.Config.MySQLTopologyPassword,
-		host, port,
-		config.Config.MySQLConnectTimeoutSeconds,
-		readTimeout,
-	)
-
-	if config.Config.MySQLTopologyUseMutualTLS ||
-		(config.Config.MySQLTopologyUseMixedTLS && requiresTLS(host, port, uri)) {
-		if uri, err = SetupMySQLTopologyTLS(uri); err != nil {
-			return nil, err
-		}
-	}
-	if db, _, err = sqlutils.GetDB(uri); err != nil {
-		return nil, err
-	}
-	if config.Config.MySQLConnectionLifetimeSeconds > 0 {
-		db.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
-	}
-	db.SetMaxOpenConns(config.MySQLTopologyMaxPoolConnections)
-	db.SetMaxIdleConns(config.MySQLTopologyMaxPoolConnections)
-	return db, err
-}
-
 func openOrchestratorMySQLGeneric() (db *sql.DB, fromCache bool, err error) {
 	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
 		config.Config.MySQLVTOrcUser,
@@ -355,42 +322,6 @@ func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error
 		log.Warning(err.Error())
 	}
 
-	return err
-}
-
-// QueryVTOrcRowsMapBuffered
-func QueryVTOrcRowsMapBuffered(query string, onRow func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
-		return err
-	}
-	db, err := OpenVTOrc()
-	if err != nil {
-		return err
-	}
-
-	return sqlutils.QueryRowsMapBuffered(db, query, onRow)
-}
-
-// QueryVTOrcBuffered
-func QueryVTOrcBuffered(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
-		return err
-	}
-	db, err := OpenVTOrc()
-	if err != nil {
-		return err
-	}
-
-	if argsArray == nil {
-		argsArray = EmptyArgs
-	}
-	if err = sqlutils.QueryRowsMapBuffered(db, query, onRow, argsArray...); err != nil {
-		log.Warning(err.Error())
-	}
 	return err
 }
 

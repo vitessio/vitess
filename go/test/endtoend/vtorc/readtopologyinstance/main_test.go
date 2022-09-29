@@ -51,10 +51,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	require.NoError(t, err)
 	falseVal := false
 	emptyVal := ""
-	config.Config.MySQLTopologyUser = "orc_client_user"
-	config.Config.MySQLTopologyPassword = "orc_client_user_password"
-	config.Config.MySQLReplicaUser = "vt_repl"
-	config.Config.MySQLReplicaPassword = ""
 	config.Config.RecoveryPeriodBlockSeconds = 1
 	config.Config.InstancePollSeconds = 1
 	config.RuntimeCLIFlags.SkipUnresolve = &falseVal

@@ -43,7 +43,6 @@ const (
 	MaintenanceOwner                      = "vtorc"
 	AuditPageSize                         = 20
 	MaintenancePurgeDays                  = 7
-	MySQLTopologyMaxPoolConnections       = 3
 	MaintenanceExpireMinutes              = 10
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
@@ -54,16 +53,6 @@ const (
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	MySQLTopologyUser                        string // The user VTOrc will use to connect to MySQL instances
-	MySQLTopologyPassword                    string // The password VTOrc will use to connect to MySQL instances
-	MySQLReplicaUser                         string // User to set on replica MySQL instances while configuring replication settings on them. If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
-	MySQLReplicaPassword                     string // Password to set on replica MySQL instances while configuring replication settings on them.
-	MySQLTopologySSLPrivateKeyFile           string // Private key file used to authenticate with a Topology mysql instance with TLS
-	MySQLTopologySSLCertFile                 string // Certificate PEM file used to authenticate with a Topology mysql instance with TLS
-	MySQLTopologySSLCAFile                   string // Certificate Authority PEM file used to authenticate with a Topology mysql instance with TLS
-	MySQLTopologySSLSkipVerify               bool   // If true, do not strictly validate mutual TLS certs for Topology mysql instances
-	MySQLTopologyUseMutualTLS                bool   // Turn on TLS authentication with the Topology MySQL instances
-	MySQLTopologyUseMixedTLS                 bool   // Mixed TLS and non-TLS authentication with the Topology MySQL instances
 	TLSCacheTTLFactor                        uint   // Factor of InstancePollSeconds that we set as TLS info cache expiry
 	SQLite3DataFile                          string // full path to sqlite3 datafile
 	MySQLVTOrcHost                           string
@@ -139,8 +128,6 @@ func newConfiguration() *Configuration {
 		SQLite3DataFile:                          "file::memory:?mode=memory&cache=shared",
 		MySQLVTOrcMaxPoolConnections:             128, // limit concurrent conns to backend DB
 		MySQLVTOrcPort:                           3306,
-		MySQLTopologyUseMutualTLS:                false,
-		MySQLTopologyUseMixedTLS:                 true,
 		MySQLVTOrcUseMutualTLS:                   false,
 		MySQLConnectTimeoutSeconds:               2,
 		MySQLVTOrcReadTimeoutSeconds:             30,
@@ -211,14 +198,6 @@ func (config *Configuration) postReadAdjustments() error {
 		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLVTOrcPassword)
 		if len(submatch) > 1 {
 			config.MySQLVTOrcPassword = os.Getenv(submatch[1])
-		}
-	}
-	{
-		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
-		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLTopologyPassword)
-		if len(submatch) > 1 {
-			config.MySQLTopologyPassword = os.Getenv(submatch[1])
 		}
 	}
 
