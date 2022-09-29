@@ -19,6 +19,8 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -31,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
+// TestVSchemaChangesUnderLoad tests vstreamer under a load of high binlog events and simultaneous multiple vschema changes
+// see https://github.com/vitessio/vitess/issues/11169
 func TestVSchemaChangesUnderLoad(t *testing.T) {
 
 	extendedTimeout := defaultTimeout * 4
@@ -41,33 +45,35 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	vc = NewVitessCluster(t, "TestVSchemaChanges", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
-	defaultReplicas = 1
-	defaultRdonly = 0
 
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 1)
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	ch1 := make(chan bool, 1)
+
+	// ch is used to signal that there is significant data inserted into the tables and when a lot of vschema changes have been applied
+	ch := make(chan bool, 1)
+
 	ctx := context.Background()
-	b := false
+	initialDataInserted := false
 	startCid := 100
 	warmupRowCount := startCid + 2000
 	insertData := func() {
 		timer := time.NewTimer(extendedTimeout)
+		defer timer.Stop()
 		log.Infof("Inserting data into customer")
 		cid := startCid
 		for {
-			if !b && cid > warmupRowCount {
+			if !initialDataInserted && cid > warmupRowCount {
 				log.Infof("Done inserting initial data into customer")
-				b = true
-				ch1 <- true
+				initialDataInserted = true
+				ch <- true
 			}
 			query := fmt.Sprintf("insert into customer(cid, name) values (%d, 'a')", cid)
 			_, _ = vtgateConn.ExecuteFetch(query, 1, false)
@@ -97,13 +103,13 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 				Filter: "select * from customer",
 			}},
 		}
-		conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
+		conn, err := vtgateconn.Dial(ctx, net.JoinHostPort("localhost", strconv.Itoa(vc.ClusterConfig.vtgateGrpcPort)))
 		require.NoError(t, err)
 		defer conn.Close()
 
 		flags := &vtgatepb.VStreamFlags{}
 
-		ctx2, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		ctx2, cancel := context.WithTimeout(ctx, extendedTimeout/2)
 		defer cancel()
 		reader, err := conn.VStream(ctx2, topodatapb.TabletType_REPLICA, vgtid, filter, flags)
 		require.NoError(t, err)
@@ -115,18 +121,26 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	}()
 
 	go insertData()
-	<-ch1 // wait for enough data to be inserted before ApplyVSchema
+	<-ch // wait for enough data to be inserted before ApplyVSchema
+	const maxApplyVSchemas = 20
 	go func() {
+		numApplyVSchema := 0
 		timer := time.NewTimer(extendedTimeout)
+		defer timer.Stop()
 		log.Infof("Started ApplyVSchema")
 		for {
 			if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema={}", "product"); err != nil {
 				log.Errorf("ApplyVSchema command failed with %+v\n", err)
 				return
 			}
+			numApplyVSchema++
+			if numApplyVSchema > maxApplyVSchemas {
+				ch <- true
+			}
 			select {
 			case <-timer.C:
 				log.Infof("Done ApplyVSchema")
+				ch <- true
 				return
 			default:
 				time.Sleep(defaultTick)
@@ -134,9 +148,9 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(defaultTimeout) // wait for enough ApplyVSchema calls before doing a PRS
+	<-ch // wait for enough ApplyVSchema calls before doing a PRS
 	if err := vc.VtctlClient.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", "product/0",
 		"--new_primary", "zone1-101", "--wait_replicas_timeout", defaultTimeout.String()); err != nil {
-		t.Fatalf("PlannedReparentShard command failed with %+v\n", err)
+		require.NoError(t, err, "PlannedReparentShard command failed")
 	}
 }
