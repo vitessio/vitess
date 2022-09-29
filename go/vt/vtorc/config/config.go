@@ -46,13 +46,8 @@ const (
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	TLSCacheTTLFactor                        uint     // Factor of InstancePollSeconds that we set as TLS info cache expiry
 	SQLite3DataFile                          string   // full path to sqlite3 datafile
-	DefaultInstancePort                      int      // In case port was not specified on command line
 	InstancePollSeconds                      uint     // Number of seconds between instance reads
-	InstanceWriteBufferSize                  int      // Instance write buffer size (max number of instances to flush in one INSERT ODKU)
-	BufferInstanceWrites                     bool     // Set to 'true' for write-optimization on backend table (compromise: writes can be stale and overwrite non stale data)
-	InstanceFlushIntervalMilliseconds        int      // Max interval between instance write buffer flushes
 	UnseenInstanceForgetHours                uint     // Number of hours after which an unseen instance is forgotten
 	SnapshotTopologiesIntervalHours          uint     // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
 	DiscoveryMaxConcurrency                  uint     // Number of goroutines doing hosts discovery
@@ -95,12 +90,7 @@ var readFileNames []string
 func newConfiguration() *Configuration {
 	return &Configuration{
 		SQLite3DataFile:                          "file::memory:?mode=memory&cache=shared",
-		DefaultInstancePort:                      3306,
-		TLSCacheTTLFactor:                        100,
 		InstancePollSeconds:                      5,
-		InstanceWriteBufferSize:                  100,
-		BufferInstanceWrites:                     false,
-		InstanceFlushIntervalMilliseconds:        100,
 		UnseenInstanceForgetHours:                240,
 		SnapshotTopologiesIntervalHours:          0,
 		DiscoveryMaxConcurrency:                  300,
@@ -136,9 +126,6 @@ func (config *Configuration) postReadAdjustments() error {
 		return fmt.Errorf("SQLite3DataFile must be set")
 	}
 
-	if config.InstanceWriteBufferSize <= 0 {
-		config.BufferInstanceWrites = false
-	}
 	return nil
 }
 

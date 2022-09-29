@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,16 +69,6 @@ const (
 	GroupReplicationMemberStateError       = "ERROR"
 )
 
-// We use this map to identify whether the query failed because the server does not support group replication or due
-// to a different reason.
-var GroupReplicationNotSupportedErrors = map[uint16]bool{
-	// If either the group replication global variables are not known or the
-	// performance_schema.replication_group_members table does not exist, the host does not support group
-	// replication, at least in the form supported here.
-	1193: true, // ERROR: 1193 (HY000): Unknown system variable 'group_replication_group_name'
-	1146: true, // ERROR: 1146 (42S02): Table 'performance_schema.replication_group_members' doesn't exist
-}
-
 // instanceKeyInformativeClusterName is a non-authoritative cache; used for auditing or general purpose.
 var instanceKeyInformativeClusterName *cache.Cache
 var forgetInstanceKeys *cache.Cache
@@ -89,7 +78,6 @@ var readTopologyInstanceCounter = metrics.NewCounter()
 var readInstanceCounter = metrics.NewCounter()
 var writeInstanceCounter = metrics.NewCounter()
 var backendWrites = collection.CreateOrReturnCollection("BACKEND_WRITES")
-var writeBufferMetrics = collection.CreateOrReturnCollection("WRITE_BUFFER")
 var writeBufferLatency = stopwatch.NewNamedStopwatch()
 
 var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
@@ -107,22 +95,8 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	instanceWriteBuffer = make(chan instanceUpdateObject, config.Config.InstanceWriteBufferSize)
 	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.InstancePollSeconds/2)*time.Second, time.Second)
 	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
-	// spin off instance write buffer flushing
-	go func() {
-		flushTick := time.Tick(time.Duration(config.Config.InstanceFlushIntervalMilliseconds) * time.Millisecond) //nolint SA1015: using time.Tick leaks the underlying ticker
-		for {
-			// it is time to flush
-			select {
-			case <-flushTick:
-				flushInstanceWriteBuffer()
-			case <-forceFlushInstanceWriteBuffer:
-				flushInstanceWriteBuffer()
-			}
-		}
-	}()
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
@@ -189,7 +163,7 @@ func logReadTopologyInstanceError(instanceKey *InstanceKey, hint string, err err
 // server and writes the result synchronously to the vtorc
 // backend.
 func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
-	return ReadTopologyInstanceBufferable(instanceKey, false, nil)
+	return ReadTopologyInstanceBufferable(instanceKey, nil)
 }
 
 // ReadTopologyInstanceBufferable connects to a topology MySQL instance
@@ -197,7 +171,7 @@ func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
 // It writes the information retrieved into vtorc's backend.
 // - writes are optionally buffered.
 // - timing information can be collected for the stages performed.
-func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
+func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", tb.Errorf("%+v", r))
@@ -469,11 +443,7 @@ Cleanup:
 		instance.IsRecentlyChecked = true
 		instance.IsUpToDate = true
 		latency.Start("backend")
-		if bufferWrites {
-			enqueueInstanceWrite(instance, instanceFound, err)
-		} else {
-			_ = WriteInstance(instance, instanceFound, err)
-		}
+		_ = WriteInstance(instance, instanceFound, err)
 		lastAttemptedCheckTimer.Stop()
 		latency.Stop("backend")
 		return instance, nil
@@ -1353,106 +1323,6 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 		return err
 	}
 	return nil
-}
-
-type instanceUpdateObject struct {
-	instance                 *Instance
-	instanceWasActuallyFound bool
-	lastError                error
-}
-
-// instances sorter by instanceKey
-type byInstanceKey []*Instance
-
-func (a byInstanceKey) Len() int           { return len(a) }
-func (a byInstanceKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byInstanceKey) Less(i, j int) bool { return a[i].Key.SmallerThan(&a[j].Key) }
-
-var instanceWriteBuffer chan instanceUpdateObject
-var forceFlushInstanceWriteBuffer = make(chan bool)
-
-func enqueueInstanceWrite(instance *Instance, instanceWasActuallyFound bool, lastError error) {
-	if len(instanceWriteBuffer) == config.Config.InstanceWriteBufferSize {
-		// Signal the "flushing" goroutine that there's work.
-		// We prefer doing all bulk flushes from one goroutine.
-		// Non blocking send to avoid blocking goroutines on sending a flush,
-		// if the "flushing" goroutine is not able read is because a flushing is ongoing.
-		select {
-		case forceFlushInstanceWriteBuffer <- true:
-		default:
-		}
-	}
-	instanceWriteBuffer <- instanceUpdateObject{instance, instanceWasActuallyFound, lastError}
-}
-
-// flushInstanceWriteBuffer saves enqueued instances to VTOrc Db
-func flushInstanceWriteBuffer() {
-	var instances []*Instance
-	var lastseen []*Instance // instances to update with last_seen field
-
-	defer func() {
-		// reset stopwatches (TODO: .ResetAll())
-		writeBufferLatency.Reset("wait")
-		writeBufferLatency.Reset("write")
-		writeBufferLatency.Start("wait") // waiting for next flush
-	}()
-
-	writeBufferLatency.Stop("wait")
-
-	if len(instanceWriteBuffer) == 0 {
-		return
-	}
-
-	// There are `DiscoveryMaxConcurrency` many goroutines trying to enqueue an instance into the buffer
-	// when one instance is flushed from the buffer then one discovery goroutine is ready to enqueue a new instance
-	// this is why we want to flush all instances in the buffer untill a max of `InstanceWriteBufferSize`.
-	// Otherwise we can flush way more instances than what's expected.
-	for i := 0; i < config.Config.InstanceWriteBufferSize && len(instanceWriteBuffer) > 0; i++ {
-		upd := <-instanceWriteBuffer
-		if upd.instanceWasActuallyFound && upd.lastError == nil {
-			lastseen = append(lastseen, upd.instance)
-		} else {
-			instances = append(instances, upd.instance)
-			log.Infof("flushInstanceWriteBuffer: will not update database_instance.last_seen due to error: %+v", upd.lastError)
-		}
-	}
-
-	writeBufferLatency.Start("write")
-
-	// sort instances by instanceKey (table pk) to make locking predictable
-	sort.Sort(byInstanceKey(instances))
-	sort.Sort(byInstanceKey(lastseen))
-
-	writeFunc := func() error {
-		err := writeManyInstances(instances, true, false)
-		if err != nil {
-			errMsg := fmt.Sprintf("flushInstanceWriteBuffer writemany: %v", err)
-			log.Errorf(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-		err = writeManyInstances(lastseen, true, true)
-		if err != nil {
-			errMsg := fmt.Sprintf("flushInstanceWriteBuffer last_seen: %v", err)
-			log.Errorf(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-
-		writeInstanceCounter.Inc(int64(len(instances) + len(lastseen)))
-		return nil
-	}
-	err := ExecDBWriteFunc(writeFunc)
-	if err != nil {
-		log.Errorf("flushInstanceWriteBuffer: %v", err)
-	}
-
-	writeBufferLatency.Stop("write")
-
-	_ = writeBufferMetrics.Append(&WriteBufferMetric{
-		Timestamp:    time.Now(),
-		WaitLatency:  writeBufferLatency.Elapsed("wait"),
-		WriteLatency: writeBufferLatency.Elapsed("write"),
-		Instances:    len(lastseen) + len(instances),
-	})
 }
 
 // WriteInstance stores an instance in the vtorc backend

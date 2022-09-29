@@ -224,7 +224,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	discoveriesCounter.Inc(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, config.Config.BufferInstanceWrites, latency)
+	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")

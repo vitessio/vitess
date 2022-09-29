@@ -67,7 +67,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	primaryInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
 		Hostname: utils.Hostname,
 		Port:     primary.MySQLPort,
-	}, false, nil)
+	}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, primaryInstance)
 	assert.Contains(t, primaryInstance.InstanceAlias, "zone1")
@@ -106,7 +106,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
 		Hostname: utils.Hostname,
 		Port:     replica.MySQLPort,
-	}, false, nil)
+	}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, replicaInstance)
 	assert.Contains(t, replicaInstance.InstanceAlias, "zone1")
