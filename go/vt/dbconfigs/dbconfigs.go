@@ -129,20 +129,6 @@ func RegisterFlags(userKeys ...string) {
 	})
 }
 
-/*
-// RegisterFlagsInSet registers the base DBFlags, credentials flags, and
-// the user specific ones for the specified system users for the requesting
-// command. For instance, the vttablet command will register flags for all
-// users as defined in the dbconfigs.All variable.
-func RegisterFlagsInSet(fs *pflag.FlagSet, userKeys ...string) {
-	registerBaseFlags(fs)
-	for _, userKey := range userKeys {
-		uc, cp := GlobalDBConfigs.getParams(userKey, &GlobalDBConfigs)
-		registerPerUserFlags(fs, userKey, uc, cp)
-	}
-}
-*/
-
 func registerBaseFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&GlobalDBConfigs.Socket, "db_socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	fs.StringVar(&GlobalDBConfigs.Host, "db_host", "", "The host name for the tcp connection.")
