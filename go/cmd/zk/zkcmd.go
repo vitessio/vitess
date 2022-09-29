@@ -135,14 +135,13 @@ func main() {
 	defer logutil.Flush()
 	server = pflag.String("server", "", "server(s) to connect to")
 	// handling case of --help & -h
-	args := os.Args[1:]
 	var help bool
 	pflag.BoolVarP(&help, "help", "h", false, "display usage and exit")
 	log.RegisterFlags(pflag.CommandLine)
 	logutil.RegisterFlags(pflag.CommandLine)
 
 	pflag.CommandLine.Usage = func() {
-		fmt.Fprintf(os.Stderr, doc)
+		fmt.Fprint(os.Stderr, doc)
 		pflag.Usage()
 	}
 
@@ -154,7 +153,7 @@ func main() {
 	}
 
 	// if no zk command is provided after --server then we need to print doc & usage both
-	args = pflag.Args()
+	args := pflag.Args()
 	if len(args) == 0 {
 		pflag.CommandLine.Usage()
 		exit.Return(1)
