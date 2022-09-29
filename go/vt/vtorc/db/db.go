@@ -89,11 +89,6 @@ func OpenDiscovery(host string, port int) (*sql.DB, error) {
 	return openTopology(host, port, config.Config.MySQLDiscoveryReadTimeoutSeconds)
 }
 
-// OpenTopology returns a DB instance to access a topology instance.
-func OpenTopology(host string, port int) (*sql.DB, error) {
-	return openTopology(host, port, config.Config.MySQLTopologyReadTimeoutSeconds)
-}
-
 func openTopology(host string, port int, readTimeout int) (db *sql.DB, err error) {
 	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
 		config.Config.MySQLTopologyUser,

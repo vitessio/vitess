@@ -328,35 +328,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		_ = ResolveHostnameIPs(instance.Key.Hostname)
 	}()
 
-	// TODO(sougou) delete DataCenterPattern
-	if config.Config.DataCenterPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.DataCenterPattern); err == nil {
-			match := pattern.FindStringSubmatch(instance.Key.Hostname)
-			if len(match) != 0 {
-				instance.DataCenter = match[1]
-			}
-		}
-		// This can be overriden by later invocation of DetectDataCenterQuery
-	}
-	if config.Config.RegionPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.RegionPattern); err == nil {
-			match := pattern.FindStringSubmatch(instance.Key.Hostname)
-			if len(match) != 0 {
-				instance.Region = match[1]
-			}
-		}
-		// This can be overriden by later invocation of DetectRegionQuery
-	}
-	if config.Config.PhysicalEnvironmentPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.PhysicalEnvironmentPattern); err == nil {
-			match := pattern.FindStringSubmatch(instance.Key.Hostname)
-			if len(match) != 0 {
-				instance.PhysicalEnvironment = match[1]
-			}
-		}
-		// This can be overriden by later invocation of DetectPhysicalEnvironmentQuery
-	}
-
 	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
 	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
 	if fullStatus.ReplicationStatus != nil {
@@ -433,56 +404,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// No `goto Cleanup` after this point.
 	// -------------------------------------------------------------------------
 
-	// TODO(sougou): delete DetectDataCenterQuery
-	if config.Config.DetectDataCenterQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectDataCenterQuery).Scan(&instance.DataCenter)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectDataCenterQuery", err)
-		}()
-	}
 	instance.DataCenter = tablet.Alias.Cell
-
-	// TODO(sougou): use cell alias to identify regions.
-	if config.Config.DetectRegionQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectRegionQuery).Scan(&instance.Region)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectRegionQuery", err)
-		}()
-	}
-
-	if config.Config.DetectPhysicalEnvironmentQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectPhysicalEnvironmentQuery).Scan(&instance.PhysicalEnvironment)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectPhysicalEnvironmentQuery", err)
-		}()
-	}
-
-	// TODO(sougou): delete DetectInstanceAliasQuery
-	if config.Config.DetectInstanceAliasQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectInstanceAliasQuery).Scan(&instance.InstanceAlias)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectInstanceAliasQuery", err)
-		}()
-	}
 	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
-
-	// TODO(sougou): come up with a strategy for semi-sync
-	if config.Config.DetectSemiSyncEnforcedQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectSemiSyncEnforcedQuery).Scan(&instance.SemiSyncEnforced)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectSemiSyncEnforcedQuery", err)
-		}()
-	}
 
 	{
 		latency.Start("backend")
@@ -497,21 +420,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance.PromotionRule = PromotionRule(durability, tablet)
 	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
 	_ = logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
-
-	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" {
-		// Only need to do on primary tablets
-		domainName := ""
-		if err := db.QueryRow(config.Config.DetectClusterDomainQuery).Scan(&domainName); err != nil {
-			domainName = ""
-			_ = logReadTopologyInstanceError(instanceKey, "DetectClusterDomainQuery", err)
-		}
-		if domainName != "" {
-			latency.Start("backend")
-			err := WriteClusterDomainName(instance.ClusterName, domainName)
-			latency.Stop("backend")
-			_ = logReadTopologyInstanceError(instanceKey, "WriteClusterDomainName", err)
-		}
-	}
 
 Cleanup:
 	waitGroup.Wait()
