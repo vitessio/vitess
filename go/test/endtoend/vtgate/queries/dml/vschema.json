@@ -1,0 +1,159 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "num_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "num_vdx_tbl",
+        "from": "num",
+        "to": "keyspace_id"
+      },
+      "owner": "s_tbl"
+    },
+    "oid_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "oid_vdx_tbl",
+        "from": "oid",
+        "to": "keyspace_id"
+      },
+      "owner": "order_tbl"
+    },
+    "unq_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "unq_idx",
+        "from": "unq_col",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "auto_tbl"
+    },
+    "nonunq_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "nonunq_idx",
+        "from": "nonunq_col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "auto_tbl"
+    }
+  },
+  "tables": {
+    "s_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "num",
+          "name": "num_vdx"
+        }
+      ]
+    },
+    "num_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "num",
+          "name": "hash"
+        }
+      ]
+    },
+    "user_tbl": {
+      "auto_increment": {
+        "column": "id",
+        "sequence": "uks.user_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "region_id",
+          "name": "hash"
+        }
+      ]
+    },
+    "order_tbl": {
+      "column_vindexes": [
+        {
+          "column": "region_id",
+          "name": "hash"
+        },
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "oid_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "hash"
+        }
+      ]
+    },
+    "oevent_tbl": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "oextra_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "auto_tbl": {
+      "auto_increment": {
+        "column": "id",
+        "sequence": "uks.auto_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "unq_col",
+          "name": "unq_vdx"
+        },
+        {
+          "columns": [
+            "nonunq_col",
+            "id"
+          ],
+          "name": "nonunq_vdx"
+        }
+      ]
+    },
+    "unq_idx": {
+      "column_vindexes": [
+        {
+          "column": "unq_col",
+          "name": "hash"
+        }
+      ]
+    },
+    "nonunq_idx": {
+      "column_vindexes": [
+        {
+          "column": "nonunq_col",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}
