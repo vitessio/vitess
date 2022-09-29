@@ -474,7 +474,5 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 				  and team_fact.team >= 22
 				)`
 
-	// Ideally we should get `[[INT32(22)] [INT32(33)]]`
-	// Change the expectation when we support better conversion handling in numeric comparison.
-	utils.AssertContainsError(t, mcmp.VtConn, query, `unsupported: cannot compare INT32 and INT64`)
+	utils.AssertMatches(t, mcmp.VtConn, query, `[[INT32(22)] [INT32(33)]]`)
 }
