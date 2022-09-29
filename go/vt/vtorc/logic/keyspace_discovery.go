@@ -32,7 +32,7 @@ import (
 func RefreshAllKeyspaces() {
 	var keyspaces []string
 	if *clustersToWatch == "" { // all known keyspaces
-		ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
 		var err error
 		// Get all the keyspaces
@@ -63,7 +63,7 @@ func RefreshAllKeyspaces() {
 	// Sort the list of keyspaces.
 	// The list can have duplicates because the input to clusters to watch may have multiple shards of the same keyspace
 	sort.Strings(keyspaces)
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	var wg sync.WaitGroup
 	for idx, keyspace := range keyspaces {
@@ -84,7 +84,7 @@ func RefreshAllKeyspaces() {
 
 // RefreshKeyspace refreshes the keyspace's information for the given keyspace from the topo
 func RefreshKeyspace(keyspaceName string) error {
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	return refreshKeyspace(refreshCtx, keyspaceName)
 }

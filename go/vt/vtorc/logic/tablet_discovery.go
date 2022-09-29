@@ -81,7 +81,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 		return
 	}
 	if *clustersToWatch == "" { // all known clusters
-		ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
 		cells, err := ts.GetKnownCells(ctx)
 		if err != nil {
@@ -89,7 +89,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 			return
 		}
 
-		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer refreshCancel()
 		var wg sync.WaitGroup
 		for _, cell := range cells {
@@ -111,7 +111,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 				keyspaceShards = append(keyspaceShards, &topo.KeyspaceShard{Keyspace: input[0], Shard: input[1]})
 			} else {
 				// Assume this is a keyspace and find all shards in keyspace
-				ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+				ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 				defer cancel()
 				shards, err := ts.GetShardNames(ctx, ks)
 				if err != nil {
@@ -132,7 +132,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 			log.Errorf("Found no keyspaceShards for input: %v", *clustersToWatch)
 			return
 		}
-		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer refreshCancel()
 		var wg sync.WaitGroup
 		for _, ks := range keyspaceShards {
@@ -162,7 +162,7 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 // change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
 func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string) {
 	log.Infof("force refresh of all tablets in shard - %v/%v", keyspace, shard)
-	refreshCtx, refreshCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
 		DiscoverInstance(*instanceKey, true)

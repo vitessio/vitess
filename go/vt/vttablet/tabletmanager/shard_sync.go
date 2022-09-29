@@ -166,7 +166,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 // success (we successfully synchronized), but the returned primaryAlias will be
 // different from the input tablet.Alias.
 func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, PrimaryTermStartTime time.Time) (primaryAlias *topodatapb.TabletAlias, shouldDemote bool, err error) {
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	var shardInfo *topo.ShardInfo
@@ -220,7 +220,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	if mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Infof("Active reparents are disabled; updating tablet state only.")
-		changeTypeCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 		if err := tm.tmState.ChangeTabletType(changeTypeCtx, tm.baseTabletType, DBActionNone); err != nil {
 			return vterrors.Wrapf(err, "failed to change type to %v", tm.baseTabletType)
@@ -234,12 +234,12 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	// no return. Instead, we should leave partial results and retry the rest
 	// later.
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
-	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelDemotePrimary()
 	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */); err != nil {
 		return vterrors.Wrap(err, "failed to demote primary")
 	}
-	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelSetPrimary()
 	log.Infof("Attempting to reparent self to new primary %v.", primaryAliasStr)
 	if primaryAlias == nil {
