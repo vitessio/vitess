@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -157,14 +156,6 @@ func ResolveHostname(hostname string) (string, error) {
 	// Unfound: resolve!
 	log.Infof("Hostname unresolved yet: %s", hostname)
 	resolvedHostname, err := resolveHostname(hostname)
-	if config.Config.RejectHostnameResolvePattern != "" {
-		// Reject, don't even cache
-		if matched, _ := regexp.MatchString(config.Config.RejectHostnameResolvePattern, resolvedHostname); matched {
-			log.Warningf("ResolveHostname: %+v resolved to %+v but rejected due to RejectHostnameResolvePattern '%+v'", hostname, resolvedHostname, config.Config.RejectHostnameResolvePattern)
-			return hostname, nil
-		}
-	}
-
 	if err != nil {
 		// Problem. What we'll do is cache the hostname for just one minute, so as to avoid flooding requests
 		// on one hand, yet make it refresh shortly on the other hand. Anyway do not write to database.

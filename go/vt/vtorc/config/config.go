@@ -56,7 +56,6 @@ type Configuration struct {
 	DiscoveryCollectionRetentionSeconds   uint   // Number of seconds to retain the discovery collection information
 	HostnameResolveMethod                 string // Method by which to "normalize" hostname ("none"/"default"/"cname")
 	ExpiryHostnameResolvesMinutes         int    // Number of minutes after which to expire hostname-resolves
-	RejectHostnameResolvePattern          string // Regexp pattern for resolved hostname that will not be accepted (not cached, not written to db). This is done to avoid storing wrong resolves due to network glitches.
 	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
 	CandidateInstanceExpireMinutes        uint   // Minutes after which a suggestion to use an instance as a candidate replica (to be preferably promoted on primary failover) is expired.
 	AuditLogFile                          string // Name of log file for audit operations. Disabled when empty.
@@ -94,7 +93,6 @@ func newConfiguration() *Configuration {
 		DiscoveryCollectionRetentionSeconds:   120,
 		HostnameResolveMethod:                 "default",
 		ExpiryHostnameResolvesMinutes:         60,
-		RejectHostnameResolvePattern:          "",
 		ReasonableReplicationLagSeconds:       10,
 		CandidateInstanceExpireMinutes:        60,
 		AuditLogFile:                          "",
