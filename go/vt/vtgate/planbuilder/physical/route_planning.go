@@ -920,33 +920,19 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 	return rVindex == lVindex
 }
 
-func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate sqlparser.Expr) bool {
-	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
-	if !ok {
+func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
+	left := predicate.OtherSide
+	opCode := predicate.OpCode
+	if opCode != int(engine.PulloutValue) && opCode != int(engine.PulloutIn) {
 		return false
 	}
-	if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
-		return false
-	}
-
-	left := comparison.Left
-	right := comparison.Right
 
 	lVindex := findColumnVindex(ctx, a, left)
-	if lVindex == nil && comparison.Operator != sqlparser.EqualOp {
-		left, right = right, left
-		lVindex = findColumnVindex(ctx, a, left)
-	}
 	if lVindex == nil || !lVindex.IsUnique() {
 		return false
 	}
 
-	subquery, isSubquery := right.(*sqlparser.Subquery)
-	if !isSubquery {
-		return false
-	}
-
-	rightSelection := extractSingleColumnSubquerySelection(subquery)
+	rightSelection := extractSingleColumnSubquerySelection(predicate.Subquery)
 	if rightSelection == nil {
 		return false
 	}
