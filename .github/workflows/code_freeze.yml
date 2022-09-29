@@ -9,4 +9,4 @@ jobs:
     steps:
     - name: Fail if Code Freeze is enabled
       run: |
-        exit 0
+        exit 1
