@@ -3993,6 +3993,10 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 					wr.Logger().Printf("%s\n", subFlags.FlagUsages())
 				}
 
+				if len(args) > 1 && args[1] == "--" {
+					args = args[1:]
+				}
+
 				switch err := cmd.method(ctx, wr, subFlags, args[1:]); err {
 				case pflag.ErrHelp:
 					// Don't actually error if the user requested --help on a
