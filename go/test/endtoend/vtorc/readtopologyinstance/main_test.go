@@ -49,17 +49,8 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	require.NoError(t, err)
 	err = flag.Set("topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot)
 	require.NoError(t, err)
-	falseVal := false
-	emptyVal := ""
 	config.Config.RecoveryPeriodBlockSeconds = 1
 	config.Config.InstancePollSeconds = 1
-	config.RuntimeCLIFlags.SkipUnresolve = &falseVal
-	config.RuntimeCLIFlags.SkipUnresolveCheck = &falseVal
-	config.RuntimeCLIFlags.Noop = &falseVal
-	config.RuntimeCLIFlags.BinlogFile = &emptyVal
-	config.RuntimeCLIFlags.Statement = &emptyVal
-	config.RuntimeCLIFlags.GrabElection = &falseVal
-	config.RuntimeCLIFlags.SkipContinuousRegistration = &falseVal
 	config.MarkConfigurationLoaded()
 	server.StartVTOrcDiscovery()
 

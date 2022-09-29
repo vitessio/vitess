@@ -379,10 +379,6 @@ func ContinuousDiscovery() {
 	}()
 	go acceptSignals()
 
-	if *config.RuntimeCLIFlags.GrabElection {
-		_ = process.GrabElection()
-	}
-
 	log.Infof("continuous discovery: starting")
 	for {
 		select {

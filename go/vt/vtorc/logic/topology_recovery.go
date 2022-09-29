@@ -769,10 +769,6 @@ func CheckAndRecover(specificInstance *inst.InstanceKey, candidateInstanceKey *i
 		log.Error(err)
 		return false, nil, err
 	}
-	if *config.RuntimeCLIFlags.Noop {
-		log.Infof("--noop provided; will not execute processes")
-		skipProcesses = true
-	}
 	// intentionally iterating entries in random order
 	for _, j := range rand.Perm(len(replicationAnalysis)) {
 		analysisEntry := replicationAnalysis[j]

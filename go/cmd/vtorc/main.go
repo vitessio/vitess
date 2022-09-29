@@ -37,11 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/server"
 )
 
-var (
-	GitCommit  string
-	AppVersion string
-)
-
 // transformArgsForPflag turns a slice of raw args passed on the command line,
 // possibly incompatible with pflag (because the user is expecting stdlib flag
 // parsing behavior) and transforms them into the arguments that should have
@@ -117,15 +112,6 @@ func main() {
 	os.Args = os.Args[0:1]
 
 	configFile := fs.String("config", "", "config file name")
-	config.RuntimeCLIFlags.SkipUnresolve = fs.Bool("skip-unresolve", false, "Do not unresolve a host name")
-	config.RuntimeCLIFlags.SkipUnresolveCheck = fs.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
-	config.RuntimeCLIFlags.Noop = fs.Bool("noop", false, "Dry run; do not perform destructing operations")
-	config.RuntimeCLIFlags.BinlogFile = fs.String("binlog", "", "Binary log file name")
-	config.RuntimeCLIFlags.Statement = fs.String("statement", "", "Statement/hint")
-	config.RuntimeCLIFlags.GrabElection = fs.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
-	config.RuntimeCLIFlags.PromotionRule = fs.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
-	config.RuntimeCLIFlags.SkipContinuousRegistration = fs.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
-	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 
 	os.Args = append(os.Args, transformArgsForPflag(fs, args[1:])...)
 	if !reflect.DeepEqual(args, os.Args) {
@@ -140,26 +126,7 @@ Please update your scripts before the next version, when this will begin to brea
 
 	servenv.ParseFlags("vtorc")
 
-	switch *config.RuntimeCLIFlags.PromotionRule {
-	case "prefer", "neutral", "prefer_not", "must_not":
-		{
-			// OK
-		}
-	default:
-		{
-			log.Fatalf("--promotion-rule only supports prefer|neutral|prefer_not|must_not")
-		}
-	}
-
-	startText := "starting vtorc"
-	if AppVersion != "" {
-		startText += ", version: " + AppVersion
-	}
-	if GitCommit != "" {
-		startText += ", git commit: " + GitCommit
-	}
-	log.Info(startText)
-
+	log.Info("starting vtorc")
 	if len(*configFile) > 0 {
 		config.ForceRead(*configFile)
 	} else {
@@ -168,7 +135,6 @@ Please update your scripts before the next version, when this will begin to brea
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()
 	}
-	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
 	server.StartVTOrcDiscovery()

@@ -88,10 +88,9 @@ func registerVTOrcDeployment(db *sql.DB) error {
 				?, NOW()
 			)
 				`
-	if _, err := execInternal(db, query, config.RuntimeCLIFlags.ConfiguredVersion); err != nil {
+	if _, err := execInternal(db, query, ""); err != nil {
 		log.Fatalf("Unable to write to vtorc_metadata: %+v", err)
 	}
-	log.Infof("Migrated database schema to version [%+v]", config.RuntimeCLIFlags.ConfiguredVersion)
 	return nil
 }
 
