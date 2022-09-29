@@ -1098,9 +1098,9 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
-		"vtorc_graceful_takeover": {
+		"vtorc_api": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/api"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
@@ -1134,9 +1134,9 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
-		"vtorc_graceful_takeover_8.0": {
+		"vtorc_api_8.0": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/api"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc_8.0",
