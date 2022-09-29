@@ -46,22 +46,10 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 		}
 		j.LHS = lhs
 		return j, nil
-	case deps.IsSolvedBy(j.RHS.TableID()):
-		// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
-		// where tbl is on the rhs of the left outer join
-		if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-			(sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
-				sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID())) {
-			// When the predicate we are pushing is using information from an outer table, we can
-			// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
-			// the predicate will not return true if the table columns are null.
-			// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
-			// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
-			// side did not match, we might as well turn the join into an inner join.
 
-			// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
-			j.LeftJoin = false
-		}
+	case deps.IsSolvedBy(j.RHS.TableID()):
+		j.tryConvertToInnerJoin(expr, semTable)
+
 		if !j.LeftJoin {
 			rhs, err := j.RHS.PushPredicate(expr, semTable)
 			if err != nil {
@@ -70,17 +58,66 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 			j.RHS = rhs
 			return j, err
 		}
+
 		op := &Filter{
 			Source:     j,
 			Predicates: []sqlparser.Expr{expr},
 		}
 		return op, nil
+
 	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
-		j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
-		return j, nil
+		j.tryConvertToInnerJoin(expr, semTable)
+
+		if !j.LeftJoin {
+			j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
+			return j, nil
+		}
+
+		op := &Filter{
+			Source:     j,
+			Predicates: []sqlparser.Expr{expr},
+		}
+		return op, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
+}
+
+// When a predicate uses information from an outer table, we can convert from an outer join to an inner join
+// if the predicate is "null-intolerant".
+//
+// Null-intolerant in this context means that the predicate will not be true if the table columns are null.
+//
+// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
+// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
+// side did not match, we might as well turn the join into an inner join.
+//
+// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
+func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.SemTable) {
+	if !j.LeftJoin {
+		return
+	}
+
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if expr.Operator == sqlparser.NullSafeEqualOp {
+			return
+		}
+
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(j.RHS.TableID()) ||
+			sqlparser.IsColName(expr.Right) && semTable.RecursiveDeps(expr.Right).IsSolvedBy(j.RHS.TableID()) {
+			j.LeftJoin = false
+		}
+
+	case *sqlparser.IsExpr:
+		if expr.Right != sqlparser.IsNotNullOp {
+			return
+		}
+
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(j.RHS.TableID()) {
+			j.LeftJoin = false
+		}
+	}
 }
 
 // TableID implements the Operator interface
