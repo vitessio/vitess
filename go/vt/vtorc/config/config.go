@@ -75,13 +75,7 @@ type Configuration struct {
 	InstancePoolExpiryMinutes                uint     // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
 	FailureDetectionPeriodBlockMinutes       int      // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 	RecoveryPeriodBlockSeconds               int      // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
-	RecoveryIgnoreHostnameFilters            []string // Recovery analysis will completely ignore hosts matching given patterns
-	RecoverPrimaryClusterFilters             []string // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
-	RecoverIntermediatePrimaryClusterFilters []string // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	PreventCrossDataCenterPrimaryFailover    bool     // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	DiscoveryIgnoreReplicaHostnameFilters    []string // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
-	DiscoveryIgnorePrimaryHostnameFilters    []string // Regexp filters to apply to prevent auto-discovering a primary. Usage: pointing your primary temporarily to replicate seom data from external host
-	DiscoveryIgnoreHostnameFilters           []string // Regexp filters to apply to prevent discovering instances of any kind
 	LockShardTimeoutSeconds                  int      // Timeout on context used to lock shard. Should be a small value because we should fail-fast
 	WaitReplicasTimeoutSeconds               int      // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
 	TopoInformationRefreshSeconds            int      // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
@@ -129,11 +123,7 @@ func newConfiguration() *Configuration {
 		InstancePoolExpiryMinutes:                60,
 		FailureDetectionPeriodBlockMinutes:       60,
 		RecoveryPeriodBlockSeconds:               3600,
-		RecoveryIgnoreHostnameFilters:            []string{},
-		RecoverPrimaryClusterFilters:             []string{"*"},
-		RecoverIntermediatePrimaryClusterFilters: []string{},
 		PreventCrossDataCenterPrimaryFailover:    false,
-		DiscoveryIgnoreReplicaHostnameFilters:    []string{},
 		LockShardTimeoutSeconds:                  30,
 		WaitReplicasTimeoutSeconds:               30,
 		TopoInformationRefreshSeconds:            15,

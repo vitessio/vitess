@@ -18,7 +18,6 @@ package inst
 
 import (
 	"fmt"
-	"regexp"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -594,11 +593,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		appendAnalysis := func(analysis *ReplicationAnalysis) {
 			if a.Analysis == NoProblem && len(a.StructureAnalysis) == 0 && !hints.IncludeNoProblem {
 				return
-			}
-			for _, filter := range config.Config.RecoveryIgnoreHostnameFilters {
-				if matched, _ := regexp.MatchString(filter, a.AnalyzedInstanceKey.Hostname); matched {
-					return
-				}
 			}
 			if a.IsDowntimed {
 				a.SkippableDueToDowntime = true

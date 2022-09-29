@@ -923,16 +923,6 @@ func InjectUnseenPrimaries() error {
 	operations := 0
 	for _, primaryKey := range unseenPrimaryKeys {
 		primaryKey := primaryKey
-
-		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnorePrimaryHostnameFilters) {
-			log.Infof("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnorePrimaryHostnameFilters", primaryKey)
-			continue
-		}
-		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
-			log.Infof("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", primaryKey)
-			continue
-		}
-
 		clusterName := primaryKey.StringCode()
 		// minimal details:
 		instance := Instance{Key: primaryKey, Version: "Unknown", ClusterName: clusterName}
