@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/flagutil"
@@ -55,6 +56,8 @@ func init() {
 		fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
 		fs.UintVar(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
+
+		acl.RegisterFlags(fs)
 	})
 }
 

@@ -193,13 +193,13 @@ func TestSecureTransport(t *testing.T) {
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 
-	useEffectiveCallerID(t, ctx)
-	useEffectiveGroups(t, ctx)
+	useEffectiveCallerID(ctx, t)
+	useEffectiveGroups(ctx, t)
 
 	clusterInstance.Teardown()
 }
 
-func useEffectiveCallerID(t *testing.T, ctx context.Context) {
+func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
@@ -248,7 +248,7 @@ func useEffectiveCallerID(t *testing.T, ctx context.Context) {
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 }
 
-func useEffectiveGroups(t *testing.T, ctx context.Context) {
+func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller's groups
 	// into immediate caller id.
