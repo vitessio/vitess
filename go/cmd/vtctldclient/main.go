@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -45,6 +46,7 @@ func main() {
 	grpcclientcommon.RegisterFlags(command.Root.PersistentFlags())
 	servenv.RegisterMySQLServerFlags(command.Root.PersistentFlags())
 	vtctlclient.RegisterFlags(command.Root.PersistentFlags())
+	acl.RegisterFlags(command.Root.PersistentFlags())
 
 	// hack to get rid of an "ERROR: logging before flag.Parse"
 	_flag.TrickGlog()
