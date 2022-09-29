@@ -70,6 +70,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
@@ -129,6 +132,12 @@ var (
 	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 	detachedMode  = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
 )
+
+func init() {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		acl.RegisterFlags(fs)
+	})
+}
 
 func main() {
 	defer exit.Recover()

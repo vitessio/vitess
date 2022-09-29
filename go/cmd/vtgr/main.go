@@ -27,6 +27,7 @@ func main() {
 	var clustersToWatch []string
 	servenv.OnParseFor("vtgr", func(fs *pflag.FlagSet) {
 		fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", nil, `Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"`)
+
 		acl.RegisterFlags(fs)
 	})
 	servenv.ParseFlags("vtgr")
