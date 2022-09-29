@@ -18,10 +18,7 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
-	"sync"
-	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -29,12 +26,8 @@ import (
 )
 
 var (
-	EmptyArgs []any
-	Db        DB = (*vtorcDB)(nil)
+	Db DB = (*vtorcDB)(nil)
 )
-
-var mysqlURI string
-var dbMutex sync.Mutex
 
 type DB interface {
 	QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
@@ -60,43 +53,6 @@ func (dummyRes DummySQLResult) RowsAffected() (int64, error) {
 	return 1, nil
 }
 
-func getMySQLURI() string {
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
-	if mysqlURI != "" {
-		return mysqlURI
-	}
-	mysqlURI := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=%ds&readTimeout=%ds&rejectReadOnly=%t&interpolateParams=true",
-		config.Config.MySQLVTOrcUser,
-		config.Config.MySQLVTOrcPassword,
-		config.Config.MySQLVTOrcHost,
-		config.Config.MySQLVTOrcPort,
-		config.Config.MySQLVTOrcDatabase,
-		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLVTOrcReadTimeoutSeconds,
-		config.Config.MySQLVTOrcRejectReadOnly,
-	)
-	if config.Config.MySQLVTOrcUseMutualTLS {
-		mysqlURI, _ = SetupMySQLVTOrcTLS(mysqlURI)
-	}
-	return mysqlURI
-}
-
-func openOrchestratorMySQLGeneric() (db *sql.DB, fromCache bool, err error) {
-	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
-		config.Config.MySQLVTOrcUser,
-		config.Config.MySQLVTOrcPassword,
-		config.Config.MySQLVTOrcHost,
-		config.Config.MySQLVTOrcPort,
-		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLVTOrcReadTimeoutSeconds,
-	)
-	if config.Config.MySQLVTOrcUseMutualTLS {
-		uri, _ = SetupMySQLVTOrcTLS(uri)
-	}
-	return sqlutils.GetDB(uri)
-}
-
 func IsSQLite() bool {
 	return config.Config.IsSQLite()
 }
@@ -104,63 +60,14 @@ func IsSQLite() bool {
 // OpenTopology returns the DB instance for the vtorc backed database
 func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
-	if IsSQLite() {
-		db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
-		if err == nil && !fromCache {
-			log.Infof("Connected to vtorc backend: sqlite on %v", config.Config.SQLite3DataFile)
-		}
-		if db != nil {
-			db.SetMaxOpenConns(1)
-			db.SetMaxIdleConns(1)
-		}
-	} else {
-		if db, fromCache, err := openOrchestratorMySQLGeneric(); err != nil {
-			log.Errorf(err.Error())
-			return db, err
-		} else if !fromCache {
-			// first time ever we talk to MySQL
-			query := fmt.Sprintf("create database if not exists %s", config.Config.MySQLVTOrcDatabase)
-			if _, err := db.Exec(query); err != nil {
-				log.Errorf(err.Error())
-				return db, err
-			}
-		}
-		db, fromCache, err = sqlutils.GetDB(getMySQLURI())
-		if err == nil && !fromCache {
-			// do not show the password but do show what we connect to.
-			safeMySQLURI := fmt.Sprintf("%s:?@tcp(%s:%d)/%s?timeout=%ds", config.Config.MySQLVTOrcUser,
-				config.Config.MySQLVTOrcHost, config.Config.MySQLVTOrcPort, config.Config.MySQLVTOrcDatabase, config.Config.MySQLConnectTimeoutSeconds)
-			log.Infof("Connected to vtorc backend: %v", safeMySQLURI)
-			if config.Config.MySQLVTOrcMaxPoolConnections > 0 {
-				log.Infof("VTOrc pool SetMaxOpenConns: %d", config.Config.MySQLVTOrcMaxPoolConnections)
-				db.SetMaxOpenConns(config.Config.MySQLVTOrcMaxPoolConnections)
-			}
-			if config.Config.MySQLConnectionLifetimeSeconds > 0 {
-				db.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
-			}
-		}
-	}
+	db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
 	if err == nil && !fromCache {
+		log.Infof("Connected to vtorc backend: sqlite on %v", config.Config.SQLite3DataFile)
 		_ = initVTOrcDB(db)
-		// A low value here will trigger reconnects which could
-		// make the number of backend connections hit the tcp
-		// limit. That's bad.  I could make this setting dynamic
-		// but then people need to know which value to use. For now
-		// allow up to 25% of MySQLVTOrcMaxPoolConnections
-		// to be idle.  That should provide a good number which
-		// does not keep the maximum number of connections open but
-		// at the same time does not trigger disconnections and
-		// reconnections too frequently.
-		maxIdleConns := int(config.Config.MySQLVTOrcMaxPoolConnections * 25 / 100)
-		if maxIdleConns < 10 {
-			maxIdleConns = 10
-		}
-		log.Infof("Connecting to backend %s:%d: maxConnections: %d, maxIdleConns: %d",
-			config.Config.MySQLVTOrcHost,
-			config.Config.MySQLVTOrcPort,
-			config.Config.MySQLVTOrcMaxPoolConnections,
-			maxIdleConns)
-		db.SetMaxIdleConns(maxIdleConns)
+	}
+	if db != nil {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
 	}
 	return db, err
 }

@@ -20,15 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"gopkg.in/gcfg.v1"
-)
-
-var (
-	envVariableRegexp = regexp.MustCompile("[$][{](.*)[}]")
 )
 
 const (
@@ -53,26 +46,8 @@ const (
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	TLSCacheTTLFactor                        uint   // Factor of InstancePollSeconds that we set as TLS info cache expiry
-	SQLite3DataFile                          string // full path to sqlite3 datafile
-	MySQLVTOrcHost                           string
-	MySQLVTOrcMaxPoolConnections             int // The maximum size of the connection pool to the VTOrc backend.
-	MySQLVTOrcPort                           uint
-	MySQLVTOrcDatabase                       string
-	MySQLVTOrcUser                           string
-	MySQLVTOrcPassword                       string
-	MySQLVTOrcCredentialsConfigFile          string   // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
-	MySQLVTOrcSSLPrivateKeyFile              string   // Private key file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLVTOrcSSLCertFile                    string   // Certificate PEM file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLVTOrcSSLCAFile                      string   // Certificate Authority PEM file used to authenticate with the VTOrc mysql instance with TLS
-	MySQLVTOrcSSLSkipVerify                  bool     // If true, do not strictly validate mutual TLS certs for the VTOrc mysql instances
-	MySQLVTOrcUseMutualTLS                   bool     // Turn on TLS authentication with the VTOrc MySQL instance
-	MySQLVTOrcReadTimeoutSeconds             int      // Number of seconds before backend mysql read operation is aborted (driver-side)
-	MySQLVTOrcRejectReadOnly                 bool     // Reject read only connections https://github.com/go-sql-driver/mysql#rejectreadonly
-	MySQLConnectTimeoutSeconds               int      // Number of seconds before connection is aborted (driver-side)
-	MySQLDiscoveryReadTimeoutSeconds         int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for discovery queries.
-	MySQLTopologyReadTimeoutSeconds          int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for all but discovery queries.
-	MySQLConnectionLifetimeSeconds           int      // Number of seconds the mysql driver will keep database connection alive before recycling it
+	TLSCacheTTLFactor                        uint     // Factor of InstancePollSeconds that we set as TLS info cache expiry
+	SQLite3DataFile                          string   // full path to sqlite3 datafile
 	DefaultInstancePort                      int      // In case port was not specified on command line
 	InstancePollSeconds                      uint     // Number of seconds between instance reads
 	InstanceWriteBufferSize                  int      // Instance write buffer size (max number of instances to flush in one INSERT ODKU)
@@ -126,15 +101,6 @@ var readFileNames []string
 func newConfiguration() *Configuration {
 	return &Configuration{
 		SQLite3DataFile:                          "file::memory:?mode=memory&cache=shared",
-		MySQLVTOrcMaxPoolConnections:             128, // limit concurrent conns to backend DB
-		MySQLVTOrcPort:                           3306,
-		MySQLVTOrcUseMutualTLS:                   false,
-		MySQLConnectTimeoutSeconds:               2,
-		MySQLVTOrcReadTimeoutSeconds:             30,
-		MySQLVTOrcRejectReadOnly:                 false,
-		MySQLDiscoveryReadTimeoutSeconds:         10,
-		MySQLTopologyReadTimeoutSeconds:          600,
-		MySQLConnectionLifetimeSeconds:           0,
 		DefaultInstancePort:                      3306,
 		TLSCacheTTLFactor:                        100,
 		InstancePollSeconds:                      5,
@@ -176,31 +142,6 @@ func newConfiguration() *Configuration {
 }
 
 func (config *Configuration) postReadAdjustments() error {
-	if config.MySQLVTOrcCredentialsConfigFile != "" {
-		mySQLConfig := struct {
-			Client struct {
-				User     string
-				Password string
-			}
-		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLVTOrcCredentialsConfigFile)
-		if err != nil {
-			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
-		} else {
-			log.Infof("Parsed vtorc credentials from %s", config.MySQLVTOrcCredentialsConfigFile)
-			config.MySQLVTOrcUser = mySQLConfig.Client.User
-			config.MySQLVTOrcPassword = mySQLConfig.Client.Password
-		}
-	}
-	{
-		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
-		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLVTOrcPassword)
-		if len(submatch) > 1 {
-			config.MySQLVTOrcPassword = os.Getenv(submatch[1])
-		}
-	}
-
 	if config.IsSQLite() && config.SQLite3DataFile == "" {
 		return fmt.Errorf("SQLite3DataFile must be set")
 	}
