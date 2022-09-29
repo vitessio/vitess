@@ -33,8 +33,8 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
-	keyspaceName    = "ks_music"
-	cell            = "test_music"
+	keyspaceName    = "ks_derived"
+	cell            = "test_derived"
 
 	//go:embed schema.sql
 	schemaSQL string
