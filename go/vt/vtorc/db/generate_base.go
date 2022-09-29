@@ -41,8 +41,6 @@ var generateSQLBase = []string{
           exec_source_log_pos bigint(20) unsigned NOT NULL,
           replication_lag_seconds bigint(20) unsigned DEFAULT NULL,
           replica_lag_seconds bigint(20) unsigned DEFAULT NULL,
-          num_replica_hosts int(10) unsigned NOT NULL,
-          replica_hosts text CHARACTER SET ascii NOT NULL,
           cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
           PRIMARY KEY (hostname,port)
         ) ENGINE=InnoDB DEFAULT CHARSET=ascii
@@ -419,7 +417,6 @@ var generateSQLBase = []string{
 			analysis varchar(128) NOT NULL,
 			cluster_name varchar(128) NOT NULL,
 			count_affected_replicas int unsigned NOT NULL,
-			replica_hosts text NOT NULL,
 			PRIMARY KEY (detection_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,

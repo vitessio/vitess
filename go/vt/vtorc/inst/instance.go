@@ -74,7 +74,6 @@ type Instance struct {
 	primaryExecutedGtidSet string // Not exported
 
 	ReplicationLagSeconds              sql.NullInt64
-	Replicas                           InstanceKeyMap
 	ClusterName                        string
 	DataCenter                         string
 	Region                             string
@@ -139,7 +138,6 @@ type Instance struct {
 
 func NewInstance() *Instance {
 	return &Instance{
-		Replicas:                make(map[InstanceKey]bool),
 		ReplicationGroupMembers: make(map[InstanceKey]bool),
 		Problems:                []string{},
 	}
@@ -337,11 +335,6 @@ func (instance *Instance) SQLThreadUpToDate() bool {
 // UsingGTID returns true when this replica is currently replicating via GTID (either Oracle or MariaDB)
 func (instance *Instance) UsingGTID() bool {
 	return instance.UsingOracleGTID || instance.UsingMariaDBGTID
-}
-
-// AddReplicaKey adds a replica to the list of this instance's replicas.
-func (instance *Instance) AddReplicaKey(replicaKey *InstanceKey) {
-	instance.Replicas.AddKey(*replicaKey)
 }
 
 // AddGroupMemberKey adds a group member to the list of this instance's group members.

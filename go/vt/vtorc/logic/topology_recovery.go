@@ -195,23 +195,6 @@ var emergencyReadTopologyInstanceMap *cache.Cache
 var emergencyRestartReplicaTopologyInstanceMap *cache.Cache
 var emergencyOperationGracefulPeriodMap *cache.Cache
 
-// InstancesByCountReplicas sorts instances by umber of replicas, descending
-type InstancesByCountReplicas [](*inst.Instance)
-
-func (instancesByCountReplicas InstancesByCountReplicas) Len() int {
-	return len(instancesByCountReplicas)
-}
-func (instancesByCountReplicas InstancesByCountReplicas) Swap(i, j int) {
-	instancesByCountReplicas[i], instancesByCountReplicas[j] = instancesByCountReplicas[j], instancesByCountReplicas[i]
-}
-func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
-	if len(instancesByCountReplicas[i].Replicas) == len(instancesByCountReplicas[j].Replicas) {
-		// Secondary sorting: prefer more advanced replicas
-		return !instancesByCountReplicas[i].ExecBinlogCoordinates.SmallerThan(&instancesByCountReplicas[j].ExecBinlogCoordinates)
-	}
-	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
-}
-
 func init() {
 	go initializeTopologyRecoveryPostConfiguration()
 }

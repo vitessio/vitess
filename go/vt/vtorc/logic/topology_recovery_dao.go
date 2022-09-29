@@ -40,7 +40,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
 		analysisEntry.CountReplicas,
-		analysisEntry.Replicas.ToCommaDelimitedList(),
 		analysisEntry.IsActionableRecovery,
 	)
 	startActivePeriodHint := "now()"
@@ -61,7 +60,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					analysis,
 					cluster_name,
 					count_affected_replicas,
-					replica_hosts,
 					is_actionable,
 					start_active_period
 				) values (
@@ -69,7 +67,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					?,
 					1,
 					0,
-					?,
 					?,
 					?,
 					?,
@@ -129,7 +126,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					analysis,
 					cluster_name,
 					count_affected_replicas,
-					replica_hosts,
 					last_detection_id
 				) values (
 					?,
@@ -144,7 +140,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					?,
 					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
 				)
 			`,
@@ -154,7 +149,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		process.ThisHostname, util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
-		analysisEntry.CountReplicas, analysisEntry.Replicas.ToCommaDelimitedList(),
+		analysisEntry.CountReplicas,
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 	)
 	if err != nil {
@@ -452,7 +447,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
       analysis,
       cluster_name,
       count_affected_replicas,
-      replica_hosts,
       participating_instances,
       lost_replicas,
       all_errors,
@@ -485,7 +479,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
 		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
-		_ = topologyRecovery.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
 
 		topologyRecovery.SuccessorKey = &inst.InstanceKey{}
 		topologyRecovery.SuccessorKey.Hostname = m.GetString("successor_hostname")

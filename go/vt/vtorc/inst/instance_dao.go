@@ -58,19 +58,6 @@ const (
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
-// InstancesByCountReplicas is a sortable type for Instance
-type InstancesByCountReplicas [](*Instance)
-
-func (instancesByCountReplicas InstancesByCountReplicas) Len() int {
-	return len(instancesByCountReplicas)
-}
-func (instancesByCountReplicas InstancesByCountReplicas) Swap(i, j int) {
-	instancesByCountReplicas[i], instancesByCountReplicas[j] = instancesByCountReplicas[j], instancesByCountReplicas[i]
-}
-func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
-	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
-}
-
 // Constant strings for Group Replication information
 // See https://dev.mysql.com/doc/refman/8.0/en/replication-group-members-table.html for additional information.
 const (
@@ -227,7 +214,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance := NewInstance()
 	instanceFound := false
 	partialSuccess := false
-	foundByShowSlaveHosts := false
 	resolvedHostname := ""
 	errorChan := make(chan error, 32)
 	var resolveErr error
@@ -446,86 +432,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// Anything after this point does not affect the fact the instance is found.
 	// No `goto Cleanup` after this point.
 	// -------------------------------------------------------------------------
-
-	// Get replicas, either by SHOW SLAVE HOSTS or via PROCESSLIST
-	if config.Config.DiscoverByShowSlaveHosts {
-		err := sqlutils.QueryRowsMap(db, `show slave hosts`,
-			func(m sqlutils.RowMap) error {
-				host := m.GetString("Host")
-				port := m.GetIntD("Port", 0)
-				if host == "" || port == 0 {
-					// otherwise report the error to the caller
-					return fmt.Errorf("ReadTopologyInstance(%+v) 'show slave hosts' returned row with <host,port>: <%v,%v>", instanceKey, host, port)
-				}
-
-				replicaKey, err := NewResolveInstanceKey(host, port)
-				if err == nil && replicaKey.IsValid() {
-					if !RegexpMatchPatterns(replicaKey.StringCode(), config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
-						instance.AddReplicaKey(replicaKey)
-					}
-					foundByShowSlaveHosts = true
-				}
-				return err
-			})
-
-		_ = logReadTopologyInstanceError(instanceKey, "show slave hosts", err)
-	}
-	if !foundByShowSlaveHosts {
-		// Either not configured to read SHOW SLAVE HOSTS or nothing was there.
-		// Discover by information_schema.processlist
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := sqlutils.QueryRowsMap(db, `
-      	select
-      		substring_index(host, ':', 1) as slave_hostname
-      	from
-      		information_schema.processlist
-      	where
-          command IN ('Binlog Dump', 'Binlog Dump GTID')
-  		`,
-				func(m sqlutils.RowMap) error {
-					cname, resolveErr := ResolveHostname(m.GetString("slave_hostname"))
-					if resolveErr != nil {
-						_ = logReadTopologyInstanceError(instanceKey, "ResolveHostname: processlist", resolveErr)
-					}
-					replicaKey := InstanceKey{Hostname: cname, Port: instance.Key.Port}
-					if !RegexpMatchPatterns(replicaKey.StringCode(), config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
-						instance.AddReplicaKey(&replicaKey)
-					}
-					return err
-				})
-
-			_ = logReadTopologyInstanceError(instanceKey, "processlist", err)
-		}()
-	}
-
-	if instance.IsNDB() {
-		// Discover by ndbinfo about MySQL Cluster SQL nodes
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := sqlutils.QueryRowsMap(db, `
-      	select
-      		substring(service_URI,9) mysql_host
-      	from
-      		ndbinfo.processes
-      	where
-          process_name='mysqld'
-  		`,
-				func(m sqlutils.RowMap) error {
-					cname, resolveErr := ResolveHostname(m.GetString("mysql_host"))
-					if resolveErr != nil {
-						_ = logReadTopologyInstanceError(instanceKey, "ResolveHostname: ndbinfo", resolveErr)
-					}
-					replicaKey := InstanceKey{Hostname: cname, Port: instance.Key.Port}
-					instance.AddReplicaKey(&replicaKey)
-					return err
-				})
-
-			_ = logReadTopologyInstanceError(instanceKey, "ndbinfo", err)
-		}()
-	}
 
 	// TODO(sougou): delete DetectDataCenterQuery
 	if config.Config.DetectDataCenterQuery != "" {
@@ -838,7 +744,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
-	replicasJSON := m.GetString("replica_hosts")
 	instance.ClusterName = m.GetString("cluster_name")
 	instance.DataCenter = m.GetString("data_center")
 	instance.Region = m.GetString("region")
@@ -871,7 +776,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.InstanceAlias = m.GetString("instance_alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
 
-	_ = instance.Replicas.ReadJSON(replicasJSON)
 	instance.applyFlavorName()
 
 	/* Read Group Replication variables below */
@@ -1044,44 +948,6 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 		}
 	}
 	return reportedInstances, nil
-}
-
-// findFuzzyInstances return instances whose names are like the one given (host & port substrings)
-// For example, the given `mydb-3:3306` might find `myhosts-mydb301-production.mycompany.com:3306`
-func findFuzzyInstances(fuzzyInstanceKey *InstanceKey) ([](*Instance), error) {
-	condition := `
-		hostname like concat('%%', ?, '%%')
-		and port = ?
-	`
-	return readInstancesByCondition(condition, sqlutils.Args(fuzzyInstanceKey.Hostname, fuzzyInstanceKey.Port), `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
-}
-
-// ReadFuzzyInstanceKey accepts a fuzzy instance key and expects to return a single, fully qualified,
-// known instance key.
-func ReadFuzzyInstanceKey(fuzzyInstanceKey *InstanceKey) *InstanceKey {
-	if fuzzyInstanceKey == nil {
-		return nil
-	}
-	if fuzzyInstanceKey.IsIPv4() {
-		// avoid fuzziness. When looking for 10.0.0.1 we don't want to match 10.0.0.15!
-		return nil
-	}
-	if fuzzyInstanceKey.Hostname != "" {
-		// Fuzzy instance search
-		if fuzzyInstances, _ := findFuzzyInstances(fuzzyInstanceKey); len(fuzzyInstances) == 1 {
-			return &(fuzzyInstances[0].Key)
-		}
-	}
-	return nil
-}
-
-// ReadFuzzyInstanceKeyIfPossible accepts a fuzzy instance key and hopes to return a single, fully qualified,
-// known instance key, or else the original given key
-func ReadFuzzyInstanceKeyIfPossible(fuzzyInstanceKey *InstanceKey) *InstanceKey {
-	if instanceKey := ReadFuzzyInstanceKey(fuzzyInstanceKey); instanceKey != nil {
-		return instanceKey
-	}
-	return fuzzyInstanceKey
 }
 
 // ReadLostInRecoveryInstances returns all instances (potentially filtered by cluster)
@@ -1459,8 +1325,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_lag_seconds",
 		"replica_lag_seconds",
 		"sql_delay",
-		"num_replica_hosts",
-		"replica_hosts",
 		"cluster_name",
 		"data_center",
 		"region",
@@ -1548,8 +1412,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SecondsBehindPrimary)
 		args = append(args, instance.ReplicationLagSeconds)
 		args = append(args, instance.SQLDelay)
-		args = append(args, len(instance.Replicas))
-		args = append(args, instance.Replicas.ToJSONString())
 		args = append(args, instance.ClusterName)
 		args = append(args, instance.DataCenter)
 		args = append(args, instance.Region)

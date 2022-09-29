@@ -149,13 +149,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			0
 		) AS count_replicas_failing_to_connect_to_primary,
 		MIN(primary_instance.replication_depth) AS replication_depth,
-		GROUP_CONCAT(
-			concat(
-				replica_instance.Hostname,
-				':',
-				replica_instance.Port
-			)
-		) as replica_hosts,
 		MIN(
 			primary_instance.replica_sql_running = 1
 			AND primary_instance.replica_io_running = 0
@@ -418,9 +411,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.DowntimeRemainingSeconds = m.GetInt("downtime_remaining_seconds")
 		a.IsBinlogServer = m.GetBool("is_binlog_server")
 		a.ClusterDetails.ReadRecoveryInfo()
-
-		a.Replicas = *NewInstanceKeyMap()
-		_ = a.Replicas.ReadCommaDelimitedList(m.GetString("replica_hosts"))
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0

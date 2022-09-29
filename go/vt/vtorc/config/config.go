@@ -85,7 +85,6 @@ type Configuration struct {
 	MySQLTopologyReadTimeoutSeconds            int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for all but discovery queries.
 	MySQLConnectionLifetimeSeconds             int      // Number of seconds the mysql driver will keep database connection alive before recycling it
 	DefaultInstancePort                        int      // In case port was not specified on command line
-	DiscoverByShowSlaveHosts                   bool     // Attempt SHOW SLAVE HOSTS before PROCESSLIST
 	InstancePollSeconds                        uint     // Number of seconds between instance reads
 	InstanceWriteBufferSize                    int      // Instance write buffer size (max number of instances to flush in one INSERT ODKU)
 	BufferInstanceWrites                       bool     // Set to 'true' for write-optimization on backend table (compromise: writes can be stale and overwrite non stale data)
@@ -170,7 +169,6 @@ func newConfiguration() *Configuration {
 		InstanceFlushIntervalMilliseconds:          100,
 		UnseenInstanceForgetHours:                  240,
 		SnapshotTopologiesIntervalHours:            0,
-		DiscoverByShowSlaveHosts:                   false,
 		DiscoveryMaxConcurrency:                    300,
 		DiscoveryQueueCapacity:                     100000,
 		DiscoveryQueueMaxStatisticsSize:            120,
