@@ -234,7 +234,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	})
 
 	latency.Start("instance")
-	db, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
+	instanceDb, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		goto Cleanup
 	}
@@ -391,7 +391,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 	// Populate GR information for the instance in Oracle MySQL 8.0+.
 	if instance.IsOracleMySQL() && !instance.IsSmallerMajorVersionByString("8.0") {
-		err := PopulateGroupReplicationInformation(instance, db)
+		err := PopulateGroupReplicationInformation(instance, instanceDb)
 		if err != nil {
 			goto Cleanup
 		}
@@ -469,7 +469,7 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
-				_ = db.QueryRow("select gtid_subtract(?, ?)", redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String()).Scan(&instance.GtidErrant)
+				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
 			}
 		}
 	}
