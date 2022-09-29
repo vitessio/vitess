@@ -242,11 +242,17 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	if err := df.selectTablets(ctx, ts); err != nil {
 		return nil, vterrors.Wrap(err, "selectTablets")
 	}
-	defer func(ctx context.Context) {
-		if err := df.restartTargets(ctx); err != nil {
-			wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflowName, err)
+	defer func() {
+		// We use a new context as we want to reset the state even
+		// when the parent context has timed out or been canceled.
+		log.Errorf("Restarting workflow %q on target tablets in keyspace %q", df.workflow, df.targetKeyspace)
+		restartCtx, restartCancel := context.WithTimeout(context.Background(), DefaultActionTimeout)
+		defer restartCancel()
+		if err := df.restartTargets(restartCtx); err != nil {
+			wr.Logger().Errorf("Could not restart workflow %q on target tablets in keyspace %q: %v, please restart it manually",
+				df.workflow, df.targetKeyspace, err)
 		}
-	}(ctx)
+	}()
 
 	// Perform the diffs.
 	// We need a cancelable context to abort all running streams
@@ -360,12 +366,6 @@ func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *
 		}
 	}()
 
-	defer func() {
-		log.Errorf("restarting targets for workflow %s in keyspace %s", df.workflow, df.targetKeyspace)
-		if err := df.restartTargets(ctx); err != nil {
-			log.Errorf("Error restarting targets for workflow %s in keyspace %s", df.workflow, df.targetKeyspace)
-		}
-	}()
 	// Stop the targets and record their source positions.
 	if err := df.stopTargets(ctx); err != nil {
 		return vterrors.Wrap(err, "stopTargets")
