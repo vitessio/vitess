@@ -3993,7 +3993,14 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 					wr.Logger().Printf("%s\n", subFlags.FlagUsages())
 				}
 
-				return cmd.method(ctx, wr, subFlags, args[1:])
+				switch err := cmd.method(ctx, wr, subFlags, args[1:]); err {
+				case pflag.ErrHelp:
+					// Don't actually error if the user requested --help on a
+					// subcommand.
+					return nil
+				default:
+					return err
+				}
 			}
 		}
 	}

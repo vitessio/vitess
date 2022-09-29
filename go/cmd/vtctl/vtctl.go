@@ -52,6 +52,29 @@ var (
 
 func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
+		// N.B. This is necessary for subcommand pflag parsing when not using
+		// cobra (cobra is where we're headed, but for `vtctl` it's a big lift
+		// before the RC cut).
+		//
+		// Essentially, the situation we have here is that commands look like:
+		//
+		//	`vtctl [global flags] <command> [subcommand flags]`
+		//
+		// Since the default behavior of pflag is to allow "interspersed" flag
+		// and positional arguments, this means that the initial servenv parse
+		// will complain if _any_ subocmmand's flag is provided; for example, if
+		// you were to invoke
+		//
+		//	`vtctl AddCellInfo --root /vitess/global --server_address "1.2.3.4" global
+		//
+		// then you would get the error "unknown flag --root", even though that
+		// is a valid flag for the AddCellInfo flag.
+		//
+		// By disabling interspersal on the top-level parse, anything after the
+		// command name ("AddCellInfo", in this example) will be forwarded to
+		// the subcommand's flag set for further parsing.
+		fs.SetInterspersed(false)
+
 		logger := logutil.NewConsoleLogger()
 		fs.SetOutput(logutil.NewLoggerWriter(logger))
 		fs.Usage = func() {
