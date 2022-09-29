@@ -111,7 +111,7 @@ type cmdFunc func(ctx context.Context, subFlags *pflag.FlagSet, args []string) e
 
 var cmdMap map[string]cmdFunc
 var zconn *zk2topo.ZkConn
-var server *string
+var server string
 
 func init() {
 	cmdMap = map[string]cmdFunc{
@@ -134,7 +134,7 @@ func init() {
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
-	server = pflag.String("server", "", "server(s) to connect to")
+	pflag.StringVar(&server, "server", server, "server(s) to connect to")
 	// handling case of --help & -h
 	var help bool
 	pflag.BoolVarP(&help, "help", "h", false, "display usage and exit")
@@ -177,7 +177,7 @@ func main() {
 	}()
 
 	// Connect to the server.
-	zconn = zk2topo.Connect(*server)
+	zconn = zk2topo.Connect(server)
 
 	// Run the command.
 	if err := cmd(ctx, subFlags, args); err != nil {
@@ -198,7 +198,6 @@ func isZkFile(path string) bool {
 }
 
 func cmdWait(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
-
 	var exitIfExists bool
 	subFlags.BoolVarP(&exitIfExists, "exit", "e", false, "exit if the path already exists")
 
