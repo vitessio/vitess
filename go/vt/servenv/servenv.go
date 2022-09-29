@@ -385,3 +385,9 @@ func init() {
 	// Flags in package logutil are installed for all binaries.
 	OnParse(logutil.RegisterFlags)
 }
+
+func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
+		OnParseFor(cmd, registerFlags)
+	}
+}
