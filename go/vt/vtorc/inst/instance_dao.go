@@ -804,9 +804,6 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 		if instance.IsDowntimed {
 			skip = true
 		}
-		if RegexpMatchPatterns(instance.Key.StringCode(), config.Config.ProblemIgnoreHostnameFilters) {
-			skip = true
-		}
 		if !skip {
 			reportedInstances = append(reportedInstances, instance)
 		}

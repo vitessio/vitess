@@ -348,14 +348,6 @@ var generateSQLBase = []string{
 		CREATE INDEX unresolved_hostname_idx_hostname_unresolve ON hostname_unresolve (unresolved_hostname)
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS database_instance_pool (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			port smallint(5) unsigned NOT NULL,
-			pool varchar(128) NOT NULL,
-			PRIMARY KEY (hostname, port, pool)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
 		DROP INDEX pool_idx ON database_instance_pool
 	`,
 	`

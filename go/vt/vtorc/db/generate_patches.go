@@ -307,11 +307,6 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE
-			database_instance_pool
-			ADD COLUMN registered_at timestamp NOT NULL DEFAULT '1971-01-01 00:00:00'
-	`,
-	`
-		ALTER TABLE
 			database_instance
 			ADD COLUMN has_replication_credentials TINYINT UNSIGNED NOT NULL
 	`,

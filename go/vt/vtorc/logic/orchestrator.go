@@ -327,19 +327,6 @@ func onHealthTick() {
 	}
 }
 
-func injectSeeds(seedOnce *sync.Once) {
-	seedOnce.Do(func() {
-		for _, seed := range config.Config.DiscoverySeeds {
-			instanceKey, err := inst.ParseRawInstanceKey(seed)
-			if err == nil {
-				_ = inst.InjectSeed(instanceKey)
-			} else {
-				log.Errorf("Error parsing seed %s: %+v", seed, err)
-			}
-		}
-	})
-}
-
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
@@ -368,8 +355,6 @@ func ContinuousDiscovery() {
 		return time.Since(continuousDiscoveryStartTime) >= checkAndRecoverWaitPeriod
 	}
 
-	var seedOnce sync.Once
-
 	go func() {
 		_ = ometrics.InitMetrics()
 	}()
@@ -389,7 +374,6 @@ func ContinuousDiscovery() {
 				// as instance poll
 				if IsLeaderOrActive() {
 					go inst.ExpireDowntime()
-					go injectSeeds(&seedOnce)
 				}
 			}()
 		case <-caretakingTick:
@@ -408,7 +392,6 @@ func ContinuousDiscovery() {
 					go inst.ExpireHostnameUnresolve()
 					go inst.ExpireClusterDomainName()
 					go inst.ExpireAudit()
-					go inst.ExpirePoolInstances()
 					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
