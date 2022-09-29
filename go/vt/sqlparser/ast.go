@@ -2223,6 +2223,27 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		ct.Path = other.Path
 	}
 
+	if other.Charset != "" {
+		if ct.Charset != "" {
+			return errors.New("cannot include CHARACTER SET more than once")
+		}
+		ct.Charset = other.Charset
+	}
+
+	if other.Collate != "" {
+		if ct.Collate != "" {
+			return errors.New("cannot include COLLATE more than once")
+		}
+		ct.Collate = other.Collate
+	}
+
+	if other.BinaryCollate == true {
+		if ct.BinaryCollate == true {
+			return errors.New("cannot include BINARY more than once")
+		}
+		ct.BinaryCollate = other.BinaryCollate
+	}
+
 	return nil
 }
 
