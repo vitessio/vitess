@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
 
@@ -341,4 +342,39 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 		err = ErrNoPrimaryTablet
 	}
 	return primary, err
+}
+
+// restartsReplication restarts the replication on the provided replicaKey. It also sets the correct semi-sync settings when it starts replication
+func restartReplication(replicaKey *inst.InstanceKey) error {
+	replicaTablet, err := inst.ReadTablet(*replicaKey)
+	if err != nil {
+		log.Info("Could not read tablet - %+v", replicaKey)
+		return err
+	}
+
+	primaryTablet, err := shardPrimary(replicaTablet.Keyspace, replicaTablet.Shard)
+	if err != nil {
+		log.Info("Could not compute primary for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
+		return err
+	}
+
+	durabilityPolicy, err := inst.GetDurabilityPolicy(replicaTablet)
+	if err != nil {
+		log.Info("Could not read the durability policy for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.WaitReplicasTimeoutSeconds)*time.Second)
+	defer cancel()
+	err = tmc.StopReplication(ctx, replicaTablet)
+	if err != nil {
+		log.Info("Could not stop replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		return err
+	}
+	err = tmc.StartReplication(ctx, replicaTablet, inst.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
+	if err != nil {
+		log.Info("Could not start replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		return err
+	}
+	return nil
 }

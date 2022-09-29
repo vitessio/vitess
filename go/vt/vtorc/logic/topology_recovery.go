@@ -368,7 +368,7 @@ func emergentlyRestartReplicationOnTopologyInstance(instanceKey *inst.InstanceKe
 		return
 	}
 	go inst.ExecuteOnTopology(func() {
-		_ = inst.RestartReplicationQuick(instanceKey)
+		_ = restartReplication(instanceKey)
 		_ = inst.AuditOperation("emergently-restart-replication-topology-instance", instanceKey, string(analysisCode))
 	})
 }
