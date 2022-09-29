@@ -62,10 +62,10 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&kubeconfigPath, "topo_k8s_kubeconfig", kubeconfigPath, "Path to a valid kubeconfig file. When running as a k8s pod inside the same cluster you wish to use as the topo, you may omit this and the below arguments, and Vitess is capable of auto-discovering the correct values. https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod")
 
 	// configContext is a string that can be used to override the default context
-	fs.StringVar(&configContext, "topo_k8s_context", configContext, "The kubeconfig context to use, overrides the 'current-context' from the config.")
+	fs.StringVar(&configContext, "topo_k8s_context", configContext, "The kubeconfig context to use, overrides the 'current-context' from the config")
 
 	// configNamespace is a string that can be used to override the default namespace for objects
-	fs.StringVar(&configNamespace, "topo_k8s_namespace", configNamespace, "The kubernetes namespace to use for all objects. Default comes from the context or in-cluster config.")
+	fs.StringVar(&configNamespace, "topo_k8s_namespace", configNamespace, "The kubernetes namespace to use for all objects. Default comes from the context or in-cluster config")
 }
 
 // Factory is the Kubernetes topo.Factory implementation.
