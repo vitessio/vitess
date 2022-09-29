@@ -37,6 +37,7 @@ import (
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -144,6 +145,7 @@ func main() {
 	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	acl.RegisterFlags(fs)
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
 		Epilogue: func(w io.Writer) { fmt.Fprint(w, doc) },
 	})

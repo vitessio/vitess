@@ -27,6 +27,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/flagutil"
@@ -253,6 +254,7 @@ func main() {
 	fs := pflag.NewFlagSet("mysqlctl", pflag.ExitOnError)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	acl.RegisterFlags(fs)
 	_flag.Parse(fs)
 
 	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))

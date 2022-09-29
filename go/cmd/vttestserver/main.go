@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttest"
@@ -163,6 +164,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
 	fs.StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
 	fs.StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
+
+	acl.RegisterFlags(fs)
 }
 
 func init() {
