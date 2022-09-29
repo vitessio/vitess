@@ -37,9 +37,6 @@ import (
 	"syscall"
 	"time"
 
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/event"
@@ -51,6 +48,8 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	// register the HTTP handlers for profiling
+	_ "net/http/pprof"
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
 

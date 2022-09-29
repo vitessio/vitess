@@ -46,6 +46,8 @@ var (
 
 	// every vitess binary that makes grpc client-side calls.
 	grpcclientBinaries = []string{
+		"mysqlctl",
+		"mysqlctld",
 		"vtadmin",
 		"vtbackup",
 		"vtbench",

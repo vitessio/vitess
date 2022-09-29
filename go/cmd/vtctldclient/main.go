@@ -18,8 +18,8 @@ package main
 
 import (
 	"flag"
-	"os"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -29,12 +29,15 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 func main() {
 	defer exit.Recover()
 
 	// Grab all those global flags across the codebase and shove 'em on in.
+	// (TODO|andrew) remove this line after the migration to pflag is complete.
 	command.Root.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	log.RegisterFlags(command.Root.PersistentFlags())
 	logutil.RegisterFlags(command.Root.PersistentFlags())
@@ -43,13 +46,10 @@ func main() {
 	grpcclientcommon.RegisterFlags(command.Root.PersistentFlags())
 	servenv.RegisterMySQLServerFlags(command.Root.PersistentFlags())
 	vtctlclient.RegisterFlags(command.Root.PersistentFlags())
+	acl.RegisterFlags(command.Root.PersistentFlags())
 
 	// hack to get rid of an "ERROR: logging before flag.Parse"
-	args := os.Args[:]
-	os.Args = os.Args[:1]
-	servenv.ParseFlags("vtctldclient")
-	flag.Parse()
-	os.Args = args
+	_flag.TrickGlog()
 
 	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
