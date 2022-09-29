@@ -92,17 +92,17 @@ var (
 )
 
 func initFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&host, "host", "", "vtgate host(s) in the form 'host1,host2,...'")
-	fs.IntVar(&port, "port", 0, "vtgate port")
-	fs.StringVar(&unixSocket, "unix_socket", "", "vtgate unix socket")
-	fs.StringVar(&protocol, "protocol", protocol, "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
-	fs.StringVar(&user, "user", "", "username to connect using mysql (password comes from the db-credentials-file)")
-	fs.StringVar(&db, "db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
+	fs.StringVar(&host, "host", host, "VTGate host(s) in the form 'host1,host2,...'")
+	fs.IntVar(&port, "port", port, "VTGate port")
+	fs.StringVar(&unixSocket, "unix_socket", unixSocket, "VTGate unix socket")
+	fs.StringVar(&protocol, "protocol", protocol, "Client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
+	fs.StringVar(&user, "user", user, "Username to connect using mysql (password comes from the db-credentials-file)")
+	fs.StringVar(&db, "db", db, "Database name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
 
-	fs.DurationVar(&deadline, "deadline", deadline, "maximum duration for the test run (default 5 minutes)")
-	fs.StringVar(&sql, "sql", "", "sql statement to execute")
-	fs.IntVar(&threads, "threads", threads, "number of parallel threads to run")
-	fs.IntVar(&count, "count", count, "number of queries per thread")
+	fs.DurationVar(&deadline, "deadline", deadline, "Maximum duration for the test run (default 5 minutes)")
+	fs.StringVar(&sql, "sql", sql, "SQL statement to execute")
+	fs.IntVar(&threads, "threads", threads, "Number of parallel threads to run")
+	fs.IntVar(&count, "count", count, "Number of queries per thread")
 
 	grpccommon.RegisterFlags(fs)
 	log.RegisterFlags(fs)
@@ -112,6 +112,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 func main() {
 	servenv.OnParseFor("vtbench", func(fs *pflag.FlagSet) {
+		logger := logutil.NewConsoleLogger()
+		fs.SetOutput(logutil.NewLoggerWriter(logger))
+
 		initFlags(fs)
 		_ = fs.Set("logtostderr", "true")
 	})
