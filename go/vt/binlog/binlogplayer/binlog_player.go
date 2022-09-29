@@ -22,19 +22,19 @@ package binlogplayer
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/withddl"
+	"github.com/spf13/pflag"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
@@ -42,10 +42,11 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/throttler"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/withddl"
 )
 
 var (
@@ -298,9 +299,9 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		}
 	}
 
-	clientFactory, ok := clientFactories[*binlogPlayerProtocol]
+	clientFactory, ok := clientFactories[binlogPlayerProtocol]
 	if !ok {
-		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
+		return fmt.Errorf("no binlog player client factory named %v", binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
 	err = blplClient.Dial(blp.tablet)
@@ -814,4 +815,44 @@ type StatsHistoryRecord struct {
 // IsDuplicate implements history.Deduplicable
 func (r *StatsHistoryRecord) IsDuplicate(other any) bool {
 	return false
+}
+
+const binlogPlayerProtocolFlagName = "binlog_player_protocol"
+
+// SetProtocol is a helper function to set the binlogplayer --binlog_player_protocol
+// flag value for tests. If successful, it returns a function that, when called,
+// returns the flag to its previous value.
+//
+// Note that because this variable is bound to a flag, the effects of this
+// function are global, not scoped to the calling test-case. Therefore, it should
+// not be used in conjunction with t.Parallel.
+func SetProtocol(name string, protocol string) (reset func()) {
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{name}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(name, func(fs *pflag.FlagSet) {
+		if fs.Lookup(binlogPlayerProtocolFlagName) != nil {
+			return
+		}
+
+		registerFlags(fs)
+	})
+	servenv.ParseFlags(name)
+
+	switch oldVal, err := pflag.CommandLine.GetString(binlogPlayerProtocolFlagName); err {
+	case nil:
+		reset = func() { SetProtocol(name, oldVal) }
+	default:
+		log.Errorf("failed to get string value for flag %q: %v", binlogPlayerProtocolFlagName, err)
+		reset = func() {}
+	}
+
+	if err := pflag.Set(binlogPlayerProtocolFlagName, protocol); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, binlogPlayerProtocolFlagName, protocol, err)
+		reset = func() {}
+	}
+
+	return reset
 }

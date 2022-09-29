@@ -28,7 +28,7 @@ import (
 
 const tmclientProtocolFlagName = "tablet_manager_protocol"
 
-// SetProtocol is a helper function to set the tmclient --tablet_maanager_protocol
+// SetProtocol is a helper function to set the tmclient --tablet_manager_protocol
 // flag value for tests. If successful, it returns a function that, when called,
 // returns the flag to its previous value.
 //

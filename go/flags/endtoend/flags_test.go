@@ -32,6 +32,12 @@ import (
 )
 
 var (
+	//go:embed mysqlctld.txt
+	mysqlctldTxt string
+
+	//go:embed vtaclcheck.txt
+	vtaclcheckTxt string
+
 	//go:embed vtexplain.txt
 	vtexplainTxt string
 
@@ -43,6 +49,9 @@ var (
 
 	//go:embed vttablet.txt
 	vttabletTxt string
+
+	//go:embed vttlstest.txt
+	vttlstestTxt string
 
 	//go:embed vtctld.txt
 	vtctldTxt string
@@ -59,16 +68,23 @@ var (
 	//go:embed vttestserver.txt
 	vttestserverTxt string
 
+	//go:embed zkctld.txt
+	zkctldTxt string
+
 	helpOutput = map[string]string{
+		"mysqlctld":    mysqlctldTxt,
+		"vtaclcheck":   vtaclcheckTxt,
 		"vtexplain":    vtexplainTxt,
 		"vtgate":       vtgateTxt,
 		"vtgr":         vtgrTxt,
 		"vttablet":     vttabletTxt,
+		"vttlstest":    vttlstestTxt,
 		"vtctld":       vtctldTxt,
 		"vtctlclient":  vtctlclientTxt,
 		"vtctldclient": vtctldclientTxt,
 		"vtorc":        vtorcTxt,
 		"vttestserver": vttestserverTxt,
+		"zkctld":       zkctldTxt,
 	}
 )
 

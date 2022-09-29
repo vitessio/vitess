@@ -106,8 +106,8 @@ func ParseFlagsForTest() {
 	}
 
 	// parse remaining flags including the log-related ones like --alsologtostderr
-	fs := flag.NewFlagSet("test", flag.ExitOnError)
-	Parse(fs)
+	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	flag.Parse()
 }
 
 // Parsed returns true if the command-line flags have been parsed.

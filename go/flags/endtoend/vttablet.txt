@@ -182,7 +182,6 @@ Usage of vttablet:
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
       --disable-replication-manager                                      Disable replication manager to prevent replication repairs.
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
-      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
       --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
       --enable-lag-throttler                                             Synonym to -enable_lag_throttler
@@ -213,7 +212,7 @@ Usage of vttablet:
       --gh-ost-path string                                               override default gh-ost binary full path
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
-      --grpc_auth_static_client_creds string                             when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
+      --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
       --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
@@ -284,7 +283,6 @@ Usage of vttablet:
       --mycnf_socket_file string                                         mysql socket file
       --mycnf_tmp_dir string                                             mysql tmp directory
       --mysql_server_version string                                      MySQL server version to advertise.
-      --mysqlctl_client_protocol string                                  the protocol to use to talk to the mysqlctl server (default "grpc")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
@@ -370,11 +368,6 @@ Usage of vttablet:
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
-      --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
-      --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats_common_tags string                                         Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
-      --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
-      --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
@@ -442,9 +435,9 @@ Usage of vttablet:
       --twopc_coordinator_address string                                 address of the (VTGate) process(es) that will be used to notify of abandoned transactions.
       --twopc_enable                                                     if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n")
-      --tx-throttler-healthcheck-cells StringList                        Synonym to -tx_throttler_healthcheck_cells
+      --tx-throttler-healthcheck-cells strings                           Synonym to -tx_throttler_healthcheck_cells
       --tx_throttler_config string                                       The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message (default "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n")
-      --tx_throttler_healthcheck_cells StringList                        A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.
+      --tx_throttler_healthcheck_cells strings                           A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.
       --unhealthy_threshold duration                                     replication lag after which a replica is considered unhealthy (default 2h0m0s)
       --use_super_read_only                                              Set super_read_only flag when performing planned failover.
   -v, --v Level                                                          log level for V logs
