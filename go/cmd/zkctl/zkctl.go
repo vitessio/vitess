@@ -19,7 +19,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -60,19 +59,11 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, usage)
-	}
-
+	fs := pflag.NewFlagSet("zkctl", pflag.ContinueOnError)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
-	args := servenv.ParseFlagsWithArgs("zkctl")
+	servenv.ParseFlagsWithArgs("zkctl")
 
-	if len(args) == 0 {
-		fs.Usage()
-		exit.Return(1)
-	}
 	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
