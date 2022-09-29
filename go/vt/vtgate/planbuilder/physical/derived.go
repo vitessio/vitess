@@ -146,10 +146,12 @@ func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 
 	// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
 	// but if we don't have groupings, we need to check if there are aggregations that will mess with us
-	for _, expr := range sel.SelectExprs {
-		if sqlparser.ContainsAggregation(expr) {
-			return false
-		}
+	if sqlparser.ContainsAggregation(sel.SelectExprs) {
+		return false
+	}
+
+	if sqlparser.ContainsAggregation(sel.Having) {
+		return false
 	}
 
 	return true
