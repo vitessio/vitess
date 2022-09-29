@@ -56,7 +56,7 @@ func init() {
 		fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
 		fs.UintVar(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
-    
+
 		acl.RegisterFlags(fs)
 	})
 }
