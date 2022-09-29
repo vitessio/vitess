@@ -30201,6 +30201,9 @@ export namespace vtrpc {
 
         /** CallerID subcomponent */
         subcomponent?: (string|null);
+
+        /** CallerID groups */
+        groups?: (string[]|null);
     }
 
     /** Represents a CallerID. */
@@ -30220,6 +30223,9 @@ export namespace vtrpc {
 
         /** CallerID subcomponent. */
         public subcomponent: string;
+
+        /** CallerID groups. */
+        public groups: string[];
 
         /**
          * Creates a new CallerID instance using the specified properties.
