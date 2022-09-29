@@ -46,7 +46,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestDerivedTableWithOrderByLimit(t *testing.T) {
-	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11763")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -57,7 +56,6 @@ func TestDerivedTableWithOrderByLimit(t *testing.T) {
 }
 
 func TestDerivedAggregationOnRHS(t *testing.T) {
-	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11703")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -86,11 +84,13 @@ func TestDerivedTableWithHaving(t *testing.T) {
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
-	mcmp.AssertMatchesAnyNoCompare("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(4)]]")
+
+	// this is probably flaky? the id returned from the derived table could be any of the ids from user.
+	// works on my machine (TM)
+	mcmp.Exec("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s")
 }
 
 func TestDerivedTableColumns(t *testing.T) {
-	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11763")
 	mcmp, closer := start(t)
 	defer closer()
 

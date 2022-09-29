@@ -21,12 +21,8 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -36,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -50,22 +48,9 @@ type (
 func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
-		switch {
-		case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
-			return leftToRightSolve(ctx, op)
-		default:
-			return greedySolve(ctx, op)
-		}
+		return optimizeQueryGraph(ctx, op)
 	case *abstract.Join:
-		opInner, err := CreatePhysicalOperator(ctx, op.LHS)
-		if err != nil {
-			return nil, err
-		}
-		opOuter, err := CreatePhysicalOperator(ctx, op.RHS)
-		if err != nil {
-			return nil, err
-		}
-		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		return optimizeJoin(ctx, op)
 	case *abstract.Derived:
 		return optimizeDerived(ctx, op)
 	case *abstract.SubQuery:
@@ -75,87 +60,161 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
 	case *abstract.Filter:
-		src, err := CreatePhysicalOperator(ctx, op.Source)
-		if err != nil {
-			return nil, err
-		}
-
-		filter := &Filter{
-			Predicates: op.Predicates,
-		}
-
-		if route, ok := src.(*Route); ok {
-			// let's push the filter into the route
-			filter.Source = route.Source
-			route.Source = filter
-			return route, nil
-		}
-
-		filter.Source = src
-
-		return filter, nil
+		return optimizeFilter(ctx, op)
 	case *abstract.Update:
-		var typ topodatapb.TabletType
-		var dest key.Destination
-
-		vindexTable := op.TableInfo.GetVindexTable()
-		opCode := engine.Unsharded
-		if vindexTable.Keyspace.Sharded {
-			opCode = engine.Scatter
-		}
-
-		tblName, ok := op.Table.Alias.Expr.(sqlparser.TableName)
-		if ok {
-			var err error
-			_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
-			if err != nil {
-				return nil, err
-			}
-			if dest != nil {
-				if typ != topodatapb.TabletType_PRIMARY {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: update statement with a replica target")
-				}
-				// we are dealing with an explicitly targeted UPDATE
-				opCode = engine.ByDestination
-			}
-		}
-
-		vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
-		if err != nil {
-			return nil, err
-		}
-
-		r := &Route{
-			Source: &Update{
-				QTable:              op.Table,
-				VTable:              vindexTable,
-				Assignments:         op.Assignments,
-				ChangedVindexValues: cvv,
-				OwnedVindexQuery:    ovq,
-				AST:                 op.AST,
-			},
-			RouteOpCode:       opCode,
-			Keyspace:          vindexTable.Keyspace,
-			VindexPreds:       vp,
-			TargetDestination: dest,
-		}
-
-		for _, predicate := range op.Table.Predicates {
-			err := r.UpdateRoutingLogic(ctx, predicate)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
-			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
-		}
-
-		return r, nil
+		return createPhysicalOperatorFromUpdate(ctx, op)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
+}
+
+func optimizeFilter(ctx *plancontext.PlanningContext, op *abstract.Filter) (abstract.PhysicalOperator, error) {
+	src, err := CreatePhysicalOperator(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := &Filter{
+		Predicates: op.Predicates,
+	}
+
+	if route, ok := src.(*Route); ok {
+		// let's push the filter into the route
+		filter.Source = route.Source
+		route.Source = filter
+		return route, nil
+	}
+
+	filter.Source = src
+
+	return filter, nil
+}
+
+func optimizeDerived(ctx *plancontext.PlanningContext, op *abstract.Derived) (abstract.PhysicalOperator, error) {
+	opInner, err := CreatePhysicalOperator(ctx, op.Inner)
+	if err != nil {
+		return nil, err
+	}
+
+	innerRoute, ok := opInner.(*Route)
+	if !ok {
+		return buildDerivedOp(op, opInner), nil
+	}
+
+	derived := &Derived{
+		Source:        innerRoute.Source,
+		Query:         op.Sel,
+		Alias:         op.Alias,
+		ColumnAliases: op.ColumnAliases,
+	}
+
+	if innerRoute.RouteOpCode == engine.EqualUnique {
+		// no need to check anything if we are sure that we will only hit a single shard
+	} else if !derived.IsMergeable(ctx) {
+		return buildDerivedOp(op, opInner), nil
+	}
+
+	innerRoute.Source = derived
+	return innerRoute, nil
+}
+
+func buildDerivedOp(op *abstract.Derived, opInner abstract.PhysicalOperator) *Derived {
+	return &Derived{
+		Source:        opInner,
+		Query:         op.Sel,
+		Alias:         op.Alias,
+		ColumnAliases: op.ColumnAliases,
+	}
+}
+
+func optimizeJoin(ctx *plancontext.PlanningContext, op *abstract.Join) (abstract.PhysicalOperator, error) {
+	lhs, err := CreatePhysicalOperator(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := CreatePhysicalOperator(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	return mergeOrJoin(ctx, lhs, rhs, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+}
+
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+	switch {
+	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
+		return leftToRightSolve(ctx, op)
+	default:
+		return greedySolve(ctx, op)
+	}
+}
+
+func createPhysicalOperatorFromUpdate(ctx *plancontext.PlanningContext, op *abstract.Update) (abstract.PhysicalOperator, error) {
+	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, op.TableInfo, op.Table, "update")
+	if err != nil {
+		return nil, err
+	}
+
+	vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &Route{
+		Source: &Update{
+			QTable:              op.Table,
+			VTable:              vindexTable,
+			Assignments:         op.Assignments,
+			ChangedVindexValues: cvv,
+			OwnedVindexQuery:    ovq,
+			AST:                 op.AST,
+		},
+		RouteOpCode:       opCode,
+		Keyspace:          vindexTable.Keyspace,
+		VindexPreds:       vp,
+		TargetDestination: dest,
+	}
+
+	for _, predicate := range op.Table.Predicates {
+		err := r.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
+		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+	}
+
+	return r, nil
+}
+
+func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantics.TableInfo, table *abstract.QueryTable, dmlType string) (*vindexes.Table, engine.Opcode, key.Destination, error) {
+	vindexTable := tableInfo.GetVindexTable()
+	opCode := engine.Unsharded
+	if vindexTable.Keyspace.Sharded {
+		opCode = engine.Scatter
+	}
+
+	var dest key.Destination
+	var typ topodatapb.TabletType
+	var err error
+	tblName, ok := table.Alias.Expr.(sqlparser.TableName)
+	if ok {
+		_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		if dest != nil {
+			if typ != topodatapb.TabletType_PRIMARY {
+				return nil, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %v statement with a replica target", dmlType)
+			}
+			// we are dealing with an explicitly targeted UPDATE
+			opCode = engine.ByDestination
+		}
+	}
+	return vindexTable, opCode, dest, nil
 }
 
 func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
@@ -516,8 +575,25 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 	return join, nil
 }
 
-func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
+func requiresSwitchingSides(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) bool {
+	required := false
 
+	_ = VisitOperators(op, func(current abstract.PhysicalOperator) (bool, error) {
+		derived, isDerived := current.(*Derived)
+
+		if isDerived && !derived.IsMergeable(ctx) {
+			required = true
+
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	return required
+}
+
+func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 	merger := func(a, b *Route) (*Route, error) {
 		return createRouteOperatorForJoin(a, b, joinPredicates, inner)
 	}
@@ -525,6 +601,25 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOpe
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
 	if newPlan != nil {
 		return newPlan, nil
+	}
+
+	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
+		if !inner {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: LEFT JOIN not supported for derived tables")
+		}
+
+		if requiresSwitchingSides(ctx, lhs) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: JOIN not supported between derived tables")
+		}
+
+		join := &ApplyJoin{
+			LHS:      rhs.Clone(),
+			RHS:      lhs.Clone(),
+			Vars:     map[string]int{},
+			LeftJoin: !inner,
+		}
+
+		return pushJoinPredicates(ctx, joinPredicates, join)
 	}
 
 	join := &ApplyJoin{
@@ -553,6 +648,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		Keyspace:            aRoute.Keyspace,
 		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
+		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
 		Source: &ApplyJoin{
 			LHS:       aRoute.Source,
@@ -572,38 +668,13 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 
 type mergeFunc func(a, b *Route) (*Route, error)
 
-// makeRoute return the input as a Route.
-// if the input is a Derived operator and has a Route as its source,
-// we push the Derived inside the Route and return it.
-func makeRoute(j abstract.PhysicalOperator) *Route {
-	route, ok := j.(*Route)
-	if ok {
-		return route
-	}
-
-	derived, ok := j.(*Derived)
-	if !ok {
-		return nil
-	}
-	dp := derived.Clone().(*Derived)
-
-	route = makeRoute(dp.Source)
-	if route == nil {
-		return nil
-	}
-
-	derived.Source = route.Source
-	route.Source = derived
-	return route
-}
-
 func operatorsToRoutes(a, b abstract.PhysicalOperator) (*Route, *Route) {
-	aRoute := makeRoute(a)
-	if aRoute == nil {
+	aRoute, ok := a.(*Route)
+	if !ok {
 		return nil, nil
 	}
-	bRoute := makeRoute(b)
-	if bRoute == nil {
+	bRoute, ok := b.(*Route)
+	if !ok {
 		return nil, nil
 	}
 	return aRoute, bRoute
@@ -650,7 +721,7 @@ func tryMerge(
 		// can merge via join predicates instead.
 		fallthrough
 
-	case engine.Scatter, engine.IN:
+	case engine.Scatter, engine.IN, engine.None:
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
@@ -669,7 +740,13 @@ func tryMerge(
 		if err != nil {
 			return nil, err
 		}
-		r.PickBestAvailableVindex()
+
+		// If we have a `None` route opcode, we want to keep it -
+		// we only try to find a better Vindex for other route opcodes
+		if aRoute.RouteOpCode != engine.None {
+			r.PickBestAvailableVindex()
+		}
+
 		return r, nil
 	}
 	return nil, nil
@@ -1043,7 +1120,8 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 		// rows as early as possible making join cheaper on the vtgate level.
 		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
 		singleSideDeps := false
-		if depsForExpr.IsSolvedBy(node.LHS.TableID()) {
+		lhsTables := node.LHS.TableID()
+		if depsForExpr.IsSolvedBy(lhsTables) {
 			lhsPreds = append(lhsPreds, expr)
 			singleSideDeps = true
 		}
@@ -1056,7 +1134,7 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 			continue
 		}
 
-		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, node.LHS.TableID())
+		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, lhsTables)
 		if err != nil {
 			return nil, err
 		}
@@ -1118,41 +1196,4 @@ func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlpar
 
 	node.Source = newInner
 	return node, nil
-}
-
-func optimizeDerived(ctx *plancontext.PlanningContext, op *abstract.Derived) (abstract.PhysicalOperator, error) {
-	opInner, err := CreatePhysicalOperator(ctx, op.Inner)
-	if err != nil {
-		return nil, err
-	}
-
-	innerRoute, ok := opInner.(*Route)
-	if !ok {
-		return buildDerivedOp(op, opInner), nil
-	}
-
-	derived := &Derived{
-		Source:        innerRoute.Source,
-		Query:         op.Sel,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
-	}
-
-	if innerRoute.RouteOpCode == engine.EqualUnique {
-		// no need to check anything if we are sure that we will only hit a single shard
-	} else if !derived.IsMergeable(ctx) {
-		return buildDerivedOp(op, opInner), nil
-	}
-
-	innerRoute.Source = derived
-	return innerRoute, nil
-}
-
-func buildDerivedOp(op *abstract.Derived, opInner abstract.PhysicalOperator) *Derived {
-	return &Derived{
-		Source:        opInner,
-		Query:         op.Sel,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
-	}
 }
