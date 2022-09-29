@@ -792,6 +792,7 @@ func tryMerge(
 			// no join predicates - no vindex
 			return nil, nil
 		}
+
 		if !sameKeyspace {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 		}
@@ -919,9 +920,82 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 	return rVindex == lVindex
 }
 
+func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate sqlparser.Expr) bool {
+	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return false
+	}
+	if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
+		return false
+	}
+
+	left := comparison.Left
+	right := comparison.Right
+
+	lVindex := findColumnVindex(ctx, a, left)
+	if lVindex == nil && comparison.Operator != sqlparser.EqualOp {
+		left, right = right, left
+		lVindex = findColumnVindex(ctx, a, left)
+	}
+	if lVindex == nil || !lVindex.IsUnique() {
+		return false
+	}
+
+	subquery, isSubquery := right.(*sqlparser.Subquery)
+	if !isSubquery {
+		return false
+	}
+
+	rightSelection := extractSingleColumnSubquerySelection(subquery)
+	if rightSelection == nil {
+		return false
+	}
+
+	rVindex := findColumnVindex(ctx, b, rightSelection)
+	if rVindex == nil {
+		return false
+	}
+	return rVindex == lVindex
+}
+
+func extractSingleColumnSubquerySelection(subquery *sqlparser.Subquery) *sqlparser.ColName {
+	if subquery.Select.GetColumnCount() != 1 {
+		return nil
+	}
+
+	columnExpr := subquery.Select.GetColumns()[0]
+
+	aliasedExpr, ok := columnExpr.(*sqlparser.AliasedExpr)
+	if !ok {
+		return nil
+	}
+
+	switch expr := aliasedExpr.Expr.(type) {
+	case *sqlparser.ColName:
+		return expr
+	case *sqlparser.Max:
+		colName, ok := expr.Arg.(*sqlparser.ColName)
+		if ok {
+			return colName
+		}
+	case *sqlparser.Min:
+		colName, ok := expr.Arg.(*sqlparser.ColName)
+		if ok {
+			return colName
+		}
+	}
+
+	return nil
+}
+
 func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOperator, exp sqlparser.Expr) vindexes.SingleColumn {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
+		return nil
+	}
+
+	exp = unwrapDerivedTables(ctx, exp)
+	if exp == nil {
 		return nil
 	}
 
@@ -936,14 +1010,15 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOpera
 		if !isCol {
 			continue
 		}
-		leftDep := ctx.SemTable.RecursiveDeps(expr)
+
+		deps := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = VisitOperators(a, func(rel abstract.PhysicalOperator) (bool, error) {
 			to, isTableOp := rel.(abstract.IntroducesTable)
 			if !isTableOp {
 				return true, nil
 			}
-			if leftDep.IsSolvedBy(to.GetQTable().ID) {
+			if deps.IsSolvedBy(to.GetQTable().ID) {
 				for _, vindex := range to.GetVTable().ColumnVindexes {
 					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {
@@ -960,6 +1035,41 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOpera
 	}
 
 	return singCol
+}
+
+// unwrapDerivedTables we want to find the bottom layer of derived tables
+func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) sqlparser.Expr {
+	for {
+		// if we are dealing with derived tables in derived tables
+		tbl, err := ctx.SemTable.TableInfoForExpr(exp)
+		if err != nil {
+			return nil
+		}
+		_, ok := tbl.(*semantics.DerivedTable)
+		if !ok {
+			break
+		}
+
+		exp, err = semantics.RewriteDerivedTableExpression(exp, tbl)
+		if err != nil {
+			return nil
+		}
+
+		switch exp.(type) {
+		case *sqlparser.ColName:
+			// do nothing
+		case *sqlparser.Max, *sqlparser.Min:
+			aggr := exp.(sqlparser.AggrFunc).GetArg()
+			colName, ok := aggr.(*sqlparser.ColName)
+			if ok {
+				exp = colName
+			}
+		default:
+			// for any other expression than a column, or the extremum of a column, we can't merge
+			return nil
+		}
+	}
+	return exp
 }
 
 func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredicates []sqlparser.Expr) bool {

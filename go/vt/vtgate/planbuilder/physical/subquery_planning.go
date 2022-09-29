@@ -113,9 +113,12 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	//
 	// Note that not all inner queries necessarily are part of the routing
 	// predicates list, so this might be a no-op.
+	subQueryWasPredicate := false
 	for i, predicate := range outer.SeenPredicates {
 		if sqlparser.EqualsExpr(predicate, subq.ExtractedSubquery) {
 			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
+
+			subQueryWasPredicate = true
 
 			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
 			// so we can stop after the first match.
@@ -127,7 +130,57 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	if err != nil {
 		return nil, err
 	}
+
+	if subQueryWasPredicate {
+		// Copy Vindex predicates from the inner route to the upper route (probably not right)
+		outer.VindexPreds = append(outer.VindexPreds, inner.VindexPreds...)
+
+		if inner.RouteOpCode == engine.None {
+			outer.setSelectNoneOpcode()
+		}
+	}
+
 	return outer, nil
+}
+
+func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op abstract.PhysicalOperator) bool {
+	validVindex := func(expr sqlparser.Expr) bool {
+		sc := findColumnVindex(ctx, op, expr)
+		return sc != nil && sc.IsUnique()
+	}
+
+	if query.GetLimit() != nil {
+		return false
+	}
+
+	sel, ok := query.(*sqlparser.Select)
+	if !ok {
+		return false
+	}
+
+	if len(sel.GroupBy) > 0 {
+		// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
+		// by checking that one of the grouping expressions used is a unique single column vindex.
+		// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
+		for _, gb := range sel.GroupBy {
+			if validVindex(gb) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
+	// but if we don't have groupings, we need to check if there are aggregations that will mess with us
+	if sqlparser.ContainsAggregation(sel.SelectExprs) {
+		return false
+	}
+
+	if sqlparser.ContainsAggregation(sel.Having) {
+		return false
+	}
+
+	return true
 }
 
 func tryMergeSubQueryOp(
@@ -141,12 +194,51 @@ func tryMergeSubQueryOp(
 	var err error
 	switch outerOp := outer.(type) {
 	case *Route:
-		if shouldTryMergingSubquery(outerOp, subq) {
-			merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
+		subqueryRoute, isRoute := subq.(*Route)
+		if !isRoute {
+			return nil, nil
+		}
+
+		if outerOp.RouteOpCode == engine.Reference && !subqueryRoute.IsSingleShard() {
+			return nil, nil
+		}
+
+		merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
+		if err != nil {
+			return nil, err
+		}
+
+		// If the subqueries could be merged here, we're done
+		if merged != nil {
+			return merged, err
+		}
+
+		if !isMergeable(ctx, subQueryInner.ExtractedSubquery.Subquery.Select, subq) {
+			return nil, nil
+		}
+
+		// Special case: Inner query won't return any results / is not routable.
+		if subqueryRoute.RouteOpCode == engine.None {
+			merged, err := merger(outerOp, subqueryRoute)
+			return merged, err
+		}
+
+		// Inner subqueries can be merged with the outer subquery as long as
+		// the inner query is a single column selection, and that single column has a matching
+		// vindex on the outer query's operand.
+		if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
+			merged, err := merger(outerOp, subqueryRoute)
+
 			if err != nil {
 				return nil, err
 			}
-			return merged, err
+
+			if merged != nil {
+				// since we inlined the subquery into the outer query, new vindex options might have been enabled,
+				// so we go over our current options to check if anything better has come up.
+				merged.PickBestAvailableVindex()
+				return merged, err
+			}
 		}
 		return nil, nil
 	case *ApplyJoin:
@@ -192,20 +284,6 @@ func tryMergeSubQueryOp(
 	default:
 		return nil, nil
 	}
-}
-
-// shouldTryMergingSubquery returns whether there is a possibility of merging the subquery with the outer route
-// For some cases like Reference, we shouldn't try to merge them, since the common logic of tryMerge will allow them to
-// be merged, even though they shouldn't
-func shouldTryMergingSubquery(outerOp *Route, subq abstract.PhysicalOperator) bool {
-	if outerOp.RouteOpCode == engine.Reference {
-		subqRoute, isRoute := subq.(*Route)
-		if !isRoute {
-			return false
-		}
-		return subqRoute.RouteOpCode.IsSingleShard()
-	}
-	return true
 }
 
 // rewriteColumnsInSubqueryOpForApplyJoin rewrites the columns that appear from the other side
