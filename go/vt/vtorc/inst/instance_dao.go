@@ -18,7 +18,6 @@ package inst
 
 import (
 	"bytes"
-	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -29,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
@@ -234,10 +232,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	})
 
 	latency.Start("instance")
-	instanceDb, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
-	if err != nil {
-		goto Cleanup
-	}
 
 	tablet, err = ReadTablet(*instanceKey)
 	if err != nil {
@@ -387,14 +381,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
 
 		instance.AllowTLS = fullStatus.ReplicationStatus.SslAllowed
-	}
-
-	// Populate GR information for the instance in Oracle MySQL 8.0+.
-	if instance.IsOracleMySQL() && !instance.IsSmallerMajorVersionByString("8.0") {
-		err := PopulateGroupReplicationInformation(instance, instanceDb)
-		if err != nil {
-			goto Cleanup
-		}
 	}
 
 	instanceFound = true
@@ -1682,93 +1668,4 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
-}
-
-// PopulateGroupReplicationInformation obtains information about Group Replication  for this host as well as other hosts
-// who are members of the same group (if any).
-func PopulateGroupReplicationInformation(instance *Instance, db *sql.DB) error {
-	q := `
-	SELECT
-		MEMBER_ID,
-		MEMBER_HOST,
-		MEMBER_PORT,
-		MEMBER_STATE,
-		MEMBER_ROLE,
-		@@global.group_replication_group_name,
-		@@global.group_replication_single_primary_mode
-	FROM
-		performance_schema.replication_group_members
-	`
-	rows, err := db.Query(q)
-	if err != nil {
-		_, grNotSupported := GroupReplicationNotSupportedErrors[err.(*mysql.MySQLError).Number]
-		if grNotSupported {
-			return nil // If GR is not supported by the instance, just exit
-		}
-		// If we got here, the query failed but not because the server does not support group replication. Let's
-		// log the error
-		errMsg := fmt.Sprintf("There was an error trying to check group replication information for instance "+
-			"%+v: %+v", instance.Key, err)
-		log.Error(errMsg)
-		return fmt.Errorf(errMsg)
-	}
-	defer rows.Close()
-	foundGroupPrimary := false
-	// Loop over the query results and populate GR instance attributes from the row that matches the instance being
-	// probed. In addition, figure out the group primary and also add it as attribute of the instance.
-	for rows.Next() {
-		var (
-			uuid               string
-			host               string
-			port               uint16
-			state              string
-			role               string
-			groupName          string
-			singlePrimaryGroup bool
-		)
-		err := rows.Scan(&uuid, &host, &port, &state, &role, &groupName, &singlePrimaryGroup)
-		if err == nil {
-			// ToDo: add support for multi primary groups.
-			if !singlePrimaryGroup {
-				log.Infof("This host seems to belong to a multi-primary replication group, which we don't " +
-					"support")
-				break
-			}
-			groupMemberKey, err := NewResolveInstanceKey(host, int(port))
-			if err != nil {
-				log.Errorf("Unable to resolve instance for group member %v:%v", host, port)
-				continue
-			}
-			// Set the replication group primary from what we find in performance_schema.replication_group_members for
-			// the instance being discovered.
-			if role == GroupReplicationMemberRolePrimary && groupMemberKey != nil {
-				instance.ReplicationGroupPrimaryInstanceKey = *groupMemberKey
-				foundGroupPrimary = true
-			}
-			if uuid == instance.ServerUUID {
-				instance.ReplicationGroupName = groupName
-				instance.ReplicationGroupIsSinglePrimary = singlePrimaryGroup
-				instance.ReplicationGroupMemberRole = role
-				instance.ReplicationGroupMemberState = state
-			} else {
-				instance.AddGroupMemberKey(groupMemberKey) // This helps us keep info on all members of the same group as the instance
-			}
-		} else {
-			log.Errorf("Unable to scan row  group replication information while processing %+v, skipping the "+
-				"row and continuing: %+v", instance.Key, err)
-		}
-	}
-	// If we did not manage to find the primary of the group in performance_schema.replication_group_members, we are
-	// likely to have been expelled from the group. Still, try to find out the primary of the group and set it for the
-	// instance being discovered, so that it is identified as part of the same cluster
-	if !foundGroupPrimary {
-		err = ReadReplicationGroupPrimary(instance)
-		if err != nil {
-			errMsg := fmt.Sprintf("Unable to find the group primary of instance %+v even though it seems to be "+
-				"part of a replication group", instance.Key)
-			log.Errorf(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-	}
-	return nil
 }
