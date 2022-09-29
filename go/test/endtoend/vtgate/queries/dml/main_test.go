@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package insert
+package dml
 
 import (
 	_ "embed"
@@ -23,10 +23,11 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -118,4 +119,32 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func start(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+
+	deleteAll := func() {
+		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+
+		tables := []string{
+			"s_tbl", "num_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
+			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl",
+		}
+		for _, table := range tables {
+			// TODO (@frouioui): following assertions produce different results between MySQL and Vitess
+			//  their differences are ignored for now. Fix it.
+			// delete from returns different RowsAffected and Flag values
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+		cluster.PanicHandler(t)
+	}
 }
