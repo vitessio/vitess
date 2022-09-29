@@ -169,6 +169,9 @@ type Listener struct {
 	// Reads are unbuffered if it's <=0.
 	connReadBufferSize int
 
+	// connBufferPooling configures if vtgate server pools connection buffers
+	connBufferPooling bool
+
 	// shutdown indicates that Shutdown method was called.
 	shutdown sync2.AtomicBool
 
@@ -184,7 +187,14 @@ type Listener struct {
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
-func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
+func NewFromListener(
+	l net.Listener,
+	authServer AuthServer,
+	handler Handler,
+	connReadTimeout time.Duration,
+	connWriteTimeout time.Duration,
+	connBufferPooling bool,
+) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:           l,
 		AuthServer:         authServer,
@@ -192,22 +202,31 @@ func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, con
 		ConnReadTimeout:    connReadTimeout,
 		ConnWriteTimeout:   connWriteTimeout,
 		ConnReadBufferSize: connBufferSize,
+		ConnBufferPooling:  connBufferPooling,
 	}
 	return NewListenerWithConfig(cfg)
 }
 
 // NewListener creates a new Listener.
-func NewListener(protocol, address string, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration, proxyProtocol bool) (*Listener, error) {
+func NewListener(
+	protocol, address string,
+	authServer AuthServer,
+	handler Handler,
+	connReadTimeout time.Duration,
+	connWriteTimeout time.Duration,
+	proxyProtocol bool,
+	connBufferPooling bool,
+) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
 	if proxyProtocol {
 		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout)
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
@@ -221,6 +240,7 @@ type ListenerConfig struct {
 	ConnReadTimeout    time.Duration
 	ConnWriteTimeout   time.Duration
 	ConnReadBufferSize int
+	ConnBufferPooling  bool
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -246,6 +266,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadTimeout:    cfg.ConnReadTimeout,
 		connWriteTimeout:   cfg.ConnWriteTimeout,
 		connReadBufferSize: cfg.ConnReadBufferSize,
+		connBufferPooling:  cfg.ConnBufferPooling,
 	}, nil
 }
 
@@ -305,6 +326,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
 		c.endWriterBuffering()
+
+		if l.connBufferPooling {
+			c.returnReader()
+		}
 
 		conn.Close()
 	}()
