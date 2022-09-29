@@ -36,6 +36,7 @@ import (
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -139,7 +140,7 @@ func main() {
 	pflag.BoolVarP(&help, "help", "h", false, "display usage and exit")
 	log.RegisterFlags(pflag.CommandLine)
 	logutil.RegisterFlags(pflag.CommandLine)
-
+	acl.RegisterFlags(pflag.CommandLine)
 	pflag.CommandLine.Usage = func() {
 		fmt.Fprint(os.Stderr, doc)
 		pflag.Usage()

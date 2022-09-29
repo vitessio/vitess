@@ -2714,9 +2714,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1",
-        "OrderBy": "(1|2) ASC",
-        "Query": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+        "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
+        "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
         "Table": "`user`, user_extra"
       }
     ]
@@ -2726,6 +2725,54 @@ Gen4 plan same as above
     "user.user_extra"
   ]
 }
+
+# order by inside derived tables can be ignored
+"select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user` join user_extra on `user`.id = user_extra.user_id order by user_extra.extra asc",
+        "ResultColumns": 2,
+        "Table": "`user`, user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
+    "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+    "Table": "`user`, user_extra"
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
+
 
 # here we keep the order since the column is visible on the outside, and used by the orderedAggregate
 "select col, count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a group by col"
@@ -2746,9 +2793,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
-        "OrderBy": "(1|2) ASC, 0 ASC",
-        "Query": "select col, count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a group by col order by col asc",
+        "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a group by col order by col asc",
         "Table": "`user`, user_extra"
       }
     ]
@@ -5658,6 +5705,63 @@ Gen4 plan same as above
                 "FieldQuery": "select id, val1, weight_string(val1) from `user` where 1 != 1",
                 "OrderBy": "(1|2) ASC, (1|2) ASC",
                 "Query": "select id, val1, weight_string(val1) from `user` where val2 \u003c 4 order by val1 asc, val1 asc limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
+
+# Can't inline derived table when it has HAVING with aggregation function
+"select * from (select id from user having count(*) = 1) s"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select id from user having count(*) = 1) s",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from (select id from `user` where 1 != 1) as s where 1 != 1",
+    "Query": "select * from (select id from `user` having count(*) = 1) as s",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select id from user having count(*) = 1) s",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": ":1 = 1",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0) AS id, sum_count_star(1) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+                "Query": "select id, count(*) from `user`",
                 "Table": "`user`"
               }
             ]

@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
@@ -61,6 +62,8 @@ func init() {
 		fs.BoolVar(&doShardReplications, "do-shard-replications", doShardReplications, "copies the shard replication information")
 		fs.BoolVar(&doTablets, "do-tablets", doTablets, "copies the tablet information")
 		fs.BoolVar(&doRoutingRules, "do-routing-rules", doRoutingRules, "copies the routing rules")
+
+		acl.RegisterFlags(fs)
 	})
 }
 
