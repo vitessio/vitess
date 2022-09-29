@@ -3595,3 +3595,1753 @@ Gen4 plan same as above
     ]
   }
 }
+
+# Subquery with `IN` condition using columns with matching lookup vindexes
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in ::__vals",
+        "Table": "music",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Subquery with `IN` condition using columns with matching lookup vindexes, with derived table
+"SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from (select music.id from music where 1 != 1) as _inner where 1 != 1",
+        "Query": "select * from (select music.id from music where music.user_id in ::__vals) as _inner",
+        "Table": "music",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select _inner.id from (select music.id from music where 1 != 1) as _inner where 1 != 1",
+        "Query": "select _inner.id from (select music.id from music where music.user_id in ::__vals) as _inner",
+        "Table": "music",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+
+# Subquery with `IN` condition using columns with matching lookup vindexes, with inner scatter query
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.foo = 'bar'",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in ::__vals and :__sq_has_values1 = 1 and music.id in ::__sq1",
+        "Table": "music",
+        "Values": [
+          "(INT64(3), INT64(4), INT64(5))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.foo = 'bar'",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id in ::__vals",
+        "Table": "music",
+        "Values": [
+          "(INT64(3), INT64(4), INT64(5))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# Subquery with `IN` condition using columns with matching lookup vindexes
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in ::__vals",
+        "Table": "music",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in ::__vals",
+        "Table": "music",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id = 5",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# Subquery with `IN` condition using columns with matching lookup vindexes, but not a top level predicate
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in ::__vals",
+        "Table": "music",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
+        "Table": "music"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# `IN` comparison on Vindex with `None` subquery, as routing predicate
+"SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in (null)",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in (null)",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id = 5",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# `IN` comparison on Vindex with `None` subquery, as non-routing predicate
+"SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in (null)",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
+        "Table": "music"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Mergeable scatter subquery
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.genre = 'pop'",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Mergeable scatter subquery with `GROUP BY` on unique vindex column
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1 group by music.id",
+        "Query": "select music.id from music where music.genre = 'pop' group by music.id",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Unmergeable scatter subquery with `GROUP BY` on-non vindex column
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)"
+"unsupported: in scatter query: group by column must reference column in SELECT list"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "random(0) AS id",
+        "GroupBy": "(1|2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.id, music.genre, weight_string(music.genre) from music where 1 != 1 group by music.genre, weight_string(music.genre)",
+            "OrderBy": "(1|2) ASC",
+            "Query": "select music.id, music.genre, weight_string(music.genre) from music where music.genre = 'pop' group by music.genre, weight_string(music.genre) order by music.genre asc",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+
+# Unmergeable scatter subquery with LIMIT
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(10)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.id from music where 1 != 1",
+            "Query": "select music.id from music where music.genre = 'pop' limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Mergeable subquery with `MAX` aggregate and grouped by unique vindex
+"SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select MAX(music.id) from music where 1 != 1 group by music.user_id",
+        "Query": "select MAX(music.id) from music where music.user_id in ::__vals group by music.user_id",
+        "Table": "music",
+        "Values": [
+          "(INT64(5), INT64(6))"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Unmergeable subquery with `MAX` aggregate
+"SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select MAX(music.id) from music where 1 != 1",
+            "Query": "select MAX(music.id) from music where music.user_id in ::__vals",
+            "Table": "music",
+            "Values": [
+              "(INT64(5), INT64(6))"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0) AS MAX(music.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select MAX(music.id) from music where 1 != 1",
+            "Query": "select MAX(music.id) from music where music.user_id in ::__vals",
+            "Table": "music",
+            "Values": [
+              "(INT64(5), INT64(6))"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+
+# Mergeable subquery with `MAX` aggregate with `EqualUnique` route operator
+"SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select MAX(music.id) from music where 1 != 1",
+        "Query": "select MAX(music.id) from music where music.user_id = 5",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Mergeable subquery with `LIMIT` due to `EqualUnique` route
+"SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select MAX(music.id) from music where 1 != 1",
+        "Query": "select MAX(music.id) from music where music.user_id = 5 limit 10",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Mergeable subquery with multiple levels of derived statements
+"SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from (select * from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+        "Query": "select * from (select * from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+        "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+
+# Mergeable subquery with multiple levels of derived statements, using a single value `IN` predicate
+"SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(10)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.id from music where 1 != 1",
+                    "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
+                    "Table": "music",
+                    "Values": [
+                      "(INT64(5))"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Unmergeable subquery with multiple levels of derived statements, using a multi value `IN` predicate
+"SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(10)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.id from music where 1 != 1",
+                    "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
+                    "Table": "music",
+                    "Values": [
+                      "(INT64(5), INT64(6))"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Unmergeable subquery with multiple levels of derived statements
+"SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(10)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.id from music where 1 != 1",
+                    "Query": "select music.id from music limit :__upper_limit",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# `None` subquery as top level predicate - outer query changes from `Scatter` to `None` on merge
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in (null)",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+        "Table": "music",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# `None` subquery as top level predicate - outer query changes from `EqualUnique` to `None` on merge
+"SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in (null)",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id = 5 and :__sq_has_values1 = 1 and music.id in ::__sq1",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in (null)",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id = 5",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# `None` subquery nested inside `OR` expression - outer query keeps routing information
+"SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.user_id in (null)",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
+        "Table": "music"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# Joining with a subquery that uses an aggregate column and an `EqualUnique` route can be merged together
+"SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0",
+    "JoinVars": {
+      "music_id": 0
+    },
+    "TableName": "music_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
+        "Query": "select 1 from (select MAX(id) as maxt from music where music.user_id = 5) as other where other.maxt = :music_id",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0",
+    "JoinVars": {
+      "music_id": 0
+    },
+    "TableName": "music_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
+        "Query": "select 1 from (select MAX(id) as maxt from music where music.user_id = 5 and MAX(id) = :music_id) as other",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# Joining with a subquery that uses an `EqualUnique` route can be merged
+"SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music join (select id from music where 1 != 1) as other on other.id = music.id where 1 != 1",
+    "Query": "select music.id from music join (select id from music where music.user_id = 5) as other on other.id = music.id",
+    "Table": "music"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music, (select id from music where 1 != 1) as other where 1 != 1",
+    "Query": "select music.id from music, (select id from music where music.user_id = 5) as other where other.id = music.id",
+    "Table": "music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# Joining with a subquery that has an `IN` route can be merged
+"SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music join (select id from music where 1 != 1) as other on other.id = music.id where 1 != 1",
+    "Query": "select music.id from music join (select id from music where music.user_id in (5, 6, 7)) as other on other.id = music.id",
+    "Table": "music"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music, (select id from music where 1 != 1) as other where 1 != 1",
+    "Query": "select music.id from music, (select id from music where music.user_id in ::__vals) as other where other.id = music.id",
+    "Table": "music",
+    "Values": [
+      "(INT64(5), INT64(6), INT64(7))"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# limit on the vtgate has to be executed on the LHS of a join
+"select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id"
+"unsupported: filtering on results of cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user`, (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+    "Query": "select id from `user`, (select user_id from user_extra limit 10) as ue where `user`.id = ue.user_id",
+    "Table": "`user`, user_extra"
+  }
+}
+
+"select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id"
+"unsupported: filtering on results of cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:1,R:0",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, `user`.a from `user` where 1 != 1",
+        "Query": "select `user`.id, `user`.a from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          1
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count_star(1) AS b",
+            "GroupBy": "(0|3), (2|4)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra where 1 != 1 group by id, weight_string(id), req, weight_string(req)",
+                "OrderBy": "(0|3) ASC, (2|4) ASC",
+                "Query": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra where id = :user_id group by id, weight_string(id), req, weight_string(req) order by id asc, req asc",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# cant switch sides for outer joins
+"select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` left join (select user_id from user_extra where 1 != 1) as ue on `user`.id = ue.user_id where 1 != 1",
+    "Query": "select id from `user` left join (select user_id from user_extra limit 10) as ue on `user`.id = ue.user_id",
+    "Table": "`user`, user_extra"
+  }
+}
+Gen4 plan same as above
+
+# limit on both sides means that we can't evaluate this at all
+"select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id"
+"unsupported: filtering on results of cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id from `user` where 1 != 1) as u, (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+    "Query": "select id from (select id from `user` limit 10) as u, (select user_id from user_extra limit 10) as ue where u.id = ue.user_id",
+    "Table": "`user`, user_extra"
+  }
+}
+
+"SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "R:0",
+    "JoinVars": {
+      "other_maxt": 0
+    },
+    "TableName": "music_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select other.maxt from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
+        "Query": "select other.maxt from (select MAX(id) as maxt from music where music.user_id = 5) as other",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id = :other_maxt",
+        "Table": "music",
+        "Values": [
+          ":other_maxt"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "R:0",
+    "JoinVars": {
+      "other_maxt": 0
+    },
+    "TableName": "music_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
+        "Query": "select 1 from (select MAX(id) as maxt from music where music.user_id = 5) as other",
+        "Table": "music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id = :other_maxt",
+        "Table": "music",
+        "Values": [
+          ":other_maxt"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}

@@ -67,16 +67,7 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		}
 		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	case *abstract.Derived:
-		opInner, err := CreatePhysicalOperator(ctx, op.Inner)
-		if err != nil {
-			return nil, err
-		}
-		return &Derived{
-			Source:        opInner,
-			Query:         op.Sel,
-			Alias:         op.Alias,
-			ColumnAliases: op.ColumnAliases,
-		}, nil
+		return optimizeDerived(ctx, op)
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
 	case *abstract.Vindex:
@@ -784,7 +775,7 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 	return rVindex == lVindex
 }
 
-func findColumnVindex(ctx *plancontext.PlanningContext, a *Route, exp sqlparser.Expr) vindexes.SingleColumn {
+func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOperator, exp sqlparser.Expr) vindexes.SingleColumn {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
@@ -1124,4 +1115,41 @@ func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlpar
 
 	node.Source = newInner
 	return node, nil
+}
+
+func optimizeDerived(ctx *plancontext.PlanningContext, op *abstract.Derived) (abstract.PhysicalOperator, error) {
+	opInner, err := CreatePhysicalOperator(ctx, op.Inner)
+	if err != nil {
+		return nil, err
+	}
+
+	innerRoute, ok := opInner.(*Route)
+	if !ok {
+		return buildDerivedOp(op, opInner), nil
+	}
+
+	derived := &Derived{
+		Source:        innerRoute.Source,
+		Query:         op.Sel,
+		Alias:         op.Alias,
+		ColumnAliases: op.ColumnAliases,
+	}
+
+	if innerRoute.RouteOpCode == engine.EqualUnique {
+		// no need to check anything if we are sure that we will only hit a single shard
+	} else if !derived.IsMergeable(ctx) {
+		return buildDerivedOp(op, opInner), nil
+	}
+
+	innerRoute.Source = derived
+	return innerRoute, nil
+}
+
+func buildDerivedOp(op *abstract.Derived, opInner abstract.PhysicalOperator) *Derived {
+	return &Derived{
+		Source:        opInner,
+		Query:         op.Sel,
+		Alias:         op.Alias,
+		ColumnAliases: op.ColumnAliases,
+	}
 }
