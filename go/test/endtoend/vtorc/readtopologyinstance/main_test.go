@@ -17,13 +17,15 @@ limitations under the License.
 package readtopologyinstance
 
 import (
-	"flag"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/app"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -43,12 +45,19 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	err := flag.Set("topo_global_server_address", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalAddress)
-	require.NoError(t, err)
-	err = flag.Set("topo_implementation", clusterInfo.ClusterInstance.VtctlProcess.TopoImplementation)
-	require.NoError(t, err)
-	err = flag.Set("topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot)
-	require.NoError(t, err)
+	tmpAddress := clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalAddress
+	tmpImplementation := clusterInfo.ClusterInstance.VtctlProcess.TopoImplementation
+	tmpGlobalRoot := clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot
+
+	servenv.OnParseFor("vtorc", func(fs *pflag.FlagSet) {
+		err := fs.Set("topo_global_server_address", tmpAddress)
+		require.NoError(t, err)
+		err = fs.Set("topo_implementation", tmpImplementation)
+		require.NoError(t, err)
+		err = fs.Set("topo_global_root", tmpGlobalRoot)
+		require.NoError(t, err)
+	})
+	servenv.ParseFlags("vtorc")
 	falseVal := false
 	emptyVal := ""
 	config.Config.Debug = true

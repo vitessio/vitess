@@ -17,6 +17,7 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/user"
@@ -26,15 +27,11 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains utility methods and definitions to lock
@@ -66,7 +63,7 @@ type Lock struct {
 }
 
 func init() {
-	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtexplain", "vtgate",
+	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtctlclient", "vtexplain", "vtgate",
 		"vtgr", "vtorc", "vtbackup"} {
 		servenv.OnParseFor(cmd, registerTopoLockFlags)
 	}

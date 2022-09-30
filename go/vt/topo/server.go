@@ -49,13 +49,10 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/vt/proto/topodata"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -178,7 +175,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtexplain", "vtgate",
+	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtctlclient", "vtexplain", "vtgate",
 		"vtgr", "vtorc", "vtbackup"} {
 		servenv.OnParseFor(cmd, registerTopoFlags)
 	}
