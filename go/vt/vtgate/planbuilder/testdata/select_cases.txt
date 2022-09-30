@@ -7288,31 +7288,23 @@ Gen4 plan same as above
         ],
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.id from music where 1 != 1",
-                    "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
-                    "Table": "music",
-                    "Values": [
-                      "(INT64(5), INT64(6))"
-                    ],
-                    "Vindex": "user_index"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
+                "Table": "music",
+                "Values": [
+                  "(INT64(5), INT64(6))"
+                ],
+                "Vindex": "user_index"
               }
             ]
           }
@@ -7422,27 +7414,19 @@ Gen4 plan same as above
         ],
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.id from music where 1 != 1",
-                    "Query": "select music.id from music limit :__upper_limit",
-                    "Table": "music"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music limit :__upper_limit",
+                "Table": "music"
               }
             ]
           }
