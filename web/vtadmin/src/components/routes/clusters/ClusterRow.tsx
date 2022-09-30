@@ -15,12 +15,11 @@ const ClusterRow: React.FC<Props> = ({ cluster }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [pingTablets, setPingTablets] = useState(false)
 
+  const { mutate, error, data, isIdle, reset } = useValidate({ clusterID: cluster.id, pingTablets })
   const closeDialog = () => {
     setIsOpen(false)
+    reset()
   }
-
-  const { mutate, error, data, isIdle } = useValidate({ clusterID: cluster.id, pingTablets })
-
   return (
     <tr>
       <Dialog
@@ -33,6 +32,7 @@ const ClusterRow: React.FC<Props> = ({ cluster }) => {
         onClose={closeDialog}
         hideCancel={!isIdle}
         title={!isIdle ? undefined : 'Validate'}
+        className="min-w-[400px]"
       >
         <div className="w-full">
           {isIdle && (
@@ -45,11 +45,33 @@ const ClusterRow: React.FC<Props> = ({ cluster }) => {
             </div>
           )}
           {!isIdle && !error && (
-            <div className="w-full flex flex-col justify-center items-center">
-              <span className="flex h-12 w-12 relative items-center justify-center">
+            <div className="w-full">
+              <div className="flex items-center whitespace-nowrap">
                 <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
-              </span>
-              <div className="text-lg mt-3 font-bold text-center">Successfully validated cluster {cluster.name}</div>
+                <div className="ml-2 text-lg font-bold">Successfully validated cluster {cluster.name}</div>
+              </div>
+              <div className="text-left w-full">
+                <table className="border-none bg-gray-100 ">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="text-base text-black bg-gray-100">Keyspace</th>
+                      <th className="text-base text-black bg-gray-100">Shard</th>
+                      <th className="text-base text-black bg-gray-100">Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data?.results_by_keyspace && Object.entries(data?.results_by_keyspace).map(([keyspace, results]) => {
+                      return results.results_by_shard && Object.entries(results.results_by_shard).map(([shard, results]) => (
+                        <tr className="p-1">
+                          <td className="py-2">{keyspace}</td>
+                          <td className="py-2">{shard}</td>
+                          <td className="py-2">{results.results}</td>
+                        </tr>
+                      ))
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
           {!isIdle && error && (
