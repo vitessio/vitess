@@ -4495,3 +4495,65 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# update with routing using tuple column in where clause
+"update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))"
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user"
+  }
+}
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "MultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user",
+    "Values": [
+      "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# delete with routing using tuple column in where clause
+"delete from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd')) for update",
+    "Query": "delete from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user"
+  }
+}
+Gen4 plan same as above
