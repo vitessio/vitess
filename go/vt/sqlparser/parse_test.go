@@ -964,6 +964,11 @@ var (
 			input:  "savepoint `ab_cd`",
 			output: "savepoint ab_cd",
 		}, {
+			input: "rollback",
+		}, {
+			input:  "rollback work",
+			output: "rollback",
+		}, {
 			input: "rollback to abc",
 		}, {
 			input:  "rollback work to abc",
@@ -2013,6 +2018,9 @@ var (
 		}, {
 			input: "begin",
 		}, {
+			input:  "begin work",
+			output: "begin",
+		}, {
 			input:  "start transaction",
 			output: "begin",
 		}, {
@@ -2024,7 +2032,8 @@ var (
 		}, {
 			input: "commit",
 		}, {
-			input: "rollback",
+			input:  "commit work",
+			output: "commit",
 		}, {
 			input: "create database test_db",
 		}, {

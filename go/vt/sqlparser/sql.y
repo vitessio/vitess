@@ -4361,6 +4361,10 @@ begin_statement:
   {
     $$ = &Begin{}
   }
+| BEGIN WORK
+  {
+    $$ = &Begin{}
+  }
 | start_transaction_statement
   {
     $$ = $1
@@ -4385,9 +4389,17 @@ commit_statement:
   {
     $$ = &Commit{}
   }
+| COMMIT WORK
+  {
+    $$ = &Commit{}
+  }
 
 rollback_statement:
   ROLLBACK
+  {
+    $$ = &Rollback{}
+  }
+| ROLLBACK WORK
   {
     $$ = &Rollback{}
   }
