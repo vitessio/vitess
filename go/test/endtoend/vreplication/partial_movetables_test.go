@@ -28,8 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
-// TestPartialMoveTables tests partial move tables by moving just one shard
-// 80- from customer to customer2.
+// TestPartialMoveTables tests partial move tables by moving each
+// customer shard -- -80,80- -- once a a time to customer2.
 func TestPartialMoveTables(t *testing.T) {
 	defaultRdonly = 1
 	origExtraVTGateArgs := extraVTGateArgs
@@ -58,11 +58,15 @@ func TestPartialMoveTables(t *testing.T) {
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
 
+	emptyShardRoutingRules := `{"rules":[]}`
+	preCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"},{"from_keyspace":"customer2","to_keyspace":"customer","shard":"80-"}]}`
+	halfCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"},{"from_keyspace":"customer","to_keyspace":"customer","shard":"-80"}]}`
+	postCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"},{"from_keyspace":"customer","to_keyspace":"customer2","shard":"-80"}]}`
+
 	// Remove any manually applied shard routing rules as these
 	// should be set by SwitchTraffic.
-	emptyRules := `{"rules":[]}`
-	applyShardRoutingRules(t, emptyRules)
-	require.Equal(t, emptyRules, getShardRoutingRules(t))
+	applyShardRoutingRules(t, emptyShardRoutingRules)
+	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
 
 	// Now setup the customer2 keyspace so we can do a partial
 	// move tables for one of the two shards: 80-.
@@ -118,7 +122,11 @@ func TestPartialMoveTables(t *testing.T) {
 	// the source keyspace (customer).
 	confirmGlobalRoutingToSource()
 
-	// Confirm shard targeting works as per usual before we switch any traffic.
+	// Shard routing rules show now also be in place with everything to
+	// the source keyspace (customer).
+	require.Equal(t, preCutoverShardRoutingRules, getShardRoutingRules(t))
+
+	// Confirm shard targeting works before we switch any traffic.
 	// Everything should be routed to the source keyspace (customer).
 
 	log.Infof("Testing reverse route (target->source) for shard being switched")
@@ -200,9 +208,9 @@ func TestPartialMoveTables(t *testing.T) {
 	err = tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionComplete, "", "", "")
 	require.Error(t, err)
 
-	currentRules = getShardRoutingRules(t)
-	require.Contains(t, currentRules, `{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}`)
-	require.Contains(t, currentRules, `{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"}`)
+	// Confirm global routing rules: -80 should still be be routed to customer
+	// while 80- should be routed to customer2.
+	require.Equal(t, halfCutoverShardRoutingRules, getShardRoutingRules(t))
 
 	_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "delete")
 	require.NoError(t, err)
@@ -222,9 +230,7 @@ func TestPartialMoveTables(t *testing.T) {
 	targetTab2 := vc.getPrimaryTablet(t, moveToKs, shard)
 	catchup(t, targetTab2, wfName, "Partial MoveTables Customer to Customer2: -80")
 	vdiff1(t, ksWf, "")
-	currentRules = getShardRoutingRules(t)
-	require.Contains(t, currentRules, `{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}`)
-	require.Contains(t, currentRules, `{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"}`)
+	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
 	expectedSwitchOutput = "SwitchTraffic was successful for workflow customer2.partial2\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n"
@@ -234,8 +240,20 @@ func TestPartialMoveTables(t *testing.T) {
 	// to the source side, customer, globally.
 	confirmGlobalRoutingToSource()
 
-	// Confirm shard routing rules --  all shards should be routed to target, overriding the global routing rules.
-	currentRules = getShardRoutingRules(t)
-	require.Contains(t, currentRules, `{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}`)
-	require.Contains(t, currentRules, `{"from_keyspace":"customer","to_keyspace":"customer2","shard":"-80"}`)
+	// Confirm shard routing rules -- all shards should be routed to target
+	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
+
+	// We cannot Complete a partial move tables at the moment because it may
+	// find that all traffic has (obviously) not been switched, so we instead
+	// cleanup using Workflow delete.
+	err = tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionComplete, "", "", "")
+	require.Error(t, err)
+	confirmGlobalRoutingToSource()
+	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
+	_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "delete")
+	require.NoError(t, err)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
+	require.Error(t, err)
+	require.Contains(t, output, "no streams found")
+	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
 }
