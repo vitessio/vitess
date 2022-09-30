@@ -774,8 +774,8 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
 	require.Nil(t, err)
 
-	restoreWaitForBackup(t, tabletType, nil, true)
 	verifyInitialReplication(t)
+	restoreWaitForBackup(t, tabletType, nil, true)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
