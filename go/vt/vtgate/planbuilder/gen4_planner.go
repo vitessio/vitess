@@ -222,6 +222,8 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
+	plan = optimizePlan(plan)
+
 	plan, err = planHorizon(ctx, plan, selStmt, true)
 	if err != nil {
 		return nil, nil, err
@@ -244,6 +246,28 @@ func newBuildSelectPlan(
 	}
 
 	return plan, semTable, nil
+}
+
+// optimizePlan removes unnecessary simpleProjections that have been created while planning
+func optimizePlan(plan logicalPlan) logicalPlan {
+	newPlan, _ := visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
+		this, ok := plan.(*simpleProjection)
+		if !ok {
+			return true, plan, nil
+		}
+
+		input, ok := this.input.(*simpleProjection)
+		if !ok {
+			return true, plan, nil
+		}
+
+		for i, col := range this.eSimpleProj.Cols {
+			this.eSimpleProj.Cols[i] = input.eSimpleProj.Cols[col]
+		}
+		this.input = input.input
+		return true, this, nil
+	})
+	return newPlan
 }
 
 func gen4UpdateStmtPlanner(
