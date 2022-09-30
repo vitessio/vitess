@@ -110,7 +110,7 @@ export class Flag {
     if (this.getValue() === true) {
       return [`-${this.id}`];
     }
-    return [`-${this.id}=${this.getStrValue()}`];
+    return [`--${this.id}=${this.getStrValue()}`];
   }
 }
 
