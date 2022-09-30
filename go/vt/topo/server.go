@@ -173,12 +173,12 @@ var (
 		cellsToAliases: make(map[string]string),
 	}
 
-	flagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtexplain", "vtgate",
+	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtexplain", "vtgate",
 		"vtgr", "vtorc", "vtbackup"}
 )
 
 func init() {
-	for _, cmd := range flagBinaries {
+	for _, cmd := range FlagBinaries {
 		servenv.OnParseFor(cmd, registerTopoFlags)
 	}
 }
