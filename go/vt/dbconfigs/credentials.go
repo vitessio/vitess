@@ -64,7 +64,6 @@ var (
 		"vtcombo",
 		"vtgr",
 		"vttablet",
-		"vttestserver",
 	}
 )
 
