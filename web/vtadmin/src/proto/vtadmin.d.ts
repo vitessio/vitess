@@ -9879,77 +9879,6 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
-<<<<<<< HEAD
-    /** Properties of a ValidateRequest. */
-    interface IValidateRequest {
-
-        /** ValidateRequest cluster_id */
-        cluster_id?: (string|null);
-
-        /** ValidateRequest ping_tablets */
-        ping_tablets?: (boolean|null);
-    }
-
-    /** Represents a ValidateRequest. */
-    class ValidateRequest implements IValidateRequest {
-
-        /**
-         * Constructs a new ValidateRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtadmin.IValidateRequest);
-
-        /** ValidateRequest cluster_id. */
-        public cluster_id: string;
-
-        /** ValidateRequest ping_tablets. */
-        public ping_tablets: boolean;
-
-        /**
-         * Creates a new ValidateRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ValidateRequest instance
-         */
-        public static create(properties?: vtadmin.IValidateRequest): vtadmin.ValidateRequest;
-
-        /**
-         * Encodes the specified ValidateRequest message. Does not implicitly {@link vtadmin.ValidateRequest.verify|verify} messages.
-         * @param message ValidateRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtadmin.IValidateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ValidateRequest message, length delimited. Does not implicitly {@link vtadmin.ValidateRequest.verify|verify} messages.
-         * @param message ValidateRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtadmin.IValidateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ValidateRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ValidateRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ValidateRequest;
-
-        /**
-         * Decodes a ValidateRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ValidateRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ValidateRequest;
-
-        /**
-         * Verifies a ValidateRequest message.
-=======
     /** Properties of a TabletExternallyReparentedRequest. */
     interface ITabletExternallyReparentedRequest {
 
@@ -10019,31 +9948,12 @@ export namespace vtadmin {
 
         /**
          * Verifies a TabletExternallyReparentedRequest message.
->>>>>>> 812a3efe81d6decc12bf641bd78bc8a18e5d5e88
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-<<<<<<< HEAD
-         * Creates a ValidateRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ValidateRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtadmin.ValidateRequest;
-
-        /**
-         * Creates a plain object from a ValidateRequest message. Also converts values to other types if specified.
-         * @param message ValidateRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtadmin.ValidateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ValidateRequest to JSON.
-=======
          * Creates a TabletExternallyReparentedRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns TabletExternallyReparentedRequest
@@ -10060,7 +9970,102 @@ export namespace vtadmin {
 
         /**
          * Converts this TabletExternallyReparentedRequest to JSON.
->>>>>>> 812a3efe81d6decc12bf641bd78bc8a18e5d5e88
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateRequest. */
+    interface IValidateRequest {
+
+        /** ValidateRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** ValidateRequest ping_tablets */
+        ping_tablets?: (boolean|null);
+    }
+
+    /** Represents a ValidateRequest. */
+    class ValidateRequest implements IValidateRequest {
+
+        /**
+         * Constructs a new ValidateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IValidateRequest);
+
+        /** ValidateRequest cluster_id. */
+        public cluster_id: string;
+
+        /** ValidateRequest ping_tablets. */
+        public ping_tablets: boolean;
+
+        /**
+         * Creates a new ValidateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateRequest instance
+         */
+        public static create(properties?: vtadmin.IValidateRequest): vtadmin.ValidateRequest;
+
+        /**
+         * Encodes the specified ValidateRequest message. Does not implicitly {@link vtadmin.ValidateRequest.verify|verify} messages.
+         * @param message ValidateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IValidateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateRequest message, length delimited. Does not implicitly {@link vtadmin.ValidateRequest.verify|verify} messages.
+         * @param message ValidateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IValidateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ValidateRequest;
+
+        /**
+         * Decodes a ValidateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ValidateRequest;
+
+        /**
+         * Verifies a ValidateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ValidateRequest;
+
+        /**
+         * Creates a plain object from a ValidateRequest message. Also converts values to other types if specified.
+         * @param message ValidateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ValidateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
