@@ -82,7 +82,7 @@ func CreateOrReturnQueue(name string) *Queue {
 		name:         name,
 		queuedKeys:   make(map[inst.InstanceKey]time.Time),
 		consumedKeys: make(map[inst.InstanceKey]time.Time),
-		queue:        make(chan inst.InstanceKey, config.Config.DiscoveryQueueCapacity),
+		queue:        make(chan inst.InstanceKey, config.DiscoveryQueueCapacity),
 	}
 	go q.startMonitoring()
 
@@ -119,8 +119,8 @@ func (q *Queue) collectStatistics() {
 	q.metrics = append(q.metrics, QueueMetric{Queued: len(q.queuedKeys), Active: len(q.consumedKeys)})
 
 	// remove old entries if we get too big
-	if len(q.metrics) > config.Config.DiscoveryQueueMaxStatisticsSize {
-		q.metrics = q.metrics[len(q.metrics)-config.Config.DiscoveryQueueMaxStatisticsSize:]
+	if len(q.metrics) > config.DiscoveryQueueMaxStatisticsSize {
+		q.metrics = q.metrics[len(q.metrics)-config.DiscoveryQueueMaxStatisticsSize:]
 	}
 }
 

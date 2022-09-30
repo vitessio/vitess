@@ -118,7 +118,7 @@ func acceptSignals() {
 				log.Infof("Received SIGHUP. Reloading configuration")
 				_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
 				config.Reload()
-				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
+				discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
 				log.Infof("Received SIGTERM. Starting shutdown")
 				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
@@ -154,7 +154,7 @@ func handleDiscoveryRequests() {
 	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
 
 	// create a pool of discovery workers
-	for i := uint(0); i < config.Config.DiscoveryMaxConcurrency; i++ {
+	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
 			for {
 				instanceKey := discoveryQueue.Consume()

@@ -39,6 +39,10 @@ const (
 	MaintenanceExpireMinutes              = 10
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
+	DiscoveryMaxConcurrency               = 300 // Number of goroutines doing hosts discovery
+	DiscoveryQueueCapacity                = 100000
+	DiscoveryQueueMaxStatisticsSize       = 120
+	DiscoveryCollectionRetentionSeconds   = 120
 )
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -50,10 +54,6 @@ type Configuration struct {
 	InstancePollSeconds                   uint   // Number of seconds between instance reads
 	UnseenInstanceForgetHours             uint   // Number of hours after which an unseen instance is forgotten
 	SnapshotTopologiesIntervalHours       uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
-	DiscoveryMaxConcurrency               uint   // Number of goroutines doing hosts discovery
-	DiscoveryQueueCapacity                uint   // Buffer size of the discovery queue. Should be greater than the number of DB instances being discovered
-	DiscoveryQueueMaxStatisticsSize       int    // The maximum number of individual secondly statistics taken of the discovery queue
-	DiscoveryCollectionRetentionSeconds   uint   // Number of seconds to retain the discovery collection information
 	HostnameResolveMethod                 string // Method by which to "normalize" hostname ("none"/"default"/"cname")
 	ExpiryHostnameResolvesMinutes         int    // Number of minutes after which to expire hostname-resolves
 	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
@@ -87,10 +87,6 @@ func newConfiguration() *Configuration {
 		InstancePollSeconds:                   5,
 		UnseenInstanceForgetHours:             240,
 		SnapshotTopologiesIntervalHours:       0,
-		DiscoveryMaxConcurrency:               300,
-		DiscoveryQueueCapacity:                100000,
-		DiscoveryQueueMaxStatisticsSize:       120,
-		DiscoveryCollectionRetentionSeconds:   120,
 		HostnameResolveMethod:                 "default",
 		ExpiryHostnameResolvesMinutes:         60,
 		ReasonableReplicationLagSeconds:       10,
