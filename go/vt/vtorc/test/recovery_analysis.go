@@ -58,7 +58,6 @@ type InfoForRecoveryAnalysis struct {
 	CountReplicasFailingToConnectToPrimary    uint
 	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
-	ReplicaHosts                              string
 	IsFailingToConnectToPrimary               int
 	ReplicationStopped                        int
 	IsDowntimed                               int
@@ -144,7 +143,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["primary_timestamp"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.PrimaryTimestamp), Valid: true}
 	rowMap["read_only"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReadOnly), Valid: true}
 	rowMap["region"] = sqlutils.CellData{String: info.Region, Valid: true}
-	rowMap["replica_hosts"] = sqlutils.CellData{String: info.ReplicaHosts, Valid: true}
 	rowMap["replication_depth"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicationDepth), Valid: true}
 	rowMap["replication_stopped"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicationStopped), Valid: true}
 	rowMap["semi_sync_primary_clients"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryClients), Valid: true}

@@ -118,14 +118,14 @@ func acceptSignals() {
 				log.Infof("Received SIGHUP. Reloading configuration")
 				_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
 				config.Reload()
-				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
+				discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
 				log.Infof("Received SIGTERM. Starting shutdown")
 				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
 				_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
-				timeout := time.After(*shutdownWaitTime)
+				timeout := time.After(shutdownWaitTime)
 				func() {
 					for {
 						count := atomic.LoadInt32(&shardsLockCounter)
@@ -154,7 +154,7 @@ func handleDiscoveryRequests() {
 	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
 
 	// create a pool of discovery workers
-	for i := uint(0); i < config.Config.DiscoveryMaxConcurrency; i++ {
+	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
 			for {
 				instanceKey := discoveryQueue.Consume()
@@ -180,10 +180,6 @@ func handleDiscoveryRequests() {
 func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
 		log.Infof("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
-		return
-	}
-	if inst.RegexpMatchPatterns(instanceKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
-		log.Infof("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", instanceKey)
 		return
 	}
 
@@ -228,7 +224,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	discoveriesCounter.Inc(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, config.Config.BufferInstanceWrites, latency)
+	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")
@@ -331,19 +327,6 @@ func onHealthTick() {
 	}
 }
 
-func injectSeeds(seedOnce *sync.Once) {
-	seedOnce.Do(func() {
-		for _, seed := range config.Config.DiscoverySeeds {
-			instanceKey, err := inst.ParseRawInstanceKey(seed)
-			if err == nil {
-				_ = inst.InjectSeed(instanceKey)
-			} else {
-				log.Errorf("Error parsing seed %s: %+v", seed, err)
-			}
-		}
-	})
-}
-
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
@@ -372,16 +355,10 @@ func ContinuousDiscovery() {
 		return time.Since(continuousDiscoveryStartTime) >= checkAndRecoverWaitPeriod
 	}
 
-	var seedOnce sync.Once
-
 	go func() {
 		_ = ometrics.InitMetrics()
 	}()
 	go acceptSignals()
-
-	if *config.RuntimeCLIFlags.GrabElection {
-		_ = process.GrabElection()
-	}
 
 	log.Infof("continuous discovery: starting")
 	for {
@@ -397,7 +374,6 @@ func ContinuousDiscovery() {
 				// as instance poll
 				if IsLeaderOrActive() {
 					go inst.ExpireDowntime()
-					go injectSeeds(&seedOnce)
 				}
 			}()
 		case <-caretakingTick:
@@ -416,11 +392,9 @@ func ContinuousDiscovery() {
 					go inst.ExpireHostnameUnresolve()
 					go inst.ExpireClusterDomainName()
 					go inst.ExpireAudit()
-					go inst.ExpirePoolInstances()
 					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
-					go process.ExpireAccessTokens()
 					go process.ExpireAvailableNodes()
 					go ExpireFailureDetectionHistory()
 					go ExpireTopologyRecoveryHistory()

@@ -25,7 +25,6 @@ import (
 )
 
 func init() {
-	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
 }
 
