@@ -40,7 +40,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
 		analysisEntry.CountReplicas,
-		analysisEntry.Replicas.ToCommaDelimitedList(),
 		analysisEntry.IsActionableRecovery,
 	)
 	startActivePeriodHint := "now()"
@@ -61,7 +60,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					analysis,
 					cluster_name,
 					count_affected_replicas,
-					replica_hosts,
 					is_actionable,
 					start_active_period
 				) values (
@@ -69,7 +67,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					?,
 					1,
 					0,
-					?,
 					?,
 					?,
 					?,
@@ -104,26 +101,8 @@ func ClearActiveFailureDetections() error {
 				in_active_period = 1
 				AND start_active_period < NOW() - INTERVAL ? MINUTE
 			`,
-		config.Config.FailureDetectionPeriodBlockMinutes,
+		config.FailureDetectionPeriodBlockMinutes,
 	)
-	if err != nil {
-		log.Error(err)
-	}
-	return err
-}
-
-// clearAcknowledgedFailureDetections clears the "in_active_period" flag for detections
-// that were acknowledged
-func clearAcknowledgedFailureDetections(whereClause string, args []any) error {
-	query := fmt.Sprintf(`
-			update topology_failure_detection set
-				in_active_period = 0,
-				end_active_period_unixtime = UNIX_TIMESTAMP()
-			where
-				in_active_period = 1
-				and %s
-			`, whereClause)
-	_, err := db.ExecVTOrc(query, args...)
 	if err != nil {
 		log.Error(err)
 	}
@@ -147,7 +126,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					analysis,
 					cluster_name,
 					count_affected_replicas,
-					replica_hosts,
 					last_detection_id
 				) values (
 					?,
@@ -162,7 +140,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					?,
 					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
 				)
 			`,
@@ -172,7 +149,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		process.ThisHostname, util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
-		analysisEntry.CountReplicas, analysisEntry.Replicas.ToCommaDelimitedList(),
+		analysisEntry.CountReplicas,
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 	)
 	if err != nil {
@@ -394,54 +371,6 @@ func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, w
 	return rows, err
 }
 
-// AcknowledgeAllRecoveries acknowledges all unacknowledged recoveries.
-func AcknowledgeAllRecoveries(owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	whereClause := `1 = 1`
-	return acknowledgeRecoveries(owner, comment, false, whereClause, sqlutils.Args())
-}
-
-// AcknowledgeRecovery acknowledges a particular recovery.
-// This also implied clearing their active period, which in turn enables further recoveries on those topologies
-func AcknowledgeRecovery(recoveryID int64, owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	whereClause := `recovery_id = ?`
-	return acknowledgeRecoveries(owner, comment, false, whereClause, sqlutils.Args(recoveryID))
-}
-
-// AcknowledgeRecovery acknowledges a particular recovery.
-// This also implied clearing their active period, which in turn enables further recoveries on those topologies
-func AcknowledgeRecoveryByUID(recoveryUID string, owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	whereClause := `uid = ?`
-	return acknowledgeRecoveries(owner, comment, false, whereClause, sqlutils.Args(recoveryUID))
-}
-
-// AcknowledgeClusterRecoveries marks active recoveries for given cluster as acknowledged.
-// This also implied clearing their active period, which in turn enables further recoveries on those topologies
-func AcknowledgeClusterRecoveries(clusterName string, owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	{
-		whereClause := `cluster_name = ?`
-		args := sqlutils.Args(clusterName)
-		_ = clearAcknowledgedFailureDetections(whereClause, args)
-		count, err := acknowledgeRecoveries(owner, comment, false, whereClause, args)
-		if err != nil {
-			return count, err
-		}
-		countAcknowledgedEntries = countAcknowledgedEntries + count
-	}
-	return countAcknowledgedEntries, nil
-}
-
-// AcknowledgeInstanceRecoveries marks active recoveries for given instane as acknowledged.
-// This also implied clearing their active period, which in turn enables further recoveries on those topologies
-func AcknowledgeInstanceRecoveries(instanceKey *inst.InstanceKey, owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	whereClause := `
-			hostname = ?
-			and port = ?
-		`
-	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
-	_ = clearAcknowledgedFailureDetections(whereClause, args)
-	return acknowledgeRecoveries(owner, comment, false, whereClause, args)
-}
-
 // AcknowledgeInstanceCompletedRecoveries marks active and COMPLETED recoveries for given instane as acknowledged.
 // This also implied clearing their active period, which in turn enables further recoveries on those topologies
 func AcknowledgeInstanceCompletedRecoveries(instanceKey *inst.InstanceKey, owner string, comment string) (countAcknowledgedEntries int64, err error) {
@@ -518,7 +447,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
       analysis,
       cluster_name,
       count_affected_replicas,
-      replica_hosts,
       participating_instances,
       lost_replicas,
       all_errors,
@@ -551,7 +479,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
 		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
-		_ = topologyRecovery.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
 
 		topologyRecovery.SuccessorKey = &inst.InstanceKey{}
 		topologyRecovery.SuccessorKey.Hostname = m.GetString("successor_hostname")
@@ -581,31 +508,12 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 	return res, err
 }
 
-// ReadActiveRecoveries reads active recovery entry/audit entries from topology_recovery
-func ReadActiveClusterRecovery(clusterName string) ([]*TopologyRecovery, error) {
-	whereClause := `
-		where
-			in_active_period=1
-			and end_recovery is null
-			and cluster_name=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(clusterName))
-}
-
 // ReadInActivePeriodClusterRecovery reads recoveries (possibly complete!) that are in active period.
 // (may be used to block further recoveries on this cluster)
 func ReadInActivePeriodClusterRecovery(clusterName string) ([]*TopologyRecovery, error) {
 	whereClause := `
 		where
 			in_active_period=1
-			and cluster_name=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(clusterName))
-}
-
-// ReadRecentlyActiveClusterRecovery reads recently completed entries for a given cluster
-func ReadRecentlyActiveClusterRecovery(clusterName string) ([]*TopologyRecovery, error) {
-	whereClause := `
-		where
-			end_recovery > now() - interval 5 minute
 			and cluster_name=?`
 	return readRecoveries(whereClause, ``, sqlutils.Args(clusterName))
 }
@@ -619,28 +527,6 @@ func ReadInActivePeriodSuccessorInstanceRecovery(instanceKey *inst.InstanceKey) 
 			and
 				successor_hostname=? and successor_port=?`
 	return readRecoveries(whereClause, ``, sqlutils.Args(instanceKey.Hostname, instanceKey.Port))
-}
-
-// ReadRecentlyActiveInstanceRecovery reads recently completed entries for a given instance
-func ReadRecentlyActiveInstanceRecovery(instanceKey *inst.InstanceKey) ([]*TopologyRecovery, error) {
-	whereClause := `
-		where
-			end_recovery > now() - interval 5 minute
-			and
-				successor_hostname=? and successor_port=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(instanceKey.Hostname, instanceKey.Port))
-}
-
-// ReadRecovery reads completed recovery entry/audit entries from topology_recovery
-func ReadRecovery(recoveryID int64) ([]*TopologyRecovery, error) {
-	whereClause := `where recovery_id = ?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(recoveryID))
-}
-
-// ReadRecoveryByUID reads completed recovery entry/audit entries from topology_recovery
-func ReadRecoveryByUID(recoveryUID string) ([]*TopologyRecovery, error) {
-	whereClause := `where uid = ?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(recoveryUID))
 }
 
 // ReadRecentRecoveries reads latest recovery entries from topology_recovery
@@ -665,125 +551,6 @@ func ReadRecentRecoveries(clusterName string, unacknowledgedOnly bool, page int)
 	return readRecoveries(whereClause, limit, args)
 }
 
-// readRecoveries reads recovery entry/audit entries from topology_recovery
-func readFailureDetections(whereCondition string, limit string, args []any) ([]*TopologyRecovery, error) {
-	res := []*TopologyRecovery{}
-	query := fmt.Sprintf(`
-		select
-      detection_id,
-      hostname,
-      port,
-      in_active_period as is_active,
-      start_active_period,
-      end_active_period_unixtime,
-      processing_node_hostname,
-      processcing_node_token,
-      analysis,
-      cluster_name,
-      count_affected_replicas,
-      replica_hosts,
-      (select max(recovery_id) from topology_recovery where topology_recovery.last_detection_id = detection_id) as related_recovery_id
-		from
-			topology_failure_detection
-		%s
-		order by
-			detection_id desc
-		%s
-		`, whereCondition, limit)
-	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		failureDetection := TopologyRecovery{}
-		failureDetection.ID = m.GetInt64("detection_id")
-
-		failureDetection.IsActive = m.GetBool("is_active")
-		failureDetection.RecoveryStartTimestamp = m.GetString("start_active_period")
-		failureDetection.ProcessingNodeHostname = m.GetString("processing_node_hostname")
-		failureDetection.ProcessingNodeToken = m.GetString("processcing_node_token")
-
-		failureDetection.AnalysisEntry.AnalyzedInstanceKey.Hostname = m.GetString("hostname")
-		failureDetection.AnalysisEntry.AnalyzedInstanceKey.Port = m.GetInt("port")
-		failureDetection.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
-		failureDetection.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
-		failureDetection.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
-		_ = failureDetection.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
-		failureDetection.AnalysisEntry.StartActivePeriod = m.GetString("start_active_period")
-
-		failureDetection.RelatedRecoveryID = m.GetInt64("related_recovery_id")
-
-		failureDetection.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
-
-		res = append(res, &failureDetection)
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
-}
-
-// ReadRecentFailureDetections
-func ReadRecentFailureDetections(clusterName string, page int) ([]*TopologyRecovery, error) {
-	whereClause := ""
-	args := sqlutils.Args()
-	if clusterName != "" {
-		whereClause = `where cluster_name = ?`
-		args = append(args, clusterName)
-	}
-	limit := `
-		limit ?
-		offset ?`
-	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
-	return readFailureDetections(whereClause, limit, args)
-}
-
-// ReadFailureDetection
-func ReadFailureDetection(detectionID int64) ([]*TopologyRecovery, error) {
-	whereClause := `where detection_id = ?`
-	return readFailureDetections(whereClause, ``, sqlutils.Args(detectionID))
-}
-
-// ReadBlockedRecoveries reads blocked recovery entries, potentially filtered by cluster name (empty to unfilter)
-func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error) {
-	res := []BlockedTopologyRecovery{}
-	whereClause := ""
-	args := sqlutils.Args()
-	if clusterName != "" {
-		whereClause = `where cluster_name = ?`
-		args = append(args, clusterName)
-	}
-	query := fmt.Sprintf(`
-		select
-				hostname,
-				port,
-				cluster_name,
-				analysis,
-				last_blocked_timestamp,
-				blocking_recovery_id
-			from
-				blocked_topology_recovery
-			%s
-			order by
-				last_blocked_timestamp desc
-		`, whereClause)
-	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		blockedTopologyRecovery := BlockedTopologyRecovery{}
-		blockedTopologyRecovery.FailedInstanceKey.Hostname = m.GetString("hostname")
-		blockedTopologyRecovery.FailedInstanceKey.Port = m.GetInt("port")
-		blockedTopologyRecovery.ClusterName = m.GetString("cluster_name")
-		blockedTopologyRecovery.Analysis = inst.AnalysisCode(m.GetString("analysis"))
-		blockedTopologyRecovery.LastBlockedTimestamp = m.GetString("last_blocked_timestamp")
-		blockedTopologyRecovery.BlockingRecoveryID = m.GetInt64("blocking_recovery_id")
-
-		res = append(res, blockedTopologyRecovery)
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
-}
-
 // writeTopologyRecoveryStep writes down a single step in a recovery process
 func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error {
 	sqlResult, err := db.ExecVTOrc(`
@@ -802,35 +569,6 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 		log.Error(err)
 	}
 	return err
-}
-
-// ReadTopologyRecoverySteps reads recovery steps for a given recovery
-func ReadTopologyRecoverySteps(recoveryUID string) ([]TopologyRecoveryStep, error) {
-	res := []TopologyRecoveryStep{}
-	query := `
-		select
-			recovery_step_id, recovery_uid, audit_at, message
-		from
-			topology_recovery_steps
-		where
-			recovery_uid=?
-		order by
-			recovery_step_id asc
-		`
-	err := db.QueryVTOrc(query, sqlutils.Args(recoveryUID), func(m sqlutils.RowMap) error {
-		recoveryStep := TopologyRecoveryStep{}
-		recoveryStep.RecoveryUID = recoveryUID
-		recoveryStep.ID = m.GetInt64("recovery_step_id")
-		recoveryStep.AuditAt = m.GetString("audit_at")
-		recoveryStep.Message = m.GetString("message")
-
-		res = append(res, recoveryStep)
-		return nil
-	})
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
 }
 
 // ExpireFailureDetectionHistory removes old rows from the topology_failure_detection table

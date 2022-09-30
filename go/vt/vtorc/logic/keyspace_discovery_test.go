@@ -80,8 +80,8 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	}
 
 	// Set clusters to watch to only watch ks1 and ks3
-	onlyKs1and3 := "ks1/-,ks3/-80,ks3/80-"
-	clustersToWatch = &onlyKs1and3
+	onlyKs1and3 := []string{"ks1/-", "ks3/-80", "ks3/80-"}
+	clustersToWatch = onlyKs1and3
 	RefreshAllKeyspaces()
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
@@ -91,8 +91,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	verifyKeyspaceInfo(t, "ks4", nil, "keyspace not found")
 
 	// Set clusters to watch to watch all keyspaces
-	allKeyspaces := ""
-	clustersToWatch = &allKeyspaces
+	clustersToWatch = nil
 	// Change the durability policy of ks1
 	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "ks1", "semi_sync")
 	RefreshAllKeyspaces()

@@ -750,8 +750,7 @@ func generateVTOrc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInf
       - DB_USER=%[4]s
       - DB_PASS=%[5]s
     ports:
-      - "13000:3000"
-      - "13200:%[1]d"
+      - "13000:%[1]d"
     command: ["sh", "-c", "/script/vtorc-up.sh"]
     %[6]s
 `, opts.webPort, opts.topologyFlags, externalDb, dbInfo.dbUser, dbInfo.dbPass, dependsOn)

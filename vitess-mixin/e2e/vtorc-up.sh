@@ -40,5 +40,4 @@ echo "Starting vtorc..."
 exec /vt/bin/vtorc \
 $TOPOLOGY_FLAGS \
 -logtostderr=true \
--orc_web_dir=/vt/web/vtorc \
 -config $config
