@@ -68,6 +68,8 @@ import {
     rebuildKeyspaceGraph,
     removeKeyspaceCell,
     createShard,
+    validate,
+    ValidateParams,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -553,4 +555,17 @@ export const useCreateShard = (
     return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
         return createShard(params);
     }, options);
+};
+
+/**
+ * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
+ * as well as all tablets in discoverable cells, are consistent.
+ */
+ export const useValidate = (
+  params: Parameters<typeof validate>[0],
+  options?: UseMutationOptions<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>
+) => {
+  return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
+      return validate(params);
+  }, options);
 };
