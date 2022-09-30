@@ -267,7 +267,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Transaction Tokens
-%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
+%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
@@ -383,6 +383,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> analyze_statement show_statement use_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
+%type <bytes> work_opt no_opt chain_opt release_opt
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
@@ -4356,8 +4357,17 @@ use_statement:
     $$ = &Use{DBName:TableIdent{v:""}}
   }
 
+work_opt:
+  {
+    $$ = nil
+  }
+| WORK
+  {
+    $$ = $1
+  }
+
 begin_statement:
-  BEGIN
+  BEGIN work_opt
   {
     $$ = &Begin{}
   }
@@ -4380,14 +4390,41 @@ start_transaction_statement:
     $$ = &Begin{TransactionCharacteristic: TxReadOnly}
   }
 
+no_opt:
+  {
+    $$ = nil
+  }
+| NO
+  {
+    $$ = nil
+  }
+
+chain_opt:
+  {
+    $$ = nil
+  }
+| AND no_opt CHAIN
+  {
+    $$ = nil
+  }
+
+release_opt:
+  {
+    $$ = nil
+  }
+| no_opt RELEASE
+  {
+    $$ = nil
+  }
+
 commit_statement:
-  COMMIT
+  COMMIT work_opt chain_opt release_opt
   {
     $$ = &Commit{}
   }
 
 rollback_statement:
-  ROLLBACK
+  ROLLBACK work_opt chain_opt release_opt
   {
     $$ = &Rollback{}
   }
@@ -7598,6 +7635,7 @@ non_reserved_keyword:
 | BOOLEAN
 | BUCKETS
 | CATALOG_NAME
+| CHAIN
 | CHANNEL
 | CHARSET
 | CHECKSUM

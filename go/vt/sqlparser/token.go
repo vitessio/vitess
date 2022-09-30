@@ -182,6 +182,7 @@ var keywords = map[string]int{
 	"case":                          CASE,
 	"cast":                          CAST,
 	"catalog_name":                  CATALOG_NAME,
+	"chain":                         CHAIN,
 	"change":                        CHANGE,
 	"channel":                       CHANNEL,
 	"char":                          CHAR,
