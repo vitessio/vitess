@@ -139,6 +139,12 @@ func UpdateConfigValuesFromFlags() {
 	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
 }
 
+// LogConfigValues is used to log the config values.
+func LogConfigValues() {
+	b, _ := json.MarshalIndent(Config, "", "\t")
+	log.Infof("Running with Configuration - %v", string(b))
+}
+
 func newConfiguration() *Configuration {
 	return &Configuration{
 		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",

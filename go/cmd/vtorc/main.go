@@ -140,6 +140,8 @@ Please update your scripts before the next version, when this will begin to brea
 	}
 	config.MarkConfigurationLoaded()
 
+	// Log final config values to debug if something goes wrong.
+	config.LogConfigValues()
 	server.StartVTOrcDiscovery()
 
 	server.RegisterVTOrcAPIEndpoints()
