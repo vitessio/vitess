@@ -132,7 +132,8 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	}
 
 	if subQueryWasPredicate {
-		// Copy Vindex predicates from the inner route to the upper route (probably not right)
+		// Copy Vindex predicates from the inner route to the upper route.
+		// If we can route based on some of these predicates, the routing can improve
 		outer.VindexPreds = append(outer.VindexPreds, inner.VindexPreds...)
 
 		if inner.RouteOpCode == engine.None {
