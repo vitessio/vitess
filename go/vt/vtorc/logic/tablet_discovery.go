@@ -45,7 +45,7 @@ import (
 var (
 	ts                *topo.Server
 	tmc               tmclient.TabletManagerClient
-	clustersToWatch   = ""
+	clustersToWatch   []string
 	shutdownWaitTime  = 30 * time.Second
 	shardsLockCounter int32
 	// ErrNoPrimaryTablet is a fixed error message.
@@ -54,7 +54,7 @@ var (
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 	fs.DurationVar(&shutdownWaitTime, "shutdown_wait_time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
 }
 
@@ -87,7 +87,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 	if !IsLeaderOrActive() {
 		return
 	}
-	if clustersToWatch == "" { // all known clusters
+	if len(clustersToWatch) == 0 { // all known clusters
 		ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer cancel()
 		cells, err := ts.GetKnownCells(ctx)
@@ -110,8 +110,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 	} else {
 		// Parse input and build list of keyspaces / shards
 		var keyspaceShards []*topo.KeyspaceShard
-		inputs := strings.Split(clustersToWatch, ",")
-		for _, ks := range inputs {
+		for _, ks := range clustersToWatch {
 			if strings.Contains(ks, "/") {
 				// This is a keyspace/shard specification
 				input := strings.Split(ks, "/")
@@ -136,7 +135,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 			}
 		}
 		if len(keyspaceShards) == 0 {
-			log.Errorf("Found no keyspaceShards for input: %v", clustersToWatch)
+			log.Errorf("Found no keyspaceShards for input: %+v", clustersToWatch)
 			return
 		}
 		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)

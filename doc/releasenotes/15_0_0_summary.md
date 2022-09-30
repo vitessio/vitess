@@ -285,10 +285,10 @@ Apart from these APIs, we also now have `/debug/status`, `/debug/vars` and `/deb
 
 #### Configuration Refactor and New Flags 
 
-Since VTOrc was forked from `Orchestrator`, it inherited a lot of configurations which don't make sense for the Vitess use-case.
+Since VTOrc was forked from `Orchestrator`, it inherited a lot of configurations that don't make sense for the Vitess use-case.
 All of such configurations have been removed.
 
-VTOrc ignores the configurations that it doesn't understand. So old configurations can be kept around on upgrading, and it won't cause any issue.
+VTOrc ignores the configurations that it doesn't understand. So old configurations can be kept around on upgrading and won't cause any issues.
 They will just be ignored.
 
 For all the configurations that are kept, flags have been added for them and the flags are the desired way to pass these configurations going forward.
