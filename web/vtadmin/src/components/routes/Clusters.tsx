@@ -14,46 +14,42 @@
  * limitations under the License.
  */
 import { orderBy } from 'lodash-es';
-import * as React from 'react';
+import React from 'react';
 
 import { useClusters } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
 import { vtadmin as pb } from '../../proto/vtadmin';
-import { DataCell } from '../dataTable/DataCell';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
-
+import ClusterRow from './clusters/ClusterRow';
 export const Clusters = () => {
-    useDocumentTitle('Clusters');
-    const clustersQuery = useClusters();
+  useDocumentTitle('Clusters');
+  const clustersQuery = useClusters();
 
-    const rows = React.useMemo(() => {
-        return orderBy(clustersQuery.data, ['name']);
-    }, [clustersQuery.data]);
+  const rows = React.useMemo(() => {
+    return orderBy(clustersQuery.data, ['name']);
+  }, [clustersQuery.data]);
 
-    const renderRows = (rows: pb.Cluster[]) =>
-        rows.map((cluster, idx) => (
-            <tr key={idx}>
-                <DataCell>{cluster.name}</DataCell>
-                <DataCell>{cluster.id}</DataCell>
-            </tr>
-        ));
+  const renderRows = (rows: pb.Cluster[]) =>
+    rows.map((cluster, idx) => (
+      <ClusterRow cluster={cluster} key={`cluster_${idx}`} />
+    ));
 
-    return (
-        <div>
-            <WorkspaceHeader>
-                <WorkspaceTitle>Clusters</WorkspaceTitle>
-            </WorkspaceHeader>
+  return (
+    <div>
+      <WorkspaceHeader>
+        <WorkspaceTitle>Clusters</WorkspaceTitle>
+      </WorkspaceHeader>
 
-            <ContentContainer>
-                <div className="max-w-screen-sm">
-                    <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
-                    <QueryLoadingPlaceholder query={clustersQuery} />
-                </div>
-            </ContentContainer>
+      <ContentContainer>
+        <div className="max-w-screen-sm">
+          <DataTable columns={['Name', 'Id', 'Validate']} data={rows} renderRows={renderRows} />
+          <QueryLoadingPlaceholder query={clustersQuery} />
         </div>
-    );
+      </ContentContainer>
+    </div>
+  );
 };
