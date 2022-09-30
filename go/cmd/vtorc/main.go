@@ -104,6 +104,7 @@ func main() {
 	logutil.RegisterFlags(fs)
 	logic.RegisterFlags(fs)
 	server.RegisterFlags(fs)
+	config.RegisterFlags(fs)
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
@@ -125,6 +126,7 @@ Please update your scripts before the next version, when this will begin to brea
 	}
 
 	servenv.ParseFlags("vtorc")
+	config.UpdateConfigValuesFromFlags()
 
 	log.Info("starting vtorc")
 	if len(*configFile) > 0 {

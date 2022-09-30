@@ -20,6 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -49,6 +52,41 @@ const (
 	CandidateInstanceExpireMinutes        = 60  // Minutes after which a suggestion to use an instance as a candidate replica (to be preferably promoted on primary failover) is expired.
 	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 )
+
+var (
+	sqliteDataFile                 = "file::memory:?mode=memory&cache=shared"
+	instancePollTime               = 5 * time.Second
+	snapshotTopologyInterval       = 0 * time.Hour
+	reasonableReplicationLag       = 10 * time.Second
+	auditFileLocation              = ""
+	auditToBackend                 = false
+	auditToSyslog                  = false
+	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
+	recoveryPeriodBlockDuration    = 30 * time.Second
+	preventCrossCellFailover       = false
+	lockShardTimeout               = 30 * time.Second
+	waitReplicasTimeout            = 30 * time.Second
+	topoInformationRefreshDuration = 15 * time.Second
+	recoveryPollDuration           = 1 * time.Second
+)
+
+// RegisterFlags registers the flags required by VTOrc
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&sqliteDataFile, "sqlite-data-file", sqliteDataFile, "SQLite Datafile to use as VTOrc's database")
+	fs.DurationVar(&instancePollTime, "instance-poll-time", instancePollTime, "Timer duration on which VTOrc refreshes MySQL information")
+	fs.DurationVar(&snapshotTopologyInterval, "snapshot-topology-interval", snapshotTopologyInterval, "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
+	fs.DurationVar(&reasonableReplicationLag, "reasonable-replication-lag", reasonableReplicationLag, "Maximum replication lag on replicas which is deemed to be acceptable")
+	fs.StringVar(&auditFileLocation, "audit-file-location", auditFileLocation, "File location where the audit logs are to be stored")
+	fs.BoolVar(&auditToBackend, "audit-to-backend", auditToBackend, "Whether to store the audit log in the VTOrc database")
+	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
+	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
+	fs.DurationVar(&recoveryPeriodBlockDuration, "recovery-period-block-duration", recoveryPeriodBlockDuration, "Duration for which a new recovery is blocked on an instance after running a recovery")
+	fs.BoolVar(&preventCrossCellFailover, "prevent-cross-cell-failover", preventCrossCellFailover, "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
+	fs.DurationVar(&lockShardTimeout, "lock-shard-timeout", lockShardTimeout, "Duration for which a shard lock is held when running a recovery")
+	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
+	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
+	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
+}
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
 // Some of the parameteres have reasonable default values, and some (like database credentials) are
@@ -81,6 +119,26 @@ func (config *Configuration) ToJSONString() string {
 var Config = newConfiguration()
 var readFileNames []string
 
+// UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
+// This is done before we read any configuration files from the user. So the config files take precedence.
+func UpdateConfigValuesFromFlags() {
+	Config.SQLite3DataFile = sqliteDataFile
+	Config.InstancePollSeconds = uint(instancePollTime / time.Second)
+	Config.InstancePollSeconds = uint(instancePollTime / time.Second)
+	Config.SnapshotTopologiesIntervalHours = uint(snapshotTopologyInterval / time.Hour)
+	Config.ReasonableReplicationLagSeconds = int(reasonableReplicationLag / time.Second)
+	Config.AuditLogFile = auditFileLocation
+	Config.AuditToBackendDB = auditToBackend
+	Config.AuditToSyslog = auditToSyslog
+	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
+	Config.RecoveryPeriodBlockSeconds = int(recoveryPeriodBlockDuration / time.Second)
+	Config.PreventCrossDataCenterPrimaryFailover = preventCrossCellFailover
+	Config.LockShardTimeoutSeconds = int(lockShardTimeout / time.Second)
+	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
+	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
+	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
+}
+
 func newConfiguration() *Configuration {
 	return &Configuration{
 		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",
@@ -91,7 +149,7 @@ func newConfiguration() *Configuration {
 		AuditToSyslog:                         false,
 		AuditToBackendDB:                      false,
 		AuditPurgeDays:                        7,
-		RecoveryPeriodBlockSeconds:            3600,
+		RecoveryPeriodBlockSeconds:            30,
 		PreventCrossDataCenterPrimaryFailover: false,
 		LockShardTimeoutSeconds:               30,
 		WaitReplicasTimeoutSeconds:            30,
