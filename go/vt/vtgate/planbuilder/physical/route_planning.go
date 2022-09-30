@@ -956,22 +956,7 @@ func extractSingleColumnSubquerySelection(subquery *sqlparser.Subquery) *sqlpars
 		return nil
 	}
 
-	switch expr := aliasedExpr.Expr.(type) {
-	case *sqlparser.ColName:
-		return expr
-	case *sqlparser.Max:
-		colName, ok := expr.Arg.(*sqlparser.ColName)
-		if ok {
-			return colName
-		}
-	case *sqlparser.Min:
-		colName, ok := expr.Arg.(*sqlparser.ColName)
-		if ok {
-			return colName
-		}
-	}
-
-	return nil
+	return getColName(aliasedExpr.Expr)
 }
 
 func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOperator, exp sqlparser.Expr) vindexes.SingleColumn {
@@ -1040,22 +1025,27 @@ func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) s
 		if err != nil {
 			return nil
 		}
-
-		switch exp.(type) {
-		case *sqlparser.ColName:
-			// do nothing
-		case *sqlparser.Max, *sqlparser.Min:
-			aggr := exp.(sqlparser.AggrFunc).GetArg()
-			colName, ok := aggr.(*sqlparser.ColName)
-			if ok {
-				exp = colName
-			}
-		default:
-			// for any other expression than a column, or the extremum of a column, we can't merge
+		exp = getColName(exp)
+		if exp == nil {
 			return nil
 		}
 	}
 	return exp
+}
+
+func getColName(exp sqlparser.Expr) *sqlparser.ColName {
+	switch exp := exp.(type) {
+	case *sqlparser.ColName:
+		return exp
+	case *sqlparser.Max, *sqlparser.Min:
+		aggr := exp.(sqlparser.AggrFunc).GetArg()
+		colName, ok := aggr.(*sqlparser.ColName)
+		if ok {
+			return colName
+		}
+	}
+	// for any other expression than a column, or the extremum of a column, we return nil
+	return nil
 }
 
 func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredicates []sqlparser.Expr) bool {
