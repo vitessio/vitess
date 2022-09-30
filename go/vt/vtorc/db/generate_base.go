@@ -348,12 +348,6 @@ var generateSQLBase = []string{
 		CREATE INDEX unresolved_hostname_idx_hostname_unresolve ON hostname_unresolve (unresolved_hostname)
 	`,
 	`
-		DROP INDEX pool_idx ON database_instance_pool
-	`,
-	`
-		CREATE INDEX pool_idx_database_instance_pool ON database_instance_pool (pool)
-	`,
-	`
 		CREATE TABLE IF NOT EXISTS database_instance_topology_history (
 			snapshot_unix_timestamp INT UNSIGNED NOT NULL,
 			hostname varchar(128) CHARACTER SET ascii NOT NULL,
