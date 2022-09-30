@@ -123,11 +123,6 @@ var generateSQLPatches = []string{
 			ADD COLUMN count_affected_replicas int unsigned NOT NULL
 	`,
 	`
-		ALTER TABLE
-			topology_recovery
-			ADD COLUMN replica_hosts text CHARACTER SET ascii NOT NULL
-	`,
-	`
 		ALTER TABLE hostname_unresolve
 			ADD COLUMN last_registered TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	`,
@@ -194,7 +189,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN participating_instances text CHARACTER SET ascii NOT NULL after replica_hosts
+			ADD COLUMN participating_instances text CHARACTER SET ascii NOT NULL after count_affected_replicas
 	`,
 	`
 		ALTER TABLE
@@ -309,21 +304,6 @@ var generateSQLPatches = []string{
 		ALTER TABLE
 			database_instance_coordinates_history
 			ADD COLUMN last_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00' AFTER recorded_timestamp
-	`,
-	`
-		ALTER TABLE
-			access_token
-			ADD COLUMN is_reentrant TINYINT UNSIGNED NOT NULL default 0
-	`,
-	`
-		ALTER TABLE
-			access_token
-			ADD COLUMN acquired_at timestamp NOT NULL DEFAULT '1971-01-01 00:00:00'
-	`,
-	`
-		ALTER TABLE
-			database_instance_pool
-			ADD COLUMN registered_at timestamp NOT NULL DEFAULT '1971-01-01 00:00:00'
 	`,
 	`
 		ALTER TABLE

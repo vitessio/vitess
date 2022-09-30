@@ -1117,7 +1117,147 @@ Gen4 error: unsupported: cross-shard correlated subquery
 # TPC-H query 18
 "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) \u003e 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: unsupported: group by on: *planbuilder.joinGen4
+{
+  "QueryType": "SELECT",
+  "Original": "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) \u003e 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": "INT64(100)",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum(5) AS sum(l_quantity)",
+        "GroupBy": "(4|10), (3|9), (0|8), (1|7), (2|6)",
+        "ResultColumns": 6,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 2] as c_name",
+              "[COLUMN 3] as c_custkey",
+              "[COLUMN 4] as o_orderkey",
+              "[COLUMN 1] as o_orderdate",
+              "[COLUMN 0] as o_totalprice",
+              "([COLUMN 10] * [COLUMN 11]) * [COLUMN 12] as sum(l_quantity)",
+              "[COLUMN 9]",
+              "[COLUMN 8]",
+              "[COLUMN 7]",
+              "[COLUMN 6]",
+              "[COLUMN 5]"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:2,L:3,L:4,L:5,L:6,L:8,L:9,L:10,L:11,L:12,L:13,L:14,R:1",
+                "JoinVars": {
+                  "o_orderkey": 0
+                },
+                "TableName": "orders_customer_lineitem",
+                "Inputs": [
+                  {
+                    "OperatorType": "Sort",
+                    "Variant": "Memory",
+                    "OrderBy": "(2|8) DESC, (3|9) ASC, (4|10) ASC, (5|11) ASC, (0|7) ASC",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:1,L:1,L:5,L:7,R:1,R:3,L:1,L:4,L:6,L:8,R:2,R:4,L:4,L:2,R:0",
+                        "JoinVars": {
+                          "o_custkey": 0
+                        },
+                        "TableName": "orders_customer",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "IN",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
+                            "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where :o_orderkey in (select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) \u003e 300) group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
+                            "Table": "orders",
+                            "Values": [
+                              ":__sq1"
+                            ],
+                            "Vindex": "hash"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), c_name, weight_string(c_name), c_custkey, weight_string(c_custkey) from customer where 1 != 1 group by c_name, weight_string(c_name), c_custkey, weight_string(c_custkey)",
+                            "Query": "select count(*), c_name, weight_string(c_name), c_custkey, weight_string(c_custkey) from customer where c_custkey = :o_custkey group by c_name, weight_string(c_name), c_custkey, weight_string(c_custkey)",
+                            "Table": "customer",
+                            "Values": [
+                              ":o_custkey"
+                            ],
+                            "Vindex": "hash"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "VindexLookup",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "Values": [
+                      ":o_orderkey"
+                    ],
+                    "Vindex": "lineitem_map",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "IN",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                        "Table": "lineitem_map",
+                        "Values": [
+                          ":l_orderkey"
+                        ],
+                        "Vindex": "md5"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "ByDestination",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1, sum(l_quantity) from lineitem where 1 != 1 group by 1",
+                        "Query": "select 1, sum(l_quantity) from lineitem where l_orderkey = :o_orderkey group by 1",
+                        "Table": "lineitem"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.customer",
+    "main.lineitem",
+    "main.orders"
+  ]
+}
 
 # TPC-H query 19
 "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity \u003e= 1 and l_quantity \u003c= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity \u003e= 10 and l_quantity \u003c= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity \u003e= 20 and l_quantity \u003c= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )"

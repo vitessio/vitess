@@ -54,7 +54,6 @@ type VTOrcConfiguration struct {
 	MySQLReplicaUser                      string
 	MySQLReplicaPassword                  string
 	RecoveryPeriodBlockSeconds            int
-	InstancePollSeconds                   int
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
 	ReplicationLagQuery                   string `json:",omitempty"`
@@ -76,7 +75,6 @@ func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	if config.RecoveryPeriodBlockSeconds == 0 {
 		config.RecoveryPeriodBlockSeconds = 1
 	}
-	config.InstancePollSeconds = 1
 	config.ListenAddress = fmt.Sprintf(":%d", webPort)
 }
 
@@ -111,6 +109,9 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
+		// This parameter is overriden from the config file, added here to just verify that we indeed use the config file paramter over the flag
+		"--recovery-period-block-duration", "10h",
+		"--instance-poll-time", "1s",
 		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
