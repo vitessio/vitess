@@ -82,11 +82,11 @@ type Server struct {
 }
 
 func init() {
-	topo.RegisterFactory("etcd2", Factory{})
 	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtexplain", "vtgate",
 		"vtgr", "vtorc", "vtbackup"} {
 		servenv.OnParseFor(cmd, registerEtcd2TopoFlags)
 	}
+	topo.RegisterFactory("etcd2", Factory{})
 }
 
 func registerEtcd2TopoFlags(fs *pflag.FlagSet) {
