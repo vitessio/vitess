@@ -41,7 +41,7 @@ import (
 )
 
 var (
-	dbCredentialsServer   string
+	dbCredentialsServer   = "file"
 	dbCredentialsFile     string
 	vaultAddr             string
 	vaultTimeout          = 10 * time.Second
@@ -107,10 +107,10 @@ func init() {
 	for _, cmd := range cmdsWithDBCredentials {
 		servenv.OnParseFor(cmd, func(fs *pflag.FlagSet) {
 			// generic flags
-			fs.StringVar(&dbCredentialsServer, "db-credentials-server", "file", "db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation)")
+			fs.StringVar(&dbCredentialsServer, "db-credentials-server", dbCredentialsServer, "db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation)")
 
 			// 'file' implementation flags
-			fs.StringVar(&dbCredentialsFile, "db-credentials-file", "", "db credentials file; send SIGHUP to reload this file")
+			fs.StringVar(&dbCredentialsFile, "db-credentials-file", dbCredentialsFile, "db credentials file; send SIGHUP to reload this file")
 
 			// 'vault' implementation flags
 			flag.StringVar(&vaultAddr, "db-credentials-vault-addr", vaultAddr, "URL to Vault server")

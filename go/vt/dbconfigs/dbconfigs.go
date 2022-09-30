@@ -51,8 +51,10 @@ const (
 )
 
 var (
-	// GlobalDBConfigs contains the initial values of dbconfgs from flags.
-	GlobalDBConfigs DBConfigs
+	// GlobalDBConfigs contains the initial values of dbconfigs from flags.
+	GlobalDBConfigs = DBConfigs{
+		Charset: "utf8mb4",
+	}
 
 	// All can be used to register all flags: RegisterFlags(All...)
 	All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl, ExternalRepl}
@@ -130,21 +132,21 @@ func RegisterFlags(userKeys ...string) {
 }
 
 func registerBaseFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&GlobalDBConfigs.Socket, "db_socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
-	fs.StringVar(&GlobalDBConfigs.Host, "db_host", "", "The host name for the tcp connection.")
-	fs.IntVar(&GlobalDBConfigs.Port, "db_port", 0, "tcp port")
-	fs.StringVar(&GlobalDBConfigs.Charset, "db_charset", "utf8mb4", "Character set used for this tablet.")
-	fs.Uint64Var(&GlobalDBConfigs.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
-	fs.StringVar(&GlobalDBConfigs.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
+	fs.StringVar(&GlobalDBConfigs.Socket, "db_socket", GlobalDBConfigs.Socket, "The unix socket to connect on. If this is specified, host and port will not be used.")
+	fs.StringVar(&GlobalDBConfigs.Host, "db_host", GlobalDBConfigs.Host, "The host name for the tcp connection.")
+	fs.IntVar(&GlobalDBConfigs.Port, "db_port", GlobalDBConfigs.Port, "tcp port")
+	fs.StringVar(&GlobalDBConfigs.Charset, "db_charset", GlobalDBConfigs.Charset, "Character set used for this tablet.")
+	fs.Uint64Var(&GlobalDBConfigs.Flags, "db_flags", GlobalDBConfigs.Flags, "Flag values as defined by MySQL.")
+	fs.StringVar(&GlobalDBConfigs.Flavor, "db_flavor", GlobalDBConfigs.Flavor, "Flavor overrid. Valid value is FilePos.")
 	fs.Var(&GlobalDBConfigs.SslMode, "db_ssl_mode", "SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.")
-	fs.StringVar(&GlobalDBConfigs.SslCa, "db_ssl_ca", "", "connection ssl ca")
-	fs.StringVar(&GlobalDBConfigs.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
-	fs.StringVar(&GlobalDBConfigs.SslCert, "db_ssl_cert", "", "connection ssl certificate")
-	fs.StringVar(&GlobalDBConfigs.SslKey, "db_ssl_key", "", "connection ssl key")
-	fs.StringVar(&GlobalDBConfigs.TLSMinVersion, "db_tls_min_version", "", "Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.")
-	fs.StringVar(&GlobalDBConfigs.ServerName, "db_server_name", "", "server name of the DB we are connecting to.")
-	fs.IntVar(&GlobalDBConfigs.ConnectTimeoutMilliseconds, "db_connect_timeout_ms", 0, "connection timeout to mysqld in milliseconds (0 for no timeout)")
-	fs.BoolVar(&GlobalDBConfigs.EnableQueryInfo, "db_conn_query_info", false, "enable parsing and processing of QUERY_OK info fields")
+	fs.StringVar(&GlobalDBConfigs.SslCa, "db_ssl_ca", GlobalDBConfigs.SslCa, "connection ssl ca")
+	fs.StringVar(&GlobalDBConfigs.SslCaPath, "db_ssl_ca_path", GlobalDBConfigs.SslCaPath, "connection ssl ca path")
+	fs.StringVar(&GlobalDBConfigs.SslCert, "db_ssl_cert", GlobalDBConfigs.SslCert, "connection ssl certificate")
+	fs.StringVar(&GlobalDBConfigs.SslKey, "db_ssl_key", GlobalDBConfigs.SslKey, "connection ssl key")
+	fs.StringVar(&GlobalDBConfigs.TLSMinVersion, "db_tls_min_version", GlobalDBConfigs.TLSMinVersion, "Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.")
+	fs.StringVar(&GlobalDBConfigs.ServerName, "db_server_name", GlobalDBConfigs.ServerName, "server name of the DB we are connecting to.")
+	fs.IntVar(&GlobalDBConfigs.ConnectTimeoutMilliseconds, "db_connect_timeout_ms", GlobalDBConfigs.ConnectTimeoutMilliseconds, "connection timeout to mysqld in milliseconds (0 for no timeout)")
+	fs.BoolVar(&GlobalDBConfigs.EnableQueryInfo, "db_conn_query_info", GlobalDBConfigs.EnableQueryInfo, "enable parsing and processing of QUERY_OK info fields")
 }
 
 // The flags will change the global singleton
