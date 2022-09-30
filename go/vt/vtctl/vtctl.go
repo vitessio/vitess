@@ -1359,6 +1359,8 @@ func commandVReplicationExec(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	subFlags.SetInterspersed(false) // all flags should be treated as posargs to pass them to the actual hook
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
