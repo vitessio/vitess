@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -35,6 +36,8 @@ func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.StringVar(&aclFile, "acl-file", aclFile, "The path of the JSON ACL file to check")
 		fs.StringVar(&staticAuthFile, "static-auth-file", staticAuthFile, "The path of the auth_server_static JSON file to check")
+
+		acl.RegisterFlags(fs)
 
 		fs.SetOutput(logutil.NewLoggerWriter(logger))
 	})

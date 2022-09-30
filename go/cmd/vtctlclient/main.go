@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -48,6 +49,8 @@ func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.DurationVar(&actionTimeout, "action_timeout", actionTimeout, "timeout for the total command")
 		fs.StringVar(&server, "server", server, "server to use for connection")
+
+		acl.RegisterFlags(fs)
 	})
 }
 
