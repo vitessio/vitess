@@ -63,8 +63,7 @@ type Lock struct {
 }
 
 func init() {
-	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtexplain", "vtgate",
-		"vtgr", "vtorc", "vtbackup"} {
+	for _, cmd := range flagBinaries {
 		servenv.OnParseFor(cmd, registerTopoLockFlags)
 	}
 }
