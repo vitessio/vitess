@@ -18,10 +18,9 @@ package readtopologyinstance
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
-
-	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
@@ -32,7 +31,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,19 +42,18 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	}()
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
+	oldArgs := os.Args
+	defer func() {
+		// Restore the old args after the test
+		os.Args = oldArgs
+	}()
 
-	tmpAddress := clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalAddress
-	tmpImplementation := clusterInfo.ClusterInstance.VtctlProcess.TopoImplementation
-	tmpGlobalRoot := clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot
-
-	servenv.OnParseFor("vtorc", func(fs *pflag.FlagSet) {
-		err := fs.Set("topo_global_server_address", tmpAddress)
-		require.NoError(t, err)
-		err = fs.Set("topo_implementation", tmpImplementation)
-		require.NoError(t, err)
-		err = fs.Set("topo_global_root", tmpGlobalRoot)
-		require.NoError(t, err)
-	})
+	// Change the args such that they match how we would invoke VTOrc
+	os.Args = []string{"vtorc",
+		"--topo_global_server_address", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalAddress,
+		"--topo_implementation", clusterInfo.ClusterInstance.VtctlProcess.TopoImplementation,
+		"--topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot,
+	}
 	servenv.ParseFlags("vtorc")
 	falseVal := false
 	emptyVal := ""
