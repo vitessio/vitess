@@ -7635,6 +7635,7 @@ non_reserved_keyword:
 | BOOLEAN
 | BUCKETS
 | CATALOG_NAME
+| CHAIN
 | CHANNEL
 | CHARSET
 | CHECKSUM
