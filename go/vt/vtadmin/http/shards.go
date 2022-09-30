@@ -161,3 +161,41 @@ func PlannedFailoverShard(ctx context.Context, r Request, api *API) *JSONRespons
 	})
 	return NewJSONResponse(result, err)
 }
+
+// ReloadSchemaShard implements the http wrapper for
+// PUT /shard/{cluster_id}/{keyspace}/{shard}/reload_schema_shard
+//
+// Query params: none
+//
+// Body params:
+// - wait_position: string
+// - include_primary: bool
+// - concurrency: uint32
+func ReloadSchemaShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var params struct {
+		WaitPosition   string `json:"wait_position"`
+		IncludePrimary bool   `json:"include_primary"`
+		Concurrency    uint32 `json:"concurrency"`
+	}
+
+	if err := decoder.Decode(&params); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := r.Vars()
+
+	result, err := api.server.ReloadSchemaShard(ctx, &vtadminpb.ReloadSchemaShardRequest{
+		ClusterId:      vars["cluster_id"],
+		Keyspace:       vars["keyspace"],
+		Shard:          vars["shard"],
+		Concurrency:    params.Concurrency,
+		IncludePrimary: params.IncludePrimary,
+		WaitPosition:   params.WaitPosition,
+	})
+	return NewJSONResponse(result, err)
+}
