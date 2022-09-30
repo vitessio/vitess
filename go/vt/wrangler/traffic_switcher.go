@@ -211,9 +211,10 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 	ws := workflow.NewServer(wr.ts, wr.tmc)
 	state := &workflow.State{
-		Workflow:       workflowName,
-		SourceKeyspace: ts.SourceKeyspaceName(),
-		TargetKeyspace: targetKeyspace,
+		Workflow:           workflowName,
+		SourceKeyspace:     ts.SourceKeyspaceName(),
+		TargetKeyspace:     targetKeyspace,
+		IsPartialMigration: ts.isPartialMigration,
 	}
 
 	var (
@@ -242,14 +243,17 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		table := ts.Tables()[0]
 
 		if ts.isPartialMigration { // shard level traffic switching is all or nothing
-			shardRules, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
+			shardRoutingRules, err := wr.ts.GetShardRoutingRules(ctx)
 			if err != nil {
 				return nil, nil, err
 			}
-			for _, sourceShard := range ts.SourceShards() {
-				if _, ok := shardRules[fmt.Sprintf("%s.%s", ts.sourceKeyspace, sourceShard.ShardName())]; ok {
-					state.WritesPartiallySwitched = true // and in effect reads are too
-					break
+
+			rules := shardRoutingRules.Rules
+			for _, rule := range rules {
+				if rule.ToKeyspace == ts.SourceKeyspaceName() {
+					state.ShardsNotYetSwitched = append(state.ShardsNotYetSwitched, rule.Shard)
+				} else {
+					state.ShardsAlreadySwitched = append(state.ShardsAlreadySwitched, rule.Shard)
 				}
 			}
 		} else {

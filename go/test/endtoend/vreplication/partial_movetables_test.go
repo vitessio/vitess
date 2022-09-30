@@ -227,8 +227,7 @@ func TestPartialMoveTables(t *testing.T) {
 	require.Contains(t, currentRules, `{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"}`)
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
-	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow customer2.partial2\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
-		shard, shard)
+	expectedSwitchOutput = "SwitchTraffic was successful for workflow customer2.partial2\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n"
 	require.Equal(t, expectedSwitchOutput, lastOutput)
 
 	// Confirm global routing rules -- everything should still be routed
@@ -239,5 +238,4 @@ func TestPartialMoveTables(t *testing.T) {
 	currentRules = getShardRoutingRules(t)
 	require.Contains(t, currentRules, `{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}`)
 	require.Contains(t, currentRules, `{"from_keyspace":"customer","to_keyspace":"customer2","shard":"-80"}`)
-
 }
