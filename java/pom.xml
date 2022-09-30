@@ -11,7 +11,7 @@
 
   <groupId>io.vitess</groupId>
   <artifactId>vitess-parent</artifactId>
-  <version>14.0.2-SNAPSHOT</version>
+  <version>14.0.3</version>
   <packaging>pom</packaging>
 
   <name>Vitess Java Client libraries [Parent]</name>
