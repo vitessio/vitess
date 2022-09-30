@@ -175,7 +175,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtctlclient", "vtexplain", "vtgate",
+	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtexplain", "vtgate",
 		"vtgr", "vtorc", "vtbackup"} {
 		servenv.OnParseFor(cmd, registerTopoFlags)
 	}
