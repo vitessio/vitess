@@ -43,6 +43,11 @@ const (
 	DiscoveryQueueCapacity                = 100000
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
+	HostnameResolveMethod                 = "default"
+	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
+	ExpiryHostnameResolvesMinutes         = 60  // Number of minutes after which to expire hostname-resolves
+	CandidateInstanceExpireMinutes        = 60  // Minutes after which a suggestion to use an instance as a candidate replica (to be preferably promoted on primary failover) is expired.
+	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 )
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -52,17 +57,12 @@ const (
 type Configuration struct {
 	SQLite3DataFile                       string // full path to sqlite3 datafile
 	InstancePollSeconds                   uint   // Number of seconds between instance reads
-	UnseenInstanceForgetHours             uint   // Number of hours after which an unseen instance is forgotten
 	SnapshotTopologiesIntervalHours       uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
-	HostnameResolveMethod                 string // Method by which to "normalize" hostname ("none"/"default"/"cname")
-	ExpiryHostnameResolvesMinutes         int    // Number of minutes after which to expire hostname-resolves
 	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
-	CandidateInstanceExpireMinutes        uint   // Minutes after which a suggestion to use an instance as a candidate replica (to be preferably promoted on primary failover) is expired.
 	AuditLogFile                          string // Name of log file for audit operations. Disabled when empty.
 	AuditToSyslog                         bool   // If true, audit messages are written to syslog
 	AuditToBackendDB                      bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
 	AuditPurgeDays                        uint   // Days after which audit entries are purged from the database
-	FailureDetectionPeriodBlockMinutes    int    // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 	RecoveryPeriodBlockSeconds            int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
 	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
 	LockShardTimeoutSeconds               int    // Timeout on context used to lock shard. Should be a small value because we should fail-fast
@@ -85,17 +85,12 @@ func newConfiguration() *Configuration {
 	return &Configuration{
 		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",
 		InstancePollSeconds:                   5,
-		UnseenInstanceForgetHours:             240,
 		SnapshotTopologiesIntervalHours:       0,
-		HostnameResolveMethod:                 "default",
-		ExpiryHostnameResolvesMinutes:         60,
 		ReasonableReplicationLagSeconds:       10,
-		CandidateInstanceExpireMinutes:        60,
 		AuditLogFile:                          "",
 		AuditToSyslog:                         false,
 		AuditToBackendDB:                      false,
 		AuditPurgeDays:                        7,
-		FailureDetectionPeriodBlockMinutes:    60,
 		RecoveryPeriodBlockSeconds:            3600,
 		PreventCrossDataCenterPrimaryFailover: false,
 		LockShardTimeoutSeconds:               30,

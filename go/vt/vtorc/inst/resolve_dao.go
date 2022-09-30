@@ -132,7 +132,7 @@ func ExpireHostnameUnresolve() error {
 		_, err := db.ExecVTOrc(`
       	delete from hostname_unresolve
 				where last_registered < NOW() - INTERVAL ? MINUTE
-				`, config.Config.ExpiryHostnameResolvesMinutes,
+				`, config.ExpiryHostnameResolvesMinutes,
 		)
 		if err != nil {
 			log.Error(err)
@@ -149,7 +149,7 @@ func ForgetExpiredHostnameResolves() error {
 				from hostname_resolve
 			where
 				resolved_timestamp < NOW() - interval ? minute`,
-		2*config.Config.ExpiryHostnameResolvesMinutes,
+		2*config.ExpiryHostnameResolvesMinutes,
 	)
 	return err
 }

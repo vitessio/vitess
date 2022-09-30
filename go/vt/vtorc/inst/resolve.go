@@ -75,23 +75,17 @@ var hostnameResolvesLightweightCacheInit = &sync.Mutex{}
 var hostnameResolvesLightweightCacheLoadedOnceFromDB = false
 var hostnameIPsCache = cache.New(10*time.Minute, time.Minute)
 
-func init() {
-	if config.Config.ExpiryHostnameResolvesMinutes < 1 {
-		config.Config.ExpiryHostnameResolvesMinutes = 1
-	}
-}
-
 func getHostnameResolvesLightweightCache() *cache.Cache {
 	hostnameResolvesLightweightCacheInit.Lock()
 	defer hostnameResolvesLightweightCacheInit.Unlock()
 	if hostnameResolvesLightweightCache == nil {
-		hostnameResolvesLightweightCache = cache.New(time.Duration(config.Config.ExpiryHostnameResolvesMinutes)*time.Minute, time.Minute)
+		hostnameResolvesLightweightCache = cache.New(time.Duration(config.ExpiryHostnameResolvesMinutes)*time.Minute, time.Minute)
 	}
 	return hostnameResolvesLightweightCache
 }
 
 func HostnameResolveMethodIsNone() bool {
-	return strings.ToLower(config.Config.HostnameResolveMethod) == "none"
+	return strings.ToLower(config.HostnameResolveMethod) == "none"
 }
 
 // GetCNAME resolves an IP or hostname into a normalized valid CNAME
@@ -105,7 +99,7 @@ func GetCNAME(hostname string) (string, error) {
 }
 
 func resolveHostname(hostname string) (string, error) {
-	switch strings.ToLower(config.Config.HostnameResolveMethod) {
+	switch strings.ToLower(config.HostnameResolveMethod) {
 	case "none":
 		return hostname, nil
 	case "default":

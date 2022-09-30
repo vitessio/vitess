@@ -133,7 +133,7 @@ func ExpireNodesHistory() error {
 			where
 				first_seen_active < now() - interval ? hour
 			`,
-		config.Config.UnseenInstanceForgetHours,
+		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
 		log.Error(err)

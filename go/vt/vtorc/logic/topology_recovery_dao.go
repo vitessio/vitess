@@ -101,7 +101,7 @@ func ClearActiveFailureDetections() error {
 				in_active_period = 1
 				AND start_active_period < NOW() - INTERVAL ? MINUTE
 			`,
-		config.Config.FailureDetectionPeriodBlockMinutes,
+		config.FailureDetectionPeriodBlockMinutes,
 	)
 	if err != nil {
 		log.Error(err)

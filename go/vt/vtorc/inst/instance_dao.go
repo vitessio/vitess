@@ -1432,7 +1432,7 @@ func ForgetLongUnseenInstances() error {
 				from database_instance
 			where
 				last_seen < NOW() - interval ? hour`,
-		config.Config.UnseenInstanceForgetHours,
+		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
 		log.Error(err)

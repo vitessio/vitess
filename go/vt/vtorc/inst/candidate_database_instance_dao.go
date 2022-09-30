@@ -59,7 +59,7 @@ func ExpireCandidateInstances() error {
 		_, err := db.ExecVTOrc(`
 				delete from candidate_database_instance
 				where last_suggested < NOW() - INTERVAL ? MINUTE
-				`, config.Config.CandidateInstanceExpireMinutes,
+				`, config.CandidateInstanceExpireMinutes,
 		)
 		if err != nil {
 			log.Error(err)

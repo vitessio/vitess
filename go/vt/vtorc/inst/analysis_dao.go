@@ -756,7 +756,7 @@ func ExpireInstanceAnalysisChangelog() error {
 			where
 				analysis_timestamp < now() - interval ? hour
 			`,
-		config.Config.UnseenInstanceForgetHours,
+		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
 		log.Error(err)
