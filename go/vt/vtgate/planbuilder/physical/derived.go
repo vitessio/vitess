@@ -118,41 +118,5 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 // Since vtgate joins are always nested loop joins, we can't execute them on the RHS
 // if they do some things, like LIMIT or GROUP BY on wrong columns
 func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
-	validVindex := func(expr sqlparser.Expr) bool {
-		sc := findColumnVindex(ctx, d, expr)
-		return sc != nil && sc.IsUnique()
-	}
-
-	if d.Query.GetLimit() != nil {
-		return false
-	}
-
-	sel, ok := d.Query.(*sqlparser.Select)
-	if !ok {
-		return false
-	}
-
-	if len(sel.GroupBy) > 0 {
-		// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
-		// by checking that one of the grouping expressions used is a unique single column vindex.
-		// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-		for _, gb := range sel.GroupBy {
-			if validVindex(gb) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
-	// but if we don't have groupings, we need to check if there are aggregations that will mess with us
-	if sqlparser.ContainsAggregation(sel.SelectExprs) {
-		return false
-	}
-
-	if sqlparser.ContainsAggregation(sel.Having) {
-		return false
-	}
-
-	return true
+	return isMergeable(ctx, d.Query, d)
 }

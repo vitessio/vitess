@@ -42,5 +42,4 @@ exec /vt/bin/vtorc \
 $TOPOLOGY_FLAGS \
 --logtostderr=true \
 --port $web_port \
---orc_web_dir=/vt/web/vtorc \
 --config $config

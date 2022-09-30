@@ -5707,44 +5707,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in ::__vals)",
+    "Table": "music",
+    "Values": [
+      "(INT64(1), INT64(2), INT64(3))"
     ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in ::__vals",
-        "Table": "music",
-        "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -5801,44 +5776,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select _inner.id from (select music.id from music where music.user_id in ::__vals) as _inner)",
+    "Table": "music",
+    "Values": [
+      "(INT64(1), INT64(2), INT64(3))"
     ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select _inner.id from (select music.id from music where 1 != 1) as _inner where 1 != 1",
-        "Query": "select _inner.id from (select music.id from music where music.user_id in ::__vals) as _inner",
-        "Table": "music",
-        "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -5891,40 +5841,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.foo = 'bar') and music.user_id in ::__vals",
+    "Table": "music",
+    "Values": [
+      "(INT64(3), INT64(4), INT64(5))"
     ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.foo = 'bar'",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id in ::__vals",
-        "Table": "music",
-        "Values": [
-          "(INT64(3), INT64(4), INT64(5))"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -5981,44 +5910,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) and music.user_id = 5",
+    "Table": "music",
+    "Values": [
+      "INT64(5)"
     ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in ::__vals",
-        "Table": "music",
-        "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id = 5",
-        "Table": "music",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -6071,40 +5975,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in ::__vals",
-        "Table": "music",
-        "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
-        "Table": "music"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -6157,40 +6036,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "None",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in (null)",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id = 5",
-        "Table": "music",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "None",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) and music.user_id = 5",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -6239,36 +6093,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "None",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in (null)",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
-        "Table": "music"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -6321,40 +6154,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.genre = 'pop'",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.genre = 'pop')",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -6407,40 +6215,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1 group by music.id",
-        "Query": "select music.id from music where music.genre = 'pop' group by music.id",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.genre = 'pop' group by music.id)",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -6652,44 +6435,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id in ::__vals group by music.user_id)",
+    "Table": "music",
+    "Values": [
+      "(INT64(5), INT64(6))"
     ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select max(music.id) from music where 1 != 1 group by music.user_id",
-        "Query": "select max(music.id) from music where music.user_id in ::__vals group by music.user_id",
-        "Table": "music",
-        "Values": [
-          "(INT64(5), INT64(6))"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -7042,44 +6800,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit)",
+    "Table": "music",
+    "Values": [
+      "INT64(5)"
     ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-        "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit",
-        "Table": "music",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -7158,44 +6891,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in (5) limit 10) as subquery_for_limit) as subquery_for_limit)",
+    "Table": "music",
+    "Values": [
+      "INT64(5)"
     ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-        "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in (5) limit 10) as subquery_for_limit) as subquery_for_limit",
-        "Table": "music",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -7288,31 +6996,23 @@ Gen4 plan same as above
         ],
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.id from music where 1 != 1",
-                    "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
-                    "Table": "music",
-                    "Values": [
-                      "(INT64(5), INT64(6))"
-                    ],
-                    "Vindex": "user_index"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
+                "Table": "music",
+                "Values": [
+                  "(INT64(5), INT64(6))"
+                ],
+                "Vindex": "user_index"
               }
             ]
           }
@@ -7422,27 +7122,19 @@ Gen4 plan same as above
         ],
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.id from music where 1 != 1",
-                    "Query": "select music.id from music limit :__upper_limit",
-                    "Table": "music"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music limit :__upper_limit",
+                "Table": "music"
               }
             ]
           }
@@ -7516,40 +7208,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "None",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in (null)",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
-        "Table": "music",
-        "Values": [
-          ":__sq1"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "None",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null))",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -7602,40 +7269,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "None",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in (null)",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 and music.user_id = 5",
-        "Table": "music",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "None",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) and music.user_id = 5",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -7684,36 +7326,15 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "None",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.user_id in (null)",
-        "Table": "music"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__sq1 or music.user_id = 5",
-        "Table": "music"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select music.id from music where 1 != 1",
+    "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5",
+    "Table": "music"
   },
   "TablesUsed": [
     "user.music"
@@ -7767,45 +7388,19 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
   "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "R:0",
-    "JoinVars": {
-      "other_maxt": 0
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
     },
-    "TableName": "music_music",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from (select max(id) as maxt from music where 1 != 1) as other where 1 != 1",
-        "Query": "select 1 from (select max(id) as maxt from music where music.user_id = 5) as other",
-        "Table": "music",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id = :other_maxt",
-        "Table": "music",
-        "Values": [
-          ":other_maxt"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "FieldQuery": "select music.id from music, (select max(id) as maxt from music where 1 != 1) as other where 1 != 1",
+    "Query": "select music.id from music, (select max(id) as maxt from music where music.user_id = 5) as other where other.maxt = music.id",
+    "Table": "music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"
@@ -8081,45 +7676,19 @@ Gen4 error: unsupported: JOIN not supported between derived tables
   "QueryType": "SELECT",
   "Original": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
   "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "R:0",
-    "JoinVars": {
-      "other_maxt": 0
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
     },
-    "TableName": "music_music",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from (select max(id) as maxt from music where 1 != 1) as other where 1 != 1",
-        "Query": "select 1 from (select max(id) as maxt from music where music.user_id = 5) as other",
-        "Table": "music",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id = :other_maxt",
-        "Table": "music",
-        "Values": [
-          ":other_maxt"
-        ],
-        "Vindex": "music_user_map"
-      }
-    ]
+    "FieldQuery": "select music.id from (select max(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
+    "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
+    "Table": "music",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
   },
   "TablesUsed": [
     "user.music"

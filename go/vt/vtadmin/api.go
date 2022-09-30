@@ -358,6 +358,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/schemas/reload", httpAPI.Adapt(vtadminhttp.ReloadSchemas)).Name("API.ReloadSchemas").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_failover", httpAPI.Adapt(vtadminhttp.EmergencyFailoverShard)).Name("API.EmergencyFailoverShard").Methods("POST")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_failover", httpAPI.Adapt(vtadminhttp.PlannedFailoverShard)).Name("API.PlannedFailoverShard").Methods("POST")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/reload_schema_shard", httpAPI.Adapt(vtadminhttp.ReloadSchemaShard)).Name("API.ReloadSchemaShard").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -1562,6 +1563,32 @@ func (api *API) RemoveKeyspaceCell(ctx context.Context, req *vtadminpb.RemoveKey
 
 	return &vtadminpb.RemoveKeyspaceCellResponse{
 		Status: "ok",
+	}, nil
+}
+
+// ReloadSchemaShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSchemaShardRequest) (*vtadminpb.ReloadSchemaShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.Vtctld.ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+		WaitPosition:   req.WaitPosition,
+		IncludePrimary: req.IncludePrimary,
+		Concurrency:    req.Concurrency,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.ReloadSchemaShardResponse{
+		Events: res.Events,
 	}, nil
 }
 
