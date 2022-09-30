@@ -26,7 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/internal/flag"
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -60,7 +60,9 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 }
 
 func TestMain(m *testing.M) {
-	flag.ParseFlagsForTest()
+	_flag.TrickGlog()
+	_flag.ParseFlagsForTest()
+	pflag.Parse()
 
 	exitCode := func() int {
 		// Launch MySQL.

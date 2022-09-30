@@ -71,6 +71,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
@@ -137,6 +138,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlTimeout, "mysql_timeout", mysqlTimeout, "how long to wait for mysqld startup")
 	fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "path to .sql file to run after mysql_install_db")
 	fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run backups detached from the terminal")
+
+	acl.RegisterFlags(fs)
 }
 
 func init() {

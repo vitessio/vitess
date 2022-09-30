@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
@@ -65,6 +66,8 @@ func init() {
 
 		fs.DurationVar(&waitTime, "wait-time", waitTime, "time to wait on an action")
 		fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run vtcl detached from the terminal")
+
+		acl.RegisterFlags(fs)
 	})
 }
 
