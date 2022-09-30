@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -76,23 +75,17 @@ var hostnameResolvesLightweightCacheInit = &sync.Mutex{}
 var hostnameResolvesLightweightCacheLoadedOnceFromDB = false
 var hostnameIPsCache = cache.New(10*time.Minute, time.Minute)
 
-func init() {
-	if config.Config.ExpiryHostnameResolvesMinutes < 1 {
-		config.Config.ExpiryHostnameResolvesMinutes = 1
-	}
-}
-
 func getHostnameResolvesLightweightCache() *cache.Cache {
 	hostnameResolvesLightweightCacheInit.Lock()
 	defer hostnameResolvesLightweightCacheInit.Unlock()
 	if hostnameResolvesLightweightCache == nil {
-		hostnameResolvesLightweightCache = cache.New(time.Duration(config.Config.ExpiryHostnameResolvesMinutes)*time.Minute, time.Minute)
+		hostnameResolvesLightweightCache = cache.New(time.Duration(config.ExpiryHostnameResolvesMinutes)*time.Minute, time.Minute)
 	}
 	return hostnameResolvesLightweightCache
 }
 
 func HostnameResolveMethodIsNone() bool {
-	return strings.ToLower(config.Config.HostnameResolveMethod) == "none"
+	return strings.ToLower(config.HostnameResolveMethod) == "none"
 }
 
 // GetCNAME resolves an IP or hostname into a normalized valid CNAME
@@ -106,7 +99,7 @@ func GetCNAME(hostname string) (string, error) {
 }
 
 func resolveHostname(hostname string) (string, error) {
-	switch strings.ToLower(config.Config.HostnameResolveMethod) {
+	switch strings.ToLower(config.HostnameResolveMethod) {
 	case "none":
 		return hostname, nil
 	case "default":
@@ -157,14 +150,6 @@ func ResolveHostname(hostname string) (string, error) {
 	// Unfound: resolve!
 	log.Infof("Hostname unresolved yet: %s", hostname)
 	resolvedHostname, err := resolveHostname(hostname)
-	if config.Config.RejectHostnameResolvePattern != "" {
-		// Reject, don't even cache
-		if matched, _ := regexp.MatchString(config.Config.RejectHostnameResolvePattern, resolvedHostname); matched {
-			log.Warningf("ResolveHostname: %+v resolved to %+v but rejected due to RejectHostnameResolvePattern '%+v'", hostname, resolvedHostname, config.Config.RejectHostnameResolvePattern)
-			return hostname, nil
-		}
-	}
-
 	if err != nil {
 		// Problem. What we'll do is cache the hostname for just one minute, so as to avoid flooding requests
 		// on one hand, yet make it refresh shortly on the other hand. Anyway do not write to database.
@@ -227,61 +212,8 @@ func FlushNontrivialResolveCacheToDatabase() error {
 	return nil
 }
 
-func ResetHostnameResolveCache() error {
-	err := deleteHostnameResolves()
-	getHostnameResolvesLightweightCache().Flush()
-	hostnameResolvesLightweightCacheLoadedOnceFromDB = false
-	return err
-}
-
 func HostnameResolveCache() (map[string]cache.Item, error) {
 	return getHostnameResolvesLightweightCache().Items(), nil
-}
-
-func UnresolveHostname(instanceKey *InstanceKey) (InstanceKey, bool, error) {
-	if *config.RuntimeCLIFlags.SkipUnresolve {
-		return *instanceKey, false, nil
-	}
-	unresolvedHostname, err := readUnresolvedHostname(instanceKey.Hostname)
-	if err != nil {
-		log.Error(err)
-		return *instanceKey, false, err
-	}
-	if unresolvedHostname == instanceKey.Hostname {
-		// unchanged. Nothing to do
-		return *instanceKey, false, nil
-	}
-	// We unresovled to a different hostname. We will now re-resolve to double-check!
-	unresolvedKey := &InstanceKey{Hostname: unresolvedHostname, Port: instanceKey.Port}
-
-	instance, err := ReadTopologyInstance(unresolvedKey)
-	if err != nil {
-		log.Error(err)
-		return *instanceKey, false, err
-	}
-	if instance.IsBinlogServer() && config.Config.SkipBinlogServerUnresolveCheck {
-		// Do nothing. Everything is assumed to be fine.
-	} else if instance.Key.Hostname != instanceKey.Hostname {
-		// Resolve(Unresolve(hostname)) != hostname ==> Bad; reject
-		if *config.RuntimeCLIFlags.SkipUnresolveCheck {
-			return *instanceKey, false, nil
-		}
-		errMsg := fmt.Sprintf("Error unresolving; hostname=%s, unresolved=%s, re-resolved=%s; mismatch. Skip/ignore with --skip-unresolve-check", instanceKey.Hostname, unresolvedKey.Hostname, instance.Key.Hostname)
-		log.Errorf(errMsg)
-		return *instanceKey, false, fmt.Errorf(errMsg)
-	}
-	return *unresolvedKey, true, nil
-}
-
-func RegisterHostnameUnresolve(registration *HostnameRegistration) (err error) {
-	if registration.Hostname == "" {
-		return DeleteHostnameUnresolve(&registration.Key)
-	}
-	if registration.CreatedAt.Add(time.Duration(config.Config.ExpiryHostnameResolvesMinutes) * time.Minute).Before(time.Now()) {
-		// already expired.
-		return nil
-	}
-	return WriteHostnameUnresolve(&registration.Key, registration.Hostname)
 }
 
 func extractIPs(ips []net.IP) (ipv4String string, ipv6String string) {
