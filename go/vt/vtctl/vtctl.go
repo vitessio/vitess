@@ -146,6 +146,11 @@ type command struct {
 	// if set, PrintAllCommands will not show this command
 	hidden bool
 
+	// (ajm188) - before we transition to cobra, we need to know whether to
+	// strip off a -- after the action (i.e. "command") name in RunCommand so
+	// that parsing continues to work.
+	disableFlagInterspersal bool
+
 	// deprecation support
 	deprecated   bool
 	deprecatedBy string
@@ -257,6 +262,7 @@ var commands = []commandGroup{
 				params: "<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
 				help: "Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
 					"For this command, the param=value arguments are parameters that the command passes to the specified hook.",
+				disableFlagInterspersal: true,
 			},
 			{
 				name:   "ExecuteFetchAsApp",
@@ -3995,7 +4001,8 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 					wr.Logger().Printf("%s\n", subFlags.FlagUsages())
 				}
 
-				if len(args) > 1 && args[1] == "--" {
+				if len(args) > 1 && args[1] == "--" && !cmd.disableFlagInterspersal {
+					PrintDoubleDashDeprecationNotice(wr)
 					args = args[1:]
 				}
 
@@ -4013,6 +4020,17 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 
 	wr.Logger().Printf("Unknown command: %v\n", action)
 	return ErrUnknownCommand
+}
+
+func PrintDoubleDashDeprecationNotice(wr *wrangler.Wrangler) {
+	msg := (`DEPRECATION NOTICE: in v14, users needed to add a double-dash ("--") separator to split up top-level and sub-command arguments/flags.
+Beginning in v16, this will no longer work properly. Please remove any double-dashes that preceed sub-command **flags** only.
+	
+Note that this does not mean you do not need a separator to split up position arguments.
+For example, to pass a flag to a hook via ExecuteHook, "vtctl ExecuteHook myhook.sh -- --hook-flag 5" is the correct formation.
+For v1 Reshard commands, you will also need a separator if your shard names begin with a hyphen, i.e. "Reshard ks.workflow -- -80,80-" needs a double-dash, but "Reshard ks.workflow 40-80,80-c0" does not.`)
+
+	wr.Logger().Warningf(msg)
 }
 
 // PrintAllCommands will print the list of commands to the logger

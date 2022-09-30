@@ -179,12 +179,14 @@ func main() {
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
 
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+
 		if args[0] == "--" {
+			vtctl.PrintDoubleDashDeprecationNotice(wr)
 			args = args[1:]
 		}
 
 		action = args[0]
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 		err := vtctl.RunCommand(ctx, wr, args)
 		cancel()
 		switch err {
