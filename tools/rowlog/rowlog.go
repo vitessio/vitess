@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -57,12 +59,12 @@ func (rlc *RowLogConfig) Validate() bool {
 
 func usage() {
 	logger := logutil.NewConsoleLogger()
-	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	flag.Usage = func() {
+	pflag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
+	pflag.Usage = func() {
 		logger.Printf("Rowlog Usage:\n")
-		s := "rowlog -ids <id list csv> -table <table_name> -pk <primary_key_only_ints> -source <source_keyspace> -target <target_keyspace> "
-		s += "-vtctld <vtctl url> -vtgate <vtgate url> -cells <cell names csv> -topo_implementation <topo type, eg: etcd2> "
-		s += "-topo_global_server_address <top url> -topo_global_root <topo root dir>\n"
+		s := "rowlog --ids <id list csv> --table <table_name> --pk <primary_key_only_ints> --source <source_keyspace> --target <target_keyspace> "
+		s += "--vtctld <vtctl url> --vtgate <vtgate url> --cells <cell names csv> --topo_implementation <topo type, eg: etcd2> "
+		s += "--topo_global_server_address <top url> --topo_global_root <topo root dir>\n"
 		logger.Printf(s)
 	}
 }
@@ -73,7 +75,7 @@ func main() {
 	ctx := context.Background()
 	config := parseCommandLine()
 	if !config.Validate() {
-		flag.Usage()
+		pflag.Usage()
 		return
 	}
 	log.Infof("Starting rowlogger with config: %s", config)
@@ -210,7 +212,10 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				log.Infof("Finished streaming keyspace %s from %s upto %s, total rows seen %d", keyspace, startPos, stopPos, totalRowsForTable)
 				return "", "", true, true, nil
 			}
-			// return gtid, stopPos, false, fieldsPrinted, nil //uncomment for testing resumability
+
+			if testResumability {
+				return gtid, stopPos, false, fieldsPrinted, nil
+			}
 		case io.EOF:
 			log.Infof("stream ended before reaching stop pos")
 			fmt.Printf("stream ended before reaching stop pos\n")
@@ -385,27 +390,39 @@ func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace st
 	return tabletId
 
 }
-func parseCommandLine() *RowLogConfig {
-	sourceKeyspace := flag.String("source", "", "")
-	targetKeyspace := flag.String("target", "", "")
-	ids := flag.String("ids", "", "")
-	pk := flag.String("pk", "", "")
-	table := flag.String("table", "", "")
-	vtgate := flag.String("vtgate", "", "")
-	vtctld := flag.String("vtctld", "", "")
-	cells := flag.String("cells", "", "")
-
+func trickGlog() {
+	var args []string
+	os.Args, args = os.Args[:1], os.Args[1:]
+	defer func() { os.Args = append(os.Args, args...) }()
 	flag.Parse()
+}
+
+var testResumability bool
+
+func parseCommandLine() *RowLogConfig {
+	trickGlog()
+	sourceKeyspace := pflag.StringP("source", "s", "", "")
+	targetKeyspace := pflag.StringP("target", "t", "", "")
+	ids := pflag.StringSlice("ids", nil, "")
+	pk := pflag.String("pk", "", "")
+	table := pflag.String("table", "", "")
+	vtgate := pflag.String("vtgate", "", "")
+	vtctld := pflag.String("vtctld", "", "")
+	cells := pflag.StringSlice("cells", nil, "")
+
+	pflag.BoolVar(&testResumability, "test_resumability", testResumability, "set to test stream resumability")
+
+	pflag.Parse()
 
 	return &RowLogConfig{
 		sourceKeyspace: *sourceKeyspace,
 		targetKeyspace: *targetKeyspace,
 		table:          *table,
 		pk:             *pk,
-		ids:            strings.Split(*ids, ","),
+		ids:            *ids,
 		vtctld:         *vtctld,
 		vtgate:         *vtgate,
-		cells:          strings.Split(*cells, ","),
+		cells:          *cells,
 	}
 }
 
