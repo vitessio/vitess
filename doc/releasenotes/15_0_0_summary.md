@@ -266,53 +266,72 @@ With this new `explain` format, you can get an output that is very similar to th
 
 ### VTOrc
 
-#### Configuration Renames
+#### Configuration Refactor and New Flags 
 
-VTOrc configurations that had `Orchestrator` as a substring have been renamed to have `VTOrc` instead. The old configuration won't 
-work in this release. So if backward compatibility is desired, then before upgrading it is suggested to duplicate the old configurations
-and also set them for the new configurations.
+Since VTOrc was forked from `Orchestrator`, it inherited a lot of configurations which don't make sense for the Vitess use-case.
+All of such configurations have been removed.
 
-VTOrc ignores the configurations that it doesn't understand. So new configurations can be added while running the previous release.
-After the upgrade, the old configurations can be dropped.
+VTOrc ignores the configurations that it doesn't understand. So old configurations can be kept around on upgrading, and it won't cause any issue.
+They will just be ignored.
 
-|           Old Configuration            |        New Configuration        |
-|:--------------------------------------:|:-------------------------------:|
-|         MySQLOrchestratorHost          |         MySQLVTOrcHost          |
-|  MySQLOrchestratorMaxPoolConnections   |  MySQLVTOrcMaxPoolConnections   |
-|         MySQLOrchestratorPort          |         MySQLVTOrcPort          |
-|       MySQLOrchestratorDatabase        |       MySQLVTOrcDatabase        |
-|         MySQLOrchestratorUser          |         MySQLVTOrcUser          |
-|       MySQLOrchestratorPassword        |       MySQLVTOrcPassword        |
-| MySQLOrchestratorCredentialsConfigFile | MySQLVTOrcCredentialsConfigFile |
-|   MySQLOrchestratorSSLPrivateKeyFile   |   MySQLVTOrcSSLPrivateKeyFile   |
-|      MySQLOrchestratorSSLCertFile      |      MySQLVTOrcSSLCertFile      |
-|       MySQLOrchestratorSSLCAFile       |       MySQLVTOrcSSLCAFile       |
-|     MySQLOrchestratorSSLSkipVerify     |     MySQLVTOrcSSLSkipVerify     |
-|     MySQLOrchestratorUseMutualTLS      |     MySQLVTOrcUseMutualTLS      |
-|  MySQLOrchestratorReadTimeoutSeconds   |  MySQLVTOrcReadTimeoutSeconds   |
-|    MySQLOrchestratorRejectReadOnly     |    MySQLVTOrcRejectReadOnly     |
+For all the configurations that are kept, flags have been added for them and the flags are the desired way to pass these configurations going forward.
+The config file will be deprecated and removed in upcoming releases. The following is a list of all the configurations that are kept and the associated flags added.
 
+|          Configurations Kept          |           Flags Introduced            |
+|:-------------------------------------:|:-------------------------------------:|
+|            SQLite3DataFile            |         `--sqlite-data-file`          |
+|          InstancePollSeconds          |        `--instance-poll-time`         |
+|    SnapshotTopologiesIntervalHours    |    `--snapshot-topology-interval`     |
+|    ReasonableReplicationLagSeconds    |    `--reasonable-replication-lag`     |
+|             AuditLogFile              |        `--audit-file-location`        |
+|             AuditToSyslog             |         `--audit-to-backend`          |
+|           AuditToBackendDB            |          `--audit-to-syslog`          |
+|            AuditPurgeDays             |       `--audit-purge-duration`        |
+|      RecoveryPeriodBlockSeconds       |  `--recovery-period-block-duration`   |
+| PreventCrossDataCenterPrimaryFailover |    `--prevent-cross-cell-failover`    |
+|        LockShardTimeoutSeconds        |        `--lock-shard-timeout`         |
+|      WaitReplicasTimeoutSeconds       |       `--wait-replicas-timeout`       |
+|     TopoInformationRefreshSeconds     | `--topo-information-refresh-duration` |
+|          RecoveryPollSeconds          |      `--recovery-poll-duration`       |
 
-For example, if you have the following configuration -
+Apart from configurations, some flags from VTOrc have also been removed -
+- `sibling`
+- `destination`
+- `discovery`
+- `skip-unresolve`
+- `skip-unresolve-check`
+- `noop`
+- `binlog`
+- `statement`
+- `grab-election`
+- `promotion-rule`
+- `skip-continuous-registration`
+- `enable-database-update`
+- `ignore-raft-setup`
+- `tag`
+
+The ideal way to ensure backward compatibility is to remove the flags listed above while on the previous release. Then upgrade VTOrc.
+After upgrading, remove the config file and instead pass the flags that are introduced.
+
+For example, if you are running VTOrc with the flags `--ignore-raft-setup --clusters_to_watch="ks/0" --config="path/to/config"` and the following configuration
 ```json
 {
-  "MySQLOrchestratorHost": "host"
+  "Debug": true,
+  "ListenAddress": ":6922",
+  "MySQLTopologyUser": "orc_client_user",
+  "MySQLTopologyPassword": "orc_client_user_password",
+  "MySQLReplicaUser": "vt_repl",
+  "MySQLReplicaPassword": "",
+  "RecoveryPeriodBlockSeconds": 1,
+  "InstancePollSeconds": 1,
+  "PreventCrossDataCenterPrimaryFailover": true
 }
 ```
-then, you should change it to
-```json
-{
-  "MySQLOrchestratorHost": "host",
-  "MySQLVTOrcHost": "host"
-}
-```
-while still on the old release. After changing the configuration, you can upgrade vitess.
-After upgrading, the old configurations can be dropped - 
-```json
-{
-  "MySQLVTOrcHost": "host"
-}
-```
+First drop the flag `--ignore-raft-setup` while on the previous release. So, you'll be running VTOrc with `--clusters_to_watch="ks/0" --config="path/to/config"` and the same configuration listed above.
+
+Now you can upgrade your VTOrc version continuing to use the same flags and configurations, and it will continue to work just the same.
+
+After upgrading, you can drop the configuration entirely and use the new flags like `--clusters_to_watch="ks/0" --recovery-period-block-duration=1s --instance-poll-time=1s --prevent-cross-cell-failover`
 
 #### Default Configuration Files
 
