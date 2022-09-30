@@ -45,6 +45,11 @@ Information about which tables are used was being reported through the `Keyspace
 For multi-table queries, this output can be confusing, so we have added `TablesUsed`, that is a string array, listing all tables and which keyspace they are on.
 `Keyspace` and `Table` fields are deprecated and will be removed in the v16 release of Vitess.
 
+#### Orchestrator Integration Deprecation
+
+Orchestrator integration in `vttablet` has been deprecated. It will continue to work in this release but is liable to be removed in future releases.
+Consider using VTOrc instead of Orchestrator as VTOrc goes GA in this release.
+
 #### Connection Pool Prefill
 
 The connection pool with prefilled connections have been removed. The pool now does lazy connection creation.
