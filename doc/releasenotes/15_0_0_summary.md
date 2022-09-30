@@ -266,6 +266,23 @@ With this new `explain` format, you can get an output that is very similar to th
 
 ### VTOrc
 
+#### Old UI Removal and Replacement
+
+The old UI that VTOrc inherited from `Orchestrator` has been removed. A replacement UI, more consistent with the other Vitess binaries has been created.
+In order to use the new UI, `--port` flag has to be provided. 
+
+Along with the UI, the old APIs have also been deprecated. However, some of them have been ported over to the new UI - 
+
+| Old API                          | New API                          | Additional notes                                                      |
+|----------------------------------|----------------------------------|-----------------------------------------------------------------------|
+| `/api/problems`                  | `/api/problems`                  | The new API also supports filtering using the keyspace and shard name |
+| `/api/disable-global-recoveries` | `/api/disable-global-recoveries` | Functionally remains the same                                         |
+| `/api/enable-global-recoveries`  | `/api/enable-global-recoveries`  | Functionally remains the same                                         |
+| `/api/health`                    | `/debug/health`                  | Functionally remains the same                                         |
+| `/api/replication-analysis`      | `/api/replication-analysis`      | Functionally remains the same. Output is now JSON format.             |
+
+Apart from these APIs, we also now have `/debug/status`, `/debug/vars/` and `/debug/liveness/` available in the new UI.
+
 #### Configuration Refactor and New Flags 
 
 Since VTOrc was forked from `Orchestrator`, it inherited a lot of configurations which don't make sense for the Vitess use-case.
@@ -313,7 +330,9 @@ Apart from configurations, some flags from VTOrc have also been removed -
 The ideal way to ensure backward compatibility is to remove the flags listed above while on the previous release. Then upgrade VTOrc.
 After upgrading, remove the config file and instead pass the flags that are introduced.
 
-For example, if you are running VTOrc with the flags `--ignore-raft-setup --clusters_to_watch="ks/0" --config="path/to/config"` and the following configuration
+#### Example Upgrade
+
+If you are running VTOrc with the flags `--ignore-raft-setup --clusters_to_watch="ks/0" --config="path/to/config"` and the following configuration
 ```json
 {
   "Debug": true,
@@ -329,7 +348,7 @@ For example, if you are running VTOrc with the flags `--ignore-raft-setup --clus
 ```
 First drop the flag `--ignore-raft-setup` while on the previous release. So, you'll be running VTOrc with `--clusters_to_watch="ks/0" --config="path/to/config"` and the same configuration listed above.
 
-Now you can upgrade your VTOrc version continuing to use the same flags and configurations, and it will continue to work just the same.
+Now you can upgrade your VTOrc version continuing to use the same flags and configurations, and it will continue to work just the same. If you wish to use the new UI, then you can add the `--port` flag as well.
 
 After upgrading, you can drop the configuration entirely and use the new flags like `--clusters_to_watch="ks/0" --recovery-period-block-duration=1s --instance-poll-time=1s --prevent-cross-cell-failover`
 
