@@ -217,9 +217,9 @@ func parseFlags() (env vttest.Environment, err error) {
 		servenv.RegisterGRPCServerFlags()
 		servenv.RegisterGRPCServerAuthFlags()
 		servenv.RegisterServiceMapFlag()
-	})
 
-	servenv.ParseFlags("vttestserver")
+		servenv.ParseFlags("vttestserver")
+	})
 
 	if basePort != 0 {
 		if config.DataDir == "" {
