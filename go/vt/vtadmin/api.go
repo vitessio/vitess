@@ -341,6 +341,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/cells", httpAPI.Adapt(vtadminhttp.GetCellInfos)).Name("API.GetCellInfos")
 	router.HandleFunc("/cells_aliases", httpAPI.Adapt(vtadminhttp.GetCellsAliases)).Name("API.GetCellsAliases")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
+	router.HandleFunc("/cluster/{cluster_id}/validate", httpAPI.Adapt(vtadminhttp.Validate)).Name("API.Validate").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
@@ -1685,6 +1686,31 @@ func (api *API) TabletExternallyPromoted(ctx context.Context, req *vtadminpb.Tab
 	}
 
 	return c.TabletExternallyPromoted(ctx, tablet)
+}
+
+// Validate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) Validate(ctx context.Context, req *vtadminpb.ValidateRequest) (*vtctldatapb.ValidateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.Validate")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.Validate(ctx, &vtctldatapb.ValidateRequest{
+		PingTablets: req.PingTablets,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 // ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.

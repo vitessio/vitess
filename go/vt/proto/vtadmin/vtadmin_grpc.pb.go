@@ -136,6 +136,9 @@ type VTAdminClient interface {
 	// * "orchestrator" here refers to external orchestrator, not the newer,
 	// Vitess-aware orchestrator, VTOrc.
 	TabletExternallyPromoted(ctx context.Context, in *TabletExternallyPromotedRequest, opts ...grpc.CallOption) (*TabletExternallyPromotedResponse, error)
+	// Validate validates all nodes in a cluster that are reachable from the global replication graph,
+	// as well as all tablets in discoverable cells, are consistent
+	Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
@@ -510,6 +513,15 @@ func (c *vTAdminClient) TabletExternallyPromoted(ctx context.Context, in *Tablet
 	return out, nil
 }
 
+func (c *vTAdminClient) Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error) {
+	out := new(vtctldata.ValidateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/Validate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) ValidateKeyspace(ctx context.Context, in *ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error) {
 	out := new(vtctldata.ValidateKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateKeyspace", in, out, opts...)
@@ -663,6 +675,9 @@ type VTAdminServer interface {
 	// * "orchestrator" here refers to external orchestrator, not the newer,
 	// Vitess-aware orchestrator, VTOrc.
 	TabletExternallyPromoted(context.Context, *TabletExternallyPromotedRequest) (*TabletExternallyPromotedResponse, error)
+	// Validate validates all nodes in a cluster that are reachable from the global replication graph,
+	// as well as all tablets in discoverable cells, are consistent
+	Validate(context.Context, *ValidateRequest) (*vtctldata.ValidateResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
@@ -799,6 +814,9 @@ func (UnimplementedVTAdminServer) StopReplication(context.Context, *StopReplicat
 }
 func (UnimplementedVTAdminServer) TabletExternallyPromoted(context.Context, *TabletExternallyPromotedRequest) (*TabletExternallyPromotedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TabletExternallyPromoted not implemented")
+}
+func (UnimplementedVTAdminServer) Validate(context.Context, *ValidateRequest) (*vtctldata.ValidateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Validate not implemented")
 }
 func (UnimplementedVTAdminServer) ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
@@ -1527,6 +1545,24 @@ func _VTAdmin_TabletExternallyPromoted_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).Validate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/Validate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).Validate(ctx, req.(*ValidateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ValidateKeyspaceRequest)
 	if err := dec(in); err != nil {
@@ -1761,6 +1797,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TabletExternallyPromoted",
 			Handler:    _VTAdmin_TabletExternallyPromoted_Handler,
+		},
+		{
+			MethodName: "Validate",
+			Handler:    _VTAdmin_Validate_Handler,
 		},
 		{
 			MethodName: "ValidateKeyspace",

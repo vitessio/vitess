@@ -146,6 +146,9 @@ service VTAdmin {
     // * "orchestrator" here refers to external orchestrator, not the newer,
     // Vitess-aware orchestrator, VTOrc.
     rpc TabletExternallyPromoted(TabletExternallyPromotedRequest) returns (TabletExternallyPromotedResponse) {};
+    // Validate validates all nodes in a cluster that are reachable from the global replication graph,
+    // as well as all tablets in discoverable cells, are consistent
+    rpc Validate(ValidateRequest) returns (vtctldata.ValidateResponse) {};
     // ValidateKeyspace validates that all nodes reachable from the specified
     // keyspace are consistent.
     rpc ValidateKeyspace(ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
@@ -785,6 +788,11 @@ message TabletExternallyPromotedResponse {
     string shard = 3;
     topodata.TabletAlias new_primary = 4;
     topodata.TabletAlias old_primary = 5;
+}
+
+message ValidateRequest {
+  string cluster_id = 1;
+  bool ping_tablets = 2;
 }
 
 message ValidateKeyspaceRequest {
