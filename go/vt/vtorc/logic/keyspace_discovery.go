@@ -31,7 +31,7 @@ import (
 // RefreshAllKeyspaces reloads the keyspace information for the keyspaces that vtorc is concerned with.
 func RefreshAllKeyspaces() {
 	var keyspaces []string
-	if *clustersToWatch == "" { // all known keyspaces
+	if len(clustersToWatch) == 0 { // all known keyspaces
 		ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer cancel()
 		var err error
@@ -43,8 +43,7 @@ func RefreshAllKeyspaces() {
 		}
 	} else {
 		// Parse input and build list of keyspaces
-		inputs := strings.Split(*clustersToWatch, ",")
-		for _, ks := range inputs {
+		for _, ks := range clustersToWatch {
 			if strings.Contains(ks, "/") {
 				// This is a keyspace/shard specification
 				input := strings.Split(ks, "/")
@@ -55,7 +54,7 @@ func RefreshAllKeyspaces() {
 			}
 		}
 		if len(keyspaces) == 0 {
-			log.Errorf("Found no keyspaces for input: %v", *clustersToWatch)
+			log.Errorf("Found no keyspaces for input: %+v", clustersToWatch)
 			return
 		}
 	}

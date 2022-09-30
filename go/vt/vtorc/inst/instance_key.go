@@ -21,8 +21,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 // InstanceKey is an instance indicator, identifued by hostname and port
@@ -79,7 +77,7 @@ func parseRawInstanceKey(hostPort string, resolve bool) (instanceKey *InstanceKe
 		return nil, fmt.Errorf("Cannot parse address: %s", hostPort)
 	}
 	if port == "" {
-		port = fmt.Sprintf("%d", config.Config.DefaultInstancePort)
+		port = "3306"
 	}
 	return newInstanceKeyStrings(hostname, port, resolve)
 }

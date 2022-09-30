@@ -31,15 +31,10 @@ import (
 	vtlog "vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtorc/app"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/server"
-)
-
-var (
-	GitCommit  string
-	AppVersion string
 )
 
 // transformArgsForPflag turns a slice of raw args passed on the command line,
@@ -107,6 +102,9 @@ func main() {
 	grpccommon.RegisterFlags(fs)
 	vtlog.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	logic.RegisterFlags(fs)
+	server.RegisterFlags(fs)
+	config.RegisterFlags(fs)
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	acl.RegisterFlags(fs)
@@ -116,20 +114,6 @@ func main() {
 	os.Args = os.Args[0:1]
 
 	configFile := fs.String("config", "", "config file name")
-	sibling := fs.StringP("sibling", "s", "", "sibling instance, host_fqdn[:port]")
-	destination := fs.StringP("destination", "d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
-	discovery := fs.Bool("discovery", true, "auto discovery mode")
-	config.RuntimeCLIFlags.SkipUnresolve = fs.Bool("skip-unresolve", false, "Do not unresolve a host name")
-	config.RuntimeCLIFlags.SkipUnresolveCheck = fs.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
-	config.RuntimeCLIFlags.Noop = fs.Bool("noop", false, "Dry run; do not perform destructing operations")
-	config.RuntimeCLIFlags.BinlogFile = fs.String("binlog", "", "Binary log file name")
-	config.RuntimeCLIFlags.Statement = fs.String("statement", "", "Statement/hint")
-	config.RuntimeCLIFlags.GrabElection = fs.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
-	config.RuntimeCLIFlags.PromotionRule = fs.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
-	config.RuntimeCLIFlags.SkipContinuousRegistration = fs.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = fs.Bool("enable-database-update", false, "Enable database update, overrides SkipVTOrcDatabaseUpdate")
-	config.RuntimeCLIFlags.IgnoreRaftSetup = fs.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
-	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 
 	os.Args = append(os.Args, transformArgsForPflag(fs, args[1:])...)
 	if !reflect.DeepEqual(args, os.Args) {
@@ -143,48 +127,22 @@ Please update your scripts before the next version, when this will begin to brea
 	}
 
 	servenv.ParseFlags("vtorc")
+	config.UpdateConfigValuesFromFlags()
 
-	if *destination != "" && *sibling != "" {
-		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
-	}
-	switch *config.RuntimeCLIFlags.PromotionRule {
-	case "prefer", "neutral", "prefer_not", "must_not":
-		{
-			// OK
-		}
-	default:
-		{
-			log.Fatalf("--promotion-rule only supports prefer|neutral|prefer_not|must_not")
-		}
-	}
-	if *destination == "" {
-		*destination = *sibling
-	}
-
-	startText := "starting vtorc"
-	if AppVersion != "" {
-		startText += ", version: " + AppVersion
-	}
-	if GitCommit != "" {
-		startText += ", git commit: " + GitCommit
-	}
-	log.Info(startText)
-
+	log.Info("starting vtorc")
 	if len(*configFile) > 0 {
 		config.ForceRead(*configFile)
 	} else {
 		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
 	}
-	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
-		config.Config.SkipOrchestratorDatabaseUpdate = false
-	}
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()
 	}
-	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	go app.HTTP(*discovery)
+	// Log final config values to debug if something goes wrong.
+	config.LogConfigValues()
+	server.StartVTOrcDiscovery()
 
 	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {

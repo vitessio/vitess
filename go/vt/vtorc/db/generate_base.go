@@ -41,8 +41,6 @@ var generateSQLBase = []string{
           exec_source_log_pos bigint(20) unsigned NOT NULL,
           replication_lag_seconds bigint(20) unsigned DEFAULT NULL,
           replica_lag_seconds bigint(20) unsigned DEFAULT NULL,
-          num_replica_hosts int(10) unsigned NOT NULL,
-          replica_hosts text CHARACTER SET ascii NOT NULL,
           cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
           PRIMARY KEY (hostname,port)
         ) ENGINE=InnoDB DEFAULT CHARSET=ascii
@@ -350,20 +348,6 @@ var generateSQLBase = []string{
 		CREATE INDEX unresolved_hostname_idx_hostname_unresolve ON hostname_unresolve (unresolved_hostname)
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS database_instance_pool (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			port smallint(5) unsigned NOT NULL,
-			pool varchar(128) NOT NULL,
-			PRIMARY KEY (hostname, port, pool)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
-		DROP INDEX pool_idx ON database_instance_pool
-	`,
-	`
-		CREATE INDEX pool_idx_database_instance_pool ON database_instance_pool (pool)
-	`,
-	`
 		CREATE TABLE IF NOT EXISTS database_instance_topology_history (
 			snapshot_unix_timestamp INT UNSIGNED NOT NULL,
 			hostname varchar(128) CHARACTER SET ascii NOT NULL,
@@ -419,7 +403,6 @@ var generateSQLBase = []string{
 			analysis varchar(128) NOT NULL,
 			cluster_name varchar(128) NOT NULL,
 			count_affected_replicas int unsigned NOT NULL,
-			replica_hosts text NOT NULL,
 			PRIMARY KEY (detection_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
@@ -664,29 +647,6 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE INDEX last_seen_idx_database_instance_binlog_files_history ON database_instance_binlog_files_history (last_seen)
-	`,
-	`
-		CREATE TABLE IF NOT EXISTS access_token (
-			access_token_id bigint unsigned not null auto_increment,
-			public_token varchar(128) NOT NULL,
-			secret_token varchar(128) NOT NULL,
-			generated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			generated_by varchar(128) CHARACTER SET utf8 NOT NULL,
-			is_acquired tinyint unsigned NOT NULL DEFAULT '0',
-			PRIMARY KEY (access_token_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
-		DROP INDEX public_token_idx ON access_token
-	`,
-	`
-		CREATE UNIQUE INDEX public_token_uidx_access_token ON access_token (public_token)
-	`,
-	`
-		DROP INDEX generated_at_idx ON access_token
-	`,
-	`
-		CREATE INDEX generated_at_idx_access_token ON access_token (generated_at)
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_recent_relaylog_history (

@@ -24,9 +24,9 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	"vitess.io/vitess/go/vt/vtorc/app"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/server"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -49,30 +49,10 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	require.NoError(t, err)
 	err = flag.Set("topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot)
 	require.NoError(t, err)
-	falseVal := false
-	emptyVal := ""
-	config.Config.Debug = true
-	config.Config.MySQLTopologyUser = "orc_client_user"
-	config.Config.MySQLTopologyPassword = "orc_client_user_password"
-	config.Config.MySQLReplicaUser = "vt_repl"
-	config.Config.MySQLReplicaPassword = ""
 	config.Config.RecoveryPeriodBlockSeconds = 1
 	config.Config.InstancePollSeconds = 1
-	config.RuntimeCLIFlags.SkipUnresolve = &falseVal
-	config.RuntimeCLIFlags.SkipUnresolveCheck = &falseVal
-	config.RuntimeCLIFlags.Noop = &falseVal
-	config.RuntimeCLIFlags.BinlogFile = &emptyVal
-	config.RuntimeCLIFlags.Statement = &emptyVal
-	config.RuntimeCLIFlags.GrabElection = &falseVal
-	config.RuntimeCLIFlags.SkipContinuousRegistration = &falseVal
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = &falseVal
-	config.RuntimeCLIFlags.IgnoreRaftSetup = &falseVal
-	config.RuntimeCLIFlags.Tag = &emptyVal
 	config.MarkConfigurationLoaded()
-
-	go func() {
-		app.HTTP(true)
-	}()
+	server.StartVTOrcDiscovery()
 
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, primary, "should have elected a primary")
@@ -87,7 +67,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	primaryInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
 		Hostname: utils.Hostname,
 		Port:     primary.MySQLPort,
-	}, false, nil)
+	}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, primaryInstance)
 	assert.Contains(t, primaryInstance.InstanceAlias, "zone1")
@@ -119,10 +99,14 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
 	assert.Equal(t, fmt.Sprintf("%v:%v", keyspace.Name, shard0.Name), primaryInstance.ClusterName)
 
+	// insert an errant GTID in the replica
+	_, err = utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
+	require.NoError(t, err)
+
 	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
 		Hostname: utils.Hostname,
 		Port:     replica.MySQLPort,
-	}, false, nil)
+	}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, replicaInstance)
 	assert.Contains(t, replicaInstance.InstanceAlias, "zone1")
@@ -148,7 +132,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.NotEmpty(t, replicaInstance.ExecutedGtidSet)
 	assert.Contains(t, replicaInstance.ExecutedGtidSet, primaryInstance.ServerUUID)
 	assert.Empty(t, replicaInstance.GtidPurged)
-	assert.Empty(t, replicaInstance.GtidErrant)
+	assert.Regexp(t, ".{8}-.{4}-.{4}-.{4}-.{12}:.*", replicaInstance.GtidErrant)
 	assert.True(t, replicaInstance.HasReplicationCredentials)
 	assert.Equal(t, replicaInstance.ReplicationIOThreadState, inst.ReplicationThreadStateRunning)
 	assert.Equal(t, replicaInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateRunning)

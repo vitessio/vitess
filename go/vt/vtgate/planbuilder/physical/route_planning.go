@@ -639,6 +639,8 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 	return join, nil
 }
 
+// requiresSwitchingSides will return true if any of the operators with the root from the given operator tree
+// is of the type that should not be on the RHS of a join
 func requiresSwitchingSides(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) bool {
 	required := false
 
@@ -792,6 +794,7 @@ func tryMerge(
 			// no join predicates - no vindex
 			return nil, nil
 		}
+
 		if !sameKeyspace {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 		}
@@ -925,6 +928,11 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOpera
 		return nil
 	}
 
+	exp = unwrapDerivedTables(ctx, exp)
+	if exp == nil {
+		return nil
+	}
+
 	var singCol vindexes.SingleColumn
 
 	// for each equality expression that exp has with other column name, we check if it
@@ -936,14 +944,15 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOpera
 		if !isCol {
 			continue
 		}
-		leftDep := ctx.SemTable.RecursiveDeps(expr)
+
+		deps := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = VisitOperators(a, func(rel abstract.PhysicalOperator) (bool, error) {
 			to, isTableOp := rel.(abstract.IntroducesTable)
 			if !isTableOp {
 				return true, nil
 			}
-			if leftDep.IsSolvedBy(to.GetQTable().ID) {
+			if deps.IsSolvedBy(to.GetQTable().ID) {
 				for _, vindex := range to.GetVTable().ColumnVindexes {
 					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {
@@ -960,6 +969,47 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOpera
 	}
 
 	return singCol
+}
+
+// unwrapDerivedTables we want to find the bottom layer of derived tables
+// nolint
+func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) sqlparser.Expr {
+	for {
+		// if we are dealing with derived tables in derived tables
+		tbl, err := ctx.SemTable.TableInfoForExpr(exp)
+		if err != nil {
+			return nil
+		}
+		_, ok := tbl.(*semantics.DerivedTable)
+		if !ok {
+			break
+		}
+
+		exp, err = semantics.RewriteDerivedTableExpression(exp, tbl)
+		if err != nil {
+			return nil
+		}
+		exp = getColName(exp)
+		if exp == nil {
+			return nil
+		}
+	}
+	return exp
+}
+
+func getColName(exp sqlparser.Expr) *sqlparser.ColName {
+	switch exp := exp.(type) {
+	case *sqlparser.ColName:
+		return exp
+	case *sqlparser.Max, *sqlparser.Min:
+		aggr := exp.(sqlparser.AggrFunc).GetArg()
+		colName, ok := aggr.(*sqlparser.ColName)
+		if ok {
+			return colName
+		}
+	}
+	// for any other expression than a column, or the extremum of a column, we return nil
+	return nil
 }
 
 func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredicates []sqlparser.Expr) bool {

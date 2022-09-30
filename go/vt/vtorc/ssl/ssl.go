@@ -8,14 +8,10 @@ import (
 	"fmt"
 	nethttp "net/http"
 	"os"
-	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 
-	"github.com/go-martini/martini"
 	"github.com/howeyc/gopass"
-
-	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 // Determine if a string element is in a string array
@@ -63,40 +59,6 @@ func ReadCAFile(caFile string) (*x509.CertPool, error) {
 		log.Infof("Read in CA file: %v", caFile)
 	}
 	return caCertPool, nil
-}
-
-// Verify that the OU of the presented client certificate matches the list
-// of Valid OUs
-func Verify(r *nethttp.Request, validOUs []string) error {
-	if strings.Contains(r.URL.String(), config.Config.StatusEndpoint) && !config.Config.StatusOUVerify {
-		return nil
-	}
-	if r.TLS == nil {
-		return errors.New("No TLS")
-	}
-	for _, chain := range r.TLS.VerifiedChains {
-		s := chain[0].Subject.OrganizationalUnit
-		log.Infof("All OUs:", strings.Join(s, " "))
-		for _, ou := range s {
-			log.Infof("Client presented OU:", ou)
-			if HasString(ou, validOUs) {
-				log.Infof("Found valid OU:", ou)
-				return nil
-			}
-		}
-	}
-	log.Error("No valid OUs found")
-	return errors.New("Invalid OU")
-}
-
-// TODO: make this testable?
-func VerifyOUs(validOUs []string) martini.Handler {
-	return func(res nethttp.ResponseWriter, req *nethttp.Request, c martini.Context) {
-		log.Infof("Verifying client OU")
-		if err := Verify(req, validOUs); err != nil {
-			nethttp.Error(res, err.Error(), nethttp.StatusUnauthorized)
-		}
-	}
 }
 
 // AppendKeyPair loads the given TLS key pair and appends it to
