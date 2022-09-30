@@ -18,7 +18,6 @@ package k8stopo
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -114,7 +113,7 @@ func TestKubernetesTopo(t *testing.T) {
 	}
 
 	serverAddr := "default"
-	flag.Set("topo_k8s_kubeconfig", testConfigPath)
+	k8stopoFlags.Set("topo_k8s_kubeconfig", testConfigPath)
 
 	// Run the test suite.
 	testIndex := 0

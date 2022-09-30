@@ -42,19 +42,18 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	vtv1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 	vtkube "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned"
 	vttyped "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned/typed/topo/v1beta1"
 )
 
-var (
-	kubeconfigPath, configContext, configNamespace string
-)
+var kubeconfigPath, configContext, configNamespace string
+var k8stopoFlags *pflag.FlagSet
 
 func init() {
-	servenv.RegisterFlagsForTopoBinaries(registerFlags)
+	k8stopoFlags = pflag.NewFlagSet("k8stopo", pflag.ExitOnError)
+	registerFlags(k8stopoFlags)
 }
 
 func registerFlags(fs *pflag.FlagSet) {
