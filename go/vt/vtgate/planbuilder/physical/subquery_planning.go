@@ -412,3 +412,46 @@ func createCorrelatedSubqueryOp(
 		LHSColumns: lhsCols,
 	}, nil
 }
+
+// canMergeSubqueryOnColumnSelection will return true if the predicate used allows us to merge the two subqueries
+// into a single Route. This can be done if we are comparing two columns that contain data that is guaranteed
+// to exist on the same shard.
+func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
+	left := predicate.OtherSide
+	opCode := predicate.OpCode
+	if opCode != int(engine.PulloutValue) && opCode != int(engine.PulloutIn) {
+		return false
+	}
+
+	lVindex := findColumnVindex(ctx, a, left)
+	if lVindex == nil || !lVindex.IsUnique() {
+		return false
+	}
+
+	rightSelection := extractSingleColumnSubquerySelection(predicate.Subquery)
+	if rightSelection == nil {
+		return false
+	}
+
+	rVindex := findColumnVindex(ctx, b, rightSelection)
+	if rVindex == nil {
+		return false
+	}
+	return rVindex == lVindex
+}
+
+// Searches for the single column returned from a subquery, like the `col` in `(SELECT col FROM tbl)`
+func extractSingleColumnSubquerySelection(subquery *sqlparser.Subquery) *sqlparser.ColName {
+	if subquery.Select.GetColumnCount() != 1 {
+		return nil
+	}
+
+	columnExpr := subquery.Select.GetColumns()[0]
+
+	aliasedExpr, ok := columnExpr.(*sqlparser.AliasedExpr)
+	if !ok {
+		return nil
+	}
+
+	return getColName(aliasedExpr.Expr)
+}

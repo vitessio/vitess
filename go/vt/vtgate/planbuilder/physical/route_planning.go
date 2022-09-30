@@ -639,6 +639,8 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 	return join, nil
 }
 
+// requiresSwitchingSides will return true if any of the operators with the root from the given operator tree
+// is of the type that should not be on the RHS of a join
 func requiresSwitchingSides(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) bool {
 	required := false
 
@@ -918,45 +920,6 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 		return false
 	}
 	return rVindex == lVindex
-}
-
-func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
-	left := predicate.OtherSide
-	opCode := predicate.OpCode
-	if opCode != int(engine.PulloutValue) && opCode != int(engine.PulloutIn) {
-		return false
-	}
-
-	lVindex := findColumnVindex(ctx, a, left)
-	if lVindex == nil || !lVindex.IsUnique() {
-		return false
-	}
-
-	rightSelection := extractSingleColumnSubquerySelection(predicate.Subquery)
-	if rightSelection == nil {
-		return false
-	}
-
-	rVindex := findColumnVindex(ctx, b, rightSelection)
-	if rVindex == nil {
-		return false
-	}
-	return rVindex == lVindex
-}
-
-func extractSingleColumnSubquerySelection(subquery *sqlparser.Subquery) *sqlparser.ColName {
-	if subquery.Select.GetColumnCount() != 1 {
-		return nil
-	}
-
-	columnExpr := subquery.Select.GetColumns()[0]
-
-	aliasedExpr, ok := columnExpr.(*sqlparser.AliasedExpr)
-	if !ok {
-		return nil
-	}
-
-	return getColName(aliasedExpr.Expr)
 }
 
 func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOperator, exp sqlparser.Expr) vindexes.SingleColumn {
