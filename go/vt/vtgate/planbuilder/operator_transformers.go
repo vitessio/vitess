@@ -86,13 +86,6 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJoin) (logicalPlan, error) {
-	// TODO systay we should move the decision of which join to use to the greedy algorithm,
-	// and thus represented as a queryTree
-	// canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
-	// if err != nil {
-	//	return nil, err
-	// }
-
 	lhs, err := transformToLogicalPlan(ctx, n.LHS, false)
 	if err != nil {
 		return nil, err
@@ -106,23 +99,6 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 		opCode = engine.LeftJoin
 	}
 
-	// if canHashJoin {
-	//	coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	return &hashJoin{
-	//		Left:           lhs,
-	//		Right:          rhs,
-	//		Cols:           n.columns,
-	//		Opcode:         OpCode,
-	//		LHSKey:         lhsInfo.offset,
-	//		RHSKey:         rhsInfo.offset,
-	//		Predicate:      sqlparser.AndExpressions(n.predicates...),
-	//		ComparisonType: coercedType,
-	//		Collation:      lhsInfo.typ.Collation,
-	//	}, nil
-	// }
 	return &joinGen4{
 		Left:       lhs,
 		Right:      rhs,

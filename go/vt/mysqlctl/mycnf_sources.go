@@ -42,7 +42,7 @@ func NewMycnfFromSources(tabletUID uint32, mysqlPort int32) (*Mycnf, error) {
 	cnfs = append(cnfs, NewMycnf(tabletUID, mysqlPort))
 
 	// Get a Mycnf file.
-	if *flagMycnfFile == "" {
+	if flagMycnfFile == "" {
 		log.Infof("No mycnf_server_id, no mycnf-file specified, using default config for server id %v", tabletUID)
 		fcnf, err := NewMycnfFromDefaultFile(tabletUID)
 		if err != nil {
@@ -54,7 +54,7 @@ func NewMycnfFromSources(tabletUID uint32, mysqlPort int32) (*Mycnf, error) {
 			cnfs = append(cnfs, fcnf)
 		}
 	} else {
-		path := *flagMycnfFile
+		path := flagMycnfFile
 		log.Infof("No mycnf_server_id specified, using mycnf-file file: %v", path)
 		fcnf, err := NewMycnfFromFile(tabletUID, path)
 		if err != nil {

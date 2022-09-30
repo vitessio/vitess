@@ -25,6 +25,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	vtlog "vitess.io/vitess/go/vt/log"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/app"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/server"
 )
 
 var (
@@ -107,6 +109,7 @@ func main() {
 	logutil.RegisterFlags(fs)
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
+	acl.RegisterFlags(fs)
 	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
 
 	args := append([]string{}, os.Args...)
@@ -183,6 +186,7 @@ Please update your scripts before the next version, when this will begin to brea
 
 	go app.HTTP(*discovery)
 
+	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {
 		addStatusParts()
 	})

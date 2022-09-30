@@ -6066,3 +6066,47 @@ Gen4 plan same as above
     "user.authoritative"
   ]
 }
+
+
+"select * from (select bar as push_it from (select foo as bar from (select id as foo from user) as t1) as t2) as t3 where push_it = 12"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select bar as push_it from (select foo as bar from (select id as foo from user) as t1) as t2) as t3 where push_it = 12",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from (select bar as push_it from (select foo as bar from (select id as foo from `user` where 1 != 1) as t1 where 1 != 1) as t2 where 1 != 1) as t3 where 1 != 1",
+    "Query": "select * from (select bar as push_it from (select foo as bar from (select id as foo from `user`) as t1) as t2) as t3 where push_it = 12",
+    "Table": "`user`",
+    "Values": [
+      "INT64(12)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select bar as push_it from (select foo as bar from (select id as foo from user) as t1) as t2) as t3 where push_it = 12",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select t3.push_it from (select bar as push_it from (select foo as bar from (select id as foo from `user` where 1 != 1) as t1 where 1 != 1) as t2 where 1 != 1) as t3 where 1 != 1",
+    "Query": "select t3.push_it from (select bar as push_it from (select foo as bar from (select id as foo from `user` where id = 12) as t1) as t2) as t3",
+    "Table": "`user`",
+    "Values": [
+      "INT64(12)"
+    ],
+    "Vindex": "user_index"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}

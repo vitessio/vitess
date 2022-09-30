@@ -60,6 +60,9 @@ import {
     fetchShardReplicationPositions,
     createKeyspace,
     reloadSchema,
+    rebuildKeyspaceGraph,
+    removeKeyspaceCell,
+    createShard,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -441,5 +444,42 @@ export const useReloadSchema = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
         return reloadSchema(params);
+    }, options);
+};
+
+/**
+ * useRebuildKeyspaceGraph is a mutate hook that rebuilds keyspace graphs for one or
+ * more cells in a keyspace.
+ */
+export const useRebuildKeyspaceGraph = (
+    params: Parameters<typeof rebuildKeyspaceGraph>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>(() => {
+        return rebuildKeyspaceGraph(params);
+    }, options);
+};
+
+/**
+ * useRemoveKeyspaceCell is a mutate hook that removes a keyspace cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+ */
+export const useRemoveKeyspaceCell = (
+    params: Parameters<typeof removeKeyspaceCell>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>(() => {
+        return removeKeyspaceCell(params);
+    }, options);
+};
+
+/**
+ * useCreateShard is a mutate hook that creates a shard in a keyspace
+ */
+export const useCreateShard = (
+    params: Parameters<typeof createShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createShard>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
+        return createShard(params);
     }, options);
 };

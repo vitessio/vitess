@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package insert
+package misc
 
 import (
 	_ "embed"
@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -35,31 +33,14 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
-	sKs             = "sks"
-	uKs             = "uks"
-	cell            = "test"
+	keyspaceName    = "ks_derived"
+	cell            = "test_derived"
 
-	//go:embed sharded_schema.sql
-	sSchemaSQL string
+	//go:embed schema.sql
+	schemaSQL string
 
 	//go:embed vschema.json
-	sVSchema string
-
-	//go:embed unsharded_schema.sql
-	uSchemaSQL string
-
-	uVSchema = `
-{
-  "tables": {
-    "u_tbl": {},
-    "user_seq": {
-       "type":   "sequence"
-    },
-    "auto_seq": {
-       "type":   "sequence"
-    }
-  }
-}`
+	vschema string
 )
 
 func TestMain(m *testing.M) {
@@ -76,30 +57,19 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start unsharded keyspace
-		uKeyspace := &cluster.Keyspace{
-			Name:      uKs,
-			SchemaSQL: uSchemaSQL,
-			VSchema:   uVSchema,
+		// Start keyspace
+		keyspace := &cluster.Keyspace{
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
+			VSchema:   vschema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
 
-		// Start sharded keyspace
-		sKeyspace := &cluster.Keyspace{
-			Name:      sKs,
-			SchemaSQL: sSchemaSQL,
-			VSchema:   sVSchema,
-		}
-		err = clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false)
-		if err != nil {
-			return 1
-		}
-
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -111,7 +81,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, sKs, sSchemaSQL, uSchemaSQL)
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1

@@ -72,7 +72,7 @@ func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	switch upd.Opcode {
 	case Unsharded:
 		return upd.execUnsharded(ctx, vcursor, bindVars, rss)
-	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard:
+	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard, MultiEqual:
 		return upd.execMultiDestination(ctx, vcursor, bindVars, rss, upd.updateVindexEntries)
 	default:
 		// Unreachable.
