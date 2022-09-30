@@ -191,109 +191,129 @@ func tryMergeSubQueryOp(
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 ) (abstract.PhysicalOperator, error) {
-	var merged abstract.PhysicalOperator
-	var err error
 	switch outerOp := outer.(type) {
 	case *Route:
-		subqueryRoute, isRoute := subq.(*Route)
-		if !isRoute {
-			return nil, nil
-		}
-
-		if outerOp.RouteOpCode == engine.Reference && !subqueryRoute.IsSingleShard() {
-			return nil, nil
-		}
-
-		merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
-		if err != nil {
-			return nil, err
-		}
-
-		// If the subqueries could be merged here, we're done
-		if merged != nil {
-			return merged, err
-		}
-
-		if !isMergeable(ctx, subQueryInner.ExtractedSubquery.Subquery.Select, subq) {
-			return nil, nil
-		}
-
-		// Special case: Inner query won't return any results / is not routable.
-		if subqueryRoute.RouteOpCode == engine.None {
-			merged, err := merger(outerOp, subqueryRoute)
-			return merged, err
-		}
-
-		// Inner subqueries can be merged with the outer subquery as long as
-		// the inner query is a single column selection, and that single column has a matching
-		// vindex on the outer query's operand.
-		if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
-			merged, err := merger(outerOp, subqueryRoute)
-
-			if err != nil {
-				return nil, err
-			}
-
-			if merged != nil {
-				// since we inlined the subquery into the outer query, new vindex options might have been enabled,
-				// so we go over our current options to check if anything better has come up.
-				merged.PickBestAvailableVindex()
-				return merged, err
-			}
-		}
-		return nil, nil
+		return tryMergeSubqueryWithRoute(ctx, subq, outerOp, joinPredicates, merger, subQueryInner)
 	case *ApplyJoin:
-		// Trying to merge the subquery with the left-hand or right-hand side of the join
-
-		if outerOp.LeftJoin {
-			return nil, nil
-		}
-		newMergefunc := func(a, b *Route) (*Route, error) {
-			rt, err := merger(a, b)
-			if err != nil {
-				return nil, err
-			}
-			outerOp.RHS, err = rewriteColumnsInSubqueryOpForApplyJoin(ctx, outerOp.RHS, outerOp, subQueryInner)
-			return rt, err
-		}
-		merged, err = tryMergeSubQueryOp(ctx, outerOp.LHS, subq, subQueryInner, joinPredicates, newMergefunc)
-		if err != nil {
-			return nil, err
-		}
-		if merged != nil {
-			outerOp.LHS = merged
-			return outerOp, nil
-		}
-
-		newMergefunc = func(a, b *Route) (*Route, error) {
-			rt, err := merger(a, b)
-			if err != nil {
-				return nil, err
-			}
-			outerOp.LHS, err = rewriteColumnsInSubqueryOpForApplyJoin(ctx, outerOp.LHS, outerOp, subQueryInner)
-			return rt, err
-		}
-		merged, err = tryMergeSubQueryOp(ctx, outerOp.RHS, subq, subQueryInner, joinPredicates, newMergefunc)
-		if err != nil {
-			return nil, err
-		}
-		if merged != nil {
-			outerOp.RHS = merged
-			return outerOp, nil
-		}
-		return nil, nil
+		return tryMergeSubqueryWithJoin(ctx, subq, outerOp, joinPredicates, merger, subQueryInner)
 	default:
 		return nil, nil
 	}
 }
 
-// rewriteColumnsInSubqueryOpForApplyJoin rewrites the columns that appear from the other side
+func tryMergeSubqueryWithRoute(
+	ctx *plancontext.PlanningContext,
+	subq abstract.PhysicalOperator,
+	outerOp *Route,
+	joinPredicates []sqlparser.Expr,
+	merger mergeFunc,
+	subQueryInner *SubQueryInner,
+) (abstract.PhysicalOperator, error) {
+	subqueryRoute, isRoute := subq.(*Route)
+	if !isRoute {
+		return nil, nil
+	}
+
+	if outerOp.RouteOpCode == engine.Reference && !subqueryRoute.IsSingleShard() {
+		return nil, nil
+	}
+
+	merged, err := tryMerge(ctx, outerOp, subq, joinPredicates, merger)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the subqueries could be merged here, we're done
+	if merged != nil {
+		return merged, err
+	}
+
+	if !isMergeable(ctx, subQueryInner.ExtractedSubquery.Subquery.Select, subq) {
+		return nil, nil
+	}
+
+	// Special case: Inner query won't return any results / is not routable.
+	if subqueryRoute.RouteOpCode == engine.None {
+		merged, err := merger(outerOp, subqueryRoute)
+		return merged, err
+	}
+
+	// Inner subqueries can be merged with the outer subquery as long as
+	// the inner query is a single column selection, and that single column has a matching
+	// vindex on the outer query's operand.
+	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
+		merged, err := merger(outerOp, subqueryRoute)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if merged != nil {
+			// since we inlined the subquery into the outer query, new vindex options might have been enabled,
+			// so we go over our current options to check if anything better has come up.
+			merged.PickBestAvailableVindex()
+			return merged, err
+		}
+	}
+	return nil, nil
+}
+
+func tryMergeSubqueryWithJoin(
+	ctx *plancontext.PlanningContext,
+	subq abstract.PhysicalOperator,
+	outerOp *ApplyJoin,
+	joinPredicates []sqlparser.Expr,
+	merger mergeFunc,
+	subQueryInner *SubQueryInner,
+) (abstract.PhysicalOperator, error) {
+	// Trying to merge the subquery with the left-hand or right-hand side of the join
+
+	if outerOp.LeftJoin {
+		return nil, nil
+	}
+	newMergefunc := func(a, b *Route) (*Route, error) {
+		rt, err := merger(a, b)
+		if err != nil {
+			return nil, err
+		}
+		outerOp.RHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.RHS, outerOp, subQueryInner)
+		return rt, err
+	}
+	merged, err := tryMergeSubQueryOp(ctx, outerOp.LHS, subq, subQueryInner, joinPredicates, newMergefunc)
+	if err != nil {
+		return nil, err
+	}
+	if merged != nil {
+		outerOp.LHS = merged
+		return outerOp, nil
+	}
+
+	newMergefunc = func(a, b *Route) (*Route, error) {
+		rt, err := merger(a, b)
+		if err != nil {
+			return nil, err
+		}
+		outerOp.LHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.LHS, outerOp, subQueryInner)
+		return rt, err
+	}
+	merged, err = tryMergeSubQueryOp(ctx, outerOp.RHS, subq, subQueryInner, joinPredicates, newMergefunc)
+	if err != nil {
+		return nil, err
+	}
+	if merged != nil {
+		outerOp.RHS = merged
+		return outerOp, nil
+	}
+	return nil, nil
+}
+
+// rewriteColumnsInSubqueryOpForJoin rewrites the columns that appear from the other side
 // of the join. For example, let's say we merged a subquery on the right side of a join tree
 // If it was using any columns from the left side then they need to be replaced by bind variables supplied
 // from that side.
 // outerTree is the joinTree within whose children the subquery lives in
 // the child of joinTree which does not contain the subquery is the otherTree
-func rewriteColumnsInSubqueryOpForApplyJoin(
+func rewriteColumnsInSubqueryOpForJoin(
 	ctx *plancontext.PlanningContext,
 	innerOp abstract.PhysicalOperator,
 	outerTree *ApplyJoin,
