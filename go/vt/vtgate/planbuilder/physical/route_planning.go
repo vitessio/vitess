@@ -1009,6 +1009,7 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOpera
 }
 
 // unwrapDerivedTables we want to find the bottom layer of derived tables
+// nolint
 func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) sqlparser.Expr {
 	for {
 		// if we are dealing with derived tables in derived tables
