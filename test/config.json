@@ -1017,6 +1017,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_vschema_load": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVSchemaChangesUnderLoad"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vreplication_basic": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
