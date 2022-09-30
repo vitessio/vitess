@@ -281,7 +281,7 @@ Along with the UI, the old APIs have also been deprecated. However, some of them
 | `/api/health`                    | `/debug/health`                  | Functionally remains the same                                         |
 | `/api/replication-analysis`      | `/api/replication-analysis`      | Functionally remains the same. Output is now JSON format.             |
 
-Apart from these APIs, we also now have `/debug/status`, `/debug/vars/` and `/debug/liveness/` available in the new UI.
+Apart from these APIs, we also now have `/debug/status`, `/debug/vars` and `/debug/liveness` available in the new UI.
 
 #### Configuration Refactor and New Flags 
 
@@ -356,11 +356,3 @@ After upgrading, you can drop the configuration entirely and use the new flags l
 
 The default files that VTOrc searches for configurations in have also changed from `"/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json"` to
 `"/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json"`.
-
-#### Debug Pages in VTOrc
-
-Like the other vitess binaries (`vtgate`, `vttablet`), now `vtorc` also takes a `--port` flag, on which it 
-displays the `/debug` pages including `/debug/status` and variables it tracks on `/debug/vars`.
-
-This change is backward compatible and opt-in by default. Not specifying the flag works like it used to with
-VTOrc running without displaying these pages.
