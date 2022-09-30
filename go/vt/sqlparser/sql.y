@@ -4772,13 +4772,13 @@ table_factor:
   }
 
 derived_table:
-  openb query_expression closeb
+  query_expression_parens
   {
-    $$ = &DerivedTable{Lateral: false, Select: $2}
+    $$ = &DerivedTable{Lateral: false, Select: $1}
   }
-| LATERAL openb query_expression closeb
+| LATERAL query_expression_parens
   {
-    $$ = &DerivedTable{Lateral: true, Select: $3}
+    $$ = &DerivedTable{Lateral: true, Select: $2}
   }
 
 aliased_table_name:
