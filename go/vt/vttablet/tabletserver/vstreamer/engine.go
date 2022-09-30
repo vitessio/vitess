@@ -23,6 +23,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/vt/servenv"
 
@@ -60,7 +61,7 @@ type Engine struct {
 	wg sync.WaitGroup
 
 	mu              sync.Mutex
-	isOpen          bool
+	isOpen          int32 // 0 or 1 in place of atomic.Bool added in go 1.19
 	streamIdx       int
 	streamers       map[int]*uvstreamer
 	rowStreamers    map[int]*rowStreamer
@@ -138,30 +139,24 @@ func (vse *Engine) InitDBConfig(keyspace string) {
 
 // Open starts the Engine service.
 func (vse *Engine) Open() {
-	vse.mu.Lock()
-	defer vse.mu.Unlock()
-	if vse.isOpen {
-		return
-	}
 	log.Info("VStreamer: opening")
-	vse.isOpen = true
+	// If it's not already open, then open it now.
+	atomic.CompareAndSwapInt32(&vse.isOpen, 0, 1)
 }
 
 // IsOpen checks if the engine is opened
 func (vse *Engine) IsOpen() bool {
-	vse.mu.Lock()
-	defer vse.mu.Unlock()
-	return vse.isOpen
+	return atomic.LoadInt32(&vse.isOpen) == 1
 }
 
 // Close closes the Engine service.
 func (vse *Engine) Close() {
 	func() {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return
 		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 		// cancels are non-blocking.
 		for _, s := range vse.streamers {
 			s.Cancel()
@@ -172,7 +167,7 @@ func (vse *Engine) Close() {
 		for _, s := range vse.resultStreamers {
 			s.Cancel()
 		}
-		vse.isOpen = false
+		atomic.StoreInt32(&vse.isOpen, 0)
 	}()
 
 	// Wait only after releasing the lock because the end of every
@@ -197,11 +192,12 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 	// Create stream and add it to the map.
 	streamer, idx, err := func() (*uvstreamer, int, error) {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+		vse.env.Config().DB.AppWithDB()
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.AppWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
@@ -238,11 +234,11 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 
 		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
 		idx := vse.streamIdx
@@ -273,11 +269,11 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	// Create stream and add it to the map.
 	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 		resultStreamer := newResultStreamer(ctx, vse.env.Config().DB.AppWithDB(), query, send, vse)
 		idx := vse.streamIdx
 		vse.resultStreamers[idx] = resultStreamer

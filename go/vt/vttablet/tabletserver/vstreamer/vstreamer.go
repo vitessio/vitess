@@ -132,6 +132,12 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	select {
 	case vs.vevents <- vschema:
 	case <-vs.ctx.Done():
+	default: // if there is a pending vschema in the channel, drain it and update it with the latest one
+		select {
+		case <-vs.vevents:
+			vs.vevents <- vschema
+		default:
+		}
 	}
 }
 
@@ -335,11 +341,16 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 			}
 		case vs.vschema = <-vs.vevents:
-			if err := vs.rebuildPlans(); err != nil {
-				return err
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				if err := vs.rebuildPlans(); err != nil {
+					return err
+				}
+				// Increment this counter for testing.
+				vschemaUpdateCount.Add(1)
 			}
-			// Increment this counter for testing.
-			vschemaUpdateCount.Add(1)
 		case <-ctx.Done():
 			return nil
 		case <-timer.C:
