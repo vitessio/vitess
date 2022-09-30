@@ -969,6 +969,30 @@ var (
 			input:  "rollback work",
 			output: "rollback",
 		}, {
+			input:  "rollback work and chain",
+			output: "rollback",
+		}, {
+			input:  "rollback work and no chain",
+			output: "rollback",
+		}, {
+			input:  "rollback work release",
+			output: "rollback",
+		}, {
+			input:  "rollback work no release",
+			output: "rollback",
+		}, {
+			input:  "rollback work and chain release",
+			output: "rollback",
+		}, {
+			input:  "rollback work and chain no release",
+			output: "rollback",
+		}, {
+			input:  "rollback work and no chain release",
+			output: "rollback",
+		}, {
+			input:  "rollback work and no chain no release",
+			output: "rollback",
+		}, {
 			input: "rollback to abc",
 		}, {
 			input:  "rollback work to abc",
@@ -2033,6 +2057,30 @@ var (
 			input: "commit",
 		}, {
 			input:  "commit work",
+			output: "commit",
+		}, {
+			input:  "commit work and chain",
+			output: "commit",
+		}, {
+			input:  "commit work and no chain",
+			output: "commit",
+		}, {
+			input:  "commit work release",
+			output: "commit",
+		}, {
+			input:  "commit work no release",
+			output: "commit",
+		}, {
+			input:  "commit work and chain release",
+			output: "commit",
+		}, {
+			input:  "commit work and chain no release",
+			output: "commit",
+		}, {
+			input:  "commit work and no chain release",
+			output: "commit",
+		}, {
+			input:  "commit work and no chain no release",
 			output: "commit",
 		}, {
 			input: "create database test_db",
