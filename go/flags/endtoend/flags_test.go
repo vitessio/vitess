@@ -77,6 +77,9 @@ var (
 	//go:embed vtbackup.txt
 	vtbackupTxt string
 
+	//go:embed zkctl.txt
+	zkctlTxt string
+
 	//go:embed zk.txt
 	zkTxt string
 
@@ -97,6 +100,7 @@ var (
 		"zkctld":       zkctldTxt,
 		"vtbackup":     vtbackupTxt,
 		"zk":           zkTxt,
+		"zkctl":        zkctlTxt,
 	}
 )
 
