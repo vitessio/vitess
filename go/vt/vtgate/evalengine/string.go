@@ -17,8 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -200,13 +198,25 @@ type builtinCharacterLength struct{}
 
 func (builtinCharacterLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
+	t := inarg.typeof()
+	raw := inarg.value().Raw()
+
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	cnt := strings.Count(inarg.value().RawStr(), "") - 1
-	result.setInt64(int64(cnt))
+	coll := collations.Local().LookupByID(inarg.collation().Collation)
+
+	if sqltypes.IsNumber(t) {
+		inarg.makeTextualAndConvert(env.DefaultCollation)
+		cnt := int64(len(inarg.value().Raw()))
+		result.setInt64(cnt)
+	} else if cnt := collations.CharLen(coll, raw); cnt >= 0 {
+		result.setInt64(int64(cnt))
+	} else {
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
+	}
 }
 
 func (builtinCharacterLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
