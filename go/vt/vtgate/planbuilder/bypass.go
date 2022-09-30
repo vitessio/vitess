@@ -41,12 +41,17 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		if !vschema.IsShardRoutingEnabled() {
 			break
 		}
+		// With shard routing enabled, a shard target will get
+		// routed according to the rules defined in the global
+		// routing rules. When there's a shard routing record
+		// for the keyspace.shard, it will override the global
+		// routing.
 		shard := string(dest)
 		targetKeyspace, err := GetShardRoute(vschema, keyspace.Name, shard)
 		if err != nil {
 			return nil, err
 		}
-		if targetKeyspace != nil {
+		if targetKeyspace != nil && targetKeyspace.Name != keyspace.Name {
 			keyspace = targetKeyspace
 		}
 	}

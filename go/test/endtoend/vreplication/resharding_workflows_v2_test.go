@@ -306,7 +306,7 @@ func TestPartialMoveTables(t *testing.T) {
 	vdiff1(t, ksWf, "")
 
 	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
-	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer: all shards
+	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer2: all shards
 	waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-
 
 	// Remove any manually applied shard routing rules as these
@@ -315,7 +315,52 @@ func TestPartialMoveTables(t *testing.T) {
 	applyShardRoutingRules(t, emptyRules)
 	require.Equal(t, emptyRules, getShardRoutingRules(t))
 
-	// switch all traffic
+	confirmGlobalRoutingToSource := func() {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+		require.NoError(t, err)
+		result := gjson.Get(output, "rules")
+		result.ForEach(func(attributeKey, attributeValue gjson.Result) bool {
+			// 0 is the keyspace and 1 is optional tablename[@tablettype]
+			fromKsTbl := strings.Split(attributeValue.Get("fromTable").String(), ".")
+			// 0 is the keyspace and 1 is the tablename
+			toKsTbl := strings.Split(attributeValue.Get("toTables.0").String(), ".")
+			// All tables in the customer and customer2 keyspaces should be
+			// routed to the customer keyspace.
+			if fromKsTbl[0] == "customer" || fromKsTbl[0] == "customer2" {
+				require.Equal(t, "customer", toKsTbl[0])
+			}
+			return true
+		})
+	}
+
+	// This query uses an ID that should always get routed to shard 80-
+	shard80PlusRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
+	// This query uses an ID that should always get routed to shard -80
+	shard0To79RoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
+
+	// reset any existing vtgate connection state
+	vtgateConn.Close()
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+
+	// Global routing rules should be in place with everything going to
+	// the source keyspace (customer).
+	confirmGlobalRoutingToSource()
+
+	// Confirm shard targeting works as per usual before we switch any traffic.
+	// Everything should be routed to the source keyspace (customer).
+	_, err = vtgateConn.ExecuteFetch("use `customer2:-80`", 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(shard0To79RoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before any SwitchTraffic")
+	_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(shard80PlusRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer.80-.primary", "Query was routed to the target before any SwitchTraffic")
+
+	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
 	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow customer2.partial\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 		shard, shard)
@@ -323,30 +368,12 @@ func TestPartialMoveTables(t *testing.T) {
 
 	// Confirm global routing rules -- everything should still be routed
 	// to the source side, customer, globally.
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
-	require.NoError(t, err)
-	result := gjson.Get(output, "rules")
-	result.ForEach(func(attributeKey, attributeValue gjson.Result) bool {
-		// 0 is the keyspace and 1 is optional tablename[@tablettype]
-		fromKsTbl := strings.Split(attributeValue.Get("fromTable").String(), ".")
-		// 0 is the keyspace and 1 is the tablename
-		toKsTbl := strings.Split(attributeValue.Get("toTables.0").String(), ".")
-		// All tables in the customer and customer2 keyspaces should be
-		// routed to the customer keyspace.
-		if fromKsTbl[0] == "customer" || fromKsTbl[0] == "customer2" {
-			require.Equal(t, "customer", toKsTbl[0])
-		}
-		return true
-	})
+	confirmGlobalRoutingToSource()
+
 	// Confirm shard routing rules -- all traffic for the 80- shard should be
 	// routed into the customer2 keyspace, overriding the global routing rules.
 	expectedShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
 	require.Equal(t, expectedShardRoutingRules, getShardRoutingRules(t))
-
-	// This query uses an ID that should always get routed to customer2:80-
-	targetRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
-	// This query uses an ID that should always get routed to customer:-80
-	sourceRoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
 
 	// reset any existing vtgate connection state
 	vtgateConn.Close()
@@ -354,42 +381,42 @@ func TestPartialMoveTables(t *testing.T) {
 	defer vtgateConn.Close()
 
 	// No shard targeting
-	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80PlusRoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer2.80-.primary")
-	_, err = vtgateConn.ExecuteFetch(sourceRoutedQuery, 0, false)
+	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
+	_, err = vtgateConn.ExecuteFetch(shard0To79RoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.-80.primary")
+	require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before partial SwitchTraffic")
 
 	// Shard targeting
 	_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80PlusRoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer2.80-.primary")
+	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
 	_, err = vtgateConn.ExecuteFetch("use `customer:80-`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80PlusRoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer2.80-.primary")
+	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
 
 	// Tablet type targeting
 	_, err = vtgateConn.ExecuteFetch("use `customer2@replica`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80PlusRoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer2.80-.replica")
-	_, err = vtgateConn.ExecuteFetch(sourceRoutedQuery, 0, false)
+	require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
+	_, err = vtgateConn.ExecuteFetch(shard0To79RoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.-80.replica")
+	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
 	_, err = vtgateConn.ExecuteFetch("use `customer@replica`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80PlusRoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer2.80-.replica")
-	_, err = vtgateConn.ExecuteFetch(sourceRoutedQuery, 0, false)
+	require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
+	_, err = vtgateConn.ExecuteFetch(shard0To79RoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.-80.replica")
+	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
 
 	// We cannot Complete a partial move tables at the moment because it will
 	// find that all traffic has (obviously) not been switched we need to
@@ -399,7 +426,7 @@ func TestPartialMoveTables(t *testing.T) {
 	require.Equal(t, expectedShardRoutingRules, getShardRoutingRules(t))
 	_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "delete")
 	require.NoError(t, err)
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
 	require.Error(t, err)
 	require.Contains(t, output, "no streams found")
 

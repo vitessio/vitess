@@ -19,12 +19,14 @@ package vindexes
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -49,6 +51,8 @@ var TabletTypeSuffix = map[topodatapb.TabletType]string{
 	7: "@restore",
 	8: "@drained",
 }
+
+var ErrShardRoutingRuleNotExist = errors.New("shard routing rule does not exist")
 
 // The following constants represent table types.
 const (
@@ -669,13 +673,13 @@ func getShardRoutingRulesKey(keyspace, shard string) string {
 
 // FindRoutedShard looks up shard routing rules and returns the target keyspace if applicable
 func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) {
-	if len(vschema.ShardRoutingRules) == 0 {
-		return keyspace, nil
-	}
+	// If there's a shard routing rule override then use that
 	if ks, ok := vschema.ShardRoutingRules[getShardRoutingRulesKey(keyspace, shard)]; ok {
 		return ks, nil
 	}
-	return keyspace, nil
+	log.Errorf("LORD: No shard routing rule found for keyspace: %s, shard: %s", keyspace, shard)
+	// Otherwise we fall back to the global routing rule for the keyspace
+	return "", ErrShardRoutingRuleNotExist
 }
 
 // ByCost provides the interface needed for ColumnVindexes to
