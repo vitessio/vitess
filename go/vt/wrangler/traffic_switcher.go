@@ -235,7 +235,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		state.WorkflowType = workflow.TypeMoveTables
 
-		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
+		// we assume a consistent state, so only choose routing rule for one table
 		if len(ts.Tables()) == 0 {
 			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflowName)
 

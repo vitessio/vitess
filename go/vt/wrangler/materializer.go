@@ -892,25 +892,25 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 	return int64(hasher.Sum64() & math.MaxInt64), nil
 }
 
-func (wr *Wrangler) createReverseShardRoutingRules(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
+// createDefaultShardRoutingRules creates a reverse routing rule for
+// each shard in a new partial keyspace migration workflow that does
+// not already have an existing routing rule in place.
+func (wr *Wrangler) createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
 	srr, err := topotools.GetShardRoutingRules(ctx, wr.ts)
 	if err != nil {
 		return err
 	}
-
-	if len(srr) != 0 {
-		wr.Logger().Infof("Shard Routing Rules are already setup by a previous Partial MoveTables, not creating reverse rules")
-		return nil
-	}
-
 	allShards, err := wr.sourceTs.GetServingShards(ctx, ms.SourceKeyspace)
 	if err != nil {
 		return err
 	}
-
 	for _, si := range allShards {
-		srr[fmt.Sprintf("%s.%s", ms.TargetKeyspace, si.ShardName())] = ms.SourceKeyspace
-		wr.Logger().Infof("Added reverse shard routing: from %v:%v to %v", ms.TargetKeyspace, si.ShardName(), ms.SourceKeyspace)
+		fromSource := fmt.Sprintf("%s.%s", ms.SourceKeyspace, si.ShardName())
+		fromTarget := fmt.Sprintf("%s.%s", ms.TargetKeyspace, si.ShardName())
+		if srr[fromSource] == "" && srr[fromTarget] == "" {
+			srr[fromTarget] = ms.SourceKeyspace
+			wr.Logger().Infof("Added default reverse shard routing from %q to %q", fromTarget, ms.SourceKeyspace)
+		}
 	}
 	if err := topotools.SaveShardRoutingRules(ctx, wr.ts, srr); err != nil {
 		return err
@@ -929,13 +929,11 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	if err != nil {
 		return nil, err
 	}
-
 	if mz.isPartial {
-		if err := wr.createReverseShardRoutingRules(ctx, ms); err != nil {
+		if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
 			return nil, err
 		}
 	}
-
 	if err := mz.deploySchema(ctx); err != nil {
 		return nil, err
 	}

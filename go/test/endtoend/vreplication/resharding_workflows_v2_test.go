@@ -271,10 +271,10 @@ func applyShardRoutingRules(t *testing.T, rules string) {
 	require.NotNil(t, output)
 }
 
-// getShardRoutingRules returns the routing rules stored in the topo.
-// It returns the rules sorted by shard, and with all newlines and
-// whitespace removed so that we have predictable, compact, easy to
-// compare results for tests.
+// getShardRoutingRules returns the shard routing rules stored in the
+// topo. It returns the rules sorted by shard and with all newlines
+// and whitespace removed so that we have predictable, compact, easy
+// to compare results for tests.
 func getShardRoutingRules(t *testing.T) string {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
 	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
