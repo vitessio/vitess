@@ -120,11 +120,11 @@ func TestCreateKs(t *testing.T) {
 		case 0:
 			err := ele.SendKeys("test_keyspace3")
 			require.Nil(t, err)
-			assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-force=false", "test_keyspace3"})
+			assertDialogCommand(t, dialog, []string{"CreateKeyspace", "--force=false", "test_keyspace3"})
 		}
 	}
 
-	assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-force=false", "test_keyspace3"})
+	assertDialogCommand(t, dialog, []string{"CreateKeyspace", "--force=false", "test_keyspace3"})
 
 	create, err := dialog.FindElement(selenium.ByID, "vt-action")
 	require.Nil(t, err)
