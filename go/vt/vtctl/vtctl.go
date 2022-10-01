@@ -249,13 +249,6 @@ var commands = []commandGroup{
 				help:   "Runs a health check on a remote tablet.",
 			},
 			{
-				name:       "IgnoreHealthError",
-				method:     commandIgnoreHealthError,
-				params:     "<tablet alias> <ignore regexp>",
-				help:       "Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything.",
-				deprecated: true,
-			},
-			{
 				name:   "Sleep",
 				method: commandSleep,
 				params: "<tablet alias> <duration>",
@@ -464,7 +457,7 @@ var commands = []commandGroup{
 			{
 				name:   "CreateLookupVindex",
 				method: commandCreateLookupVindex,
-				params: "[--cell=<source_cells> DEPRECATED] [--cells=<source_cells>] [--tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
+				params: "[--cells=<source_cells>] [--tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
 				help:   `Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`,
 			},
 			{
@@ -488,7 +481,7 @@ var commands = []commandGroup{
 			{
 				name:   "SwitchReads",
 				method: commandSwitchReads,
-				params: "[--cells=c1,c2,...] [--reverse] --tablet_type={replica|rdonly} [--dry_run] <keyspace.workflow>",
+				params: "[--cells=c1,c2,...] [--reverse] [--tablet_types=REPLICA,RDONLY] [--dry_run] <keyspace.workflow>",
 				help:   "Switch read traffic for the specified workflow.",
 			},
 			{
@@ -1257,10 +1250,6 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		TabletAlias: tabletAlias,
 	})
 	return err
-}
-
-func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	return fmt.Errorf("this command is no longer relevant and has been deprecated")
 }
 
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2527,8 +2516,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Source cells to replicate from.")
-	// TODO: keep --cell around for backward compatibility and remove it in a future version
-	cell := subFlags.String("cell", "", "Cell to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	continueAfterCopyWithOwner := subFlags.Bool("continue_after_copy_with_owner", false, "Vindex will continue materialization after copy when an owner is provided")
 	if err := subFlags.Parse(args); err != nil {
@@ -2536,9 +2523,6 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 	}
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("two arguments are required: keyspace and json_spec")
-	}
-	if *cells == "" && *cell != "" {
-		*cells = *cell
 	}
 	keyspace := subFlags.Arg(0)
 	specs := &vschemapb.Keyspace{}
@@ -2681,19 +2665,10 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	tabletTypes := subFlags.String("tablet_types", "rdonly,replica", "Tablet types to switch one or both or rdonly/replica")
-	deprecatedTabletType := subFlags.String("tablet_type", "", "(DEPRECATED) one of rdonly/replica")
+	tabletTypes := subFlags.String("tablet_types", "rdonly,replica", "Tablet types to switch one or both of rdonly/replica")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
 	if err := subFlags.Parse(args); err != nil {
 		return err
-	}
-
-	if !(*deprecatedTabletType == "" || *deprecatedTabletType == "replica" || *deprecatedTabletType == "rdonly") {
-		return fmt.Errorf("invalid value specified for --tablet_type: %s", *deprecatedTabletType)
-	}
-
-	if *deprecatedTabletType != "" {
-		*tabletTypes = *deprecatedTabletType
 	}
 
 	tabletTypesArr := strings.Split(*tabletTypes, ",")
