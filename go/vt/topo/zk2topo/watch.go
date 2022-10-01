@@ -31,7 +31,7 @@ func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 	zkPath := path.Join(zs.root, filePath)
 
 	// Get the initial value, set the initial watch
-	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer initialCancel()
 
 	data, stats, watch, err := zs.conn.GetW(initialCtx, zkPath)

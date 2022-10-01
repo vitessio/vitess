@@ -23,13 +23,12 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -39,8 +38,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtexplain", "vtgate",
-		"vtgr", "vtorc", "vtbackup"} {
+	for _, cmd := range topo.FlagBinaries {
 		servenv.OnParseFor(cmd, registerEtcd2TopoLockFlags)
 	}
 }

@@ -1160,7 +1160,7 @@ func commandChangeTabletType(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	if *dryRun {
