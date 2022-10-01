@@ -387,7 +387,19 @@ func init() {
 }
 
 func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
-	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
+	topoBinaries := []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctld",
+		"vtgate",
+		"vtgr",
+		"vttablet",
+		"vttestserver",
+		"zk",
+		"vtorc",
+	}
+	for _, cmd := range topoBinaries {
 		OnParseFor(cmd, registerFlags)
 	}
 }
