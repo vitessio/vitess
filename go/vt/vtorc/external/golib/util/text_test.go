@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
+	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -37,7 +37,7 @@ g,h,i
 
 		tabulated := Tabulate(strings.Split(text, "\n"), ",", ",")
 		expected := strings.Split(text, "\n")
-		test.S(t).ExpectTrue(reflect.DeepEqual(tabulated, expected))
+		require.True(t, reflect.DeepEqual(tabulated, expected))
 	}
 	{
 		text := strings.TrimSpace(`
@@ -52,7 +52,7 @@ g,h,i
 			"d|e|f",
 			"g|h|i",
 		}
-		test.S(t).ExpectTrue(reflect.DeepEqual(tabulated, expected))
+		require.True(t, reflect.DeepEqual(tabulated, expected))
 	}
 	{
 		text := strings.TrimSpace(`
@@ -67,7 +67,7 @@ d,e,100
 			"d   |e |100",
 			"0000|h |i  ",
 		}
-		test.S(t).ExpectTrue(reflect.DeepEqual(tabulated, expected))
+		require.True(t, reflect.DeepEqual(tabulated, expected))
 	}
 	{
 		text := strings.TrimSpace(`
@@ -83,6 +83,6 @@ d,1,100
 			"0000| 3|  i",
 		}
 
-		test.S(t).ExpectTrue(reflect.DeepEqual(tabulated, expected))
+		require.True(t, reflect.DeepEqual(tabulated, expected))
 	}
 }

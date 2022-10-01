@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
+	"github.com/stretchr/testify/require"
 )
 
 var spacesRegexp = regexp.MustCompile(`[\s]+`)
@@ -36,46 +36,46 @@ func stripSpaces(statement string) string {
 }
 
 func TestIsCreateTable(t *testing.T) {
-	test.S(t).ExpectTrue(IsCreateTable("create table t(id int)"))
-	test.S(t).ExpectTrue(IsCreateTable(" create table t(id int)"))
-	test.S(t).ExpectTrue(IsCreateTable("CREATE  TABLE t(id int)"))
-	test.S(t).ExpectTrue(IsCreateTable(`
+	require.True(t, IsCreateTable("create table t(id int)"))
+	require.True(t, IsCreateTable(" create table t(id int)"))
+	require.True(t, IsCreateTable("CREATE  TABLE t(id int)"))
+	require.True(t, IsCreateTable(`
 		create table t(id int)
 		`))
-	test.S(t).ExpectFalse(IsCreateTable("where create table t(id int)"))
-	test.S(t).ExpectFalse(IsCreateTable("insert"))
+	require.False(t, IsCreateTable("where create table t(id int)"))
+	require.False(t, IsCreateTable("insert"))
 }
 
 func TestToSqlite3CreateTable(t *testing.T) {
 	{
 		statement := "create table t(id int)"
 		result := ToSqlite3CreateTable(statement)
-		test.S(t).ExpectEquals(result, statement)
+		require.Equal(t, result, statement)
 	}
 	{
 		statement := "create table t(id int, v varchar(123) CHARACTER SET ascii NOT NULL default '')"
 		result := ToSqlite3CreateTable(statement)
-		test.S(t).ExpectEquals(result, "create table t(id int, v varchar(123) NOT NULL default '')")
+		require.Equal(t, result, "create table t(id int, v varchar(123) NOT NULL default '')")
 	}
 	{
 		statement := "create table t(id int, v varchar ( 123 ) CHARACTER SET ascii NOT NULL default '')"
 		result := ToSqlite3CreateTable(statement)
-		test.S(t).ExpectEquals(result, "create table t(id int, v varchar ( 123 ) NOT NULL default '')")
+		require.Equal(t, result, "create table t(id int, v varchar ( 123 ) NOT NULL default '')")
 	}
 	{
 		statement := "create table t(i smallint unsigned)"
 		result := ToSqlite3CreateTable(statement)
-		test.S(t).ExpectEquals(result, "create table t(i smallint)")
+		require.Equal(t, result, "create table t(i smallint)")
 	}
 	{
 		statement := "create table t(i smallint(5) unsigned)"
 		result := ToSqlite3CreateTable(statement)
-		test.S(t).ExpectEquals(result, "create table t(i smallint)")
+		require.Equal(t, result, "create table t(i smallint)")
 	}
 	{
 		statement := "create table t(i smallint ( 5 ) unsigned)"
 		result := ToSqlite3CreateTable(statement)
-		test.S(t).ExpectEquals(result, "create table t(i smallint)")
+		require.Equal(t, result, "create table t(i smallint)")
 	}
 }
 
@@ -87,7 +87,7 @@ func TestToSqlite3AlterTable(t *testing.T) {
 				ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER replica_lag_seconds
 		`
 		result := stripSpaces(ToSqlite3Dialect(statement))
-		test.S(t).ExpectEquals(result, stripSpaces(`
+		require.Equal(t, result, stripSpaces(`
 			ALTER TABLE
 				database_instance
 				add column sql_delay int not null default 0
@@ -100,7 +100,7 @@ func TestToSqlite3AlterTable(t *testing.T) {
 				ADD INDEX source_host_port_idx (source_host, source_port)
 		`
 		result := stripSpaces(ToSqlite3Dialect(statement))
-		test.S(t).ExpectEquals(result, stripSpaces(`
+		require.Equal(t, result, stripSpaces(`
 			create index
 				source_host_port_idx_database_instance
 				on database_instance (source_host, source_port)
@@ -113,7 +113,7 @@ func TestToSqlite3AlterTable(t *testing.T) {
 					ADD KEY last_detection_idx (last_detection_id)
 			`
 		result := stripSpaces(ToSqlite3Dialect(statement))
-		test.S(t).ExpectEquals(result, stripSpaces(`
+		require.Equal(t, result, stripSpaces(`
 			create index
 				last_detection_idx_topology_recovery
 				on topology_recovery (last_detection_id)
@@ -130,7 +130,7 @@ func TestCreateIndex(t *testing.T) {
 				on database_instance (source_host(128), source_port)
 		`
 		result := stripSpaces(ToSqlite3Dialect(statement))
-		test.S(t).ExpectEquals(result, stripSpaces(`
+		require.Equal(t, result, stripSpaces(`
 			create index
 				source_host_port_idx_database_instance
 				on database_instance (source_host, source_port)
@@ -139,14 +139,14 @@ func TestCreateIndex(t *testing.T) {
 }
 
 func TestIsInsert(t *testing.T) {
-	test.S(t).ExpectTrue(IsInsert("insert into t"))
-	test.S(t).ExpectTrue(IsInsert("insert ignore into t"))
-	test.S(t).ExpectTrue(IsInsert(`
+	require.True(t, IsInsert("insert into t"))
+	require.True(t, IsInsert("insert ignore into t"))
+	require.True(t, IsInsert(`
 		  insert ignore into t
 			`))
-	test.S(t).ExpectFalse(IsInsert("where create table t(id int)"))
-	test.S(t).ExpectFalse(IsInsert("create table t(id int)"))
-	test.S(t).ExpectTrue(IsInsert(`
+	require.False(t, IsInsert("where create table t(id int)"))
+	require.False(t, IsInsert("create table t(id int)"))
+	require.True(t, IsInsert(`
 		insert into
 				cluster_domain_name (cluster_name, domain_name, last_registered)
 			values
@@ -169,7 +169,7 @@ func TestToSqlite3Insert(t *testing.T) {
 					last_registered=values(last_registered)
 		`
 		result := stripSpaces(ToSqlite3Dialect(statement))
-		test.S(t).ExpectEquals(result, stripSpaces(`
+		require.Equal(t, result, stripSpaces(`
 			replace into
 					cluster_domain_name (cluster_name, domain_name, last_registered)
 				values
@@ -182,61 +182,61 @@ func TestToSqlite3GeneralConversions(t *testing.T) {
 	{
 		statement := "select now()"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select datetime('now')")
+		require.Equal(t, result, "select datetime('now')")
 	}
 	{
 		statement := "select now() - interval ? second"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select datetime('now', printf('-%d second', ?))")
+		require.Equal(t, result, "select datetime('now', printf('-%d second', ?))")
 	}
 	{
 		statement := "select now() + interval ? minute"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select datetime('now', printf('+%d minute', ?))")
+		require.Equal(t, result, "select datetime('now', printf('+%d minute', ?))")
 	}
 	{
 		statement := "select now() + interval 5 minute"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select datetime('now', '+5 minute')")
+		require.Equal(t, result, "select datetime('now', '+5 minute')")
 	}
 	{
 		statement := "select some_table.some_column + interval ? minute"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select datetime(some_table.some_column, printf('+%d minute', ?))")
+		require.Equal(t, result, "select datetime(some_table.some_column, printf('+%d minute', ?))")
 	}
 	{
 		statement := "AND primary_instance.last_attempted_check <= primary_instance.last_seen + interval ? minute"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "AND primary_instance.last_attempted_check <= datetime(primary_instance.last_seen, printf('+%d minute', ?))")
+		require.Equal(t, result, "AND primary_instance.last_attempted_check <= datetime(primary_instance.last_seen, printf('+%d minute', ?))")
 	}
 	{
 		statement := "select concat(primary_instance.port, '') as port"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select (primary_instance.port || '') as port")
+		require.Equal(t, result, "select (primary_instance.port || '') as port")
 	}
 	{
 		statement := "select concat( 'abc' , 'def') as s"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select ('abc'  || 'def') as s")
+		require.Equal(t, result, "select ('abc'  || 'def') as s")
 	}
 	{
 		statement := "select concat( 'abc' , 'def', last.col) as s"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select ('abc'  || 'def' || last.col) as s")
+		require.Equal(t, result, "select ('abc'  || 'def' || last.col) as s")
 	}
 	{
 		statement := "select concat(myself.only) as s"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select concat(myself.only) as s")
+		require.Equal(t, result, "select concat(myself.only) as s")
 	}
 	{
 		statement := "select concat(1, '2', 3, '4') as s"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select concat(1, '2', 3, '4') as s")
+		require.Equal(t, result, "select concat(1, '2', 3, '4') as s")
 	}
 	{
 		statement := "select group_concat( 'abc' , 'def') as s"
 		result := ToSqlite3Dialect(statement)
-		test.S(t).ExpectEquals(result, "select group_concat( 'abc' , 'def') as s")
+		require.Equal(t, result, "select group_concat( 'abc' , 'def') as s")
 	}
 }
