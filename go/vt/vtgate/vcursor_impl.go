@@ -18,13 +18,11 @@ package vtgate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"sync/atomic"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -1045,28 +1043,5 @@ func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
-	routedKeyspace, err := vc.vschema.FindRoutedShard(keyspace, shard)
-	if err == nil {
-		log.Errorf("LORD: Shard routing rule found for keyspace: %s, shard: %s :: routed to %s", keyspace, shard, routedKeyspace)
-		return routedKeyspace, nil
-	}
-	if !errors.Is(err, vindexes.ErrShardRoutingRuleNotExist) {
-		return "", err
-	}
-	// If there's no shard routing rule for the keyspace.shard then we
-	// will use the global routing rule as the fallback.
-	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout/3)
-	defer cancel()
-	rss, err := vc.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, key.DestinationShard(shard))
-	if err != nil {
-		return "", err
-	}
-	if rss == nil || len(rss) < 1 {
-		log.Errorf("LORD: No destinations found for keyspace: %s, shard: %s :: falling back to %s", keyspace, shard, keyspace)
-		// If nothing else, then send it on to the user specified keyspace
-		return keyspace, nil
-	}
-	log.Errorf("LORD: Using global routing rule for keyspace: %s, shard: %s :: %s", keyspace, shard, rss[0].Target.Keyspace)
-	log.Errorf("LORD: RSS %+v", rss)
-	return rss[0].Target.Keyspace, nil
+	return vc.vschema.FindRoutedShard(keyspace, shard)
 }
