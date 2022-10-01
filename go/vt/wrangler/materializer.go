@@ -904,19 +904,23 @@ func (wr *Wrangler) createDefaultShardRoutingRules(ctx context.Context, ms *vtct
 	if err != nil {
 		return err
 	}
+	changed := false
 	for _, si := range allShards {
 		fromSource := fmt.Sprintf("%s.%s", ms.SourceKeyspace, si.ShardName())
 		fromTarget := fmt.Sprintf("%s.%s", ms.TargetKeyspace, si.ShardName())
 		if srr[fromSource] == "" && srr[fromTarget] == "" {
 			srr[fromTarget] = ms.SourceKeyspace
+			changed = true
 			wr.Logger().Infof("Added default reverse shard routing from %q to %q", fromTarget, ms.SourceKeyspace)
 		}
 	}
-	if err := topotools.SaveShardRoutingRules(ctx, wr.ts, srr); err != nil {
-		return err
-	}
-	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		return err
+	if changed {
+		if err := topotools.SaveShardRoutingRules(ctx, wr.ts, srr); err != nil {
+			return err
+		}
+		if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return err
+		}
 	}
 	return nil
 }
