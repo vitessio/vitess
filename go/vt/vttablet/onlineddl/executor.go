@@ -650,6 +650,29 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	return acceptableErrorCodeFound, nil
 }
 
+func (e *Executor) isConnectionQueryRunning(ctx context.Context, connID int64, submatch string) (bool, error) {
+	findProcessQuery, err := sqlparser.ParseAndBind(sqlFindProcess,
+		sqltypes.Int64BindVariable(connID),
+	)
+	if err != nil {
+		return false, err
+	}
+	rs, err := e.execQuery(ctx, findProcessQuery)
+	if err != nil {
+		return false, err
+	}
+	row := rs.Named().Row()
+	if row == nil {
+		return false, nil
+	}
+	info, err := row.ToString("info")
+	if err != nil {
+		return false, err
+	}
+	fmt.Printf("========= ZZZ checking process %v contains: %v\n", connID, submatch)
+	return strings.Contains(info, submatch), nil
+}
+
 // validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
 func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
 	// Validate table does not participate in foreign key relationship:
@@ -745,25 +768,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// and no harm done.
 	// Later on, when traffic is blocked and tables renamed, that's a more dangerous place to be in; we want as little logic
 	// in that place as possible.
-	var stowawayTableName string
-	if !isVreplicationTestSuite {
-		stowawayTableName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-		if err != nil {
-			return err
-		}
-		// Audit stowawayTableName. If operation is complete, we remove the audit. But if this tablet fails while
-		// the original table is renamed (into stowaway table), then this will be both the evidence and the information we need
-		// to restore the table back into existence. This can (and will) be done by a different vttablet process
-		if err := e.updateMigrationStowawayTable(ctx, onlineDDL.UUID, stowawayTableName); err != nil {
-			return err
-		}
-		defer e.updateMigrationStowawayTable(ctx, onlineDDL.UUID, "")
+	sentryTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return nil
 	}
 
 	bufferingCtx, bufferingContextCancel := context.WithCancel(ctx)
 	defer bufferingContextCancel()
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
+		fmt.Printf("========= ZZZ toggling buffering: %v\n", bufferQueries)
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
 			// called after new table is in place.
@@ -774,8 +788,110 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		}
+		fmt.Printf("========= ZZZ toggled buffering: %v\n", bufferQueries)
 		return nil
 	}
+
+	lockConn, err := e.pool.Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer lockConn.Recycle()
+
+	renameConn, err := e.pool.Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer renameConn.Recycle()
+	renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
+	waitForPos := func(pos mysql.Position) error {
+		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
+		defer cancel()
+		// Wait for target to reach the up-to-date pos
+		fmt.Printf("========= ZZZ waiting for pos\n")
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(pos)); err != nil {
+			fmt.Printf("========= ZZZ error waiting for pos: %v\n", err)
+			return err
+		}
+		fmt.Printf("========= ZZZ waited for pos!\n")
+		// Target is now in sync with source!
+		return nil
+	}
+	var postWritesPos mysql.Position
+
+	if !isVreplicationTestSuite {
+		// We create the sentry table before toggling writes, because this involves a WaitForPos, which takes some time. We
+		// don't want to overload the buffering time with this excessive wait.
+
+		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
+			return err
+		}
+		parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
+		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+		fmt.Printf("========= ZZZ sentry table created: %v\n", sentryTableName)
+
+		//
+		//
+		//
+		//
+		//
+		//
+		//
+		//
+		//
+		postSentryPos, err := e.primaryPosition(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("========= ZZZ postSentryPos: %v\n", postSentryPos)
+		log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
+		fmt.Printf("========= ZZZ about to wait for pos: %v\n", postSentryPos)
+		if err := waitForPos(postSentryPos); err != nil {
+			return err
+		}
+		//
+		//
+		//
+		//
+		//
+		//
+		//
+		//
+		//
+		//
+	}
+
+	renameProcessFound := false
+
+	waitForRenameProcess := func(expectFound bool) error {
+		renameWaitCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		defer cancel()
+
+		checkRenameProcess := func() error {
+			fmt.Printf("========= ZZZ waiting to find process %v\n", renameConn.ID())
+			renameProcessFound, err = e.isConnectionQueryRunning(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
+			fmt.Printf("========= ZZZ result: %v, %v\n", renameProcessFound, err)
+			return err
+		}
+
+		if err := checkRenameProcess(); err != nil {
+			return err
+		}
+		for renameProcessFound != expectFound {
+			select {
+			case <-renameWaitCtx.Done():
+				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
+			case <-time.After(time.Second):
+				if err := checkRenameProcess(); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
@@ -788,13 +904,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if err != nil {
 		return err
 	}
-
-	// swap out the table
 	// Give a fraction of a second for a scenario where a query is in
 	// query executor, it passed the ACLs and is _about to_ execute. This will be nicer to those queries:
 	// they will be able to complete before the rename, rather than block briefly on the rename only to find
 	// the table no longer exists.
+	fmt.Printf("========= ZZZ sleeping 100ms\n")
 	time.Sleep(100 * time.Millisecond)
+
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
@@ -805,30 +921,40 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
 		}
-	} else {
-		// real production
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, stowawayTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+		fmt.Printf("========= ZZZ table renamed. getting primary position\n")
+		postWritesPos, err = e.primaryPosition(ctx)
+		if err != nil {
 			return err
 		}
+		fmt.Printf("========= ZZZ primary position: %v\n", postWritesPos)
+	} else {
+
+		// real production
+		fmt.Printf("========= ZZZ issuing lock tables for sentry %v\n", sentryTableName)
+		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
+		if _, err := lockConn.Exec(ctx, lockTableQuery.Query, 1, false); err != nil {
+			return err
+		}
+		defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
+
+		fmt.Printf("========= ZZZ table blocked. getting primary position\n")
+		postWritesPos, err = e.primaryPosition(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("========= ZZZ primary position: %v\n", postWritesPos)
+
+		fmt.Printf("========= ZZZ issuing rename query, id %v\n", renameConn.ID())
+		go renameConn.Exec(ctx, renameQuery.Query, 1, false)
+		fmt.Printf("========= ZZZ issued rename query: %v\n", renameQuery.Query)
+		// the rename should block, because of the LOCK
+		// wait for the above rename to kick in
 	}
 
-	// We have just created a gaping hole, the original table does not exist.
-	// we expect to fill that hole by swapping in the vrepl table. But if anything goes wrong we prepare
-	// to rename the table back:
-	defer func() {
-		if _, err := e.renameTableIfApplicable(ctx, stowawayTableName, onlineDDL.Table); err != nil {
-			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot rename back swapped table: %v into %v: %v", stowawayTableName, onlineDDL.Table, err)
-		}
-	}()
 	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
 	// that some leftover query finds the table is not actually there anymore...
 	// At any case, there's definitely no more writes to the table since it does not exist. We can
 	// safely take the (GTID) pos now.
-	postWritesPos, err := e.primaryPosition(ctx)
-	if err != nil {
-		return err
-	}
 	_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", s.workflow)
 
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
@@ -837,18 +963,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
-	waitForPos := func() error {
-		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
-		defer cancel()
-		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
-			return err
-		}
-		// Target is now in sync with source!
-		return nil
-	}
 	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
-	if err := waitForPos(); err != nil {
+	fmt.Printf("========= ZZZ about to wait for pos: %v\n", postWritesPos)
+	if err := waitForPos(postWritesPos); err != nil {
 		return err
 	}
 	// Stop vreplication
@@ -866,22 +983,30 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		} else {
-			// Normal (non-testing) alter table
-			conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
-			if err != nil {
+			fmt.Printf("========= ZZZ validating rename still in place\n")
+
+			if err := waitForRenameProcess(true); err != nil {
 				return err
 			}
-			defer conn.Close()
 
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
-				vreplTable, onlineDDL.Table,
-				stowawayTableName, vreplTable,
-			)
-			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			// // Normal (non-testing) alter table
+			fmt.Printf("========= ZZZ cut-over, dropping sentry table: %v\n", sentryTableName)
+			dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
+			if _, err := lockConn.Exec(ctx, dropTableQuery.Query, 1, false); err != nil {
+				return err
+			}
+
+			fmt.Printf("========= ZZZ cut-over, unlocking tables\n")
+			if _, err := lockConn.Exec(ctx, sqlUnlockTables, 1, false); err != nil {
+				return err
+			}
+			fmt.Printf("========= ZZZ cut-over, dropped and unlocked\n")
+			if err := waitForRenameProcess(false); err != nil {
 				return err
 			}
 		}
 	}
+	fmt.Printf("========= ZZZ we're good!\n")
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 
 	go func() {
@@ -3336,6 +3461,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
 							_ = e.updateMigrationMessage(ctx, uuid, err.Error())
+							log.Errorf("cutOverVReplMigration failed: err=%v", err)
 							if merr, ok := err.(*mysql.SQLError); ok {
 								switch merr.Num {
 								case mysql.ERTooLongIdent:
