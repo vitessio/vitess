@@ -700,6 +700,9 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw
 		if err := sw.deleteRoutingRules(ctx); err != nil {
 			return err
 		}
+		if err := sw.deleteShardRoutingRules(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1517,6 +1520,23 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.TargetKeyspaceName())
 		log.Errorf("%w", err2)
 		return err2
+	}
+	return nil
+}
+
+func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
+	if !ts.isPartialMigration {
+		return nil
+	}
+	srr, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
+	if err != nil {
+		return err
+	}
+	for _, si := range ts.TargetShards() {
+		delete(srr, fmt.Sprintf("%s.%s", ts.targetKeyspace, si.ShardName()))
+	}
+	if err := topotools.SaveShardRoutingRules(ctx, ts.TopoServer(), srr); err != nil {
+		return err
 	}
 	return nil
 }

@@ -58,10 +58,13 @@ func TestPartialMoveTables(t *testing.T) {
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
 
+	emptyGlobalRoutingRules := "{}\n"
+
+	// These should be listed in shard order
 	emptyShardRoutingRules := `{"rules":[]}`
 	preCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"},{"from_keyspace":"customer2","to_keyspace":"customer","shard":"80-"}]}`
-	halfCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"},{"from_keyspace":"customer","to_keyspace":"customer","shard":"-80"}]}`
-	postCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"},{"from_keyspace":"customer","to_keyspace":"customer2","shard":"-80"}]}`
+	halfCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"},{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
+	postCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"-80"},{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
 
 	// Remove any manually applied shard routing rules as these
 	// should be set by SwitchTraffic.
@@ -73,7 +76,7 @@ func TestPartialMoveTables(t *testing.T) {
 	defaultRdonly = 0
 	setupCustomer2Keyspace(t)
 	currentWorkflowType = wrangler.MoveTablesWorkflow
-	wfName := "partial"
+	wfName := "partial80Dash"
 	moveToKs := "customer2"
 	shard := "80-"
 	ksWf := fmt.Sprintf("%s.%s", moveToKs, wfName)
@@ -145,8 +148,8 @@ func TestPartialMoveTables(t *testing.T) {
 
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
-	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow customer2.partial\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
-		shard, shard)
+	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
+		moveToKs, wfName, shard, shard)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
 
 	// Confirm global routing rules -- everything should still be routed
@@ -203,8 +206,7 @@ func TestPartialMoveTables(t *testing.T) {
 	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
 
 	// We cannot Complete a partial move tables at the moment because it will
-	// find that all traffic has (obviously) not been switched we need to
-	// cleanup using Workflow delete.
+	// find that all traffic has (obviously) not been switched.
 	err = tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionComplete, "", "", "")
 	require.Error(t, err)
 
@@ -212,48 +214,59 @@ func TestPartialMoveTables(t *testing.T) {
 	// while 80- should be routed to customer2.
 	require.Equal(t, halfCutoverShardRoutingRules, getShardRoutingRules(t))
 
-	_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "delete")
-	require.NoError(t, err)
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
-	require.Error(t, err)
-	require.Contains(t, output, "no streams found")
-
-	// now move other shard
-	wfName = "partial2"
+	// Now move the other shard: -80
+	wfName = "partialDash80"
 	shard = "-80"
 	ksWf = fmt.Sprintf("%s.%s", moveToKs, wfName)
 
-	// start the partial movetables for -80, 80- has already been partiall switched
+	// Start the partial movetables for -80, 80- has already been switched
 	err = tstWorkflowExec(t, defaultCellName, wfName, targetKs, moveToKs,
 		"customer", workflowActionCreate, "", shard, "")
 	require.NoError(t, err)
 	targetTab2 := vc.getPrimaryTablet(t, moveToKs, shard)
 	catchup(t, targetTab2, wfName, "Partial MoveTables Customer to Customer2: -80")
 	vdiff1(t, ksWf, "")
-	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
-	expectedSwitchOutput = "SwitchTraffic was successful for workflow customer2.partial2\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n"
+	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
+		moveToKs, wfName)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
 
-	// Confirm global routing rules -- everything should still be routed
+	// Confirm global routing rules: everything should still be routed
 	// to the source side, customer, globally.
 	confirmGlobalRoutingToSource()
 
-	// Confirm shard routing rules -- all shards should be routed to target
+	// Confirm shard routing rules: all shards should be routed to the
+	// target side (customer2).
 	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
 
-	// We cannot Complete a partial move tables at the moment because it may
-	// find that all traffic has (obviously) not been switched, so we instead
-	// cleanup using Workflow delete.
-	err = tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionComplete, "", "", "")
-	require.Error(t, err)
-	confirmGlobalRoutingToSource()
-	require.Equal(t, postCutoverShardRoutingRules, getShardRoutingRules(t))
-	_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "delete")
+	// Cancel both reverse workflows (as we've done the cutover), which should
+	// clean up both the global routing rules and the shard routing rules.
+	for _, wf := range []string{"partialDash80", "partial80Dash"} {
+		// We switched traffic, so it's the reverse workflow we want to cancel.
+		reverseWf := wf + "_reverse"
+		reverseKs := targetKs // customer
+		err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "")
+		require.NoError(t, err)
+
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")
+		require.Error(t, err)
+		require.Contains(t, output, "no streams found")
+
+		// Delete the original workflow
+		originalKsWf := fmt.Sprintf("%s.%s", moveToKs, wf)
+		_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", originalKsWf, "delete")
+		require.NoError(t, err)
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", originalKsWf, "show")
+		require.Error(t, err)
+		require.Contains(t, output, "no streams found")
+	}
+
+	// Confirm that the global routing rules are now gone.
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
-	require.Error(t, err)
-	require.Contains(t, output, "no streams found")
+	require.Equal(t, emptyGlobalRoutingRules, output)
+
+	// Confirm that the shard routing rules are now gone.
 	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
 }

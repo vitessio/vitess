@@ -20,12 +20,14 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -269,11 +271,32 @@ func applyShardRoutingRules(t *testing.T, rules string) {
 	require.NotNil(t, output)
 }
 
+// getShardRoutingRules returns the routing rules stored in the topo.
+// It returns the rules sorted by shard, and with all newlines and
+// whitespace removed so that we have predictable, compact, easy to
+// compare results for tests.
 func getShardRoutingRules(t *testing.T) string {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
 	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
 	require.Nilf(t, err, output)
 	require.NotNil(t, output)
+
+	// Sort the rules by shard
+	jsonOutput := gjson.Parse(output)
+	rules := jsonOutput.Get("rules").Array()
+	sort.Slice(rules, func(i, j int) bool {
+		return rules[i].Get("shard").String() < rules[j].Get("shard").String()
+	})
+	sb := strings.Builder{}
+	for i := 0; i < len(rules); i++ {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(rules[i].String())
+	}
+	output = fmt.Sprintf(`{"rules":[%s]}`, sb.String())
+
+	// Remove newlines and whitespace
 	re := regexp.MustCompile(`[\n\s]+`)
 	output = re.ReplaceAllString(output, "")
 	output = strings.TrimSpace(output)
