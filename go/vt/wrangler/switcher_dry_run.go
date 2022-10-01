@@ -48,7 +48,9 @@ func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) deleteShardRoutingRules(ctx context.Context) error {
-	dr.drLog.Log("Shard routing rules for participating keyspace shards will be deleted")
+	if dr.ts.isPartialMigration {
+		dr.drLog.Log("Shard routing rules for participating shards will be deleted")
+	}
 	return nil
 }
 
