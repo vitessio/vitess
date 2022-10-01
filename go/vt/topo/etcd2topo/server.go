@@ -40,14 +40,12 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/servenv"
-
 	"go.etcd.io/etcd/client/pkg/v3/tlsutil"
 	"google.golang.org/grpc"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -82,8 +80,7 @@ type Server struct {
 }
 
 func init() {
-	for _, cmd := range []string{"vttablet", "vtctl", "vtctld", "mysqlctl", "mysqlctld", "vttestserver", "vtcombo", "vtctldclient", "vtexplain", "vtgate",
-		"vtgr", "vtorc", "vtbackup"} {
+	for _, cmd := range topo.FlagBinaries {
 		servenv.OnParseFor(cmd, registerEtcd2TopoFlags)
 	}
 	topo.RegisterFactory("etcd2", Factory{})

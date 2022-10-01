@@ -108,7 +108,6 @@ Flags:
       --logtostderr                            log to standard error instead of files
       --mysql_server_version string            MySQL server version to advertise.
       --purge_logs_interval duration           how often try to remove old logs (default 1h0m0s)
-      --remote_operation_timeout duration      time to wait for a remote operation (default 30s)
       --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                          server to use for connection (required)
       --stats_backend string                   The name of the registered push-based monitoring/stats backend to use
@@ -117,9 +116,6 @@ Flags:
       --stats_drop_variables string            Variables to be dropped from the list of exported variables.
       --stats_emit_period duration             Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
-      --topo_global_root string                the path of the global topology data in the global topology server
-      --topo_global_server_address string      the address of the global topology server
-      --topo_implementation string             the topology implementation to use
   -v, --v Level                                log level for V logs
       --version                                version for vtctldclient
       --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging

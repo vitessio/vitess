@@ -61,7 +61,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 		log.Errorf("Unexpected: tablet type did not change to primary: %v", newPrimaryTablet.Type)
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
 	_, err = TopoServ.UpdateShardFields(ctx, newPrimaryTablet.Keyspace, newPrimaryTablet.Shard, func(si *topo.ShardInfo) error {
 		if proto.Equal(si.PrimaryAlias, newPrimaryTablet.Alias) && proto.Equal(si.PrimaryTermStartTime, newPrimaryTablet.PrimaryTermStartTime) {
@@ -103,12 +103,12 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType,
 		return nil, err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	if err := tmc.ChangeType(tmcCtx, tablet, tabletType, semiSync); err != nil {
 		return nil, err
 	}
-	tsCtx, tsCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tsCtx, tsCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tsCancel()
 	ti, err := TopoServ.GetTablet(tsCtx, tablet.Alias)
 	if err != nil {
@@ -128,7 +128,7 @@ func ResetReplicationParameters(instanceKey InstanceKey) error {
 		return err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	if err := tmc.ResetReplicationParameters(tmcCtx, tablet); err != nil {
 		return err
@@ -143,7 +143,7 @@ func FullStatus(instanceKey InstanceKey) (*replicationdatapb.FullStatus, error) 
 		return nil, err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	return tmc.FullStatus(tmcCtx, tablet)
 }

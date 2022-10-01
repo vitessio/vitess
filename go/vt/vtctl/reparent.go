@@ -87,7 +87,7 @@ func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not writable or the shard primary")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "alias of a tablet that should be the new primary")
 	avoidTablet := subFlags.String("avoid_tablet", "", "alias of a tablet that should not be the primary, i.e. reparent to any other tablet if this one is the primary")
@@ -154,7 +154,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
 	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
