@@ -22,7 +22,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
+	"github.com/openark/golib/sqlutils"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
