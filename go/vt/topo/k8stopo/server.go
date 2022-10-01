@@ -33,6 +33,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/fields"
@@ -49,14 +51,12 @@ import (
 )
 
 var kubeconfigPath, configContext, configNamespace string
-var k8stopoFlags *pflag.FlagSet
 
 func init() {
-	k8stopoFlags = pflag.NewFlagSet("k8stopo", pflag.ExitOnError)
-	registerFlags(k8stopoFlags)
+	servenv.RegisterFlagsForTopoBinaries(registerK8STopoFlags)
 }
 
-func registerFlags(fs *pflag.FlagSet) {
+func registerK8STopoFlags(fs *pflag.FlagSet) {
 	// kubeconfigPath is a string that gives the location of a valid kubeconfig file
 	fs.StringVar(&kubeconfigPath, "topo_k8s_kubeconfig", kubeconfigPath, "Path to a valid kubeconfig file. When running as a k8s pod inside the same cluster you wish to use as the topo, you may omit this and the below arguments, and Vitess is capable of auto-discovering the correct values. https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod")
 

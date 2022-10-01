@@ -113,7 +113,12 @@ func TestKubernetesTopo(t *testing.T) {
 	}
 
 	serverAddr := "default"
-	k8stopoFlags.Set("topo_k8s_kubeconfig", testConfigPath)
+
+	oldKubeConfigPath := kubeconfigPath
+	kubeconfigPath = testConfigPath
+	defer func() {
+		kubeconfigPath = oldKubeConfigPath
+	}()
 
 	// Run the test suite.
 	testIndex := 0
