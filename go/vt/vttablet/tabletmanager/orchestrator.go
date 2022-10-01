@@ -52,10 +52,15 @@ func init() {
 
 func registerOrcFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&orcAddr, "orc_api_url", orcAddr, "Address of Orchestrator's HTTP API (e.g. http://host:port/api/). Leave empty to disable Orchestrator integration.")
+	_ = fs.MarkDeprecated("orc_api_url", "Orchestrator integration is deprecated. Consider using VTOrc instead")
 	fs.StringVar(&orcUser, "orc_api_user", orcUser, "(Optional) Basic auth username to authenticate with Orchestrator's HTTP API. Leave empty to disable basic auth.")
+	_ = fs.MarkDeprecated("orc_api_user", "Orchestrator integration is deprecated. Consider using VTOrc instead")
 	fs.StringVar(&orcPassword, "orc_api_password", orcPassword, "(Optional) Basic auth password to authenticate with Orchestrator's HTTP API.")
+	_ = fs.MarkDeprecated("orc_api_password", "Orchestrator integration is deprecated. Consider using VTOrc instead")
 	fs.DurationVar(&orcTimeout, "orc_timeout", orcTimeout, "Timeout for calls to Orchestrator's HTTP API.")
+	_ = fs.MarkDeprecated("orc_timeout", "Orchestrator integration is deprecated. Consider using VTOrc instead")
 	fs.DurationVar(&orcInterval, "orc_discover_interval", orcInterval, "How often to ping Orchestrator's HTTP API endpoint to tell it we exist. 0 means never.")
+	_ = fs.MarkDeprecated("orc_discover_interval", "Orchestrator integration is deprecated. Consider using VTOrc instead")
 }
 
 type orcClient struct {
@@ -70,6 +75,7 @@ func newOrcClient() (*orcClient, error) {
 		// Orchestrator integration is disabled.
 		return nil, nil
 	}
+	log.Errorf("Orchestrator integration has been deprecated. Consider using VTOrc instead.")
 	apiRoot, err := url.Parse(orcAddr)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "can't parse --orc_api_url flag value (%v)", orcAddr)

@@ -34,6 +34,7 @@ interface Props<T> {
     renderItem?: (item: T) => JSX.Element | string;
     selectedItem: T | null;
     size?: 'large';
+    description?: string;
 }
 
 /**
@@ -54,6 +55,7 @@ export const Select = <T,>({
     renderItem,
     selectedItem,
     size,
+    description,
 }: Props<T>) => {
     const _itemToString = React.useCallback(
         (item: T | null): string => {
@@ -135,6 +137,7 @@ export const Select = <T,>({
     return (
         <div className={containerClass}>
             <Label {...getLabelProps()} label={label} />
+            {description && <div className="mt-[-4px] mb-4">{description}</div>}
             <button
                 type="button"
                 {...getToggleButtonProps()}

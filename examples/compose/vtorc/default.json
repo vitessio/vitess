@@ -1,7 +1,6 @@
 {
   "Debug": true,
   "EnableSyslog": false,
-  "ListenAddress": ":3000",
   "MySQLTopologyUser": "orc_client_user",
   "MySQLTopologyPassword": "orc_client_user_password",
   "MySQLReplicaUser": "vt_repl",

@@ -122,6 +122,8 @@ service VTAdmin {
     // tablets in one or more clusters, depending on the request fields (see
     // ReloadSchemasRequest for details).
     rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
+    // ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+    rpc ReloadSchemaShard(ReloadSchemaShardRequest) returns (ReloadSchemaShardResponse) {};
     // RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
     rpc RemoveKeyspaceCell(RemoveKeyspaceCellRequest) returns (RemoveKeyspaceCellResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
@@ -702,6 +704,20 @@ message ReloadSchemasResponse {
     repeated TabletResult tablet_results = 3;
 }
 
+message ReloadSchemaShardRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string shard = 3;
+  string wait_position = 4;
+  bool include_primary = 5;
+
+  uint32 concurrency = 6;
+}
+
+message ReloadSchemaShardResponse {
+  repeated logutil.Event events = 1;
+}
+
 message RefreshTabletReplicationSourceRequest {
     topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
@@ -785,6 +801,11 @@ message TabletExternallyPromotedResponse {
     string shard = 3;
     topodata.TabletAlias new_primary = 4;
     topodata.TabletAlias old_primary = 5;
+}
+
+message TabletExternallyReparentedRequest {
+  topodata.TabletAlias alias = 1;
+  repeated string cluster_ids = 2;
 }
 
 message ValidateKeyspaceRequest {

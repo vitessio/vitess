@@ -48,7 +48,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	nodePath := path.Join(s.root, filePath)
 	options := &api.QueryOptions{}
 
-	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer initialCancel()
 
 	pair, _, err := s.kv.Get(nodePath, options.WithContext(initialCtx))

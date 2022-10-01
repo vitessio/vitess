@@ -570,7 +570,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 
 	// We set a topo timeout since we contact topo for the shard record.
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var sourceKeyspace string
 	sourceShards := sets.NewString()

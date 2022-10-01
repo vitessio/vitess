@@ -16,12 +16,6 @@
 
 package inst
 
-import (
-	"regexp"
-
-	"vitess.io/vitess/go/vt/vtorc/config"
-)
-
 // ClusterInfo makes for a cluster status/info summary
 type ClusterInfo struct {
 	ClusterName                             string
@@ -34,21 +28,6 @@ type ClusterInfo struct {
 
 // ReadRecoveryInfo
 func (clusterInfo *ClusterInfo) ReadRecoveryInfo() {
-	clusterInfo.HasAutomatedPrimaryRecovery = clusterInfo.filtersMatchCluster(config.Config.RecoverPrimaryClusterFilters)
-	clusterInfo.HasAutomatedIntermediatePrimaryRecovery = clusterInfo.filtersMatchCluster(config.Config.RecoverIntermediatePrimaryClusterFilters)
-}
-
-// filtersMatchCluster will see whether the given filters match the given cluster details
-func (clusterInfo *ClusterInfo) filtersMatchCluster(filters []string) bool {
-	for _, filter := range filters {
-		if filter == clusterInfo.ClusterName {
-			return true
-		}
-		if filter == "*" {
-			return true
-		} else if matched, _ := regexp.MatchString(filter, clusterInfo.ClusterName); matched && filter != "" {
-			return true
-		}
-	}
-	return false
+	clusterInfo.HasAutomatedPrimaryRecovery = true
+	clusterInfo.HasAutomatedIntermediatePrimaryRecovery = true
 }

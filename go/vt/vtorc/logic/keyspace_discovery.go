@@ -31,8 +31,8 @@ import (
 // RefreshAllKeyspaces reloads the keyspace information for the keyspaces that vtorc is concerned with.
 func RefreshAllKeyspaces() {
 	var keyspaces []string
-	if *clustersToWatch == "" { // all known keyspaces
-		ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	if len(clustersToWatch) == 0 { // all known keyspaces
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
 		var err error
 		// Get all the keyspaces
@@ -43,8 +43,7 @@ func RefreshAllKeyspaces() {
 		}
 	} else {
 		// Parse input and build list of keyspaces
-		inputs := strings.Split(*clustersToWatch, ",")
-		for _, ks := range inputs {
+		for _, ks := range clustersToWatch {
 			if strings.Contains(ks, "/") {
 				// This is a keyspace/shard specification
 				input := strings.Split(ks, "/")
@@ -55,7 +54,7 @@ func RefreshAllKeyspaces() {
 			}
 		}
 		if len(keyspaces) == 0 {
-			log.Errorf("Found no keyspaces for input: %v", *clustersToWatch)
+			log.Errorf("Found no keyspaces for input: %+v", clustersToWatch)
 			return
 		}
 	}
@@ -63,7 +62,7 @@ func RefreshAllKeyspaces() {
 	// Sort the list of keyspaces.
 	// The list can have duplicates because the input to clusters to watch may have multiple shards of the same keyspace
 	sort.Strings(keyspaces)
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	var wg sync.WaitGroup
 	for idx, keyspace := range keyspaces {
@@ -84,7 +83,7 @@ func RefreshAllKeyspaces() {
 
 // RefreshKeyspace refreshes the keyspace's information for the given keyspace from the topo
 func RefreshKeyspace(keyspaceName string) error {
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	return refreshKeyspace(refreshCtx, keyspaceName)
 }
