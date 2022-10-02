@@ -762,19 +762,22 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 
-	// A bit early on, we generate names for stowaway and temporary tables
+	// A bit early on, we generate names for temporary tables
 	// We do this here because right now we're in a safe place where nothing happened yet. If there's an error now, bail out
 	// and no harm done.
 	// Later on, when traffic is blocked and tables renamed, that's a more dangerous place to be in; we want as little logic
 	// in that place as possible.
-	sentryTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-	if err != nil {
-		return nil
-	}
+	var sentryTableName string
 	if !isVreplicationTestSuite {
-		// We create the sentry table before toggling writes, because this involves a WaitForPos, which takes some time. We
-		// don't want to overload the buffering time with this excessive wait.
+		sentryTableName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+		if err != nil {
+			return nil
+		}
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
+			return err
+		}
+		createSentryQuery := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
+		if _, err := e.execQuery(ctx, createSentryQuery.Query); err != nil {
 			return err
 		}
 	}
@@ -831,11 +834,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	} else {
 		// real production
-		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTableWrite, onlineDDL.Table)
-
+		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, onlineDDL.Table, sentryTableName)
 		lockContext, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 		defer cancel()
-
 		if _, err := lockConn.Exec(lockContext, lockTableQuery.Query, 1, false); err != nil {
 			return err
 		}
@@ -845,10 +846,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// to run on the table.
 
 		// However, LOCK TABLES does not generate a GTID entry. We will want to grab a GTID position that is
-		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a transaction for the
-		// sake of the transaction:
-		msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, msg)
+		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a DDL by same connection holding
+		// the lock to generate a new GTID.
+		dropSentryQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
+		if _, err := lockConn.Exec(lockContext, dropSentryQuery.Query, 1, false); err != nil {
+			return err
+		}
+		// msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
+		// if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
+		// 	return err
+		// }
 	}
 
 	// No writes take place on the table at this point. It's safe to take the position.
@@ -1158,7 +1165,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	vreplTableName := fmt.Sprintf("~%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
