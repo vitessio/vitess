@@ -669,7 +669,6 @@ func (e *Executor) isConnectionQueryRunning(ctx context.Context, connID int64, s
 	if err != nil {
 		return false, err
 	}
-	fmt.Printf("========= ZZZ checking process %v contains: %v\n", connID, submatch)
 	return strings.Contains(info, submatch), nil
 }
 
@@ -772,12 +771,24 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if err != nil {
 		return nil
 	}
+	if !isVreplicationTestSuite {
+		// We create the sentry table before toggling writes, because this involves a WaitForPos, which takes some time. We
+		// don't want to overload the buffering time with this excessive wait.
+		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
+			return err
+		}
+	}
+
+	lockConn, err := e.pool.Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer lockConn.Recycle()
+	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	bufferingCtx, bufferingContextCancel := context.WithCancel(ctx)
 	defer bufferingContextCancel()
-	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
-		fmt.Printf("========= ZZZ toggling buffering: %v\n", bufferQueries)
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
 			// called after new table is in place.
@@ -788,116 +799,15 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		}
-		fmt.Printf("========= ZZZ toggled buffering: %v\n", bufferQueries)
 		return nil
 	}
-
-	lockConn, err := e.pool.Get(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer lockConn.Recycle()
-
-	renameConn, err := e.pool.Get(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer renameConn.Recycle()
-	renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
-	waitForPos := func(pos mysql.Position) error {
-		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
-		defer cancel()
-		// Wait for target to reach the up-to-date pos
-		fmt.Printf("========= ZZZ waiting for pos\n")
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(pos)); err != nil {
-			fmt.Printf("========= ZZZ error waiting for pos: %v\n", err)
-			return err
-		}
-		fmt.Printf("========= ZZZ waited for pos!\n")
-		// Target is now in sync with source!
-		return nil
-	}
-	var postWritesPos mysql.Position
-
-	if !isVreplicationTestSuite {
-		// We create the sentry table before toggling writes, because this involves a WaitForPos, which takes some time. We
-		// don't want to overload the buffering time with this excessive wait.
-
-		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
-			return err
-		}
-		parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-			return err
-		}
-		fmt.Printf("========= ZZZ sentry table created: %v\n", sentryTableName)
-
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-		postSentryPos, err := e.primaryPosition(ctx)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("========= ZZZ postSentryPos: %v\n", postSentryPos)
-		log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
-		fmt.Printf("========= ZZZ about to wait for pos: %v\n", postSentryPos)
-		if err := waitForPos(postSentryPos); err != nil {
-			return err
-		}
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-	}
-
-	renameProcessFound := false
-
-	waitForRenameProcess := func(expectFound bool) error {
-		renameWaitCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
-		defer cancel()
-
-		checkRenameProcess := func() error {
-			fmt.Printf("========= ZZZ waiting to find process %v\n", renameConn.ID())
-			renameProcessFound, err = e.isConnectionQueryRunning(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
-			fmt.Printf("========= ZZZ result: %v, %v\n", renameProcessFound, err)
-			return err
-		}
-
-		if err := checkRenameProcess(); err != nil {
-			return err
-		}
-		for renameProcessFound != expectFound {
-			select {
-			case <-renameWaitCtx.Done():
-				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
-			case <-time.After(time.Second):
-				if err := checkRenameProcess(); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
 			toggleBuffering(false)
 		})
 	}
+	// Preparation is complete. We proceed to cut-over.
 	// stop writes on source:
 	err = toggleBuffering(true)
 	defer reenableWritesOnce()
@@ -906,9 +816,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	// Give a fraction of a second for a scenario where a query is in
 	// query executor, it passed the ACLs and is _about to_ execute. This will be nicer to those queries:
-	// they will be able to complete before the rename, rather than block briefly on the rename only to find
-	// the table no longer exists.
-	fmt.Printf("========= ZZZ sleeping 100ms\n")
+	// they will be able to complete before the lock/rename, rather than block.
 	time.Sleep(100 * time.Millisecond)
 
 	if isVreplicationTestSuite {
@@ -921,40 +829,27 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
 		}
-		fmt.Printf("========= ZZZ table renamed. getting primary position\n")
-		postWritesPos, err = e.primaryPosition(ctx)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("========= ZZZ primary position: %v\n", postWritesPos)
 	} else {
-
 		// real production
-		fmt.Printf("========= ZZZ issuing lock tables for sentry %v\n", sentryTableName)
-		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
-		if _, err := lockConn.Exec(ctx, lockTableQuery.Query, 1, false); err != nil {
+		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTableWrite, onlineDDL.Table)
+
+		lockContext, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		defer cancel()
+
+		if _, err := lockConn.Exec(lockContext, lockTableQuery.Query, 1, false); err != nil {
 			return err
 		}
-		defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
-
-		fmt.Printf("========= ZZZ table blocked. getting primary position\n")
-		postWritesPos, err = e.primaryPosition(ctx)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("========= ZZZ primary position: %v\n", postWritesPos)
-
-		fmt.Printf("========= ZZZ issuing rename query, id %v\n", renameConn.ID())
-		go renameConn.Exec(ctx, renameQuery.Query, 1, false)
-		fmt.Printf("========= ZZZ issued rename query: %v\n", renameQuery.Query)
-		// the rename should block, because of the LOCK
-		// wait for the above rename to kick in
+		// The table is now locked. It's noteworthy that the LOCK TABLES command waits for any pending
+		// query to complete. And since we have a buffering rule in place, we expect zero queries to
+		// even attempt to reach the table. Even of the LOCK terminates unexpectedly, nothing is going
+		// to run on the table.
 	}
 
-	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
-	// that some leftover query finds the table is not actually there anymore...
-	// At any case, there's definitely no more writes to the table since it does not exist. We can
-	// safely take the (GTID) pos now.
+	// No writes take place on the table at this point. It's safe to take the position.
+	postWritesPos, err := e.primaryPosition(ctx)
+	if err != nil {
+		return err
+	}
 	_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", s.workflow)
 
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
@@ -963,9 +858,18 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
+	waitForPos := func(s *VReplStream, pos mysql.Position) error {
+		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
+		defer cancel()
+		// Wait for target to reach the up-to-date pos
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(pos)); err != nil {
+			return err
+		}
+		// Target is now in sync with source!
+		return nil
+	}
 	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
-	fmt.Printf("========= ZZZ about to wait for pos: %v\n", postWritesPos)
-	if err := waitForPos(postWritesPos); err != nil {
+	if err := waitForPos(s, postWritesPos); err != nil {
 		return err
 	}
 	// Stop vreplication
@@ -983,30 +887,56 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		} else {
-			fmt.Printf("========= ZZZ validating rename still in place\n")
+			renameConn, err := e.pool.Get(ctx, nil)
+			if err != nil {
+				return err
+			}
+			defer renameConn.Recycle()
+			// renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, vreplTable, sentryTableName, onlineDDL.Table, vreplTable, sentryTableName, onlineDDL.Table)
+			renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
 
-			if err := waitForRenameProcess(true); err != nil {
+			waitForRenameProcess := func() error {
+				renameWaitCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+				defer cancel()
+
+				for {
+					renameProcessFound, err := e.isConnectionQueryRunning(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
+					if err != nil {
+						return err
+					}
+					if renameProcessFound {
+						return nil
+					}
+					select {
+					case <-renameWaitCtx.Done():
+						return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
+					case <-time.After(time.Second):
+						// sleep
+					}
+				}
+			}
+
+			renameCompleteChan := make(chan error)
+
+			go func() {
+				_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
+				renameCompleteChan <- err
+			}()
+			// the rename should block, because of the LOCK
+			// wait for the above rename to kick in
+			if err := waitForRenameProcess(); err != nil {
 				return err
 			}
 
-			// // Normal (non-testing) alter table
-			fmt.Printf("========= ZZZ cut-over, dropping sentry table: %v\n", sentryTableName)
-			dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
-			if _, err := lockConn.Exec(ctx, dropTableQuery.Query, 1, false); err != nil {
-				return err
-			}
-
-			fmt.Printf("========= ZZZ cut-over, unlocking tables\n")
 			if _, err := lockConn.Exec(ctx, sqlUnlockTables, 1, false); err != nil {
 				return err
 			}
-			fmt.Printf("========= ZZZ cut-over, dropped and unlocked\n")
-			if err := waitForRenameProcess(false); err != nil {
+			err = <-renameCompleteChan
+			if err != nil {
 				return err
 			}
 		}
 	}
-	fmt.Printf("========= ZZZ we're good!\n")
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 
 	go func() {
@@ -1026,7 +956,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	return nil
 
 	// deferred function will re-enable writes now
-	// deferred function will unlock keyspace
+	// deferred function will ensure the table is unlocked
 }
 
 // initMigrationSQLMode sets sql_mode according to DDL strategy, and returns a function that
