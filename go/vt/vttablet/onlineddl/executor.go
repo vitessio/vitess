@@ -822,6 +822,17 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// they will be able to complete before the lock/rename, rather than block.
 	time.Sleep(100 * time.Millisecond)
 
+	waitForPos := func(s *VReplStream, pos mysql.Position) error {
+		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
+		defer cancel()
+		// Wait for target to reach the up-to-date pos
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(pos)); err != nil {
+			return err
+		}
+		// Target is now in sync with source!
+		return nil
+	}
+
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
@@ -834,6 +845,18 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	} else {
 		// real production
+		msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
+		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
+			return err
+		}
+		postSentryPos, err := e.primaryPosition(ctx)
+		if err != nil {
+			return err
+		}
+		if err := waitForPos(s, postSentryPos); err != nil {
+			return err
+		}
+
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, onlineDDL.Table, sentryTableName)
 		lockContext, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 		defer cancel()
@@ -852,10 +875,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err := lockConn.Exec(lockContext, dropSentryQuery.Query, 1, false); err != nil {
 			return err
 		}
-		// msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
-		// if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
-		// 	return err
-		// }
 	}
 
 	// No writes take place on the table at this point. It's safe to take the position.
@@ -871,16 +890,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
-	waitForPos := func(s *VReplStream, pos mysql.Position) error {
-		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
-		defer cancel()
-		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(pos)); err != nil {
-			return err
-		}
-		// Target is now in sync with source!
-		return nil
-	}
 	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	if err := waitForPos(s, postWritesPos); err != nil {
 		return err
