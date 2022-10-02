@@ -843,6 +843,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// query to complete. And since we have a buffering rule in place, we expect zero queries to
 		// even attempt to reach the table. Even of the LOCK terminates unexpectedly, nothing is going
 		// to run on the table.
+
+		// However, LOCK TABLES does not generate a GTID entry. We will want to grab a GTID position that is
+		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a dummy RENAME statement,
+		// which renamed the table away and back. It's atomic, it's using our LOCK, it's not really modifying the table,
+		// and last it of course generates a GTID entry.
+
+		dummyRename := sqlparser.BuildParsedQuery(sqlRenameTwoTables, onlineDDL.Table, sentryTableName, sentryTableName, onlineDDL.Table)
+		if _, err := lockConn.Exec(lockContext, dummyRename.Query, 1, false); err != nil {
+			return err
+		}
 	}
 
 	// No writes take place on the table at this point. It's safe to take the position.
@@ -1152,7 +1162,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	vreplTableName := fmt.Sprintf("~%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
