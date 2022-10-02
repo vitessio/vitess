@@ -7,6 +7,7 @@ Usage of vtorc:
       --catch-sigpipe                                catch and ignore SIGPIPE on stdout and stderr if specified
       --clusters_to_watch strings                    Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config string                                config file name
+      --consul_auth_static_file string               JSON File to read the topos/tokens from.
       --grpc_auth_static_client_creds string         When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                      Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                          Enable gRPC tracing.
@@ -52,6 +53,10 @@ Usage of vtorc:
       --tablet_manager_grpc_server_name string       the server name to use to validate server certificate
       --tablet_manager_protocol string               Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --topo-information-refresh-duration duration   Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server (default 15s)
+      --topo_consul_lock_delay duration              LockDelay for consul session. (default 15s)
+      --topo_consul_lock_session_checks string       List of checks for consul session. (default "serfHealth")
+      --topo_consul_lock_session_ttl string          TTL for consul session.
+      --topo_consul_watch_poll_duration duration     time of the long poll for watch queries. (default 30s)
       --topo_etcd_lease_ttl int                      Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
       --topo_etcd_tls_ca string                      path to the ca to use to validate the server cert when connecting to the etcd topo server
       --topo_etcd_tls_cert string                    path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS
