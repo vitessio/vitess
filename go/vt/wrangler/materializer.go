@@ -911,7 +911,7 @@ func (wr *Wrangler) createDefaultShardRoutingRules(ctx context.Context, ms *vtct
 		if srr[fromSource] == "" && srr[fromTarget] == "" {
 			srr[fromTarget] = ms.SourceKeyspace
 			changed = true
-			wr.Logger().Infof("Added default reverse shard routing from %q to %q", fromTarget, ms.SourceKeyspace)
+			wr.Logger().Infof("Added default shard routing rule from %q to %q", fromTarget, fromSource)
 		}
 	}
 	if changed {

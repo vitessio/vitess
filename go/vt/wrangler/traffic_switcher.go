@@ -222,9 +222,11 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		keyspace string
 	)
 
-	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
-	// source of the reverse workflow, which is the target of the workflow initiated by the user for checking routing rules
-	// Similarly we use a target shard of the reverse workflow as the original source to check if writes have been switched
+	// We reverse writes by using the source_keyspace.workflowname_reverse workflow
+	// spec, so we need to use the source of the reverse workflow, which is the
+	// target of the workflow initiated by the user for checking routing rules.
+	// Similarly we use a target shard of the reverse workflow as the original
+	// source to check if writes have been switched.
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
 		keyspace = state.SourceKeyspace
@@ -235,7 +237,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		state.WorkflowType = workflow.TypeMoveTables
 
-		// we assume a consistent state, so only choose routing rule for one table
+		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
 			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflowName)
 
