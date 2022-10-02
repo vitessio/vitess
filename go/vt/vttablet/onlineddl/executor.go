@@ -845,14 +845,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// to run on the table.
 
 		// However, LOCK TABLES does not generate a GTID entry. We will want to grab a GTID position that is
-		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a dummy RENAME statement,
-		// which renamed the table away and back. It's atomic, it's using our LOCK, it's not really modifying the table,
-		// and last it of course generates a GTID entry.
-
-		dummyRename := sqlparser.BuildParsedQuery(sqlRenameTwoTables, onlineDDL.Table, sentryTableName, sentryTableName, onlineDDL.Table)
-		if _, err := lockConn.Exec(lockContext, dummyRename.Query, 1, false); err != nil {
-			return err
-		}
+		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a transaction for the
+		// sake of the transaction:
+		msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, msg)
 	}
 
 	// No writes take place on the table at this point. It's safe to take the position.
