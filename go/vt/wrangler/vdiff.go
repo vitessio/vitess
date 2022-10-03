@@ -245,7 +245,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	defer func() {
 		// We use a new context as we want to reset the state even
 		// when the parent context has timed out or been canceled.
-		log.Errorf("Restarting workflow %q on target tablets in keyspace %q", df.workflow, df.targetKeyspace)
+		log.Infof("Restarting the %q VReplication workflow on target tablets in keyspace %q", df.workflow, df.targetKeyspace)
 		restartCtx, restartCancel := context.WithTimeout(context.Background(), DefaultActionTimeout)
 		defer restartCancel()
 		if err := df.restartTargets(restartCtx); err != nil {
@@ -906,9 +906,19 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 // restartTargets restarts the stopped target vreplication streams.
 func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.WorkflowName()))
-		log.Infof("restarting target replication with %s", query)
-		_, err := df.ts.TabletManagerClient().VReplicationExec(ctx, target.primary.Tablet, query)
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
+			encodeString(target.primary.DbName()), encodeString(df.ts.WorkflowName()))
+		log.Infof("Restarting the %q VReplication workflow on %q using %q", df.ts.WorkflowName(), target.primary.Alias, query)
+		var err error
+		// Let's retry a few times if we get a retryable error.
+		for i := 1; i <= 3; i++ {
+			_, err = df.ts.TabletManagerClient().VReplicationExec(ctx, target.primary.Tablet, query)
+			if err == nil || !mysql.IsEphemeralError(err) {
+				break
+			}
+			log.Warningf("Encountered the following error while restarting the %q VReplication workflow on %q, will retry (attempt #%d): %v",
+				df.ts.WorkflowName(), target.primary.Alias, i, err)
+		}
 		return err
 	})
 }
