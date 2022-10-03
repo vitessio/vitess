@@ -359,6 +359,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_failover", httpAPI.Adapt(vtadminhttp.EmergencyFailoverShard)).Name("API.EmergencyFailoverShard").Methods("POST")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_failover", httpAPI.Adapt(vtadminhttp.PlannedFailoverShard)).Name("API.PlannedFailoverShard").Methods("POST")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/reload_schema_shard", httpAPI.Adapt(vtadminhttp.ReloadSchemaShard)).Name("API.ReloadSchemaShard").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/validate", httpAPI.Adapt(vtadminhttp.ValidateShard)).Name("API.ValidateShard").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -1782,6 +1783,33 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 
 	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace: req.Keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ValidateShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ValidateShard(ctx context.Context, req *vtadminpb.ValidateShardRequest) (*vtctldatapb.ValidateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
+		Keyspace:    req.Keyspace,
+		Shard:       req.Shard,
+		PingTablets: req.PingTablets,
 	})
 
 	if err != nil {

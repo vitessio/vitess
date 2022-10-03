@@ -148,6 +148,8 @@ type VTAdminClient interface {
 	// for shard 0 matches the schema on all of the other tablets in the
 	// keyspace.
 	ValidateSchemaKeyspace(ctx context.Context, in *ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
+	// ValidateShard validates that that all nodes reachable from the specified shard are consistent.
+	ValidateShard(ctx context.Context, in *ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of
 	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
@@ -551,6 +553,15 @@ func (c *vTAdminClient) ValidateSchemaKeyspace(ctx context.Context, in *Validate
 	return out, nil
 }
 
+func (c *vTAdminClient) ValidateShard(ctx context.Context, in *ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error) {
+	out := new(vtctldata.ValidateShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
 	out := new(vtctldata.ValidateVersionKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateVersionKeyspace", in, out, opts...)
@@ -698,6 +709,8 @@ type VTAdminServer interface {
 	// for shard 0 matches the schema on all of the other tablets in the
 	// keyspace.
 	ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
+	// ValidateShard validates that that all nodes reachable from the specified shard are consistent.
+	ValidateShard(context.Context, *ValidateShardRequest) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of
 	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
@@ -839,6 +852,9 @@ func (UnimplementedVTAdminServer) ValidateKeyspace(context.Context, *ValidateKey
 }
 func (UnimplementedVTAdminServer) ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateSchemaKeyspace not implemented")
+}
+func (UnimplementedVTAdminServer) ValidateShard(context.Context, *ValidateShardRequest) (*vtctldata.ValidateShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateShard not implemented")
 }
 func (UnimplementedVTAdminServer) ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionKeyspace not implemented")
@@ -1633,6 +1649,24 @@ func _VTAdmin_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ValidateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ValidateShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ValidateShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ValidateShard(ctx, req.(*ValidateShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ValidateVersionKeyspaceRequest)
 	if err := dec(in); err != nil {
@@ -1847,6 +1881,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateSchemaKeyspace",
 			Handler:    _VTAdmin_ValidateSchemaKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateShard",
+			Handler:    _VTAdmin_ValidateShard_Handler,
 		},
 		{
 			MethodName: "ValidateVersionKeyspace",

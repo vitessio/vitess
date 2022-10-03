@@ -199,3 +199,35 @@ func ReloadSchemaShard(ctx context.Context, r Request, api *API) *JSONResponse {
 	})
 	return NewJSONResponse(result, err)
 }
+
+// ValidateShard implements the http wrapper for
+// PUT /shard/{cluster_id}/{keyspace}/{shard}/validate
+//
+// Query params: none
+//
+// Body params:
+// - ping_tablets: bool
+func ValidateShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var params struct {
+		PingTablets bool `json:"ping_tablets"`
+	}
+
+	if err := decoder.Decode(&params); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := r.Vars()
+
+	result, err := api.server.ValidateShard(ctx, &vtadminpb.ValidateShardRequest{
+		ClusterId:   vars["cluster_id"],
+		Keyspace:    vars["keyspace"],
+		Shard:       vars["shard"],
+		PingTablets: params.PingTablets,
+	})
+	return NewJSONResponse(result, err)
+}
