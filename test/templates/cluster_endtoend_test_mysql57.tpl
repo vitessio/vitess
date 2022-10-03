@@ -8,12 +8,16 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+{{if .InstallXtraBackup}}
+  # This is used if we need to pin the xtrabackup version used in tests.
+  # If this is NOT set then the latest version available will be used.
+  #XTRABACKUP_VERSION: "2.4.24-1"
+{{end}}
 
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
-    timeout-minutes: 45
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -70,28 +74,52 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        # Setup Percona Server for MySQL 8.0
-        sudo apt-get update
-        sudo apt-get install -y lsb-release gnupg2 curl
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release setup ps80
         sudo apt-get update
 
-        # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
-        sudo service mysql stop
-        sudo service etcd stop
+        # Uninstall any previously installed MySQL first
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-        go mod download
+
+        sudo systemctl stop apparmor
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
+        # Bionic packages are still compatible for Focal since there's no MySQL 5.7
+        # packages for Focal.
+        echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7*
+
+        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
         {{if .InstallXtraBackup}}
 
-        sudo apt-get install percona-xtrabackup-80 lz4
+        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo apt-get install -y gnupg2
+        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo apt-get update
+        if [[ -n $XTRABACKUP_VERSION ]]; then
+          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
+          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
+          sudo apt install -y "./$debfile"
+        else
+          sudo apt-get install -y percona-xtrabackup-24
+        fi
 
         {{end}}
 
@@ -118,7 +146,7 @@ jobs:
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.
@@ -132,9 +160,8 @@ jobs:
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        cat <<-EOF>>./config/mycnf/mysql57.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
-        innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
         innodb_buffer_pool_size=64M
         innodb_doublewrite=OFF
