@@ -25,15 +25,6 @@
         "ignore_nulls": "true"
       },
       "owner": "t7_xxhash"
-    },
-    "users_important_number_idx": {
-      "type": "lookup_hash",
-      "params": {
-        "from": "important_number",
-        "table": "users_important_number_idx",
-        "to": "id"
-      },
-      "owner": "users"
     }
   },
   "tables": {
@@ -132,29 +123,6 @@
           "name": "hash"
         }
       ]
-    },
-    "users": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "id",
-          "type": "UINT64"
-        },
-        {
-          "name": "employee_number",
-          "type": "UINT64"
-        },
-        {
-          "name": "important_number",
-          "type": "UINT64"
-        }
-      ],
-      "auto_increment": null
     }
   }
 }

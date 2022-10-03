@@ -1,16 +1,3 @@
-CREATE TABLE users(
-    id bigint,
-    employee_number bigint not null,
-    important_number bigint not null,
-    primary key(id)
-) ENGINE InnoDB;
-
-CREATE TABLE users_important_number_idx(
-    id bigint,
-    important_number bigint not null,
-    primary key(important_number, id)
-) ENGINE InnoDB;
-
 create table t3
 (
     id5 bigint,
