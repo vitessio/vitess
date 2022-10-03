@@ -756,17 +756,17 @@ export const createShard = async (params: CreateShardParams) => {
 };
 
 export interface ValidateParams {
-  clusterID: string;
-  pingTablets: boolean;
+    clusterID: string;
+    pingTablets: boolean;
 }
 
 export const validate = async (params: ValidateParams) => {
-  const { result } = await vtfetch(`/api/cluster/${params.clusterID}/validate`, {
-    method: 'put',
-    body: JSON.stringify({ ping_tablets: params.pingTablets }),
-  });
-  const err = pb.ValidateRequest.verify(result);
-  if (err) throw Error(err);
+    const { result } = await vtfetch(`/api/cluster/${params.clusterID}/validate`, {
+        method: 'put',
+        body: JSON.stringify({ ping_tablets: params.pingTablets }),
+    });
+    const err = pb.ValidateRequest.verify(result);
+    if (err) throw Error(err);
 
-  return vtctldata.ValidateResponse.create(result);
-}
+    return vtctldata.ValidateResponse.create(result);
+};
