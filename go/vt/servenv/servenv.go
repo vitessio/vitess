@@ -305,10 +305,7 @@ func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
-	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
-	for _, hook := range getFlagHooksFor(cmd) {
-		hook(fs)
-	}
+	fs := GetFlagSetFor(cmd)
 
 	_flag.Parse(fs)
 
@@ -324,12 +321,20 @@ func ParseFlags(cmd string) {
 	}
 }
 
-// ParseFlagsWithArgs initializes flags and returns the positional arguments
-func ParseFlagsWithArgs(cmd string) []string {
+// GetFlagSetFor returns the flag set for a given command.
+// This has to exported for the Vitess-operator to use
+func GetFlagSetFor(cmd string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
 	for _, hook := range getFlagHooksFor(cmd) {
 		hook(fs)
 	}
+
+	return fs
+}
+
+// ParseFlagsWithArgs initializes flags and returns the positional arguments
+func ParseFlagsWithArgs(cmd string) []string {
+	fs := GetFlagSetFor(cmd)
 
 	_flag.Parse(fs)
 
