@@ -776,10 +776,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
 			return err
 		}
-		// createSentryQuery := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
-		// if _, err := e.execQuery(ctx, createSentryQuery.Query); err != nil {
-		// 	return err
-		// }
 	}
 
 	lockConn, err := e.pool.Get(ctx, nil)
@@ -876,18 +872,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	} else {
 		// real production
-		// msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
-		// if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
-		// 	return err
-		// }
-		// postSentryPos, err := e.primaryPosition(ctx)
-		// if err != nil {
-		// 	return err
-		// }
-		// if err := waitForPos(s, postSentryPos); err != nil {
-		// 	return err
-		// }
-
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTableWrite, onlineDDL.Table)
 		// lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, onlineDDL.Table, sentryTableName)
 		lockContext, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
@@ -909,14 +893,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if err := waitForRenameProcess(); err != nil {
 			return err
 		}
-		// dropSentryQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
-		// 		if _, err := lockConn.Exec(lockContext, dropSentryQuery.Query, 1, false); err != nil {
-		// 			return err
-		// 		}
-		// parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables, onlineDDL.Table, sentryTableName, sentryTableName, onlineDDL.Table)
-		// if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-		// 	return err
-		// }
 
 		// However, LOCK TABLES does not generate a GTID entry. We will want to grab a GTID position that is
 		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a transaction for the sake
@@ -950,24 +926,22 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	// rename tables atomically (remember, writes on source tables are stopped)
-	{
-		if isVreplicationTestSuite {
-			// this is used in Vitess endtoend testing suite
-			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
-			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-				return err
-			}
-		} else {
-			if _, err := lockConn.Exec(ctx, sqlUnlockTables, 1, false); err != nil {
-				return err
-			}
-			// The RENAME should now be unblocked
-			if err := <-renameCompleteChan; err != nil {
-				return err
-			}
-			// Tables are now swapped
+	if isVreplicationTestSuite {
+		// this is used in Vitess endtoend testing suite
+		testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
+		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			return err
 		}
+	} else {
+		if _, err := lockConn.Exec(ctx, sqlUnlockTables, 1, false); err != nil {
+			return err
+		}
+		// The RENAME should now be unblocked
+		if err := <-renameCompleteChan; err != nil {
+			return err
+		}
+		// Tables are now swapped
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 
