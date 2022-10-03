@@ -158,7 +158,9 @@ service VTAdmin {
     // for shard 0 matches the schema on all of the other tablets in the
     // keyspace.
     rpc ValidateSchemaKeyspace(ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
-	// ValidateVersionKeyspace validates that the version on the primary of
+    // ValidateShard validates that that all nodes reachable from the specified shard are consistent.
+    rpc ValidateShard(ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
+	  // ValidateVersionKeyspace validates that the version on the primary of
     // shard 0 matches all of the other tablets in the keyspace.
     rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
     // VTExplain provides information on how Vitess plans to execute a
@@ -825,6 +827,13 @@ message ValidateKeyspaceRequest {
 message ValidateSchemaKeyspaceRequest {
     string cluster_id = 1;
     string keyspace = 2;
+}
+
+message ValidateShardRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string shard = 3;
+  bool ping_tablets = 4;
 }
 
 message ValidateVersionKeyspaceRequest {
