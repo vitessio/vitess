@@ -2264,12 +2264,54 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1",
-        "OrderBy": "(1|2) ASC",
-        "Query": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+        "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
+        "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
         "Table": "`user`, user_extra"
       }
     ]
+  }
+}
+
+# order by inside derived tables can be ignored
+"select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user` join user_extra on `user`.id = user_extra.user_id order by user_extra.extra asc",
+        "ResultColumns": 2,
+        "Table": "`user`, user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
+    "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+    "Table": "`user`, user_extra"
   }
 }
 
@@ -2292,9 +2334,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
-        "OrderBy": "(1|2) ASC, 0 ASC",
-        "Query": "select col, count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a group by col order by col asc",
+        "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a group by col order by col asc",
         "Table": "`user`, user_extra"
       }
     ]
@@ -4909,3 +4951,102 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
   }
 }
 Gen4 plan same as above
+
+# grouping on data from derived table
+"select val1, count(*)  from (select id, val1 from user where val2 < 4 order by val1 limit 2) as x group by val1"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select val1, count(*)  from (select id, val1 from user where val2 \u003c 4 order by val1 limit 2) as x group by val1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_star(1) AS count(*)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 1] as val1",
+          "[COLUMN 0] as count(*)",
+          "[COLUMN 2]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, val1, weight_string(val1) from `user` where 1 != 1",
+                "OrderBy": "(1|2) ASC, (1|2) ASC",
+                "Query": "select id, val1, weight_string(val1) from `user` where val2 \u003c 4 order by val1 asc, val1 asc limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Can't inline derived table when it has HAVING with aggregation function
+"select * from (select id from user having count(*) = 1) s"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select id from user having count(*) = 1) s",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from (select id from `user` where 1 != 1) as s where 1 != 1",
+    "Query": "select * from (select id from `user` having count(*) = 1) as s",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select id from user having count(*) = 1) s",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(*)') = 1",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0) AS id, sum_count_star(1) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+                "Query": "select id, count(*) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
