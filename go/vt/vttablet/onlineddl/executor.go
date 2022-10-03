@@ -1158,7 +1158,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	vreplTableName := fmt.Sprintf("~%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
