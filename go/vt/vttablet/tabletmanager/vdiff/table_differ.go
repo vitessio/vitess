@@ -49,7 +49,7 @@ import (
 )
 
 // how long to wait for background operations to complete
-var BackgroundOperationTimeout = *topo.RemoteOperationTimeout * 4
+var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
