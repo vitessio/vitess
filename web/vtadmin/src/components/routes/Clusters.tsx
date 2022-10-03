@@ -26,30 +26,28 @@ import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import ClusterRow from './clusters/ClusterRow';
 export const Clusters = () => {
-  useDocumentTitle('Clusters');
-  const clustersQuery = useClusters();
+    useDocumentTitle('Clusters');
+    const clustersQuery = useClusters();
 
-  const rows = React.useMemo(() => {
-    return orderBy(clustersQuery.data, ['name']);
-  }, [clustersQuery.data]);
+    const rows = React.useMemo(() => {
+        return orderBy(clustersQuery.data, ['name']);
+    }, [clustersQuery.data]);
 
-  const renderRows = (rows: pb.Cluster[]) =>
-    rows.map((cluster, idx) => (
-      <ClusterRow cluster={cluster} key={`cluster_${idx}`} />
-    ));
+    const renderRows = (rows: pb.Cluster[]) =>
+        rows.map((cluster, idx) => <ClusterRow cluster={cluster} key={`cluster_${idx}`} />);
 
-  return (
-    <div>
-      <WorkspaceHeader>
-        <WorkspaceTitle>Clusters</WorkspaceTitle>
-      </WorkspaceHeader>
+    return (
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Clusters</WorkspaceTitle>
+            </WorkspaceHeader>
 
-      <ContentContainer>
-        <div className="max-w-screen-sm">
-          <DataTable columns={['Name', 'Id', 'Validate']} data={rows} renderRows={renderRows} />
-          <QueryLoadingPlaceholder query={clustersQuery} />
+            <ContentContainer>
+                <div className="max-w-screen-sm">
+                    <DataTable columns={['Name', 'Id', 'Validate']} data={rows} renderRows={renderRows} />
+                    <QueryLoadingPlaceholder query={clustersQuery} />
+                </div>
+            </ContentContainer>
         </div>
-      </ContentContainer>
-    </div>
-  );
+    );
 };
