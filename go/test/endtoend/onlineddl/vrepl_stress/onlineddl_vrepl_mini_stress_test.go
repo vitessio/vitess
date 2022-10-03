@@ -275,7 +275,7 @@ func TestSchemaChange(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
-	for i := 0; i < countIterations*10; i++ {
+	for i := 0; i < countIterations; i++ {
 		// Finally, this is the real test:
 		// We populate a table, and begin a concurrent workload (this is the "mini stress")
 		// We then ALTER TABLE via vreplication.
