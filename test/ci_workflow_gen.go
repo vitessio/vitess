@@ -26,15 +26,33 @@ import (
 	"text/template"
 )
 
+type mysqlVersion string
+
+const (
+	mysql57    mysqlVersion = "mysql57"
+	mysql80    mysqlVersion = "mysql80"
+	mariadb103 mysqlVersion = "mariadb103"
+
+	defaultMySQLVersion = mysql80
+)
+
+var (
+	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
+	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
+)
+
+var (
+	unitTestDatabases = "mysql57, mariadb103, mysql80"
+)
+
 const (
 	workflowConfigDir = "../.github/workflows"
 
-	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "mysql57, mariadb103, mysql80"
+	unitTestTemplate = "templates/unit_test.tpl"
 
 	// An empty string will cause the default non platform specific template
 	// to be used.
-	clusterTestTemplateFormatStr = "templates/cluster_endtoend_test%s.tpl"
+	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
 	unitTestSelfHostedDatabases   = ""
@@ -120,9 +138,7 @@ var (
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
-	clustersRequiringMySQL80 = []string{
-		"mysql80",
-	}
+	clustersRequiringMySQL57 = []string{}
 )
 
 type unitTest struct {
@@ -133,6 +149,7 @@ type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20                     bool
+	Docker                       bool
 }
 
 type selfHostedTest struct {
@@ -161,7 +178,7 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
-	generateClusterWorkflows(clusterList, clusterTestTemplateFormatStr)
+	generateClusterWorkflows(clusterList, clusterTestTemplate)
 	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
 	// tests that will use self-hosted runners
@@ -228,7 +245,7 @@ func generateSelfHostedClusterWorkflows() error {
 		test := &selfHostedTest{
 			Name:              fmt.Sprintf("Cluster (%s)", cluster),
 			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-			Platform:          "mysql57",
+			Platform:          "mysql80",
 			directoryName:     directoryName,
 			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 			Shard:             cluster,
@@ -249,10 +266,10 @@ func generateSelfHostedClusterWorkflows() error {
 				break
 			}
 		}
-		mysql80Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, mysql80Cluster := range mysql80Clusters {
-			if mysql80Cluster == cluster {
-				test.Platform = "mysql80"
+		mysql57Clusters := canonnizeList(clustersRequiringMySQL57)
+		for _, mysql57Cluster := range mysql57Clusters {
+			if mysql57Cluster == cluster {
+				test.Platform = "mysql57"
 				break
 			}
 		}
@@ -292,11 +309,10 @@ func generateClusterWorkflows(list []string, tpl string) {
 				break
 			}
 		}
-		ubuntu20Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, ubuntu20Cluster := range ubuntu20Clusters {
-			if ubuntu20Cluster == cluster {
-				test.Ubuntu20 = true
-				test.Platform = "mysql80"
+		mysql57Clusters := canonnizeList(clustersRequiringMySQL57)
+		for _, mysql57Cluster := range mysql57Clusters {
+			if mysql57Cluster == cluster {
+				test.Platform = "mysql57"
 				break
 			}
 		}

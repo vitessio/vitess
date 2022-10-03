@@ -8,6 +8,7 @@ jobs:
   build:
     name: Run endtoend tests on {{.Name}}
     {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -68,7 +69,7 @@ jobs:
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        sudo apt-get install percona-xtrabackup-80 lz4
 
         {{end}}
 
