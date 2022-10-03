@@ -51,7 +51,30 @@ var cases = []string{
 func TestBuiltinLowerandLcase(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
-
+	var cases = []string{
+		"\"Å å\"",
+		"NULL",
+		"\"\"",
+		"\"a\"",
+		"\"abc\"",
+		"1",
+		"-1",
+		"0123",
+		"0xAACC",
+		"3.1415926",
+		"\"中文测试\"",
+		"\"日本語テスト\"",
+		"\"한국어 시험\"",
+		"\"😊😂🤢\"",
+		"'123'",
+		"9223372036854775807",
+		"-9223372036854775808",
+		"999999999999999999999999",
+		"-999999999999999999999999",
+		"_latin1 X'ÂÄÌå'",
+		"_binary 'Müller' ",
+		"_utf8mb4 'abcABCÅå'",
+	}
 	for _, str := range cases {
 		query := fmt.Sprintf("LOWER (%s)", str)
 		compareRemoteExpr(t, conn, query)
@@ -64,6 +87,31 @@ func TestBuiltinLowerandLcase(t *testing.T) {
 func TestBuiltinUpperandUcase(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
+
+	var cases = []string{
+		"\"Å å\"",
+		"NULL",
+		"\"\"",
+		"\"a\"",
+		"\"abc\"",
+		"1",
+		"-1",
+		"0123",
+		"0xAACC",
+		"3.1415926",
+		"\"中文测试\"",
+		"\"日本語テスト\"",
+		"\"한국어 시험\"",
+		"\"😊😂🤢\"",
+		"'123'",
+		"9223372036854775807",
+		"-9223372036854775808",
+		"999999999999999999999999",
+		"-999999999999999999999999",
+		"_latin1 X'ÂÄÌå'",
+		"_binary 'Müller' ",
+		"_utf8mb4 'abcABCÅå'",
+	}
 
 	for _, str := range cases {
 		query := fmt.Sprintf("UPPER(%s)", str)

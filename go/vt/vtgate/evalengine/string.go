@@ -58,30 +58,8 @@ func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 	return sqltypes.VarChar, f
 }
 
-type builtinLcase struct{}
-
-func (builtinLcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	inarg := &args[0]
-	raw := inarg.value().Raw()
-	t := inarg.typeof()
-
-	if inarg.isNull() {
-		result.setNull()
-		return
-	}
-
-	coll := collations.Local().LookupByID(inarg.Collation())
-
-	if sqltypes.IsNumber(t) {
-		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
-		var dst []byte
-		dst = csa.ToLower(dst, raw)
-		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
-	} else {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
-	}
+type builtinLcase struct {
+	builtinLower
 }
 
 func (builtinLcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -126,30 +104,8 @@ func (builtinUpper) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 	return sqltypes.VarChar, f
 }
 
-type builtinUcase struct{}
-
-func (builtinUcase) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	inarg := &args[0]
-	raw := inarg.value().Raw()
-	t := inarg.typeof()
-
-	if inarg.isNull() {
-		result.setNull()
-		return
-	}
-
-	coll := collations.Local().LookupByID(inarg.Collation())
-
-	if sqltypes.IsNumber(t) {
-		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
-		var dst []byte
-		dst = csa.ToUpper(dst, raw)
-		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
-	} else {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
-	}
+type builtinUcase struct {
+	builtinUpper
 }
 
 func (builtinUcase) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -194,29 +150,8 @@ func (builtinCharLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type,
 	return sqltypes.Int64, f
 }
 
-type builtinCharacterLength struct{}
-
-func (builtinCharacterLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	inarg := &args[0]
-	t := inarg.typeof()
-	raw := inarg.value().Raw()
-
-	if inarg.isNull() {
-		result.setNull()
-		return
-	}
-
-	coll := collations.Local().LookupByID(inarg.collation().Collation)
-
-	if sqltypes.IsNumber(t) {
-		inarg.makeTextualAndConvert(env.DefaultCollation)
-		cnt := int64(len(inarg.value().Raw()))
-		result.setInt64(cnt)
-	} else if cnt := collations.CharLen(coll, raw); cnt >= 0 {
-		result.setInt64(int64(cnt))
-	} else {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
-	}
+type builtinCharacterLength struct {
+	builtinCharLength
 }
 
 func (builtinCharacterLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -248,17 +183,8 @@ func (builtinOctetLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type
 	return sqltypes.Int64, f
 }
 
-type builtinLength struct{}
-
-func (builtinLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	inarg := &args[0]
-	if inarg.isNull() {
-		result.setNull()
-		return
-	}
-
-	cnt := len(inarg.value().RawStr())
-	result.setInt64(int64(cnt))
+type builtinLength struct {
+	builtinOctetLength
 }
 
 func (builtinLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
