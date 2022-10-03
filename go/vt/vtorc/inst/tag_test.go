@@ -3,139 +3,139 @@ package inst
 import (
 	"testing"
 
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
+	"github.com/stretchr/testify/require"
 )
 
 //nolint:staticcheck
 func TestParseTag(t *testing.T) {
 	{
 		tag, err := ParseTag("")
-		test.S(t).ExpectTrue(tag == nil)
-		test.S(t).ExpectNotNil(err)
+		require.True(t, tag == nil)
+		require.Error(t, err)
 	}
 	{
 		tag, err := ParseTag("=")
-		test.S(t).ExpectTrue(tag == nil)
-		test.S(t).ExpectNotNil(err)
+		require.True(t, tag == nil)
+		require.Error(t, err)
 	}
 	{
 		tag, err := ParseTag("=backup")
-		test.S(t).ExpectTrue(tag == nil)
-		test.S(t).ExpectNotNil(err)
+		require.True(t, tag == nil)
+		require.Error(t, err)
 	}
 	{
 		tag, err := ParseTag("  =backup")
-		test.S(t).ExpectTrue(tag == nil)
-		test.S(t).ExpectNotNil(err)
+		require.True(t, tag == nil)
+		require.Error(t, err)
 	}
 	{
 		tag, err := ParseTag("role")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(tag != nil)
-		test.S(t).ExpectEquals(tag.TagName, "role")
-		test.S(t).ExpectEquals(tag.TagValue, "")
-		test.S(t).ExpectFalse(tag.Negate)
-		test.S(t).ExpectFalse(tag.HasValue)
+		require.NoError(t, err)
+		require.True(t, tag != nil)
+		require.Equal(t, tag.TagName, "role")
+		require.Equal(t, tag.TagValue, "")
+		require.False(t, tag.Negate)
+		require.False(t, tag.HasValue)
 
-		test.S(t).ExpectEquals(tag.String(), "role=")
+		require.Equal(t, tag.String(), "role=")
 	}
 	{
 		tag, err := ParseTag("role=")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(tag != nil)
-		test.S(t).ExpectEquals(tag.TagName, "role")
-		test.S(t).ExpectEquals(tag.TagValue, "")
-		test.S(t).ExpectFalse(tag.Negate)
-		test.S(t).ExpectTrue(tag.HasValue)
+		require.NoError(t, err)
+		require.True(t, tag != nil)
+		require.Equal(t, tag.TagName, "role")
+		require.Equal(t, tag.TagValue, "")
+		require.False(t, tag.Negate)
+		require.True(t, tag.HasValue)
 
-		test.S(t).ExpectEquals(tag.String(), "role=")
+		require.Equal(t, tag.String(), "role=")
 
 	}
 	{
 		tag, err := ParseTag("role=backup")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(tag != nil)
-		test.S(t).ExpectEquals(tag.TagName, "role")
-		test.S(t).ExpectEquals(tag.TagValue, "backup")
-		test.S(t).ExpectFalse(tag.Negate)
-		test.S(t).ExpectTrue(tag.HasValue)
+		require.NoError(t, err)
+		require.True(t, tag != nil)
+		require.Equal(t, tag.TagName, "role")
+		require.Equal(t, tag.TagValue, "backup")
+		require.False(t, tag.Negate)
+		require.True(t, tag.HasValue)
 
-		test.S(t).ExpectEquals(tag.String(), "role=backup")
+		require.Equal(t, tag.String(), "role=backup")
 	}
 	{
 		tag, err := ParseTag("!role")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(tag != nil)
-		test.S(t).ExpectEquals(tag.TagName, "role")
-		test.S(t).ExpectTrue(tag.Negate)
-		test.S(t).ExpectFalse(tag.HasValue)
+		require.NoError(t, err)
+		require.True(t, tag != nil)
+		require.Equal(t, tag.TagName, "role")
+		require.True(t, tag.Negate)
+		require.False(t, tag.HasValue)
 	}
 	{
 		tag, err := ParseTag("~role=backup")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(tag != nil)
-		test.S(t).ExpectEquals(tag.TagName, "role")
-		test.S(t).ExpectEquals(tag.TagValue, "backup")
-		test.S(t).ExpectTrue(tag.Negate)
-		test.S(t).ExpectTrue(tag.HasValue)
+		require.NoError(t, err)
+		require.True(t, tag != nil)
+		require.Equal(t, tag.TagName, "role")
+		require.Equal(t, tag.TagValue, "backup")
+		require.True(t, tag.Negate)
+		require.True(t, tag.HasValue)
 	}
 }
 
 func TestParseIntersectTags(t *testing.T) {
 	{
 		_, err := ParseIntersectTags("")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseIntersectTags(",")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseIntersectTags(",,,")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseIntersectTags("role,")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		tags, err := ParseIntersectTags("role")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(len(tags), 1)
+		require.NoError(t, err)
+		require.Equal(t, len(tags), 1)
 
-		test.S(t).ExpectEquals(tags[0].TagName, "role")
-		test.S(t).ExpectEquals(tags[0].TagValue, "")
-		test.S(t).ExpectFalse(tags[0].Negate)
-		test.S(t).ExpectFalse(tags[0].HasValue)
+		require.Equal(t, tags[0].TagName, "role")
+		require.Equal(t, tags[0].TagValue, "")
+		require.False(t, tags[0].Negate)
+		require.False(t, tags[0].HasValue)
 	}
 	{
 		tags, err := ParseIntersectTags("role,dc")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(len(tags), 2)
+		require.NoError(t, err)
+		require.Equal(t, len(tags), 2)
 
-		test.S(t).ExpectEquals(tags[0].TagName, "role")
-		test.S(t).ExpectEquals(tags[0].TagValue, "")
-		test.S(t).ExpectFalse(tags[0].Negate)
-		test.S(t).ExpectFalse(tags[0].HasValue)
+		require.Equal(t, tags[0].TagName, "role")
+		require.Equal(t, tags[0].TagValue, "")
+		require.False(t, tags[0].Negate)
+		require.False(t, tags[0].HasValue)
 
-		test.S(t).ExpectEquals(tags[1].TagName, "dc")
-		test.S(t).ExpectEquals(tags[1].TagValue, "")
-		test.S(t).ExpectFalse(tags[1].Negate)
-		test.S(t).ExpectFalse(tags[1].HasValue)
+		require.Equal(t, tags[1].TagName, "dc")
+		require.Equal(t, tags[1].TagValue, "")
+		require.False(t, tags[1].Negate)
+		require.False(t, tags[1].HasValue)
 	}
 	{
 		tags, err := ParseIntersectTags("role=backup, !dc=ny")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(len(tags), 2)
+		require.NoError(t, err)
+		require.Equal(t, len(tags), 2)
 
-		test.S(t).ExpectEquals(tags[0].TagName, "role")
-		test.S(t).ExpectEquals(tags[0].TagValue, "backup")
-		test.S(t).ExpectFalse(tags[0].Negate)
-		test.S(t).ExpectTrue(tags[0].HasValue)
+		require.Equal(t, tags[0].TagName, "role")
+		require.Equal(t, tags[0].TagValue, "backup")
+		require.False(t, tags[0].Negate)
+		require.True(t, tags[0].HasValue)
 
-		test.S(t).ExpectEquals(tags[1].TagName, "dc")
-		test.S(t).ExpectEquals(tags[1].TagValue, "ny")
-		test.S(t).ExpectTrue(tags[1].Negate)
-		test.S(t).ExpectTrue(tags[1].HasValue)
+		require.Equal(t, tags[1].TagName, "dc")
+		require.Equal(t, tags[1].TagValue, "ny")
+		require.True(t, tags[1].Negate)
+		require.True(t, tags[1].HasValue)
 	}
 }

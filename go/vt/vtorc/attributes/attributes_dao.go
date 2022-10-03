@@ -21,8 +21,9 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
+	"github.com/openark/golib/sqlutils"
+
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 )
 
 // SetHostAttributes is used to set host attributes

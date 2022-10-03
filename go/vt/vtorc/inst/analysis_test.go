@@ -20,7 +20,8 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
+
+	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -30,18 +31,18 @@ func init() {
 func TestGetAnalysisInstanceType(t *testing.T) {
 	{
 		analysis := &ReplicationAnalysis{}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "intermediate-primary")
+		require.Equal(t, string(analysis.GetAnalysisInstanceType()), "intermediate-primary")
 	}
 	{
 		analysis := &ReplicationAnalysis{IsPrimary: true}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "primary")
+		require.Equal(t, string(analysis.GetAnalysisInstanceType()), "primary")
 	}
 	{
 		analysis := &ReplicationAnalysis{IsCoPrimary: true}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "co-primary")
+		require.Equal(t, string(analysis.GetAnalysisInstanceType()), "co-primary")
 	}
 	{
 		analysis := &ReplicationAnalysis{IsPrimary: true, IsCoPrimary: true}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "co-primary")
+		require.Equal(t, string(analysis.GetAnalysisInstanceType()), "co-primary")
 	}
 }
