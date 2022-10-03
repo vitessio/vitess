@@ -70,6 +70,8 @@ import {
     createShard,
     validate,
     ValidateParams,
+    validateShard,
+    ValidateShardParams,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -567,5 +569,18 @@ export const useValidate = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
         return validate(params);
+    }, options);
+};
+
+/**
+ * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
+ * as well as all tablets in discoverable cells, are consistent.
+ */
+export const useValidateShard = (
+    params: Parameters<typeof validateShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>(() => {
+        return validateShard(params);
     }, options);
 };

@@ -772,8 +772,20 @@ export const validate = async (params: ValidateParams) => {
 };
 
 export interface ValidateShardParams {
-  clusterID: string;
-  keyspace: string;
-  shard: string;
-  pingTablets: boolean;
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+    pingTablets: boolean;
 }
+
+export const validateShard = async (params: ValidateShardParams) => {
+    const { result } = await vtfetch(`/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/validate`, {
+        method: 'put',
+        body: JSON.stringify({ ping_tablets: params.pingTablets }),
+    });
+
+    const err = vtctldata.ValidateShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateShardResponse.create(result);
+};
