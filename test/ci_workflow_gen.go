@@ -33,7 +33,7 @@ const (
 	mysql80    mysqlVersion = "mysql80"
 	mariadb103 mysqlVersion = "mariadb103"
 
-	defaultMySQLVersion mysqlVersion = mysql57
+	defaultMySQLVersion = mysql80
 )
 
 type mysqlVersions []mysqlVersion
@@ -120,6 +120,7 @@ var (
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",
+		"mysql57",
 		"mysql80",
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
@@ -157,7 +158,7 @@ type clusterTest struct {
 	Name, Shard, Platform        string
 	FileName                     string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20, Docker             bool
+	Docker                       bool
 	LimitResourceUsage           bool
 }
 
@@ -176,12 +177,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
-	case clusterName == "mysql80":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vtorc_8.0":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vreplication_across_db_versions":
-		return []mysqlVersion{mysql80}
+	case clusterName == "mysql57":
+		return []mysqlVersion{mysql57}
 	default:
 		return defaultMySQLVersions
 	}
@@ -273,11 +270,16 @@ func generateSelfHostedClusterWorkflows() error {
 	clusters := canonnizeList(clusterSelfHostedList)
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
-			directoryName := fmt.Sprintf("cluster_test_%s", cluster)
+			mysqlVersionIndicator := ""
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			}
+
+			directoryName := fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator)
 			test := &selfHostedTest{
-				Name:              fmt.Sprintf("Cluster (%s)", cluster),
-				ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-				Platform:          "mysql57",
+				Name:              fmt.Sprintf("Cluster (%s)(%s)", cluster, mysqlVersion),
+				ImageName:         fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator),
+				Platform:          "mysql80",
 				directoryName:     directoryName,
 				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 				Shard:             cluster,
@@ -298,14 +300,9 @@ func generateSelfHostedClusterWorkflows() error {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
-				test.Platform = string(mysql80)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
-			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
-				mysqlVersionIndicator = "_" + string(mysqlVersion)
-			}
-
 			err := setupTestDockerFile(test)
 			if err != nil {
 				return err
@@ -344,9 +341,8 @@ func generateClusterWorkflows(list []string, tpl string) {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
-				test.Ubuntu20 = true
-				test.Platform = string(mysql80)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true

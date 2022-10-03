@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (12)
+name: Cluster (12)(mysql80)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (12)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (12)(mysql80)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (12)
+    name: Run endtoend tests on Cluster (12)(mysql80)
     runs-on: self-hosted
 
     steps:
