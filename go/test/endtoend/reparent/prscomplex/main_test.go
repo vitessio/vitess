@@ -93,6 +93,11 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+/*
+TestAcquireSameConnID tests that a query started on a connection gets reconnected with a new connection.
+Another query acquires the old connection ID and does not override the query list maintained by the vttablet process.
+PRS should not fail as the query list is maintained appropriately.
+*/
 func TestAcquireSameConnID(t *testing.T) {
 	defer func() {
 		err := recover()
@@ -105,15 +110,14 @@ func TestAcquireSameConnID(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	// start a reserved connection
 	utils.Exec(t, conn, "set sql_mode=''")
 	_ = utils.Exec(t, conn, "select connection_id()")
-	//connID, err := qr.Rows[0][0].ToInt64()
-	//require.NoError(t, err)
 
+	// restart the mysql to trigger reconnect on next query.
 	primTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	err = primTablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
-
 	err = primTablet.MysqlctlProcess.StartProvideInit(false)
 	require.NoError(t, err)
 
@@ -138,6 +142,7 @@ func TestAcquireSameConnID(t *testing.T) {
 
 	}
 
+	// prs should happen without any error.
 	text, err := rutils.Prs(t, clusterInstance, clusterInstance.Keyspaces[0].Shards[0].Replica())
 	require.NoError(t, err, text)
 }

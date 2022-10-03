@@ -51,7 +51,10 @@ func NewQueryDetail(ctx context.Context, conn killable) *QueryDetail {
 type QueryList struct {
 	name string
 
-	mu           sync.Mutex
+	mu sync.Mutex
+	// on reconnect connection id will get reused by a different connection.
+	// so have to maintain a list to compare with the actual connection.
+	// and remove appropriately.
 	queryDetails map[int64][]*QueryDetail
 }
 
