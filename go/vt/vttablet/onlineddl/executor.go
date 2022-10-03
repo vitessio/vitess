@@ -900,9 +900,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// even attempt to reach the table. Even of the LOCK terminates unexpectedly, nothing is going
 		// to run on the table.
 
-		// However, LOCK TABLES does not generate a GTID entry. We will want to grab a GTID position that is
-		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a DDL by same connection holding
-		// the lock to generate a new GTID.
 		go func() {
 			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
@@ -920,6 +917,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 		// 	return err
 		// }
+
+		// However, LOCK TABLES does not generate a GTID entry. We will want to grab a GTID position that is
+		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a transaction for the sake
+		// of a new GTID entry to which we can wait for.
 		msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
 		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
 			return err
@@ -958,14 +959,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		} else {
-
 			if _, err := lockConn.Exec(ctx, sqlUnlockTables, 1, false); err != nil {
 				return err
 			}
-			err = <-renameCompleteChan
-			if err != nil {
+			// The RENAME should now be unblocked
+			if err := <-renameCompleteChan; err != nil {
 				return err
 			}
+			// Tables are now swapped
 		}
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
