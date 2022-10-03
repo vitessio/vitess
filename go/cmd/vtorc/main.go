@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
-	vtlog "vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -100,7 +99,7 @@ func main() {
 	// directly.
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
 	grpccommon.RegisterFlags(fs)
-	vtlog.RegisterFlags(fs)
+	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
 	logic.RegisterFlags(fs)
 	server.RegisterFlags(fs)
