@@ -26,6 +26,27 @@ import (
 	"text/template"
 )
 
+type mysqlVersion string
+
+const (
+	mysql57    mysqlVersion = "mysql57"
+	mysql80    mysqlVersion = "mysql80"
+	mariadb103 mysqlVersion = "mariadb103"
+
+	defaultMySQLVersion = mysql80
+)
+
+type mysqlVersions []mysqlVersion
+
+var (
+	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
+	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
+)
+
+var (
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
+)
+
 const (
 	workflowConfigDir = "../.github/workflows"
 
@@ -110,6 +131,13 @@ var (
 	clusterDockerList     = []string{
 		"vreplication_basic",
 		"vreplication_v2",
+		"schemadiff_vrepl",
+		"topo_connection_cache",
+		"vtgate_partial_keyspace",
+	}
+
+	clusterSelfHostedList = []string{
+		"vtorc",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
@@ -132,12 +160,35 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20                     bool
+	Docker                       bool
+	LimitResourceUsage           bool
+	PartialKeyspace              bool
 }
 
 type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
-	MakeTools, InstallXtraBackup                                bool
+	FileName                                                    string
+	MakeTools, InstallXtraBackup, Docker                        bool
+}
+
+// clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
+func clusterMySQLVersions(clusterName string) mysqlVersions {
+	switch {
+	case strings.HasPrefix(clusterName, "onlineddl_"):
+		return allMySQLVersions
+	case clusterName == "schemadiff_vrepl":
+		return allMySQLVersions
+	case clusterName == "tabletmanager_tablegc":
+		return allMySQLVersions
+	case clusterName == "vtorc":
+		return allMySQLVersions
+	case clusterName == "xb_backup":
+		return allMySQLVersions
+	case clusterName == "xb_recovery":
+		return allMySQLVersions
+	default:
+		return defaultMySQLVersions
+	}
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -224,38 +275,41 @@ func generateSelfHostedUnitTestWorkflows() error {
 func generateSelfHostedClusterWorkflows() error {
 	clusters := canonnizeList(clusterSelfHostedList)
 	for _, cluster := range clusters {
-		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
-		test := &selfHostedTest{
-			Name:              fmt.Sprintf("Cluster (%s)", cluster),
-			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-			Platform:          "mysql57",
-			directoryName:     directoryName,
-			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
-			Shard:             cluster,
-			MakeTools:         false,
-			InstallXtraBackup: false,
-		}
-		makeToolClusters := canonnizeList(clustersRequiringMakeTools)
-		for _, makeToolCluster := range makeToolClusters {
-			if makeToolCluster == cluster {
-				test.MakeTools = true
-				break
+		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
+			// check mysqlversion
+			mysqlVersionIndicator := ""
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+				mysqlVersionIndicator = "_" + string(mysqlVersion)
 			}
-		}
-		xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
-		for _, xtraBackupCluster := range xtraBackupClusters {
-			if xtraBackupCluster == cluster {
-				test.InstallXtraBackup = true
-				break
+
+			directoryName := fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator)
+			test := &selfHostedTest{
+				Name:              fmt.Sprintf("Cluster (%s)(%s)", cluster, mysqlVersion),
+				ImageName:         fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator),
+				Platform:          "mysql80",
+				directoryName:     directoryName,
+				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
+				Shard:             cluster,
+				MakeTools:         false,
+				InstallXtraBackup: false,
 			}
-		}
-		mysql80Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, mysql80Cluster := range mysql80Clusters {
-			if mysql80Cluster == cluster {
-				test.Platform = "mysql80"
-				break
+			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
+			for _, makeToolCluster := range makeToolClusters {
+				if makeToolCluster == cluster {
+					test.MakeTools = true
+					break
+				}
 			}
-		}
+			xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
+			for _, xtraBackupCluster := range xtraBackupClusters {
+				if xtraBackupCluster == cluster {
+					test.InstallXtraBackup = true
+					break
+				}
+			}
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
+			}
 
 		err := setupTestDockerFile(test)
 		if err != nil {
@@ -274,30 +328,27 @@ func generateSelfHostedClusterWorkflows() error {
 func generateClusterWorkflows(list []string, tpl string) {
 	clusters := canonnizeList(list)
 	for _, cluster := range clusters {
-		test := &clusterTest{
-			Name:  fmt.Sprintf("Cluster (%s)", cluster),
-			Shard: cluster,
-		}
-		makeToolClusters := canonnizeList(clustersRequiringMakeTools)
-		for _, makeToolCluster := range makeToolClusters {
-			if makeToolCluster == cluster {
-				test.MakeTools = true
-				break
+		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
+			test := &clusterTest{
+				Name:  fmt.Sprintf("Cluster (%s)", cluster),
+				Shard: cluster,
 			}
-		}
-		xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
-		for _, xtraBackupCluster := range xtraBackupClusters {
-			if xtraBackupCluster == cluster {
-				test.InstallXtraBackup = true
-				break
+			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
+			for _, makeToolCluster := range makeToolClusters {
+				if makeToolCluster == cluster {
+					test.MakeTools = true
+					break
+				}
 			}
-		}
-		ubuntu20Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, ubuntu20Cluster := range ubuntu20Clusters {
-			if ubuntu20Cluster == cluster {
-				test.Ubuntu20 = true
-				test.Platform = "mysql80"
-				break
+			xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
+			for _, xtraBackupCluster := range xtraBackupClusters {
+				if xtraBackupCluster == cluster {
+					test.InstallXtraBackup = true
+					break
+				}
+			}
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 		}
 
