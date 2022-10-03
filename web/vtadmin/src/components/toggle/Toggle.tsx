@@ -2,8 +2,8 @@ import { Switch } from '@headlessui/react';
 
 interface ToggleParams {
     enabled: boolean;
-    className?: string;
     onChange: () => void;
+    className?: string;
 }
 
 const Toggle: React.FC<ToggleParams> = ({ enabled, className, onChange }) => {

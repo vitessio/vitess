@@ -452,7 +452,7 @@ func (tm *TabletManager) Close() {
 		return nil
 	}
 
-	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer updateCancel()
 
 	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {

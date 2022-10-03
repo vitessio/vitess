@@ -1,0 +1,168 @@
+Usage of vtbackup:
+      --allow_first_backup                              Allow this job to take the first backup of an existing shard.
+      --alsologtostderr                                 log to standard error as well as files
+      --azblob_backup_account_key_file string           Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
+      --azblob_backup_account_name string               Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
+      --azblob_backup_container_name string             Azure Blob Container Name.
+      --azblob_backup_parallelism int                   Azure Blob operation parallelism (requires extra memory when increased). (default 1)
+      --azblob_backup_storage_root string               Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
+      --backup_engine_implementation string             Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
+      --backup_storage_block_size int                   if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
+      --backup_storage_compress                         if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
+      --backup_storage_hook string                      if set, we send the contents of the backup files through this hook.
+      --backup_storage_implementation string            Which backup storage implementation to use for creating and restoring backups.
+      --backup_storage_number_blocks int                if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --ceph_backup_storage_config string               Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --concurrency int                                 (init restore parameter) how many concurrent files to restore at once (default 4)
+      --consul_auth_static_file string                  JSON File to read the topos/tokens from.
+      --db-credentials-file string                      db credentials file; send SIGHUP to reload this file
+      --db-credentials-server string                    db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
+      --db-credentials-vault-addr string                URL to Vault server
+      --db-credentials-vault-path string                Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds
+      --db-credentials-vault-role-mountpoint string     Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
+      --db-credentials-vault-role-secretidfile string   Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable
+      --db-credentials-vault-roleid string              Vault AppRole id; can also be passed using VAULT_ROLEID environment variable
+      --db-credentials-vault-timeout duration           Timeout for vault API operations (default 10s)
+      --db-credentials-vault-tls-ca string              Path to CA PEM for validating Vault server certificate
+      --db-credentials-vault-tokenfile string           Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
+      --db-credentials-vault-ttl duration               How long to cache DB credentials from the Vault server (default 30m0s)
+      --db_allprivs_password string                     db allprivs password
+      --db_allprivs_use_ssl                             Set this flag to false to make the allprivs connection to not use ssl (default true)
+      --db_allprivs_user string                         db allprivs user userKey (default "vt_allprivs")
+      --db_app_password string                          db app password
+      --db_app_use_ssl                                  Set this flag to false to make the app connection to not use ssl (default true)
+      --db_app_user string                              db app user userKey (default "vt_app")
+      --db_appdebug_password string                     db appdebug password
+      --db_appdebug_use_ssl                             Set this flag to false to make the appdebug connection to not use ssl (default true)
+      --db_appdebug_user string                         db appdebug user userKey (default "vt_appdebug")
+      --db_charset string                               Character set used for this tablet. (default "utf8mb4")
+      --db_conn_query_info                              enable parsing and processing of QUERY_OK info fields
+      --db_connect_timeout_ms int                       connection timeout to mysqld in milliseconds (0 for no timeout)
+      --db_dba_password string                          db dba password
+      --db_dba_use_ssl                                  Set this flag to false to make the dba connection to not use ssl (default true)
+      --db_dba_user string                              db dba user userKey (default "vt_dba")
+      --db_erepl_password string                        db erepl password
+      --db_erepl_use_ssl                                Set this flag to false to make the erepl connection to not use ssl (default true)
+      --db_erepl_user string                            db erepl user userKey (default "vt_erepl")
+      --db_filtered_password string                     db filtered password
+      --db_filtered_use_ssl                             Set this flag to false to make the filtered connection to not use ssl (default true)
+      --db_filtered_user string                         db filtered user userKey (default "vt_filtered")
+      --db_flags uint                                   Flag values as defined by MySQL.
+      --db_flavor string                                Flavor overrid. Valid value is FilePos.
+      --db_host string                                  The host name for the tcp connection.
+      --db_port int                                     tcp port
+      --db_repl_password string                         db repl password
+      --db_repl_use_ssl                                 Set this flag to false to make the repl connection to not use ssl (default true)
+      --db_repl_user string                             db repl user userKey (default "vt_repl")
+      --db_server_name string                           server name of the DB we are connecting to.
+      --db_socket string                                The unix socket to connect on. If this is specified, host and port will not be used.
+      --db_ssl_ca string                                connection ssl ca
+      --db_ssl_ca_path string                           connection ssl ca path
+      --db_ssl_cert string                              connection ssl certificate
+      --db_ssl_key string                               connection ssl key
+      --db_ssl_mode SslMode                             SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
+      --db_tls_min_version string                       Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
+      --detach                                          detached mode - run backups detached from the terminal
+      --file_backup_storage_root string                 Root directory for the file backup storage.
+      --gcs_backup_storage_bucket string                Google Cloud Storage bucket to use for backups.
+      --gcs_backup_storage_root string                  Root prefix for all backup-related object names.
+      --grpc_auth_static_client_creds string            When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc_compression string                         Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
+      --grpc_enable_tracing                             Enable gRPC tracing.
+      --grpc_initial_conn_window_size int               gRPC initial connection window size
+      --grpc_initial_window_size int                    gRPC initial window size
+      --grpc_keepalive_time duration                    After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
+      --grpc_keepalive_timeout duration                 After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --grpc_max_message_size int                       Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc_prometheus                                 Enable gRPC monitoring with Prometheus.
+  -h, --help                                            display usage and exit
+      --init_db_name_override string                    (init parameter) override the name of the db used by vttablet
+      --init_db_sql_file string                         path to .sql file to run after mysql_install_db
+      --init_keyspace string                            (init parameter) keyspace to use for this tablet
+      --init_shard string                               (init parameter) shard to use for this tablet
+      --initial_backup                                  Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
+      --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                     keep logs for this long (using mtime) (zero to keep forever)
+      --log_backtrace_at traceLocation                  when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                                  If non-empty, write log files in this directory
+      --log_err_stacks                                  log stack traces for errors
+      --log_rotate_max_size uint                        size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logtostderr                                     log to standard error instead of files
+      --min_backup_interval duration                    Only take a new backup if it's been at least this long since the most recent backup.
+      --min_retention_count int                         Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
+      --min_retention_time duration                     Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.
+      --mycnf-file string                               path to my.cnf, if reading all config params from there
+      --mycnf_bin_log_path string                       mysql binlog path
+      --mycnf_data_dir string                           data directory for mysql
+      --mycnf_error_log_path string                     mysql error log path
+      --mycnf_general_log_path string                   mysql general log path
+      --mycnf_innodb_data_home_dir string               Innodb data home directory
+      --mycnf_innodb_log_group_home_dir string          Innodb log group home directory
+      --mycnf_master_info_file string                   mysql master.info file
+      --mycnf_mysql_port int                            port mysql is listening on
+      --mycnf_pid_file string                           mysql pid file
+      --mycnf_relay_log_index_path string               mysql relay log index path
+      --mycnf_relay_log_info_path string                mysql relay log info path
+      --mycnf_relay_log_path string                     mysql relay log path
+      --mycnf_secure_file_priv string                   mysql path for loading secure files
+      --mycnf_server_id int                             mysql server id of the server (if specified, mycnf-file will be ignored)
+      --mycnf_slow_log_path string                      mysql slow query log path
+      --mycnf_socket_file string                        mysql socket file
+      --mycnf_tmp_dir string                            mysql tmp directory
+      --mysql_port int                                  mysql port (default 3306)
+      --mysql_server_version string                     MySQL server version to advertise.
+      --mysql_socket string                             path to the mysql socket
+      --mysql_timeout duration                          how long to wait for mysqld startup (default 5m0s)
+      --pprof strings                                   enable profiling
+      --purge_logs_interval duration                    how often try to remove old logs (default 1h0m0s)
+      --remote_operation_timeout duration               time to wait for a remote operation (default 30s)
+      --restart_before_backup                           Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
+      --s3_backup_aws_endpoint string                   endpoint of the S3 backend (region must be provided).
+      --s3_backup_aws_region string                     AWS region to use. (default "us-east-1")
+      --s3_backup_aws_retries int                       AWS request retries. (default -1)
+      --s3_backup_force_path_style                      force the s3 path style.
+      --s3_backup_log_level string                      determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
+      --s3_backup_server_side_encryption string         server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
+      --s3_backup_storage_bucket string                 S3 bucket to use for backups.
+      --s3_backup_storage_root string                   root prefix for all backup-related object names.
+      --s3_backup_tls_skip_verify_cert                  skip the 'certificate is valid' check for SSL connections.
+      --security_policy string                          the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --sql-max-length-errors int                       truncate queries in error logs to the given length (default unlimited)
+      --sql-max-length-ui int                           truncate queries in debug UIs to the given length (default 512) (default 512)
+      --stderrthreshold severity                        logs at or above this threshold go to stderr (default 1)
+      --tablet_manager_grpc_ca string                   the server ca to use to validate servers when connecting
+      --tablet_manager_grpc_cert string                 the cert to use to connect
+      --tablet_manager_grpc_concurrency int             concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App}) (default 8)
+      --tablet_manager_grpc_connpool_size int           number of tablets to keep tmclient connections open to (default 100)
+      --tablet_manager_grpc_crl string                  the server crl to use to validate server certificates when connecting
+      --tablet_manager_grpc_key string                  the key to use to connect
+      --tablet_manager_grpc_server_name string          the server name to use to validate server certificate
+      --tablet_manager_protocol string                  Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --topo_consul_lock_delay duration                 LockDelay for consul session. (default 15s)
+      --topo_consul_lock_session_checks string          List of checks for consul session. (default "serfHealth")
+      --topo_consul_lock_session_ttl string             TTL for consul session.
+      --topo_consul_watch_poll_duration duration        time of the long poll for watch queries. (default 30s)
+      --topo_etcd_lease_ttl int                         Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
+      --topo_etcd_tls_ca string                         path to the ca to use to validate the server cert when connecting to the etcd topo server
+      --topo_etcd_tls_cert string                       path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS
+      --topo_etcd_tls_key string                        path to the client key to use to connect to the etcd topo server, enables TLS
+      --topo_global_root string                         the path of the global topology data in the global topology server
+      --topo_global_server_address string               the address of the global topology server
+      --topo_implementation string                      the topology implementation to use
+      --topo_zk_auth_file string                        auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
+      --topo_zk_base_timeout duration                   zk base timeout (see zk.Connect) (default 30s)
+      --topo_zk_max_concurrency int                     maximum number of pending requests to send to a Zookeeper server. (default 64)
+      --topo_zk_tls_ca string                           the server ca to use to validate servers when connecting to the zk topo server
+      --topo_zk_tls_cert string                         the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
+      --topo_zk_tls_key string                          the key to use to connect to the zk topo server, enables TLS
+  -v, --v Level                                         log level for V logs
+      --version                                         print binary version
+      --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging
+      --xbstream_restore_flags string                   flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
+      --xtrabackup_backup_flags string                  flags to pass to backup command. These should be space separated and will be added to the end of the command
+      --xtrabackup_prepare_flags string                 flags to pass to prepare command. These should be space separated and will be added to the end of the command
+      --xtrabackup_root_path string                     directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
+      --xtrabackup_stream_mode string                   which mode to use if streaming, valid values are tar and xbstream (default "tar")
+      --xtrabackup_stripe_block_size uint               Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
+      --xtrabackup_stripes uint                         If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
+      --xtrabackup_user string                          User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.

@@ -368,8 +368,7 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 // verifyInitialReplication generates a record on the primary and verifies that the record
 // exists on all tablets in the shard. We also check the PRIMARY as with lossless semi-sync
 // it's possible that a GTID is applied on a replica but not (yet) on the source:
-//
-//	http://my-replication-life.blogspot.com/2013/09/loss-less-semi-synchronous-replication.html
+// http://my-replication-life.blogspot.com/2013/09/loss-less-semi-synchronous-replication.html
 func verifyInitialReplication(t *testing.T) {
 	// confirm that semi-sync is enabled for the replica tablets
 	healthyReplicaCount := 0

@@ -20,9 +20,9 @@ import (
 	"testing"
 )
 
-// This package is mostly tested from ../grpcvtgatesconn . This place-holder test
+// This package is mostly tested from ../grpcvtgateconn . This place-holder test
 // is to document this fact. In order to make sure all code paths are
-// covered, you need to run the coverage tool from the ../grpcvtgatesconn directory
+// covered, you need to run the coverage tool from the ../grpcvtgateconn directory
 // using the following command:
 //
 //	go test -coverprofile=c.out -coverpkg ../grpcvtgateservice,.

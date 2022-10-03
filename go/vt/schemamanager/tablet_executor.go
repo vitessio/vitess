@@ -360,7 +360,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
-	rl := timer.NewRateLimiter(*topo.RemoteOperationTimeout / 4)
+	rl := timer.NewRateLimiter(topo.RemoteOperationTimeout / 4)
 	defer rl.Stop()
 
 	syncOperationExecuted := false
