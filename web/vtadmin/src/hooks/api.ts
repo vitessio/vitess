@@ -561,11 +561,11 @@ export const useCreateShard = (
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
  * as well as all tablets in discoverable cells, are consistent.
  */
- export const useValidate = (
-  params: Parameters<typeof validate>[0],
-  options?: UseMutationOptions<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>
+export const useValidate = (
+    params: Parameters<typeof validate>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>
 ) => {
-  return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
-      return validate(params);
-  }, options);
+    return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
+        return validate(params);
+    }, options);
 };
