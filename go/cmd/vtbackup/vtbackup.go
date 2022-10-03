@@ -63,7 +63,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	mathrand "math/rand"
 	"os"
 	"strings"
 	"syscall"
@@ -145,7 +144,6 @@ func registerFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	mathrand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
