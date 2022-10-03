@@ -18,23 +18,17 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
-	"sync"
-	"time"
+
+	"github.com/openark/golib/sqlutils"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 )
 
 var (
-	EmptyArgs []any
-	Db        DB = (*vtorcDB)(nil)
+	Db DB = (*vtorcDB)(nil)
 )
-
-var mysqlURI string
-var dbMutex sync.Mutex
 
 type DB interface {
 	QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
@@ -60,81 +54,6 @@ func (dummyRes DummySQLResult) RowsAffected() (int64, error) {
 	return 1, nil
 }
 
-func getMySQLURI() string {
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
-	if mysqlURI != "" {
-		return mysqlURI
-	}
-	mysqlURI := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=%ds&readTimeout=%ds&rejectReadOnly=%t&interpolateParams=true",
-		config.Config.MySQLVTOrcUser,
-		config.Config.MySQLVTOrcPassword,
-		config.Config.MySQLVTOrcHost,
-		config.Config.MySQLVTOrcPort,
-		config.Config.MySQLVTOrcDatabase,
-		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLVTOrcReadTimeoutSeconds,
-		config.Config.MySQLVTOrcRejectReadOnly,
-	)
-	if config.Config.MySQLVTOrcUseMutualTLS {
-		mysqlURI, _ = SetupMySQLVTOrcTLS(mysqlURI)
-	}
-	return mysqlURI
-}
-
-// OpenDiscovery returns a DB instance to access a topology instance.
-// It has lower read timeout than OpenTopology and is intended to
-// be used with low-latency discovery queries.
-func OpenDiscovery(host string, port int) (*sql.DB, error) {
-	return openTopology(host, port, config.Config.MySQLDiscoveryReadTimeoutSeconds)
-}
-
-// OpenTopology returns a DB instance to access a topology instance.
-func OpenTopology(host string, port int) (*sql.DB, error) {
-	return openTopology(host, port, config.Config.MySQLTopologyReadTimeoutSeconds)
-}
-
-func openTopology(host string, port int, readTimeout int) (db *sql.DB, err error) {
-	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
-		config.Config.MySQLTopologyUser,
-		config.Config.MySQLTopologyPassword,
-		host, port,
-		config.Config.MySQLConnectTimeoutSeconds,
-		readTimeout,
-	)
-
-	if config.Config.MySQLTopologyUseMutualTLS ||
-		(config.Config.MySQLTopologyUseMixedTLS && requiresTLS(host, port, uri)) {
-		if uri, err = SetupMySQLTopologyTLS(uri); err != nil {
-			return nil, err
-		}
-	}
-	if db, _, err = sqlutils.GetDB(uri); err != nil {
-		return nil, err
-	}
-	if config.Config.MySQLConnectionLifetimeSeconds > 0 {
-		db.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
-	}
-	db.SetMaxOpenConns(config.MySQLTopologyMaxPoolConnections)
-	db.SetMaxIdleConns(config.MySQLTopologyMaxPoolConnections)
-	return db, err
-}
-
-func openOrchestratorMySQLGeneric() (db *sql.DB, fromCache bool, err error) {
-	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
-		config.Config.MySQLVTOrcUser,
-		config.Config.MySQLVTOrcPassword,
-		config.Config.MySQLVTOrcHost,
-		config.Config.MySQLVTOrcPort,
-		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLVTOrcReadTimeoutSeconds,
-	)
-	if config.Config.MySQLVTOrcUseMutualTLS {
-		uri, _ = SetupMySQLVTOrcTLS(uri)
-	}
-	return sqlutils.GetDB(uri)
-}
-
 func IsSQLite() bool {
 	return config.Config.IsSQLite()
 }
@@ -142,65 +61,14 @@ func IsSQLite() bool {
 // OpenTopology returns the DB instance for the vtorc backed database
 func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
-	if IsSQLite() {
-		db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
-		if err == nil && !fromCache {
-			log.Infof("Connected to vtorc backend: sqlite on %v", config.Config.SQLite3DataFile)
-		}
-		if db != nil {
-			db.SetMaxOpenConns(1)
-			db.SetMaxIdleConns(1)
-		}
-	} else {
-		if db, fromCache, err := openOrchestratorMySQLGeneric(); err != nil {
-			log.Errorf(err.Error())
-			return db, err
-		} else if !fromCache {
-			// first time ever we talk to MySQL
-			query := fmt.Sprintf("create database if not exists %s", config.Config.MySQLVTOrcDatabase)
-			if _, err := db.Exec(query); err != nil {
-				log.Errorf(err.Error())
-				return db, err
-			}
-		}
-		db, fromCache, err = sqlutils.GetDB(getMySQLURI())
-		if err == nil && !fromCache {
-			// do not show the password but do show what we connect to.
-			safeMySQLURI := fmt.Sprintf("%s:?@tcp(%s:%d)/%s?timeout=%ds", config.Config.MySQLVTOrcUser,
-				config.Config.MySQLVTOrcHost, config.Config.MySQLVTOrcPort, config.Config.MySQLVTOrcDatabase, config.Config.MySQLConnectTimeoutSeconds)
-			log.Infof("Connected to vtorc backend: %v", safeMySQLURI)
-			if config.Config.MySQLVTOrcMaxPoolConnections > 0 {
-				log.Infof("VTOrc pool SetMaxOpenConns: %d", config.Config.MySQLVTOrcMaxPoolConnections)
-				db.SetMaxOpenConns(config.Config.MySQLVTOrcMaxPoolConnections)
-			}
-			if config.Config.MySQLConnectionLifetimeSeconds > 0 {
-				db.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
-			}
-		}
-	}
+	db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
 	if err == nil && !fromCache {
-		if !config.Config.SkipOrchestratorDatabaseUpdate {
-			_ = initVTOrcDB(db)
-		}
-		// A low value here will trigger reconnects which could
-		// make the number of backend connections hit the tcp
-		// limit. That's bad.  I could make this setting dynamic
-		// but then people need to know which value to use. For now
-		// allow up to 25% of MySQLVTOrcMaxPoolConnections
-		// to be idle.  That should provide a good number which
-		// does not keep the maximum number of connections open but
-		// at the same time does not trigger disconnections and
-		// reconnections too frequently.
-		maxIdleConns := int(config.Config.MySQLVTOrcMaxPoolConnections * 25 / 100)
-		if maxIdleConns < 10 {
-			maxIdleConns = 10
-		}
-		log.Infof("Connecting to backend %s:%d: maxConnections: %d, maxIdleConns: %d",
-			config.Config.MySQLVTOrcHost,
-			config.Config.MySQLVTOrcPort,
-			config.Config.MySQLVTOrcMaxPoolConnections,
-			maxIdleConns)
-		db.SetMaxIdleConns(maxIdleConns)
+		log.Infof("Connected to vtorc backend: sqlite on %v", config.Config.SQLite3DataFile)
+		_ = initVTOrcDB(db)
+	}
+	if db != nil {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
 	}
 	return db, err
 }
@@ -212,23 +80,6 @@ func translateStatement(statement string) (string, error) {
 	return statement, nil
 }
 
-// versionIsDeployed checks if given version has already been deployed
-func versionIsDeployed(db *sql.DB) (result bool, err error) {
-	query := `
-		select
-			count(*) as is_deployed
-		from
-			vtorc_db_deployments
-		where
-			deployed_version = ?
-		`
-	err = db.QueryRow(query, config.RuntimeCLIFlags.ConfiguredVersion).Scan(&result)
-	// err means the table 'vtorc_db_deployments' does not even exist, in which case we proceed
-	// to deploy.
-	// If there's another error to this, like DB gone bad, then we're about to find out anyway.
-	return result, err
-}
-
 // registerVTOrcDeployment updates the vtorc_metadata table upon successful deployment
 func registerVTOrcDeployment(db *sql.DB) error {
 	query := `
@@ -238,10 +89,9 @@ func registerVTOrcDeployment(db *sql.DB) error {
 				?, NOW()
 			)
 				`
-	if _, err := execInternal(db, query, config.RuntimeCLIFlags.ConfiguredVersion); err != nil {
+	if _, err := execInternal(db, query, ""); err != nil {
 		log.Fatalf("Unable to write to vtorc_metadata: %+v", err)
 	}
-	log.Infof("Migrated database schema to version [%+v]", config.RuntimeCLIFlags.ConfiguredVersion)
 	return nil
 }
 
@@ -309,15 +159,6 @@ func deployStatements(db *sql.DB, queries []string) error {
 // application's lifetime.
 func initVTOrcDB(db *sql.DB) error {
 	log.Info("Initializing vtorc")
-
-	versionAlreadyDeployed, err := versionIsDeployed(db)
-	if versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
-		// Already deployed with this version
-		return nil
-	}
-	if config.Config.PanicIfDifferentDatabaseDeploy && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
-		log.Fatalf("PanicIfDifferentDatabaseDeploy is set. Configured version %s is not the version found in the database", config.RuntimeCLIFlags.ConfiguredVersion)
-	}
 	log.Info("Migrating database schema")
 	_ = deployStatements(db, generateSQLBase)
 	_ = deployStatements(db, generateSQLPatches)
@@ -388,42 +229,6 @@ func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error
 		log.Warning(err.Error())
 	}
 
-	return err
-}
-
-// QueryVTOrcRowsMapBuffered
-func QueryVTOrcRowsMapBuffered(query string, onRow func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
-		return err
-	}
-	db, err := OpenVTOrc()
-	if err != nil {
-		return err
-	}
-
-	return sqlutils.QueryRowsMapBuffered(db, query, onRow)
-}
-
-// QueryVTOrcBuffered
-func QueryVTOrcBuffered(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
-		return err
-	}
-	db, err := OpenVTOrc()
-	if err != nil {
-		return err
-	}
-
-	if argsArray == nil {
-		argsArray = EmptyArgs
-	}
-	if err = sqlutils.QueryRowsMapBuffered(db, query, onRow, argsArray...); err != nil {
-		log.Warning(err.Error())
-	}
 	return err
 }
 

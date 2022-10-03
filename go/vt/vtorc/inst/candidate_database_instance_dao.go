@@ -17,10 +17,10 @@
 package inst
 
 import (
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
+	"github.com/openark/golib/sqlutils"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
@@ -60,7 +60,7 @@ func ExpireCandidateInstances() error {
 		_, err := db.ExecVTOrc(`
 				delete from candidate_database_instance
 				where last_suggested < NOW() - INTERVAL ? MINUTE
-				`, config.Config.CandidateInstanceExpireMinutes,
+				`, config.CandidateInstanceExpireMinutes,
 		)
 		if err != nil {
 			log.Error(err)
@@ -68,46 +68,4 @@ func ExpireCandidateInstances() error {
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
-}
-
-// BulkReadCandidateDatabaseInstance returns a slice of
-// CandidateDatabaseInstance converted to JSON.
-/*
-root@myVTOrc [vtorc]> select * from candidate_database_instance;
-+-------------------+------+---------------------+----------+----------------+
-| hostname          | port | last_suggested      | priority | promotion_rule |
-+-------------------+------+---------------------+----------+----------------+
-| host1.example.com | 3306 | 2016-11-22 17:41:06 |        1 | prefer         |
-| host2.example.com | 3306 | 2016-11-22 17:40:24 |        1 | prefer         |
-+-------------------+------+---------------------+----------+----------------+
-2 rows in set (0.00 sec)
-*/
-func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
-	var candidateDatabaseInstances []CandidateDatabaseInstance
-
-	// Read all promotion rules from the table
-	query := `
-		SELECT
-			hostname,
-			port,
-			promotion_rule,
-			last_suggested,
-			last_suggested + INTERVAL ? MINUTE AS promotion_rule_expiry
-		FROM
-			candidate_database_instance
-	`
-	err := db.QueryVTOrc(query, sqlutils.Args(config.Config.CandidateInstanceExpireMinutes), func(m sqlutils.RowMap) error {
-		cdi := CandidateDatabaseInstance{
-			Hostname:            m.GetString("hostname"),
-			Port:                m.GetInt("port"),
-			PromotionRule:       promotionrule.CandidatePromotionRule(m.GetString("promotion_rule")),
-			LastSuggestedString: m.GetString("last_suggested"),
-			PromotionRuleExpiry: m.GetString("promotion_rule_expiry"),
-		}
-		// add to end of candidateDatabaseInstances
-		candidateDatabaseInstances = append(candidateDatabaseInstances, cdi)
-
-		return nil
-	})
-	return candidateDatabaseInstances, err
 }

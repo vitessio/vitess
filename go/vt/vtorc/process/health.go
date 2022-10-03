@@ -52,9 +52,8 @@ type NodeHealth struct {
 
 func NewNodeHealth() *NodeHealth {
 	return &NodeHealth{
-		Hostname:   ThisHostname,
-		Token:      util.ProcessToken.Hash,
-		AppVersion: config.RuntimeCLIFlags.ConfiguredVersion,
+		Hostname: ThisHostname,
+		Token:    util.ProcessToken.Hash,
 	}
 }
 
@@ -62,7 +61,6 @@ func (nodeHealth *NodeHealth) Update() *NodeHealth {
 	nodeHealth.onceUpdate.Do(func() {
 		nodeHealth.Hostname = ThisHostname
 		nodeHealth.Token = util.ProcessToken.Hash
-		nodeHealth.AppVersion = config.RuntimeCLIFlags.ConfiguredVersion
 	})
 	nodeHealth.LastReported = time.Now()
 	return nodeHealth

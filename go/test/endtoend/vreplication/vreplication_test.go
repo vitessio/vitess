@@ -1191,7 +1191,7 @@ func applyVSchema(t *testing.T, vschema, keyspace string) {
 }
 
 func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=replica", "--dry_run", ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=replica", "--dry_run", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
@@ -1199,9 +1199,9 @@ func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []s
 func switchReads(t *testing.T, cells, ksWorkflow string) {
 	var output string
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=rdonly", ksWorkflow)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=rdonly", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=replica", ksWorkflow)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=replica", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
 }
 

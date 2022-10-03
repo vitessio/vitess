@@ -201,8 +201,7 @@ services:
       - DB_PASS=
     image: vitess/lite:${VITESS_TAG:-latest}
     ports:
-      - 13000:3000
-      - 13200:8080
+      - 13000:8080
     volumes:
       - .:/script
   vttablet101:
