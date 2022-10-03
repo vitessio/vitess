@@ -843,6 +843,21 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 }
 
 func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, found bool) {
+	if count, isCount := order.WeightStrExpr.(*sqlparser.Count); isCount {
+		for _, arg := range count.Args {
+			for _, key := range plan.groupByKeys {
+				if sqlparser.EqualsExpr(arg, key.Expr) {
+					return key.KeyCol, key.WeightStringCol, true
+				}
+			}
+
+			for _, aggregate := range plan.aggregates {
+				if sqlparser.EqualsExpr(arg, aggregate.Original.Expr) {
+					return aggregate.Col, -1, true
+				}
+			}
+		}
+	}
 	for _, key := range plan.groupByKeys {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) ||
 			sqlparser.EqualsExpr(order.Inner.Expr, key.Expr) {
