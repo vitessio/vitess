@@ -763,10 +763,21 @@ func terminatedRestore(t *testing.T) {
 // Args:
 // tablet_type: 'replica' or 'rdonly'.
 func vtctlBackup(t *testing.T, tabletType string) {
-	restoreWaitForBackup(t, tabletType, nil, true)
-	verifyInitialReplication(t)
+	// Start vtorc before running backups
+	vtorcProcess := localCluster.NewVTOrcProcess(cluster.VTOrcConfiguration{})
+	err := vtorcProcess.Setup()
+	require.NoError(t, err)
+	localCluster.VTOrcProcesses = append(localCluster.VTOrcProcesses, vtorcProcess)
 
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	// StopReplication on replica1. We verify that the replication works fine later in
+	// verifyInitialReplication. So this will also check that VTOrc is running.
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
+	require.Nil(t, err)
+
+	verifyInitialReplication(t)
+	restoreWaitForBackup(t, tabletType, nil, true)
+
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
@@ -780,6 +791,11 @@ func vtctlBackup(t *testing.T, tabletType string) {
 
 	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+
+	// Stop VTOrc
+	err = localCluster.VTOrcProcesses[0].TearDown()
+	localCluster.VTOrcProcesses = nil
+	require.NoError(t, err)
 
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)

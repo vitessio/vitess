@@ -3255,6 +3255,9 @@ var (
 	}, {
 		// Offset as part of expressions
 		input: "select a, b from c where :1 + :2 = :302 and sum(:34) < :24",
+	}, {
+		input:  "select * from (((select 1))) as tbl",
+		output: "select * from (select 1 from dual) as tbl",
 	}}
 )
 

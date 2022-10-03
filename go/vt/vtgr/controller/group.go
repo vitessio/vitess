@@ -28,8 +28,8 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtgr/inst"
 	"vitess.io/vitess/go/vt/vtgr/log"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (

@@ -666,7 +666,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		}
 
 		resp := make(map[string]any)
-		resp["activeReparents"] = !*mysqlctl.DisableActiveReparents
+		resp["activeReparents"] = !mysqlctl.DisableActiveReparents
 		resp["showStatus"] = enableRealtimeStats
 		resp["showTopologyCRUD"] = showTopologyCRUD
 		resp["showWorkflows"] = workflowManagerInit

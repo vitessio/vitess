@@ -112,6 +112,8 @@ type VTAdminClient interface {
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
 	ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error)
+	// ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+	ReloadSchemaShard(ctx context.Context, in *ReloadSchemaShardRequest, opts ...grpc.CallOption) (*ReloadSchemaShardResponse, error)
 	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
@@ -447,6 +449,15 @@ func (c *vTAdminClient) ReloadSchemas(ctx context.Context, in *ReloadSchemasRequ
 	return out, nil
 }
 
+func (c *vTAdminClient) ReloadSchemaShard(ctx context.Context, in *ReloadSchemaShardRequest, opts ...grpc.CallOption) (*ReloadSchemaShardResponse, error) {
+	out := new(ReloadSchemaShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReloadSchemaShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error) {
 	out := new(RemoveKeyspaceCellResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RemoveKeyspaceCell", in, out, opts...)
@@ -639,6 +650,8 @@ type VTAdminServer interface {
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
 	ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error)
+	// ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+	ReloadSchemaShard(context.Context, *ReloadSchemaShardRequest) (*ReloadSchemaShardResponse, error)
 	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
@@ -778,6 +791,9 @@ func (UnimplementedVTAdminServer) RefreshTabletReplicationSource(context.Context
 }
 func (UnimplementedVTAdminServer) ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemas not implemented")
+}
+func (UnimplementedVTAdminServer) ReloadSchemaShard(context.Context, *ReloadSchemaShardRequest) (*ReloadSchemaShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemaShard not implemented")
 }
 func (UnimplementedVTAdminServer) RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
@@ -1401,6 +1417,24 @@ func _VTAdmin_ReloadSchemas_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadSchemaShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReloadSchemaShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReloadSchemaShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReloadSchemaShard(ctx, req.(*ReloadSchemaShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveKeyspaceCellRequest)
 	if err := dec(in); err != nil {
@@ -1733,6 +1767,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReloadSchemas",
 			Handler:    _VTAdmin_ReloadSchemas_Handler,
+		},
+		{
+			MethodName: "ReloadSchemaShard",
+			Handler:    _VTAdmin_ReloadSchemaShard_Handler,
 		},
 		{
 			MethodName: "RemoveKeyspaceCell",

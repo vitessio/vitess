@@ -19,8 +19,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -720,20 +718,17 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 }
 
 // MakeAPICall is used make an API call given the url. It returns the status and the body of the response received
-func MakeAPICall(t *testing.T, url string) (status int, response string) {
+func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string) {
 	t.Helper()
-	res, err := http.Get(url)
+	var err error
+	status, response, err = vtorc.MakeAPICall(url)
 	require.NoError(t, err)
-	bodyBytes, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-	body := string(bodyBytes)
-	return res.StatusCode, body
+	return status, response
 }
 
-// MakeAPICallRetry is used to make an API call and retry if we see a 500 - Cannot deduce cluster primary output. This happens when we haven't
-// finished refreshing information after a ClusterHasNoPrimary recovery and call GracefulPrimaryTakeover. This leads to us seeing no Primary tablet
-// in the database of VTOrc. This is ephemeral though, because we will refresh the new-primary's information as part of the ClusterHasNoPrimary recovery flow.
-func MakeAPICallRetry(t *testing.T, url string) (status int, response string) {
+// MakeAPICallRetry is used to make an API call and retry on the given condition.
+// The function provided takes in the status and response and returns if we should continue to retry or not
+func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, retry func(int, string) bool) (status int, response string) {
 	t.Helper()
 	timeout := time.After(10 * time.Second)
 	for {
@@ -742,8 +737,8 @@ func MakeAPICallRetry(t *testing.T, url string) (status int, response string) {
 			t.Fatal("timed out waiting for api to work")
 			return
 		default:
-			status, response = MakeAPICall(t, url)
-			if status == 500 && strings.Contains(response, "Cannot deduce cluster primary") {
+			status, response = MakeAPICall(t, vtorc, url)
+			if retry(status, response) {
 				time.Sleep(1 * time.Second)
 				break
 			}

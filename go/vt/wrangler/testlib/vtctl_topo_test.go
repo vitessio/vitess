@@ -65,7 +65,7 @@ func TestVtctlTopoCommands(t *testing.T) {
 	tmp := t.TempDir()
 
 	// Test TopoCat.
-	testVtctlTopoCommand(t, vp, []string{"TopoCat", "-long", "-decode_proto", "/keyspaces/*/Keyspace"}, `path=/keyspaces/ks1/Keyspace version=V
+	testVtctlTopoCommand(t, vp, []string{"TopoCat", "--long", "--decode_proto", "/keyspaces/*/Keyspace"}, `path=/keyspaces/ks1/Keyspace version=V
 path=/keyspaces/ks2/Keyspace version=V
 keyspace_type:SNAPSHOT
 `)
@@ -90,7 +90,7 @@ keyspace_type:SNAPSHOT
 	}
 
 	// Test TopoCp from disk to topo.
-	_, err = vp.RunAndOutput([]string{"TopoCp", "-to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
+	_, err = vp.RunAndOutput([]string{"TopoCp", "--to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
 	if err != nil {
 		t.Fatalf("TopoCp(/keyspaces/ks3/Keyspace) failed: %v", err)
 	}

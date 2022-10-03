@@ -136,7 +136,6 @@ type ReplicationAnalysis struct {
 	CountReplicasFailingToConnectToPrimary    uint
 	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
-	Replicas                                  InstanceKeyMap
 	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
@@ -191,12 +190,6 @@ func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i.ReplicationAnalysis = *replicationAnalysis
 
 	return json.Marshal(i)
-}
-
-// ReadReplicaHostsFromString parses and reads replica keys from comma delimited string
-func (replicationAnalysis *ReplicationAnalysis) ReadReplicaHostsFromString(replicaHostsString string) error {
-	replicationAnalysis.Replicas = *NewInstanceKeyMap()
-	return replicationAnalysis.Replicas.ReadCommaDelimitedList(replicaHostsString)
 }
 
 // AnalysisString returns a human friendly description of all analysis issues

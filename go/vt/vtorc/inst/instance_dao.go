@@ -18,21 +18,20 @@ package inst
 
 import (
 	"bytes"
-	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
+
+	"github.com/openark/golib/sqlutils"
 
 	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
@@ -42,37 +41,20 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
-	"vitess.io/vitess/go/vt/vtorc/attributes"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/vtorc/metrics/query"
 	"vitess.io/vitess/go/vt/vtorc/util"
 	math "vitess.io/vitess/go/vt/vtorc/util"
 )
 
 const (
-	backendDBConcurrency       = 20
-	retryInstanceFunctionCount = 5
-	retryInterval              = 500 * time.Millisecond
+	backendDBConcurrency = 20
 )
 
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
-
-// InstancesByCountReplicas is a sortable type for Instance
-type InstancesByCountReplicas [](*Instance)
-
-func (instancesByCountReplicas InstancesByCountReplicas) Len() int {
-	return len(instancesByCountReplicas)
-}
-func (instancesByCountReplicas InstancesByCountReplicas) Swap(i, j int) {
-	instancesByCountReplicas[i], instancesByCountReplicas[j] = instancesByCountReplicas[j], instancesByCountReplicas[i]
-}
-func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
-	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
-}
 
 // Constant strings for Group Replication information
 // See https://dev.mysql.com/doc/refman/8.0/en/replication-group-members-table.html for additional information.
@@ -88,16 +70,6 @@ const (
 	GroupReplicationMemberStateError       = "ERROR"
 )
 
-// We use this map to identify whether the query failed because the server does not support group replication or due
-// to a different reason.
-var GroupReplicationNotSupportedErrors = map[uint16]bool{
-	// If either the group replication global variables are not known or the
-	// performance_schema.replication_group_members table does not exist, the host does not support group
-	// replication, at least in the form supported here.
-	1193: true, // ERROR: 1193 (HY000): Unknown system variable 'group_replication_group_name'
-	1146: true, // ERROR: 1146 (42S02): Table 'performance_schema.replication_group_members' doesn't exist
-}
-
 // instanceKeyInformativeClusterName is a non-authoritative cache; used for auditing or general purpose.
 var instanceKeyInformativeClusterName *cache.Cache
 var forgetInstanceKeys *cache.Cache
@@ -107,7 +79,6 @@ var readTopologyInstanceCounter = metrics.NewCounter()
 var readInstanceCounter = metrics.NewCounter()
 var writeInstanceCounter = metrics.NewCounter()
 var backendWrites = collection.CreateOrReturnCollection("BACKEND_WRITES")
-var writeBufferMetrics = collection.CreateOrReturnCollection("WRITE_BUFFER")
 var writeBufferLatency = stopwatch.NewNamedStopwatch()
 
 var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
@@ -125,22 +96,8 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	instanceWriteBuffer = make(chan instanceUpdateObject, config.Config.InstanceWriteBufferSize)
 	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.InstancePollSeconds/2)*time.Second, time.Second)
 	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
-	// spin off instance write buffer flushing
-	go func() {
-		flushTick := time.Tick(time.Duration(config.Config.InstanceFlushIntervalMilliseconds) * time.Millisecond) //nolint SA1015: using time.Tick leaks the underlying ticker
-		for {
-			// it is time to flush
-			select {
-			case <-flushTick:
-				flushInstanceWriteBuffer()
-			case <-forceFlushInstanceWriteBuffer:
-				flushInstanceWriteBuffer()
-			}
-		}
-	}()
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
@@ -207,35 +164,7 @@ func logReadTopologyInstanceError(instanceKey *InstanceKey, hint string, err err
 // server and writes the result synchronously to the vtorc
 // backend.
 func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
-	return ReadTopologyInstanceBufferable(instanceKey, false, nil)
-}
-
-func RetryInstanceFunction(f func() (*Instance, error)) (instance *Instance, err error) {
-	for i := 0; i < retryInstanceFunctionCount; i++ {
-		if instance, err = f(); err == nil {
-			return instance, nil
-		}
-	}
-	return instance, err
-}
-
-// expectReplicationThreadsState expects both replication threads to be running, or both to be not running.
-// Specifically, it looks for both to be "Yes" or for both to be "No".
-func expectReplicationThreadsState(instanceKey *InstanceKey, expectedState ReplicationThreadState) (expectationMet bool, err error) {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
-	if err != nil {
-		return false, err
-	}
-	err = sqlutils.QueryRowsMap(db, "show slave status", func(m sqlutils.RowMap) error {
-		ioThreadState := ReplicationThreadStateFromStatus(m.GetString("Slave_IO_Running"))
-		sqlThreadState := ReplicationThreadStateFromStatus(m.GetString("Slave_SQL_Running"))
-
-		if ioThreadState == expectedState && sqlThreadState == expectedState {
-			expectationMet = true
-		}
-		return nil
-	})
-	return expectationMet, err
+	return ReadTopologyInstanceBufferable(instanceKey, nil)
 }
 
 // ReadTopologyInstanceBufferable connects to a topology MySQL instance
@@ -243,7 +172,7 @@ func expectReplicationThreadsState(instanceKey *InstanceKey, expectedState Repli
 // It writes the information retrieved into vtorc's backend.
 // - writes are optionally buffered.
 // - timing information can be collected for the stages performed.
-func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
+func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", tb.Errorf("%+v", r))
@@ -258,7 +187,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance := NewInstance()
 	instanceFound := false
 	partialSuccess := false
-	foundByShowSlaveHosts := false
 	resolvedHostname := ""
 	errorChan := make(chan error, 32)
 	var resolveErr error
@@ -279,10 +207,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	})
 
 	latency.Start("instance")
-	db, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
-	if err != nil {
-		goto Cleanup
-	}
 
 	tablet, err = ReadTablet(*instanceKey)
 	if err != nil {
@@ -299,7 +223,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	if err != nil {
 		goto Cleanup
 	}
-	instance.ClusterName = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
+	instance.ClusterName = GetClusterNameFromKeyspaceAndShard(tablet.Keyspace, tablet.Shard)
 
 	fullStatus, err = FullStatus(*instanceKey)
 	if err != nil {
@@ -373,35 +297,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		_ = ResolveHostnameIPs(instance.Key.Hostname)
 	}()
 
-	// TODO(sougou) delete DataCenterPattern
-	if config.Config.DataCenterPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.DataCenterPattern); err == nil {
-			match := pattern.FindStringSubmatch(instance.Key.Hostname)
-			if len(match) != 0 {
-				instance.DataCenter = match[1]
-			}
-		}
-		// This can be overriden by later invocation of DetectDataCenterQuery
-	}
-	if config.Config.RegionPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.RegionPattern); err == nil {
-			match := pattern.FindStringSubmatch(instance.Key.Hostname)
-			if len(match) != 0 {
-				instance.Region = match[1]
-			}
-		}
-		// This can be overriden by later invocation of DetectRegionQuery
-	}
-	if config.Config.PhysicalEnvironmentPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.PhysicalEnvironmentPattern); err == nil {
-			match := pattern.FindStringSubmatch(instance.Key.Hostname)
-			if len(match) != 0 {
-				instance.PhysicalEnvironment = match[1]
-			}
-		}
-		// This can be overriden by later invocation of DetectPhysicalEnvironmentQuery
-	}
-
 	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
 	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
 	if fullStatus.ReplicationStatus != nil {
@@ -463,30 +358,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.AllowTLS = fullStatus.ReplicationStatus.SslAllowed
 	}
 
-	// Populate GR information for the instance in Oracle MySQL 8.0+.
-	if instance.IsOracleMySQL() && !instance.IsSmallerMajorVersionByString("8.0") {
-		err := PopulateGroupReplicationInformation(instance, db)
-		if err != nil {
-			goto Cleanup
-		}
-	}
-
-	if config.Config.ReplicationLagQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			if err := db.QueryRow(config.Config.ReplicationLagQuery).Scan(&instance.ReplicationLagSeconds); err == nil {
-				if instance.ReplicationLagSeconds.Valid && instance.ReplicationLagSeconds.Int64 < 0 {
-					log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
-					instance.ReplicationLagSeconds.Int64 = 0
-				}
-			} else {
-				instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
-				_ = logReadTopologyInstanceError(instanceKey, "ReplicationLagQuery", err)
-			}
-		}()
-	}
-
 	instanceFound = true
 
 	// -------------------------------------------------------------------------
@@ -494,136 +365,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// No `goto Cleanup` after this point.
 	// -------------------------------------------------------------------------
 
-	// Get replicas, either by SHOW SLAVE HOSTS or via PROCESSLIST
-	if config.Config.DiscoverByShowSlaveHosts {
-		err := sqlutils.QueryRowsMap(db, `show slave hosts`,
-			func(m sqlutils.RowMap) error {
-				host := m.GetString("Host")
-				port := m.GetIntD("Port", 0)
-				if host == "" || port == 0 {
-					// otherwise report the error to the caller
-					return fmt.Errorf("ReadTopologyInstance(%+v) 'show slave hosts' returned row with <host,port>: <%v,%v>", instanceKey, host, port)
-				}
-
-				replicaKey, err := NewResolveInstanceKey(host, port)
-				if err == nil && replicaKey.IsValid() {
-					if !RegexpMatchPatterns(replicaKey.StringCode(), config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
-						instance.AddReplicaKey(replicaKey)
-					}
-					foundByShowSlaveHosts = true
-				}
-				return err
-			})
-
-		_ = logReadTopologyInstanceError(instanceKey, "show slave hosts", err)
-	}
-	if !foundByShowSlaveHosts {
-		// Either not configured to read SHOW SLAVE HOSTS or nothing was there.
-		// Discover by information_schema.processlist
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := sqlutils.QueryRowsMap(db, `
-      	select
-      		substring_index(host, ':', 1) as slave_hostname
-      	from
-      		information_schema.processlist
-      	where
-          command IN ('Binlog Dump', 'Binlog Dump GTID')
-  		`,
-				func(m sqlutils.RowMap) error {
-					cname, resolveErr := ResolveHostname(m.GetString("slave_hostname"))
-					if resolveErr != nil {
-						_ = logReadTopologyInstanceError(instanceKey, "ResolveHostname: processlist", resolveErr)
-					}
-					replicaKey := InstanceKey{Hostname: cname, Port: instance.Key.Port}
-					if !RegexpMatchPatterns(replicaKey.StringCode(), config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
-						instance.AddReplicaKey(&replicaKey)
-					}
-					return err
-				})
-
-			_ = logReadTopologyInstanceError(instanceKey, "processlist", err)
-		}()
-	}
-
-	if instance.IsNDB() {
-		// Discover by ndbinfo about MySQL Cluster SQL nodes
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := sqlutils.QueryRowsMap(db, `
-      	select
-      		substring(service_URI,9) mysql_host
-      	from
-      		ndbinfo.processes
-      	where
-          process_name='mysqld'
-  		`,
-				func(m sqlutils.RowMap) error {
-					cname, resolveErr := ResolveHostname(m.GetString("mysql_host"))
-					if resolveErr != nil {
-						_ = logReadTopologyInstanceError(instanceKey, "ResolveHostname: ndbinfo", resolveErr)
-					}
-					replicaKey := InstanceKey{Hostname: cname, Port: instance.Key.Port}
-					instance.AddReplicaKey(&replicaKey)
-					return err
-				})
-
-			_ = logReadTopologyInstanceError(instanceKey, "ndbinfo", err)
-		}()
-	}
-
-	// TODO(sougou): delete DetectDataCenterQuery
-	if config.Config.DetectDataCenterQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectDataCenterQuery).Scan(&instance.DataCenter)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectDataCenterQuery", err)
-		}()
-	}
 	instance.DataCenter = tablet.Alias.Cell
-
-	// TODO(sougou): use cell alias to identify regions.
-	if config.Config.DetectRegionQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectRegionQuery).Scan(&instance.Region)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectRegionQuery", err)
-		}()
-	}
-
-	if config.Config.DetectPhysicalEnvironmentQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectPhysicalEnvironmentQuery).Scan(&instance.PhysicalEnvironment)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectPhysicalEnvironmentQuery", err)
-		}()
-	}
-
-	// TODO(sougou): delete DetectInstanceAliasQuery
-	if config.Config.DetectInstanceAliasQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectInstanceAliasQuery).Scan(&instance.InstanceAlias)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectInstanceAliasQuery", err)
-		}()
-	}
 	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
-
-	// TODO(sougou): come up with a strategy for semi-sync
-	if config.Config.DetectSemiSyncEnforcedQuery != "" {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			err := db.QueryRow(config.Config.DetectSemiSyncEnforcedQuery).Scan(&instance.SemiSyncEnforced)
-			_ = logReadTopologyInstanceError(instanceKey, "DetectSemiSyncEnforcedQuery", err)
-		}()
-	}
 
 	{
 		latency.Start("backend")
@@ -638,21 +381,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance.PromotionRule = PromotionRule(durability, tablet)
 	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
 	_ = logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
-
-	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" {
-		// Only need to do on primary tablets
-		domainName := ""
-		if err := db.QueryRow(config.Config.DetectClusterDomainQuery).Scan(&domainName); err != nil {
-			domainName = ""
-			_ = logReadTopologyInstanceError(instanceKey, "DetectClusterDomainQuery", err)
-		}
-		if domainName != "" {
-			latency.Start("backend")
-			err := WriteClusterDomainName(instance.ClusterName, domainName)
-			latency.Stop("backend")
-			_ = logReadTopologyInstanceError(instanceKey, "WriteClusterDomainName", err)
-		}
-	}
 
 Cleanup:
 	waitGroup.Wait()
@@ -702,7 +430,7 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
-				_ = db.QueryRow("select gtid_subtract(?, ?)", redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String()).Scan(&instance.GtidErrant)
+				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
 			}
 		}
 	}
@@ -716,11 +444,7 @@ Cleanup:
 		instance.IsRecentlyChecked = true
 		instance.IsUpToDate = true
 		latency.Start("backend")
-		if bufferWrites {
-			enqueueInstanceWrite(instance, instanceFound, err)
-		} else {
-			_ = WriteInstance(instance, instanceFound, err)
-		}
+		_ = WriteInstance(instance, instanceFound, err)
 		lastAttemptedCheckTimer.Stop()
 		latency.Stop("backend")
 		return instance, nil
@@ -733,6 +457,11 @@ Cleanup:
 	_ = UpdateInstanceLastChecked(&instance.Key, partialSuccess)
 	latency.Stop("backend")
 	return nil, err
+}
+
+// GetClusterNameFromKeyspaceAndShard returns the cluster name from keyspace and shard
+func GetClusterNameFromKeyspaceAndShard(keyspace, shard string) string {
+	return fmt.Sprintf("%v:%v", keyspace, shard)
 }
 
 func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
@@ -833,46 +562,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	return nil
 }
 
-type byNamePort [](*InstanceKey)
-
-func (byName byNamePort) Len() int      { return len(byName) }
-func (byName byNamePort) Swap(i, j int) { byName[i], byName[j] = byName[j], byName[i] }
-func (byName byNamePort) Less(i, j int) bool {
-	return (byName[i].Hostname < byName[j].Hostname) ||
-		(byName[i].Hostname == byName[j].Hostname && byName[i].Port < byName[j].Port)
-}
-
-// BulkReadInstance returns a list of all instances from the database
-//   - I only need the Hostname and Port fields.
-//   - I must use readInstancesByCondition to ensure all column
-//     settings are correct.
-func BulkReadInstance() ([](*InstanceKey), error) {
-	// no condition (I want all rows) and no sorting (but this is done by Hostname, Port anyway)
-	const (
-		condition = "1=1"
-		orderBy   = ""
-	)
-	var instanceKeys [](*InstanceKey)
-
-	instances, err := readInstancesByCondition(condition, nil, orderBy)
-	if err != nil {
-		return nil, fmt.Errorf("BulkReadInstance: %+v", err)
-	}
-
-	// update counters if we picked anything up
-	if len(instances) > 0 {
-		readInstanceCounter.Inc(int64(len(instances)))
-
-		for _, instance := range instances {
-			instanceKeys = append(instanceKeys, &instance.Key)
-		}
-		// sort on vtorc and not the backend (should be redundant)
-		sort.Sort(byNamePort(instanceKeys))
-	}
-
-	return instanceKeys, nil
-}
-
 // readInstanceRow reads a single instance row from the vtorc backend database.
 func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance := NewInstance()
@@ -920,7 +609,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
-	replicasJSON := m.GetString("replica_hosts")
 	instance.ClusterName = m.GetString("cluster_name")
 	instance.DataCenter = m.GetString("data_center")
 	instance.Region = m.GetString("region")
@@ -953,7 +641,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.InstanceAlias = m.GetString("instance_alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
 
-	_ = instance.Replicas.ReadJSON(replicasJSON)
 	instance.applyFlavorName()
 
 	/* Read Group Replication variables below */
@@ -1031,11 +718,6 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			log.Error(err)
 			return instances, err
 		}
-		err = PopulateInstancesAgents(instances)
-		if err != nil {
-			log.Error(err)
-			return instances, err
-		}
 		return instances, err
 	}
 	instanceReadChan <- true
@@ -1067,65 +749,6 @@ func ReadInstance(instanceKey *InstanceKey) (*Instance, bool, error) {
 	return instances[0], true, nil
 }
 
-// ReadClusterInstances reads all instances of a given cluster
-func ReadClusterInstances(clusterName string) ([](*Instance), error) {
-	if strings.Contains(clusterName, "'") {
-		errMsg := fmt.Sprintf("Invalid cluster name: %s", clusterName)
-		log.Errorf(errMsg)
-		return [](*Instance){}, fmt.Errorf(errMsg)
-	}
-	condition := `cluster_name = ?`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
-}
-
-// ReadClusterWriteablePrimary returns the/a writeable primary of this cluster
-// Typically, the cluster name indicates the primary of the cluster. However, in circular
-// primary-primary replication one primary can assume the name of the cluster, and it is
-// not guaranteed that it is the writeable one.
-func ReadClusterWriteablePrimary(clusterName string) ([](*Instance), error) {
-	condition := `
-		cluster_name = ?
-		and read_only = 0
-		and (replication_depth = 0 or is_co_primary)
-		and tablet_type = ?
-	`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName, topodatapb.TabletType_PRIMARY), "replication_depth asc")
-}
-
-// ReadClusterPrimary returns the primary of this cluster.
-// - if the cluster has co-primaries, the/a writable one is returned
-// - if the cluster has a single primary, that primary is returned whether it is read-only or writable.
-func ReadClusterPrimary(clusterName string) ([](*Instance), error) {
-	condition := `
-		cluster_name = ?
-		and (replication_depth = 0 or is_co_primary)
-		and tablet_type = ?
-	`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName, topodatapb.TabletType_PRIMARY), "read_only asc, replication_depth asc")
-}
-
-// ReadWriteableClustersPrimaries returns writeable primaries of all clusters, but only one
-// per cluster, in similar logic to ReadClusterWriteablePrimary
-func ReadWriteableClustersPrimaries() (instances [](*Instance), err error) {
-	condition := `
-		read_only = 0
-		and (replication_depth = 0 or is_co_primary)
-		and tablet_type = ?
-	`
-	allPrimaries, err := readInstancesByCondition(condition, sqlutils.Args(topodatapb.TabletType_PRIMARY), "cluster_name asc, replication_depth asc")
-	if err != nil {
-		return instances, err
-	}
-	visitedClusters := make(map[string]bool)
-	for _, instance := range allPrimaries {
-		if !visitedClusters[instance.ClusterName] {
-			visitedClusters[instance.ClusterName] = true
-			instances = append(instances, instance)
-		}
-	}
-	return instances, err
-}
-
 // ReadReplicaInstances reads replicas of a given primary
 func ReadReplicaInstances(primaryKey *InstanceKey) ([](*Instance), error) {
 	condition := `
@@ -1155,22 +778,6 @@ func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey *InstanceKe
 	return replicas, err
 }
 
-// ReadBinlogServerReplicaInstances reads direct replicas of a given primary that are binlog servers
-func ReadBinlogServerReplicaInstances(primaryKey *InstanceKey) ([](*Instance), error) {
-	condition := `
-			source_host = ?
-			and source_port = ?
-			and binlog_server = 1
-		`
-	return readInstancesByCondition(condition, sqlutils.Args(primaryKey.Hostname, primaryKey.Port), "")
-}
-
-// ReadUnseenInstances reads all instances which were not recently seen
-func ReadUnseenInstances() ([](*Instance), error) {
-	condition := `last_seen < last_checked`
-	return readInstancesByCondition(condition, sqlutils.Args(), "")
-}
-
 // ReadProblemInstances reads all instances with problems
 func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 	condition := `
@@ -1198,88 +805,11 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 		if instance.IsDowntimed {
 			skip = true
 		}
-		if RegexpMatchPatterns(instance.Key.StringCode(), config.Config.ProblemIgnoreHostnameFilters) {
-			skip = true
-		}
 		if !skip {
 			reportedInstances = append(reportedInstances, instance)
 		}
 	}
 	return reportedInstances, nil
-}
-
-// SearchInstances reads all instances qualifying for some searchString
-func SearchInstances(searchString string) ([](*Instance), error) {
-	searchString = strings.TrimSpace(searchString)
-	condition := `
-			instr(hostname, ?) > 0
-			or instr(cluster_name, ?) > 0
-			or instr(version, ?) > 0
-			or instr(version_comment, ?) > 0
-			or instr(concat(hostname, ':', port), ?) > 0
-			or concat(server_id, '') = ?
-			or concat(port, '') = ?
-		`
-	args := sqlutils.Args(searchString, searchString, searchString, searchString, searchString, searchString, searchString)
-	return readInstancesByCondition(condition, args, `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
-}
-
-// FindInstances reads all instances whose name matches given pattern
-func FindInstances(regexpPattern string) (result [](*Instance), err error) {
-	result = [](*Instance){}
-	r, err := regexp.Compile(regexpPattern)
-	if err != nil {
-		return result, err
-	}
-	condition := `1=1`
-	unfiltered, err := readInstancesByCondition(condition, sqlutils.Args(), `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
-	if err != nil {
-		return unfiltered, err
-	}
-	for _, instance := range unfiltered {
-		if r.MatchString(instance.Key.DisplayString()) {
-			result = append(result, instance)
-		}
-	}
-	return result, nil
-}
-
-// findFuzzyInstances return instances whose names are like the one given (host & port substrings)
-// For example, the given `mydb-3:3306` might find `myhosts-mydb301-production.mycompany.com:3306`
-func findFuzzyInstances(fuzzyInstanceKey *InstanceKey) ([](*Instance), error) {
-	condition := `
-		hostname like concat('%%', ?, '%%')
-		and port = ?
-	`
-	return readInstancesByCondition(condition, sqlutils.Args(fuzzyInstanceKey.Hostname, fuzzyInstanceKey.Port), `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
-}
-
-// ReadFuzzyInstanceKey accepts a fuzzy instance key and expects to return a single, fully qualified,
-// known instance key.
-func ReadFuzzyInstanceKey(fuzzyInstanceKey *InstanceKey) *InstanceKey {
-	if fuzzyInstanceKey == nil {
-		return nil
-	}
-	if fuzzyInstanceKey.IsIPv4() {
-		// avoid fuzziness. When looking for 10.0.0.1 we don't want to match 10.0.0.15!
-		return nil
-	}
-	if fuzzyInstanceKey.Hostname != "" {
-		// Fuzzy instance search
-		if fuzzyInstances, _ := findFuzzyInstances(fuzzyInstanceKey); len(fuzzyInstances) == 1 {
-			return &(fuzzyInstances[0].Key)
-		}
-	}
-	return nil
-}
-
-// ReadFuzzyInstanceKeyIfPossible accepts a fuzzy instance key and hopes to return a single, fully qualified,
-// known instance key, or else the original given key
-func ReadFuzzyInstanceKeyIfPossible(fuzzyInstanceKey *InstanceKey) *InstanceKey {
-	if instanceKey := ReadFuzzyInstanceKey(fuzzyInstanceKey); instanceKey != nil {
-		return instanceKey
-	}
-	return fuzzyInstanceKey
 }
 
 // ReadLostInRecoveryInstances returns all instances (potentially filtered by cluster)
@@ -1293,260 +823,6 @@ func ReadLostInRecoveryInstances(clusterName string) ([](*Instance), error) {
 		and ? IN ('', cluster_name)
 	`
 	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, clusterName), "cluster_name asc, replication_depth asc")
-}
-
-// ReadDowntimedInstances returns all instances currently downtimed, potentially filtered by cluster
-func ReadDowntimedInstances(clusterName string) ([](*Instance), error) {
-	condition := `
-		ifnull(
-			database_instance_downtime.downtime_active = 1
-			and database_instance_downtime.end_timestamp > now()
-			, 0)
-		and ? IN ('', cluster_name)
-	`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "cluster_name asc, replication_depth asc")
-}
-
-// ReadClusterCandidateInstances reads cluster instances which are also marked as candidates
-func ReadClusterCandidateInstances(clusterName string) ([](*Instance), error) {
-	condition := `
-			cluster_name = ?
-			and concat(hostname, ':', port) in (
-				select concat(hostname, ':', port)
-					from candidate_database_instance
-					where promotion_rule in ('must', 'prefer')
-			)
-			`
-	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
-}
-
-// ReadClusterNeutralPromotionRuleInstances reads cluster instances whose promotion-rule is marked as 'neutral'
-func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstances [](*Instance), err error) {
-	instances, err := ReadClusterInstances(clusterName)
-	if err != nil {
-		return neutralInstances, err
-	}
-	for _, instance := range instances {
-		if instance.PromotionRule == promotionrule.Neutral {
-			neutralInstances = append(neutralInstances, instance)
-		}
-	}
-	return neutralInstances, nil
-}
-
-// filterOSCInstances will filter the given list such that only replicas fit for OSC control remain.
-func filterOSCInstances(instances [](*Instance)) [](*Instance) {
-	result := [](*Instance){}
-	for _, instance := range instances {
-		if RegexpMatchPatterns(instance.Key.StringCode(), config.Config.OSCIgnoreHostnameFilters) {
-			continue
-		}
-		if instance.IsBinlogServer() {
-			continue
-		}
-		if !instance.IsLastCheckValid {
-			continue
-		}
-		result = append(result, instance)
-	}
-	return result
-}
-
-// GetClusterOSCReplicas returns a heuristic list of replicas which are fit as controll replicas for an OSC operation.
-// These would be intermediate primaries
-func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
-	var intermediatePrimaries [](*Instance)
-	result := [](*Instance){}
-	var err error
-	if strings.Contains(clusterName, "'") {
-		errMsg := fmt.Sprintf("Invalid cluster name: %s", clusterName)
-		log.Errorf(errMsg)
-		return [](*Instance){}, fmt.Errorf(errMsg)
-	}
-	{
-		// Pick up to two busiest IMs
-		condition := `
-			replication_depth = 1
-			and num_replica_hosts > 0
-			and cluster_name = ?
-		`
-		intermediatePrimaries, err = readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
-		if err != nil {
-			return result, err
-		}
-		sort.Sort(sort.Reverse(InstancesByCountReplicas(intermediatePrimaries)))
-		intermediatePrimaries = filterOSCInstances(intermediatePrimaries)
-		intermediatePrimaries = intermediatePrimaries[0:math.MinInt(2, len(intermediatePrimaries))]
-		result = append(result, intermediatePrimaries...)
-	}
-	{
-		// Get 2 replicas of found IMs, if possible
-		if len(intermediatePrimaries) == 1 {
-			// Pick 2 replicas for this IM
-			replicas, err := ReadReplicaInstances(&(intermediatePrimaries[0].Key))
-			if err != nil {
-				return result, err
-			}
-			sort.Sort(sort.Reverse(InstancesByCountReplicas(replicas)))
-			replicas = filterOSCInstances(replicas)
-			replicas = replicas[0:math.MinInt(2, len(replicas))]
-			result = append(result, replicas...)
-
-		}
-		if len(intermediatePrimaries) == 2 {
-			// Pick one replica from each IM (should be possible)
-			for _, im := range intermediatePrimaries {
-				replicas, err := ReadReplicaInstances(&im.Key)
-				if err != nil {
-					return result, err
-				}
-				sort.Sort(sort.Reverse(InstancesByCountReplicas(replicas)))
-				replicas = filterOSCInstances(replicas)
-				if len(replicas) > 0 {
-					result = append(result, replicas[0])
-				}
-			}
-		}
-	}
-	{
-		// Get 2 3rd tier replicas, if possible
-		condition := `
-			replication_depth = 3
-			and cluster_name = ?
-		`
-		replicas, err := readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
-		if err != nil {
-			return result, err
-		}
-		sort.Sort(sort.Reverse(InstancesByCountReplicas(replicas)))
-		replicas = filterOSCInstances(replicas)
-		replicas = replicas[0:math.MinInt(2, len(replicas))]
-		result = append(result, replicas...)
-	}
-	{
-		// Get 2 1st tier leaf replicas, if possible
-		condition := `
-			replication_depth = 1
-			and num_replica_hosts = 0
-			and cluster_name = ?
-		`
-		replicas, err := readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
-		if err != nil {
-			return result, err
-		}
-		replicas = filterOSCInstances(replicas)
-		replicas = replicas[0:math.MinInt(2, len(replicas))]
-		result = append(result, replicas...)
-	}
-
-	return result, nil
-}
-
-// GetClusterGhostReplicas returns a list of replicas that can serve as the connected servers
-// for a [gh-ost](https://github.com/github/gh-ost) operation. A gh-ost operation prefers to talk
-// to a RBR replica that has no children.
-func GetClusterGhostReplicas(clusterName string) (result [](*Instance), err error) {
-	condition := `
-			replication_depth > 0
-			and binlog_format = 'ROW'
-			and cluster_name = ?
-		`
-	instances, err := readInstancesByCondition(condition, sqlutils.Args(clusterName), "num_replica_hosts asc")
-	if err != nil {
-		return result, err
-	}
-
-	for _, instance := range instances {
-		skipThisHost := false
-		if instance.IsBinlogServer() {
-			skipThisHost = true
-		}
-		if !instance.IsLastCheckValid {
-			skipThisHost = true
-		}
-		if !instance.LogBinEnabled {
-			skipThisHost = true
-		}
-		if !instance.LogReplicationUpdatesEnabled {
-			skipThisHost = true
-		}
-		if !skipThisHost {
-			result = append(result, instance)
-		}
-	}
-
-	return result, err
-}
-
-// GetInstancesMaxLag returns the maximum lag in a set of instances
-func GetInstancesMaxLag(instances [](*Instance)) (maxLag int64, err error) {
-	if len(instances) == 0 {
-		errMsg := "No instances found in GetInstancesMaxLag"
-		log.Errorf(errMsg)
-		return 0, fmt.Errorf(errMsg)
-	}
-	for _, clusterInstance := range instances {
-		if clusterInstance.ReplicationLagSeconds.Valid && clusterInstance.ReplicationLagSeconds.Int64 > maxLag {
-			maxLag = clusterInstance.ReplicationLagSeconds.Int64
-		}
-	}
-	return maxLag, nil
-}
-
-// GetClusterHeuristicLag returns a heuristic lag for a cluster, based on its OSC replicas
-func GetClusterHeuristicLag(clusterName string) (int64, error) {
-	instances, err := GetClusterOSCReplicas(clusterName)
-	if err != nil {
-		return 0, err
-	}
-	return GetInstancesMaxLag(instances)
-}
-
-// GetHeuristicClusterPoolInstances returns instances of a cluster which are also pooled. If `pool` argument
-// is empty, all pools are considered, otherwise, only instances of given pool are considered.
-func GetHeuristicClusterPoolInstances(clusterName string, pool string) (result [](*Instance), err error) {
-	result = [](*Instance){}
-	instances, err := ReadClusterInstances(clusterName)
-	if err != nil {
-		return result, err
-	}
-
-	pooledInstanceKeys := NewInstanceKeyMap()
-	clusterPoolInstances, err := ReadClusterPoolInstances(clusterName, pool)
-	if err != nil {
-		return result, err
-	}
-	for _, clusterPoolInstance := range clusterPoolInstances {
-		pooledInstanceKeys.AddKey(InstanceKey{Hostname: clusterPoolInstance.Hostname, Port: clusterPoolInstance.Port})
-	}
-
-	for _, instance := range instances {
-		skipThisHost := false
-		if instance.IsBinlogServer() {
-			skipThisHost = true
-		}
-		if !instance.IsLastCheckValid {
-			skipThisHost = true
-		}
-		if !pooledInstanceKeys.HasKey(instance.Key) {
-			skipThisHost = true
-		}
-		if !skipThisHost {
-			result = append(result, instance)
-		}
-	}
-
-	return result, err
-}
-
-// GetHeuristicClusterPoolInstancesLag returns a heuristic lag for the instances participating
-// in a cluster pool (or all the cluster's pools)
-func GetHeuristicClusterPoolInstancesLag(clusterName string, pool string) (int64, error) {
-	instances, err := GetHeuristicClusterPoolInstances(clusterName, pool)
-	if err != nil {
-		return 0, err
-	}
-	return GetInstancesMaxLag(instances)
 }
 
 // readUnseenPrimaryKeys will read list of primaries that have never been seen, and yet whose replicas
@@ -1615,16 +891,6 @@ func InjectUnseenPrimaries() error {
 	operations := 0
 	for _, primaryKey := range unseenPrimaryKeys {
 		primaryKey := primaryKey
-
-		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnorePrimaryHostnameFilters) {
-			log.Infof("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnorePrimaryHostnameFilters", primaryKey)
-			continue
-		}
-		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
-			log.Infof("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", primaryKey)
-			continue
-		}
-
 		clusterName := primaryKey.StringCode()
 		// minimal details:
 		instance := Instance{Key: primaryKey, Version: "Unknown", ClusterName: clusterName}
@@ -1733,61 +999,6 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 	return err
 }
 
-// ReadCountMySQLSnapshots is a utility method to return registered number of snapshots for a given list of hosts
-func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
-	res := make(map[string]int)
-	if !config.Config.ServeAgentsHTTP {
-		return res, nil
-	}
-	query := fmt.Sprintf(`
-		select
-			hostname,
-			count_mysql_snapshots
-		from
-			host_agent
-		where
-			hostname in (%s)
-		order by
-			hostname
-		`, sqlutils.InClauseStringValues(hostnames))
-
-	err := db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
-		res[m.GetString("hostname")] = m.GetInt("count_mysql_snapshots")
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
-}
-
-// PopulateInstancesAgents will fill in extra data acquired from agents for given instances
-// At current this is the number of snapshots.
-// This isn't too pretty; it's a push-into-instance-data-that-belongs-to-agent thing.
-// Originally the need was to visually present the number of snapshots per host on the web/cluster page, which
-// indeed proves to be useful in our experience.
-func PopulateInstancesAgents(instances [](*Instance)) error {
-	if len(instances) == 0 {
-		return nil
-	}
-	hostnames := []string{}
-	for _, instance := range instances {
-		hostnames = append(hostnames, instance.Key.Hostname)
-	}
-	agentsCountMySQLSnapshots, err := ReadCountMySQLSnapshots(hostnames)
-	if err != nil {
-		return err
-	}
-	for _, instance := range instances {
-		if count, ok := agentsCountMySQLSnapshots[instance.Key.Hostname]; ok {
-			instance.CountMySQLSnapshots = count
-		}
-	}
-
-	return nil
-}
-
 func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
 	if clusterName, found := instanceKeyInformativeClusterName.Get(instanceKey.StringCode()); found {
 		return clusterName.(string), nil
@@ -1810,109 +1021,6 @@ func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
 		log.Error(err)
 	}
 	return clusterName, err
-}
-
-// ReadClusters reads names of all known clusters
-func ReadClusters() (clusterNames []string, err error) {
-	clusters, err := ReadClustersInfo("")
-	if err != nil {
-		return clusterNames, err
-	}
-	for _, clusterInfo := range clusters {
-		clusterNames = append(clusterNames, clusterInfo.ClusterName)
-	}
-	return clusterNames, nil
-}
-
-// ReadClusterInfo reads some info about a given cluster
-func ReadClusterInfo(clusterName string) (*ClusterInfo, error) {
-	clusters, err := ReadClustersInfo(clusterName)
-	if err != nil {
-		return &ClusterInfo{}, err
-	}
-	if len(clusters) != 1 {
-		return &ClusterInfo{}, fmt.Errorf("No cluster info found for %s", clusterName)
-	}
-	return &(clusters[0]), nil
-}
-
-// ReadClustersInfo reads names of all known clusters and some aggregated info
-func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
-	clusters := []ClusterInfo{}
-
-	whereClause := ""
-	args := sqlutils.Args()
-	if clusterName != "" {
-		whereClause = `where cluster_name = ?`
-		args = append(args, clusterName)
-	}
-	query := fmt.Sprintf(`
-		select
-			cluster_name,
-			count(*) as count_instances,
-			ifnull(min(domain_name), '') as domain_name
-		from
-			database_instance
-			left join cluster_domain_name using (cluster_name)
-		%s
-		group by
-			cluster_name`, whereClause)
-
-	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		clusterInfo := ClusterInfo{
-			ClusterName:    m.GetString("cluster_name"),
-			CountInstances: m.GetUint("count_instances"),
-			ClusterDomain:  m.GetString("domain_name"),
-		}
-		clusterInfo.ReadRecoveryInfo()
-
-		clusters = append(clusters, clusterInfo)
-		return nil
-	})
-
-	return clusters, err
-}
-
-// HeuristicallyApplyClusterDomainInstanceAttribute writes down the cluster-domain
-// to primary-hostname as a general attribute, by reading current topology and **trusting** it to be correct
-func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (instanceKey *InstanceKey, err error) {
-	clusterInfo, err := ReadClusterInfo(clusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	if clusterInfo.ClusterDomain == "" {
-		return nil, fmt.Errorf("Cannot find domain name for cluster %+v", clusterName)
-	}
-
-	primaries, err := ReadClusterWriteablePrimary(clusterName)
-	if err != nil {
-		return nil, err
-	}
-	if len(primaries) != 1 {
-		return nil, fmt.Errorf("found %+v potential primary for cluster %+v", len(primaries), clusterName)
-	}
-	instanceKey = &primaries[0].Key
-	return instanceKey, attributes.SetGeneralAttribute(clusterInfo.ClusterDomain, instanceKey.StringCode())
-}
-
-// GetHeuristicClusterDomainInstanceAttribute attempts detecting the cluster domain
-// for the given cluster, and return the instance key associated as writer with that domain
-func GetHeuristicClusterDomainInstanceAttribute(clusterName string) (instanceKey *InstanceKey, err error) {
-	clusterInfo, err := ReadClusterInfo(clusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	if clusterInfo.ClusterDomain == "" {
-		return nil, fmt.Errorf("Cannot find domain name for cluster %+v", clusterName)
-	}
-
-	writerInstanceName, err := attributes.GetGeneralAttribute(clusterInfo.ClusterDomain)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRawInstanceKey(writerInstanceName)
 }
 
 // ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
@@ -2069,8 +1177,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_lag_seconds",
 		"replica_lag_seconds",
 		"sql_delay",
-		"num_replica_hosts",
-		"replica_hosts",
 		"cluster_name",
 		"data_center",
 		"region",
@@ -2158,8 +1264,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SecondsBehindPrimary)
 		args = append(args, instance.ReplicationLagSeconds)
 		args = append(args, instance.SQLDelay)
-		args = append(args, len(instance.Replicas))
-		args = append(args, instance.Replicas.ToJSONString())
 		args = append(args, instance.ClusterName)
 		args = append(args, instance.DataCenter)
 		args = append(args, instance.Region)
@@ -2217,106 +1321,6 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 		return err
 	}
 	return nil
-}
-
-type instanceUpdateObject struct {
-	instance                 *Instance
-	instanceWasActuallyFound bool
-	lastError                error
-}
-
-// instances sorter by instanceKey
-type byInstanceKey []*Instance
-
-func (a byInstanceKey) Len() int           { return len(a) }
-func (a byInstanceKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byInstanceKey) Less(i, j int) bool { return a[i].Key.SmallerThan(&a[j].Key) }
-
-var instanceWriteBuffer chan instanceUpdateObject
-var forceFlushInstanceWriteBuffer = make(chan bool)
-
-func enqueueInstanceWrite(instance *Instance, instanceWasActuallyFound bool, lastError error) {
-	if len(instanceWriteBuffer) == config.Config.InstanceWriteBufferSize {
-		// Signal the "flushing" goroutine that there's work.
-		// We prefer doing all bulk flushes from one goroutine.
-		// Non blocking send to avoid blocking goroutines on sending a flush,
-		// if the "flushing" goroutine is not able read is because a flushing is ongoing.
-		select {
-		case forceFlushInstanceWriteBuffer <- true:
-		default:
-		}
-	}
-	instanceWriteBuffer <- instanceUpdateObject{instance, instanceWasActuallyFound, lastError}
-}
-
-// flushInstanceWriteBuffer saves enqueued instances to VTOrc Db
-func flushInstanceWriteBuffer() {
-	var instances []*Instance
-	var lastseen []*Instance // instances to update with last_seen field
-
-	defer func() {
-		// reset stopwatches (TODO: .ResetAll())
-		writeBufferLatency.Reset("wait")
-		writeBufferLatency.Reset("write")
-		writeBufferLatency.Start("wait") // waiting for next flush
-	}()
-
-	writeBufferLatency.Stop("wait")
-
-	if len(instanceWriteBuffer) == 0 {
-		return
-	}
-
-	// There are `DiscoveryMaxConcurrency` many goroutines trying to enqueue an instance into the buffer
-	// when one instance is flushed from the buffer then one discovery goroutine is ready to enqueue a new instance
-	// this is why we want to flush all instances in the buffer untill a max of `InstanceWriteBufferSize`.
-	// Otherwise we can flush way more instances than what's expected.
-	for i := 0; i < config.Config.InstanceWriteBufferSize && len(instanceWriteBuffer) > 0; i++ {
-		upd := <-instanceWriteBuffer
-		if upd.instanceWasActuallyFound && upd.lastError == nil {
-			lastseen = append(lastseen, upd.instance)
-		} else {
-			instances = append(instances, upd.instance)
-			log.Infof("flushInstanceWriteBuffer: will not update database_instance.last_seen due to error: %+v", upd.lastError)
-		}
-	}
-
-	writeBufferLatency.Start("write")
-
-	// sort instances by instanceKey (table pk) to make locking predictable
-	sort.Sort(byInstanceKey(instances))
-	sort.Sort(byInstanceKey(lastseen))
-
-	writeFunc := func() error {
-		err := writeManyInstances(instances, true, false)
-		if err != nil {
-			errMsg := fmt.Sprintf("flushInstanceWriteBuffer writemany: %v", err)
-			log.Errorf(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-		err = writeManyInstances(lastseen, true, true)
-		if err != nil {
-			errMsg := fmt.Sprintf("flushInstanceWriteBuffer last_seen: %v", err)
-			log.Errorf(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-
-		writeInstanceCounter.Inc(int64(len(instances) + len(lastseen)))
-		return nil
-	}
-	err := ExecDBWriteFunc(writeFunc)
-	if err != nil {
-		log.Errorf("flushInstanceWriteBuffer: %v", err)
-	}
-
-	writeBufferLatency.Stop("write")
-
-	_ = writeBufferMetrics.Append(&WriteBufferMetric{
-		Timestamp:    time.Now(),
-		WaitLatency:  writeBufferLatency.Elapsed("wait"),
-		WriteLatency: writeBufferLatency.Elapsed("write"),
-		Instances:    len(lastseen) + len(instances),
-	})
 }
 
 // WriteInstance stores an instance in the vtorc backend
@@ -2422,30 +1426,6 @@ func ForgetInstance(instanceKey *InstanceKey) error {
 	return nil
 }
 
-// ForgetInstance removes an instance entry from the vtorc backed database.
-// It may be auto-rediscovered through topology or requested for discovery by multiple means.
-func ForgetCluster(clusterName string) error {
-	clusterInstances, err := ReadClusterInstances(clusterName)
-	if err != nil {
-		return err
-	}
-	if len(clusterInstances) == 0 {
-		return nil
-	}
-	for _, instance := range clusterInstances {
-		forgetInstanceKeys.Set(instance.Key.StringCode(), true, cache.DefaultExpiration)
-		_ = AuditOperation("forget", &instance.Key, "")
-	}
-	_, err = db.ExecVTOrc(`
-			delete
-				from database_instance
-			where
-				cluster_name = ?`,
-		clusterName,
-	)
-	return err
-}
-
 // ForgetLongUnseenInstances will remove entries of all instacnes that have long since been last seen.
 func ForgetLongUnseenInstances() error {
 	sqlResult, err := db.ExecVTOrc(`
@@ -2453,7 +1433,7 @@ func ForgetLongUnseenInstances() error {
 				from database_instance
 			where
 				last_seen < NOW() - interval ? hour`,
-		config.Config.UnseenInstanceForgetHours,
+		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
 		log.Error(err)
@@ -2490,40 +1470,6 @@ func SnapshotTopologies() error {
 		return nil
 	}
 	return ExecDBWriteFunc(writeFunc)
-}
-
-// ReadHistoryClusterInstances reads (thin) instances from history
-func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern string) ([](*Instance), error) {
-	instances := [](*Instance){}
-
-	query := `
-		select
-			*
-		from
-			database_instance_topology_history
-		where
-			snapshot_unix_timestamp rlike ?
-			and cluster_name = ?
-		order by
-			hostname, port`
-
-	err := db.QueryVTOrc(query, sqlutils.Args(historyTimestampPattern, clusterName), func(m sqlutils.RowMap) error {
-		instance := NewInstance()
-
-		instance.Key.Hostname = m.GetString("hostname")
-		instance.Key.Port = m.GetInt("port")
-		instance.SourceKey.Hostname = m.GetString("source_host")
-		instance.SourceKey.Port = m.GetInt("source_port")
-		instance.ClusterName = m.GetString("cluster_name")
-
-		instances = append(instances, instance)
-		return nil
-	})
-	if err != nil {
-		log.Error(err)
-		return instances, err
-	}
-	return instances, err
 }
 
 // RecordStaleInstanceBinlogCoordinates snapshots the binlog coordinates of instances
@@ -2580,176 +1526,4 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
-}
-
-// ResetInstanceRelaylogCoordinatesHistory forgets about the history of an instance. This action is desirable
-// when relay logs become obsolete or irrelevant. Such is the case on `CHANGE MASTER TO`: servers gets compeltely
-// new relay logs.
-func ResetInstanceRelaylogCoordinatesHistory(instanceKey *InstanceKey) error {
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-			update database_instance_coordinates_history
-				set relay_log_file='', relay_log_pos=0
-			where
-				hostname=? and port=?
-				`, instanceKey.Hostname, instanceKey.Port,
-		)
-		if err != nil {
-			log.Error(err)
-		}
-		return err
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-// FigureClusterName will make a best effort to deduce a cluster name using either a given alias
-// or an instanceKey. First attempt is at alias, and if that doesn't work, we try instanceKey.
-// - clusterHint may be an empty string
-func FigureClusterName(clusterHint string, instanceKey *InstanceKey, thisInstanceKey *InstanceKey) (clusterName string, err error) {
-	// Look for exact matches, first.
-
-	if clusterHint != "" {
-		// Exact cluster name match:
-		if clusterInfo, err := ReadClusterInfo(clusterHint); err == nil && clusterInfo != nil {
-			return clusterInfo.ClusterName, nil
-		}
-	}
-
-	clusterByInstanceKey := func(instanceKey *InstanceKey) (hasResult bool, clusterName string, err error) {
-		if instanceKey == nil {
-			return false, "", nil
-		}
-		instance, _, err := ReadInstance(instanceKey)
-		if err != nil {
-			log.Error(err)
-			return true, clusterName, err
-		}
-		if instance != nil {
-			if instance.ClusterName == "" {
-				errMsg := fmt.Sprintf("Unable to determine cluster name for %+v, empty cluster name. clusterHint=%+v", instance.Key, clusterHint)
-				log.Errorf(errMsg)
-				return true, clusterName, fmt.Errorf(errMsg)
-			}
-			return true, instance.ClusterName, nil
-		}
-		return false, "", nil
-	}
-	// exact instance key:
-	if hasResult, clusterName, err := clusterByInstanceKey(instanceKey); hasResult {
-		return clusterName, err
-	}
-	// fuzzy instance key:
-	if hasResult, clusterName, err := clusterByInstanceKey(ReadFuzzyInstanceKeyIfPossible(instanceKey)); hasResult {
-		return clusterName, err
-	}
-	//  Let's see about _this_ instance
-	if hasResult, clusterName, err := clusterByInstanceKey(thisInstanceKey); hasResult {
-		return clusterName, err
-	}
-	errMsg := fmt.Sprintf("Unable to determine cluster name. clusterHint=%+v", clusterHint)
-	log.Errorf(errMsg)
-	return clusterName, fmt.Errorf(errMsg)
-}
-
-// FigureInstanceKey tries to figure out a key
-func FigureInstanceKey(instanceKey *InstanceKey, thisInstanceKey *InstanceKey) (*InstanceKey, error) {
-	if figuredKey := ReadFuzzyInstanceKeyIfPossible(instanceKey); figuredKey != nil {
-		return figuredKey, nil
-	}
-	figuredKey := thisInstanceKey
-	if figuredKey == nil {
-		errMsg := fmt.Sprintf("Cannot deduce instance %+v", instanceKey)
-		log.Errorf(errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}
-	return figuredKey, nil
-}
-
-// PopulateGroupReplicationInformation obtains information about Group Replication  for this host as well as other hosts
-// who are members of the same group (if any).
-func PopulateGroupReplicationInformation(instance *Instance, db *sql.DB) error {
-	q := `
-	SELECT
-		MEMBER_ID,
-		MEMBER_HOST,
-		MEMBER_PORT,
-		MEMBER_STATE,
-		MEMBER_ROLE,
-		@@global.group_replication_group_name,
-		@@global.group_replication_single_primary_mode
-	FROM
-		performance_schema.replication_group_members
-	`
-	rows, err := db.Query(q)
-	if err != nil {
-		_, grNotSupported := GroupReplicationNotSupportedErrors[err.(*mysql.MySQLError).Number]
-		if grNotSupported {
-			return nil // If GR is not supported by the instance, just exit
-		}
-		// If we got here, the query failed but not because the server does not support group replication. Let's
-		// log the error
-		errMsg := fmt.Sprintf("There was an error trying to check group replication information for instance "+
-			"%+v: %+v", instance.Key, err)
-		log.Error(errMsg)
-		return fmt.Errorf(errMsg)
-	}
-	defer rows.Close()
-	foundGroupPrimary := false
-	// Loop over the query results and populate GR instance attributes from the row that matches the instance being
-	// probed. In addition, figure out the group primary and also add it as attribute of the instance.
-	for rows.Next() {
-		var (
-			uuid               string
-			host               string
-			port               uint16
-			state              string
-			role               string
-			groupName          string
-			singlePrimaryGroup bool
-		)
-		err := rows.Scan(&uuid, &host, &port, &state, &role, &groupName, &singlePrimaryGroup)
-		if err == nil {
-			// ToDo: add support for multi primary groups.
-			if !singlePrimaryGroup {
-				log.Infof("This host seems to belong to a multi-primary replication group, which we don't " +
-					"support")
-				break
-			}
-			groupMemberKey, err := NewResolveInstanceKey(host, int(port))
-			if err != nil {
-				log.Errorf("Unable to resolve instance for group member %v:%v", host, port)
-				continue
-			}
-			// Set the replication group primary from what we find in performance_schema.replication_group_members for
-			// the instance being discovered.
-			if role == GroupReplicationMemberRolePrimary && groupMemberKey != nil {
-				instance.ReplicationGroupPrimaryInstanceKey = *groupMemberKey
-				foundGroupPrimary = true
-			}
-			if uuid == instance.ServerUUID {
-				instance.ReplicationGroupName = groupName
-				instance.ReplicationGroupIsSinglePrimary = singlePrimaryGroup
-				instance.ReplicationGroupMemberRole = role
-				instance.ReplicationGroupMemberState = state
-			} else {
-				instance.AddGroupMemberKey(groupMemberKey) // This helps us keep info on all members of the same group as the instance
-			}
-		} else {
-			log.Errorf("Unable to scan row  group replication information while processing %+v, skipping the "+
-				"row and continuing: %+v", instance.Key, err)
-		}
-	}
-	// If we did not manage to find the primary of the group in performance_schema.replication_group_members, we are
-	// likely to have been expelled from the group. Still, try to find out the primary of the group and set it for the
-	// instance being discovered, so that it is identified as part of the same cluster
-	if !foundGroupPrimary {
-		err = ReadReplicationGroupPrimary(instance)
-		if err != nil {
-			errMsg := fmt.Sprintf("Unable to find the group primary of instance %+v even though it seems to be "+
-				"part of a replication group", instance.Key)
-			log.Errorf(errMsg)
-			return fmt.Errorf(errMsg)
-		}
-	}
-	return nil
 }

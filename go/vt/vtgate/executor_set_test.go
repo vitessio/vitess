@@ -375,9 +375,9 @@ func TestExecutorSetMetadata(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
 	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
 
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
 	executor, _, _, _ = createExecutorEnv()

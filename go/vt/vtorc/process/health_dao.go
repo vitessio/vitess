@@ -21,11 +21,10 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"fmt"
+	"github.com/openark/golib/sqlutils"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 )
 
 // WriteRegisterNode writes down this node in the node_health table
@@ -80,13 +79,7 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	}
 	// Got here? The UPDATE didn't work. Row isn't there.
 	{
-		dbBackend := ""
-		if config.Config.IsSQLite() {
-			dbBackend = config.Config.SQLite3DataFile
-		} else {
-			dbBackend = fmt.Sprintf("%s:%d", config.Config.MySQLVTOrcHost,
-				config.Config.MySQLVTOrcPort)
-		}
+		dbBackend := config.Config.SQLite3DataFile
 		sqlResult, err := db.ExecVTOrc(`
 			insert ignore into node_health
 				(hostname, token, first_seen_active, last_seen_active, extra_info, command, app_version, db_backend)
@@ -141,7 +134,7 @@ func ExpireNodesHistory() error {
 			where
 				first_seen_active < now() - interval ? hour
 			`,
-		config.Config.UnseenInstanceForgetHours,
+		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
 		log.Error(err)

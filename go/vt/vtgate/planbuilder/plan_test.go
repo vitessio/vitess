@@ -278,7 +278,7 @@ func TestOne(t *testing.T) {
 		v: loadSchema(t, "schema_test.json", true),
 	}
 
-	testFile(t, "onecase.txt", "", vschema, true)
+	testFile(t, "onecase.txt", "", vschema, false)
 }
 
 func TestOneWithMainAsDefault(t *testing.T) {
@@ -536,6 +536,10 @@ type vschemaWrapper struct {
 	dest          key.Destination
 	sysVarEnabled bool
 	version       plancontext.PlannerVersion
+}
+
+func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {
+	return false
 }
 
 func (vw *vschemaWrapper) GetVSchema() *vindexes.VSchema {

@@ -122,7 +122,6 @@ var (
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
-		"vtorc",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
@@ -269,11 +268,17 @@ func generateSelfHostedClusterWorkflows() error {
 	clusters := canonnizeList(clusterSelfHostedList)
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
-			directoryName := fmt.Sprintf("cluster_test_%s", cluster)
+			// check mysqlversion
+			mysqlVersionIndicator := ""
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			}
+
+			directoryName := fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator)
 			test := &selfHostedTest{
-				Name:              fmt.Sprintf("Cluster (%s)", cluster),
-				ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-				Platform:          "mysql57",
+				Name:              fmt.Sprintf("Cluster (%s)(%s)", cluster, mysqlVersion),
+				ImageName:         fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator),
+				Platform:          "mysql80",
 				directoryName:     directoryName,
 				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 				Shard:             cluster,
@@ -296,10 +301,6 @@ func generateSelfHostedClusterWorkflows() error {
 			}
 			if mysqlVersion == mysql57 {
 				test.Platform = string(mysql57)
-			}
-			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
-				mysqlVersionIndicator = "_" + string(mysqlVersion)
 			}
 
 			err := setupTestDockerFile(test)

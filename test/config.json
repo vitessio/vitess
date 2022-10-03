@@ -111,7 +111,7 @@
 		},
 		"backup_only": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -120,7 +120,7 @@
 		},
 		"backup_transform": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -623,7 +623,7 @@
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/dml"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
@@ -1017,6 +1017,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_vschema_load": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVSchemaChangesUnderLoad"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vreplication_basic": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
@@ -1033,6 +1042,15 @@
 			"Manual": false,
 			"Shard": "vreplication_basic",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vstream_flush_binlog": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVStreamFlushBinlog"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_failover": {
@@ -1080,9 +1098,9 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
-		"vtorc_graceful_takeover": {
+		"vtorc_api": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/api"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",

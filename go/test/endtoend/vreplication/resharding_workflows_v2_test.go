@@ -272,7 +272,7 @@ func TestPartialMoveTables(t *testing.T) {
 	// tracking is enabled then vtgate will produce an error about the
 	// unknown symbol before attempting to route the query.
 	extraVTGateArgs = append(extraVTGateArgs, []string{
-		"--enable_partial_keyspace_migration",
+		"--enable-partial-keyspace-migration",
 		"--schema_change_signal=false",
 	}...)
 	defer func() {

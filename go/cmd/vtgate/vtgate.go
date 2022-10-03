@@ -24,10 +24,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,19 +38,19 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
-	cell                                                        = "test_nj"
-	tabletTypesToWait, plannerVersion, plannerVersionDeprecated string
+	cell                           = "test_nj"
+	tabletTypesToWait, plannerName string
 )
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&cell, "cell", cell, "cell to use")
 	fs.StringVar(&tabletTypesToWait, "tablet_types_to_wait", tabletTypesToWait, "wait till connected for specified tablet types during Gateway initialization")
-	fs.StringVar(&plannerVersion, "planner-version", plannerVersion, "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
-	fs.StringVar(&plannerVersionDeprecated, "planner_version", plannerVersionDeprecated, "Deprecated flag. Use planner-version instead")
+	fs.StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+
+	acl.RegisterFlags(fs)
 }
 
 var resilientServer *srvtopo.ResilientServer
@@ -156,11 +157,7 @@ func main() {
 		log.Exitf("cells_to_watch validation failed: %v", err)
 	}
 
-	version, err := env.CheckPlannerVersionFlag(&plannerVersion, &plannerVersionDeprecated)
-	if err != nil {
-		log.Exitf("failed to get planner version from flags: %v", err)
-	}
-	plannerVersion, _ := plancontext.PlannerNameToVersion(version)
+	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
 
 	// pass nil for HealthCheck and it will be created
 	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion)

@@ -21,9 +21,10 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
+	"github.com/openark/golib/sqlutils"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 )
 
 var writeResolvedHostnameCounter = metrics.NewCounter()
@@ -126,110 +127,13 @@ func ReadAllHostnameResolves() ([]HostnameResolve, error) {
 	return res, err
 }
 
-// ReadAllHostnameUnresolves returns the content of the hostname_unresolve table
-func ReadAllHostnameUnresolves() ([]HostnameUnresolve, error) {
-	unres := []HostnameUnresolve{}
-	query := `
-		select
-			hostname,
-			unresolved_hostname
-		from
-			hostname_unresolve
-		`
-	err := db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
-		hostnameUnresolve := HostnameUnresolve{hostname: m.GetString("hostname"), unresolvedHostname: m.GetString("unresolved_hostname")}
-
-		unres = append(unres, hostnameUnresolve)
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return unres, err
-}
-
-// readUnresolvedHostname reverse-reads hostname resolve. It returns a hostname which matches given pattern and resovles to resolvedHostname,
-// or, in the event no such hostname is found, the given resolvedHostname, unchanged.
-func readUnresolvedHostname(hostname string) (string, error) {
-	unresolvedHostname := hostname
-
-	query := `
-	   		select
-	   			unresolved_hostname
-	   		from
-	   			hostname_unresolve
-	   		where
-	   			hostname = ?
-	   		`
-
-	err := db.QueryVTOrc(query, sqlutils.Args(hostname), func(m sqlutils.RowMap) error {
-		unresolvedHostname = m.GetString("unresolved_hostname")
-		return nil
-	})
-	readUnresolvedHostnameCounter.Inc(1)
-
-	if err != nil {
-		log.Error(err)
-	}
-	return unresolvedHostname, err
-}
-
-// WriteHostnameUnresolve upserts an entry in hostname_unresolve
-func WriteHostnameUnresolve(instanceKey *InstanceKey, unresolvedHostname string) error {
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-        	insert into hostname_unresolve (
-        		hostname,
-        		unresolved_hostname,
-        		last_registered)
-        	values (?, ?, NOW())
-        	on duplicate key update
-        		unresolved_hostname=values(unresolved_hostname),
-        		last_registered=now()
-				`, instanceKey.Hostname, unresolvedHostname,
-		)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-		_, _ = db.ExecVTOrc(`
-        	replace into hostname_unresolve_history (
-        		hostname,
-        		unresolved_hostname,
-        		last_registered)
-        	values (?, ?, NOW())
-				`, instanceKey.Hostname, unresolvedHostname,
-		)
-		writeUnresolvedHostnameCounter.Inc(1)
-		return nil
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-// DeleteHostnameUnresolve removes an unresolve entry
-func DeleteHostnameUnresolve(instanceKey *InstanceKey) error {
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-      	delete from hostname_unresolve
-				where hostname=?
-				`, instanceKey.Hostname,
-		)
-		if err != nil {
-			log.Error(err)
-		}
-		return err
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
 // ExpireHostnameUnresolve expires hostname_unresolve entries that haven't been updated recently.
 func ExpireHostnameUnresolve() error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
       	delete from hostname_unresolve
 				where last_registered < NOW() - INTERVAL ? MINUTE
-				`, config.Config.ExpiryHostnameResolvesMinutes,
+				`, config.ExpiryHostnameResolvesMinutes,
 		)
 		if err != nil {
 			log.Error(err)
@@ -246,7 +150,7 @@ func ForgetExpiredHostnameResolves() error {
 				from hostname_resolve
 			where
 				resolved_timestamp < NOW() - interval ? minute`,
-		2*config.Config.ExpiryHostnameResolvesMinutes,
+		2*config.ExpiryHostnameResolvesMinutes,
 	)
 	return err
 }
@@ -287,15 +191,6 @@ func DeleteInvalidHostnameResolves() error {
 			log.Error(err)
 		}
 	}
-	return err
-}
-
-// deleteHostnameResolves compeltely erases the database cache
-func deleteHostnameResolves() error {
-	_, err := db.ExecVTOrc(`
-			delete
-				from hostname_resolve`,
-	)
 	return err
 }
 
