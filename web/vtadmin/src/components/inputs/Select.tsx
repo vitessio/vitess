@@ -22,19 +22,20 @@ import style from './Select.module.scss';
 import { Icon, Icons } from '../Icon';
 
 interface Props<T> {
-    className?: string;
-    disabled?: boolean;
-    inputClassName?: string;
-    items: T[];
-    itemToString?: (item: T | null) => string;
-    label: string;
-    onChange: (selectedItem: T | null | undefined) => void;
-    placeholder: string;
-    emptyPlaceholder?: string | (() => JSX.Element | string);
-    renderItem?: (item: T) => JSX.Element | string;
-    selectedItem: T | null;
-    size?: 'large';
-    description?: string;
+  className?: string;
+  disabled?: boolean;
+  inputClassName?: string;
+  items: T[];
+  itemToString?: (item: T | null) => string;
+  label: string;
+  onChange: (selectedItem: T | null | undefined) => void;
+  placeholder: string;
+  emptyPlaceholder?: string | (() => JSX.Element | string);
+  renderItem?: (item: T) => JSX.Element | string;
+  selectedItem: T | null;
+  size?: 'large';
+  description?: string;
+  required?: boolean;
 }
 
 /**
@@ -43,118 +44,119 @@ interface Props<T> {
  * and allows for fine-grained rendering control. :)
  */
 export const Select = <T,>({
-    className,
-    disabled,
-    inputClassName,
-    itemToString,
-    items,
-    label,
-    onChange,
-    placeholder,
-    emptyPlaceholder,
-    renderItem,
-    selectedItem,
-    size,
-    description,
+  className,
+  disabled,
+  inputClassName,
+  itemToString,
+  items,
+  label,
+  onChange,
+  placeholder,
+  emptyPlaceholder,
+  renderItem,
+  selectedItem,
+  size,
+  description,
+  required
 }: Props<T>) => {
-    const _itemToString = React.useCallback(
-        (item: T | null): string => {
-            if (typeof itemToString === 'function') return itemToString(item);
-            return item ? String(item) : '';
-        },
-        [itemToString]
+  const _itemToString = React.useCallback(
+    (item: T | null): string => {
+      if (typeof itemToString === 'function') return itemToString(item);
+      return item ? String(item) : '';
+    },
+    [itemToString]
+  );
+
+  const onSelectedItemChange = React.useCallback(
+    (changes: UseSelectStateChange<T>) => {
+      onChange(changes.selectedItem);
+    },
+    [onChange]
+  );
+
+  const {
+    getItemProps,
+    getLabelProps,
+    getMenuProps,
+    getToggleButtonProps,
+    highlightedIndex,
+    isOpen,
+    selectItem,
+  } = useSelect({
+    itemToString: _itemToString,
+    items,
+    onSelectedItemChange,
+    selectedItem,
+  });
+
+  const containerClass = cx(style.container, className, {
+    [style.large]: size === 'large',
+    [style.open]: isOpen,
+    [style.placeholder]: !selectedItem,
+  });
+
+  const _renderItem = React.useCallback(
+    (item: T): string | JSX.Element | null => {
+      if (typeof item === 'string') {
+        return item;
+      }
+
+      if (typeof renderItem === 'function') {
+        return renderItem(item);
+      }
+
+      return null;
+    },
+    [renderItem]
+  );
+
+  let content = null;
+  if (items.length) {
+    content = (
+      <ul {...getMenuProps()} className={style.menu}>
+        {items.map((item, index) => {
+          const itemClass = cx({ [style.active]: highlightedIndex === index });
+          return (
+            <li key={index} className={itemClass} {...getItemProps({ item, index })}>
+              {_renderItem(item)}
+            </li>
+          );
+        })}
+      </ul>
     );
-
-    const onSelectedItemChange = React.useCallback(
-        (changes: UseSelectStateChange<T>) => {
-            onChange(changes.selectedItem);
-        },
-        [onChange]
-    );
-
-    const {
-        getItemProps,
-        getLabelProps,
-        getMenuProps,
-        getToggleButtonProps,
-        highlightedIndex,
-        isOpen,
-        selectItem,
-    } = useSelect({
-        itemToString: _itemToString,
-        items,
-        onSelectedItemChange,
-        selectedItem,
-    });
-
-    const containerClass = cx(style.container, className, {
-        [style.large]: size === 'large',
-        [style.open]: isOpen,
-        [style.placeholder]: !selectedItem,
-    });
-
-    const _renderItem = React.useCallback(
-        (item: T): string | JSX.Element | null => {
-            if (typeof item === 'string') {
-                return item;
-            }
-
-            if (typeof renderItem === 'function') {
-                return renderItem(item);
-            }
-
-            return null;
-        },
-        [renderItem]
-    );
-
-    let content = null;
-    if (items.length) {
-        content = (
-            <ul {...getMenuProps()} className={style.menu}>
-                {items.map((item, index) => {
-                    const itemClass = cx({ [style.active]: highlightedIndex === index });
-                    return (
-                        <li key={index} className={itemClass} {...getItemProps({ item, index })}>
-                            {_renderItem(item)}
-                        </li>
-                    );
-                })}
-            </ul>
-        );
-    } else {
-        let emptyContent = typeof emptyPlaceholder === 'function' ? emptyPlaceholder() : emptyPlaceholder;
-        if (typeof emptyContent === 'string' || !emptyContent) {
-            emptyContent = <div className={style.emptyPlaceholder}>{emptyContent || 'No items'}</div>;
-        }
-        content = (
-            <div className={style.emptyContainer} {...getMenuProps()} data-testid="select-empty">
-                {emptyContent}
-            </div>
-        );
+  } else {
+    let emptyContent = typeof emptyPlaceholder === 'function' ? emptyPlaceholder() : emptyPlaceholder;
+    if (typeof emptyContent === 'string' || !emptyContent) {
+      emptyContent = <div className={style.emptyPlaceholder}>{emptyContent || 'No items'}</div>;
     }
-
-    return (
-        <div className={containerClass}>
-            <Label {...getLabelProps()} label={label} />
-            {description && <div className="mt-[-4px] mb-4">{description}</div>}
-            <button
-                type="button"
-                {...getToggleButtonProps()}
-                className={cx(style.toggle, inputClassName)}
-                disabled={disabled}
-            >
-                {selectedItem ? _renderItem(selectedItem) : placeholder}
-                <Icon className={style.chevron} icon={isOpen ? Icons.chevronUp : Icons.chevronDown} />
-            </button>
-            <div className={style.dropdown} hidden={!isOpen}>
-                {content}
-                {selectedItem && (
-                    <button className={style.clear} onClick={() => selectItem(null as any)} type="button">
-                        Clear selection
-                    </button>
-                )}
-            </div>
-        </div>
+    content = (
+      <div className={style.emptyContainer} {...getMenuProps()} data-testid="select-empty">
+        {emptyContent}
+      </div>
     );
+  }
+
+  return (
+    <div className={containerClass}>
+      <Label {...getLabelProps()} label={label} required={required} />
+      {description && <div className="mt-[-4px] mb-4">{description}</div>}
+      <button
+        type="button"
+        {...getToggleButtonProps()}
+        className={cx(style.toggle, inputClassName)}
+        disabled={disabled}
+      >
+        {selectedItem ? _renderItem(selectedItem) : placeholder}
+        <Icon className={style.chevron} icon={isOpen ? Icons.chevronUp : Icons.chevronDown} />
+      </button>
+      <div className={style.dropdown} hidden={!isOpen}>
+        {content}
+        {selectedItem && (
+          <button className={style.clear} onClick={() => selectItem(null as any)} type="button">
+            Clear selection
+          </button>
+        )}
+      </div>
+    </div>
+  );
 };
