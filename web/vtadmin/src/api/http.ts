@@ -770,3 +770,10 @@ export const validate = async (params: ValidateParams) => {
 
     return vtctldata.ValidateResponse.create(result);
 };
+
+export interface ValidateShardParams {
+  clusterID: string;
+  keyspace: string;
+  shard: string;
+  pingTablets: boolean;
+}
