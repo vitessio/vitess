@@ -31,6 +31,8 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"github.com/openark/golib/sqlutils"
+
 	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
@@ -42,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/vtorc/metrics/query"
 	"vitess.io/vitess/go/vt/vtorc/util"
 	math "vitess.io/vitess/go/vt/vtorc/util"
