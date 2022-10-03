@@ -581,13 +581,15 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables         = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
-	sqlRenameTable        = "RENAME TABLE `%a` TO `%a`"
-	sqlRenameThreeTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
-	sqlLockTwoTablesWrite = "LOCK TABLES `%a` WRITE, `%a` WRITE"
-	sqlUnlockTables       = "UNLOCK TABLES"
-	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a"
-	sqlCreateSentryTable  = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
+	sqlSwapTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
+	// sqlRenameTwoTables    = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameThreeTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlLockTableWrite    = "LOCK TABLES `%a` WRITE"
+	// sqlLockTwoTablesWrite = "LOCK TABLES `%a` WRITE, `%a` WRITE"
+	sqlUnlockTables = "UNLOCK TABLES"
+	sqlFindProcess  = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a"
+	// sqlCreateSentryTable = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
 )
 
 const (

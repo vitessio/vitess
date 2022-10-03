@@ -776,10 +776,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
 			return err
 		}
-		createSentryQuery := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
-		if _, err := e.execQuery(ctx, createSentryQuery.Query); err != nil {
-			return err
-		}
+		// createSentryQuery := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
+		// if _, err := e.execQuery(ctx, createSentryQuery.Query); err != nil {
+		// 	return err
+		// }
 	}
 
 	lockConn, err := e.pool.Get(ctx, nil)
@@ -833,6 +833,37 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return nil
 	}
 
+	renameConn, err := e.pool.Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer renameConn.Recycle()
+	// renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, vreplTable, sentryTableName, onlineDDL.Table, vreplTable, sentryTableName, onlineDDL.Table)
+	renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
+
+	waitForRenameProcess := func() error {
+		renameWaitCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		defer cancel()
+
+		for {
+			renameProcessFound, err := e.isConnectionQueryRunning(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
+			if err != nil {
+				return err
+			}
+			if renameProcessFound {
+				return nil
+			}
+			select {
+			case <-renameWaitCtx.Done():
+				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
+			case <-time.After(time.Second):
+				// sleep
+			}
+		}
+	}
+
+	renameCompleteChan := make(chan error)
+
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
@@ -845,19 +876,20 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	} else {
 		// real production
-		msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
-		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
-			return err
-		}
-		postSentryPos, err := e.primaryPosition(ctx)
-		if err != nil {
-			return err
-		}
-		if err := waitForPos(s, postSentryPos); err != nil {
-			return err
-		}
+		// msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
+		// if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
+		// 	return err
+		// }
+		// postSentryPos, err := e.primaryPosition(ctx)
+		// if err != nil {
+		// 	return err
+		// }
+		// if err := waitForPos(s, postSentryPos); err != nil {
+		// 	return err
+		// }
 
-		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, onlineDDL.Table, sentryTableName)
+		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTableWrite, onlineDDL.Table)
+		// lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, onlineDDL.Table, sentryTableName)
 		lockContext, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 		defer cancel()
 		if _, err := lockConn.Exec(lockContext, lockTableQuery.Query, 1, false); err != nil {
@@ -871,8 +903,25 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// However, LOCK TABLES does not generate a GTID entry. We will want to grab a GTID position that is
 		// absolutely known to be beyond the LOCK TABLES statement. So next we issue a DDL by same connection holding
 		// the lock to generate a new GTID.
-		dropSentryQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
-		if _, err := lockConn.Exec(lockContext, dropSentryQuery.Query, 1, false); err != nil {
+		go func() {
+			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
+			renameCompleteChan <- err
+		}()
+		// the rename should block, because of the LOCK
+		// wait for the above rename to kick in
+		if err := waitForRenameProcess(); err != nil {
+			return err
+		}
+		// dropSentryQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
+		// 		if _, err := lockConn.Exec(lockContext, dropSentryQuery.Query, 1, false); err != nil {
+		// 			return err
+		// 		}
+		// parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables, onlineDDL.Table, sentryTableName, sentryTableName, onlineDDL.Table)
+		// if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+		// 	return err
+		// }
+		msg := fmt.Sprintf("marking cut-over position at %v", time.Now())
+		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, msg); err != nil {
 			return err
 		}
 	}
@@ -909,46 +958,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		} else {
-			renameConn, err := e.pool.Get(ctx, nil)
-			if err != nil {
-				return err
-			}
-			defer renameConn.Recycle()
-			// renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, vreplTable, sentryTableName, onlineDDL.Table, vreplTable, sentryTableName, onlineDDL.Table)
-			renameQuery := sqlparser.BuildParsedQuery(sqlRenameThreeTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
-
-			waitForRenameProcess := func() error {
-				renameWaitCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
-				defer cancel()
-
-				for {
-					renameProcessFound, err := e.isConnectionQueryRunning(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
-					if err != nil {
-						return err
-					}
-					if renameProcessFound {
-						return nil
-					}
-					select {
-					case <-renameWaitCtx.Done():
-						return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
-					case <-time.After(time.Second):
-						// sleep
-					}
-				}
-			}
-
-			renameCompleteChan := make(chan error)
-
-			go func() {
-				_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
-				renameCompleteChan <- err
-			}()
-			// the rename should block, because of the LOCK
-			// wait for the above rename to kick in
-			if err := waitForRenameProcess(); err != nil {
-				return err
-			}
 
 			if _, err := lockConn.Exec(ctx, sqlUnlockTables, 1, false); err != nil {
 				return err
@@ -1174,7 +1183,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	vreplTableName := fmt.Sprintf("~%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
