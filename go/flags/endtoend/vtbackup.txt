@@ -81,6 +81,7 @@ Usage of vtbackup:
       --init_keyspace string                            (init parameter) keyspace to use for this tablet
       --init_shard string                               (init parameter) shard to use for this tablet
       --initial_backup                                  Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
+      --keep-alive-timeout duration                     Wait until timeout elapses after a successful backup before shutting down.
       --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                     keep logs for this long (using mtime) (zero to keep forever)
       --log_backtrace_at traceLocation                  when logging hits line file:N, emit a stack trace (default :0)
@@ -113,6 +114,7 @@ Usage of vtbackup:
       --mysql_server_version string                     MySQL server version to advertise.
       --mysql_socket string                             path to the mysql socket
       --mysql_timeout duration                          how long to wait for mysqld startup (default 5m0s)
+      --port int                                        port for the server
       --pprof strings                                   enable profiling
       --purge_logs_interval duration                    how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration               time to wait for a remote operation (default 30s)

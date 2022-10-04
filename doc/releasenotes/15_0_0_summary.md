@@ -24,6 +24,7 @@
 - The deprecated `--mutex-profile-fraction` flag has been removed. Please use `--pprof=mutex` instead.
 - The deprecated vtgate/vtexplain/vtcombo flag `--planner_version` has been removed. Please use `--planner-version` instead.
 - The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
+- `vtctl` commands that take shard names and ranges as positional arguments (e.g. `vtctl Reshard ks.workflow -80 -40,40-80`) need to have their positional arguments separated from their flag arguments by a double-dash separator to avoid the new parsing library from mistaking them as flags (e.g. `vtctl Reshard ks.workflow -- -80 -40,40-80`).
 
 #### Vindex Interface
 
@@ -85,10 +86,10 @@ connections, similar to the way pooling happens for write buffers. Defaults to o
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
-$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer resume 4c664dc2-eba9-11ec-9ef7-920702940ee0
+$ vtctlclient --server=localhost:15999 VDiff --v2 customer.commerce2customer resume 4c664dc2-eba9-11ec-9ef7-920702940ee0
 VDiff 4c664dc2-eba9-11ec-9ef7-920702940ee0 resumed on target shards, use show to view progress
 
-$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer show last
+$ vtctlclient --server=localhost:15999 VDiff --v2 customer.commerce2customer show last
 
 VDiff Summary for customer.commerce2customer (4c664dc2-eba9-11ec-9ef7-920702940ee0)
 State:        completed
@@ -99,7 +100,7 @@ CompletedAt:  2022-06-26 22:44:31
 
 Use "--format=json" for more detailed output.
 
-$ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.commerce2customer show last
+$ vtctlclient --server=localhost:15999 VDiff --v2 --format=json customer.commerce2customer show last
 {
 	"Workflow": "commerce2customer",
 	"Keyspace": "customer",
