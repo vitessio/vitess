@@ -59,8 +59,7 @@ var (
 			output: "select * from my_table_function('foo', 'bar')",
 		},
 		{
-			input:  "select 1",
-			output: "select 1 from dual",
+			input: "select 1",
 		}, {
 			input: "select 1 from t",
 		}, {
@@ -171,7 +170,8 @@ var (
 		}, {
 			input: "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
 		}, {
-			input: "with test as (select 1 from dual), test_two as (select 2 from dual) select * from test, test_two union all (with b as (with c as (select 1, 2 from dual) select * from c) select * from b)",
+			input:  "with test as (select 1 from dual), test_two as (select 2 from dual) select * from test, test_two union all (with b as (with c as (select 1, 2 from dual) select * from c) select * from b)",
+			output: "with test as (select 1), test_two as (select 2) select * from test, test_two union all (with b as (with c as (select 1, 2) select * from c) select * from b)",
 		}, {
 			input:  "select /* union order by */ 1 from t union select 1 from t order by a",
 			output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
@@ -206,7 +206,8 @@ var (
 		}, {
 			input: "select * from a where not exists (select * from b where a.x = b.x)",
 		}, {
-			input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
+			input:  "select * from t1 where col in (select 1 from dual union select 2 from dual)",
+			output: "select * from t1 where col in (select 1 union select 2)",
 		}, {
 			input: "select * from t1 where exists (select a from t2 union select b from t3)",
 		}, {
@@ -408,14 +409,17 @@ var (
 		}, {
 			input: "with cte1 (w, x) as (select a from b) select a from cte1 join (with cte2 (y, z) as (select c from d) select * from cte2) as sub1 where a = b",
 		}, {
-			input: "with t as (select (1) from dual) select sum(n) from t",
+			input:  "with t as (select (1) from dual) select sum(n) from t",
+			output: "with t as (select (1)) select sum(n) from t",
 		}, {
-			input: "with recursive t (n) as (select (1) from dual union all select n + 1 from t where n < 100) select sum(n) from t",
+			input:  "with recursive t (n) as (select (1) from dual union all select n + 1 from t where n < 100) select sum(n) from t",
+			output: "with recursive t (n) as (select (1) union all select n + 1 from t where n < 100) select sum(n) from t",
 		}, {
-			input: "with recursive t (n) as (select (1) from dual union select n + 1 from t where n < 100) select sum(n) from t",
+			input:  "with recursive t (n) as (select (1) from dual union select n + 1 from t where n < 100) select sum(n) from t",
+			output: "with recursive t (n) as (select (1) union select n + 1 from t where n < 100) select sum(n) from t",
 		}, {
 			input:  "with recursive a as (select 1 union select 2) select 10 union select 20",
-			output: "with recursive a as (select 1 from dual union select 2 from dual) select 10 from dual union select 20 from dual",
+			output: "with recursive a as (select 1 union select 2) select 10 union select 20",
 		}, {
 			input: "with cte1 as (select a from b) update c set d = e",
 		}, {
@@ -788,13 +792,14 @@ var (
 			input:                      "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
 			useSelectExpressionLiteral: true,
 		}, {
-			input: "select /* dual */ 1 from dual",
+			input:  "select /* dual */ 1 from dual",
+			output: "select /* dual */ 1",
 		}, {
 			input:  "select /* Dual */ 1 from Dual",
-			output: "select /* Dual */ 1 from dual",
+			output: "select /* Dual */ 1",
 		}, {
 			input:  "select /* DUAL */ 1 from Dual",
-			output: "select /* DUAL */ 1 from dual",
+			output: "select /* DUAL */ 1",
 		}, {
 			input: "select /* column as bool in where */ a from t where b",
 		}, {
@@ -835,13 +840,14 @@ var (
 			input:  "select /*!401011 from*/ t",
 			output: "select 1 from t",
 		}, {
-			input: "select /* dual */ 1 from dual",
+			input:  "select /* dual */ 1 from dual",
+			output: "select /* dual */ 1",
 		}, {
 			input:  "select * from (select 'tables') tables",
-			output: "select * from (select 'tables' from dual) as `tables`",
+			output: "select * from (select 'tables') as `tables`",
 		}, {
 			input:                      "select * from (select 'tables') tables",
-			output:                     "select * from (select tables from dual) as `tables`",
+			output:                     "select * from (select tables) as `tables`",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "insert /* simple */ into a values (1)",
@@ -1336,34 +1342,34 @@ var (
 			output: "alter table b add spatial index a using btree (id)",
 		}, {
 			input:  "create ALGORITHM=UNDEFINED DEFINER=`UserName`@`localhost` SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create algorithm = undefined definer = `UserName`@`localhost` sql security definer view a as select current_timestamp() from dual",
+			output: "create algorithm = undefined definer = `UserName`@`localhost` sql security definer view a as select current_timestamp()",
 		}, {
 			input:  "create ALGORITHM=UNDEFINED SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create algorithm = undefined sql security definer view a as select current_timestamp() from dual",
+			output: "create algorithm = undefined sql security definer view a as select current_timestamp()",
 		}, {
 			input:  "create ALGORITHM=UNDEFINED DEFINER=UserName@localhost view a as select current_timestamp()",
-			output: "create algorithm = undefined definer = `UserName`@`localhost` view a as select current_timestamp() from dual",
+			output: "create algorithm = undefined definer = `UserName`@`localhost` view a as select current_timestamp()",
 		}, {
 			input:  "create ALGORITHM=MERGE DEFINER=UserName@localhost SQL SECURITY INVOKER view a as select current_timestamp()",
-			output: "create algorithm = merge definer = `UserName`@`localhost` sql security invoker view a as select current_timestamp() from dual",
+			output: "create algorithm = merge definer = `UserName`@`localhost` sql security invoker view a as select current_timestamp()",
 		}, {
 			input:  "create ALGORITHM=TEMPTABLE DEFINER=UserName@localhost SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create algorithm = temptable definer = `UserName`@`localhost` sql security definer view a as select current_timestamp() from dual",
+			output: "create algorithm = temptable definer = `UserName`@`localhost` sql security definer view a as select current_timestamp()",
 		}, {
 			input:  "create DEFINER=`nameUser`@`localhost` SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create definer = `nameUser`@`localhost` sql security definer view a as select current_timestamp() from dual",
+			output: "create definer = `nameUser`@`localhost` sql security definer view a as select current_timestamp()",
 		}, {
 			input:  "create SQL SECURITY INVOKER view a as select current_timestamp()",
-			output: "create sql security invoker view a as select current_timestamp() from dual",
+			output: "create sql security invoker view a as select current_timestamp()",
 		}, {
-			input:  "create view a as select current_timestamp()",
-			output: "create view a as select current_timestamp() from dual",
+			input:  "CREATE VIEW a AS SELECT current_timestamp()",
+			output: "create view a as select current_timestamp()",
 		}, {
 			input:  "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
 			output: "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
 		}, {
-			input:  "create or replace view a as select current_timestamp()",
-			output: "create or replace view a as select current_timestamp() from dual",
+			input:  "CREATE OR REPLACE VIEW a AS SELECT current_timestamp()",
+			output: "create or replace view a as select current_timestamp()",
 		}, {
 			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 		}, {
@@ -1800,7 +1806,7 @@ var (
 			output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 		}, {
 			input:  "select /* drop trailing semicolon */ 1 from dual;",
-			output: "select /* drop trailing semicolon */ 1 from dual",
+			output: "select /* drop trailing semicolon */ 1",
 		}, {
 			input:                      "select /* cache directive */ sql_no_cache 'foo' from t",
 			output:                     "select /* cache directive */ sql_no_cache foo from t",
@@ -1845,7 +1851,8 @@ var (
 		}, {
 			input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
 		}, {
-			input: "select truncate(120.3333, 2) from dual",
+			input:  "select truncate(120.3333, 2) from dual",
+			output: "select truncate(120.3333, 2)",
 		}, {
 			input: "update t partition (p0) set a = 1",
 		}, {
@@ -2006,7 +2013,8 @@ var (
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
-			input: "with a as (select (1) from dual) select name, dense_rank() over window_name from a",
+			input:  "with a as (select (1) from dual) select name, dense_rank() over window_name from a",
+			output: "with a as (select (1)) select name, dense_rank() over window_name from a",
 		}, {
 			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as (ROWS UNBOUNDED PRECEDING)",
 		}, {
@@ -2221,22 +2229,22 @@ var (
 			input: "drop procedure dbName.p1",
 		}, {
 			input:  "CREATE DEFINER=`root`@`localhost` PROCEDURE p2() SELECT RAND()",
-			output: "create definer = `root`@`localhost` procedure p2 () select RAND() from dual",
+			output: "create definer = `root`@`localhost` procedure p2 () select RAND()",
 		}, {
 			input:  "create procedure mydb.p1() select rand()",
-			output: "create procedure mydb.p1 () select rand() from dual",
+			output: "create procedure mydb.p1 () select rand()",
 		}, {
 			input:  "create procedure p1() select rand()",
-			output: "create procedure p1 () select rand() from dual",
+			output: "create procedure p1 () select rand()",
 		}, {
 			input:  "create procedure p1() language sql deterministic sql security invoker select 1+1",
-			output: "create procedure p1 () language sql deterministic sql security invoker select 1 + 1 from dual",
+			output: "create procedure p1 () language sql deterministic sql security invoker select 1 + 1",
 		}, {
 			input:  "create definer = me procedure p1(v1 int) select now()",
-			output: "create definer = `me`@`%` procedure p1 (in v1 int) select now() from dual",
+			output: "create definer = `me`@`%` procedure p1 (in v1 int) select now()",
 		}, {
 			input:  "create definer = me procedure p1(v1 int) comment 'some_comment' not deterministic select now()",
-			output: "create definer = `me`@`%` procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
+			output: "create definer = `me`@`%` procedure p1 (in v1 int) comment 'some_comment' not deterministic select now()",
 		}, {
 			input:                      "SELECT FORMAT(45124,2) FROM test",
 			output:                     "select FORMAT(45124,2) from test",
@@ -2594,13 +2602,13 @@ var (
 			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
 		}, {
 			input:  "SELECT _utf8mb4'abc'",
-			output: "select _utf8mb4 'abc' from dual",
+			output: "select _utf8mb4 'abc'",
 		}, {
 			input:  "SELECT _latin1 X'4D7953514C'",
-			output: "select _latin1 X'4D7953514C' from dual",
+			output: "select _latin1 X'4D7953514C'",
 		}, {
 			input:  "SELECT _utf8mb4'abc' COLLATE utf8mb4_danish_ci",
-			output: "select _utf8mb4 'abc' collate utf8mb4_danish_ci from dual",
+			output: "select _utf8mb4 'abc' collate utf8mb4_danish_ci",
 		}, {
 			input:  "CREATE TABLE engine_cost (cost_name varchar(64) NOT NULL PRIMARY KEY, default_value float GENERATED ALWAYS AS ((case cost_name when _utf8mb3'io_block_read_cost' then 1.0 when _utf8mb3'memory_block_read_cost' then 0.25 else NULL end)) VIRTUAL)",
 			output: "create table engine_cost (\n\tcost_name varchar(64) not null primary key,\n\tdefault_value float generated always as ((case cost_name when _utf8mb3 'io_block_read_cost' then 1.0 when _utf8mb3 'memory_block_read_cost' then 0.25 else null end)) virtual\n)",
@@ -2608,14 +2616,13 @@ var (
 			input:  "CREATE VIEW myview AS SELECT concat(a.first_name, _utf8mb4 ' ', a.last_name) AS name, if(a.active, _utf8mb4 'active', _utf8mb4 '') AS notes FROM a",
 			output: "create view myview as select concat(a.first_name, _utf8mb4 ' ', a.last_name) as name, if(a.active, _utf8mb4 'active', _utf8mb4 '') as notes from a",
 		}, {
-			input:  "select 1 into @aaa",
-			output: "select 1 from dual into @aaa",
+			input: "select 1 into @aaa",
 		}, {
 			input:  "select now() into @late where now() > '2019-04-04 13:25:44'",
-			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
+			output: "select now() where now() > '2019-04-04 13:25:44' into @late",
 		}, {
-			input:  "select now() where now() > '2019-04-04 13:25:44' into @late",
-			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
+			input:  "SELECT now() WHERE now() > '2019-04-04 13:25:44' INTO @late",
+			output: "select now() where now() > '2019-04-04 13:25:44' into @late",
 		}, {
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO @x,@y,@z",
 			output: "select * from (values row(2, 4, 8)) as t into @x, @y, @z",
@@ -2639,7 +2646,7 @@ var (
 			output: "select id from mytable union select id from testtable union select id from othertable limit 1 into @myId",
 		}, {
 			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
-			output: "select 1 from dual into outfile 'x.txt'",
+			output: "select 1 into outfile 'x.txt'",
 		}, {
 			input:  "SELECT * FROM (VALUES ROW(2,4,8),ROW(1,2,3)) AS t(a,b,c) INTO OUTFILE 'myfile.txt'",
 			output: "select * from (values row(2, 4, 8), row(1, 2, 3)) as t (a, b, c) into outfile 'myfile.txt'",
@@ -2700,6 +2707,12 @@ var (
 		}, {
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 BIGINT DEFAULT -1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 BIGINT default -1\n)",
+		}, {
+			input:  "CREATE TABLE `dual` (id int)",
+			output: "create table `dual` (\n\tid int\n)",
+		}, {
+			input:  "DROP TABLE `dual`",
+			output: "drop table `dual`",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -2708,10 +2721,10 @@ var (
 	validMultiStatementSql = []parseTest{
 		{
 			input:  "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end",
-			output: "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin\nselect rand() * 10 from dual;\nend",
+			output: "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin\nselect rand() * 10;\nend",
 		}, {
 			input:  "create procedure p1(v1 datetime)\nif rand() < 1 then select rand();\nend if",
-			output: "create procedure p1 (in v1 datetime) if rand() < 1 then select rand() from dual;\nend if",
+			output: "create procedure p1 (in v1 datetime) if rand() < 1 then select rand();\nend if",
 		}, {
 			input: `create procedure p1(n double, m double)
 begin
@@ -2726,7 +2739,7 @@ begin
 	set @s = concat(n, ' ', @s, ' ', m, '.');
 	select @s;
 end`,
-			output: "create procedure p1 (in n double, in m double) begin\nset @s = '';\nif n = m then set @s = 'equals';\nelse if n > m then set @s = 'greater';\nelse set @s = 'less';\nend if; set @s = concat('is ', @s, ' than');\nend if;\nset @s = concat(n, ' ', @s, ' ', m, '.');\nselect @s from dual;\nend",
+			output: "create procedure p1 (in n double, in m double) begin\nset @s = '';\nif n = m then set @s = 'equals';\nelse if n > m then set @s = 'greater';\nelse set @s = 'less';\nend if; set @s = concat('is ', @s, ' than');\nend if;\nset @s = concat(n, ' ', @s, ' ', m, '.');\nselect @s;\nend",
 		}, { // DECLARE statements are only allowed inside of BEGIN/END blocks
 			input: `create procedure p1 () begin
 declare cond_name condition for 1002;
@@ -2794,15 +2807,15 @@ END`,
 		},
 		{
 			input:  "with a(j) as (select 1), b(i) as (select 2) (select j from a union select i from b order by j desc limit 1) union select j from a;",
-			output: "with a (j) as (select 1 from dual), b (i) as (select 2 from dual) (select j from a union select i from b order by j desc limit 1) union select j from a",
+			output: "with a (j) as (select 1), b (i) as (select 2) (select j from a union select i from b order by j desc limit 1) union select j from a",
 		},
 		{
 			input:  "with a(j) as (select 1) ( with c(k) as (select 3) select k from c union select 6) union select k from c;",
-			output: "with a (j) as (select 1 from dual) (with c (k) as (select 3 from dual) select k from c union select 6 from dual) union select k from c",
+			output: "with a (j) as (select 1) (with c (k) as (select 3) select k from c union select 6) union select k from c",
 		},
 		{
 			input:  "with a(j) as (select 1) ( with c(k) as (select 3) select (select k from c union select 6 limit 1) as b) union select k from c;",
-			output: "with a (j) as (select 1 from dual) (with c (k) as (select 3 from dual) select (select k from c union select 6 from dual limit 1) as b from dual) union select k from c",
+			output: "with a (j) as (select 1) (with c (k) as (select 3) select (select k from c union select 6 limit 1) as b) union select k from c",
 		},
 	}
 )
@@ -3081,6 +3094,7 @@ var ignoreWhitespaceTests = []parseTest{
 									else select true from dual; delete from x;
 								end case;
 							end`,
+		output: "create trigger t1 before delete on foo for each row begin case old.x when old.y then set session var = 1; when 0 then update a set b = 2; delete from z; else select true; delete from x; end case; end",
 	}, {
 		// TODO: this is a test of parsing if statements, not triggers. would be better to isolate it
 		input: `create trigger t1 before delete on foo for each row 
@@ -3573,7 +3587,7 @@ func TestCaseSensitivity(t *testing.T) {
 			input: "insert into A(A, B) values (1, 2)",
 		}, {
 			input:  "create view A as select current_timestamp()",
-			output: "create view a as select current_timestamp() from dual",
+			output: "create view a as select current_timestamp()",
 		}, {
 			input:  "drop view A",
 			output: "drop view a",
@@ -3600,10 +3614,10 @@ func TestKeywords(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input:  "select current_timestamp",
-			output: "select current_timestamp() from dual",
+			output: "select current_timestamp()",
 		}, {
 			input:                      "select current_TIMESTAMP",
-			output:                     "select current_TIMESTAMP from dual",
+			output:                     "select current_TIMESTAMP",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "update t set a = current_timestamp()",
@@ -3646,17 +3660,17 @@ func TestKeywords(t *testing.T) {
 			output: "update t set b = utc_timestamp() + 5",
 		}, {
 			input:  "select utc_time, utc_date, utc_time(6)",
-			output: "select utc_time(), utc_date(), utc_time(6) from dual",
+			output: "select utc_time(), utc_date(), utc_time(6)",
 		}, {
 			input:                      "select utc_TIME, UTC_date, utc_time(6)",
-			output:                     "select utc_TIME, UTC_date, utc_time(6) from dual",
+			output:                     "select utc_TIME, UTC_date, utc_time(6)",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select 1 from dual where localtime > utc_time",
-			output: "select 1 from dual where localtime() > utc_time()",
+			output: "select 1 where localtime() > utc_time()",
 		}, {
 			input:  "select 1 from dual where localtime(2) > utc_time(1)",
-			output: "select 1 from dual where localtime(2) > utc_time(1)",
+			output: "select 1 where localtime(2) > utc_time(1)",
 		}, {
 			input:  "update t set a = localtimestamp(), b = utc_timestamp",
 			output: "update t set a = localtimestamp(), b = utc_timestamp()",
@@ -3710,13 +3724,13 @@ func TestKeywords(t *testing.T) {
 			output: "select table_commment as `Comment` from information_schema.`TABLES`",
 		}, {
 			input:  "select 1 as comment",
-			output: "select 1 as `comment` from dual",
+			output: "select 1 as `comment`",
 		}, {
 			input:  "select variables from t",
 			output: "select `variables` from t",
 		}, {
 			input:  "select 1 as found",
-			output: "select 1 as `found` from dual",
+			output: "select 1 as `found`",
 		}, {
 			input:  "select found from t",
 			output: "select `found` from t",
@@ -3731,7 +3745,7 @@ func TestKeywords(t *testing.T) {
 			output: "delete from x where `found` = 32",
 		}, {
 			input:  "select 1 as event",
-			output: "select 1 as `event` from dual",
+			output: "select 1 as `event`",
 		}, {
 			input:  "select event from t",
 			output: "select `event` from t",
@@ -4192,11 +4206,11 @@ func TestFunctionCalls(t *testing.T) {
 	testCases := []parseTest{
 		{
 			input:  "select CAST(1 as datetime) from dual",
-			output: "select CAST(1, datetime) from dual",
+			output: "select CAST(1, datetime)",
 		},
 		{
 			input:  "select LOCALTIMESTAMP from dual",
-			output: "select LOCALTIMESTAMP() from dual",
+			output: "select LOCALTIMESTAMP()",
 		},
 	}
 
@@ -4222,7 +4236,8 @@ func TestFunctionCalls(t *testing.T) {
 
 	for _, query := range queries {
 		test := parseTest{
-			input: query,
+			input:  query,
+			output: strings.Replace(query, " from dual", "", -1),
 		}
 		runParseTestCase(t, test)
 	}
@@ -5122,27 +5137,27 @@ func TestTrim(t *testing.T) {
 	testCases := []parseTest{
 		{
 			input:  `SELECT TRIM("foo")`,
-			output: `select trim(both ' ' from 'foo') from dual`,
+			output: "select trim(both ' ' from 'foo')",
 		},
 		{
 			input:  `SELECT TRIM("bar" FROM "foo")`,
-			output: `select trim(both 'bar' from 'foo') from dual`,
+			output: "select trim(both 'bar' from 'foo')",
 		},
 		{
 			input:  `SELECT TRIM(LEADING "bar" FROM "foo")`,
-			output: `select trim(leading 'bar' from 'foo') from dual`,
+			output: "select trim(leading 'bar' from 'foo')",
 		},
 		{
 			input:  `SELECT TRIM(TRAILING "bar" FROM "foo")`,
-			output: `select trim(trailing 'bar' from 'foo') from dual`,
+			output: "select trim(trailing 'bar' from 'foo')",
 		},
 		{
 			input:  `SELECT TRIM(BOTH "bar" FROM "foo")`,
-			output: `select trim(both 'bar' from 'foo') from dual`,
+			output: "select trim(both 'bar' from 'foo')",
 		},
 		{
 			input:  `SELECT TRIM(TRIM("foobar"))`,
-			output: `select trim(both ' ' from trim(both ' ' from 'foobar')) from dual`,
+			output: "select trim(both ' ' from trim(both ' ' from 'foobar'))",
 		},
 	}
 	for _, tcase := range testCases {
@@ -5603,6 +5618,12 @@ var (
 	}, {
 		input:  "create table t (id int primary key, col1 geometry null SRID 0 default null SRID 4236)",
 		output: "cannot include SRID more than once at position 85 near '4236'",
+	}, {
+		input:  "create table dual (id int)",
+		output: "syntax error at position 18 near 'dual'",
+	}, {
+		input:  "drop table dual",
+		output: "syntax error at position 16 near 'dual'",
 	},
 	}
 )
@@ -6218,6 +6239,7 @@ var correctlyDontParse = []string{
 	"div",
 	"double",
 	"drop",
+	"dual",
 	"each",
 	"else",
 	"elseif",
@@ -6481,6 +6503,7 @@ func TestReservedKeywordsParseWhenQualified(t *testing.T) {
 		"sql_calc_found_rows": true,
 		"straight_join":       true,
 		"when":                true,
+		"dual":                true,
 	}
 
 	for _, kw := range correctlyDontParse {

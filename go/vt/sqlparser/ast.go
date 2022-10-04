@@ -515,12 +515,19 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	if node.CalcFoundRows {
 		calcFoundRows = "sql_calc_found_rows "
 	}
-	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%v%s%v",
+
+	buf.Myprintf("%vselect %v%s%s%s%s%v",
 		node.With,
 		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
-		node.From, node.Where,
-		node.GroupBy, node.Having, node.Window, node.OrderBy,
-		node.Limit, node.Lock, node.Into)
+	)
+
+	if node.From != nil {
+		buf.Myprintf(" from %v", node.From)
+	}
+
+	buf.Myprintf("%v%v%v%v%v%v%s%v",
+		node.Where, node.GroupBy, node.Having, node.Window,
+		node.OrderBy, node.Limit, node.Lock, node.Into)
 }
 
 func (node *Select) walkSubtree(visit Visit) error {

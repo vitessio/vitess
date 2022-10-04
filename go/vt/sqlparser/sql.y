@@ -310,7 +310,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> ROW_NUMBER PERCENT_RANK RANK
 
 // Table functions
-%token <bytes> JSON_TABLE PATH
+%token <bytes> DUAL JSON_TABLE PATH
 
 // Table options
 %token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
@@ -324,7 +324,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // MySQL reserved words that are currently unused.
 %token <bytes> ACCESSIBLE ASENSITIVE
 %token <bytes> CUBE
-%token <bytes> DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND DELAYED DISTINCTROW DUAL
+%token <bytes> DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND DELAYED DISTINCTROW
 %token <bytes> EMPTY
 %token <bytes> FETCH FLOAT4 FLOAT8
 %token <bytes> GET
@@ -679,7 +679,11 @@ base_select_no_cte:
 
 from_opt:
   {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
+    $$ = nil
+  }
+| FROM DUAL
+  {
+    $$ = nil
   }
 | FROM table_references
   {
@@ -7123,6 +7127,7 @@ reserved_keyword:
 | DIV
 | DOUBLE
 | DROP
+| DUAL
 | EACH
 | ELSE
 | ELSEIF

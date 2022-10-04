@@ -66,8 +66,8 @@ func TestIgnoreSpecialComments(t *testing.T) {
 	two, err := ParseNext(tokenizer)
 	require.NoError(t, err)
 
-	assert.Equal(t, "select 1 from dual", String(one))
-	assert.Equal(t, "select 2 from dual", String(two))
+	assert.Equal(t, "select 1", String(one))
+	assert.Equal(t, "select 2", String(two))
 }
 
 // TestParseNextErrors tests all the error cases, and ensures a valid
