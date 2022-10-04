@@ -229,11 +229,8 @@ func (ins *Insert) GetTableName() string {
 
 // TryExecute performs a non-streaming exec.
 func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if ins.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(ins.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)
+	defer cancelFunc()
 
 	switch ins.Opcode {
 	case InsertUnsharded:
