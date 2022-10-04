@@ -111,6 +111,7 @@ func addMap(input map[string]interface{}, buf *bytes.Buffer) error {
 
 func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj interface{}) error {
 	buf.WriteString(prepend + `"` + name + `":`)
+
 	enc := json.NewEncoder(buf)
 	enc.SetEscapeHTML(false)
 

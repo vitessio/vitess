@@ -302,6 +302,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
 		Errors:       atomic.LoadUint64(&p.Errors),
 	}
+
 	b := new(bytes.Buffer)
 	enc := json.NewEncoder(b)
 	enc.SetEscapeHTML(false)
