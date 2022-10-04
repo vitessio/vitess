@@ -229,5 +229,6 @@ func ValidateShard(ctx context.Context, r Request, api *API) *JSONResponse {
 		Shard:       vars["shard"],
 		PingTablets: params.PingTablets,
 	})
+
 	return NewJSONResponse(result, err)
 }
