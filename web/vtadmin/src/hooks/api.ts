@@ -72,8 +72,10 @@ import {
     ValidateParams,
     validateShard,
     ValidateShardParams,
+    getFullStatus,
+    GetFullStatusParams,
 } from '../api/http';
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -584,3 +586,11 @@ export const useValidateShard = (
         return validateShard(params);
     }, options);
 };
+
+/**
+ * useGetFullStatus is a query hook that fetches the full status of a tablet
+ */
+export const useGetFullStatus = (
+    params: GetFullStatusParams,
+    options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
+) => useQuery(['full-status', params], () => getFullStatus(params), options);

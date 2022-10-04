@@ -789,3 +789,17 @@ export const validateShard = async (params: ValidateShardParams) => {
 
     return vtctldata.ValidateShardResponse.create(result);
 };
+
+export interface GetFullStatusParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const getFullStatus = async (params: GetFullStatusParams) => {
+    const { result } = await vtfetch(`/api/tablet/${params.alias}/full_status?cluster=${params.clusterID}`);
+
+    const err = vtctldata.GetFullStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetFullStatusResponse.create(result);
+};

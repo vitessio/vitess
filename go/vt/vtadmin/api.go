@@ -368,6 +368,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet").Methods("GET")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.DeleteTablet)).Name("API.DeleteTablet").Methods("DELETE", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/full_status", httpAPI.Adapt(vtadminhttp.GetFullStatus)).Name("API.GetFullStatus").Methods("GET")
 	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
@@ -771,6 +772,25 @@ func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersReque
 	return &vtadminpb.GetClustersResponse{
 		Clusters: vcs,
 	}, nil
+}
+
+// GetFullStatus is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetFullStatus(ctx context.Context, req *vtadminpb.GetFullStatusRequest) (*vtctldatapb.GetFullStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetFullStatus")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetFullStatus(ctx, &vtctldatapb.GetFullStatusRequest{
+		TabletAlias: req.Alias,
+	})
 }
 
 // GetGates is part of the vtadminpb.VTAdminServer interface.
