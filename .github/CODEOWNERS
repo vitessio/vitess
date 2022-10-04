@@ -1,10 +1,12 @@
 * @deepthi
 bootstrap.sh @deepthi
+/.github/ISSUE_TEMPLATE/ @frouioui
+/.github/workflows/ @frouioui
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
 /docker/ @derekperkins @dkhenry @mattlord
-/examples/compose @shlomi-noach @GuptaManan100
+/examples/compose @shlomi-noach @GuptaManan100 @frouioui
 /examples/demo @sougou @mattlord
-/examples/legacy_local @deepthi @GuptaManan100
+/examples/legacy_local @deepthi @GuptaManan100 @frouioui
 /examples/local @rohit-nayak-ps @frouioui @mattlord @GuptaManan100
 /examples/operator @GuptaManan100 @frouioui
 /examples/region_sharding @deepthi
@@ -22,6 +24,7 @@ bootstrap.sh @deepthi
 /go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
 /go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100
+/go/tools/ @frouioui
 /go/vt/dbconnpool @harshit-gangal
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi @mattlord
@@ -57,6 +60,7 @@ bootstrap.sh @deepthi
 /proto/vtadmin.proto @ajm188 @doeg @notfelineit
 /proto/vtctldata.proto @ajm188 @notfelineit
 /proto/vtctlservice.proto @ajm188 @notfelineit
-/test/ @GuptaManan100
+/test/ @GuptaManan100 @frouioui
+/tools/ @frouioui
 /web/vtadmin @ajm188 @doeg @notfelineit
 /web/vtctld2 @notfelineit @rohit-nayak-ps
