@@ -23,11 +23,11 @@ bootstrap.sh @deepthi
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
-/go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100
+/go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
 /go/tools/ @frouioui
 /go/vt/dbconnpool @harshit-gangal
 /go/vt/discovery @deepthi
-/go/vt/mysqlctl @deepthi @mattlord
+/go/vt/mysqlctl @deepthi @mattlord @rsajwani
 /go/vt/proto @harshit-gangal
 /go/vt/proto/vtadmin @ajm188 @doeg @notfelineit
 /go/vt/schema @shlomi-noach
@@ -35,7 +35,8 @@ bootstrap.sh @deepthi
 /go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
 /go/vt/srvtopo @rafael @mattlord
 /go/vt/sysvars @harshit-gangal @systay
-/go/vt/topo @deepthi @rafael @mattlord
+/go/vt/topo @deepthi @rafael @mattlord @rsajwani
+/go/vt/topotools @deepthi @rafael @mattlord @rsajwani
 /go/vt/vitessdriver @harshit-gangal
 /go/vt/vtadmin @ajm188 @doeg @notfelineit @rohit-nayak-ps
 /go/vt/vtctl @deepthi
@@ -48,9 +49,9 @@ bootstrap.sh @deepthi
 /go/vt/vterrors @harshit-gangal @systay
 /go/vt/vtexplain @systay @harshit-gangal
 /go/vt/vtgate @harshit-gangal @systay @frouioui @GuptaManan100
-/go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100
+/go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
 /go/vt/vttablet/queryservice @harshit-gangal @systay
-/go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
+/go/vt/vttablet/tabletmanager @deepthi @shlomi-noach @rsajwani
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach
