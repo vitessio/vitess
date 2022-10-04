@@ -105,14 +105,20 @@ func Usage() {
 // filterTestFlags returns two slices: the second one has just the flags for `go test` and the first one contains
 // the rest of the flags.
 const goTestFlagSuffix = "-test"
+const goTestRunFlag = "-test.run"
 
 func filterTestFlags() ([]string, []string) {
 	args := os.Args
 	var testFlags []string
 	var otherArgs []string
+	isRunFlag := false
 	for i := 0; 0 < len(args) && i < len(args); i++ {
-		if strings.HasPrefix(args[i], goTestFlagSuffix) {
+		if strings.HasPrefix(args[i], goTestFlagSuffix) || isRunFlag {
+			isRunFlag = false
 			testFlags = append(testFlags, args[i])
+			if args[i] == goTestRunFlag {
+				isRunFlag = true
+			}
 			continue
 		}
 		otherArgs = append(otherArgs, args[i])
