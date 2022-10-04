@@ -250,6 +250,12 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set @@socket = '/tmp/change.sock'",
 		err: "variable 'socket' is a read only variable",
+	}, {
+		in:  "set @@query_timeout = 50",
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 50},
+	}, {
+		in:  "set @@query_timeout = 50, query_timeout = 75",
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 75},
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
