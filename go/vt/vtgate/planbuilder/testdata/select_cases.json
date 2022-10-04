@@ -2602,7 +2602,7 @@
     "v3-plan": "unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id \u003c user.id)",
+      "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
       "Instructions": {
         "OperatorType": "SemiJoin",
         "JoinVars": {
@@ -2630,7 +2630,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
+            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
             "Table": "user_extra",
             "Values": [
               "INT64(3)"
@@ -2647,7 +2647,7 @@
     "v3-plan": "unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id \u003c user.id) order by col",
+      "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
       "Instructions": {
         "OperatorType": "SemiJoin",
         "JoinVars": {
@@ -2676,7 +2676,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
+            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
             "Table": "user_extra",
             "Values": [
               "INT64(3)"
@@ -2946,7 +2946,7 @@
     "query": "select 1 from (select col, count(*) as a from main.unsharded group by col having a > 0 limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select 1 from (select col, count(*) as a from main.unsharded group by col having a \u003e 0 limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
+      "Original": "select 1 from (select col, count(*) as a from main.unsharded group by col having a > 0 limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Unsharded",
@@ -2955,7 +2955,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from (select col, count(*) as a from unsharded where 1 != 1 group by col) as f left join unsharded as u on f.col = u.id where 1 != 1",
-        "Query": "select 1 from (select col, count(*) as a from unsharded group by col having a \u003e 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
+        "Query": "select 1 from (select col, count(*) as a from unsharded group by col having a > 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
         "Table": "unsharded"
       }
     }
@@ -3250,7 +3250,7 @@
     "query": "SELECT a->\"$[4]\", a->>\"$[3]\" FROM user",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "SELECT a-\u003e\"$[4]\", a-\u003e\u003e\"$[3]\" FROM user",
+      "Original": "SELECT a->\"$[4]\", a->>\"$[3]\" FROM user",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
@@ -3258,8 +3258,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user` where 1 != 1",
-        "Query": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user`",
+        "FieldQuery": "select a -> '$[4]', a ->> '$[3]' from `user` where 1 != 1",
+        "Query": "select a -> '$[4]', a ->> '$[3]' from `user`",
         "Table": "`user`"
       }
     }

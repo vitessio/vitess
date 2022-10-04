@@ -2448,7 +2448,7 @@
     "query": "select id from user where user.id > 5",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select id from user where user.id \u003e 5",
+      "Original": "select id from user where user.id > 5",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
@@ -2457,7 +2457,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where `user`.id \u003e 5",
+        "Query": "select id from `user` where `user`.id > 5",
         "Table": "`user`"
       }
     }
@@ -4071,7 +4071,7 @@
     "query": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE user.id <=> NULL AND music.user_id = 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE user.id \u003c=\u003e NULL AND music.user_id = 10",
+      "Original": "SELECT music.id FROM music LEFT OUTER JOIN user ON music.user_id = user.id WHERE user.id <=> NULL AND music.user_id = 10",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -4080,7 +4080,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
-        "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 10 and `user`.id \u003c=\u003e null",
+        "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 10 and `user`.id <=> null",
         "Table": "`user`, music",
         "Values": [
           "INT64(10)"

@@ -1312,7 +1312,7 @@
     "query": "select user.col from user join user_extra on user.id < user_extra.user_id",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
+      "Original": "select user.col from user join user_extra on user.id < user_extra.user_id",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
@@ -1341,7 +1341,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
+            "Query": "select 1 from user_extra where :user_id < user_extra.user_id",
             "Table": "user_extra"
           }
         ]
@@ -1349,7 +1349,7 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
+      "Original": "select user.col from user join user_extra on user.id < user_extra.user_id",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
@@ -1378,7 +1378,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
+            "Query": "select 1 from user_extra where :user_id < user_extra.user_id",
             "Table": "user_extra"
           }
         ]

@@ -58,7 +58,7 @@
     "query": "SHOW table StatUs In user WHERE `Rows` > 70",
     "plan": {
       "QueryType": "SHOW",
-      "Original": "SHOW table StatUs In user WHERE `Rows` \u003e 70",
+      "Original": "SHOW table StatUs In user WHERE `Rows` > 70",
       "Instructions": {
         "OperatorType": "Send",
         "Keyspace": {
@@ -66,7 +66,7 @@
           "Sharded": true
         },
         "TargetDestination": "AnyShard()",
-        "Query": "show table status where `Rows` \u003e 70",
+        "Query": "show table status where `Rows` > 70",
         "SingleShardOnly": true
       }
     }

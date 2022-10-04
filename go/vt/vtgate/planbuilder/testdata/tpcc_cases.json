@@ -972,7 +972,7 @@
     "query": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id < 30 AND ol.ol_o_id >= 15 AND s.s_w_id= 12 AND s.s_quantity < 10",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 12 AND s.s_quantity \u003c 10",
+      "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id < 30 AND ol.ol_o_id >= 15 AND s.s_w_id= 12 AND s.s_quantity < 10",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -981,7 +981,7 @@
           "Sharded": true
         },
         "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where 1 != 1",
-        "Query": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and s.s_w_id = 12 and s.s_quantity \u003c 10",
+        "Query": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id < 30 and ol.ol_o_id >= 15 and s.s_w_id = 12 and s.s_quantity < 10",
         "Table": "stock1, order_line1",
         "Values": [
           "INT64(12)"
@@ -991,7 +991,7 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 12 AND s.s_quantity \u003c 10",
+      "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id < 30 AND ol.ol_o_id >= 15 AND s.s_w_id= 12 AND s.s_quantity < 10",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -1000,7 +1000,7 @@
           "Sharded": true
         },
         "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where 1 != 1",
-        "Query": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity \u003c 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
+        "Query": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity < 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id < 30 and ol.ol_o_id >= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
         "Table": "order_line1, stock1",
         "Values": [
           "INT64(12)"
@@ -1014,7 +1014,7 @@
     "query": "SELECT DISTINCT ol_i_id FROM order_line1 WHERE ol_w_id = 1 AND ol_d_id = 156 AND ol_o_id < 500 AND ol_o_id >= 56",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "SELECT DISTINCT ol_i_id FROM order_line1 WHERE ol_w_id = 1 AND ol_d_id = 156 AND ol_o_id \u003c 500 AND ol_o_id \u003e= 56",
+      "Original": "SELECT DISTINCT ol_i_id FROM order_line1 WHERE ol_w_id = 1 AND ol_d_id = 156 AND ol_o_id < 500 AND ol_o_id >= 56",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -1023,7 +1023,7 @@
           "Sharded": true
         },
         "FieldQuery": "select ol_i_id from order_line1 where 1 != 1",
-        "Query": "select distinct ol_i_id from order_line1 where ol_w_id = 1 and ol_d_id = 156 and ol_o_id \u003c 500 and ol_o_id \u003e= 56",
+        "Query": "select distinct ol_i_id from order_line1 where ol_w_id = 1 and ol_d_id = 156 and ol_o_id < 500 and ol_o_id >= 56",
         "Table": "order_line1",
         "Values": [
           "INT64(1)"
@@ -1037,7 +1037,7 @@
     "query": "SELECT count(*) FROM stock1 WHERE s_w_id = 1 AND s_i_id = 8 AND s_quantity < 1000",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "SELECT count(*) FROM stock1 WHERE s_w_id = 1 AND s_i_id = 8 AND s_quantity \u003c 1000",
+      "Original": "SELECT count(*) FROM stock1 WHERE s_w_id = 1 AND s_i_id = 8 AND s_quantity < 1000",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -1046,7 +1046,7 @@
           "Sharded": true
         },
         "FieldQuery": "select count(*) from stock1 where 1 != 1",
-        "Query": "select count(*) from stock1 where s_w_id = 1 and s_i_id = 8 and s_quantity \u003c 1000",
+        "Query": "select count(*) from stock1 where s_w_id = 1 and s_i_id = 8 and s_quantity < 1000",
         "Table": "stock1",
         "Values": [
           "INT64(1)"
@@ -1060,7 +1060,7 @@
     "query": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id > 2100 and o_id < 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) \u003e 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
+      "Original": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id > 2100 and o_id < 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "INT64(1)",
@@ -1095,7 +1095,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where 1 != 1 group by o_c_id, o_d_id, o_w_id) as t where 1 != 1",
-                "Query": "select 1 from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id, o_d_id, o_w_id having count(distinct o_id) \u003e 1 limit 1) as t where t.o_w_id = :o_o_w_id and t.o_d_id = :o_o_d_id and t.o_c_id = :o_o_c_id",
+                "Query": "select 1 from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id > 2100 and o_id < 11153 group by o_c_id, o_d_id, o_w_id having count(distinct o_id) > 1 limit 1) as t where t.o_w_id = :o_o_w_id and t.o_d_id = :o_o_d_id and t.o_c_id = :o_o_c_id",
                 "Table": "orders1",
                 "Values": [
                   "INT64(1)"
@@ -1109,7 +1109,7 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) \u003e 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
+      "Original": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id > 2100 and o_id < 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -1118,7 +1118,7 @@
           "Sharded": true
         },
         "FieldQuery": "select o.o_id, o.o_d_id from orders1 as o, (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where 1 != 1 group by o_c_id, o_d_id, o_w_id) as t where 1 != 1",
-        "Query": "select o.o_id, o.o_d_id from orders1 as o, (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id, o_d_id, o_w_id having count(distinct o_id) \u003e 1 limit 1) as t where t.o_w_id = o.o_w_id and t.o_d_id = o.o_d_id and t.o_c_id = o.o_c_id limit 1",
+        "Query": "select o.o_id, o.o_d_id from orders1 as o, (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id > 2100 and o_id < 11153 group by o_c_id, o_d_id, o_w_id having count(distinct o_id) > 1 limit 1) as t where t.o_w_id = o.o_w_id and t.o_d_id = o.o_d_id and t.o_c_id = o.o_c_id limit 1",
         "Table": "orders1",
         "Values": [
           "INT64(1)"

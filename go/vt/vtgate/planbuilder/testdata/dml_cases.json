@@ -109,7 +109,7 @@
     "query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
     "plan": {
       "QueryType": "UPDATE",
-      "Original": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+      "Original": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
       "Instructions": {
         "OperatorType": "Update",
         "Variant": "Unsharded",
@@ -119,7 +119,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+        "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000"
       }
     }
   },
@@ -770,7 +770,7 @@
     "query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
     "plan": {
       "QueryType": "DELETE",
-      "Original": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+      "Original": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
       "Instructions": {
         "OperatorType": "Delete",
         "Variant": "Unsharded",
@@ -780,7 +780,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+        "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
       }
     }
   },
@@ -3227,7 +3227,7 @@
     "query": "update user u set u.name = 'john' where u.col > 20",
     "plan": {
       "QueryType": "UPDATE",
-      "Original": "update user u set u.name = 'john' where u.col \u003e 20",
+      "Original": "update user u set u.name = 'john' where u.col > 20",
       "Instructions": {
         "OperatorType": "Update",
         "Variant": "Scatter",
@@ -3242,8 +3242,8 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'john' from `user` as u where u.col \u003e 20 for update",
-        "Query": "update `user` as u set u.`name` = 'john' where u.col \u003e 20",
+        "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'john' from `user` as u where u.col > 20 for update",
+        "Query": "update `user` as u set u.`name` = 'john' where u.col > 20",
         "Table": "user"
       }
     }
@@ -3253,7 +3253,7 @@
     "query": "delete from user u where u.col > 20",
     "plan": {
       "QueryType": "DELETE",
-      "Original": "delete from user u where u.col \u003e 20",
+      "Original": "delete from user u where u.col > 20",
       "Instructions": {
         "OperatorType": "Delete",
         "Variant": "Scatter",
@@ -3265,8 +3265,8 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col \u003e 20 for update",
-        "Query": "delete from `user` as u where u.col \u003e 20",
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col > 20 for update",
+        "Query": "delete from `user` as u where u.col > 20",
         "Table": "user"
       }
     }
@@ -4490,7 +4490,7 @@
     "v3-plan": "unsupported: subqueries in sharded DML",
     "gen4-plan": {
       "QueryType": "UPDATE",
-      "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id \u003e 5",
+      "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
       "Instructions": {
         "OperatorType": "Update",
         "Variant": "Scatter",
@@ -4500,7 +4500,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id \u003e 5",
+        "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id > 5",
         "Table": "user"
       }
     }

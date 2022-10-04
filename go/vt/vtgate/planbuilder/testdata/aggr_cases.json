@@ -855,7 +855,7 @@
     "query": "select id, count(*) c from user group by id having max(col) > 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select id, count(*) c from user group by id having max(col) \u003e 10",
+      "Original": "select id, count(*) c from user group by id having max(col) > 10",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
@@ -864,7 +864,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
-        "Query": "select id, count(*) as c from `user` group by id having max(col) \u003e 10",
+        "Query": "select id, count(*) as c from `user` group by id having max(col) > 10",
         "Table": "`user`"
       }
     }
@@ -2673,7 +2673,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) \u003e 10",
+      "Original": "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) > 10",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
@@ -2682,7 +2682,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.id, count(*) as c from `user`, user_extra where 1 != 1 group by `user`.id",
-        "Query": "select `user`.id, count(*) as c from `user`, user_extra where `user`.id = user_extra.user_id group by `user`.id having max(`user`.col) \u003e 10",
+        "Query": "select `user`.id, count(*) as c from `user`, user_extra where `user`.id = user_extra.user_id group by `user`.id having max(`user`.col) > 10",
         "Table": "`user`, user_extra"
       }
     }
@@ -2692,7 +2692,7 @@
     "query": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) \u003e 10)",
+      "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
@@ -2706,7 +2706,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10 limit 1)",
+            "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) > 10 limit 1)",
             "Table": "`user`"
           }
         ]
@@ -2714,7 +2714,7 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) \u003e 10)",
+      "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
@@ -2728,7 +2728,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10 limit 1)",
+            "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) > 10 limit 1)",
             "Table": "`user`"
           }
         ]
@@ -2918,7 +2918,7 @@
     "v3-plan": "unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id \u003c user.id) order by id",
+      "Original": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
       "Instructions": {
         "OperatorType": "SemiJoin",
         "JoinVars": {
@@ -2947,7 +2947,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
+            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
             "Table": "user_extra",
             "Values": [
               "INT64(3)"
@@ -3096,10 +3096,10 @@
     "v3-plan": "unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a \u003e 10",
+      "Original": "select count(*) a from user having a > 10",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "a \u003e 10",
+        "Predicate": "a > 10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3129,10 +3129,10 @@
     "v3-plan": "unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a \u003e= 10",
+      "Original": "select count(*) a from user having a >= 10",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "a \u003e= 10",
+        "Predicate": "a >= 10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3162,10 +3162,10 @@
     "v3-plan": "unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a \u003c 10",
+      "Original": "select count(*) a from user having a < 10",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "a \u003c 10",
+        "Predicate": "a < 10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3195,10 +3195,10 @@
     "v3-plan": "unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a \u003c= 10",
+      "Original": "select count(*) a from user having a <= 10",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "a \u003c= 10",
+        "Predicate": "a <= 10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -3228,10 +3228,10 @@
     "v3-plan": "unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select col, count(*) a from user group by col having a \u003c= 10",
+      "Original": "select col, count(*) a from user group by col having a <= 10",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "a \u003c= 10",
+        "Predicate": "a <= 10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4563,7 +4563,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) \u003c 3 and count(*) \u003e 5",
+      "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) < 3 and count(*) > 5",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "Columns": [
@@ -4572,7 +4572,7 @@
         "Inputs": [
           {
             "OperatorType": "Filter",
-            "Predicate": "OFFSET(1, 'count(*)') \u003c 3 and OFFSET(1, 'count(*)') \u003e 5",
+            "Predicate": "OFFSET(1, 'count(*)') < 3 and OFFSET(1, 'count(*)') > 5",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -4647,7 +4647,7 @@
     "v3-plan": "symbol ue.col not found in subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select (select 1 from user u having count(ue.col) \u003e 10) from user_extra ue",
+      "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
       "Instructions": {
         "OperatorType": "Subquery",
         "Variant": "PulloutValue",
@@ -4663,7 +4663,7 @@
             "Inputs": [
               {
                 "OperatorType": "Filter",
-                "Predicate": "OFFSET(1, 'count(ue.col)') \u003e 10",
+                "Predicate": "OFFSET(1, 'count(ue.col)') > 10",
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
@@ -4906,7 +4906,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(city) from (select phone, id, city from user where id \u003e 12 limit 10) as x",
+      "Original": "select count(city) from (select phone, id, city from user where id > 12 limit 10) as x",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
@@ -4930,7 +4930,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select phone, id, city from `user` where 1 != 1",
-                    "Query": "select phone, id, city from `user` where id \u003e 12 limit :__upper_limit",
+                    "Query": "select phone, id, city from `user` where id > 12 limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -4947,7 +4947,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) from (select phone, id, city from user where id \u003e 12 limit 10) as x",
+      "Original": "select count(*) from (select phone, id, city from user where id > 12 limit 10) as x",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
@@ -4971,7 +4971,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select phone, id, city from `user` where 1 != 1",
-                    "Query": "select phone, id, city from `user` where id \u003e 12 limit :__upper_limit",
+                    "Query": "select phone, id, city from `user` where id > 12 limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -5050,7 +5050,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select val1, count(*)  from (select id, val1 from user where val2 \u003c 4 order by val1 limit 2) as x group by val1",
+      "Original": "select val1, count(*)  from (select id, val1 from user where val2 < 4 order by val1 limit 2) as x group by val1",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -5079,7 +5079,7 @@
                     },
                     "FieldQuery": "select id, val1, weight_string(val1) from `user` where 1 != 1",
                     "OrderBy": "(1|2) ASC, (1|2) ASC",
-                    "Query": "select id, val1, weight_string(val1) from `user` where val2 \u003c 4 order by val1 asc, val1 asc limit :__upper_limit",
+                    "Query": "select id, val1, weight_string(val1) from `user` where val2 < 4 order by val1 asc, val1 asc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]

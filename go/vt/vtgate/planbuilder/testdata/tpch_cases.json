@@ -17,7 +17,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate \u003c date('1995-03-15') and l_shipdate \u003e date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 10",
+      "Original": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < date('1995-03-15') and l_shipdate > date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 10",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "INT64(10)",
@@ -68,7 +68,7 @@
                                   "Sharded": true
                                 },
                                 "FieldQuery": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where 1 != 1 group by l_orderkey, weight_string(l_orderkey)",
-                                "Query": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where l_shipdate \u003e date('1995-03-15') group by l_orderkey, weight_string(l_orderkey)",
+                                "Query": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where l_shipdate > date('1995-03-15') group by l_orderkey, weight_string(l_orderkey)",
                                 "Table": "lineitem"
                               },
                               {
@@ -88,7 +88,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select o_custkey, count(*), weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
-                                    "Query": "select o_custkey, count(*), weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where o_orderdate \u003c date('1995-03-15') and o_orderkey = :l_orderkey group by o_custkey, weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
+                                    "Query": "select o_custkey, count(*), weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where o_orderdate < date('1995-03-15') and o_orderkey = :l_orderkey group by o_custkey, weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
                                     "Table": "orders",
                                     "Values": [
                                       ":l_orderkey"
@@ -132,7 +132,7 @@
     "v3-plan": "symbol o_orderkey not found in table or subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select o_orderpriority, count(*) as order_count from orders where o_orderdate \u003e= date('1993-07-01') and o_orderdate \u003c date('1993-07-01') + interval '3' month and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate \u003c l_receiptdate ) group by o_orderpriority order by o_orderpriority",
+      "Original": "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate < l_receiptdate ) group by o_orderpriority order by o_orderpriority",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -164,7 +164,7 @@
                     },
                     "FieldQuery": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where 1 != 1 group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey)",
                     "OrderBy": "(1|3) ASC",
-                    "Query": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where o_orderdate \u003e= date('1993-07-01') and o_orderdate \u003c date('1993-07-01') + interval '3' month group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey) order by o_orderpriority asc",
+                    "Query": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey) order by o_orderpriority asc",
                     "Table": "orders"
                   },
                   {
@@ -175,7 +175,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from lineitem where 1 != 1",
-                    "Query": "select 1 from lineitem where l_commitdate \u003c l_receiptdate and l_orderkey = :o_orderkey",
+                    "Query": "select 1 from lineitem where l_commitdate < l_receiptdate and l_orderkey = :o_orderkey",
                     "Table": "lineitem",
                     "Values": [
                       ":o_orderkey"
@@ -196,7 +196,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select n_name, sum(l_extendedprice * (1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate \u003e= date('1994-01-01') and o_orderdate \u003c date('1994-01-01') + interval '1' year group by n_name order by revenue desc",
+      "Original": "select n_name, sum(l_extendedprice * (1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by n_name order by revenue desc",
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
@@ -258,7 +258,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
-                                    "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where o_orderdate \u003e= date('1994-01-01') and o_orderdate \u003c date('1994-01-01') + interval '1' year group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
+                                    "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
                                     "Table": "orders"
                                   },
                                   {
@@ -379,7 +379,7 @@
     "query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate \u003e= date('1994-01-01') and l_shipdate \u003c date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity \u003c 24",
+      "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
@@ -393,7 +393,7 @@
               "Sharded": true
             },
             "FieldQuery": "select sum(l_extendedprice * l_discount) as revenue from lineitem where 1 != 1",
-            "Query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate \u003e= date('1994-01-01') and l_shipdate \u003c date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity \u003c 24",
+            "Query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
             "Table": "lineitem"
           }
         ]
@@ -401,7 +401,7 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate \u003e= date('1994-01-01') and l_shipdate \u003c date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity \u003c 24",
+      "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
@@ -415,7 +415,7 @@
               "Sharded": true
             },
             "FieldQuery": "select sum(l_extendedprice * l_discount) as revenue from lineitem where 1 != 1",
-            "Query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate \u003e= date('1994-01-01') and l_shipdate \u003c date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity \u003c 24",
+            "Query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
             "Table": "lineitem"
           }
         ]
@@ -620,7 +620,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) as revenue, c_acctbal, n_name, c_address, c_phone, c_comment from customer, orders, lineitem, nation where c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate \u003e= date('1993-10-01') and o_orderdate \u003c date('1993-10-01') + interval '3' month and l_returnflag = 'R' and c_nationkey = n_nationkey group by c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment order by revenue desc limit 20",
+      "Original": "select c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) as revenue, c_acctbal, n_name, c_address, c_phone, c_comment from customer, orders, lineitem, nation where c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month and l_returnflag = 'R' and c_nationkey = n_nationkey group by c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment order by revenue desc limit 20",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "INT64(20)",
@@ -688,7 +688,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where 1 != 1 group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
-                                    "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where o_orderdate \u003e= date('1993-10-01') and o_orderdate \u003c date('1993-10-01') + interval '3' month group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
+                                    "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
                                     "Table": "orders"
                                   },
                                   {
@@ -775,7 +775,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select l_shipmode, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority \u003c\u003e '1-URGENT' and o_orderpriority \u003c\u003e '2-HIGH' then 1 else 0 end) as low_line_count from orders, lineitem where o_orderkey = l_orderkey and l_shipmode in ('MAIL', 'SHIP') and l_commitdate \u003c l_receiptdate and l_shipdate \u003c l_commitdate and l_receiptdate \u003e= date('1994-01-01') and l_receiptdate \u003c date('1994-01-01') + interval '1' year group by l_shipmode order by l_shipmode",
+      "Original": "select l_shipmode, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority <> '1-URGENT' and o_orderpriority <> '2-HIGH' then 1 else 0 end) as low_line_count from orders, lineitem where o_orderkey = l_orderkey and l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= date('1994-01-01') and l_receiptdate < date('1994-01-01') + interval '1' year group by l_shipmode order by l_shipmode",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -825,7 +825,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where 1 != 1 group by l_shipmode, weight_string(l_shipmode)",
-                        "Query": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where l_shipmode in ('MAIL', 'SHIP') and l_commitdate \u003c l_receiptdate and l_shipdate \u003c l_commitdate and l_receiptdate \u003e= date('1994-01-01') and l_receiptdate \u003c date('1994-01-01') + interval '1' year and l_orderkey = :o_orderkey group by l_shipmode, weight_string(l_shipmode)",
+                        "Query": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= date('1994-01-01') and l_receiptdate < date('1994-01-01') + interval '1' year and l_orderkey = :o_orderkey group by l_shipmode, weight_string(l_shipmode)",
                         "Table": "lineitem",
                         "Values": [
                           ":o_orderkey"
@@ -997,7 +997,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity \u003e= 1 and l_quantity \u003c= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity \u003e= 10 and l_quantity \u003c= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity \u003e= 20 and l_quantity \u003c= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
+      "Original": "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity >= 1 and l_quantity <= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity >= 10 and l_quantity <= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity >= 20 and l_quantity <= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
@@ -1040,7 +1040,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1, count(*) from part where 1 != 1 group by 1",
-                    "Query": "select 1, count(*) from part where p_partkey = :l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and :l_quantity \u003e= 1 and :l_quantity \u003c= 1 + 10 and p_size between 1 and 5 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and :l_quantity \u003e= 10 and :l_quantity \u003c= 10 + 10 and p_size between 1 and 10 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and :l_quantity \u003e= 20 and :l_quantity \u003c= 20 + 10 and p_size between 1 and 15 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' group by 1",
+                    "Query": "select 1, count(*) from part where p_partkey = :l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and :l_quantity >= 1 and :l_quantity <= 1 + 10 and p_size between 1 and 5 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and :l_quantity >= 10 and :l_quantity <= 10 + 10 and p_size between 1 and 10 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and :l_quantity >= 20 and :l_quantity <= 20 + 10 and p_size between 1 and 15 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' group by 1",
                     "Table": "part"
                   }
                 ]
@@ -1063,7 +1063,7 @@
     "v3-plan": "unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate \u003e l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey \u003c\u003e l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey \u003c\u003e l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name limit 100",
+      "Original": "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate > l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey <> l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey <> l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name limit 100",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "INT64(100)",
@@ -1119,7 +1119,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where 1 != 1 group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
-                                    "Query": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where l1.l_receiptdate \u003e l1.l_commitdate and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
+                                    "Query": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where l1.l_receiptdate > l1.l_commitdate and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
                                     "Table": "lineitem"
                                   },
                                   {
@@ -1130,7 +1130,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select 1, count(*) as numwait from orders where 1 != 1 group by 1",
-                                    "Query": "select 1, count(*) as numwait from orders where o_orderstatus = 'F' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) and o_orderkey = :l1_l_orderkey group by 1",
+                                    "Query": "select 1, count(*) as numwait from orders where o_orderstatus = 'F' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and o_orderkey = :l1_l_orderkey group by 1",
                                     "Table": "orders",
                                     "Values": [
                                       ":l1_l_orderkey"
@@ -1156,7 +1156,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
-                                    "Query": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) and s_suppkey = :l1_l_suppkey group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
+                                    "Query": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and s_suppkey = :l1_l_suppkey group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
                                     "Table": "supplier",
                                     "Values": [
                                       ":l1_l_suppkey"
@@ -1171,7 +1171,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select 1, count(*) as numwait from nation where 1 != 1 group by 1",
-                                    "Query": "select 1, count(*) as numwait from nation where n_name = 'SAUDI ARABIA' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) and n_nationkey = :s_nationkey group by 1",
+                                    "Query": "select 1, count(*) as numwait from nation where n_name = 'SAUDI ARABIA' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and n_nationkey = :s_nationkey group by 1",
                                     "Table": "nation",
                                     "Values": [
                                       ":s_nationkey"
