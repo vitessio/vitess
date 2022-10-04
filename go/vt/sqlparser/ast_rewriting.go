@@ -471,6 +471,7 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
 		sysvars.SQLSelectLimit.Name,
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
+		sysvars.QueryTimeout.Name,
 		sysvars.Workload.Name:
 		found = true
 	}
