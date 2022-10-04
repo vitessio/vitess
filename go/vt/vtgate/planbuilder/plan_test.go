@@ -218,7 +218,7 @@ func makeTestOutput(t *testing.T) string {
 
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json", true),
+		v:             loadSchema(t, "vschemas/schema.json", true),
 		sysVarEnabled: true,
 	}
 	testOutputTempDir := makeTestOutput(t)
@@ -255,7 +255,7 @@ func TestPlan(t *testing.T) {
 
 func TestSysVarSetDisabled(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json", true),
+		v:             loadSchema(t, "vschemas/schema.json", true),
 		sysVarEnabled: false,
 	}
 
@@ -264,7 +264,7 @@ func TestSysVarSetDisabled(t *testing.T) {
 
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
@@ -272,7 +272,7 @@ func TestOne(t *testing.T) {
 
 func TestOneWithMainAsDefault(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -284,7 +284,7 @@ func TestOneWithMainAsDefault(t *testing.T) {
 
 func TestOneWithSecondUserAsDefault(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "second_user",
 			Sharded: true,
@@ -296,7 +296,7 @@ func TestOneWithSecondUserAsDefault(t *testing.T) {
 
 func TestOneWithUserAsDefault(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "user",
 			Sharded: true,
@@ -308,7 +308,7 @@ func TestOneWithUserAsDefault(t *testing.T) {
 
 func TestOneWithTPCHVSchema(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(t, "tpch_schema_test.json", true),
+		v:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -317,7 +317,7 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "rails_schema_test.json", true),
+		v:             loadSchema(t, "vschemas/rails_schema.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -326,7 +326,7 @@ func TestRubyOnRailsQueries(t *testing.T) {
 
 func TestOLTP(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "oltp_schema_test.json", true),
+		v:             loadSchema(t, "vschemas/oltp_schema.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -335,7 +335,7 @@ func TestOLTP(t *testing.T) {
 
 func TestTPCC(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "tpcc_schema_test.json", true),
+		v:             loadSchema(t, "vschemas/tpcc_schema.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -344,7 +344,7 @@ func TestTPCC(t *testing.T) {
 
 func TestTPCH(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "tpch_schema_test.json", true),
+		v:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -365,7 +365,7 @@ func BenchmarkTPCH(b *testing.B) {
 
 func benchmarkWorkload(b *testing.B, name string) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(b, name+"_schema_test.json", true),
+		v:             loadSchema(b, name+"vschemas/_schema.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -380,7 +380,7 @@ func benchmarkWorkload(b *testing.B, name string) {
 
 func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -394,7 +394,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 	keyRange, _ := key.ParseShardingSpec("-")
 
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -409,7 +409,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -429,7 +429,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "second_user",
 			Sharded: true,
@@ -444,7 +444,7 @@ func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
 func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "user",
 			Sharded: true,
@@ -459,7 +459,7 @@ func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemaWrapper{
-		v:          loadSchema(t, "schema_test.json", true),
+		v:          loadSchema(t, "vschemas/schema.json", true),
 		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
@@ -470,7 +470,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v: loadSchema(t, "vschemas/schema.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -863,7 +863,7 @@ var benchMarkFiles = []string{"from_cases.json", "filter_cases.json", "large_cas
 
 func BenchmarkPlanner(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json", true),
+		v:             loadSchema(b, "vschemas/schema.json", true),
 		sysVarEnabled: true,
 	}
 	for _, filename := range benchMarkFiles {
@@ -882,7 +882,7 @@ func BenchmarkPlanner(b *testing.B) {
 
 func BenchmarkSemAnalysis(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json", true),
+		v:             loadSchema(b, "vschemas/schema.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -915,7 +915,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 
 func BenchmarkSelectVsDML(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json", true),
+		v:             loadSchema(b, "vschemas/schema.json", true),
 		sysVarEnabled: true,
 		version:       V3,
 	}

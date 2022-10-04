@@ -38,7 +38,7 @@ import (
 func TestSimplifyBuggyQuery(t *testing.T) {
 	query := "(select id from unsharded union select id from unsharded_auto) union (select id from user union select name from unsharded)"
 	vschema := &vschemaWrapper{
-		v:       loadSchema(t, "schema_test.json", true),
+		v:       loadSchema(t, "vschemas/schema.json", true),
 		version: Gen4,
 	}
 	stmt, reserved, err := sqlparser.Parse2(query)
@@ -60,7 +60,7 @@ func TestSimplifyPanic(t *testing.T) {
 	t.Skip("not needed to run")
 	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
 	vschema := &vschemaWrapper{
-		v:       loadSchema(t, "schema_test.json", true),
+		v:       loadSchema(t, "vschemas/schema.json", true),
 		version: Gen4,
 	}
 	stmt, reserved, err := sqlparser.Parse2(query)
@@ -81,7 +81,7 @@ func TestSimplifyPanic(t *testing.T) {
 func TestUnsupportedFile(t *testing.T) {
 	t.Skip("run manually to see if any queries can be simplified")
 	vschema := &vschemaWrapper{
-		v:       loadSchema(t, "schema_test.json", true),
+		v:       loadSchema(t, "vschemas/schema.json", true),
 		version: Gen4,
 	}
 	fmt.Println(vschema)
