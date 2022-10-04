@@ -177,6 +177,20 @@ export namespace vtadmin {
         public getClusters(request: vtadmin.IGetClustersRequest): Promise<vtadmin.GetClustersResponse>;
 
         /**
+         * Calls GetFullStatus.
+         * @param request GetFullStatusRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetFullStatusResponse
+         */
+        public getFullStatus(request: vtadmin.IGetFullStatusRequest, callback: vtadmin.VTAdmin.GetFullStatusCallback): void;
+
+        /**
+         * Calls GetFullStatus.
+         * @param request GetFullStatusRequest message or plain object
+         * @returns Promise
+         */
+        public getFullStatus(request: vtadmin.IGetFullStatusRequest): Promise<vtctldata.GetFullStatusResponse>;
+
+        /**
          * Calls GetGates.
          * @param request GetGatesRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetGatesResponse
@@ -745,6 +759,13 @@ export namespace vtadmin {
          * @param [response] GetClustersResponse
          */
         type GetClustersCallback = (error: (Error|null), response?: vtadmin.GetClustersResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getFullStatus}.
+         * @param error Error, if any
+         * @param [response] GetFullStatusResponse
+         */
+        type GetFullStatusCallback = (error: (Error|null), response?: vtctldata.GetFullStatusResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getGates}.
@@ -4462,6 +4483,102 @@ export namespace vtadmin {
 
         /**
          * Converts this GetClustersResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetFullStatusRequest. */
+    interface IGetFullStatusRequest {
+
+        /** GetFullStatusRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetFullStatusRequest alias */
+        alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a GetFullStatusRequest. */
+    class GetFullStatusRequest implements IGetFullStatusRequest {
+
+        /**
+         * Constructs a new GetFullStatusRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetFullStatusRequest);
+
+        /** GetFullStatusRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetFullStatusRequest alias. */
+        public alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new GetFullStatusRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetFullStatusRequest instance
+         */
+        public static create(properties?: vtadmin.IGetFullStatusRequest): vtadmin.GetFullStatusRequest;
+
+        /**
+         * Encodes the specified GetFullStatusRequest message. Does not implicitly {@link vtadmin.GetFullStatusRequest.verify|verify} messages.
+         * @param message GetFullStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetFullStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetFullStatusRequest message, length delimited. Does not implicitly {@link vtadmin.GetFullStatusRequest.verify|verify} messages.
+         * @param message GetFullStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetFullStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetFullStatusRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetFullStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetFullStatusRequest;
+
+        /**
+         * Decodes a GetFullStatusRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetFullStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetFullStatusRequest;
+
+        /**
+         * Verifies a GetFullStatusRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetFullStatusRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetFullStatusRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetFullStatusRequest;
+
+        /**
+         * Creates a plain object from a GetFullStatusRequest message. Also converts values to other types if specified.
+         * @param message GetFullStatusRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetFullStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetFullStatusRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

@@ -64,6 +64,8 @@ service VTAdmin {
     rpc GetCellsAliases(GetCellsAliasesRequest) returns (GetCellsAliasesResponse) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
+    // GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+    rpc GetFullStatus(GetFullStatusRequest) returns (vtctldata.GetFullStatusResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
     // GetKeyspace returns a keyspace by name in the specified cluster.
@@ -418,6 +420,11 @@ message GetClustersRequest {}
 
 message GetClustersResponse {
     repeated Cluster clusters = 1;
+}
+
+message GetFullStatusRequest {
+  string cluster_id = 1;
+  topodata.TabletAlias alias = 2;
 }
 
 message GetGatesRequest {
