@@ -848,6 +848,7 @@ func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 	b := new(bytes.Buffer)
 	enc := json.NewEncoder(b)
 	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
 	err = enc.Encode(plan)
 	if err != nil {
 		panic(err)
