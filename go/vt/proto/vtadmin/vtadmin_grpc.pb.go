@@ -54,6 +54,8 @@ type VTAdminClient interface {
 	GetCellsAliases(ctx context.Context, in *GetCellsAliasesRequest, opts ...grpc.CallOption) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
+	// GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+	GetFullStatus(ctx context.Context, in *GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetFullStatusResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error)
 	// GetKeyspace returns a keyspace by name in the specified cluster.
@@ -259,6 +261,15 @@ func (c *vTAdminClient) GetCellsAliases(ctx context.Context, in *GetCellsAliases
 func (c *vTAdminClient) GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error) {
 	out := new(GetClustersResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetClusters", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetFullStatus(ctx context.Context, in *GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetFullStatusResponse, error) {
+	out := new(vtctldata.GetFullStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetFullStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -615,6 +626,8 @@ type VTAdminServer interface {
 	GetCellsAliases(context.Context, *GetCellsAliasesRequest) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
+	// GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+	GetFullStatus(context.Context, *GetFullStatusRequest) (*vtctldata.GetFullStatusResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error)
 	// GetKeyspace returns a keyspace by name in the specified cluster.
@@ -756,6 +769,9 @@ func (UnimplementedVTAdminServer) GetCellsAliases(context.Context, *GetCellsAlia
 }
 func (UnimplementedVTAdminServer) GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusters not implemented")
+}
+func (UnimplementedVTAdminServer) GetFullStatus(context.Context, *GetFullStatusRequest) (*vtctldata.GetFullStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFullStatus not implemented")
 }
 func (UnimplementedVTAdminServer) GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGates not implemented")
@@ -1069,6 +1085,24 @@ func _VTAdmin_GetClusters_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetClusters(ctx, req.(*GetClustersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetFullStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFullStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetFullStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetFullStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetFullStatus(ctx, req.(*GetFullStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1753,6 +1787,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetClusters",
 			Handler:    _VTAdmin_GetClusters_Handler,
+		},
+		{
+			MethodName: "GetFullStatus",
+			Handler:    _VTAdmin_GetFullStatus_Handler,
 		},
 		{
 			MethodName: "GetGates",
