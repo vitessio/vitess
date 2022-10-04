@@ -1,5 +1,3 @@
-# Test cases in this file follow the code in ordered_aggregate.go.
-#
 # Aggregate on unsharded
 "select count(*), col from unsharded"
 {
