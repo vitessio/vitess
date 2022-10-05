@@ -259,6 +259,15 @@
 				"site_test"
 			]
 		},
+		"onlineddl_qs": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/queryserving"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_qs",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"onlineddl_ghost": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/ghost"],

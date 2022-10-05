@@ -1,0 +1,26 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
+    }
+  },
+  "tables": {
+    "users": {
+      "column_vindexes": [
+        {
+          "column": "team_id",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
+    "music": {
+      "column_vindexes": [
+        {
+          "column": "music_id",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    }
+  }
+}
