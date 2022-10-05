@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/pflag"
 	"log"
 	"os"
 	"os/exec"
@@ -29,8 +30,6 @@ import (
 	"strings"
 	"sync"
 	"text/template"
-
-	"github.com/spf13/pflag"
 )
 
 type (
@@ -339,7 +338,6 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 
 			for b := range prChan {
 				fmt.Print(".")
-
 				if b.isPR {
 					prInfo, err := loadPRInfo(b.key)
 					if err != nil {
@@ -494,7 +492,7 @@ func main() {
 		to                             = "HEAD"
 	)
 	pflag.StringVarP(&from, "from", "f", "", "from sha/tag/branch")
-	pflag.StringVarP(&to, "to", to, "t", "to sha/tag/branch")
+	pflag.StringVarP(&to, "to", "t", to, "to sha/tag/branch")
 	pflag.StringVarP(&versionName, "version", "v", "", "name of the version (has to be the following format: v11.0.0)")
 	pflag.StringVarP(&summaryFile, "summary", "s", "", "readme file on which there is a summary of the release")
 	pflag.Parse()
