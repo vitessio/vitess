@@ -26,13 +26,14 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/openark/golib/sqlutils"
+
 	"vitess.io/vitess/go/vt/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 

@@ -22,9 +22,10 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
+	"github.com/openark/golib/sqlutils"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"

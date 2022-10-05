@@ -17,6 +17,7 @@ limitations under the License.
 package pools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -24,8 +25,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sync2"
 )
@@ -576,9 +575,14 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 		// try to use it.
 		p.factory = FailFactory
 		p.Put(r)
-		time.Sleep(15 * time.Millisecond)
-		assert.Zero(t, p.Active())
-
+		timeout := time.After(1 * time.Second)
+		for p.Active() != 0 {
+			select {
+			case <-timeout:
+				t.Errorf("Timed out waiting for resource to be closed by idle timeout")
+			default:
+			}
+		}
 		// reset factory for next run.
 		p.factory = PoolFactory
 	}

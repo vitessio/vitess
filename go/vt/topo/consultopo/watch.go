@@ -33,9 +33,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
-		servenv.OnParseFor(cmd, registerWatchFlags)
-	}
+	servenv.RegisterFlagsForTopoBinaries(registerWatchFlags)
 }
 
 func registerWatchFlags(fs *pflag.FlagSet) {

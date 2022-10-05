@@ -18,8 +18,9 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -63,7 +64,7 @@ func init() {
 	})
 }
 
-func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
@@ -81,7 +82,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return wr.ReparentTablet(ctx, tabletAlias)
 }
 
-func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
@@ -105,7 +106,7 @@ func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return wr.InitShardPrimary(ctx, keyspace, shard, tabletAlias, *force, *waitReplicasTimeout)
 }
 
-func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
@@ -149,7 +150,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	return wr.PlannedReparentShard(ctx, keyspace, shard, newPrimaryAlias, avoidTabletAlias, *waitReplicasTimeout)
 }
 
-func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
@@ -189,7 +190,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas, *preventCrossCellPromotion)
 }
 
-func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

@@ -112,6 +112,8 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		// This parameter is overriden from the config file, added here to just verify that we indeed use the config file paramter over the flag
 		"--recovery-period-block-duration", "10h",
 		"--instance-poll-time", "1s",
+		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
+		"--topo-information-refresh-duration", "3s",
 		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {

@@ -19,8 +19,9 @@ package inst
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
 )
 
 func init() {
@@ -34,9 +35,9 @@ func TestIsSmallerMajorVersion(t *testing.T) {
 	i5517 := Instance{Version: "5.5.17"}
 	i56 := Instance{Version: "5.6"}
 
-	test.S(t).ExpectFalse(i55.IsSmallerMajorVersion(&i5517))
-	test.S(t).ExpectFalse(i56.IsSmallerMajorVersion(&i5517))
-	test.S(t).ExpectTrue(i55.IsSmallerMajorVersion(&i56))
+	require.False(t, i55.IsSmallerMajorVersion(&i5517))
+	require.False(t, i56.IsSmallerMajorVersion(&i5517))
+	require.True(t, i55.IsSmallerMajorVersion(&i56))
 }
 
 func TestIsVersion(t *testing.T) {
@@ -45,40 +46,40 @@ func TestIsVersion(t *testing.T) {
 	i56 := Instance{Version: "5.6.20"}
 	i57 := Instance{Version: "5.7.8-log"}
 
-	test.S(t).ExpectTrue(i51.IsMySQL51())
-	test.S(t).ExpectTrue(i55.IsMySQL55())
-	test.S(t).ExpectTrue(i56.IsMySQL56())
-	test.S(t).ExpectFalse(i55.IsMySQL56())
-	test.S(t).ExpectTrue(i57.IsMySQL57())
-	test.S(t).ExpectFalse(i56.IsMySQL57())
+	require.True(t, i51.IsMySQL51())
+	require.True(t, i55.IsMySQL55())
+	require.True(t, i56.IsMySQL56())
+	require.False(t, i55.IsMySQL56())
+	require.True(t, i57.IsMySQL57())
+	require.False(t, i56.IsMySQL57())
 }
 
 func TestIsSmallerBinlogFormat(t *testing.T) {
 	iStatement := &Instance{Key: key1, BinlogFormat: "STATEMENT"}
 	iRow := &Instance{Key: key2, BinlogFormat: "ROW"}
 	iMixed := &Instance{Key: key3, BinlogFormat: "MIXED"}
-	test.S(t).ExpectTrue(iStatement.IsSmallerBinlogFormat(iRow))
-	test.S(t).ExpectFalse(iStatement.IsSmallerBinlogFormat(iStatement))
-	test.S(t).ExpectFalse(iRow.IsSmallerBinlogFormat(iStatement))
+	require.True(t, iStatement.IsSmallerBinlogFormat(iRow))
+	require.False(t, iStatement.IsSmallerBinlogFormat(iStatement))
+	require.False(t, iRow.IsSmallerBinlogFormat(iStatement))
 
-	test.S(t).ExpectTrue(iStatement.IsSmallerBinlogFormat(iMixed))
-	test.S(t).ExpectTrue(iMixed.IsSmallerBinlogFormat(iRow))
-	test.S(t).ExpectFalse(iMixed.IsSmallerBinlogFormat(iStatement))
-	test.S(t).ExpectFalse(iRow.IsSmallerBinlogFormat(iMixed))
+	require.True(t, iStatement.IsSmallerBinlogFormat(iMixed))
+	require.True(t, iMixed.IsSmallerBinlogFormat(iRow))
+	require.False(t, iMixed.IsSmallerBinlogFormat(iStatement))
+	require.False(t, iRow.IsSmallerBinlogFormat(iMixed))
 }
 
 func TestReplicationThreads(t *testing.T) {
 	{
-		test.S(t).ExpectFalse(instance1.ReplicaRunning())
+		require.False(t, instance1.ReplicaRunning())
 	}
 	{
-		test.S(t).ExpectTrue(instance1.ReplicationThreadsExist())
+		require.True(t, instance1.ReplicationThreadsExist())
 	}
 	{
-		test.S(t).ExpectTrue(instance1.ReplicationThreadsStopped())
+		require.True(t, instance1.ReplicationThreadsStopped())
 	}
 	{
 		i := Instance{Key: key1, ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
-		test.S(t).ExpectFalse(i.ReplicationThreadsExist())
+		require.False(t, i.ReplicationThreadsExist())
 	}
 }
