@@ -1,0 +1,89 @@
+[
+  {
+    "comment": "get_lock from dual",
+    "query": "select get_lock('xyz', 10) from dual",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock('xyz', 10) from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock('xyz', 10) from dual where 1 != 1",
+        "Query": "select get_lock('xyz', 10) from dual"
+      }
+    }
+  },
+  {
+    "comment": "is_free_lock from dual",
+    "query": "select is_free_lock('xyz') from dual",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select is_free_lock('xyz') from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select is_free_lock('xyz') from dual where 1 != 1",
+        "Query": "select is_free_lock('xyz') from dual"
+      }
+    }
+  },
+  {
+    "comment": "get_lock from dual prepare query",
+    "query": "select get_lock(?, ?)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock(?, ?)",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock(:v1, :v2) from dual where 1 != 1",
+        "Query": "select get_lock(:v1, :v2) from dual"
+      }
+    }
+  },
+  {
+    "comment": "lock tables read",
+    "query": "lock tables t as x read local",
+    "plan": {
+      "QueryType": "LOCK_TABLES",
+      "Original": "lock tables t as x read local",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "lock tables write",
+    "query": "lock tables t low_priority write",
+    "plan": {
+      "QueryType": "LOCK_TABLES",
+      "Original": "lock tables t low_priority write",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "unlock tables",
+    "query": "unlock tables",
+    "plan": {
+      "QueryType": "UNLOCK_TABLES",
+      "Original": "unlock tables",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  }
+]

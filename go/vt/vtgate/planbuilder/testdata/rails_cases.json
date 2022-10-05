@@ -1,0 +1,210 @@
+[
+  {
+    "comment": "Author5.joins(books: [{orders: :customer}, :supplier])",
+    "query": "select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2,-3,-4",
+        "JoinVars": {
+          "book6s_supplier5_id": 4
+        },
+        "TableName": "author5s, book6s_book6s_order2s_order2s_customer2s_supplier5s",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2,-3,-4,-5",
+            "JoinVars": {
+              "order2s_customer2_id": 5
+            },
+            "TableName": "author5s, book6s_book6s_order2s_order2s_customer2s",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "-1,-2,-3,-4,-5,1",
+                "JoinVars": {
+                  "book6s_order2s_order2_id": 5
+                },
+                "TableName": "author5s, book6s_book6s_order2s_order2s",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "-1,-2,-3,-4,-5,1",
+                    "JoinVars": {
+                      "book6s_id": 5
+                    },
+                    "TableName": "author5s, book6s_book6s_order2s",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s join book6s on book6s.author5_id = author5s.id where 1 != 1",
+                        "Query": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s join book6s on book6s.author5_id = author5s.id",
+                        "Table": "author5s, book6s"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select book6s_order2s.order2_id from book6s_order2s where 1 != 1",
+                        "Query": "select book6s_order2s.order2_id from book6s_order2s where book6s_order2s.book6_id = :book6s_id",
+                        "Table": "book6s_order2s",
+                        "Values": [
+                          ":book6s_id"
+                        ],
+                        "Vindex": "binary_md5"
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select order2s.customer2_id from order2s where 1 != 1",
+                    "Query": "select order2s.customer2_id from order2s where order2s.id = :book6s_order2s_order2_id",
+                    "Table": "order2s"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from customer2s where 1 != 1",
+                "Query": "select 1 from customer2s where customer2s.id = :order2s_customer2_id",
+                "Table": "customer2s",
+                "Values": [
+                  ":order2s_customer2_id"
+                ],
+                "Vindex": "binary_md5"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from supplier5s where 1 != 1",
+            "Query": "select 1 from supplier5s where supplier5s.id = :book6s_supplier5_id",
+            "Table": "supplier5s",
+            "Values": [
+              ":book6s_supplier5_id"
+            ],
+            "Vindex": "binary_md5"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "1,2,3,4",
+        "JoinVars": {
+          "order2s_id": 0
+        },
+        "TableName": "customer2s, order2s_author5s, book6s_book6s_order2s_supplier5s",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select order2s.id from order2s, customer2s where 1 != 1",
+            "Query": "select order2s.id from order2s, customer2s where customer2s.id = order2s.customer2_id",
+            "Table": "customer2s, order2s"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-2,-3,-4,-5",
+            "JoinVars": {
+              "book6s_supplier5_id": 0
+            },
+            "TableName": "author5s, book6s_book6s_order2s_supplier5s",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "-2,-3,-4,-5,-6",
+                "JoinVars": {
+                  "book6s_id": 0
+                },
+                "TableName": "author5s, book6s_book6s_order2s",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select book6s.id, book6s.supplier5_id, author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at from author5s, book6s where 1 != 1",
+                    "Query": "select book6s.id, book6s.supplier5_id, author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at from author5s, book6s where book6s.author5_id = author5s.id",
+                    "Table": "author5s, book6s"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from book6s_order2s where 1 != 1",
+                    "Query": "select 1 from book6s_order2s where book6s_order2s.book6_id = :book6s_id and book6s_order2s.order2_id = :order2s_id",
+                    "Table": "book6s_order2s",
+                    "Values": [
+                      ":book6s_id"
+                    ],
+                    "Vindex": "binary_md5"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from supplier5s where 1 != 1",
+                "Query": "select 1 from supplier5s where supplier5s.id = :book6s_supplier5_id",
+                "Table": "supplier5s",
+                "Values": [
+                  ":book6s_supplier5_id"
+                ],
+                "Vindex": "binary_md5"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+]
