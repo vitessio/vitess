@@ -390,6 +390,8 @@ type VtctldClient interface {
 	ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(ctx context.Context, in *vtctldata.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
 }
@@ -1191,6 +1193,15 @@ func (c *vtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldat
 	return out, nil
 }
 
+func (c *vtctldClient) ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error) {
+	out := new(vtctldata.ValidateVersionShardResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateVersionShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error) {
 	out := new(vtctldata.ValidateVSchemaResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateVSchema", in, out, opts...)
@@ -1458,6 +1469,8 @@ type VtctldServer interface {
 	ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(context.Context, *vtctldata.ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
 	mustEmbedUnimplementedVtctldServer()
@@ -1706,6 +1719,9 @@ func (UnimplementedVtctldServer) ValidateShard(context.Context, *vtctldata.Valid
 }
 func (UnimplementedVtctldServer) ValidateVersionKeyspace(context.Context, *vtctldata.ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionShard not implemented")
 }
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
@@ -3172,6 +3188,24 @@ func _Vtctld_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ValidateVersionShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateVersionShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateVersionShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateVersionShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateVersionShard(ctx, req.(*vtctldata.ValidateVersionShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ValidateVSchemaRequest)
 	if err := dec(in); err != nil {
@@ -3504,6 +3538,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVersionKeyspace",
 			Handler:    _Vtctld_ValidateVersionKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateVersionShard",
+			Handler:    _Vtctld_ValidateVersionShard_Handler,
 		},
 		{
 			MethodName: "ValidateVSchema",
