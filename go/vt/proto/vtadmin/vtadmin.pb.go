@@ -5555,6 +5555,69 @@ func (x *ValidateVersionKeyspaceRequest) GetKeyspace() string {
 	return ""
 }
 
+type ValidateVersionShardRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	Keyspace  string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Shard     string `protobuf:"bytes,3,opt,name=shard,proto3" json:"shard,omitempty"`
+}
+
+func (x *ValidateVersionShardRequest) Reset() {
+	*x = ValidateVersionShardRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtadmin_proto_msgTypes[93]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ValidateVersionShardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateVersionShardRequest) ProtoMessage() {}
+
+func (x *ValidateVersionShardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtadmin_proto_msgTypes[93]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateVersionShardRequest.ProtoReflect.Descriptor instead.
+func (*ValidateVersionShardRequest) Descriptor() ([]byte, []int) {
+	return file_vtadmin_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *ValidateVersionShardRequest) GetClusterId() string {
+	if x != nil {
+		return x.ClusterId
+	}
+	return ""
+}
+
+func (x *ValidateVersionShardRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *ValidateVersionShardRequest) GetShard() string {
+	if x != nil {
+		return x.Shard
+	}
+	return ""
+}
+
 type VTExplainRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -5568,7 +5631,7 @@ type VTExplainRequest struct {
 func (x *VTExplainRequest) Reset() {
 	*x = VTExplainRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtadmin_proto_msgTypes[93]
+		mi := &file_vtadmin_proto_msgTypes[94]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5581,7 +5644,7 @@ func (x *VTExplainRequest) String() string {
 func (*VTExplainRequest) ProtoMessage() {}
 
 func (x *VTExplainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtadmin_proto_msgTypes[93]
+	mi := &file_vtadmin_proto_msgTypes[94]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5594,7 +5657,7 @@ func (x *VTExplainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VTExplainRequest.ProtoReflect.Descriptor instead.
 func (*VTExplainRequest) Descriptor() ([]byte, []int) {
-	return file_vtadmin_proto_rawDescGZIP(), []int{93}
+	return file_vtadmin_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *VTExplainRequest) GetCluster() string {
@@ -5629,7 +5692,7 @@ type VTExplainResponse struct {
 func (x *VTExplainResponse) Reset() {
 	*x = VTExplainResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtadmin_proto_msgTypes[94]
+		mi := &file_vtadmin_proto_msgTypes[95]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5642,7 +5705,7 @@ func (x *VTExplainResponse) String() string {
 func (*VTExplainResponse) ProtoMessage() {}
 
 func (x *VTExplainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtadmin_proto_msgTypes[94]
+	mi := &file_vtadmin_proto_msgTypes[95]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5655,7 +5718,7 @@ func (x *VTExplainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VTExplainResponse.ProtoReflect.Descriptor instead.
 func (*VTExplainResponse) Descriptor() ([]byte, []int) {
-	return file_vtadmin_proto_rawDescGZIP(), []int{94}
+	return file_vtadmin_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *VTExplainResponse) GetResponse() string {
@@ -5677,7 +5740,7 @@ type Schema_ShardTableSize struct {
 func (x *Schema_ShardTableSize) Reset() {
 	*x = Schema_ShardTableSize{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtadmin_proto_msgTypes[98]
+		mi := &file_vtadmin_proto_msgTypes[99]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5690,7 +5753,7 @@ func (x *Schema_ShardTableSize) String() string {
 func (*Schema_ShardTableSize) ProtoMessage() {}
 
 func (x *Schema_ShardTableSize) ProtoReflect() protoreflect.Message {
-	mi := &file_vtadmin_proto_msgTypes[98]
+	mi := &file_vtadmin_proto_msgTypes[99]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5735,7 +5798,7 @@ type Schema_TableSize struct {
 func (x *Schema_TableSize) Reset() {
 	*x = Schema_TableSize{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtadmin_proto_msgTypes[99]
+		mi := &file_vtadmin_proto_msgTypes[100]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5748,7 +5811,7 @@ func (x *Schema_TableSize) String() string {
 func (*Schema_TableSize) ProtoMessage() {}
 
 func (x *Schema_TableSize) ProtoReflect() protoreflect.Message {
-	mi := &file_vtadmin_proto_msgTypes[99]
+	mi := &file_vtadmin_proto_msgTypes[100]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5803,7 +5866,7 @@ type ReloadSchemasResponse_KeyspaceResult struct {
 func (x *ReloadSchemasResponse_KeyspaceResult) Reset() {
 	*x = ReloadSchemasResponse_KeyspaceResult{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtadmin_proto_msgTypes[102]
+		mi := &file_vtadmin_proto_msgTypes[103]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5816,7 +5879,7 @@ func (x *ReloadSchemasResponse_KeyspaceResult) String() string {
 func (*ReloadSchemasResponse_KeyspaceResult) ProtoMessage() {}
 
 func (x *ReloadSchemasResponse_KeyspaceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_vtadmin_proto_msgTypes[102]
+	mi := &file_vtadmin_proto_msgTypes[103]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5864,7 +5927,7 @@ type ReloadSchemasResponse_ShardResult struct {
 func (x *ReloadSchemasResponse_ShardResult) Reset() {
 	*x = ReloadSchemasResponse_ShardResult{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtadmin_proto_msgTypes[103]
+		mi := &file_vtadmin_proto_msgTypes[104]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5877,7 +5940,7 @@ func (x *ReloadSchemasResponse_ShardResult) String() string {
 func (*ReloadSchemasResponse_ShardResult) ProtoMessage() {}
 
 func (x *ReloadSchemasResponse_ShardResult) ProtoReflect() protoreflect.Message {
-	mi := &file_vtadmin_proto_msgTypes[103]
+	mi := &file_vtadmin_proto_msgTypes[104]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5926,7 +5989,7 @@ type ReloadSchemasResponse_TabletResult struct {
 func (x *ReloadSchemasResponse_TabletResult) Reset() {
 	*x = ReloadSchemasResponse_TabletResult{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtadmin_proto_msgTypes[104]
+		mi := &file_vtadmin_proto_msgTypes[105]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5939,7 +6002,7 @@ func (x *ReloadSchemasResponse_TabletResult) String() string {
 func (*ReloadSchemasResponse_TabletResult) ProtoMessage() {}
 
 func (x *ReloadSchemasResponse_TabletResult) ProtoReflect() protoreflect.Message {
-	mi := &file_vtadmin_proto_msgTypes[104]
+	mi := &file_vtadmin_proto_msgTypes[105]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6707,7 +6770,14 @@ var file_vtadmin_proto_rawDesc = []byte{
 	0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x63, 0x6c, 0x75, 0x73,
 	0x74, 0x65, 0x72, 0x49, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
 	0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x22, 0x5a, 0x0a, 0x10, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x52, 0x65,
+	0x65, 0x22, 0x6e, 0x0a, 0x1b, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72,
+	0x73, 0x69, 0x6f, 0x6e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x49, 0x64, 0x12,
+	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72,
+	0x64, 0x22, 0x5a, 0x0a, 0x10, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x52, 0x65,
 	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72,
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12,
 	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
@@ -6715,8 +6785,8 @@ var file_vtadmin_proto_rawDesc = []byte{
 	0x71, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x71, 0x6c, 0x22, 0x2f, 0x0a,
 	0x11, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
 	0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xe6,
-	0x1e, 0x0a, 0x07, 0x56, 0x54, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x12, 0x53, 0x0a, 0x0e, 0x43, 0x72,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xcf,
+	0x1f, 0x0a, 0x07, 0x56, 0x54, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x12, 0x53, 0x0a, 0x0e, 0x43, 0x72,
 	0x65, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1e, 0x2e, 0x76,
 	0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79,
 	0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1f, 0x2e, 0x76,
@@ -6958,14 +7028,20 @@ var file_vtadmin_proto_rawDesc = []byte{
 	0x65, 0x73, 0x74, 0x1a, 0x2a, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
 	0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x4b,
 	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
-	0x00, 0x12, 0x44, 0x0a, 0x09, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x12, 0x19,
-	0x2e, 0x76, 0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61,
-	0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x76, 0x74, 0x61, 0x64,
-	0x6d, 0x69, 0x6e, 0x2e, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x42, 0x26, 0x5a, 0x24, 0x76, 0x69, 0x74, 0x65, 0x73,
-	0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76,
-	0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x00, 0x12, 0x67, 0x0a, 0x14, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72,
+	0x73, 0x69, 0x6f, 0x6e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x24, 0x2e, 0x76, 0x74, 0x61, 0x64,
+	0x6d, 0x69, 0x6e, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73,
+	0x69, 0x6f, 0x6e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
+	0x27, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69,
+	0x64, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x68, 0x61, 0x72, 0x64,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x44, 0x0a, 0x09, 0x56, 0x54,
+	0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x12, 0x19, 0x2e, 0x76, 0x74, 0x61, 0x64, 0x6d, 0x69,
+	0x6e, 0x2e, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x76, 0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x56, 0x54, 0x45,
+	0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00,
+	0x42, 0x26, 0x5a, 0x24, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69,
+	0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2f, 0x76, 0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -6981,7 +7057,7 @@ func file_vtadmin_proto_rawDescGZIP() []byte {
 }
 
 var file_vtadmin_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_vtadmin_proto_msgTypes = make([]protoimpl.MessageInfo, 105)
+var file_vtadmin_proto_msgTypes = make([]protoimpl.MessageInfo, 106)
 var file_vtadmin_proto_goTypes = []interface{}{
 	(Tablet_ServingState)(0),                            // 0: vtadmin.Tablet.ServingState
 	(*Cluster)(nil),                                     // 1: vtadmin.Cluster
@@ -7077,95 +7153,97 @@ var file_vtadmin_proto_goTypes = []interface{}{
 	(*ValidateSchemaKeyspaceRequest)(nil),               // 91: vtadmin.ValidateSchemaKeyspaceRequest
 	(*ValidateShardRequest)(nil),                        // 92: vtadmin.ValidateShardRequest
 	(*ValidateVersionKeyspaceRequest)(nil),              // 93: vtadmin.ValidateVersionKeyspaceRequest
-	(*VTExplainRequest)(nil),                            // 94: vtadmin.VTExplainRequest
-	(*VTExplainResponse)(nil),                           // 95: vtadmin.VTExplainResponse
-	nil,                                                 // 96: vtadmin.ClusterCellsAliases.AliasesEntry
-	nil,                                                 // 97: vtadmin.Keyspace.ShardsEntry
-	nil,                                                 // 98: vtadmin.Schema.TableSizesEntry
-	(*Schema_ShardTableSize)(nil),                       // 99: vtadmin.Schema.ShardTableSize
-	(*Schema_TableSize)(nil),                            // 100: vtadmin.Schema.TableSize
-	nil,                                                 // 101: vtadmin.Schema.TableSize.ByShardEntry
-	nil,                                                 // 102: vtadmin.GetWorkflowsResponse.WorkflowsByClusterEntry
-	(*ReloadSchemasResponse_KeyspaceResult)(nil),        // 103: vtadmin.ReloadSchemasResponse.KeyspaceResult
-	(*ReloadSchemasResponse_ShardResult)(nil),           // 104: vtadmin.ReloadSchemasResponse.ShardResult
-	(*ReloadSchemasResponse_TabletResult)(nil),          // 105: vtadmin.ReloadSchemasResponse.TabletResult
-	(*mysqlctl.BackupInfo)(nil),                         // 106: mysqlctl.BackupInfo
-	(*topodata.CellInfo)(nil),                           // 107: topodata.CellInfo
-	(*vtctldata.ShardReplicationPositionsResponse)(nil), // 108: vtctldata.ShardReplicationPositionsResponse
-	(*vtctldata.Keyspace)(nil),                          // 109: vtctldata.Keyspace
-	(*tabletmanagerdata.TableDefinition)(nil),           // 110: tabletmanagerdata.TableDefinition
-	(*vtctldata.Shard)(nil),                             // 111: vtctldata.Shard
-	(*vschema.SrvVSchema)(nil),                          // 112: vschema.SrvVSchema
-	(*topodata.Tablet)(nil),                             // 113: topodata.Tablet
-	(*vschema.Keyspace)(nil),                            // 114: vschema.Keyspace
-	(*vtctldata.Workflow)(nil),                          // 115: vtctldata.Workflow
-	(*vtctldata.CreateKeyspaceRequest)(nil),             // 116: vtctldata.CreateKeyspaceRequest
-	(*vtctldata.CreateShardRequest)(nil),                // 117: vtctldata.CreateShardRequest
-	(*vtctldata.DeleteKeyspaceRequest)(nil),             // 118: vtctldata.DeleteKeyspaceRequest
-	(*vtctldata.DeleteShardsRequest)(nil),               // 119: vtctldata.DeleteShardsRequest
-	(*topodata.TabletAlias)(nil),                        // 120: topodata.TabletAlias
-	(*vtctldata.EmergencyReparentShardRequest)(nil),     // 121: vtctldata.EmergencyReparentShardRequest
-	(*logutil.Event)(nil),                               // 122: logutil.Event
-	(*vtctldata.GetBackupsRequest)(nil),                 // 123: vtctldata.GetBackupsRequest
-	(*vtctldata.PlannedReparentShardRequest)(nil),       // 124: vtctldata.PlannedReparentShardRequest
-	(*topodata.CellsAlias)(nil),                         // 125: topodata.CellsAlias
-	(*vtctldata.CreateShardResponse)(nil),               // 126: vtctldata.CreateShardResponse
-	(*vtctldata.DeleteKeyspaceResponse)(nil),            // 127: vtctldata.DeleteKeyspaceResponse
-	(*vtctldata.DeleteShardsResponse)(nil),              // 128: vtctldata.DeleteShardsResponse
-	(*vtctldata.GetFullStatusResponse)(nil),             // 129: vtctldata.GetFullStatusResponse
-	(*vtctldata.ValidateResponse)(nil),                  // 130: vtctldata.ValidateResponse
-	(*vtctldata.ValidateKeyspaceResponse)(nil),          // 131: vtctldata.ValidateKeyspaceResponse
-	(*vtctldata.ValidateSchemaKeyspaceResponse)(nil),    // 132: vtctldata.ValidateSchemaKeyspaceResponse
-	(*vtctldata.ValidateShardResponse)(nil),             // 133: vtctldata.ValidateShardResponse
-	(*vtctldata.ValidateVersionKeyspaceResponse)(nil),   // 134: vtctldata.ValidateVersionKeyspaceResponse
+	(*ValidateVersionShardRequest)(nil),                 // 94: vtadmin.ValidateVersionShardRequest
+	(*VTExplainRequest)(nil),                            // 95: vtadmin.VTExplainRequest
+	(*VTExplainResponse)(nil),                           // 96: vtadmin.VTExplainResponse
+	nil,                                                 // 97: vtadmin.ClusterCellsAliases.AliasesEntry
+	nil,                                                 // 98: vtadmin.Keyspace.ShardsEntry
+	nil,                                                 // 99: vtadmin.Schema.TableSizesEntry
+	(*Schema_ShardTableSize)(nil),                       // 100: vtadmin.Schema.ShardTableSize
+	(*Schema_TableSize)(nil),                            // 101: vtadmin.Schema.TableSize
+	nil,                                                 // 102: vtadmin.Schema.TableSize.ByShardEntry
+	nil,                                                 // 103: vtadmin.GetWorkflowsResponse.WorkflowsByClusterEntry
+	(*ReloadSchemasResponse_KeyspaceResult)(nil),        // 104: vtadmin.ReloadSchemasResponse.KeyspaceResult
+	(*ReloadSchemasResponse_ShardResult)(nil),           // 105: vtadmin.ReloadSchemasResponse.ShardResult
+	(*ReloadSchemasResponse_TabletResult)(nil),          // 106: vtadmin.ReloadSchemasResponse.TabletResult
+	(*mysqlctl.BackupInfo)(nil),                         // 107: mysqlctl.BackupInfo
+	(*topodata.CellInfo)(nil),                           // 108: topodata.CellInfo
+	(*vtctldata.ShardReplicationPositionsResponse)(nil), // 109: vtctldata.ShardReplicationPositionsResponse
+	(*vtctldata.Keyspace)(nil),                          // 110: vtctldata.Keyspace
+	(*tabletmanagerdata.TableDefinition)(nil),           // 111: tabletmanagerdata.TableDefinition
+	(*vtctldata.Shard)(nil),                             // 112: vtctldata.Shard
+	(*vschema.SrvVSchema)(nil),                          // 113: vschema.SrvVSchema
+	(*topodata.Tablet)(nil),                             // 114: topodata.Tablet
+	(*vschema.Keyspace)(nil),                            // 115: vschema.Keyspace
+	(*vtctldata.Workflow)(nil),                          // 116: vtctldata.Workflow
+	(*vtctldata.CreateKeyspaceRequest)(nil),             // 117: vtctldata.CreateKeyspaceRequest
+	(*vtctldata.CreateShardRequest)(nil),                // 118: vtctldata.CreateShardRequest
+	(*vtctldata.DeleteKeyspaceRequest)(nil),             // 119: vtctldata.DeleteKeyspaceRequest
+	(*vtctldata.DeleteShardsRequest)(nil),               // 120: vtctldata.DeleteShardsRequest
+	(*topodata.TabletAlias)(nil),                        // 121: topodata.TabletAlias
+	(*vtctldata.EmergencyReparentShardRequest)(nil),     // 122: vtctldata.EmergencyReparentShardRequest
+	(*logutil.Event)(nil),                               // 123: logutil.Event
+	(*vtctldata.GetBackupsRequest)(nil),                 // 124: vtctldata.GetBackupsRequest
+	(*vtctldata.PlannedReparentShardRequest)(nil),       // 125: vtctldata.PlannedReparentShardRequest
+	(*topodata.CellsAlias)(nil),                         // 126: topodata.CellsAlias
+	(*vtctldata.CreateShardResponse)(nil),               // 127: vtctldata.CreateShardResponse
+	(*vtctldata.DeleteKeyspaceResponse)(nil),            // 128: vtctldata.DeleteKeyspaceResponse
+	(*vtctldata.DeleteShardsResponse)(nil),              // 129: vtctldata.DeleteShardsResponse
+	(*vtctldata.GetFullStatusResponse)(nil),             // 130: vtctldata.GetFullStatusResponse
+	(*vtctldata.ValidateResponse)(nil),                  // 131: vtctldata.ValidateResponse
+	(*vtctldata.ValidateKeyspaceResponse)(nil),          // 132: vtctldata.ValidateKeyspaceResponse
+	(*vtctldata.ValidateSchemaKeyspaceResponse)(nil),    // 133: vtctldata.ValidateSchemaKeyspaceResponse
+	(*vtctldata.ValidateShardResponse)(nil),             // 134: vtctldata.ValidateShardResponse
+	(*vtctldata.ValidateVersionKeyspaceResponse)(nil),   // 135: vtctldata.ValidateVersionKeyspaceResponse
+	(*vtctldata.ValidateVersionShardResponse)(nil),      // 136: vtctldata.ValidateVersionShardResponse
 }
 var file_vtadmin_proto_depIdxs = []int32{
 	1,   // 0: vtadmin.ClusterBackup.cluster:type_name -> vtadmin.Cluster
-	106, // 1: vtadmin.ClusterBackup.backup:type_name -> mysqlctl.BackupInfo
+	107, // 1: vtadmin.ClusterBackup.backup:type_name -> mysqlctl.BackupInfo
 	1,   // 2: vtadmin.ClusterCellsAliases.cluster:type_name -> vtadmin.Cluster
-	96,  // 3: vtadmin.ClusterCellsAliases.aliases:type_name -> vtadmin.ClusterCellsAliases.AliasesEntry
+	97,  // 3: vtadmin.ClusterCellsAliases.aliases:type_name -> vtadmin.ClusterCellsAliases.AliasesEntry
 	1,   // 4: vtadmin.ClusterCellInfo.cluster:type_name -> vtadmin.Cluster
-	107, // 5: vtadmin.ClusterCellInfo.cell_info:type_name -> topodata.CellInfo
+	108, // 5: vtadmin.ClusterCellInfo.cell_info:type_name -> topodata.CellInfo
 	1,   // 6: vtadmin.ClusterShardReplicationPosition.cluster:type_name -> vtadmin.Cluster
-	108, // 7: vtadmin.ClusterShardReplicationPosition.position_info:type_name -> vtctldata.ShardReplicationPositionsResponse
+	109, // 7: vtadmin.ClusterShardReplicationPosition.position_info:type_name -> vtctldata.ShardReplicationPositionsResponse
 	15,  // 8: vtadmin.ClusterWorkflows.workflows:type_name -> vtadmin.Workflow
 	1,   // 9: vtadmin.Keyspace.cluster:type_name -> vtadmin.Cluster
-	109, // 10: vtadmin.Keyspace.keyspace:type_name -> vtctldata.Keyspace
-	97,  // 11: vtadmin.Keyspace.shards:type_name -> vtadmin.Keyspace.ShardsEntry
+	110, // 10: vtadmin.Keyspace.keyspace:type_name -> vtctldata.Keyspace
+	98,  // 11: vtadmin.Keyspace.shards:type_name -> vtadmin.Keyspace.ShardsEntry
 	1,   // 12: vtadmin.Schema.cluster:type_name -> vtadmin.Cluster
-	110, // 13: vtadmin.Schema.table_definitions:type_name -> tabletmanagerdata.TableDefinition
-	98,  // 14: vtadmin.Schema.table_sizes:type_name -> vtadmin.Schema.TableSizesEntry
+	111, // 13: vtadmin.Schema.table_definitions:type_name -> tabletmanagerdata.TableDefinition
+	99,  // 14: vtadmin.Schema.table_sizes:type_name -> vtadmin.Schema.TableSizesEntry
 	1,   // 15: vtadmin.Shard.cluster:type_name -> vtadmin.Cluster
-	111, // 16: vtadmin.Shard.shard:type_name -> vtctldata.Shard
+	112, // 16: vtadmin.Shard.shard:type_name -> vtctldata.Shard
 	1,   // 17: vtadmin.SrvVSchema.cluster:type_name -> vtadmin.Cluster
-	112, // 18: vtadmin.SrvVSchema.srv_v_schema:type_name -> vschema.SrvVSchema
+	113, // 18: vtadmin.SrvVSchema.srv_v_schema:type_name -> vschema.SrvVSchema
 	1,   // 19: vtadmin.Tablet.cluster:type_name -> vtadmin.Cluster
-	113, // 20: vtadmin.Tablet.tablet:type_name -> topodata.Tablet
+	114, // 20: vtadmin.Tablet.tablet:type_name -> topodata.Tablet
 	0,   // 21: vtadmin.Tablet.state:type_name -> vtadmin.Tablet.ServingState
 	1,   // 22: vtadmin.VSchema.cluster:type_name -> vtadmin.Cluster
-	114, // 23: vtadmin.VSchema.v_schema:type_name -> vschema.Keyspace
+	115, // 23: vtadmin.VSchema.v_schema:type_name -> vschema.Keyspace
 	1,   // 24: vtadmin.Vtctld.cluster:type_name -> vtadmin.Cluster
 	1,   // 25: vtadmin.VTGate.cluster:type_name -> vtadmin.Cluster
 	1,   // 26: vtadmin.Workflow.cluster:type_name -> vtadmin.Cluster
-	115, // 27: vtadmin.Workflow.workflow:type_name -> vtctldata.Workflow
-	116, // 28: vtadmin.CreateKeyspaceRequest.options:type_name -> vtctldata.CreateKeyspaceRequest
+	116, // 27: vtadmin.Workflow.workflow:type_name -> vtctldata.Workflow
+	117, // 28: vtadmin.CreateKeyspaceRequest.options:type_name -> vtctldata.CreateKeyspaceRequest
 	7,   // 29: vtadmin.CreateKeyspaceResponse.keyspace:type_name -> vtadmin.Keyspace
-	117, // 30: vtadmin.CreateShardRequest.options:type_name -> vtctldata.CreateShardRequest
-	118, // 31: vtadmin.DeleteKeyspaceRequest.options:type_name -> vtctldata.DeleteKeyspaceRequest
-	119, // 32: vtadmin.DeleteShardsRequest.options:type_name -> vtctldata.DeleteShardsRequest
-	120, // 33: vtadmin.DeleteTabletRequest.alias:type_name -> topodata.TabletAlias
+	118, // 30: vtadmin.CreateShardRequest.options:type_name -> vtctldata.CreateShardRequest
+	119, // 31: vtadmin.DeleteKeyspaceRequest.options:type_name -> vtctldata.DeleteKeyspaceRequest
+	120, // 32: vtadmin.DeleteShardsRequest.options:type_name -> vtctldata.DeleteShardsRequest
+	121, // 33: vtadmin.DeleteTabletRequest.alias:type_name -> topodata.TabletAlias
 	1,   // 34: vtadmin.DeleteTabletResponse.cluster:type_name -> vtadmin.Cluster
-	121, // 35: vtadmin.EmergencyFailoverShardRequest.options:type_name -> vtctldata.EmergencyReparentShardRequest
+	122, // 35: vtadmin.EmergencyFailoverShardRequest.options:type_name -> vtctldata.EmergencyReparentShardRequest
 	1,   // 36: vtadmin.EmergencyFailoverShardResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 37: vtadmin.EmergencyFailoverShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	122, // 38: vtadmin.EmergencyFailoverShardResponse.events:type_name -> logutil.Event
+	121, // 37: vtadmin.EmergencyFailoverShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	123, // 38: vtadmin.EmergencyFailoverShardResponse.events:type_name -> logutil.Event
 	48,  // 39: vtadmin.FindSchemaRequest.table_size_options:type_name -> vtadmin.GetSchemaTableSizeOptions
-	123, // 40: vtadmin.GetBackupsRequest.request_options:type_name -> vtctldata.GetBackupsRequest
+	124, // 40: vtadmin.GetBackupsRequest.request_options:type_name -> vtctldata.GetBackupsRequest
 	2,   // 41: vtadmin.GetBackupsResponse.backups:type_name -> vtadmin.ClusterBackup
 	4,   // 42: vtadmin.GetCellInfosResponse.cell_infos:type_name -> vtadmin.ClusterCellInfo
 	3,   // 43: vtadmin.GetCellsAliasesResponse.aliases:type_name -> vtadmin.ClusterCellsAliases
 	1,   // 44: vtadmin.GetClustersResponse.clusters:type_name -> vtadmin.Cluster
-	120, // 45: vtadmin.GetFullStatusRequest.alias:type_name -> topodata.TabletAlias
+	121, // 45: vtadmin.GetFullStatusRequest.alias:type_name -> topodata.TabletAlias
 	14,  // 46: vtadmin.GetGatesResponse.gates:type_name -> vtadmin.VTGate
 	7,   // 47: vtadmin.GetKeyspacesResponse.keyspaces:type_name -> vtadmin.Keyspace
 	48,  // 48: vtadmin.GetSchemaRequest.table_size_options:type_name -> vtadmin.GetSchemaTableSizeOptions
@@ -7173,50 +7251,50 @@ var file_vtadmin_proto_depIdxs = []int32{
 	8,   // 50: vtadmin.GetSchemasResponse.schemas:type_name -> vtadmin.Schema
 	5,   // 51: vtadmin.GetShardReplicationPositionsResponse.replication_positions:type_name -> vtadmin.ClusterShardReplicationPosition
 	10,  // 52: vtadmin.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtadmin.SrvVSchema
-	120, // 53: vtadmin.GetTabletRequest.alias:type_name -> topodata.TabletAlias
+	121, // 53: vtadmin.GetTabletRequest.alias:type_name -> topodata.TabletAlias
 	11,  // 54: vtadmin.GetTabletsResponse.tablets:type_name -> vtadmin.Tablet
 	12,  // 55: vtadmin.GetVSchemasResponse.v_schemas:type_name -> vtadmin.VSchema
 	13,  // 56: vtadmin.GetVtctldsResponse.vtctlds:type_name -> vtadmin.Vtctld
-	102, // 57: vtadmin.GetWorkflowsResponse.workflows_by_cluster:type_name -> vtadmin.GetWorkflowsResponse.WorkflowsByClusterEntry
-	120, // 58: vtadmin.PingTabletRequest.alias:type_name -> topodata.TabletAlias
+	103, // 57: vtadmin.GetWorkflowsResponse.workflows_by_cluster:type_name -> vtadmin.GetWorkflowsResponse.WorkflowsByClusterEntry
+	121, // 58: vtadmin.PingTabletRequest.alias:type_name -> topodata.TabletAlias
 	1,   // 59: vtadmin.PingTabletResponse.cluster:type_name -> vtadmin.Cluster
-	124, // 60: vtadmin.PlannedFailoverShardRequest.options:type_name -> vtctldata.PlannedReparentShardRequest
+	125, // 60: vtadmin.PlannedFailoverShardRequest.options:type_name -> vtctldata.PlannedReparentShardRequest
 	1,   // 61: vtadmin.PlannedFailoverShardResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 62: vtadmin.PlannedFailoverShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	122, // 63: vtadmin.PlannedFailoverShardResponse.events:type_name -> logutil.Event
-	120, // 64: vtadmin.RefreshStateRequest.alias:type_name -> topodata.TabletAlias
+	121, // 62: vtadmin.PlannedFailoverShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	123, // 63: vtadmin.PlannedFailoverShardResponse.events:type_name -> logutil.Event
+	121, // 64: vtadmin.RefreshStateRequest.alias:type_name -> topodata.TabletAlias
 	1,   // 65: vtadmin.RefreshStateResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 66: vtadmin.ReloadSchemasRequest.tablets:type_name -> topodata.TabletAlias
-	103, // 67: vtadmin.ReloadSchemasResponse.keyspace_results:type_name -> vtadmin.ReloadSchemasResponse.KeyspaceResult
-	104, // 68: vtadmin.ReloadSchemasResponse.shard_results:type_name -> vtadmin.ReloadSchemasResponse.ShardResult
-	105, // 69: vtadmin.ReloadSchemasResponse.tablet_results:type_name -> vtadmin.ReloadSchemasResponse.TabletResult
-	122, // 70: vtadmin.ReloadSchemaShardResponse.events:type_name -> logutil.Event
-	120, // 71: vtadmin.RefreshTabletReplicationSourceRequest.alias:type_name -> topodata.TabletAlias
-	120, // 72: vtadmin.RefreshTabletReplicationSourceResponse.primary:type_name -> topodata.TabletAlias
+	121, // 66: vtadmin.ReloadSchemasRequest.tablets:type_name -> topodata.TabletAlias
+	104, // 67: vtadmin.ReloadSchemasResponse.keyspace_results:type_name -> vtadmin.ReloadSchemasResponse.KeyspaceResult
+	105, // 68: vtadmin.ReloadSchemasResponse.shard_results:type_name -> vtadmin.ReloadSchemasResponse.ShardResult
+	106, // 69: vtadmin.ReloadSchemasResponse.tablet_results:type_name -> vtadmin.ReloadSchemasResponse.TabletResult
+	123, // 70: vtadmin.ReloadSchemaShardResponse.events:type_name -> logutil.Event
+	121, // 71: vtadmin.RefreshTabletReplicationSourceRequest.alias:type_name -> topodata.TabletAlias
+	121, // 72: vtadmin.RefreshTabletReplicationSourceResponse.primary:type_name -> topodata.TabletAlias
 	1,   // 73: vtadmin.RefreshTabletReplicationSourceResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 74: vtadmin.RunHealthCheckRequest.alias:type_name -> topodata.TabletAlias
+	121, // 74: vtadmin.RunHealthCheckRequest.alias:type_name -> topodata.TabletAlias
 	1,   // 75: vtadmin.RunHealthCheckResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 76: vtadmin.SetReadOnlyRequest.alias:type_name -> topodata.TabletAlias
-	120, // 77: vtadmin.SetReadWriteRequest.alias:type_name -> topodata.TabletAlias
-	120, // 78: vtadmin.StartReplicationRequest.alias:type_name -> topodata.TabletAlias
+	121, // 76: vtadmin.SetReadOnlyRequest.alias:type_name -> topodata.TabletAlias
+	121, // 77: vtadmin.SetReadWriteRequest.alias:type_name -> topodata.TabletAlias
+	121, // 78: vtadmin.StartReplicationRequest.alias:type_name -> topodata.TabletAlias
 	1,   // 79: vtadmin.StartReplicationResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 80: vtadmin.StopReplicationRequest.alias:type_name -> topodata.TabletAlias
+	121, // 80: vtadmin.StopReplicationRequest.alias:type_name -> topodata.TabletAlias
 	1,   // 81: vtadmin.StopReplicationResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 82: vtadmin.TabletExternallyPromotedRequest.alias:type_name -> topodata.TabletAlias
+	121, // 82: vtadmin.TabletExternallyPromotedRequest.alias:type_name -> topodata.TabletAlias
 	1,   // 83: vtadmin.TabletExternallyPromotedResponse.cluster:type_name -> vtadmin.Cluster
-	120, // 84: vtadmin.TabletExternallyPromotedResponse.new_primary:type_name -> topodata.TabletAlias
-	120, // 85: vtadmin.TabletExternallyPromotedResponse.old_primary:type_name -> topodata.TabletAlias
-	120, // 86: vtadmin.TabletExternallyReparentedRequest.alias:type_name -> topodata.TabletAlias
-	125, // 87: vtadmin.ClusterCellsAliases.AliasesEntry.value:type_name -> topodata.CellsAlias
-	111, // 88: vtadmin.Keyspace.ShardsEntry.value:type_name -> vtctldata.Shard
-	100, // 89: vtadmin.Schema.TableSizesEntry.value:type_name -> vtadmin.Schema.TableSize
-	101, // 90: vtadmin.Schema.TableSize.by_shard:type_name -> vtadmin.Schema.TableSize.ByShardEntry
-	99,  // 91: vtadmin.Schema.TableSize.ByShardEntry.value:type_name -> vtadmin.Schema.ShardTableSize
+	121, // 84: vtadmin.TabletExternallyPromotedResponse.new_primary:type_name -> topodata.TabletAlias
+	121, // 85: vtadmin.TabletExternallyPromotedResponse.old_primary:type_name -> topodata.TabletAlias
+	121, // 86: vtadmin.TabletExternallyReparentedRequest.alias:type_name -> topodata.TabletAlias
+	126, // 87: vtadmin.ClusterCellsAliases.AliasesEntry.value:type_name -> topodata.CellsAlias
+	112, // 88: vtadmin.Keyspace.ShardsEntry.value:type_name -> vtctldata.Shard
+	101, // 89: vtadmin.Schema.TableSizesEntry.value:type_name -> vtadmin.Schema.TableSize
+	102, // 90: vtadmin.Schema.TableSize.by_shard:type_name -> vtadmin.Schema.TableSize.ByShardEntry
+	100, // 91: vtadmin.Schema.TableSize.ByShardEntry.value:type_name -> vtadmin.Schema.ShardTableSize
 	6,   // 92: vtadmin.GetWorkflowsResponse.WorkflowsByClusterEntry.value:type_name -> vtadmin.ClusterWorkflows
 	7,   // 93: vtadmin.ReloadSchemasResponse.KeyspaceResult.keyspace:type_name -> vtadmin.Keyspace
-	122, // 94: vtadmin.ReloadSchemasResponse.KeyspaceResult.events:type_name -> logutil.Event
+	123, // 94: vtadmin.ReloadSchemasResponse.KeyspaceResult.events:type_name -> logutil.Event
 	9,   // 95: vtadmin.ReloadSchemasResponse.ShardResult.shard:type_name -> vtadmin.Shard
-	122, // 96: vtadmin.ReloadSchemasResponse.ShardResult.events:type_name -> logutil.Event
+	123, // 96: vtadmin.ReloadSchemasResponse.ShardResult.events:type_name -> logutil.Event
 	11,  // 97: vtadmin.ReloadSchemasResponse.TabletResult.tablet:type_name -> vtadmin.Tablet
 	16,  // 98: vtadmin.VTAdmin.CreateKeyspace:input_type -> vtadmin.CreateKeyspaceRequest
 	18,  // 99: vtadmin.VTAdmin.CreateShard:input_type -> vtadmin.CreateShardRequest
@@ -7264,56 +7342,58 @@ var file_vtadmin_proto_depIdxs = []int32{
 	91,  // 141: vtadmin.VTAdmin.ValidateSchemaKeyspace:input_type -> vtadmin.ValidateSchemaKeyspaceRequest
 	92,  // 142: vtadmin.VTAdmin.ValidateShard:input_type -> vtadmin.ValidateShardRequest
 	93,  // 143: vtadmin.VTAdmin.ValidateVersionKeyspace:input_type -> vtadmin.ValidateVersionKeyspaceRequest
-	94,  // 144: vtadmin.VTAdmin.VTExplain:input_type -> vtadmin.VTExplainRequest
-	17,  // 145: vtadmin.VTAdmin.CreateKeyspace:output_type -> vtadmin.CreateKeyspaceResponse
-	126, // 146: vtadmin.VTAdmin.CreateShard:output_type -> vtctldata.CreateShardResponse
-	127, // 147: vtadmin.VTAdmin.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
-	128, // 148: vtadmin.VTAdmin.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
-	22,  // 149: vtadmin.VTAdmin.DeleteTablet:output_type -> vtadmin.DeleteTabletResponse
-	24,  // 150: vtadmin.VTAdmin.EmergencyFailoverShard:output_type -> vtadmin.EmergencyFailoverShardResponse
-	8,   // 151: vtadmin.VTAdmin.FindSchema:output_type -> vtadmin.Schema
-	27,  // 152: vtadmin.VTAdmin.GetBackups:output_type -> vtadmin.GetBackupsResponse
-	29,  // 153: vtadmin.VTAdmin.GetCellInfos:output_type -> vtadmin.GetCellInfosResponse
-	31,  // 154: vtadmin.VTAdmin.GetCellsAliases:output_type -> vtadmin.GetCellsAliasesResponse
-	33,  // 155: vtadmin.VTAdmin.GetClusters:output_type -> vtadmin.GetClustersResponse
-	129, // 156: vtadmin.VTAdmin.GetFullStatus:output_type -> vtctldata.GetFullStatusResponse
-	36,  // 157: vtadmin.VTAdmin.GetGates:output_type -> vtadmin.GetGatesResponse
-	7,   // 158: vtadmin.VTAdmin.GetKeyspace:output_type -> vtadmin.Keyspace
-	39,  // 159: vtadmin.VTAdmin.GetKeyspaces:output_type -> vtadmin.GetKeyspacesResponse
-	8,   // 160: vtadmin.VTAdmin.GetSchema:output_type -> vtadmin.Schema
-	42,  // 161: vtadmin.VTAdmin.GetSchemas:output_type -> vtadmin.GetSchemasResponse
-	44,  // 162: vtadmin.VTAdmin.GetShardReplicationPositions:output_type -> vtadmin.GetShardReplicationPositionsResponse
-	10,  // 163: vtadmin.VTAdmin.GetSrvVSchema:output_type -> vtadmin.SrvVSchema
-	47,  // 164: vtadmin.VTAdmin.GetSrvVSchemas:output_type -> vtadmin.GetSrvVSchemasResponse
-	11,  // 165: vtadmin.VTAdmin.GetTablet:output_type -> vtadmin.Tablet
-	51,  // 166: vtadmin.VTAdmin.GetTablets:output_type -> vtadmin.GetTabletsResponse
-	12,  // 167: vtadmin.VTAdmin.GetVSchema:output_type -> vtadmin.VSchema
-	54,  // 168: vtadmin.VTAdmin.GetVSchemas:output_type -> vtadmin.GetVSchemasResponse
-	56,  // 169: vtadmin.VTAdmin.GetVtctlds:output_type -> vtadmin.GetVtctldsResponse
-	15,  // 170: vtadmin.VTAdmin.GetWorkflow:output_type -> vtadmin.Workflow
-	59,  // 171: vtadmin.VTAdmin.GetWorkflows:output_type -> vtadmin.GetWorkflowsResponse
-	61,  // 172: vtadmin.VTAdmin.PingTablet:output_type -> vtadmin.PingTabletResponse
-	63,  // 173: vtadmin.VTAdmin.PlannedFailoverShard:output_type -> vtadmin.PlannedFailoverShardResponse
-	65,  // 174: vtadmin.VTAdmin.RebuildKeyspaceGraph:output_type -> vtadmin.RebuildKeyspaceGraphResponse
-	67,  // 175: vtadmin.VTAdmin.RefreshState:output_type -> vtadmin.RefreshStateResponse
-	73,  // 176: vtadmin.VTAdmin.RefreshTabletReplicationSource:output_type -> vtadmin.RefreshTabletReplicationSourceResponse
-	69,  // 177: vtadmin.VTAdmin.ReloadSchemas:output_type -> vtadmin.ReloadSchemasResponse
-	71,  // 178: vtadmin.VTAdmin.ReloadSchemaShard:output_type -> vtadmin.ReloadSchemaShardResponse
-	75,  // 179: vtadmin.VTAdmin.RemoveKeyspaceCell:output_type -> vtadmin.RemoveKeyspaceCellResponse
-	77,  // 180: vtadmin.VTAdmin.RunHealthCheck:output_type -> vtadmin.RunHealthCheckResponse
-	79,  // 181: vtadmin.VTAdmin.SetReadOnly:output_type -> vtadmin.SetReadOnlyResponse
-	81,  // 182: vtadmin.VTAdmin.SetReadWrite:output_type -> vtadmin.SetReadWriteResponse
-	83,  // 183: vtadmin.VTAdmin.StartReplication:output_type -> vtadmin.StartReplicationResponse
-	85,  // 184: vtadmin.VTAdmin.StopReplication:output_type -> vtadmin.StopReplicationResponse
-	87,  // 185: vtadmin.VTAdmin.TabletExternallyPromoted:output_type -> vtadmin.TabletExternallyPromotedResponse
-	130, // 186: vtadmin.VTAdmin.Validate:output_type -> vtctldata.ValidateResponse
-	131, // 187: vtadmin.VTAdmin.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
-	132, // 188: vtadmin.VTAdmin.ValidateSchemaKeyspace:output_type -> vtctldata.ValidateSchemaKeyspaceResponse
-	133, // 189: vtadmin.VTAdmin.ValidateShard:output_type -> vtctldata.ValidateShardResponse
-	134, // 190: vtadmin.VTAdmin.ValidateVersionKeyspace:output_type -> vtctldata.ValidateVersionKeyspaceResponse
-	95,  // 191: vtadmin.VTAdmin.VTExplain:output_type -> vtadmin.VTExplainResponse
-	145, // [145:192] is the sub-list for method output_type
-	98,  // [98:145] is the sub-list for method input_type
+	94,  // 144: vtadmin.VTAdmin.ValidateVersionShard:input_type -> vtadmin.ValidateVersionShardRequest
+	95,  // 145: vtadmin.VTAdmin.VTExplain:input_type -> vtadmin.VTExplainRequest
+	17,  // 146: vtadmin.VTAdmin.CreateKeyspace:output_type -> vtadmin.CreateKeyspaceResponse
+	127, // 147: vtadmin.VTAdmin.CreateShard:output_type -> vtctldata.CreateShardResponse
+	128, // 148: vtadmin.VTAdmin.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
+	129, // 149: vtadmin.VTAdmin.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
+	22,  // 150: vtadmin.VTAdmin.DeleteTablet:output_type -> vtadmin.DeleteTabletResponse
+	24,  // 151: vtadmin.VTAdmin.EmergencyFailoverShard:output_type -> vtadmin.EmergencyFailoverShardResponse
+	8,   // 152: vtadmin.VTAdmin.FindSchema:output_type -> vtadmin.Schema
+	27,  // 153: vtadmin.VTAdmin.GetBackups:output_type -> vtadmin.GetBackupsResponse
+	29,  // 154: vtadmin.VTAdmin.GetCellInfos:output_type -> vtadmin.GetCellInfosResponse
+	31,  // 155: vtadmin.VTAdmin.GetCellsAliases:output_type -> vtadmin.GetCellsAliasesResponse
+	33,  // 156: vtadmin.VTAdmin.GetClusters:output_type -> vtadmin.GetClustersResponse
+	130, // 157: vtadmin.VTAdmin.GetFullStatus:output_type -> vtctldata.GetFullStatusResponse
+	36,  // 158: vtadmin.VTAdmin.GetGates:output_type -> vtadmin.GetGatesResponse
+	7,   // 159: vtadmin.VTAdmin.GetKeyspace:output_type -> vtadmin.Keyspace
+	39,  // 160: vtadmin.VTAdmin.GetKeyspaces:output_type -> vtadmin.GetKeyspacesResponse
+	8,   // 161: vtadmin.VTAdmin.GetSchema:output_type -> vtadmin.Schema
+	42,  // 162: vtadmin.VTAdmin.GetSchemas:output_type -> vtadmin.GetSchemasResponse
+	44,  // 163: vtadmin.VTAdmin.GetShardReplicationPositions:output_type -> vtadmin.GetShardReplicationPositionsResponse
+	10,  // 164: vtadmin.VTAdmin.GetSrvVSchema:output_type -> vtadmin.SrvVSchema
+	47,  // 165: vtadmin.VTAdmin.GetSrvVSchemas:output_type -> vtadmin.GetSrvVSchemasResponse
+	11,  // 166: vtadmin.VTAdmin.GetTablet:output_type -> vtadmin.Tablet
+	51,  // 167: vtadmin.VTAdmin.GetTablets:output_type -> vtadmin.GetTabletsResponse
+	12,  // 168: vtadmin.VTAdmin.GetVSchema:output_type -> vtadmin.VSchema
+	54,  // 169: vtadmin.VTAdmin.GetVSchemas:output_type -> vtadmin.GetVSchemasResponse
+	56,  // 170: vtadmin.VTAdmin.GetVtctlds:output_type -> vtadmin.GetVtctldsResponse
+	15,  // 171: vtadmin.VTAdmin.GetWorkflow:output_type -> vtadmin.Workflow
+	59,  // 172: vtadmin.VTAdmin.GetWorkflows:output_type -> vtadmin.GetWorkflowsResponse
+	61,  // 173: vtadmin.VTAdmin.PingTablet:output_type -> vtadmin.PingTabletResponse
+	63,  // 174: vtadmin.VTAdmin.PlannedFailoverShard:output_type -> vtadmin.PlannedFailoverShardResponse
+	65,  // 175: vtadmin.VTAdmin.RebuildKeyspaceGraph:output_type -> vtadmin.RebuildKeyspaceGraphResponse
+	67,  // 176: vtadmin.VTAdmin.RefreshState:output_type -> vtadmin.RefreshStateResponse
+	73,  // 177: vtadmin.VTAdmin.RefreshTabletReplicationSource:output_type -> vtadmin.RefreshTabletReplicationSourceResponse
+	69,  // 178: vtadmin.VTAdmin.ReloadSchemas:output_type -> vtadmin.ReloadSchemasResponse
+	71,  // 179: vtadmin.VTAdmin.ReloadSchemaShard:output_type -> vtadmin.ReloadSchemaShardResponse
+	75,  // 180: vtadmin.VTAdmin.RemoveKeyspaceCell:output_type -> vtadmin.RemoveKeyspaceCellResponse
+	77,  // 181: vtadmin.VTAdmin.RunHealthCheck:output_type -> vtadmin.RunHealthCheckResponse
+	79,  // 182: vtadmin.VTAdmin.SetReadOnly:output_type -> vtadmin.SetReadOnlyResponse
+	81,  // 183: vtadmin.VTAdmin.SetReadWrite:output_type -> vtadmin.SetReadWriteResponse
+	83,  // 184: vtadmin.VTAdmin.StartReplication:output_type -> vtadmin.StartReplicationResponse
+	85,  // 185: vtadmin.VTAdmin.StopReplication:output_type -> vtadmin.StopReplicationResponse
+	87,  // 186: vtadmin.VTAdmin.TabletExternallyPromoted:output_type -> vtadmin.TabletExternallyPromotedResponse
+	131, // 187: vtadmin.VTAdmin.Validate:output_type -> vtctldata.ValidateResponse
+	132, // 188: vtadmin.VTAdmin.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
+	133, // 189: vtadmin.VTAdmin.ValidateSchemaKeyspace:output_type -> vtctldata.ValidateSchemaKeyspaceResponse
+	134, // 190: vtadmin.VTAdmin.ValidateShard:output_type -> vtctldata.ValidateShardResponse
+	135, // 191: vtadmin.VTAdmin.ValidateVersionKeyspace:output_type -> vtctldata.ValidateVersionKeyspaceResponse
+	136, // 192: vtadmin.VTAdmin.ValidateVersionShard:output_type -> vtctldata.ValidateVersionShardResponse
+	96,  // 193: vtadmin.VTAdmin.VTExplain:output_type -> vtadmin.VTExplainResponse
+	146, // [146:194] is the sub-list for method output_type
+	98,  // [98:146] is the sub-list for method input_type
 	98,  // [98:98] is the sub-list for extension type_name
 	98,  // [98:98] is the sub-list for extension extendee
 	0,   // [0:98] is the sub-list for field type_name
@@ -8442,7 +8522,7 @@ func file_vtadmin_proto_init() {
 			}
 		}
 		file_vtadmin_proto_msgTypes[93].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*VTExplainRequest); i {
+			switch v := v.(*ValidateVersionShardRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -8454,6 +8534,18 @@ func file_vtadmin_proto_init() {
 			}
 		}
 		file_vtadmin_proto_msgTypes[94].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VTExplainRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtadmin_proto_msgTypes[95].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*VTExplainResponse); i {
 			case 0:
 				return &v.state
@@ -8465,7 +8557,7 @@ func file_vtadmin_proto_init() {
 				return nil
 			}
 		}
-		file_vtadmin_proto_msgTypes[98].Exporter = func(v interface{}, i int) interface{} {
+		file_vtadmin_proto_msgTypes[99].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Schema_ShardTableSize); i {
 			case 0:
 				return &v.state
@@ -8477,7 +8569,7 @@ func file_vtadmin_proto_init() {
 				return nil
 			}
 		}
-		file_vtadmin_proto_msgTypes[99].Exporter = func(v interface{}, i int) interface{} {
+		file_vtadmin_proto_msgTypes[100].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Schema_TableSize); i {
 			case 0:
 				return &v.state
@@ -8489,7 +8581,7 @@ func file_vtadmin_proto_init() {
 				return nil
 			}
 		}
-		file_vtadmin_proto_msgTypes[102].Exporter = func(v interface{}, i int) interface{} {
+		file_vtadmin_proto_msgTypes[103].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ReloadSchemasResponse_KeyspaceResult); i {
 			case 0:
 				return &v.state
@@ -8501,7 +8593,7 @@ func file_vtadmin_proto_init() {
 				return nil
 			}
 		}
-		file_vtadmin_proto_msgTypes[103].Exporter = func(v interface{}, i int) interface{} {
+		file_vtadmin_proto_msgTypes[104].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ReloadSchemasResponse_ShardResult); i {
 			case 0:
 				return &v.state
@@ -8513,7 +8605,7 @@ func file_vtadmin_proto_init() {
 				return nil
 			}
 		}
-		file_vtadmin_proto_msgTypes[104].Exporter = func(v interface{}, i int) interface{} {
+		file_vtadmin_proto_msgTypes[105].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ReloadSchemasResponse_TabletResult); i {
 			case 0:
 				return &v.state
@@ -8532,7 +8624,7 @@ func file_vtadmin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_vtadmin_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   105,
+			NumMessages:   106,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

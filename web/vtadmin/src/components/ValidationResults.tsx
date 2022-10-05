@@ -5,7 +5,7 @@ interface Props {
     resultsByKeyspace?: {
         [k: string]: vtctldata.IValidateKeyspaceResponse;
     };
-    resultsByShard?: vtctldata.ValidateShardResponse;
+    resultsByShard?: vtctldata.ValidateShardResponse | vtctldata.ValidateVersionShardResponse;
     shard?: string;
 }
 

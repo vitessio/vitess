@@ -803,3 +803,23 @@ export const getFullStatus = async (params: GetFullStatusParams) => {
 
     return vtctldata.GetFullStatusResponse.create(result);
 };
+
+export interface ValidateVersionShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+}
+
+export const validateVersionShard = async (params: ValidateVersionShardParams) => {
+    const { result } = await vtfetch(
+        `/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/validate_version`,
+        {
+            method: 'put',
+        }
+    );
+
+    const err = vtctldata.ValidateVersionShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateVersionShardResponse.create(result);
+};

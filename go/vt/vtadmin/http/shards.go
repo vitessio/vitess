@@ -232,3 +232,21 @@ func ValidateShard(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(result, err)
 }
+
+// ValidateVersionShard implements the http wrapper for
+// PUT /shard/{cluster_id}/{keyspace}/{shard}/validate_version
+//
+// Query params: none
+//
+// Body params: none
+func ValidateVersionShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	result, err := api.server.ValidateVersionShard(ctx, &vtadminpb.ValidateVersionShardRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["keyspace"],
+		Shard:     vars["shard"],
+	})
+
+	return NewJSONResponse(result, err)
+}

@@ -667,6 +667,20 @@ export namespace vtadmin {
         public validateVersionKeyspace(request: vtadmin.IValidateVersionKeyspaceRequest): Promise<vtctldata.ValidateVersionKeyspaceResponse>;
 
         /**
+         * Calls ValidateVersionShard.
+         * @param request ValidateVersionShardRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ValidateVersionShardResponse
+         */
+        public validateVersionShard(request: vtadmin.IValidateVersionShardRequest, callback: vtadmin.VTAdmin.ValidateVersionShardCallback): void;
+
+        /**
+         * Calls ValidateVersionShard.
+         * @param request ValidateVersionShardRequest message or plain object
+         * @returns Promise
+         */
+        public validateVersionShard(request: vtadmin.IValidateVersionShardRequest): Promise<vtctldata.ValidateVersionShardResponse>;
+
+        /**
          * Calls VTExplain.
          * @param request VTExplainRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VTExplainResponse
@@ -1004,6 +1018,13 @@ export namespace vtadmin {
          * @param [response] ValidateVersionKeyspaceResponse
          */
         type ValidateVersionKeyspaceCallback = (error: (Error|null), response?: vtctldata.ValidateVersionKeyspaceResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#validateVersionShard}.
+         * @param error Error, if any
+         * @param [response] ValidateVersionShardResponse
+         */
+        type ValidateVersionShardCallback = (error: (Error|null), response?: vtctldata.ValidateVersionShardResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
@@ -10606,6 +10627,108 @@ export namespace vtadmin {
 
         /**
          * Converts this ValidateVersionKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVersionShardRequest. */
+    interface IValidateVersionShardRequest {
+
+        /** ValidateVersionShardRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** ValidateVersionShardRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ValidateVersionShardRequest shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a ValidateVersionShardRequest. */
+    class ValidateVersionShardRequest implements IValidateVersionShardRequest {
+
+        /**
+         * Constructs a new ValidateVersionShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IValidateVersionShardRequest);
+
+        /** ValidateVersionShardRequest cluster_id. */
+        public cluster_id: string;
+
+        /** ValidateVersionShardRequest keyspace. */
+        public keyspace: string;
+
+        /** ValidateVersionShardRequest shard. */
+        public shard: string;
+
+        /**
+         * Creates a new ValidateVersionShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVersionShardRequest instance
+         */
+        public static create(properties?: vtadmin.IValidateVersionShardRequest): vtadmin.ValidateVersionShardRequest;
+
+        /**
+         * Encodes the specified ValidateVersionShardRequest message. Does not implicitly {@link vtadmin.ValidateVersionShardRequest.verify|verify} messages.
+         * @param message ValidateVersionShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IValidateVersionShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVersionShardRequest message, length delimited. Does not implicitly {@link vtadmin.ValidateVersionShardRequest.verify|verify} messages.
+         * @param message ValidateVersionShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IValidateVersionShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVersionShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVersionShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ValidateVersionShardRequest;
+
+        /**
+         * Decodes a ValidateVersionShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVersionShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ValidateVersionShardRequest;
+
+        /**
+         * Verifies a ValidateVersionShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVersionShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVersionShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ValidateVersionShardRequest;
+
+        /**
+         * Creates a plain object from a ValidateVersionShardRequest message. Also converts values to other types if specified.
+         * @param message ValidateVersionShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ValidateVersionShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVersionShardRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -49820,6 +49943,192 @@ export namespace vtctldata {
 
         /**
          * Converts this ValidateVersionKeyspaceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVersionShardRequest. */
+    interface IValidateVersionShardRequest {
+
+        /** ValidateVersionShardRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ValidateVersionShardRequest shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a ValidateVersionShardRequest. */
+    class ValidateVersionShardRequest implements IValidateVersionShardRequest {
+
+        /**
+         * Constructs a new ValidateVersionShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidateVersionShardRequest);
+
+        /** ValidateVersionShardRequest keyspace. */
+        public keyspace: string;
+
+        /** ValidateVersionShardRequest shard. */
+        public shard: string;
+
+        /**
+         * Creates a new ValidateVersionShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVersionShardRequest instance
+         */
+        public static create(properties?: vtctldata.IValidateVersionShardRequest): vtctldata.ValidateVersionShardRequest;
+
+        /**
+         * Encodes the specified ValidateVersionShardRequest message. Does not implicitly {@link vtctldata.ValidateVersionShardRequest.verify|verify} messages.
+         * @param message ValidateVersionShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidateVersionShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVersionShardRequest message, length delimited. Does not implicitly {@link vtctldata.ValidateVersionShardRequest.verify|verify} messages.
+         * @param message ValidateVersionShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidateVersionShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVersionShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVersionShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidateVersionShardRequest;
+
+        /**
+         * Decodes a ValidateVersionShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVersionShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidateVersionShardRequest;
+
+        /**
+         * Verifies a ValidateVersionShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVersionShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVersionShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidateVersionShardRequest;
+
+        /**
+         * Creates a plain object from a ValidateVersionShardRequest message. Also converts values to other types if specified.
+         * @param message ValidateVersionShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidateVersionShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVersionShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVersionShardResponse. */
+    interface IValidateVersionShardResponse {
+
+        /** ValidateVersionShardResponse results */
+        results?: (string[]|null);
+    }
+
+    /** Represents a ValidateVersionShardResponse. */
+    class ValidateVersionShardResponse implements IValidateVersionShardResponse {
+
+        /**
+         * Constructs a new ValidateVersionShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidateVersionShardResponse);
+
+        /** ValidateVersionShardResponse results. */
+        public results: string[];
+
+        /**
+         * Creates a new ValidateVersionShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVersionShardResponse instance
+         */
+        public static create(properties?: vtctldata.IValidateVersionShardResponse): vtctldata.ValidateVersionShardResponse;
+
+        /**
+         * Encodes the specified ValidateVersionShardResponse message. Does not implicitly {@link vtctldata.ValidateVersionShardResponse.verify|verify} messages.
+         * @param message ValidateVersionShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidateVersionShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVersionShardResponse message, length delimited. Does not implicitly {@link vtctldata.ValidateVersionShardResponse.verify|verify} messages.
+         * @param message ValidateVersionShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidateVersionShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVersionShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVersionShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidateVersionShardResponse;
+
+        /**
+         * Decodes a ValidateVersionShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVersionShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidateVersionShardResponse;
+
+        /**
+         * Verifies a ValidateVersionShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVersionShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVersionShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidateVersionShardResponse;
+
+        /**
+         * Creates a plain object from a ValidateVersionShardResponse message. Also converts values to other types if specified.
+         * @param message ValidateVersionShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidateVersionShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVersionShardResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

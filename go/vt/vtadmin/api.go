@@ -360,6 +360,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_failover", httpAPI.Adapt(vtadminhttp.PlannedFailoverShard)).Name("API.PlannedFailoverShard").Methods("POST")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/reload_schema_shard", httpAPI.Adapt(vtadminhttp.ReloadSchemaShard)).Name("API.ReloadSchemaShard").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/validate", httpAPI.Adapt(vtadminhttp.ValidateShard)).Name("API.ValidateShard").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/validate_version", httpAPI.Adapt(vtadminhttp.ValidateVersionShard)).Name("API.ValidateVersionShard").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -1855,6 +1856,32 @@ func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.Vali
 
 	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
 		Keyspace: req.Keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ValidateVersionShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.ValidateVersionShardRequest) (*vtctldatapb.ValidateVersionShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.ValidateVersionShard(ctx, &vtctldatapb.ValidateVersionShardRequest{
+		Keyspace: req.Keyspace,
+		Shard:    req.Shard,
 	})
 
 	if err != nil {
