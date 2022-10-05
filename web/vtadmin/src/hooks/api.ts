@@ -74,6 +74,8 @@ import {
     ValidateShardParams,
     getFullStatus,
     GetFullStatusParams,
+    validateVersionShard,
+    ValidateVersionShardParams,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -575,8 +577,8 @@ export const useValidate = (
 };
 
 /**
- * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
- * as well as all tablets in discoverable cells, are consistent.
+ * useValidateShard is a mutate hook that validates that that all nodes
+ * reachable from the specified shard are consistent.
  */
 export const useValidateShard = (
     params: Parameters<typeof validateShard>[0],
@@ -594,3 +596,15 @@ export const useGetFullStatus = (
     params: GetFullStatusParams,
     options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
 ) => useQuery(['full-status', params], () => getFullStatus(params), options);
+
+/**
+ * useValidateVersionShard is a mutate hook that validates that the version on the primary matches all of the replicas.
+ */
+export const useValidateVersionShard = (
+    params: Parameters<typeof validateVersionShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
+        return validateVersionShard(params);
+    }, options);
+};

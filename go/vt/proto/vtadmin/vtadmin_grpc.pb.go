@@ -155,6 +155,8 @@ type VTAdminClient interface {
 	// ValidateVersionKeyspace validates that the version on the primary of
 	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(ctx context.Context, in *ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
@@ -582,6 +584,15 @@ func (c *vTAdminClient) ValidateVersionKeyspace(ctx context.Context, in *Validat
 	return out, nil
 }
 
+func (c *vTAdminClient) ValidateVersionShard(ctx context.Context, in *ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error) {
+	out := new(vtctldata.ValidateVersionShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateVersionShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
 	out := new(VTExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
@@ -727,6 +738,8 @@ type VTAdminServer interface {
 	// ValidateVersionKeyspace validates that the version on the primary of
 	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
@@ -874,6 +887,9 @@ func (UnimplementedVTAdminServer) ValidateShard(context.Context, *ValidateShardR
 }
 func (UnimplementedVTAdminServer) ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionKeyspace not implemented")
+}
+func (UnimplementedVTAdminServer) ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionShard not implemented")
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
@@ -1719,6 +1735,24 @@ func _VTAdmin_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ValidateVersionShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateVersionShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ValidateVersionShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ValidateVersionShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ValidateVersionShard(ctx, req.(*ValidateVersionShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
@@ -1927,6 +1961,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVersionKeyspace",
 			Handler:    _VTAdmin_ValidateVersionKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateVersionShard",
+			Handler:    _VTAdmin_ValidateVersionShard_Handler,
 		},
 		{
 			MethodName: "VTExplain",

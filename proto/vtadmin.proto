@@ -165,6 +165,8 @@ service VTAdmin {
 	  // ValidateVersionKeyspace validates that the version on the primary of
     // shard 0 matches all of the other tablets in the keyspace.
     rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+    // ValidateVersionShard validates that the version on the primary matches all of the replicas.
+    rpc ValidateVersionShard(ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
     // VTExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
@@ -846,6 +848,12 @@ message ValidateShardRequest {
 message ValidateVersionKeyspaceRequest {
     string cluster_id = 1;
     string keyspace = 2;
+}
+
+message ValidateVersionShardRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string shard = 3;
 }
 
 message VTExplainRequest {

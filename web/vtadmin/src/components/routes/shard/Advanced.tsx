@@ -9,6 +9,7 @@ import {
     useTabletExternallyPromoted,
     useTablets,
     useValidateShard,
+    useValidateVersionShard,
 } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel';
@@ -156,6 +157,17 @@ const Advanced: React.FC = () => {
         }
     );
 
+    // validation dialog parameters
+    const [validateDialogTitle, setValidateDialogTitle] = useState('');
+    const [validateDialogDescription, setValidateDialogDescription] = useState('');
+    const onCloseValidateDialog = () => {
+        setValidateDialogIsOpen(false);
+        setValidateDialogTitle('');
+        setValidateDialogDescription('');
+        setValidateShardResponse(null);
+        setValidateVersionShardResponse(null);
+    };
+
     // validateShard parameters
     const [pingTablets, setPingTablets] = useState(false);
     const [validateDialogIsOpen, setValidateDialogIsOpen] = useState(false);
@@ -170,16 +182,34 @@ const Advanced: React.FC = () => {
         },
         {
             onSuccess: (result) => {
-                setDialogTitle(``);
-                setDialogDescription(
-                    `Successfully failed over shard ${params.shard} to tablet ${formatAlias(
-                        plannedReparentTablet?.tablet?.alias
-                    )}.`
-                );
+                setValidateDialogTitle('Validate Shard');
+                setValidateDialogDescription(`Successfully validated ${params.shard}.`);
                 setValidateDialogIsOpen(true);
                 setValidateShardResponse(result);
             },
             onError: (error) => warn(`There was an error validating shard ${params.shard}: ${error}`),
+        }
+    );
+
+    const [
+        validateVersionShardResponse,
+        setValidateVersionShardResponse,
+    ] = useState<vtctldata.ValidateVersionShardResponse | null>(null);
+
+    const validateVersionShardMutation = useValidateVersionShard(
+        {
+            clusterID: params.clusterID,
+            keyspace: params.keyspace,
+            shard: params.shard,
+        },
+        {
+            onSuccess: (result) => {
+                setValidateDialogTitle('Validate Version Shard');
+                setValidateDialogDescription(`Successfully validated versions on ${params.shard}.`);
+                setValidateDialogIsOpen(true);
+                setValidateShardResponse(result);
+            },
+            onError: (error) => warn(`There was an error validating versions on shard ${params.shard}: ${error}`),
         }
     );
 
@@ -222,14 +252,17 @@ const Advanced: React.FC = () => {
                 isOpen={validateDialogIsOpen}
                 onClose={() => setValidateDialogIsOpen(false)}
                 onConfirm={() => setValidateDialogIsOpen(false)}
-                title="Validate Shard"
+                title={validateDialogTitle}
                 hideCancel
                 confirmText="Dismiss"
             >
                 <>
-                    <div className="mt-8 mb-4">Successfully validated shard {shardName}.</div>
+                    <div className="mt-8 mb-4">{validateDialogDescription}</div>
                     {validateShardResponse && (
-                        <ValidationResults resultsByShard={validateShardResponse} shard={shardName} />
+                        <ValidationResults
+                            resultsByShard={validateShardResponse || validateVersionShardResponse}
+                            shard={shardName}
+                        />
                     )}
                 </>
             </Dialog>
@@ -264,6 +297,19 @@ const Advanced: React.FC = () => {
                                     </div>
                                 </>
                             }
+                        />
+                        <ActionPanel
+                            description={
+                                <>
+                                    Validates that the version on the primary matches all of the replicas on shard{' '}
+                                    <span className="font-bold">{shardName}</span>.
+                                </>
+                            }
+                            documentationLink="https://vitess.io/docs/reference/programs/vtctl/schema-version-permissions/#validateversionshard"
+                            loadingText="Validating shard versions..."
+                            loadedText="Validate"
+                            mutation={validateShardMutation as UseMutationResult}
+                            title="Validate Version Shard"
                         />
                     </div>
                 </div>
