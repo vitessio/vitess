@@ -216,3 +216,30 @@ func (builtinBitLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, 
 	_, f := args[0].typeof(env)
 	return sqltypes.Int64, f
 }
+
+type builtinASCII struct {
+}
+
+func (builtinASCII) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	inarg.makeBinary()
+	bs := inarg.bytes()
+	if len(bs) > 0 {
+		result.setInt64(int64(bs[0]))
+	} else {
+		result.setInt64(0)
+	}
+}
+
+func (builtinASCII) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("ASCII")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
+}

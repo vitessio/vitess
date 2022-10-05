@@ -156,3 +156,13 @@ func TestBuiltinBitLength(t *testing.T) {
 		compareRemoteExpr(t, conn, query)
 	}
 }
+
+func TestBuiltinASCII(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, str := range cases {
+		query := fmt.Sprintf("ASCII(%s)", str)
+		compareRemoteExpr(t, conn, query)
+	}
+}
