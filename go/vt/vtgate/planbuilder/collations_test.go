@@ -40,7 +40,7 @@ type collationTestCase struct {
 
 func (tc *collationTestCase) run(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json", false),
+		v:             loadSchema(t, "vschemas/schema.json", false),
 		sysVarEnabled: true,
 		version:       Gen4,
 	}

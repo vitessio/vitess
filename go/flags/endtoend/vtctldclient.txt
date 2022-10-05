@@ -1,0 +1,129 @@
+Executes a cluster management command on the remote vtctld server.
+
+Usage:
+  vtctldclient [command]
+
+Available Commands:
+  AddCellInfo                 Registers a local topology service in a new cell by creating the CellInfo.
+  AddCellsAlias               Defines a group of cells that can be referenced by a single name (the alias).
+  ApplyRoutingRules           Applies the VSchema routing rules.
+  ApplySchema                 Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
+  ApplyShardRoutingRules      Applies VSchema shard routing rules.
+  ApplyVSchema                Applies the VTGate routing schema to the provided keyspace. Shows the result after application.
+  Backup                      Uses the BackupStorage service on the given tablet to create and store a new backup.
+  BackupShard                 Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
+  ChangeTabletType            Changes the db type for the specified tablet, if possible.
+  CreateKeyspace              Creates the specified keyspace in the topology.
+  CreateShard                 Creates the specified shard in the topology.
+  DeleteCellInfo              Deletes the CellInfo for the provided cell.
+  DeleteCellsAlias            Deletes the CellsAlias for the provided alias.
+  DeleteKeyspace              Deletes the specified keyspace from the topology.
+  DeleteShards                Deletes the specified shards from the topology.
+  DeleteSrvVSchema            Deletes the SrvVSchema object in the given cell.
+  DeleteTablets               Deletes tablet(s) from the topology.
+  EmergencyReparentShard      Reparents the shard to the new primary. Assumes the old primary is dead and not responding.
+  ExecuteFetchAsApp           Executes the given query as the App user on the remote tablet.
+  ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.
+  ExecuteHook                 Runs the specified hook on the given tablet.
+  FindAllShardsInKeyspace     Returns a map of shard names to shard references for a given keyspace.
+  GetBackups                  Lists backups for the given shard.
+  GetCellInfo                 Gets the CellInfo object for the given cell.
+  GetCellInfoNames            Lists the names of all cells in the cluster.
+  GetCellsAliases             Gets all CellsAlias objects in the cluster.
+  GetFullStatus               Outputs a JSON structure that contains full status of MySQL including the replication information, semi-sync information, GTID information among others.
+  GetKeyspace                 Returns information about the given keyspace from the topology.
+  GetKeyspaces                Returns information about every keyspace in the topology.
+  GetPermissions              Displays the permissions for a tablet.
+  GetRoutingRules             Displays the VSchema routing rules.
+  GetSchema                   Displays the full schema for a tablet, optionally restricted to the specified tables/views.
+  GetShard                    Returns information about a shard in the topology.
+  GetShardRoutingRules        Displays VSchema shard routing rules.
+  GetSrvKeyspaceNames         Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.
+  GetSrvKeyspaces             Returns the SrvKeyspaces for the given keyspace in one or more cells.
+  GetSrvVSchema               Returns the SrvVSchema for the given cell.
+  GetSrvVSchemas              Returns the SrvVSchema for all cells, optionally filtered by the given cells.
+  GetTablet                   Outputs a JSON structure that contains information about the tablet.
+  GetTabletVersion            Print the version of a tablet from its debug vars.
+  GetTablets                  Looks up tablets according to filter criteria.
+  GetVSchema                  Prints a JSON representation of a keyspace's topo record.
+  GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
+  InitShardPrimary            Sets the initial primary for the shard.
+  LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
+  PingTablet                  Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+  PlannedReparentShard        Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.
+  RebuildKeyspaceGraph        Rebuilds the serving data for the keyspace(s). This command may trigger an update to all connected clients.
+  RebuildVSchemaGraph         Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).
+  RefreshState                Reloads the tablet record on the specified tablet.
+  RefreshStateByShard         Reloads the tablet record all tablets in the shard, optionally limited to the specified cells.
+  ReloadSchema                Reloads the schema on a remote tablet.
+  ReloadSchemaKeyspace        Reloads the schema on all tablets in a keyspace. This is done on a best-effort basis.
+  ReloadSchemaShard           Reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+  RemoveBackup                Removes the given backup from the BackupStorage used by vtctld.
+  RemoveKeyspaceCell          Removes the specified cell from the Cells list for all shards in the specified keyspace (by calling RemoveShardCell on every shard). It also removes the SrvKeyspace for that keyspace in that cell.
+  RemoveShardCell             Remove the specified cell from the specified shard's Cells list.
+  ReparentTablet              Reparent a tablet to the current primary in the shard.
+  RestoreFromBackup           Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.
+  RunHealthCheck              Runs a healthcheck on the remote tablet.
+  SetKeyspaceDurabilityPolicy Sets the durability-policy used by the specified keyspace.
+  SetShardIsPrimaryServing    Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graphs; i.e. it does not run `RebuildKeyspaceGraph`.
+  SetShardTabletControl       Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables.
+  SetWritable                 Sets the specified tablet as writable or read-only.
+  ShardReplicationFix         Walks through a ShardReplication object and fixes the first error encountered.
+  ShardReplicationPositions   
+  SleepTablet                 Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.
+  SourceShardAdd              Adds the SourceShard record with the provided index for emergencies only. It does not call RefreshState for the shard primary.
+  SourceShardDelete           Deletes the SourceShard record with the provided index. This should only be used for emergency cleanup. It does not call RefreshState for the shard primary.
+  StartReplication            Starts replication on the specified tablet.
+  StopReplication             Stops replication on the specified tablet.
+  TabletExternallyReparented  Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
+  UpdateCellInfo              Updates the content of a CellInfo with the provided parameters, creating the CellInfo if it does not exist.
+  UpdateCellsAlias            Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
+  Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
+  ValidateKeyspace            Validates that all nodes reachable from the specified keyspace are consistent.
+  ValidateSchemaKeyspace      Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.
+  ValidateShard               Validates that all nodes reachable from the specified shard are consistent.
+  ValidateVersionKeyspace     Validates that the version on the primary tablet of shard 0 matches all of the other tablets in the keyspace.
+  completion                  Generate the autocompletion script for the specified shell
+  help                        Help about any command
+
+Flags:
+      --action_timeout duration                timeout for the total command (default 1h0m0s)
+      --alsologtostderr                        log to standard error as well as files
+      --emit_stats                             If set, emit stats to push-based monitoring and stats backends
+      --grpc_auth_static_client_creds string   When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc_compression string                Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
+      --grpc_enable_tracing                    Enable gRPC tracing.
+      --grpc_initial_conn_window_size int      gRPC initial connection window size
+      --grpc_initial_window_size int           gRPC initial window size
+      --grpc_keepalive_time duration           After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
+      --grpc_keepalive_timeout duration        After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --grpc_max_message_size int              Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc_prometheus                        Enable gRPC monitoring with Prometheus.
+  -h, --help                                   help for vtctldclient
+      --keep_logs duration                     keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration            keep logs for this long (using mtime) (zero to keep forever)
+      --log_backtrace_at traceLocation         when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                         If non-empty, write log files in this directory
+      --log_rotate_max_size uint               size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logtostderr                            log to standard error instead of files
+      --mysql_server_version string            MySQL server version to advertise.
+      --purge_logs_interval duration           how often try to remove old logs (default 1h0m0s)
+      --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --server string                          server to use for connection (required)
+      --stats_backend string                   The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string        List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings              Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string            Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration             Interval between emitting stats to all registered backends (default 1m0s)
+      --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
+  -v, --v Level                                log level for V logs
+      --version                                version for vtctldclient
+      --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging
+      --vtctl_client_protocol string           Protocol to use to talk to the vtctl server. (default "grpc")
+      --vtctld_grpc_ca string                  the server ca to use to validate servers when connecting
+      --vtctld_grpc_cert string                the cert to use to connect
+      --vtctld_grpc_crl string                 the server crl to use to validate server certificates when connecting
+      --vtctld_grpc_key string                 the key to use to connect
+      --vtctld_grpc_server_name string         the server name to use to validate server certificate
+
+Use "vtctldclient [command] --help" for more information about a command.

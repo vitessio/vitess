@@ -1,0 +1,145 @@
+Usage of vttestserver:
+      --alsologtostderr                                                  log to standard error as well as files
+      --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
+      --app_pool_size int                                                Size of the connection pool for app connections (default 40)
+      --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
+      --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
+      --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
+      --backup_storage_hook string                                       if set, we send the contents of the backup files through this hook.
+      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
+      --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
+      --cells strings                                                    Comma separated list of cells (default [test])
+      --charset string                                                   MySQL charset (default "utf8mb4")
+      --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
+      --compression-level int                                            what level to pass to the compressor. (default 1)
+      --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
+      --data_dir string                                                  Directory where the data files will be placed, defaults to a random directory under /vt/vtdataroot
+      --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
+      --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
+      --default_schema_dir string                                        Default directory for initial schema files. If no schema is found in schema_dir, default to this location.
+      --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
+      --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
+      --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
+      --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
+      --external-compressor string                                       command with arguments to use when compressing a backup.
+      --external-compressor-extension string                             extension to use when using an external compressor.
+      --external-decompressor string                                     command with arguments to use when decompressing a backup.
+      --external_topo_global_root string                                 the path of the global topology data in the global topology server for vtcombo process
+      --external_topo_global_server_address string                       the address of the global topology server for vtcombo process
+      --external_topo_implementation string                              the topology implementation to use for vtcombo process
+      --extra_my_cnf string                                              extra files to add to the config, separated by ':'
+      --foreign_key_mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
+      --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
+      --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
+      --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
+      --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
+      --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
+      --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
+      --grpc_crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
+      --grpc_enable_optional_tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
+      --grpc_enable_tracing                                              Enable gRPC tracing.
+      --grpc_initial_conn_window_size int                                gRPC initial connection window size
+      --grpc_initial_window_size int                                     gRPC initial window size
+      --grpc_keepalive_time duration                                     After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
+      --grpc_keepalive_timeout duration                                  After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --grpc_key string                                                  server private key to use for gRPC connections, requires grpc_cert, enables TLS
+      --grpc_max_connection_age duration                                 Maximum age of a client connection before GoAway is sent. (default 2562047h47m16.854775807s)
+      --grpc_max_connection_age_grace duration                           Additional grace period after grpc_max_connection_age, after which connections are forcibly closed. (default 2562047h47m16.854775807s)
+      --grpc_max_message_size int                                        Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc_port int                                                    Port to listen on for gRPC calls. If zero, do not listen.
+      --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus.
+      --grpc_server_ca string                                            path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
+      --grpc_server_initial_conn_window_size int                         gRPC server initial connection window size
+      --grpc_server_initial_window_size int                              gRPC server initial window size
+      --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
+      --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+  -h, --help                                                             display usage and exit
+      --initialize_with_random_data                                      If this flag is each table-shard will be initialized with random data. See also the 'rng_seed' and 'min_shard_size' and 'max_shard_size' flags.
+      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
+      --keyspaces strings                                                Comma separated list of keyspaces (default [test_keyspace])
+      --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                                                   If non-empty, write log files in this directory
+      --log_err_stacks                                                   log stack traces for errors
+      --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logtostderr                                                      log to standard error instead of files
+      --max_table_shard_size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly (default 10000)
+      --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly. (default 1000)
+      --mysql_bind_host string                                           which host to bind vtgate mysql listener to (default "localhost")
+      --mysql_only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
+      --mysql_server_version string                                      MySQL server version to advertise.
+      --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
+      --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
+      --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize_with_random_data is true. Only applies to fields that can contain NULL values. (default 0.1)
+      --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
+      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
+      --persistent_mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema_dir option) and seeding of random data (--initialize_with_random_data option) will only run during cluster startup if the data directory does not already exist. vschema migrations are run every time the cluster starts, since persistence for the topology server has not been implemented yet
+      --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
+      --planner-version string                                           Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails.
+      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
+      --port int                                                         Port to use for vtcombo. If this is 0, a random port will be chosen.
+      --pprof strings                                                    enable profiling
+      --proto_topo string                                                Define the fake cluster topology as a compact text format encoded vttest proto. See vttest.proto for more information.
+      --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
+      --queryserver-config-transaction-timeout float                     query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value
+      --rdonly_count int                                                 Rdonly tablets per shard (default 1)
+      --replica_count int                                                Replica tablets per shard (includes primary) (default 2)
+      --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
+      --rng_seed int                                                     The random number generator seed to use when initializing with random data (see also --initialize_with_random_data). Multiple runs with the same seed will result with the same initial data. (default 123)
+      --schema_dir string                                                Directory for initial schema files. Within this dir, there should be a subdir for each keyspace. Within each keyspace dir, each file is executed as SQL after the database is created on each shard. If the directory contains a vschema.json file, it will be used as the vschema for the V3 API.
+      --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --snapshot_file string                                             A MySQL DB snapshot file
+      --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
+      --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
+      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
+      --tablet_dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
+      --tablet_hostname string                                           The hostname to use for the tablet otherwise it will be derived from OS' hostname (default "localhost")
+      --tablet_manager_grpc_ca string                                    the server ca to use to validate servers when connecting
+      --tablet_manager_grpc_cert string                                  the cert to use to connect
+      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App}) (default 8)
+      --tablet_manager_grpc_connpool_size int                            number of tablets to keep tmclient connections open to (default 100)
+      --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
+      --tablet_manager_grpc_key string                                   the key to use to connect
+      --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
+      --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
+      --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
+      --topo_consul_lock_session_ttl string                              TTL for consul session.
+      --topo_consul_watch_poll_duration duration                         time of the long poll for watch queries. (default 30s)
+      --topo_zk_auth_file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
+      --topo_zk_base_timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
+      --topo_zk_max_concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)
+      --topo_zk_tls_ca string                                            the server ca to use to validate servers when connecting to the zk topo server
+      --topo_zk_tls_cert string                                          the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
+      --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
+      --transaction_mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
+  -v, --v Level                                                          log level for V logs
+      --version                                                          print binary version
+      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
+      --vschema_ddl_authorized_users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
+      --vtctl_client_protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
+      --vtctld_grpc_ca string                                            the server ca to use to validate servers when connecting
+      --vtctld_grpc_cert string                                          the cert to use to connect
+      --vtctld_grpc_crl string                                           the server crl to use to validate server certificates when connecting
+      --vtctld_grpc_key string                                           the key to use to connect
+      --vtctld_grpc_server_name string                                   the server name to use to validate server certificate
+      --vtgate_grpc_ca string                                            the server ca to use to validate servers when connecting
+      --vtgate_grpc_cert string                                          the cert to use to connect
+      --vtgate_grpc_crl string                                           the server crl to use to validate server certificates when connecting
+      --vtgate_grpc_key string                                           the key to use to connect
+      --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
+      --workflow_manager_init                                            Enable workflow manager
+      --xbstream_restore_flags string                                    flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
+      --xtrabackup_backup_flags string                                   flags to pass to backup command. These should be space separated and will be added to the end of the command
+      --xtrabackup_prepare_flags string                                  flags to pass to prepare command. These should be space separated and will be added to the end of the command
+      --xtrabackup_root_path string                                      directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
+      --xtrabackup_stream_mode string                                    which mode to use if streaming, valid values are tar and xbstream (default "tar")
+      --xtrabackup_stripe_block_size uint                                Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
+      --xtrabackup_stripes uint                                          If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
+      --xtrabackup_user string                                           User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.

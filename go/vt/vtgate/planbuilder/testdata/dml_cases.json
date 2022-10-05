@@ -1,0 +1,6157 @@
+[
+  {
+    "comment": "update table not found",
+    "query": "update nouser set val = 1",
+    "plan": "table nouser not found"
+  },
+  {
+    "comment": "delete table not found",
+    "query": "delete from nouser",
+    "plan": "table nouser not found"
+  },
+  {
+    "comment": "explicit keyspace reference",
+    "query": "update main.m1 set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update main.m1 set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update m1 set val = 1",
+        "Table": "m1"
+      },
+      "TablesUsed": [
+        "main.m1"
+      ]
+    }
+  },
+  {
+    "comment": "update unsharded",
+    "query": "update unsharded set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set val = 1",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "subqueries in unsharded update",
+    "query": "update unsharded set col = (select col from unsharded limit 1)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set col = (select col from unsharded limit 1)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set col = (select col from unsharded limit 1)",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded union in subquery of unsharded update",
+    "query": "update unsharded set col = (select id from unsharded union select id from unsharded)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set col = (select id from unsharded union select id from unsharded)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded join in subquery of unsharded update",
+    "query": "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "update with join subquery",
+    "query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "routing rules: updated of a routed table",
+    "query": "update route1 set a=1 where id=1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update route1 set a=1 where id=1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` as route1 set a = 1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update route1 set a=1 where id=1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` as route1 set a = 1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update: routing rules for subquery.",
+    "query": "update unsharded_a set a=(select a from route2)",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded_a set a=(select a from route2)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded_a set a = (select a from unsharded as route2)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded_a"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded_a set a=(select a from route2)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded_a set a = (select a from unsharded as route2)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "delete unsharded",
+    "query": "delete from unsharded",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from unsharded",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from unsharded",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id",
+    "query": "update user set val = 1 where id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id with alias",
+    "query": "update user as user_alias set val = 1 where user_alias.id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user as user_alias set val = 1 where user_alias.id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user as user_alias set val = 1 where user_alias.id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id with parenthesized expression",
+    "query": "update user set val = 1 where (id = 1)",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where (id = 1)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where (id = 1)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id with multi-part where clause with parens",
+    "query": "update user set val = 1 where (name = 'foo' and id = 1)",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where (name = 'foo' and id = 1)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where (name = 'foo' and id = 1)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id, changing one vindex column",
+    "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "email_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
+        "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
+        "Table": "user_metadata",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "email_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
+        "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
+        "Table": "user_metadata",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id, changing same vindex twice",
+    "query": "update user_metadata set email = 'a', email = 'b' where user_id = 1",
+    "plan": "column has duplicate set values: 'email'"
+  },
+  {
+    "comment": "update by primary keyspace id, changing multiple vindex columns",
+    "query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "address_user_map:4",
+          "email_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
+        "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+        "Table": "user_metadata",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "address_user_map:4",
+          "email_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
+        "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+        "Table": "user_metadata",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id, changing one vindex column, using order by and limit",
+    "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "email_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
+        "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+        "Table": "user_metadata",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "email_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
+        "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+        "Table": "user_metadata",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    }
+  },
+  {
+    "comment": "update changes non owned vindex column",
+    "query": "update music_extra set music_id = 1 where user_id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update music_extra set music_id = 1 where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "music_user_map:1"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, music_id = 1 from music_extra where user_id = 1 for update",
+        "Query": "update music_extra set music_id = 1 where user_id = 1",
+        "Table": "music_extra",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music_extra"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update music_extra set music_id = 1 where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "music_user_map:1"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, music_id = 1 from music_extra where user_id = 1 for update",
+        "Query": "update music_extra set music_id = 1 where user_id = 1",
+        "Table": "music_extra",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id, stray where clause",
+    "query": "update user set val = 1 where id = id2 and id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = id2 and id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = id2 and id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = id2 and id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = id2 and id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update by primary keyspace id, stray where clause with conversion error",
+    "query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete from by primary keyspace id",
+    "query": "delete from user where id = 1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
+        "Query": "delete from `user` where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
+        "Query": "delete from `user` where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "multi-table delete with comma join",
+    "query": "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1",
+        "Table": "unsharded_a, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "main.unsharded_b"
+      ]
+    }
+  },
+  {
+    "comment": "multi-table delete with ansi join",
+    "query": "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1",
+        "Table": "unsharded_a, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "main.unsharded_b"
+      ]
+    }
+  },
+  {
+    "comment": "delete with join from subquery",
+    "query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "routing rules: deleted from a routed table",
+    "query": "delete from route1 where id = 1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from route1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
+        "Query": "delete from `user` as route1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from route1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
+        "Query": "delete from `user` as route1 where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete: routing rules for subquery",
+    "query": "delete from  unsharded_a where a=(select a from route2)",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from  unsharded_a where a=(select a from route2)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded_a"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from  unsharded_a where a=(select a from route2)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "update by lookup",
+    "query": "update music set val = 1 where id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update music set val = 1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update music set val = 1 where id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "music_user_map"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update music set val = 1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update music set val = 1 where id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "music_user_map"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "update multi-table ansi join",
+    "query": "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1",
+        "Table": "unsharded_a, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "main.unsharded_b"
+      ]
+    }
+  },
+  {
+    "comment": "update multi-table comma join",
+    "query": "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1",
+        "Table": "unsharded_a, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "main.unsharded_b"
+      ]
+    }
+  },
+  {
+    "comment": "delete from by lookup",
+    "query": "delete from music where id = 1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from music where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+        "Query": "delete from music where id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "music_user_map"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from music where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+        "Query": "delete from music where id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "music_user_map"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "delete from, no owned vindexes",
+    "query": "delete from music_extra where user_id = 1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from music_extra where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from music_extra where user_id = 1",
+        "Table": "music_extra",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music_extra"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from music_extra where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from music_extra where user_id = 1",
+        "Table": "music_extra",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music_extra"
+      ]
+    }
+  },
+  {
+    "comment": "simple insert, no values",
+    "query": "insert into unsharded values()",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded values()",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded values ()",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "simple insert unsharded",
+    "query": "insert into unsharded values(1, 2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded values(1, 2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded values (1, 2)",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "simple upsert unsharded",
+    "query": "insert into unsharded values(1, 2) on duplicate key update x = 3",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded values(1, 2) on duplicate key update x = 3",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded insert, no col list with auto-inc and authoritative column list",
+    "query": "insert into unsharded_authoritative values(1,1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_authoritative values(1,1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
+        "TableName": "unsharded_authoritative"
+      },
+      "TablesUsed": [
+        "main.unsharded_authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "sharded upsert with sharding key set to vindex column",
+    "query": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "MultiShardAutocommit": false,
+        "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
+        "TableName": "music",
+        "VindexValues": {
+          "music_user_map": "INT64(2)",
+          "user_index": "INT64(1)"
+        }
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "sharded bulk upsert with sharding key set to vindex column",
+    "query": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "MultiShardAutocommit": false,
+        "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
+        "TableName": "music",
+        "VindexValues": {
+          "music_user_map": "INT64(2), INT64(4)",
+          "user_index": "INT64(1), INT64(3)"
+        }
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "insert unsharded with select",
+    "query": "insert into unsharded select id from unsharded_auto",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded select id from unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded select id from unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded select id from unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded select id from unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "insert unsharded with select with join",
+    "query": "insert into unsharded select id from unsharded join unsharded_auto",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded select id from unsharded join unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded select id from unsharded join unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "insert unsharded, invalid value for auto-inc",
+    "query": "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "insert unsharded, column present",
+    "query": "insert into unsharded_auto(id, val) values(1, 'aa')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_auto(id, val) values(1, 'aa')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "insert unsharded, column absent",
+    "query": "insert into unsharded_auto(val) values('aa')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_auto(val) values('aa')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "insert unsharded, column absent",
+    "query": "insert into unsharded_auto(val) values(false)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_auto(val) values(false)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "insert unsharded, multi-val",
+    "query": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded insert subquery in insert value",
+    "query": "insert into unsharded values((select 1 from dual), 1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded values((select 1 from dual), 1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded values (1, 1)",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "sharded insert subquery in insert value",
+    "query": "insert into user(id, val) values((select 1), 1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id, val) values((select 1), 1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert into a routed table",
+    "query": "insert into route1(id) values (1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into route1(id) values (1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with mimatched column list",
+    "query": "insert into user(id) values (1, 2)",
+    "plan": "column list doesn't match values"
+  },
+  {
+    "comment": "insert no column list for sharded authoritative table",
+    "query": "insert into authoritative values(1, 2, 3)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into authoritative values(1, 2, 3)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
+        "TableName": "authoritative",
+        "VindexValues": {
+          "user_index": "INT64(1)"
+        }
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "insert sharded, no values",
+    "query": "insert into user values()",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user values()",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with one vindex",
+    "query": "insert into user(id) values (1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id) values (1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert ignore sharded",
+    "query": "insert ignore into user(id) values (1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert ignore into user(id) values (1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "MultiShardAutocommit": false,
+        "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert on duplicate key",
+    "query": "insert into user(id) values(1) on duplicate key update col = 2",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id) values(1) on duplicate key update col = 2",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with one vindex and bind var",
+    "query": "insert into user(id) values (:aa)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id) values (:aa)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with non vindex",
+    "query": "insert into user(nonid) values (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(nonid) values (2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with default seq",
+    "query": "insert into user(id, nonid) values (default, 2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id, nonid) values (default, 2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with non vindex bool value",
+    "query": "insert into user(nonid) values (true)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(nonid) values (true)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "NULL",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with all vindexes supplied",
+    "query": "insert into user(nonid, name, id) values (2, 'foo', 1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL",
+          "name_user_map": "VARCHAR(\"foo\")",
+          "user_index": ":__seq0"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert for non-vindex autoinc",
+    "query": "insert into user_extra(nonid) values (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(nonid) values (2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
+        "TableName": "user_extra",
+        "VindexValues": {
+          "user_index": "NULL"
+        }
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "insert for non-compliant names",
+    "query": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c_0, 2)",
+        "TableName": "weird`name",
+        "VindexValues": {
+          "user_index": "INT64(1)"
+        }
+      },
+      "TablesUsed": [
+        "user.weird`name"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded insert from union",
+    "query": "insert into unsharded select 1 from dual union select 1 from dual",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded select 1 from dual union select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded select 1 from dual union select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "insert for non-vindex autoinc, invalid value",
+    "query": "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
+        "TableName": "user_extra",
+        "VindexValues": {
+          "user_index": "NULL"
+        }
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "insert invalid index value",
+    "query": "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into music_extra(music_id, user_id) values (:_music_id_0, :_user_id_0)",
+        "TableName": "music_extra",
+        "VindexValues": {
+          "music_user_map": "INT64(1)",
+          "user_index": "DECIMAL(18446744073709551616)"
+        }
+      },
+      "TablesUsed": [
+        "user.music_extra"
+      ]
+    }
+  },
+  {
+    "comment": "insert invalid index value",
+    "query": "insert into music_extra(music_id, user_id) values(1, id)",
+    "plan": "column access not supported here"
+  },
+  {
+    "comment": "insert invalid table",
+    "query": "insert into noexist(music_id, user_id) values(1, 18446744073709551616)",
+    "plan": "table noexist not found"
+  },
+  {
+    "comment": "insert with multiple rows",
+    "query": "insert into user(id) values (1), (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id) values (1), (2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL, NULL",
+          "name_user_map": "NULL, NULL",
+          "user_index": ":__seq0, :__seq1"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with query timeout",
+    "query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+        "QueryTimeout": 1,
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL, NULL",
+          "name_user_map": "NULL, NULL",
+          "user_index": ":__seq0, :__seq1"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert with multiple rows - multi-shard autocommit",
+    "query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": true,
+        "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+        "TableName": "user",
+        "VindexValues": {
+          "costly_map": "NULL, NULL",
+          "name_user_map": "NULL, NULL",
+          "user_index": ":__seq0, :__seq1"
+        }
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert into a vindex not allowed",
+    "query": "insert into user_index(id) values(1)",
+    "plan": "unsupported: multi-shard or vindex write statement"
+  },
+  {
+    "comment": "simple replace unsharded",
+    "query": "replace into unsharded values(1, 2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into unsharded values(1, 2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "replace into unsharded values (1, 2)",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "replace unsharded with select",
+    "query": "replace into unsharded select id from unsharded_auto",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into unsharded select id from unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "replace into unsharded select id from unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into unsharded select id from unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "replace into unsharded select id from unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "replace unsharded, invalid value for auto-inc",
+    "query": "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "replace unsharded, column present",
+    "query": "replace into unsharded_auto(id, val) values(1, 'aa')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into unsharded_auto(id, val) values(1, 'aa')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "replace unsharded, column absent",
+    "query": "replace into unsharded_auto(val) values('aa')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into unsharded_auto(val) values('aa')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "replace unsharded, multi-val",
+    "query": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
+        "TableName": "unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "replace invalid table",
+    "query": "replace into noexist(music_id, user_id) values(1, 18446744073709551616)",
+    "plan": "table noexist not found"
+  },
+  {
+    "comment": "insert a row in a multi column vindex table",
+    "query": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
+        "TableName": "multicolvin",
+        "VindexValues": {
+          "cola_map": "INT64(1)",
+          "colb_colc_map": "INT64(2), INT64(3)",
+          "kid_index": "INT64(4)"
+        }
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    }
+  },
+  {
+    "comment": "insert for overlapped vindex columns",
+    "query": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid_0, :_column_a_0, 3)",
+        "TableName": "overlap_vindex",
+        "VindexValues": {
+          "cola_kid_map": "INT64(2), INT64(1)",
+          "kid_index": "INT64(1)"
+        }
+      },
+      "TablesUsed": [
+        "user.overlap_vindex"
+      ]
+    }
+  },
+  {
+    "comment": "insert multiple rows in a multi column vindex table",
+    "query": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
+        "TableName": "multicolvin",
+        "VindexValues": {
+          "cola_map": "INT64(1), INT64(5)",
+          "colb_colc_map": "INT64(2), INT64(6), INT64(3), INT64(7)",
+          "kid_index": "INT64(4), INT64(8)"
+        }
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    }
+  },
+  {
+    "comment": "delete row in a multi column vindex table",
+    "query": "delete from multicolvin where kid=1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicolvin where kid=1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+        "Query": "delete from multicolvin where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicolvin where kid=1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+        "Query": "delete from multicolvin where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    }
+  },
+  {
+    "comment": "update columns of multi column vindex",
+    "query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "colb_colc_map:4"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
+        "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "colb_colc_map:4"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
+        "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    }
+  },
+  {
+    "comment": "update multiple vindexes, with multi column vindex",
+    "query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "cola_map:4",
+          "colb_colc_map:5"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_a = 0, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
+        "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "cola_map:4",
+          "colb_colc_map:5"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_a = 0, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
+        "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    }
+  },
+  {
+    "comment": "update with no primary vindex on where clause (scatter update)",
+    "query": "update user_extra set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with target destination",
+    "query": "update `user[-]`.user_extra set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update `user[-]`.user_extra set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with no primary vindex on where clause (scatter update)   - multi shard autocommit",
+    "query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": true,
+        "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with no primary vindex on where clause (scatter update)   - query timeout",
+    "query": "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
+        "QueryTimeout": 1,
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with non-comparison expr",
+    "query": "update user_extra set val = 1 where id between 1 and 2",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set val = 1 where id between 1 and 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1 where id between 1 and 2",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with primary id through IN clause",
+    "query": "update user_extra set val = 1 where user_id in (1, 2)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set val = 1 where user_id in (1, 2)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1 where user_id in (1, 2)",
+        "Table": "user_extra",
+        "Values": [
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with non-unique key",
+    "query": "update user_extra set val = 1 where name = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set val = 1 where name = 'foo'",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1 where `name` = 'foo'",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update by lookup with IN clause",
+    "query": "update user_extra set val = 1 where id in (1, 2)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set val = 1 where id in (1, 2)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1 where id in (1, 2)",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with where clause with parens",
+    "query": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete from with no where clause",
+    "query": "delete from user_extra",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user_extra",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from user_extra",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete with target destination",
+    "query": "delete from `user[-]`.user_extra",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from `user[-]`.user_extra",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from user_extra",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete with non-comparison expr",
+    "query": "delete from user_extra where user_id between 1 and 2",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user_extra where user_id between 1 and 2",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from user_extra where user_id between 1 and 2",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete from with no index match",
+    "query": "delete from user_extra where name = 'jose'",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user_extra where name = 'jose'",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from user_extra where `name` = 'jose'",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete from with no index match - multi shard autocommit",
+    "query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": true,
+        "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete from with no index match - query timeout",
+    "query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
+        "QueryTimeout": 1,
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete from with primary id in through IN clause",
+    "query": "delete from user_extra where user_id in (1, 2)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user_extra where user_id in (1, 2)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from user_extra where user_id in (1, 2)",
+        "Table": "user_extra",
+        "Values": [
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded update where inner query references outer query",
+    "query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+        "Table": "unsharded, unsharded_a, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+        "Table": "unsharded, unsharded_a, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a",
+        "main.unsharded_b"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded delete where inner query references outer query",
+    "query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "update vindex value to null",
+    "query": "update user set name = null where id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = null where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id = 1 for update",
+        "Query": "update `user` set `name` = null where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = null where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id = 1 for update",
+        "Query": "update `user` set `name` = null where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert using last_insert_id",
+    "query": "insert into unsharded values(last_insert_id(), 2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded values(last_insert_id(), 2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded values (:__lastInsertId, 2)",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "update vindex value to null with multiple primary keyspace id",
+    "query": "update user set name = null where id in (1, 2, 3)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = null where id in (1, 2, 3)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id in (1, 2, 3) for update",
+        "Query": "update `user` set `name` = null where id in (1, 2, 3)",
+        "Table": "user",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update vindex value to null without a where clause",
+    "query": "update user set name = null",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = null",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` for update",
+        "Query": "update `user` set `name` = null",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update vindex value to null with complex where clause",
+    "query": "update user set name = null where id + 1 = 2",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = null where id + 1 = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id + 1 = 2 for update",
+        "Query": "update `user` set `name` = null where id + 1 = 2",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete from user by primary keyspace id with in clause",
+    "query": "delete from user where id in (1, 2, 3)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where id in (1, 2, 3)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id in (1, 2, 3) for update",
+        "Query": "delete from `user` where id in (1, 2, 3)",
+        "Table": "user",
+        "Values": [
+          "(INT64(1), INT64(2), INT64(3))"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete from user by complex expression",
+    "query": "delete from user where id + 1 = 2",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where id + 1 = 2",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id + 1 = 2 for update",
+        "Query": "delete from `user` where id + 1 = 2",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete from user without a where clause",
+    "query": "delete from user",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+        "Query": "delete from `user`",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete with single table targets",
+    "query": "delete music from music where id = 1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete music from music where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+        "Query": "delete from music where id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "music_user_map"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete music from music where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+        "Query": "delete from music where id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "music_user_map"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "scatter update table with owned vindexes without changing lookup vindex",
+    "query": "update user set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set val = 1",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "scatter delete with owned lookup vindex",
+    "query": "delete from user",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+        "Query": "delete from `user`",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update multi column vindex, without values for all the vindex columns",
+    "query": "update multicolvin set column_c = 2 where kid = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicolvin set column_c = 2 where kid = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "colb_colc_map:4"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_c = 2 from multicolvin where kid = 1 for update",
+        "Query": "update multicolvin set column_c = 2 where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicolvin set column_c = 2 where kid = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "colb_colc_map:4"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "kid_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_c = 2 from multicolvin where kid = 1 for update",
+        "Query": "update multicolvin set column_c = 2 where kid = 1",
+        "Table": "multicolvin",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "kid_index"
+      },
+      "TablesUsed": [
+        "user.multicolvin"
+      ]
+    }
+  },
+  {
+    "comment": "update with binary value",
+    "query": "update user set name = _binary 'abc' where id = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = _binary 'abc' where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from `user` where id = 1 for update",
+        "Query": "update `user` set `name` = _binary 'abc' where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = _binary 'abc' where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from `user` where id = 1 for update",
+        "Query": "update `user` set `name` = _binary 'abc' where id = 1",
+        "Table": "user",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete with binary value",
+    "query": "delete from user where name = _binary 'abc'",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where name = _binary 'abc'",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
+        "Query": "delete from `user` where `name` = _binary 'abc'",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where name = _binary 'abc'",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
+        "Query": "delete from `user` where `name` = _binary 'abc'",
+        "Table": "user",
+        "Values": [
+          "VARBINARY(\"abc\")"
+        ],
+        "Vindex": "name_user_map"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete with shard targeting",
+    "query": "delete from `user[-]`.user",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from `user[-]`.user",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+        "Query": "delete from `user`",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update with shard targeting",
+    "query": "update `user[-]`.user set name = 'myname'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update `user[-]`.user set name = 'myname'",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'myname' from `user` for update",
+        "Query": "update `user` set `name` = 'myname'",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update with shard targeting without vindex",
+    "query": "update `user[-]`.user_extra set val = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update `user[-]`.user_extra set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update user_extra set val = 1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "multi-table delete with single table",
+    "query": "delete u.* from user u where u.id * u.col = u.foo",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u.* from user u where u.id * u.col = u.foo",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",
+        "Query": "delete from `user` where `user`.id * `user`.col = `user`.foo",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete with unknown reference",
+    "query": "delete music from user where id = 1",
+    "plan": "Unknown table 'music' in MULTI DELETE"
+  },
+  {
+    "comment": "delete with derived tables",
+    "query": "delete music from (select * from user) music where id = 1",
+    "plan": "The target table music of the DELETE is not updatable"
+  },
+  {
+    "comment": "delete with derived tables with unknown table",
+    "query": "delete user from (select * from user) music where id = 1",
+    "plan": "Unknown table 'user' in MULTI DELETE"
+  },
+  {
+    "query": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
+        "TableName": "user_privacy_consents"
+      },
+      "TablesUsed": [
+        "main.user_privacy_consents"
+      ]
+    },
+    "gen4-plan": "unsupported: unable to split predicates to derived table: not :__sq_has_values1"
+  },
+  {
+    "comment": "Delete on backfilling unique lookup vindex should be a scatter",
+    "query": "delete from zlookup_unique.t1 where c2 = 20",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from zlookup_unique.t1 where c2 = 20",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
+        "Query": "delete from t1 where c2 = 20",
+        "Table": "t1"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "Update on backfilling unique lookup vindex should be a scatter",
+    "query": "update zlookup_unique.t1 set c2 = 1 where c2 = 20",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 20",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "lookup_t1:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 20 for update",
+        "Query": "update t1 set c2 = 1 where c2 = 20",
+        "Table": "t1"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "Delete on backfilling and non-backfilling unique lookup vindexes should be a delete equal",
+    "query": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
+        "Query": "delete from t1 where c2 = 10 and c3 = 20",
+        "Table": "t1",
+        "Values": [
+          "INT64(20)"
+        ],
+        "Vindex": "lookup_t1_2"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
+        "Query": "delete from t1 where c2 = 10 and c3 = 20",
+        "Table": "t1",
+        "Values": [
+          "INT64(20)"
+        ],
+        "Vindex": "lookup_t1_2"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "Update on backfilling and non-backfilling unique lookup vindexes should be an equal",
+    "query": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "lookup_t1:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 = 20 for update",
+        "Query": "update t1 set c2 = 1 where c2 = 10 and c3 = 20",
+        "Table": "t1",
+        "Values": [
+          "INT64(20)"
+        ],
+        "Vindex": "lookup_t1_2"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "lookup_t1:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 = 20 for update",
+        "Query": "update t1 set c2 = 1 where c2 = 10 and c3 = 20",
+        "Table": "t1",
+        "Values": [
+          "INT64(20)"
+        ],
+        "Vindex": "lookup_t1_2"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "Delete EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be a delete IN",
+    "query": "delete from zlookup_unique.t1 where c2 = 10 and c3 in (20, 21)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 in (20, 21)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 in (20, 21) for update",
+        "Query": "delete from t1 where c2 = 10 and c3 in (20, 21)",
+        "Table": "t1",
+        "Values": [
+          "(INT64(20), INT64(21))"
+        ],
+        "Vindex": "lookup_t1_2"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "Update EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be an update IN",
+    "query": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "lookup_t1:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "xxhash",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 in (20, 21) for update",
+        "Query": "update t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
+        "Table": "t1",
+        "Values": [
+          "(INT64(20), INT64(21))"
+        ],
+        "Vindex": "lookup_t1_2"
+      },
+      "TablesUsed": [
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "update with alias table",
+    "query": "update user u set u.name = 'john' where u.col > 20",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user u set u.name = 'john' where u.col > 20",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_user_map:3"
+        ],
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'john' from `user` as u where u.col > 20 for update",
+        "Query": "update `user` as u set u.`name` = 'john' where u.col > 20",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete with alias table",
+    "query": "delete from user u where u.col > 20",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user u where u.col > 20",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col > 20 for update",
+        "Query": "delete from `user` as u where u.col > 20",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update with a multicol vindex",
+    "query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with a multicol vindex - reverse order",
+    "query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with a multicol vindex using an IN clause",
+    "query": "update multicol_tbl set x = 1 where colb IN (1,2) and cola = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where colb IN (1,2) and cola = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with a multicol vindex using an IN clause",
+    "query": "update multicol_tbl set x = 1 where colb IN (1,2) and cola IN (3,4)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where colb IN (1,2) and cola IN (3,4)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola in (3, 4)",
+        "Table": "multicol_tbl",
+        "Values": [
+          "(INT64(3), INT64(4))",
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with a multicol vindex",
+    "query": "delete from multicol_tbl where cola = 1 and colb = 2",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where cola = 1 and colb = 2",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
+        "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where cola = 1 and colb = 2",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
+        "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with a multicol vindex - reverse order",
+    "query": "delete from multicol_tbl where colb = 2 and cola = 1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where colb = 2 and cola = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
+        "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where colb = 2 and cola = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
+        "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with a multicol vindex using an IN clause",
+    "query": "delete from multicol_tbl where colb IN (1,2) and cola = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where colb IN (1,2) and cola = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola = 1 for update",
+        "Query": "delete from multicol_tbl where colb in (1, 2) and cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with a multicol vindex using an IN clause",
+    "query": "delete from multicol_tbl where colb IN (1,2) and cola IN (3,4)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where colb IN (1,2) and cola IN (3,4)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola in (3, 4) for update",
+        "Query": "delete from multicol_tbl where colb in (1, 2) and cola in (3, 4)",
+        "Table": "multicol_tbl",
+        "Values": [
+          "(INT64(3), INT64(4))",
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with multicol and an owned vindex which changes",
+    "query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "colc_map:4"
+        ],
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name`, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
+        "Query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "colc_map:4"
+        ],
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name`, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
+        "Query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)",
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with routing using non-unique lookup vindex",
+    "query": "update multicol_tbl set x = 42 where name = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 42 where name = 'foo'",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 42 where `name` = 'foo'",
+        "Table": "multicol_tbl",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "name_muticoltbl_map"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with routing using subsharding column",
+    "query": "update multicol_tbl set x = 42 where cola = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 42 where cola = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 42 where cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 42 where cola = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "SubShard",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 42 where cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with routing using subsharding column on lookup vindex",
+    "query": "update multicol_tbl set name = 'bar' where cola = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set name = 'bar' where cola = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_muticoltbl_map:4"
+        ],
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola = 1 for update",
+        "Query": "update multicol_tbl set `name` = 'bar' where cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set name = 'bar' where cola = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "SubShard",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_muticoltbl_map:4"
+        ],
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola = 1 for update",
+        "Query": "update multicol_tbl set `name` = 'bar' where cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with routing using subsharding column with in query",
+    "query": "update multicol_tbl set name = 'bar' where cola in (1,2)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set name = 'bar' where cola in (1,2)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "ChangedVindexValues": [
+          "name_muticoltbl_map:4"
+        ],
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola in (1, 2) for update",
+        "Query": "update multicol_tbl set `name` = 'bar' where cola in (1, 2)",
+        "Table": "multicol_tbl",
+        "Values": [
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "update with routing using subsharding column with in query as lower cost over lookup vindex",
+    "query": "update multicol_tbl set x = 1 where name = 'foo' and cola = 2",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where name = 'foo' and cola = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where `name` = 'foo' and cola = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update multicol_tbl set x = 1 where name = 'foo' and cola = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update multicol_tbl set x = 1 where `name` = 'foo' and cola = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "name_muticoltbl_map"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with routing using non-unique lookup vindex",
+    "query": "delete from multicol_tbl where name = 'foo'",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where name = 'foo'",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' for update",
+        "Query": "delete from multicol_tbl where `name` = 'foo'",
+        "Table": "multicol_tbl",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "name_muticoltbl_map"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with routing using subsharding column",
+    "query": "delete from multicol_tbl where cola = 1",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where cola = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
+        "Query": "delete from multicol_tbl where cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where cola = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "SubShard",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
+        "Query": "delete from multicol_tbl where cola = 1",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with routing using subsharding column with in query",
+    "query": "delete from multicol_tbl where cola in (1,2)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where cola in (1,2)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola in (1, 2) for update",
+        "Query": "delete from multicol_tbl where cola in (1, 2)",
+        "Table": "multicol_tbl",
+        "Values": [
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "delete with routing using subsharding column with in query as lower cost over lookup vindex",
+    "query": "delete from multicol_tbl where name = 'foo' and cola = 2",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where name = 'foo' and cola = 2",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
+        "Query": "delete from multicol_tbl where `name` = 'foo' and cola = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "INT64(2)"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from multicol_tbl where name = 'foo' and cola = 2",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 2,
+        "KsidVindex": "multicolIdx",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
+        "Query": "delete from multicol_tbl where `name` = 'foo' and cola = 2",
+        "Table": "multicol_tbl",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "name_muticoltbl_map"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "insert using select with simple table.",
+    "query": "insert into music(id, user_id) select * from user",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(id, user_id) select * from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "TableName": "music",
+        "VindexOffsetFromSelect": {
+          "music_user_map": "[0]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(id, user_id) select * from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "TableName": "music",
+        "VindexOffsetFromSelect": {
+          "music_user_map": "[0]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert using select with more columns in insert",
+    "query": "insert into music(id, user_id) select 1",
+    "plan": "Column count doesn't match value count at row 1"
+  },
+  {
+    "comment": "insert using select with more columns in select",
+    "query": "insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id",
+    "plan": "Column count doesn't match value count at row 1"
+  },
+  {
+    "comment": "insert using select with more columns in select after accounting for star column",
+    "query": "insert into music(id, user_id) select id, *, 2 from user",
+    "plan": "Column count doesn't match value count at row 1"
+  },
+  {
+    "comment": "insert using select with auto-inc column using vitess sequence, sequence column not present",
+    "query": "insert into user_extra(user_id) select id from user",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id) select id from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:1",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id) select id from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:1",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "insert using select with auto-inc column using vitess sequence, sequence column present",
+    "query": "insert into user_extra(id, user_id) select null, id from user",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(id, user_id) select null, id from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select null, id from `user` where 1 != 1",
+            "Query": "select null, id from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(id, user_id) select null, id from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select null, id from `user` where 1 != 1",
+            "Query": "select null, id from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "sharded insert from select",
+    "query": "insert into user(id) select 1 from dual",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id) select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:0",
+        "MultiShardAutocommit": false,
+        "TableName": "user",
+        "VindexOffsetFromSelect": {
+          "costly_map": "[-1]",
+          "name_user_map": "[-1]",
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "INT64(1) as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(id) select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:0",
+        "MultiShardAutocommit": false,
+        "TableName": "user",
+        "VindexOffsetFromSelect": {
+          "costly_map": "[-1]",
+          "name_user_map": "[-1]",
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "INT64(1) as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert using select with sharding column is autoinc and not present in the insert column query",
+    "query": "insert into user(pattern) SELECT 1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(pattern) SELECT 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:1",
+        "MultiShardAutocommit": false,
+        "TableName": "user",
+        "VindexOffsetFromSelect": {
+          "costly_map": "[-1]",
+          "name_user_map": "[-1]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "INT64(1) as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(pattern) SELECT 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:1",
+        "MultiShardAutocommit": false,
+        "TableName": "user",
+        "VindexOffsetFromSelect": {
+          "costly_map": "[-1]",
+          "name_user_map": "[-1]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "INT64(1) as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert using select with sharding column is not an autoinc and not present in the insert column query",
+    "query": "insert into user_extra(pattern) SELECT 1",
+    "plan": "insert query does not have sharding column 'user_id' in the column list"
+  },
+  {
+    "comment": "sharded same keyspace",
+    "query": "insert into user_extra(user_id, col) select col1, col2 from user",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, col) select col1, col2 from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+            "Query": "select col1, col2 from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, col) select col1, col2 from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+            "Query": "select col1, col2 from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded same keyspace",
+    "query": "insert into unsharded(col) select col from unsharded_auto",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded(col) select col from unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded(col) select col from unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded(col) select col from unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into unsharded(col) select col from unsharded_auto for update",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "sharded different keyspace",
+    "query": "insert into user_extra(user_id, col) select col1, col2 from t1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, col) select col1, col2 from t1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "zlookup_unique",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1, col2 from t1 where 1 != 1",
+            "Query": "select col1, col2 from t1 for update",
+            "Table": "t1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, col) select col1, col2 from t1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "zlookup_unique",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1, col2 from t1 where 1 != 1",
+            "Query": "select col1, col2 from t1 for update",
+            "Table": "t1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user_extra",
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "sharded insert table, unsharded select table",
+    "query": "insert into user_extra(user_id, col) select col1, col2 from unsharded_tab",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, col) select col1, col2 from unsharded_tab",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main_2",
+              "Sharded": false
+            },
+            "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
+            "Query": "select col1, col2 from unsharded_tab for update",
+            "Table": "unsharded_tab"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, col) select col1, col2 from unsharded_tab",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "main:2",
+        "MultiShardAutocommit": false,
+        "TableName": "user_extra",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main_2",
+              "Sharded": false
+            },
+            "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
+            "Query": "select col1, col2 from unsharded_tab for update",
+            "Table": "unsharded_tab"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main_2.unsharded_tab",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded different keyspace",
+    "query": "insert into unsharded(col) select col from unsharded_tab",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded(col) select col from unsharded_tab",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "TableName": "unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main_2",
+              "Sharded": false
+            },
+            "FieldQuery": "select col from unsharded_tab where 1 != 1",
+            "Query": "select col from unsharded_tab for update",
+            "Table": "unsharded_tab"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded(col) select col from unsharded_tab",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "TableName": "unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main_2",
+              "Sharded": false
+            },
+            "FieldQuery": "select col from unsharded_tab where 1 != 1",
+            "Query": "select col from unsharded_tab for update",
+            "Table": "unsharded_tab"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main_2.unsharded_tab"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded insert table, sharded select table",
+    "query": "insert into unsharded(col) select col from t1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded(col) select col from t1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "TableName": "unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "zlookup_unique",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from t1 where 1 != 1",
+            "Query": "select col from t1 for update",
+            "Table": "t1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded(col) select col from t1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "TableName": "unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "zlookup_unique",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from t1 where 1 != 1",
+            "Query": "select col from t1 for update",
+            "Table": "t1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded subquery in sharded update, not the same keyspace between outer and inner",
+    "query": "update user set col = (select id from unsharded)",
+    "v3-plan": "unsupported: subqueries in sharded DML",
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (select id from unsharded)",
+      "Instructions": {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from unsharded where 1 != 1",
+            "Query": "select id from unsharded lock in share mode",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "MultiShardAutocommit": false,
+            "Query": "update `user` set col = :__sq1",
+            "Table": "user"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery in unsharded update, not the same keyspace",
+    "query": "update unsharded set col = (select id from user)",
+    "v3-plan": "unsupported: sharded subqueries in DML",
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set col = (select id from user)",
+      "Instructions": {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` lock in share mode",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "MultiShardAutocommit": false,
+            "Query": "update unsharded set col = :__sq1",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded join unsharded subqueries in unsharded update",
+    "query": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
+    "v3-plan": "unsupported: sharded subqueries in DML",
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
+      "Instructions": {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "unsharded_id": 0
+            },
+            "TableName": "unsharded_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+                "Query": "select unsharded.id from unsharded lock in share mode",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user` where `user`.id = :unsharded_id lock in share mode",
+                "Table": "`user`",
+                "Values": [
+                  ":unsharded_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "MultiShardAutocommit": false,
+            "Query": "update unsharded set col = :__sq1",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded update with sub query where the sources can be merged into a single query",
+    "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
+    "v3-plan": "unsupported: subqueries in sharded DML",
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
+        "Table": "user",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "merge through correlated subquery",
+    "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
+    "v3-plan": "unsupported: subqueries in sharded DML",
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id = 5",
+        "Table": "user",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "merge through correlated subquery #2",
+    "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
+    "v3-plan": "unsupported: subqueries in sharded DML",
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id > 5",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "all defaults empty column, empty values",
+    "query": "insert into authoritative () values ()",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into authoritative () values ()",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into authoritative(user_id) values (:_user_id_0)",
+        "TableName": "authoritative",
+        "VindexValues": {
+          "user_index": "NULL"
+        }
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "explain dml without any directive should fail",
+    "query": "explain format=vtexplain delete from user",
+    "plan": "explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
+  },
+  {
+    "comment": "explain dml with actually_run_query directive",
+    "query": "explain /*vt+ execute_dml_queries */ format=vtexplain delete from user",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "explain /*vt+ execute_dml_queries */ format=vtexplain delete from user",
+      "Instructions": {
+        "OperatorType": "VTEXPLAIN",
+        "Inputs": [
+          {
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "MultiShardAutocommit": false,
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+            "Query": "delete from `user`",
+            "Table": "user"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "explain dml with actually_run_query directive - 2",
+    "query": "explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user",
+      "Instructions": {
+        "OperatorType": "VTEXPLAIN",
+        "Inputs": [
+          {
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "MultiShardAutocommit": false,
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+            "Query": "delete from `user`",
+            "Table": "user"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Here V3 populates the TablesUsed incorrectly\n# delete with join from multi table join subquery.",
+    "query": "delete foo from unsharded as foo join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete foo from unsharded as foo join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+        "Table": "unsharded, unsharded, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded, unsharded_b"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete foo from unsharded as foo join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
+        "Table": "unsharded, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_b"
+      ]
+    }
+  },
+  {
+    "comment": "update with routing using multi column vindex",
+    "query": "update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "user",
+        "Values": [
+          "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
+        ],
+        "Vindex": "name_user_map"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete with routing using multi column vindex",
+    "query": "delete from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "v3-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd')) for update",
+        "Query": "delete from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd')) for update",
+        "Query": "delete from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+        "Table": "user",
+        "Values": [
+          "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
+        ],
+        "Vindex": "name_user_map"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  }
+]

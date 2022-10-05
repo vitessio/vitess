@@ -744,15 +744,16 @@ func generateVTOrc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInf
     volumes:
       - ".:/script"
     environment:
-      - TOPOLOGY_FLAGS=%[1]s
-      - EXTERNAL_DB=%[2]s
-      - DB_USER=%[3]s
-      - DB_PASS=%[4]s
+      - WEB_PORT=%[1]d
+      - TOPOLOGY_FLAGS=%[2]s
+      - EXTERNAL_DB=%[3]s
+      - DB_USER=%[4]s
+      - DB_PASS=%[5]s
     ports:
-      - "13000:3000"
+      - "13000:%[1]d"
     command: ["sh", "-c", "/script/vtorc-up.sh"]
-    %[5]s
-`, opts.topologyFlags, externalDb, dbInfo.dbUser, dbInfo.dbPass, dependsOn)
+    %[6]s
+`, opts.webPort, opts.topologyFlags, externalDb, dbInfo.dbUser, dbInfo.dbPass, dependsOn)
 }
 
 func generateVreplication(dbInfo externalDbInfo, opts vtOptions) string {

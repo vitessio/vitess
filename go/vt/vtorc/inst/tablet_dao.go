@@ -26,13 +26,14 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/openark/golib/sqlutils"
+
 	"vitess.io/vitess/go/vt/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -61,7 +62,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 		log.Errorf("Unexpected: tablet type did not change to primary: %v", newPrimaryTablet.Type)
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
 	_, err = TopoServ.UpdateShardFields(ctx, newPrimaryTablet.Keyspace, newPrimaryTablet.Shard, func(si *topo.ShardInfo) error {
 		if proto.Equal(si.PrimaryAlias, newPrimaryTablet.Alias) && proto.Equal(si.PrimaryTermStartTime, newPrimaryTablet.PrimaryTermStartTime) {
@@ -103,12 +104,12 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType,
 		return nil, err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	if err := tmc.ChangeType(tmcCtx, tablet, tabletType, semiSync); err != nil {
 		return nil, err
 	}
-	tsCtx, tsCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tsCtx, tsCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tsCancel()
 	ti, err := TopoServ.GetTablet(tsCtx, tablet.Alias)
 	if err != nil {
@@ -128,7 +129,7 @@ func ResetReplicationParameters(instanceKey InstanceKey) error {
 		return err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	if err := tmc.ResetReplicationParameters(tmcCtx, tablet); err != nil {
 		return err
@@ -143,7 +144,7 @@ func FullStatus(instanceKey InstanceKey) (*replicationdatapb.FullStatus, error) 
 		return nil, err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	return tmc.FullStatus(tmcCtx, tablet)
 }

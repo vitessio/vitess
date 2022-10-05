@@ -64,7 +64,7 @@ func commandApplyRoutingRules(cmd *cobra.Command, args []string) error {
 	}
 
 	if applyRoutingRulesOptions.Rules == "" && applyRoutingRulesOptions.RulesFilePath == "" {
-		return errors.New("must pass exactly one of --rules and --rules-file")
+		return errors.New("must pass exactly one of --rules or --rules-file")
 	}
 
 	cli.FinishedParsing(cmd)

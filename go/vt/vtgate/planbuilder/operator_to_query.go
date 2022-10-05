@@ -93,7 +93,10 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		sel.SelectExprs = opQuery.SelectExprs
 		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
 			Select: sel,
-		}, nil)
+		}, nil, op.ColumnAliases)
+		for _, col := range op.Columns {
+			qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+		}
 	default:
 		panic(fmt.Sprintf("%T", op))
 	}
@@ -120,10 +123,16 @@ func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.
 		Name:      sqlparser.NewIdentifierCS(tableName),
 		Qualifier: sqlparser.NewIdentifierCS(db),
 	}
-	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints)
+	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints, nil)
 }
 
-func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr, hints sqlparser.IndexHints) {
+func (qb *queryBuilder) addTableExpr(
+	tableName, alias string,
+	tableID semantics.TableSet,
+	tblExpr sqlparser.SimpleTableExpr,
+	hints sqlparser.IndexHints,
+	columnAliases sqlparser.Columns,
+) {
 	if qb.sel == nil {
 		qb.sel = &sqlparser.Select{}
 	}
@@ -133,7 +142,7 @@ func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.
 		Partitions: nil,
 		As:         sqlparser.NewIdentifierCS(alias),
 		Hints:      hints,
-		Columns:    nil,
+		Columns:    columnAliases,
 	}
 	err := qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
 	if err != nil {
