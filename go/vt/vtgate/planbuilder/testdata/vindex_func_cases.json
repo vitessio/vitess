@@ -1,0 +1,492 @@
+[
+  {
+    "comment": "vindex func read all cols",
+    "query": "select id, keyspace_id, range_start, range_end, hex_keyspace_id, shard from user_index where id = :id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, keyspace_id, range_start, range_end, hex_keyspace_id, shard from user_index where id = :id",
+      "Instructions": {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "Fields": {
+          "hex_keyspace_id": "VARBINARY",
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY",
+          "range_end": "VARBINARY",
+          "range_start": "VARBINARY",
+          "shard": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
+      }
+    }
+  },
+  {
+    "comment": "vindex func select *",
+    "query": "select * from user_index where id = :id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user_index where id = :id",
+      "Instructions": {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "Fields": {
+          "hex_keyspace_id": "VARBINARY",
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY",
+          "range_end": "VARBINARY",
+          "range_start": "VARBINARY",
+          "shard": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
+      }
+    }
+  },
+  {
+    "comment": "vindex func read with id repeated",
+    "query": "select id, keyspace_id, id from user_index where id = :id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, keyspace_id, id from user_index where id = :id",
+      "Instructions": {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1,
+          0
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
+      }
+    }
+  },
+  {
+    "comment": "ambiguous vindex reference",
+    "query": "select id, keyspace_id, id from hash_dup where id = :id",
+    "plan": "ambiguous vindex reference: hash_dup"
+  },
+  {
+    "comment": "disambiguated vindex reference",
+    "query": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
+      "Instructions": {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1,
+          0
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "hash_dup"
+      }
+    }
+  },
+  {
+    "comment": "You can even join with a vindexFunc primitive",
+    "query": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              1
+            ],
+            "Fields": {
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "Join vindexFunc on RHS",
+    "query": "select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0,L:0",
+        "TableName": "unsharded_",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              1
+            ],
+            "Fields": {
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "Join with vindexFunc on a column of it, already present in select list",
+    "query": "select user_index.id, user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_index.id, user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "JoinVars": {
+          "user_index_id": 0
+        },
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              0,
+              1
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "Join with vindexFunc on a column of it, already present at the end of the select list",
+    "query": "select user_index.keyspace_id, user_index.id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_index.keyspace_id, user_index.id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "JoinVars": {
+          "user_index_id": 1
+        },
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              1,
+              0
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_index.keyspace_id, user_index.id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:1,L:0,R:0",
+        "JoinVars": {
+          "user_index_id": 0
+        },
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              0,
+              1
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "Join with vindexFunc on a column of it, not present in select list",
+    "query": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "user_index_id": 1
+        },
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              1,
+              0
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:1,R:0",
+        "JoinVars": {
+          "user_index_id": 0
+        },
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              0,
+              1
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "Join with aliased table name",
+    "query": "select ui.keyspace_id, unsharded.id from user_index ui join unsharded where ui.id = :id and unsharded.id = ui.id",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select ui.keyspace_id, unsharded.id from user_index ui join unsharded where ui.id = :id and unsharded.id = ui.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "ui_id": 1
+        },
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              1,
+              0
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select ui.keyspace_id, unsharded.id from user_index ui join unsharded where ui.id = :id and unsharded.id = ui.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:1,R:0",
+        "JoinVars": {
+          "ui_id": 0
+        },
+        "TableName": "_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              0,
+              1
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "query": "select none from user_index where id = :id",
+    "v3-plan": "symbol `none` not found in table or subquery",
+    "gen4-plan": "symbol `none` not found"
+  }
+]
