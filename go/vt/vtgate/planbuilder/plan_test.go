@@ -18,12 +18,14 @@ package planbuilder
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -193,13 +195,13 @@ func makeTestOutput(t *testing.T) string {
 	testOutputTempDir, err := os.MkdirTemp("testdata", "plan_test")
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(testOutputTempDir)
-		} else {
-			t.Logf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
-		}
-	})
+	// t.Cleanup(func() {
+	// 	if !t.Failed() {
+	// 		_ = os.RemoveAll(testOutputTempDir)
+	// 	} else {
+	// 		t.Logf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
+	// 	}
+	// })
 
 	return testOutputTempDir
 }
@@ -662,35 +664,36 @@ func (vw *vschemaWrapper) currentDb() string {
 	return ksName
 }
 
-func escapeNewLines(in string) string {
-	return strings.ReplaceAll(in, "\n", "\\n")
+type planTest struct {
+	Comment  string          `json:"comment,omitempty"`
+	Query    string          `json:"query,omitempty"`
+	Plan     json.RawMessage `json:"plan,omitempty"`
+	V3Plan   json.RawMessage `json:"v3-plan,omitempty"`
+	Gen4Plan json.RawMessage `json:"gen4-plan,omitempty"`
 }
 
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	t.Run(filename, func(t *testing.T) {
-		expected := &strings.Builder{}
+		var expected []planTest
 		var outFirstPlanner string
 		for tcase := range iterateExecFile(filename) {
+			current := planTest{}
 			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
+				current.Query = tcase.input
+				current.Comment = strings.Trim(tcase.comments, "\n# \t")
 				vschema.version = V3
 				plan, err := TestBuilder(tcase.input, vschema, vschema.currentDb())
 				out := getPlanOrErrorOutput(err, plan)
 
-				if out != tcase.output {
+				if out != tcase.output && out != "\""+tcase.output+"\"" {
 					t.Errorf("V3 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
-				if err != nil {
-					out = `"` + out + `"`
-				}
 				outFirstPlanner = out
-
-				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
 			})
 
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
 			if err != nil && tcase.output2ndPlanner == "" && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
-				expected.WriteString("\n")
 				continue
 			}
 
@@ -703,30 +706,30 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			//       produces the same plan as the V3 planner does
 			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			t.Run(testName, func(t *testing.T) {
-				if out != tcase.output2ndPlanner {
+				if out != tcase.output2ndPlanner && out != "\""+tcase.output2ndPlanner+"\"" {
 					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output2ndPlanner, out)
-				}
-				if err != nil {
-					out = `"` + out + `"`
 				}
 
 				if outFirstPlanner == out {
-					expected.WriteString(samePlanMarker)
+					current.Plan = []byte(out)
 				} else {
-					if err != nil {
-						out = out[1 : len(out)-1] // remove the double quotes
-						expected.WriteString(fmt.Sprintf("Gen4 error: %s\n", out))
-					} else {
-						expected.WriteString(fmt.Sprintf("%s\n", out))
-					}
+					current.V3Plan = []byte(outFirstPlanner)
+					current.Gen4Plan = []byte(out)
 				}
 			})
-			expected.WriteString("\n")
+			expected = append(expected, current)
 		}
 
 		if tempDir != "" {
-			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
-			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			name := strings.TrimSuffix(filename, filepath.Ext(filename))
+			name = filepath.Join(tempDir, name+".json")
+			file, err := os.Create(name)
+			require.NoError(t, err)
+			enc := json.NewEncoder(file)
+			enc.SetEscapeHTML(false)
+			enc.SetIndent("", "  ")
+			err = enc.Encode(expected)
+			require.NoError(t, err)
 		}
 	})
 }
@@ -744,10 +747,17 @@ func getPlanOutput(tcase testCase, vschema *vschemaWrapper) (out string, err err
 
 func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 	if err != nil {
-		return err.Error()
+		return "\"" + err.Error() + "\""
 	}
-	bout, _ := json.MarshalIndent(plan, "", "  ")
-	return string(bout)
+	b := new(bytes.Buffer)
+	enc := json.NewEncoder(b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	err = enc.Encode(plan)
+	if err != nil {
+		panic(err)
+	}
+	return b.String()
 }
 
 type testCase struct {

@@ -1,0 +1,531 @@
+[
+  {
+    "comment": "set single user defined variable",
+    "query": "set @foo = 42",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @foo = 42",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "UserDefinedVariable",
+            "Name": "foo",
+            "Expr": "INT64(42)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set multi user defined variable",
+    "query": "set @foo = 42, @bar = @foo",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @foo = 42, @bar = @foo",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "UserDefinedVariable",
+            "Name": "foo",
+            "Expr": "INT64(42)"
+          },
+          {
+            "Type": "UserDefinedVariable",
+            "Name": "bar",
+            "Expr": ":__vtudvfoo"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set multi user defined variable with complex expression",
+    "query": "set @foo = 42, @bar = @foo + 1",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @foo = 42, @bar = @foo + 1",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "UserDefinedVariable",
+            "Name": "foo",
+            "Expr": "INT64(42)"
+          },
+          {
+            "Type": "UserDefinedVariable",
+            "Name": "bar",
+            "Expr": ":__vtudvfoo + INT64(1)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set UDV to expression that can't be evaluated at vtgate",
+    "query": "set @foo = CONCAT('Any','Expression','Is','Valid')",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @foo = CONCAT('Any','Expression','Is','Valid')",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "UserDefinedVariable",
+            "Name": "foo",
+            "Expr": "[COLUMN 0]"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AnyShard()",
+            "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid') from dual",
+            "SingleShardOnly": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "single sysvar cases",
+    "query": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "multiple sysvar cases",
+    "query": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
+          },
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_safe_updates",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "0"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "autocommit case",
+    "query": "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(1)"
+          },
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(1)"
+          },
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(1)"
+          },
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": ":__vtudvmyudv"
+          },
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(1)"
+          },
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(0)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set ignore plan",
+    "query": "set @@default_storage_engine = 'DONOTCHANGEME'",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@default_storage_engine = 'DONOTCHANGEME'",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarIgnore",
+            "Name": "default_storage_engine",
+            "Expr": "'DONOTCHANGEME'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set check and ignore plan",
+    "query": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set system settings",
+    "query": "set @@sql_safe_updates = 1",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@sql_safe_updates = 1",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_safe_updates",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "1"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set plan building with ON/OFF enum",
+    "query": "set @@innodb_strict_mode = OFF",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@innodb_strict_mode = OFF",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarIgnore",
+            "Name": "innodb_strict_mode",
+            "Expr": "0"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set plan building with string literal",
+    "query": "set @@innodb_strict_mode = 'OFF'",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@innodb_strict_mode = 'OFF'",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarIgnore",
+            "Name": "innodb_strict_mode",
+            "Expr": "0"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set plan building with string literal",
+    "query": "set @@innodb_tmpdir = 'OFF'",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@innodb_tmpdir = 'OFF'",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarIgnore",
+            "Name": "innodb_tmpdir",
+            "Expr": "'OFF'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set system settings",
+    "query": "set @@ndbinfo_max_bytes = 192",
+    "plan": "ndbinfo_max_bytes: system setting is not supported"
+  },
+  {
+    "comment": "set autocommit",
+    "query": "set autocommit = 1",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set autocommit = 1",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(1)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set autocommit false",
+    "query": "set autocommit = 0",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set autocommit = 0",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(0)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set autocommit with backticks",
+    "query": "set @@session.`autocommit` = 0",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@session.`autocommit` = 0",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(0)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "more vitess aware settings",
+    "query": "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "client_found_rows",
+            "Expr": "INT64(0)"
+          },
+          {
+            "Type": "SysVarAware",
+            "Name": "skip_query_plan_cache",
+            "Expr": "INT64(1)"
+          },
+          {
+            "Type": "SysVarAware",
+            "Name": "sql_select_limit",
+            "Expr": "INT64(20)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set autocommit to default",
+    "query": "set @@autocommit = default",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @@autocommit = default",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "autocommit",
+            "Expr": "INT64(1)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set global autocommit to default",
+    "query": "set global autocommit = off",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set global autocommit = off",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarCheckAndIgnore",
+            "Name": "autocommit",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": {},
+            "Expr": "0"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "change read only variable",
+    "query": "set socket = ''",
+    "plan": "variable 'socket' is a read only variable"
+  }
+]

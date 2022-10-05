@@ -1,0 +1,85 @@
+[
+  {
+    "comment": "Explain statement",
+    "query": "explain select * from user",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "explain select * from user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select * from `user`",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Explain Vitess statement",
+    "query": "explain format=vitess select * from user",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "explain format=vitess select * from user",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "Analyze statement",
+    "query": "analyze table t1",
+    "plan": {
+      "QueryType": "OTHER",
+      "Original": "analyze table t1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "analyze table t1",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Describe statement",
+    "query": "describe select * from t",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "describe select * from t",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select * from t",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Desc statement",
+    "query": "desc select * from t",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "desc select * from t",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select * from t",
+        "SingleShardOnly": true
+      }
+    }
+  }
+]

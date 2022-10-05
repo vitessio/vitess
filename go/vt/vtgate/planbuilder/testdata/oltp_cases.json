@@ -1,0 +1,275 @@
+[
+  {
+    "comment": "OLTP simple select",
+    "query": "SELECT c FROM sbtest34 WHERE id=15",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c FROM sbtest34 WHERE id=15",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from sbtest34 where 1 != 1",
+        "Query": "select c from sbtest34 where id = 15",
+        "Table": "sbtest34",
+        "Values": [
+          "INT64(15)"
+        ],
+        "Vindex": "hash"
+      }
+    }
+  },
+  {
+    "comment": "OLTP simple range select",
+    "query": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from sbtest12 where 1 != 1",
+        "Query": "select c from sbtest12 where id between 1 and 10",
+        "Table": "sbtest12"
+      }
+    }
+  },
+  {
+    "comment": "OLTP sum range select",
+    "query": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select SUM(k) from sbtest43 where 1 != 1",
+            "Query": "select SUM(k) from sbtest43 where id between 90 and 990",
+            "Table": "sbtest43"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum(0) AS SUM(k)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select SUM(k) from sbtest43 where 1 != 1",
+            "Query": "select SUM(k) from sbtest43 where id between 90 and 990",
+            "Table": "sbtest43"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "OLTP order range select",
+    "query": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "FieldQuery": "select c, weight_string(c) from sbtest1 where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select c, weight_string(c) from sbtest1 where id between 50 and 235 order by c asc",
+        "ResultColumns": 1,
+        "Table": "sbtest1"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "FieldQuery": "select c, weight_string(c) from sbtest1 where 1 != 1",
+        "OrderBy": "(0|1) ASC COLLATE latin1_swedish_ci",
+        "Query": "select c, weight_string(c) from sbtest1 where id between 50 and 235 order by c asc",
+        "ResultColumns": 1,
+        "Table": "sbtest1"
+      }
+    }
+  },
+  {
+    "comment": "OLTP distinct range select",
+    "query": "SELECT DISTINCT c FROM sbtest30 WHERE id BETWEEN 1 AND 10 ORDER BY c",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT DISTINCT c FROM sbtest30 WHERE id BETWEEN 1 AND 10 ORDER BY c",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "1",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select c, weight_string(c) from sbtest30 where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select distinct c, weight_string(c) from sbtest30 where id between 1 and 10 order by c asc",
+            "ResultColumns": 2,
+            "Table": "sbtest30"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT DISTINCT c FROM sbtest30 WHERE id BETWEEN 1 AND 10 ORDER BY c",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "(0|1) COLLATE latin1_swedish_ci",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select c, weight_string(c) from sbtest30 where 1 != 1",
+            "OrderBy": "(0|1) ASC COLLATE latin1_swedish_ci, (0|1) ASC COLLATE latin1_swedish_ci",
+            "Query": "select distinct c, weight_string(c) from sbtest30 where id between 1 and 10 order by c asc, c asc",
+            "Table": "sbtest30"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "OLTP index udpate",
+    "query": "UPDATE sbtest6 SET k=k+1 WHERE id=5",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "UPDATE sbtest6 SET k=k+1 WHERE id=5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update sbtest6 set k = k + 1 where id = 5",
+        "Table": "sbtest6",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "hash"
+      }
+    }
+  },
+  {
+    "comment": "OLTP non index update",
+    "query": "UPDATE sbtest9 SET c=7 WHERE id=8",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "UPDATE sbtest9 SET c=7 WHERE id=8",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update sbtest9 set c = 7 where id = 8",
+        "Table": "sbtest9",
+        "Values": [
+          "INT64(8)"
+        ],
+        "Vindex": "hash"
+      }
+    }
+  },
+  {
+    "comment": "OLTP delete",
+    "query": "DELETE FROM sbtest15 WHERE id=7525",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "DELETE FROM sbtest15 WHERE id=7525",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from sbtest15 where id = 7525",
+        "Table": "sbtest15",
+        "Values": [
+          "INT64(7525)"
+        ],
+        "Vindex": "hash"
+      }
+    }
+  },
+  {
+    "comment": "OLTP insert",
+    "query": "INSERT INTO sbtest16 (id, k, c, pad) VALUES (42, 1, 2, 50)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO sbtest16 (id, k, c, pad) VALUES (42, 1, 2, 50)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
+        "TableName": "sbtest16"
+      }
+    }
+  }
+]

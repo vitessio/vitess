@@ -1,0 +1,621 @@
+[
+  {
+    "comment": "Show table status without database name or conditions.",
+    "query": "SHOW table StatUs",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "SHOW table StatUs",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show table status",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Show Table status with a keyspace name",
+    "query": "SHOW table StatUs from main",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "SHOW table StatUs from main",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show table status",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Show Table status with a keyspace name using IN",
+    "query": "SHOW table StatUs In main",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "SHOW table StatUs In main",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show table status",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Show Table status with a keyspace name with a condition",
+    "query": "SHOW table StatUs In user WHERE Rows > 70",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "SHOW table StatUs In user WHERE Rows > 70",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show table status where `Rows` > 70",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Show Table status with a Like condition",
+    "query": "SHOW table StatUs LIKe '%a'",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "SHOW table StatUs LIKe '%a'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show table status like '%a'",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show columns from user keyspace",
+    "query": "show full columns from user.user_extra",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show full columns from user.user_extra",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show full columns from user_extra",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show columns from main keyspace",
+    "query": "show full columns from unsharded",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show full columns from unsharded",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show full columns from unsharded",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show columns pass as dbname in from clause supersedes the qualifier",
+    "query": "show full columns from user.unsharded from main",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show full columns from user.unsharded from main",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show full columns from unsharded",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show columns fails as table does not exists in user keyspace",
+    "query": "show full columns from unsharded from user",
+    "plan": "table unsharded not found"
+  },
+  {
+    "comment": "show columns fails as table does not exists in user keyspace",
+    "query": "show full columns from user.unsharded",
+    "plan": "table unsharded not found"
+  },
+  {
+    "comment": "show charset",
+    "query": "show charset",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show charset",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "show function",
+    "query": "show function status",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show function status",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show function status",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show privileges",
+    "query": "show privileges",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show privileges",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show privileges",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show procedure status",
+    "query": "show procedure status",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show procedure status",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show procedure status",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show variables",
+    "query": "show variables",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AnyShard()",
+            "Query": "show variables",
+            "SingleShardOnly": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show global variables",
+    "query": "show global variables",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show global variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AnyShard()",
+            "Query": "show global variables",
+            "SingleShardOnly": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show databases",
+    "query": "show databases",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show databases",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "show create database",
+    "query": "show create database user",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create database user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create database `user`",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show create database system_schema",
+    "query": "show create database mysql",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create database mysql",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create database mysql",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show create procedure",
+    "query": "show create procedure proc",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create procedure proc",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create procedure proc",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show create procedure from system_schema",
+    "query": "show create procedure information_schema.proc",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create procedure information_schema.proc",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create procedure information_schema.proc",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show create table on table present in sharded but as unsharded is selected it goes to unsharded keyspace",
+    "query": "show create table user_extra",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create table user_extra",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create table user_extra",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show create table with qualifier",
+    "query": "show create table user.user_extra",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create table user.user_extra",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create table user_extra",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show create table with unsharded as default keyspace",
+    "query": "show create table unknown",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create table unknown",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create table unknown",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show create table with table not present with qualifier",
+    "query": "show create table user.unknown",
+    "plan": "table unknown not found"
+  },
+  {
+    "comment": "show create table from system_schema",
+    "query": "show create table information_schema.tables",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show create table information_schema.tables",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show create table information_schema.`tables`",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show tables",
+    "query": "show tables",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show tables",
+      "Instructions": {
+        "OperatorType": "RenameFields",
+        "Columns": [
+          "Tables_in_main"
+        ],
+        "Indices": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AnyShard()",
+            "Query": "show tables",
+            "SingleShardOnly": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show tables from db",
+    "query": "show tables from user",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show tables from user",
+      "Instructions": {
+        "OperatorType": "RenameFields",
+        "Columns": [
+          "Tables_in_user"
+        ],
+        "Indices": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetDestination": "AnyShard()",
+            "Query": "show tables",
+            "SingleShardOnly": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show tables from system schema",
+    "query": "show tables from performance_schema",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show tables from performance_schema",
+      "Instructions": {
+        "OperatorType": "RenameFields",
+        "Columns": [
+          "Tables_in_performance_schema"
+        ],
+        "Indices": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AnyShard()",
+            "Query": "show tables from performance_schema",
+            "SingleShardOnly": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show migrations with db and like",
+    "query": "show vitess_migrations from user like '%format'",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show vitess_migrations from user like '%format'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "SELECT * FROM _vt.schema_migrations where migration_uuid LIKE '%format' OR migration_context LIKE '%format' OR migration_status LIKE '%format'"
+      }
+    }
+  },
+  {
+    "comment": "show migrations with db and where",
+    "query": "show vitess_migrations from user where id = 5",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show vitess_migrations from user where id = 5",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "SELECT * FROM _vt.schema_migrations where id = 5"
+      }
+    }
+  },
+  {
+    "comment": "show vgtid",
+    "query": "show global vgtid_executed",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show global vgtid_executed",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "vgtid(1) AS global vgtid_executed",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "select 'main' as db_name, @@global.gtid_executed as gtid_executed, :__vt_shard as shard",
+            "ShardNameNeeded": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show gtid",
+    "query": "show global gtid_executed from user",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show global gtid_executed from user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "select 'user' as db_name, @@global.gtid_executed as gtid_executed, :__vt_shard as shard",
+        "ShardNameNeeded": true
+      }
+    }
+  },
+  {
+    "comment": "show warnings",
+    "query": "show warnings",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show warnings",
+      "Instructions": {
+        "OperatorType": "SHOW WARNINGS"
+      }
+    }
+  },
+  {
+    "comment": "show global status",
+    "query": "show global status",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show global status",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show global status",
+        "SingleShardOnly": true
+      }
+    }
+  }
+]
