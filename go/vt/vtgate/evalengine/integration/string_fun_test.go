@@ -147,3 +147,12 @@ func TestBuiltinLength(t *testing.T) {
 		compareRemoteExpr(t, conn, query)
 	}
 }
+
+func TestBuiltinBitLength(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+	for _, str := range cases {
+		query := fmt.Sprintf("BIT_LENGTH(%s)", str)
+		compareRemoteExpr(t, conn, query)
+	}
+}

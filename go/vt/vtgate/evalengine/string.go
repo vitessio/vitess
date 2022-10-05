@@ -194,3 +194,25 @@ func (builtinLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, fla
 	_, f := args[0].typeof(env)
 	return sqltypes.Int64, f
 }
+
+type builtinBitLength struct {
+}
+
+func (builtinBitLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	cnt := len(inarg.value().RawStr())
+	result.setInt64(int64(cnt * 8))
+}
+
+func (builtinBitLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("BIT_LENGTH")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
+}
