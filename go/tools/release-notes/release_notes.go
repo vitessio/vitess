@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/pflag"
 	"log"
 	"os"
 	"os/exec"
@@ -30,6 +29,8 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/spf13/pflag"
 )
 
 type (
