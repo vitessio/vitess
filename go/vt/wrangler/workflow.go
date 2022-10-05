@@ -144,7 +144,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 	if !vrw.Exists() {
 		stateInfo = append(stateInfo, WorkflowStateNotCreated)
 	} else {
-		if !vrw.ts.isPartialMigration { // shard level traffic switching is all or nothing
+		if !ws.IsPartialMigration { // shard level traffic switching is all or nothing
 			if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
 				s = "All Reads Switched"
 			} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
@@ -172,21 +172,21 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 		}
 		if ws.WritesSwitched {
 			stateInfo = append(stateInfo, "Writes Switched")
-		} else if vrw.ts.isPartialMigration {
-			if ws.WritesPartiallySwitched {
-				// For partial migrations, the traffic switching is all or nothing
-				// at the shard level, so reads are effectively switched on the
-				// shard when writes are switched.
-				sourceShards := vrw.ts.SourceShards()
-				switchedShards := make([]string, len(sourceShards))
-				for i, sourceShard := range sourceShards {
-					switchedShards[i] = sourceShard.ShardName()
-				}
-				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(switchedShards, ",")))
-				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(switchedShards, ",")))
+		} else if ws.IsPartialMigration {
+			// For partial migrations, the traffic switching is all or nothing
+			// at the shard level, so reads are effectively switched on the
+			// shard when writes are switched.
+			if len(ws.ShardsAlreadySwitched) > 0 && len(ws.ShardsNotYetSwitched) > 0 {
+				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
+				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
 			} else {
-				stateInfo = append(stateInfo, "Reads Not Switched")
-				stateInfo = append(stateInfo, "Writes Not Switched")
+				if len(ws.ShardsAlreadySwitched) == 0 {
+					stateInfo = append(stateInfo, "Reads Not Switched")
+					stateInfo = append(stateInfo, "Writes Not Switched")
+				} else {
+					stateInfo = append(stateInfo, "All Reads Switched")
+					stateInfo = append(stateInfo, "All Writes Switched")
+				}
 			}
 		} else {
 			stateInfo = append(stateInfo, "Writes Not Switched")
