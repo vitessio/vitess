@@ -250,8 +250,8 @@ const Advanced: React.FC = () => {
             <Dialog
                 className="min-w-[500px]"
                 isOpen={validateDialogIsOpen}
-                onClose={() => setValidateDialogIsOpen(false)}
-                onConfirm={() => setValidateDialogIsOpen(false)}
+                onClose={onCloseValidateDialog}
+                onConfirm={onCloseValidateDialog}
                 title={validateDialogTitle}
                 hideCancel
                 confirmText="Dismiss"
@@ -308,7 +308,7 @@ const Advanced: React.FC = () => {
                             documentationLink="https://vitess.io/docs/reference/programs/vtctl/schema-version-permissions/#validateversionshard"
                             loadingText="Validating shard versions..."
                             loadedText="Validate"
-                            mutation={validateShardMutation as UseMutationResult}
+                            mutation={validateVersionShardMutation as UseMutationResult}
                             title="Validate Version Shard"
                         />
                     </div>
