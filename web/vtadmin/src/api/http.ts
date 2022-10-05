@@ -796,7 +796,10 @@ export interface GetFullStatusParams {
 }
 
 export const getFullStatus = async (params: GetFullStatusParams) => {
-    const { result } = await vtfetch(`/api/tablet/${params.alias}/full_status?cluster=${params.clusterID}`);
+    const req = new URLSearchParams();
+    req.append('cluster', params.clusterID);
+
+    const { result } = await vtfetch(`/api/tablet/${params.alias}/full_status?${req}`);
 
     const err = vtctldata.GetFullStatusResponse.verify(result);
     if (err) throw Error(err);
