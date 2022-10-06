@@ -220,6 +220,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
 					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
+					vx.wr.optimizeCopyStateTable(ctx, primary.Tablet)
 				}
 				mu.Lock()
 				results[primary] = qr
@@ -729,7 +730,7 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 
 func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
 	var cs []copyState
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
+	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where id = (select max(id) from _vt.copy_state where vrepl_id = %d)", id)
 	qr, err := wr.VReplicationExec(ctx, tablet.Alias, query)
 	if err != nil {
 		return nil, err

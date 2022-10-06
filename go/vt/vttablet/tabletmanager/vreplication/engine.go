@@ -62,6 +62,11 @@ const (
   table_name varbinary(128),
   lastpk varbinary(2000),
   primary key (vrepl_id, table_name))`
+
+	alterCopyState = `alter table _vt.copy_state
+  add column id bigint unsigned not null auto_increment first,
+  drop primary key, add primary key(id),
+  add key (vrepl_id, table_name)`
 )
 
 var withDDL *withddl.WithDDL
@@ -75,7 +80,7 @@ const (
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
-	allddls = append(allddls, createReshardingJournalTable, createCopyState)
+	allddls = append(allddls, createReshardingJournalTable, createCopyState, alterCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
 	withDDL = withddl.New(allddls)
 

@@ -566,7 +566,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 // GetCopyProgress returns the progress of all tables being copied in the workflow
 func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	ctx := context.Background()
-	getTablesQuery := "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
+	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
 	const MaxRows = 1000
@@ -712,6 +712,33 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
 			wr.Logger().Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 		}
+	}
+}
+
+// optimizeCopyStateTable rebuilds the table to ensure the on-disk structures
+// are minimal and optimized and resets the auto-inc value for subsequent
+// inserts.
+// This helps to ensure that the size, storage, and performance related factors
+// for the table remain optimal over time and that we don't ever exhaust the
+// available auto-inc values for the table.
+func (wr *Wrangler) optimizeCopyStateTable(ctx context.Context, tablet *topodatapb.Tablet) {
+	sqlOptimizeTable := `optimize table _vt.copy_state`
+	// This will automatically set the value to 1 or the current max value in the table, whichever is greater
+	sqlResetAutoInc := `alter table _vt.copy_state auto_increment = 1`
+	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:   []byte(sqlOptimizeTable),
+		MaxRows: uint64(0),
+	}); err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the table may not exist if no workflows have been run
+			wr.Logger().Errorf("Error optimizing the copy state table: %v", err)
+		}
+		return
+	}
+	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:   []byte(sqlResetAutoInc),
+		MaxRows: uint64(0),
+	}); err != nil {
+		wr.Logger().Errorf("Error resetting the auto_increment value for the copy state table: %v", err)
 	}
 }
 

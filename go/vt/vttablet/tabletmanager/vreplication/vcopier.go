@@ -111,7 +111,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 // primary key that was copied. A nil Result means that nothing has been copied.
 // A table that was fully copied is removed from copyState.
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
-	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id))
+	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where id = (select max(id) from _vt.copy_state where vrepl_id=%d)", vc.vr.id))
 	if err != nil {
 		return err
 	}
@@ -221,10 +221,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
+	// garbage collect old copy_state rows in between every 2nd and 3rd rows copied update
+	garbageCollectionTicker := time.NewTicker((rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2))
 	defer rowsCopiedTicker.Stop()
 
 	var pkfields []*querypb.Field
-	var updateCopyState *sqlparser.ParsedQuery
+	var addLatestCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
 
@@ -234,6 +236,23 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			case <-rowsCopiedTicker.C:
 				update := binlogplayer.GenerateUpdateRowsCopied(vc.vr.id, vc.vr.stats.CopyRowCount.Get())
 				_, _ = vc.vr.dbClient.Execute(update)
+			case <-garbageCollectionTicker.C:
+				// Garbage collect older copy_state rows:
+				//   - using a goroutine so that we are not blocking the copy flow
+				//   - using a new connection so that we do not change the critical
+				//   - transaction behavior of the copy itself
+				// This helps to ensure that the table does not grow too large and the
+				// number of rows does not have a big impact on the queries used for
+				// the workflow.
+				go func() {
+					gcCopyState := fmt.Sprintf("delete from _vt.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from _vt.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
+						vc.vr.id, encodeString(tableName), vc.vr.id, encodeString(tableName))
+					dbClient := vc.vr.vre.getDBClient(false)
+					if _, err := dbClient.ExecuteFetch(gcCopyState, -1); err != nil {
+						log.Errorf("Error while garbage collecting older copy_state rows with query %q: %v", gcCopyState, err)
+					}
+
+				}()
 			case <-ctx.Done():
 				return io.EOF
 			default:
@@ -270,8 +289,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 			pkfields = append(pkfields, rows.Pkfields...)
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
-			updateCopyState = buf.ParsedQuery()
+			buf.Myprintf("insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
+			addLatestCopyState = buf.ParsedQuery()
 		}
 		if len(rows.Rows) == 0 {
 			return nil
@@ -315,11 +334,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				Value: buf,
 			},
 		}
-		updateState, err := updateCopyState.GenerateQuery(bv, nil)
+		addNewState, err := addLatestCopyState.GenerateQuery(bv, nil)
 		if err != nil {
 			return err
 		}
-		if _, err := vc.vr.dbClient.Execute(updateState); err != nil {
+		if _, err := vc.vr.dbClient.Execute(addNewState); err != nil {
 			return err
 		}
 

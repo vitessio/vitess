@@ -541,3 +541,18 @@ func getShardRoutingRules(t *testing.T) string {
 	output = strings.TrimSpace(output)
 	return output
 }
+
+func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
+	// Update information_schem with the latest data
+	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
+	require.NoError(t, err)
+
+	// Verify that there's no delete marked rows and we reset the auto-inc value
+	res, err := tablet.QueryTablet("select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'",
+		"", false)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Equal(t, 1, len(res.Rows))
+	require.Equal(t, "0", res.Rows[0][0].String(), "data_free should be 0")
+	require.Equal(t, "1", res.Rows[0][1].String(), "auto_increment should be 1")
+}
