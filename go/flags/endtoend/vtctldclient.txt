@@ -90,7 +90,6 @@ Available Commands:
 Flags:
       --action_timeout duration                timeout for the total command (default 1h0m0s)
       --alsologtostderr                        log to standard error as well as files
-      --emit_stats                             If set, emit stats to push-based monitoring and stats backends
       --grpc_auth_static_client_creds string   When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                    Enable gRPC tracing.
@@ -111,11 +110,6 @@ Flags:
       --purge_logs_interval duration           how often try to remove old logs (default 1h0m0s)
       --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                          server to use for connection (required)
-      --stats_backend string                   The name of the registered push-based monitoring/stats backend to use
-      --stats_combine_dimensions string        List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats_common_tags strings              Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
-      --stats_drop_variables string            Variables to be dropped from the list of exported variables.
-      --stats_emit_period duration             Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
   -v, --v Level                                log level for V logs
       --version                                version for vtctldclient

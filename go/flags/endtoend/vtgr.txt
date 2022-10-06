@@ -6,6 +6,7 @@ Usage of vtgr:
       --db_config string                           Full path to db config file that will be used by VTGR.
       --db_flavor string                           MySQL flavor override. (default "MySQL56")
       --db_port int                                Local mysql port, set this to enable local fast check.
+      --emit_stats                                 If set, emit stats to push-based monitoring and stats backends
       --enable_heartbeat_check                     Enable heartbeat checking, set together with --group_heartbeat_threshold.
       --gr_port int                                Port to bootstrap a MySQL group. (default 33061)
       --group_heartbeat_threshold int              VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with --enable_heartbeat_check.
@@ -34,6 +35,11 @@ Usage of vtgr:
       --scan_interval duration                     Scan interval to diagnose and repair. (default 3s)
       --scan_repair_timeout duration               Time to wait for a Diagnose and repair operation. (default 3s)
       --security_policy string                     the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --stats_backend string                       The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string            List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings                  Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string                Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration                 Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                   logs at or above this threshold go to stderr (default 1)
       --tablet_manager_grpc_ca string              the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string            the cert to use to connect
