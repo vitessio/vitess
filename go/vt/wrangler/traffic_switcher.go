@@ -1661,7 +1661,11 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 				renameName := getRenameFileName(tableName)
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
-				query = fmt.Sprintf("rename table %s.%s TO %s.%s", source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
+				query = fmt.Sprintf("rename table %s.%s TO %s.%s",
+					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
+					sqlescape.EscapeID(sqlescape.UnescapeID(tableName)),
+					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
+					sqlescape.EscapeID(sqlescape.UnescapeID(renameName)))
 			}
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
