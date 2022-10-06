@@ -785,7 +785,7 @@ func (api *API) GetFullStatus(ctx context.Context, req *vtadminpb.GetFullStatusR
 		return nil, err
 	}
 
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletFullStatusResource, rbac.GetAction) {
 		return nil, nil
 	}
 

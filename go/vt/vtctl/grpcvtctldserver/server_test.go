@@ -11181,6 +11181,8 @@ func TestValidateVersionKeyspace(t *testing.T) {
 }
 
 func TestValidateVersionShard(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("zone1", "zone2")
 	tmc := testutil.TabletManagerClient{
@@ -11275,6 +11277,8 @@ func TestValidateVersionShard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tt.setup()
 			resp, err := vtctld.ValidateVersionShard(ctx, tt.req)
 			if tt.shouldErr {
