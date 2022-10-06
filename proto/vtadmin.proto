@@ -162,7 +162,7 @@ service VTAdmin {
     rpc ValidateSchemaKeyspace(ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
     // ValidateShard validates that that all nodes reachable from the specified shard are consistent.
     rpc ValidateShard(ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
-	  // ValidateVersionKeyspace validates that the version on the primary of
+    // ValidateVersionKeyspace validates that the version on the primary of
     // shard 0 matches all of the other tablets in the keyspace.
     rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
     // ValidateVersionShard validates that the version on the primary matches all of the replicas.
