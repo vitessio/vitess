@@ -553,6 +553,10 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	require.Equal(t, 1, len(res.Rows))
-	require.Equal(t, "0", res.Rows[0][0].String(), "data_free should be 0")
-	require.Equal(t, "1", res.Rows[0][1].String(), "auto_increment should be 1")
+	dataFree, err := res.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), dataFree, "data_free should be 0")
+	autoIncrement, err := res.Rows[0][1].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), autoIncrement, "auto_increment should be 1")
 }

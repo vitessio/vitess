@@ -221,9 +221,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
+	defer rowsCopiedTicker.Stop()
 	// garbage collect old copy_state rows in between every 2nd and 3rd rows copied update
 	garbageCollectionTicker := time.NewTicker((rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2))
-	defer rowsCopiedTicker.Stop()
+	defer garbageCollectionTicker.Stop()
 
 	var pkfields []*querypb.Field
 	var addLatestCopyState *sqlparser.ParsedQuery
@@ -236,6 +237,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			case <-rowsCopiedTicker.C:
 				update := binlogplayer.GenerateUpdateRowsCopied(vc.vr.id, vc.vr.stats.CopyRowCount.Get())
 				_, _ = vc.vr.dbClient.Execute(update)
+			case <-ctx.Done():
+				return io.EOF
+			default:
+			}
+			select {
 			case <-garbageCollectionTicker.C:
 				// Garbage collect older copy_state rows:
 				//   - using a goroutine so that we are not blocking the copy flow
