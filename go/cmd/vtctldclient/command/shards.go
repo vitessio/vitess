@@ -154,6 +154,7 @@ Use ctrl-C to interrupt the command and see partial results if needed.`,
 		RunE:                  commandSourceShardDelete,
 	}
 
+	// ValidateVersionShard makes a ValidateVersionShard gRPC request to a vtctld.
 	ValidateVersionShard = &cobra.Command{
 		Use:                   "ValidateVersionShard <keyspace/shard>",
 		Short:                 "Validates that the version on the primary matches all of the replicas.",

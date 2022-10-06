@@ -69,7 +69,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -4141,7 +4140,7 @@ func (s *VtctldServer) ValidateVersionShard(ctx context.Context, req *vtctldatap
 
 	wg.Wait()
 
-	response := vtctldata.ValidateVersionShardResponse{}
+	response := vtctldatapb.ValidateVersionShardResponse{}
 	if er.HasErrors() {
 		response.Results = append(response.Results, er.ErrorStrings()...)
 	}
