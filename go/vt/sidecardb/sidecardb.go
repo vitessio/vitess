@@ -11,6 +11,11 @@ import (
 	"vitess.io/vitess/go/vt/schemadiff"
 )
 
+const (
+	CreateVTDatabaseQuery = "create database if not exists _vt"
+	UseVTDatabaseQuery    = "use _vt"
+)
+
 //go:embed vtschema/*
 var schemaLocation embed.FS
 
@@ -37,7 +42,9 @@ var vtTables []*VTTable
 func init() {
 	// todo: twopc tables?
 	vtTables = []*VTTable{
-		{"Misc", "metadata/reparent_journal.sql", "reparent_journal"},
+		{"Metadata", "metadata/local_metadata.sql", "local_metadata"},
+		{"Metadata", "metadata/shard_metadata.sql", "shard_metadata"},
+		{"Misc", "misc/reparent_journal.sql", "reparent_journal"},
 		{"Online DDL", "onlineddl/schema_migrations.sql", "schema_migrations"},
 		{"VTGate Schema Tracker", "schematracker/schemacopy.sql", "schemacopy"},
 		{"VReplication", "vreplication/vreplication.sql", "vreplication"},
@@ -52,17 +59,43 @@ func init() {
 	}
 }
 
-func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
-	rs, err := si.exec(si.ctx, "select database()", 1, false)
-	if err != nil {
-		return "", err
+// Init creates or upgrades the _vt schema based on declarative schema for all _vt tables
+func Init(ctx context.Context, exec Exec, metadataOnly bool) error {
+	if !InitVTSchemaOnTabletInit {
+		log.Infof("init-vt-schema-on-tablet-init NOT set, not updating _vt schema on tablet init")
+		return nil
 	}
-	currentDB := rs.Rows[0][0].ToString()
-	rs, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false)
-	if err != nil {
-		return "", err
+	log.Infof("init-vt-schema-on-tablet-init SET, updating _vt schema on tablet init")
+	si := &VTSchemaInit{
+		ctx:  ctx,
+		exec: exec,
 	}
-	return currentDB, nil
+
+	if err := si.CreateVTDatabase(); err != nil {
+		return err
+	}
+
+	currentDatabase, err := si.setCurrentDatabase("_vt")
+	if err != nil {
+		return err
+	}
+	// nolint
+	defer si.setCurrentDatabase(currentDatabase)
+
+	if err = si.loadExistingTables(); err != nil {
+		return err
+	}
+
+	for _, table := range vtTables {
+		if metadataOnly && table.module != "Metadata" {
+			continue
+		}
+		if err := si.createOrUpgradeTable(table); err != nil {
+			return err
+		}
+	}
+	log.Flush()
+	return nil
 }
 
 func (si *VTSchemaInit) CreateVTDatabase() error {
@@ -80,12 +113,25 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 		log.Infof("Created _vt database")
 		break
 	case 1:
-		log.Infof("_vt database already exists, not an error")
+		//log.Infof("_vt database already exists, not an error")
 		break
 	default:
 		return fmt.Errorf("found too many rows for _vt: %d", len(rs.Rows))
 	}
 	return nil
+}
+
+func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
+	rs, err := si.exec(si.ctx, "select database()", 1, false)
+	if err != nil {
+		return "", err
+	}
+	currentDB := rs.Rows[0][0].ToString()
+	rs, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false)
+	if err != nil {
+		return "", err
+	}
+	return currentDB, nil
 }
 
 func (si *VTSchemaInit) getCurrentSchema(tableName string) (string, error) {
@@ -98,7 +144,7 @@ func (si *VTSchemaInit) getCurrentSchema(tableName string) (string, error) {
 	}
 	if len(rs.Rows) > 0 {
 		currentTableSchema = rs.Rows[0][1].ToString()
-		log.Infof("current schema %s", currentTableSchema)
+		//log.Infof("current schema %s", currentTableSchema)
 	}
 	return currentTableSchema, nil
 }
@@ -112,7 +158,7 @@ func stripCharset(schema string) string {
 }
 
 func (si *VTSchemaInit) findTableSchemaDiff(current, desired string) (string, error) {
-
+	// temp hack so we don't get a spurious alter just because of the charset
 	current = stripCharset(current)
 	hints := &schemadiff.DiffHints{}
 	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints)
@@ -121,6 +167,11 @@ func (si *VTSchemaInit) findTableSchemaDiff(current, desired string) (string, er
 	}
 
 	tableAlterSQL := diff.CanonicalStatementString()
+	if strings.Contains(tableAlterSQL, "ALTER") {
+		log.Infof("alter sql %s", tableAlterSQL)
+		log.Infof("current schema %s", current)
+
+	}
 	return tableAlterSQL, nil
 }
 
@@ -136,7 +187,9 @@ func (si *VTSchemaInit) createOrUpgradeTable(table *VTTable) error {
 	desiredTableSchema = string(bytes)
 
 	var tableAlterSQL string
-	if si.tableExists(table.name) {
+	tableExists := si.tableExists(table.name)
+	if tableExists {
+		//log.Infof("table exists %s", table.name)
 		currentTableSchema, err := si.getCurrentSchema(table.name)
 		if err != nil {
 			return err
@@ -148,6 +201,7 @@ func (si *VTSchemaInit) createOrUpgradeTable(table *VTTable) error {
 		}
 
 	} else {
+		//log.Infof("table %s not found", table.name)
 		tableAlterSQL = desiredTableSchema
 	}
 
@@ -155,6 +209,9 @@ func (si *VTSchemaInit) createOrUpgradeTable(table *VTTable) error {
 		//log.Infof("tableAlterSQL is %s", tableAlterSQL)
 		_, err = si.exec(ctx, tableAlterSQL, 1, false)
 		if err != nil {
+			if strings.Contains(err.Error(), "already exists") { //todo: improve check for existing table
+				return nil
+			}
 			log.Errorf("Error altering _vt table %s: %+v", table, err)
 			return err
 		}
@@ -162,16 +219,20 @@ func (si *VTSchemaInit) createOrUpgradeTable(table *VTTable) error {
 		if err != nil {
 			return err
 		}
-		tableAlterSQL, err = si.findTableSchemaDiff(newTableSchema, desiredTableSchema)
+		tableAlterSQL2, err := si.findTableSchemaDiff(newTableSchema, desiredTableSchema)
 		if err != nil {
 			return err
 		}
-		if tableAlterSQL != "" {
-			err = fmt.Errorf("table alter did not work, desired schema is %s but current schema is %s: %s",
+		if tableAlterSQL2 != "" {
+			_ = fmt.Errorf("table alter did not work, desired schema is %s but current schema is %s: %s",
 				desiredTableSchema, newTableSchema, tableAlterSQL)
-			//log.Error(err)
+			log.Error(err)
 		}
-		log.Infof("Created or upgraded _vt table %s", table)
+		if tableExists {
+			log.Infof("Updated _vt table %s: %s", table, tableAlterSQL)
+		} else {
+			log.Infof("Created _vt table %s", table)
+		}
 		return nil
 	}
 	log.Infof("Table %s was already correct", table.name)
@@ -183,7 +244,7 @@ func (si *VTSchemaInit) tableExists(tableName string) bool {
 	return ok
 }
 
-func (si *VTSchemaInit) setExistingTables() error {
+func (si *VTSchemaInit) loadExistingTables() error {
 	si.existingTables = make(map[string]bool)
 	rs, err := si.exec(si.ctx, "show tables from _vt", 1000, false)
 	if err != nil {
@@ -192,40 +253,5 @@ func (si *VTSchemaInit) setExistingTables() error {
 	for _, row := range rs.Rows {
 		si.existingTables[row[0].ToString()] = true
 	}
-	return nil
-}
-
-// Init creates or upgrades the _vt schema based on declarative schema for all _vt tables
-func Init(ctx context.Context, exec Exec) error {
-	if !InitVTSchemaOnTabletInit {
-		log.Infof("init-vt-schema-on-tablet-init NOT set, not updating _vt schema on tablet init")
-		return nil
-	}
-	si := &VTSchemaInit{
-		ctx:  ctx,
-		exec: exec,
-	}
-
-	if err := si.CreateVTDatabase(); err != nil {
-		return err
-	}
-
-	currentDatabase, err := si.setCurrentDatabase("_vt")
-	if err != nil {
-		return err
-	}
-	// nolint
-	defer si.setCurrentDatabase(currentDatabase)
-
-	if err = si.setExistingTables(); err != nil {
-		return err
-	}
-
-	for _, table := range vtTables {
-		if err := si.createOrUpgradeTable(table); err != nil {
-			return err
-		}
-	}
-	log.Flush()
 	return nil
 }

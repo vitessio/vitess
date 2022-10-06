@@ -4,5 +4,5 @@ CREATE TABLE _vt.shard_metadata
     `value`   mediumblob     NOT NULL,
     `db_name` varbinary(255) NOT NULL,
 
-    PRIMARY KEY (`name`, `db_name`)
+    PRIMARY KEY (`db_name`, `name`)
 ) ENGINE = InnoDB

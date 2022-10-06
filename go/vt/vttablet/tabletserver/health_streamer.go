@@ -411,7 +411,7 @@ func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) 
 		var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
 			return conn.Exec(ctx, query, maxRows, wantFields)
 		}
-		if err := sidecardb.Init(hs.ctx, exec); err != nil {
+		if err := sidecardb.Init(hs.ctx, exec, false); err != nil {
 			return false, err
 		}
 		return true, nil

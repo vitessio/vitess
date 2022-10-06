@@ -40,7 +40,7 @@ for i in 100 101 102; do
 done
 
 # set the correct durability policy for the keyspace
-vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce
+vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=none commerce
 
 # start vtorc
 ./scripts/vtorc-up.sh
@@ -70,4 +70,3 @@ CELL=zone1 ./scripts/vtgate-up.sh
 
 # start vtadmin
 ./scripts/vtadmin-up.sh
-

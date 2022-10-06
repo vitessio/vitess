@@ -98,7 +98,7 @@ func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetada
 			}
 			return conn.ExecuteFetch(query, maxRows, wantFields)
 		}
-		if err := sidecardb.Init(context.TODO(), exec); err != nil {
+		if err := sidecardb.Init(context.TODO(), exec, true); err != nil {
 			log.Error(err)
 			return err
 		}
@@ -147,10 +147,11 @@ func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata 
 }
 
 func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
-		return err
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
+			return err
+		}
 	}
-
 	if err := createLocalMetadataTable(conn, dbName); err != nil {
 		return err
 	}
@@ -163,20 +164,21 @@ func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
 }
 
 func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch(sqlCreateLocalMetadataTable, 0, false); err != nil {
-		return err
-	}
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		if _, err := conn.ExecuteFetch(sqlCreateLocalMetadataTable, 0, false); err != nil {
+			return err
+		}
 
-	for _, sql := range sqlAlterLocalMetadataTable {
-		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
-			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
-				log.Errorf("Error executing %v: %v", sql, err)
-				return err
+		for _, sql := range sqlAlterLocalMetadataTable {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+				if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+					log.Errorf("Error executing %v: %v", sql, err)
+					return err
+				}
 			}
 		}
 	}
-
 	sql := fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName)
 	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action.", sql, err)
@@ -186,20 +188,21 @@ func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 }
 
 func createShardMetadataTable(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
-		return err
-	}
+	if !sidecardb.InitVTSchemaOnTabletInit {
+		if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
+			return err
+		}
 
-	for _, sql := range sqlAlterShardMetadataTable {
-		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
-			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
-				log.Errorf("Error executing %v: %v", sql, err)
-				return err
+		for _, sql := range sqlAlterShardMetadataTable {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+				if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+					log.Errorf("Error executing %v: %v", sql, err)
+					return err
+				}
 			}
 		}
 	}
-
 	sql := fmt.Sprintf(sqlUpdateShardMetadataTable, dbName)
 	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action.", sql, err)

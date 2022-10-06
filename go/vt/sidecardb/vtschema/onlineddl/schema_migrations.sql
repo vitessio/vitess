@@ -49,6 +49,7 @@ CREATE TABLE _vt.schema_migrations
     `last_throttled_timestamp`        timestamp        NULL     DEFAULT NULL,
     `component_throttled`             tinytext         NOT NULL,
     `cancelled_timestamp`             timestamp        NULL     DEFAULT NULL,
+    `postpone_launch`                 tinyint unsigned NOT NULL DEFAULT '0',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uuid_idx` (`migration_uuid`),
     KEY `keyspace_shard_idx` (`keyspace`(64), `shard`(64)),

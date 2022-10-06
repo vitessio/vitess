@@ -619,7 +619,6 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrap(err, "lost topology lock, aborting")
 	}
-
 	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, tabletMap, opts); err != nil {
 		return err
 	}

@@ -34,7 +34,7 @@ CREATE DATABASE IF NOT EXISTS _vt;
 # as in production which is defined in go/vt/mysqlctl/metadata_tables.go.
 CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
-  value VARCHAR(255) NOT NULL,
+  value MEDIUMBLOB NOT NULL,
   db_name VARBINARY(255) NOT NULL,
   PRIMARY KEY (db_name, name)
   ) ENGINE=InnoDB;
