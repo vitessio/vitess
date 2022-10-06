@@ -105,7 +105,7 @@ func instancePollSecondsDuration() time.Duration {
 	return time.Duration(config.Config.InstancePollSeconds) * time.Second
 }
 
-// acceptSighupSignal registers for OS signals
+// acceptSighupSignal registers for SIGHUP signal from the OS to reload the configuration files.
 func acceptSighupSignal() {
 	c := make(chan os.Signal, 1)
 
