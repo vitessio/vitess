@@ -20,6 +20,7 @@ CREATE TABLE _vt.vreplication
     `workflow_type`         int              NOT NULL DEFAULT '0',
     `time_throttled`        bigint           NOT NULL DEFAULT '0',
     `component_throttled`   varchar(255)     NOT NULL DEFAULT '',
+    `workflow_sub_type`     int              NOT NULL DEFAULT '0',
     PRIMARY KEY (`id`),
     KEY `workflow_idx` (`workflow`(64))
 ) ENGINE = InnoDB
