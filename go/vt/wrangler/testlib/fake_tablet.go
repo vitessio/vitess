@@ -24,11 +24,14 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/netutil"
@@ -170,6 +173,33 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 }
 
+func (ft *FakeTablet) filterExpectedQueries(queries []string) []string {
+	if sidecardb.InitVTSchemaOnTabletInit {
+		var newExpectedExecuteSuperQueryList []string
+		initQueries := []string{
+			"CREATE DATABASE",
+			"CREATE TABLE",
+			"ALTER TABLE",
+			"USE _vt",
+		}
+		for _, query := range queries {
+			isInitQuery := false
+			for _, initQuery := range initQueries {
+				if strings.Contains(strings.ToUpper(query), initQuery) {
+					isInitQuery = true
+					break
+				}
+			}
+			if isInitQuery {
+				continue
+			}
+			newExpectedExecuteSuperQueryList = append(newExpectedExecuteSuperQueryList, query)
+		}
+		return newExpectedExecuteSuperQueryList
+	}
+	return queries
+}
+
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
@@ -177,7 +207,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	if ft.TM != nil {
 		t.Fatalf("TM for %v is already running", ft.Tablet.Alias)
 	}
-
+	ft.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = ft.filterExpectedQueries(ft.FakeMysqlDaemon.ExpectedExecuteSuperQueryList)
 	// Listen on a random port for gRPC.
 	var err error
 	ft.Listener, err = net.Listen("tcp", ":0")

@@ -126,6 +126,9 @@ func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if rs == nil || rs.Rows == nil { // we get this in tests
+		return "", nil
+	}
 	currentDB := rs.Rows[0][0].ToString()
 	rs, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false)
 	if err != nil {

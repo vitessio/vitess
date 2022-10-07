@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -502,8 +504,31 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 	return nil
 }
 
+func isVTInitQuery(query string) bool {
+	if sidecardb.InitVTSchemaOnTabletInit {
+		initQueries := []string{
+			"CREATE DATABASE",
+			"CREATE TABLE",
+			"ALTER TABLE",
+			"USE ",
+			"SHOW DATABASES LIKE ",
+			"SELECT DATABASE()",
+			"SHOW TABLES FROM ",
+		}
+		for _, initQuery := range initQueries {
+			if strings.Contains(strings.ToUpper(query), initQuery) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // FetchSuperQuery returns the results from the map, if any
 func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	if isVTInitQuery(query) {
+		return &sqltypes.Result{}, nil
+	}
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}

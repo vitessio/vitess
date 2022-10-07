@@ -891,7 +891,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 
 	// retrying should work
 	newPrimary.FakeMysqlDaemon.PromoteError = nil
-	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = newPrimary.filterExpectedQueries([]string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
@@ -905,8 +905,8 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
-	}
-	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+	})
+	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = newPrimary.filterExpectedQueries([]string{
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -914,7 +914,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
-	}
+	})
 
 	// run PlannedReparentShard
 	err = vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
