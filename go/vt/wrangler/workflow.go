@@ -725,7 +725,7 @@ func (wr *Wrangler) optimizeCopyStateTable(ctx context.Context, tablet *topodata
 	sqlOptimizeTable := `optimize table _vt.copy_state`
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:   []byte(sqlOptimizeTable),
-		MaxRows: uint64(0),
+		MaxRows: uint64(100), // always produces 1+rows with notes and status
 	}); err != nil {
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the table may not exist if no workflows have been run
 			wr.Logger().Errorf("Error optimizing the copy state table: %v", err)
