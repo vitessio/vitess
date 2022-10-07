@@ -527,9 +527,6 @@ func (tme *testShardMigraterEnv) expectDeleteReverseVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		dbclient.addQueryRE("delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt.*", &sqltypes.Result{}, nil)
-		dbclient.addQuery("optimize table _vt.copy_state", &sqltypes.Result{}, nil)
-		dbclient.addQuery("alter table _vt.copy_state auto_increment = 1", &sqltypes.Result{}, nil)
 	}
 }
 
@@ -576,9 +573,6 @@ func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		dbclient.addQueryRE("delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt.*", &sqltypes.Result{}, nil)
-		dbclient.addQuery("optimize table _vt.copy_state", &sqltypes.Result{}, nil)
-		dbclient.addQuery("alter table _vt.copy_state auto_increment = 1", &sqltypes.Result{}, nil)
 	}
 }
 
