@@ -115,9 +115,9 @@ func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state 
 		db.addInvariant(streamExtInfoKs2, replicationResult)
 
 		if state == "Copying" {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1), copyStateResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), copyStateResult)
 		} else {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1), noResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), noResult)
 		}
 	}
 }

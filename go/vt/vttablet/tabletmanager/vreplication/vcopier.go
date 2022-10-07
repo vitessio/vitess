@@ -244,9 +244,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			select {
 			case <-garbageCollectionTicker.C:
 				// Garbage collect older copy_state rows:
-				//   - using a goroutine so that we are not blocking the copy flow
-				//   - using a new connection so that we do not change the critical
-				//   - transaction behavior of the copy itself
+				//   - Using a goroutine so that we are not blocking the copy flow
+				//   - Using a new connection so that we do not change the transactional behavior of the copy itself
 				// This helps to ensure that the table does not grow too large and the
 				// number of rows does not have a big impact on the queries used for
 				// the workflow.
