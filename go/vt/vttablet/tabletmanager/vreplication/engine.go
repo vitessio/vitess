@@ -80,8 +80,9 @@ const (
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
-	allddls = append(allddls, createReshardingJournalTable, createCopyState, alterCopyState)
+	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
+	allddls = append(allddls, alterCopyState)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)

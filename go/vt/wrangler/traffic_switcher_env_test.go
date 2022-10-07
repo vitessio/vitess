@@ -46,7 +46,7 @@ import (
 const (
 	streamInfoQuery    = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
 	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
-	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d"
+	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where id = (select max(id) from _vt.copy_state where vrepl_id = %d)"
 )
 
 var (
@@ -527,6 +527,9 @@ func (tme *testShardMigraterEnv) expectDeleteReverseVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQueryRE("delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt.*", &sqltypes.Result{}, nil)
+		dbclient.addQuery("optimize table _vt.copy_state", &sqltypes.Result{}, nil)
+		dbclient.addQuery("alter table _vt.copy_state auto_increment = 1", &sqltypes.Result{}, nil)
 	}
 }
 
@@ -573,6 +576,9 @@ func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQueryRE("delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt.*", &sqltypes.Result{}, nil)
+		dbclient.addQuery("optimize table _vt.copy_state", &sqltypes.Result{}, nil)
+		dbclient.addQuery("alter table _vt.copy_state auto_increment = 1", &sqltypes.Result{}, nil)
 	}
 }
 

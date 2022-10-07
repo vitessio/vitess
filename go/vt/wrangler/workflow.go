@@ -723,8 +723,6 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 // available auto-inc values for the table.
 func (wr *Wrangler) optimizeCopyStateTable(ctx context.Context, tablet *topodatapb.Tablet) {
 	sqlOptimizeTable := `optimize table _vt.copy_state`
-	// This will automatically set the value to 1 or the current max value in the table, whichever is greater
-	sqlResetAutoInc := `alter table _vt.copy_state auto_increment = 1`
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:   []byte(sqlOptimizeTable),
 		MaxRows: uint64(0),
@@ -734,6 +732,8 @@ func (wr *Wrangler) optimizeCopyStateTable(ctx context.Context, tablet *topodata
 		}
 		return
 	}
+	// This will automatically set the value to 1 or the current max value in the table, whichever is greater
+	sqlResetAutoInc := `alter table _vt.copy_state auto_increment = 1`
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:   []byte(sqlResetAutoInc),
 		MaxRows: uint64(0),
