@@ -862,8 +862,8 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst1", encodeString(fmt.Sprintf("%v", lastpk))),
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', null)", qr.InsertID, "not_copied"),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst1", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', null)", qr.InsertID, "not_copied"),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -979,7 +979,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -1065,7 +1065,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
