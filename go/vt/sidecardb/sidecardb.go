@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -44,7 +45,7 @@ func init() {
 	vtTables = []*VTTable{
 		{"Metadata", "metadata/local_metadata.sql", "local_metadata"},
 		{"Metadata", "metadata/shard_metadata.sql", "shard_metadata"},
-		{"Misc", "misc/reparent_journal.sql", "reparent_journal"},
+		{"Metadata", "misc/reparent_journal.sql", "reparent_journal"},
 		{"Online DDL", "onlineddl/schema_migrations.sql", "schema_migrations"},
 		{"VTGate Schema Tracker", "schematracker/schemacopy.sql", "schemacopy"},
 		{"VReplication", "vreplication/vreplication.sql", "vreplication"},
@@ -59,8 +60,17 @@ func init() {
 	}
 }
 
+func PrintCallerDetails() {
+	pc, _, line, ok := runtime.Caller(2)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		log.Infof(">>>>>>>>> called from %s:%d\n", details.Name(), line)
+	}
+}
+
 // Init creates or upgrades the _vt schema based on declarative schema for all _vt tables
-func Init(ctx context.Context, exec Exec, metadataOnly bool) error {
+func Init(ctx context.Context, exec Exec, metadataTables bool) error {
+	PrintCallerDetails()
 	if !InitVTSchemaOnTabletInit {
 		log.Infof("init-vt-schema-on-tablet-init NOT set, not updating _vt schema on tablet init")
 		return nil
@@ -87,7 +97,10 @@ func Init(ctx context.Context, exec Exec, metadataOnly bool) error {
 	}
 
 	for _, table := range vtTables {
-		if metadataOnly && table.module != "Metadata" {
+		if metadataTables && table.module != "Metadata" {
+			continue
+		}
+		if !metadataTables && table.module == "Metadata" {
 			continue
 		}
 		if err := si.createOrUpgradeTable(table); err != nil {
@@ -111,7 +124,6 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 			return err
 		}
 		log.Infof("Created _vt database")
-		break
 	case 1:
 		//log.Infof("_vt database already exists, not an error")
 		break
@@ -130,7 +142,7 @@ func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
 		return "", nil
 	}
 	currentDB := rs.Rows[0][0].ToString()
-	rs, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false)
+	_, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false)
 	if err != nil {
 		return "", err
 	}

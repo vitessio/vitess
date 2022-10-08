@@ -436,9 +436,14 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 		_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 	}
 
+	log.Infof("PopulateReparentJournal with %v,%v,%v,%v", timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)
 	cmds = []string{mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)}
 
-	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	err = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	if err != nil {
+		log.Infof("PopulateReparentJournal failed with %+v", err)
+	}
+	return err
 }
 
 // InitReplica sets replication primary and position, and waits for the

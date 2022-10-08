@@ -82,6 +82,7 @@ type MetadataManager struct{}
 // followed immediately by upsertLocalMetadata.
 func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
 	log.Infof("Populating _vt.local_metadata table...")
+	sidecardb.PrintCallerDetails()
 
 	// Get a non-pooled DBA connection.
 	conn, err := mysqld.GetDbaConnection(context.TODO())
@@ -89,6 +90,12 @@ func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetada
 		return err
 	}
 	defer conn.Close()
+
+	// Disable replication on this session. We close the connection after using
+	// it, so there's no need to re-enable replication when we're done.
+	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
+		return err
+	}
 
 	if sidecardb.InitVTSchemaOnTabletInit {
 		var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
@@ -102,12 +109,6 @@ func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetada
 			log.Error(err)
 			return err
 		}
-	}
-
-	// Disable replication on this session. We close the connection after using
-	// it, so there's no need to re-enable replication when we're done.
-	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
-		return err
 	}
 
 	// Create the database and table if necessary.
