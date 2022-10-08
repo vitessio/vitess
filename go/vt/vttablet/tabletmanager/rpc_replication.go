@@ -366,6 +366,10 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
 	if !sidecardb.InitVTSchemaOnTabletInit {
+		_, err := tm.MysqlDaemon.FetchSuperQuery(ctx, sidecardb.CreateVTDatabaseQuery)
+		if err != nil {
+			return "", err
+		}
 		var cmds []string
 		cmds = mysqlctl.CreateReparentJournal()
 		if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
@@ -420,6 +424,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
 	log.Infof("PopulateReparentJournal: action: %v parent: %v  position: %v", actionName, primaryAlias, position)
+	sidecardb.PrintCallerDetails()
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err

@@ -46,6 +46,7 @@ func init() {
 		{"Metadata", "metadata/local_metadata.sql", "local_metadata"},
 		{"Metadata", "metadata/shard_metadata.sql", "shard_metadata"},
 		{"Metadata", "misc/reparent_journal.sql", "reparent_journal"},
+		{"Misc", "misc/reparent_journal.sql", "reparent_journal"},
 		{"Online DDL", "onlineddl/schema_migrations.sql", "schema_migrations"},
 		{"VTGate Schema Tracker", "schematracker/schemacopy.sql", "schemacopy"},
 		{"VReplication", "vreplication/vreplication.sql", "vreplication"},
@@ -119,7 +120,7 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 
 	switch len(rs.Rows) {
 	case 0:
-		_, err := si.exec(si.ctx, "CREATE DATABASE IF NOT EXISTS _vt", 1, false)
+		_, err := si.exec(si.ctx, CreateVTDatabaseQuery, 1, false)
 		if err != nil {
 			return err
 		}
@@ -186,7 +187,12 @@ func (si *VTSchemaInit) findTableSchemaDiff(current, desired string) (string, er
 		log.Infof("alter sql %s", tableAlterSQL)
 		log.Infof("current schema %s", current)
 
+	} else {
+		if strings.Contains(tableAlterSQL, "CREATE TABLE") {
+			tableAlterSQL = strings.Replace(tableAlterSQL, "CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
+		}
 	}
+
 	return tableAlterSQL, nil
 }
 
