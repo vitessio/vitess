@@ -100,6 +100,10 @@ var waitRetryTime = 1 * time.Second
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
+// How frequntly vcopier will garbage collect old copy_state rows.
+// By default, do it in between every 2nd and 3rd rows copied update.
+var copyStateGCInterval = (rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2)
+
 // Engine is the engine for handling vreplication.
 type Engine struct {
 	// mu synchronizes isOpen, cancelRetry, controllers and wg.

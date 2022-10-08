@@ -222,9 +222,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
-	// garbage collect old copy_state rows in between every 2nd and 3rd rows copied update
-	garbageCollectionTicker := time.NewTicker((rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2))
-	defer garbageCollectionTicker.Stop()
+	copyStateGCTicker := time.NewTicker(copyStateGCInterval)
+	defer copyStateGCTicker.Stop()
 
 	var pkfields []*querypb.Field
 	var addLatestCopyState *sqlparser.ParsedQuery
@@ -242,7 +241,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			select {
-			case <-garbageCollectionTicker.C:
+			case <-copyStateGCTicker.C:
 				// Garbage collect older copy_state rows:
 				//   - Using a goroutine so that we are not blocking the copy flow
 				//   - Using a new connection so that we do not change the transactional behavior of the copy itself
@@ -250,13 +249,17 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				// number of rows does not have a big impact on the queries used for
 				// the workflow.
 				go func() {
-					gcCopyState := fmt.Sprintf("delete from _vt.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from _vt.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
+					gcQuery := fmt.Sprintf("delete from _vt.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from _vt.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
 						vc.vr.id, encodeString(tableName), vc.vr.id, encodeString(tableName))
 					dbClient := vc.vr.vre.getDBClient(false)
-					if _, err := dbClient.ExecuteFetch(gcCopyState, -1); err != nil {
-						log.Errorf("Error while garbage collecting older copy_state rows with query %q: %v", gcCopyState, err)
+					if err := dbClient.Connect(); err != nil {
+						log.Errorf("Error while garbage collecting older copy_state rows, could not connect to database: %v", err)
+						return
 					}
-
+					defer dbClient.Close()
+					if _, err := dbClient.ExecuteFetch(gcQuery, -1); err != nil {
+						log.Errorf("Error while garbage collecting older copy_state rows with query %q: %v", gcQuery, err)
+					}
 				}()
 			case <-ctx.Done():
 				return io.EOF

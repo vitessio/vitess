@@ -715,30 +715,30 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 	}
 }
 
-// optimizeCopyStateTable rebuilds the table to ensure the on-disk structures
-// are minimal and optimized and resets the auto-inc value for subsequent
-// inserts.
+// optimizeCopyStateTable rebuilds the copy_state table to ensure the on-disk
+// structures are minimal and optimized and resets the auto-inc value for
+// subsequent inserts.
 // This helps to ensure that the size, storage, and performance related factors
 // for the table remain optimal over time and that we don't ever exhaust the
 // available auto-inc values for the table.
 func (wr *Wrangler) optimizeCopyStateTable(ctx context.Context, tablet *topodatapb.Tablet) {
-	sqlOptimizeTable := `optimize table _vt.copy_state`
+	sqlOptimizeTable := "optimize table _vt.copy_state"
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:   []byte(sqlOptimizeTable),
 		MaxRows: uint64(100), // always produces 1+rows with notes and status
 	}); err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the table may not exist if no workflows have been run
-			wr.Logger().Errorf("Error optimizing the copy state table: %v", err)
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERNoSuchTable { // the table may not exist
+			return
 		}
-		return
+		wr.Logger().Errorf("Error optimizing the copy_state table: %v", err)
 	}
 	// This will automatically set the value to 1 or the current max value in the table, whichever is greater
-	sqlResetAutoInc := `alter table _vt.copy_state auto_increment = 1`
+	sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:   []byte(sqlResetAutoInc),
 		MaxRows: uint64(0),
 	}); err != nil {
-		wr.Logger().Errorf("Error resetting the auto_increment value for the copy state table: %v", err)
+		wr.Logger().Errorf("Error resetting the auto_increment value for the copy_state table: %v", err)
 	}
 }
 
