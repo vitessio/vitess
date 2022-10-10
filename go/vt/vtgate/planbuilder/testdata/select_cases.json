@@ -5397,5 +5397,24 @@
         ]
       }
     }
+  },
+  {
+    "comment": "Earlier columns are in scope in subqueries https://github.com/vitessio/vitess/issues/11246",
+    "query": "SELECT 1 as x, (SELECT x)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 as x, (SELECT x)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1) from dual where 1 != 1",
+        "Query": "select 1 as x, (select x from dual) from dual",
+        "Table": "dual"
+      }
+    }
   }
 ]

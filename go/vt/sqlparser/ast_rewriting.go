@@ -538,6 +538,14 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	if !ok {
 		return
 	}
+	_, isColName := expr.Expr.(*ColName)
+	if isColName {
+		// If we find a single col-name in a `dual` subquery, we can be pretty sure the user is returning a column
+		// already projected.
+		// `select 1 as x, (select x)`
+		// is perfectly valid - any aliased columns to the left are available inside subquery scopes
+		return
+	}
 	er.bindVars.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
