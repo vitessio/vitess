@@ -1827,7 +1827,8 @@ func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.Get
 		}
 		resp := vtctldatapb.GetTopologyPathResponse{
 			Cell: &vtctldatapb.TopologyCell{
-				Path:     req.Path,
+				Path: req.Path,
+				// the toplevel display has no name, just children
 				Children: append([]string{topo.GlobalCell}, cells...),
 			},
 		}
