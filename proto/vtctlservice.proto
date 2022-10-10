@@ -139,6 +139,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetTopologyPath returns the topology cell at a given path.
+  rpc GetTopologyPath(vtctldata.GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
   rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.
