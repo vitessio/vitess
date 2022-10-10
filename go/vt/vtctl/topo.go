@@ -19,11 +19,11 @@ package vtctl
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -110,7 +110,7 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 	return string(marshalled), err
 }
 
-func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cell := subFlags.String("cell", topo.GlobalCell, "topology cell to cat the file from. Defaults to global cell.")
 	long := subFlags.Bool("long", false, "long listing.")
 	decodeProtoJSON := subFlags.Bool("decode_proto_json", false, "decode proto files and display them as json")
@@ -146,7 +146,7 @@ func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	return topologyDecoder.decode(ctx, resolved, conn, wr, *long)
 }
 
-func commandTopoCp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandTopoCp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cell := subFlags.String("cell", topo.GlobalCell, "topology cell to use for the copy. Defaults to global cell.")
 	toTopo := subFlags.Bool("to_topo", false, "copies from local server to topo instead (reverse direction).")
 	subFlags.Parse(args)

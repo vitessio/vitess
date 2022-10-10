@@ -18,9 +18,10 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"strings"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -71,7 +72,7 @@ func init() {
 	})
 }
 
-func commandAddCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandAddCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	serverAddress := subFlags.String("server_address", "", "The address the topology server is using for that cell.")
 	root := subFlags.String("root", "", "The root path the topology server is using for that cell.")
 	if err := subFlags.Parse(args); err != nil {
@@ -92,7 +93,7 @@ func commandAddCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	return err
 }
 
-func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	serverAddress := subFlags.String("server_address", "", "The address the topology server is using for that cell.")
 	root := subFlags.String("root", "", "The root path the topology server is using for that cell.")
 	if err := subFlags.Parse(args); err != nil {
@@ -113,7 +114,7 @@ func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return err
 }
 
-func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -130,7 +131,7 @@ func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return err
 }
 
-func commandGetCellInfoNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetCellInfoNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -145,7 +146,7 @@ func commandGetCellInfoNames(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return nil
 }
 
-func commandGetCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

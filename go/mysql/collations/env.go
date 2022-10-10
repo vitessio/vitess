@@ -232,6 +232,33 @@ func (env *Environment) CharsetAlias(charset string) (alias string, ok bool) {
 	return
 }
 
+// CollationAlias returns the internal collaction name for the given charset.
+// For now, this maps all `utf8` to `utf8mb3` collation names; in future versions of MySQL,
+// this mapping will change, so it's important to use this helper so that
+// Vitess code has a consistent mapping for the active collations environment.
+func (env *Environment) CollationAlias(collation string) (string, bool) {
+	col := env.LookupByName(collation)
+	if col == nil {
+		return collation, false
+	}
+	allCols, ok := globalVersionInfo[col.ID()]
+	if !ok {
+		return collation, false
+	}
+	if len(allCols.alias) == 1 {
+		return collation, false
+	}
+	for _, alias := range allCols.alias {
+		for source, dest := range env.version.charsetAliases() {
+			if strings.HasPrefix(collation, fmt.Sprintf("%s_", source)) &&
+				strings.HasPrefix(alias.name, fmt.Sprintf("%s_", dest)) {
+				return alias.name, true
+			}
+		}
+	}
+	return collation, false
+}
+
 // DefaultConnectionCharset is the default charset that Vitess will use when negotiating a
 // charset in a MySQL connection handshake. Note that in this context, a 'charset' is equivalent
 // to a Collation ID, with the exception that it can only fit in 1 byte.

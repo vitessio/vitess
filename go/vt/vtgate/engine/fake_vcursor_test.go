@@ -224,6 +224,13 @@ func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
+}
+
+func (t *noopVCursor) GetQueryTimeout(queryTimeoutFromComments int) int {
+	return queryTimeoutFromComments
+}
+
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {
 	panic("implement me")
 }

@@ -32,8 +32,8 @@ import { TabContainer } from '../../tabs/TabContainer';
 import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
-import { TabletReplication } from './TabletReplication';
 import { env } from '../../../util/env';
+import FullStatus from './FullStatus';
 
 interface RouteParams {
     alias: string;
@@ -48,6 +48,7 @@ export const Tablet = () => {
 
     const { data: tablet, ...tq } = useTablet({ alias, clusterID });
     const { data: debugVars } = useExperimentalTabletDebugVars({ alias, clusterID });
+
     if (tq.error) {
         return (
             <div className={style.placeholder}>
@@ -105,9 +106,8 @@ export const Tablet = () => {
             <ContentContainer>
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
-                    <Tab text="Replication Status" to={`${url}/replication`} />
+                    <Tab text="Full Status" to={`${url}/full-status`} />
                     <Tab text="JSON" to={`${url}/json`} />
-
                     <ReadOnlyGate>
                         <Tab text="Advanced" to={`${url}/advanced`} />
                     </ReadOnlyGate>
@@ -116,10 +116,6 @@ export const Tablet = () => {
                 <Switch>
                     <Route path={`${path}/qps`}>
                         <TabletCharts alias={alias} clusterID={clusterID} />
-                    </Route>
-
-                    <Route path={`${path}/replication`}>
-                        <TabletReplication tablet={tablet} />
                     </Route>
 
                     <Route path={`${path}/json`}>
@@ -131,6 +127,8 @@ export const Tablet = () => {
                             )}
                         </div>
                     </Route>
+
+                    <Route path={`${url}/full-status`}>{tablet && <FullStatus tablet={tablet} />}</Route>
 
                     {!isReadOnlyMode() && (
                         <Route path={`${path}/advanced`}>

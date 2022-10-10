@@ -756,7 +756,7 @@ func TestSelectSystemVariables(t *testing.T) {
 
 	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable_system_settings, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
-		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@socket"
+		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@socket, @@query_timeout"
 
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
@@ -773,6 +773,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@session_track_gtids", Type: sqltypes.VarChar},
 			{Name: "@@ddl_strategy", Type: sqltypes.VarChar},
 			{Name: "@@socket", Type: sqltypes.VarChar},
+			{Name: "@@query_timeout", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
@@ -789,6 +790,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewVarChar("own_gtid"),
 			sqltypes.NewVarChar(""),
 			sqltypes.NewVarChar(""),
+			sqltypes.NewInt64(0),
 		}},
 	}
 	require.NoError(t, err)
@@ -803,23 +805,27 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 
 	primarySession.Autocommit = true
 	primarySession.EnableSystemSettings = true
+	primarySession.QueryTimeout = 75
 
 	defer func() {
 		primarySession.Autocommit = false
 		primarySession.EnableSystemSettings = false
+		primarySession.QueryTimeout = 0
 	}()
 
-	sql := "select @@autocommit, @@enable_system_settings"
+	sql := "select @@autocommit, @@enable_system_settings, @@query_timeout"
 
 	result, err := executorExec(executor, sql, nil)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "@@autocommit", Type: sqltypes.Int64},
 			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
+			{Name: "@@query_timeout", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(75),
 		}},
 	}
 	require.NoError(t, err)
