@@ -79,14 +79,7 @@ var (
 
 const configKeyPrefix = "backup.storage.azblob"
 
-func configKey(key string) string {
-	parts := []string{configKeyPrefix}
-	if key != "" {
-		parts = append(parts, key)
-	}
-
-	return strings.Join(parts, ".")
-}
+var configKey = viperutil.KeyPartial(configKeyPrefix)
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.String("azblob_backup_account_name", "", "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")

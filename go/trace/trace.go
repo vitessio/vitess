@@ -26,8 +26,10 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -125,6 +127,8 @@ type tracingService interface {
 // object to make sure that all spans are sent to the backend before the process exits.
 type TracerFactory func(serviceName string) (tracingService, io.Closer, error)
 
+const configKeyPrefix = "trace"
+
 var (
 	// tracingBackendFactories should be added to by a plugin during init() to install itself
 	tracingBackendFactories = make(map[string]TracerFactory)
@@ -133,15 +137,29 @@ var (
 
 	/* flags */
 
-	tracingServer = "noop"
-	enableLogging bool
+	configKey = viperutil.KeyPartial(configKeyPrefix)
+
+	tracingServer = viperutil.NewValue(
+		configKey("service"),
+		viper.GetString,
+		viperutil.WithFlags[string]("tracer"),
+		viperutil.WithDefault("noop"),
+	)
+	enableLogging = viperutil.NewValue(
+		configKey("enable-logging"),
+		viper.GetBool,
+		viperutil.WithFlags[bool]("tracing-enable-logging"),
+	)
 
 	pluginFlags []func(fs *pflag.FlagSet)
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&tracingServer, "tracer", "noop", "tracing service to use")
-	fs.BoolVar(&enableLogging, "tracing-enable-logging", false, "whether to enable logging in the tracing service")
+	fs.String("tracer", tracingServer.Value(), "tracing service to use")
+	tracingServer.Bind(nil, fs)
+
+	fs.Bool("tracing-enable-logging", false, "whether to enable logging in the tracing service")
+	enableLogging.Bind(nil, fs)
 
 	for _, fn := range pluginFlags {
 		fn(fs)
@@ -150,20 +168,21 @@ func RegisterFlags(fs *pflag.FlagSet) {
 
 // StartTracing enables tracing for a named service
 func StartTracing(serviceName string) io.Closer {
-	factory, ok := tracingBackendFactories[tracingServer]
+	tracingBackend := tracingServer.Get()
+	factory, ok := tracingBackendFactories[tracingBackend]
 	if !ok {
 		return fail(serviceName)
 	}
 
 	tracer, closer, err := factory(serviceName)
 	if err != nil {
-		log.Error(vterrors.Wrapf(err, "failed to create a %s tracer", tracingServer))
+		log.Error(vterrors.Wrapf(err, "failed to create a %s tracer", tracingBackend))
 		return &nilCloser{}
 	}
 
 	currentTracer = tracer
-	if tracingServer != "noop" {
-		log.Infof("successfully started tracing with [%s]", tracingServer)
+	if tracingBackend != "noop" {
+		log.Infof("successfully started tracing with [%s]", tracingBackend)
 	}
 
 	return closer

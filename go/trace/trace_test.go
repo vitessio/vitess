@@ -23,7 +23,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/viperutil"
 )
 
 func TestFakeSpan(t *testing.T) {
@@ -49,7 +52,16 @@ func TestRegisterService(t *testing.T) {
 		return tracer, tracer, nil
 	}
 
-	tracingServer = fakeName
+	var old viperutil.Value[string]
+	old = *tracingServer
+	t.Cleanup(func() {
+		*tracingServer = old
+	})
+
+	v := viper.New()
+	tracingServer = viperutil.NewValue(configKey("service"), v.GetString)
+	v.Set(configKey("service"), fakeName)
+	tracingServer.Fetch()
 
 	serviceName := "vtservice"
 	closer := StartTracing(serviceName)

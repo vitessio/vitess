@@ -18,14 +18,13 @@ package trace
 
 import (
 	"io"
-	"os"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/pflag"
-	"github.com/uber/jaeger-client-go"
+	"github.com/spf13/viper"
 	"github.com/uber/jaeger-client-go/config"
 
-	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -36,18 +35,40 @@ included but nothing Jaeger specific.
 */
 
 var (
-	agentHost    string
-	samplingType = flagutil.NewOptionalString("const")
-	samplingRate = flagutil.NewOptionalFloat64(0.1)
+	jaegerConfigKey = viperutil.KeyPartial(configKey("jaeger"))
+	agentHost       = viperutil.NewValue(
+		jaegerConfigKey("agent-host"),
+		viper.GetString,
+		viperutil.WithFlags[string]("jaeger-agent-host"),
+	)
+	samplingType = viperutil.NewValue(
+		jaegerConfigKey("sampling_type"),
+		viper.GetString,
+		viperutil.WithFlags[string]("tracing-sampling-type"),
+		viperutil.WithDefault("const"),
+		viperutil.WithEnvVars[string]("JAEGER_SAMPLER_TYPE"),
+	)
+	samplingRate = viperutil.NewValue(
+		jaegerConfigKey("sampling_rate"),
+		viper.GetFloat64,
+		viperutil.WithFlags[float64]("tracing-sampling-rate"),
+		viperutil.WithDefault(0.1),
+		viperutil.WithEnvVars[float64]("JAEGER_SAMPLER_PARAM"),
+	)
 )
 
 func init() {
 	// If compiled with plugin_jaeger, ensure that trace.RegisterFlags includes
 	// jaeger tracing flags.
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
-		fs.StringVar(&agentHost, "jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
-		fs.Var(samplingType, "tracing-sampling-type", "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
-		fs.Var(samplingRate, "tracing-sampling-rate", "sampling rate for the probabilistic jaeger sampler")
+		fs.String("jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
+		agentHost.Bind(nil, fs)
+
+		fs.String("tracing-sampling-type", samplingType.Value(), "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
+		samplingType.Bind(nil, fs)
+
+		fs.Float64("tracing-sampling-rate", samplingRate.Value(), "sampling rate for the probabilistic jaeger sampler")
+		samplingRate.Bind(nil, fs)
 	})
 }
 
@@ -79,32 +100,17 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	}
 
 	// Allow command line args to override environment variables.
-	if agentHost != "" {
-		cfg.Reporter.LocalAgentHostPort = agentHost
+	if host := agentHost.Get(); host != "" {
+		cfg.Reporter.LocalAgentHostPort = host
 	}
 	log.Infof("Tracing to: %v as %v", cfg.Reporter.LocalAgentHostPort, cfg.ServiceName)
 
-	if os.Getenv("JAEGER_SAMPLER_PARAM") == "" {
-		// If the environment variable was not set, we take the flag regardless
-		// of whether it was explicitly set on the command line.
-		cfg.Sampler.Param = samplingRate.Get()
-	} else if samplingRate.IsSet() {
-		// If the environment variable was set, but the user also explicitly
-		// passed the command line flag, the flag takes precedence.
-		cfg.Sampler.Param = samplingRate.Get()
-	}
-
-	if samplingType.IsSet() {
-		cfg.Sampler.Type = samplingType.Get()
-	} else if cfg.Sampler.Type == "" {
-		log.Infof("--tracing-sampler-type was not set, and JAEGER_SAMPLER_TYPE was not set, defaulting to const sampler")
-		cfg.Sampler.Type = jaeger.SamplerTypeConst
-	}
-
+	cfg.Sampler.Param = samplingRate.Get()
+	cfg.Sampler.Type = samplingType.Get()
 	log.Infof("Tracing sampler type %v (param: %v)", cfg.Sampler.Type, cfg.Sampler.Param)
 
 	var opts []config.Option
-	if enableLogging {
+	if enableLogging.Get() {
 		opts = append(opts, config.Logger(&traceLogger{}))
 	} else if cfg.Reporter.LogSpans {
 		log.Warningf("JAEGER_REPORTER_LOG_SPANS was set, but --tracing-enable-logging was not; spans will not be logged")
