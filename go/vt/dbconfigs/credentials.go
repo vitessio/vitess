@@ -33,32 +33,38 @@ import (
 	"time"
 
 	vaultapi "github.com/aquarapid/vaultlib"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	// generic flags
-	dbCredentialsServer = flag.String("db-credentials-server", "file", "db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation)")
-
-	// 'file' implementation flags
-	dbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file; send SIGHUP to reload this file")
-
-	// 'vault' implementation flags
-	vaultAddr             = flag.String("db-credentials-vault-addr", "", "URL to Vault server")
-	vaultTimeout          = flag.Duration("db-credentials-vault-timeout", 10*time.Second, "Timeout for vault API operations")
-	vaultCACert           = flag.String("db-credentials-vault-tls-ca", "", "Path to CA PEM for validating Vault server certificate")
-	vaultPath             = flag.String("db-credentials-vault-path", "", "Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds")
-	vaultCacheTTL         = flag.Duration("db-credentials-vault-ttl", 30*time.Minute, "How long to cache DB credentials from the Vault server")
-	vaultTokenFile        = flag.String("db-credentials-vault-tokenfile", "", "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
-	vaultRoleID           = flag.String("db-credentials-vault-roleid", "", "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
-	vaultRoleSecretIDFile = flag.String("db-credentials-vault-role-secretidfile", "", "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
-	vaultRoleMountPoint   = flag.String("db-credentials-vault-role-mountpoint", "approle", "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+	dbCredentialsServer   = "file"
+	dbCredentialsFile     string
+	vaultAddr             string
+	vaultTimeout          = 10 * time.Second
+	vaultCACert           string
+	vaultPath             string
+	vaultCacheTTL         = 30 * time.Minute
+	vaultTokenFile        string
+	vaultRoleID           string
+	vaultRoleSecretIDFile string
+	vaultRoleMountPoint   = "approle"
 
 	// ErrUnknownUser is returned by credential server when the
 	// user doesn't exist
 	ErrUnknownUser = errors.New("unknown user")
+
+	cmdsWithDBCredentials = []string{
+		"mysqlctl",
+		"mysqlctld",
+		"vtbackup",
+		"vtcombo",
+		"vtgr",
+		"vttablet",
+	}
 )
 
 // CredentialsServer is the interface for a credential server
@@ -76,12 +82,55 @@ type CredentialsServer interface {
 // been parsed.
 var AllCredentialsServers = make(map[string]CredentialsServer)
 
+func init() {
+	AllCredentialsServers["file"] = &FileCredentialsServer{}
+	AllCredentialsServers["vault"] = &VaultCredentialsServer{}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		for range sigChan {
+			if fcs, ok := AllCredentialsServers["file"].(*FileCredentialsServer); ok {
+				fcs.mu.Lock()
+				fcs.dbCredentials = nil
+				fcs.mu.Unlock()
+			}
+			if vcs, ok := AllCredentialsServers["vault"].(*VaultCredentialsServer); ok {
+				vcs.mu.Lock()
+				vcs.dbCredsCache = nil
+				vcs.mu.Unlock()
+			}
+		}
+	}()
+
+	for _, cmd := range cmdsWithDBCredentials {
+		servenv.OnParseFor(cmd, func(fs *pflag.FlagSet) {
+			// generic flags
+			fs.StringVar(&dbCredentialsServer, "db-credentials-server", dbCredentialsServer, "db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation)")
+
+			// 'file' implementation flags
+			fs.StringVar(&dbCredentialsFile, "db-credentials-file", dbCredentialsFile, "db credentials file; send SIGHUP to reload this file")
+
+			// 'vault' implementation flags
+			flag.StringVar(&vaultAddr, "db-credentials-vault-addr", vaultAddr, "URL to Vault server")
+			flag.DurationVar(&vaultTimeout, "db-credentials-vault-timeout", vaultTimeout, "Timeout for vault API operations")
+			flag.StringVar(&vaultCACert, "db-credentials-vault-tls-ca", vaultCACert, "Path to CA PEM for validating Vault server certificate")
+			flag.StringVar(&vaultPath, "db-credentials-vault-path", vaultPath, "Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds")
+			flag.DurationVar(&vaultCacheTTL, "db-credentials-vault-ttl", vaultCacheTTL, "How long to cache DB credentials from the Vault server")
+			flag.StringVar(&vaultTokenFile, "db-credentials-vault-tokenfile", vaultTokenFile, "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
+			flag.StringVar(&vaultRoleID, "db-credentials-vault-roleid", vaultRoleID, "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
+			flag.StringVar(&vaultRoleSecretIDFile, "db-credentials-vault-role-secretidfile", vaultRoleSecretIDFile, "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
+			flag.StringVar(&vaultRoleMountPoint, "db-credentials-vault-role-mountpoint", vaultRoleMountPoint, "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+		})
+	}
+}
+
 // GetCredentialsServer returns the current CredentialsServer. Only valid
 // after flag.Init was called.
 func GetCredentialsServer() CredentialsServer {
-	cs, ok := AllCredentialsServers[*dbCredentialsServer]
+	cs, ok := AllCredentialsServers[dbCredentialsServer]
 	if !ok {
-		log.Exitf("Invalid credential server: %v", *dbCredentialsServer)
+		log.Exitf("Invalid credential server: %v", dbCredentialsServer)
 	}
 	return cs
 }
@@ -110,7 +159,7 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 	fcs.mu.Lock()
 	defer fcs.mu.Unlock()
 
-	if *dbCredentialsFile == "" {
+	if dbCredentialsFile == "" {
 		return "", "", ErrUnknownUser
 	}
 
@@ -118,14 +167,14 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 	if fcs.dbCredentials == nil {
 		fcs.dbCredentials = make(map[string][]string)
 
-		data, err := os.ReadFile(*dbCredentialsFile)
+		data, err := os.ReadFile(dbCredentialsFile)
 		if err != nil {
-			log.Warningf("Failed to read dbCredentials file: %v", *dbCredentialsFile)
+			log.Warningf("Failed to read dbCredentials file: %v", dbCredentialsFile)
 			return "", "", err
 		}
 
 		if err = json.Unmarshal(data, &fcs.dbCredentials); err != nil {
-			log.Warningf("Failed to parse dbCredentials file: %v", *dbCredentialsFile)
+			log.Warningf("Failed to parse dbCredentials file: %v", dbCredentialsFile)
 			return "", "", err
 		}
 	}
@@ -143,7 +192,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 	defer vcs.mu.Unlock()
 
 	if vcs.vaultCacheExpireTicker == nil {
-		vcs.vaultCacheExpireTicker = time.NewTicker(*vaultCacheTTL)
+		vcs.vaultCacheExpireTicker = time.NewTicker(vaultCacheTTL)
 		go func() {
 			for range vcs.vaultCacheExpireTicker.C {
 				if vcs, ok := AllCredentialsServers["vault"].(*VaultCredentialsServer); ok {
@@ -161,15 +210,15 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		return user, vcs.dbCredsCache[user][0], nil
 	}
 
-	if *vaultAddr == "" {
+	if vaultAddr == "" {
 		return "", "", errors.New("No Vault server specified")
 	}
 
-	token, err := readFromFile(*vaultTokenFile)
+	token, err := readFromFile(vaultTokenFile)
 	if err != nil {
 		return "", "", errors.New("No Vault token in provided filename")
 	}
-	secretID, err := readFromFile(*vaultRoleSecretIDFile)
+	secretID, err := readFromFile(vaultRoleSecretIDFile)
 	if err != nil {
 		return "", "", errors.New("No Vault secret_id in provided filename")
 	}
@@ -182,25 +231,25 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		// All these can be overriden by environment
 		//   so we need to check if they have been set by NewConfig
 		if config.Address == "" {
-			config.Address = *vaultAddr
+			config.Address = vaultAddr
 		}
 		if config.Timeout == (0 * time.Second) {
-			config.Timeout = *vaultTimeout
+			config.Timeout = vaultTimeout
 		}
 		if config.CACert == "" {
-			config.CACert = *vaultCACert
+			config.CACert = vaultCACert
 		}
 		if config.Token == "" {
 			config.Token = token
 		}
 		if config.AppRoleCredentials.RoleID == "" {
-			config.AppRoleCredentials.RoleID = *vaultRoleID
+			config.AppRoleCredentials.RoleID = vaultRoleID
 		}
 		if config.AppRoleCredentials.SecretID == "" {
 			config.AppRoleCredentials.SecretID = secretID
 		}
 		if config.AppRoleCredentials.MountPoint == "" {
-			config.AppRoleCredentials.MountPoint = *vaultRoleMountPoint
+			config.AppRoleCredentials.MountPoint = vaultRoleMountPoint
 		}
 
 		if config.CACert != "" {
@@ -217,7 +266,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		}
 	}
 
-	secret, err := vcs.vaultClient.GetSecret(*vaultPath)
+	secret, err := vcs.vaultClient.GetSecret(vaultPath)
 	if err != nil {
 		log.Errorf("Error in Vault server params: %v", err)
 		return "", "", ErrUnknownUser
@@ -271,26 +320,4 @@ func withCredentials(cp *mysql.ConnParams) (*mysql.ConnParams, error) {
 		err = nil
 	}
 	return &result, err
-}
-
-func init() {
-	AllCredentialsServers["file"] = &FileCredentialsServer{}
-	AllCredentialsServers["vault"] = &VaultCredentialsServer{}
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP)
-	go func() {
-		for range sigChan {
-			if fcs, ok := AllCredentialsServers["file"].(*FileCredentialsServer); ok {
-				fcs.mu.Lock()
-				fcs.dbCredentials = nil
-				fcs.mu.Unlock()
-			}
-			if vcs, ok := AllCredentialsServers["vault"].(*VaultCredentialsServer); ok {
-				vcs.mu.Lock()
-				vcs.dbCredsCache = nil
-				vcs.mu.Unlock()
-			}
-		}
-	}()
 }

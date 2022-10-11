@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vtorc)
+name: Cluster (vtorc)(mysql80)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtorc)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtorc)(mysql80)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vtorc)
+    name: Run endtoend tests on Cluster (vtorc)(mysql80)
     runs-on: self-hosted
 
     steps:

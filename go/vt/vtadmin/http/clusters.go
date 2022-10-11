@@ -18,12 +18,39 @@ package http
 
 import (
 	"context"
+	"encoding/json"
+
+	"github.com/gorilla/mux"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/errors"
 )
 
 // GetClusters implements the http wrapper for /clusters
 func GetClusters(ctx context.Context, r Request, api *API) *JSONResponse {
 	clusters, err := api.server.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 	return NewJSONResponse(clusters, err)
+}
+
+// Validate implements the http wrapper for /cluster/{cluster_id}/validate
+func Validate(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := mux.Vars(r.Request)
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var result struct {
+		PingTablets bool `json:"pingTablets"`
+	}
+
+	if err := decoder.Decode(&result); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	resp, err := api.server.Validate(ctx, &vtadminpb.ValidateRequest{
+		ClusterId:   vars["cluster_id"],
+		PingTablets: result.PingTablets,
+	})
+	return NewJSONResponse(resp, err)
 }

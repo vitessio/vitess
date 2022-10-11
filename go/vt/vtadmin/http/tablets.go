@@ -22,6 +22,22 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
+// GetFullStatus implements the http wrapper for /tablets/{tablet}/full_status
+func GetFullStatus(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	alias, err := vars.GetTabletAlias("tablet")
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+	status, err := api.server.GetFullStatus(ctx, &vtadminpb.GetFullStatusRequest{
+		ClusterId: r.URL.Query()["cluster"][0],
+		Alias:     alias,
+	})
+
+	return NewJSONResponse(status, err)
+}
+
 // GetTablets implements the http wrapper for /tablets[?cluster=[&cluster=]].
 func GetTablets(ctx context.Context, r Request, api *API) *JSONResponse {
 	tablets, err := api.server.GetTablets(ctx, &vtadminpb.GetTabletsRequest{

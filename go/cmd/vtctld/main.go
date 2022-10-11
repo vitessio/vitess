@@ -17,6 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -29,6 +32,10 @@ func init() {
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
+
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		acl.RegisterFlags(fs)
+	})
 }
 
 // used at runtime by plug-ins

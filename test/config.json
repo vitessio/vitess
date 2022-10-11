@@ -623,7 +623,7 @@
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/dml"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
@@ -1017,6 +1017,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_vschema_load": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVSchemaChangesUnderLoad"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vreplication_basic": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
@@ -1116,33 +1125,6 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
-		"vtorc_primary_failure_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_api_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/api"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_general_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/general"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
-			"RetryMax": 3,
-			"Tags": []
-		},
 		"vault": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
@@ -1205,6 +1187,15 @@
 			"Shard": "topo_connection_cache",
 			"RetryMax": 1,
 			"Tags": []
+		},
+		"prscomplex": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/prscomplex"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vttablet_prscomplex",
+			"RetryMax": 1,
+			"Tags": [""]
 		}
 	}
 }

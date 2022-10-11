@@ -61,6 +61,12 @@ func (mode *SslMode) String() string {
 	return string(*mode)
 }
 
+// Type returns the value type, part of the pflag Value interface
+// for allowing this to be used as a generic flag.
+func (mode *SslMode) Type() string {
+	return "SslMode"
+}
+
 // Set updates the value of the SslMode pointer, part of the Value interface
 // for allowing to update a flag.
 func (mode *SslMode) Set(value string) error {

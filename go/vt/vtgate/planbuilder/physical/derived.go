@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -109,4 +110,13 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 		return -1, nil
 	}
 	return 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", name.Name.String())
+}
+
+// IsMergeable is not a great name for this function. Suggestions for a better one are welcome!
+// This function will return false if the derived table inside it has to run on the vtgate side, and so can't be merged with subqueries
+// This logic can also be used to check if this is a derived table that can be had on the left hand side of a vtgate join.
+// Since vtgate joins are always nested loop joins, we can't execute them on the RHS
+// if they do some things, like LIMIT or GROUP BY on wrong columns
+func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
+	return isMergeable(ctx, d.Query, d)
 }

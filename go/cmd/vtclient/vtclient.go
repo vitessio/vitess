@@ -33,6 +33,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
@@ -101,6 +102,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&maxSeqID, "max_sequence_id", maxSeqID, "max sequence ID.")
 	fs.BoolVar(&useRandom, "use_random_sequence", useRandom, "use random sequence for generating [min_sequence_id, max_sequence_id)")
 	fs.IntVar(&qps, "qps", qps, "queries per second to throttle each thread at.")
+
+	acl.RegisterFlags(fs)
 
 	bindVariables = newBindvars(fs, "bind_variables", "bind variables as a json list")
 }

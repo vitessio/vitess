@@ -417,6 +417,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		switch sysVar {
 		case sysvars.Autocommit.Name:
 			bindVars[key] = sqltypes.BoolBindVariable(session.Autocommit)
+		case sysvars.QueryTimeout.Name:
+			bindVars[key] = sqltypes.Int64BindVariable(session.GetQueryTimeout())
 		case sysvars.ClientFoundRows.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {

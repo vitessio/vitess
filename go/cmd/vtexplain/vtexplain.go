@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -67,6 +68,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&numShards, "shards", numShards, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
 	fs.StringVar(&executionMode, "execution-mode", executionMode, "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
 	fs.StringVar(&outputMode, "output-mode", outputMode, "Output in human-friendly text or json")
+
+	acl.RegisterFlags(fs)
 }
 
 func init() {

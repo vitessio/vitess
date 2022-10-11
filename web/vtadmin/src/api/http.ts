@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
+import { vtadmin as pb, vtadmin, vtctldata } from '../proto/vtadmin';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
@@ -561,6 +561,133 @@ export const reloadSchema = async (params: ReloadSchemaParams) => {
     return pb.ReloadSchemasResponse.create(result);
 };
 
+export interface DeleteShardParams {
+    clusterID: string;
+    keyspaceShard: string;
+    evenIfServing: boolean;
+    recursive: boolean;
+}
+
+export const deleteShard = async (params: DeleteShardParams) => {
+    const req = new URLSearchParams();
+    req.append('keyspace_shard', params.keyspaceShard);
+    req.append('even_if_serving', String(params.evenIfServing));
+    req.append('recursive', String(params.recursive));
+
+    const { result } = await vtfetch(`/api/shards/${params.clusterID}?${req}`, { method: 'delete' });
+
+    const err = vtctldata.DeleteShardsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.DeleteShardsResponse.create(result);
+};
+
+export interface ReloadSchemaShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+
+    waitPosition?: string;
+    includePrimary: boolean;
+    concurrency?: number;
+}
+
+export const reloadSchemaShard = async (params: ReloadSchemaShardParams) => {
+    const body: Record<string, string | boolean | number> = {
+        include_primary: params.includePrimary,
+    };
+
+    if (params.waitPosition) {
+        body.wait_position = params.waitPosition;
+    }
+
+    if (params.concurrency) {
+        body.concurrency = params.concurrency;
+    }
+
+    const { result } = await vtfetch(
+        `/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/reload_schema_shard`,
+        {
+            method: 'put',
+            body: JSON.stringify(body),
+        }
+    );
+
+    const err = pb.ReloadSchemaShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.ReloadSchemaShardResponse.create(result);
+};
+
+export interface TabletExternallyPromotedParams {
+    alias?: string;
+    clusterIDs: string[];
+}
+
+export const tabletExternallyPromoted = async (params: TabletExternallyPromotedParams) => {
+    const req = new URLSearchParams();
+    req.append('cluster', params.clusterIDs[0]);
+
+    const { result } = await vtfetch(`/api/tablet/${params.alias}/externally_promoted?${req}`, {
+        method: 'post',
+    });
+
+    const err = pb.TabletExternallyPromotedResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.TabletExternallyPromotedResponse.create(result);
+};
+
+export interface PlannedFailoverShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+    new_primary?: vtadmin.Tablet;
+}
+
+export const plannedFailoverShard = async (params: PlannedFailoverShardParams) => {
+    const body: Partial<pb.PlannedFailoverShardRequest['options']> = {};
+    if (params.new_primary) body['new_primary'] = params.new_primary.tablet?.alias;
+
+    const { result } = await vtfetch(
+        `/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/planned_failover`,
+        {
+            method: 'post',
+            body: JSON.stringify(body),
+        }
+    );
+
+    const err = pb.PlannedFailoverShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.PlannedFailoverShardResponse.create(result);
+};
+
+export interface EmergencyFailoverShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+    new_primary?: vtadmin.Tablet;
+}
+
+export const emergencyFailoverShard = async (params: EmergencyFailoverShardParams) => {
+    const body: Partial<pb.PlannedFailoverShardRequest['options']> = {};
+    if (params.new_primary && params.new_primary.tablet?.alias) body['new_primary'] = params.new_primary.tablet?.alias;
+
+    const { result } = await vtfetch(
+        `/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/emergency_failover`,
+        {
+            method: 'post',
+            body: JSON.stringify(body),
+        }
+    );
+
+    const err = pb.EmergencyFailoverShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.EmergencyFailoverShardResponse.create(result);
+};
+
 export interface RebuildKeyspaceGraphParams {
     clusterID: string;
     keyspace: string;
@@ -626,4 +753,76 @@ export const createShard = async (params: CreateShardParams) => {
     if (err) throw Error(err);
 
     return vtctldata.CreateShardResponse.create(result);
+};
+
+export interface ValidateParams {
+    clusterID: string;
+    pingTablets: boolean;
+}
+
+export const validate = async (params: ValidateParams) => {
+    const { result } = await vtfetch(`/api/cluster/${params.clusterID}/validate`, {
+        method: 'put',
+        body: JSON.stringify({ ping_tablets: params.pingTablets }),
+    });
+    const err = pb.ValidateRequest.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateResponse.create(result);
+};
+
+export interface ValidateShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+    pingTablets: boolean;
+}
+
+export const validateShard = async (params: ValidateShardParams) => {
+    const { result } = await vtfetch(`/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/validate`, {
+        method: 'put',
+        body: JSON.stringify({ ping_tablets: params.pingTablets }),
+    });
+
+    const err = vtctldata.ValidateShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateShardResponse.create(result);
+};
+
+export interface GetFullStatusParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const getFullStatus = async (params: GetFullStatusParams) => {
+    const req = new URLSearchParams();
+    req.append('cluster', params.clusterID);
+
+    const { result } = await vtfetch(`/api/tablet/${params.alias}/full_status?${req.toString()}`);
+
+    const err = vtctldata.GetFullStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetFullStatusResponse.create(result);
+};
+
+export interface ValidateVersionShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+}
+
+export const validateVersionShard = async (params: ValidateVersionShardParams) => {
+    const { result } = await vtfetch(
+        `/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/validate_version`,
+        {
+            method: 'put',
+        }
+    );
+
+    const err = vtctldata.ValidateVersionShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateVersionShardResponse.create(result);
 };

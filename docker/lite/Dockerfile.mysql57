@@ -50,8 +50,6 @@ ENV PATH $VTROOT/bin:$PATH
 
 # Copy artifacts from builder layer.
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/orchestrator /vt/web/orchestrator
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtorc /vt/web/vtorc
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 
 # Create mount point for actual data (e.g. MySQL data dir)

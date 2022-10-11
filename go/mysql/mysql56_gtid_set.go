@@ -73,7 +73,7 @@ func parseInterval(s string) (interval, error) {
 // parseMysql56GTIDSet is registered as a GTIDSet parser.
 //
 // https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
-func parseMysql56GTIDSet(s string) (GTIDSet, error) {
+func parseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 	set := Mysql56GTIDSet{}
 
 	// gtid_set: uuid_set [, uuid_set] ...
@@ -656,5 +656,23 @@ func popInterval(dst *interval, s1, s2 *[]interval) bool {
 }
 
 func init() {
-	gtidSetParsers[Mysql56FlavorID] = parseMysql56GTIDSet
+	gtidSetParsers[Mysql56FlavorID] = func(s string) (GTIDSet, error) {
+		return parseMysql56GTIDSet(s)
+	}
+}
+
+// Subtract takes in two Mysql56GTIDSets as strings and subtracts the second from the first
+// The result is also a string.
+// An error is thrown if parsing is not possible for either GTIDSets
+func Subtract(lhs, rhs string) (string, error) {
+	lhsSet, err := parseMysql56GTIDSet(lhs)
+	if err != nil {
+		return "", err
+	}
+	rhsSet, err := parseMysql56GTIDSet(rhs)
+	if err != nil {
+		return "", err
+	}
+	diffSet := lhsSet.Difference(rhsSet)
+	return diffSet.String(), nil
 }

@@ -94,7 +94,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 // VerifyRowsInTabletForTable verifies the total number of rows in a table.
 // This is used to check that replication has caught up with the changes on primary.
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(1 * time.Minute)
 	for time.Now().Before(timeout) {
 		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
 		// but eventually it will catch up and if not caught up in required time, testcase will fail

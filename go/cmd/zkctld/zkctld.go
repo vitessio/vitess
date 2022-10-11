@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -47,6 +48,8 @@ func registerFlags(fs *pflag.FlagSet) {
 		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
 	fs.UintVar(&myID, "zk.myid", myID,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
+
+	acl.RegisterFlags(fs)
 }
 
 func main() {
