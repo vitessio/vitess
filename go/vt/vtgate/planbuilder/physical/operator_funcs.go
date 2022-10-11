@@ -220,7 +220,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 		if len(columns) == 0 {
 			return op, nil, nil
 		}
-		for _, col := range columns { ///select 1 from (select * from user join user_extra) t join unsharded on t.id = unsharded.apa
+		for _, col := range columns {
 			i, err := op.findOutputColumn(col)
 			if err != nil {
 				return nil, nil, err

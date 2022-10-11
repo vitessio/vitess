@@ -44,7 +44,7 @@ type PrimitiveDescription struct {
 
 // MarshalJSON serializes the PlanDescription into a JSON representation.
 // We do this rather manual thing here so the `other` map looks like
-//fields belonging to pd and not a map in a field.
+// fields belonging to pd and not a map in a field.
 func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	buf.WriteString("{")
@@ -111,12 +111,11 @@ func addMap(input map[string]any, buf *bytes.Buffer) error {
 
 func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 	buf.WriteString(prepend + `"` + name + `":`)
-	b, err := json.Marshal(obj)
-	if err != nil {
-		return err
-	}
-	buf.Write(b)
-	return nil
+
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+
+	return enc.Encode(obj)
 }
 
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree

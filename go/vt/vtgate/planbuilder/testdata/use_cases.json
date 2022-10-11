@@ -1,0 +1,61 @@
+[
+  {
+    "comment": "use db",
+    "query": "use ks",
+    "plan": {
+      "QueryType": "USE",
+      "Original": "use ks",
+      "Instructions": {
+        "OperatorType": "UpdateTarget",
+        "target": "ks"
+      }
+    }
+  },
+  {
+    "comment": "use db tablet",
+    "query": "use ks@replica",
+    "plan": {
+      "QueryType": "USE",
+      "Original": "use ks@replica",
+      "Instructions": {
+        "OperatorType": "UpdateTarget",
+        "target": "ks@replica"
+      }
+    }
+  },
+  {
+    "comment": "use db target with :",
+    "query": "use `ks:-80@replica`",
+    "plan": {
+      "QueryType": "USE",
+      "Original": "use `ks:-80@replica`",
+      "Instructions": {
+        "OperatorType": "UpdateTarget",
+        "target": "ks:-80@replica"
+      }
+    }
+  },
+  {
+    "comment": "use db target with /",
+    "query": "use `ks/80-@replica`",
+    "plan": {
+      "QueryType": "USE",
+      "Original": "use `ks/80-@replica`",
+      "Instructions": {
+        "OperatorType": "UpdateTarget",
+        "target": "ks/80-@replica"
+      }
+    }
+  },
+  {
+    "comment": "reset db",
+    "query": "use",
+    "plan": {
+      "QueryType": "USE",
+      "Original": "use",
+      "Instructions": {
+        "OperatorType": "UpdateTarget"
+      }
+    }
+  }
+]
