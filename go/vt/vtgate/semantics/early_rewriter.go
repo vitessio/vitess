@@ -302,9 +302,14 @@ func (r *earlyRewriter) expandTableColumns(
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 			vt := tbl.GetVindexTable()
 			if vt != nil {
+				keyspace := vt.Keyspace
+				var ks sqlparser.IdentifierCS
+				if keyspace != nil {
+					ks = sqlparser.NewIdentifierCS(keyspace.Name)
+				}
 				tblName := sqlparser.TableName{
 					Name:      tblName.Name,
-					Qualifier: sqlparser.NewIdentifierCS(vt.Keyspace.Name),
+					Qualifier: ks,
 				}
 				expandedColumns[tblName] = append(expandedColumns[tblName], colName)
 			}
