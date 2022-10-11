@@ -27,47 +27,47 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { Link } from 'react-router-dom';
 
 const TopologyLink: React.FC<{ clusterID: string }> = ({ clusterID, children }) => {
-  const to = {
-    pathname: `/topology/${clusterID}`,
-  };
+    const to = {
+        pathname: `/topology/${clusterID}`,
+    };
 
-  return (
-    <Link className="font-bold" to={to}>
-      {children}
-    </Link>
-  );
+    return (
+        <Link className="font-bold" to={to}>
+            {children}
+        </Link>
+    );
 };
 export const Topology = () => {
-  useDocumentTitle('Topology');
-  const { data } = useClusters();
+    useDocumentTitle('Topology');
+    const { data } = useClusters();
 
-  const rows = React.useMemo(() => {
-    return orderBy(data, ['name']);
-  }, [data]);
+    const rows = React.useMemo(() => {
+        return orderBy(data, ['name']);
+    }, [data]);
 
-  const renderRows = (rows: pb.Cluster[]) =>
-    rows.map((cluster, idx) => (
-      <tr key={idx}>
-        <DataCell>{cluster.name}</DataCell>
-        <DataCell>{cluster.id}</DataCell>
-        <DataCell>
-          <TopologyLink clusterID={cluster.id}>View Topology</TopologyLink>
-        </DataCell>
-      </tr>
-    ));
+    const renderRows = (rows: pb.Cluster[]) =>
+        rows.map((cluster, idx) => (
+            <tr key={idx}>
+                <DataCell>{cluster.name}</DataCell>
+                <DataCell>{cluster.id}</DataCell>
+                <DataCell>
+                    <TopologyLink clusterID={cluster.id}>View Topology</TopologyLink>
+                </DataCell>
+            </tr>
+        ));
 
-  return (
-    <div>
-      <WorkspaceHeader>
-        <WorkspaceTitle>Topology</WorkspaceTitle>
-      </WorkspaceHeader>
+    return (
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Topology</WorkspaceTitle>
+            </WorkspaceHeader>
 
-      <ContentContainer>
-        <div className="max-w-screen-sm">
-          <div className="text-xl font-bold">Clusters</div>
-          <DataTable columns={['Name', 'Id', 'Topology']} data={rows} renderRows={renderRows} />
+            <ContentContainer>
+                <div className="max-w-screen-sm">
+                    <div className="text-xl font-bold">Clusters</div>
+                    <DataTable columns={['Name', 'Id', 'Topology']} data={rows} renderRows={renderRows} />
+                </div>
+            </ContentContainer>
         </div>
-      </ContentContainer>
-    </div>
-  );
+    );
 };

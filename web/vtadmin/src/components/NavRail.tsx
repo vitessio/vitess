@@ -23,78 +23,78 @@ import { getTableDefinitions } from '../util/tableDefinitions';
 import VitessLogo from './VitessLogo';
 
 export const NavRail = () => {
-  const { data: clusters = [] } = useClusters();
-  const { data: keyspaces = [] } = useKeyspaces();
-  const { data: gates = [] } = useGates();
-  const { data: schemas = [] } = useSchemas();
-  const { data: tablets = [] } = useTablets();
-  const { data: vtctlds = [] } = useVtctlds();
-  const { data: workflows = [] } = useWorkflows();
+    const { data: clusters = [] } = useClusters();
+    const { data: keyspaces = [] } = useKeyspaces();
+    const { data: gates = [] } = useGates();
+    const { data: schemas = [] } = useSchemas();
+    const { data: tablets = [] } = useTablets();
+    const { data: vtctlds = [] } = useVtctlds();
+    const { data: workflows = [] } = useWorkflows();
 
-  const tds = React.useMemo(() => getTableDefinitions(schemas), [schemas]);
+    const tds = React.useMemo(() => getTableDefinitions(schemas), [schemas]);
 
-  return (
-    <div className={style.container}>
-      <Link className={style.logoContainer} to="/">
-        <VitessLogo className="h-[40px]" />
-      </Link>
+    return (
+        <div className={style.container}>
+            <Link className={style.logoContainer} to="/">
+                <VitessLogo className="h-[40px]" />
+            </Link>
 
-      <div className={style.navLinks}>
-        <ul className={style.navList}>
-          <li>
-            <NavRailLink hotkey="C" text="Clusters" to="/clusters" count={clusters.length} />
-          </li>
-          <li>
-            <NavRailLink hotkey="G" text="Gates" to="/gates" count={gates.length} />
-          </li>
-          <li>
-            <NavRailLink hotkey="K" text="Keyspaces" to="/keyspaces" count={keyspaces.length} />
-          </li>
-          <li>
-            <NavRailLink hotkey="S" text="Schemas" to="/schemas" count={tds.length} />
-          </li>
-          <li>
-            <NavRailLink hotkey="T" text="Tablets" to="/tablets" count={tablets.length} />
-          </li>
-          <li>
-            <NavRailLink hotkey="V" text="vtctlds" to="/vtctlds" count={vtctlds.length} />
-          </li>
-          <li>
-            <NavRailLink hotkey="W" text="Workflows" to="/workflows" count={workflows.length} />
-          </li>
-        </ul>
+            <div className={style.navLinks}>
+                <ul className={style.navList}>
+                    <li>
+                        <NavRailLink hotkey="C" text="Clusters" to="/clusters" count={clusters.length} />
+                    </li>
+                    <li>
+                        <NavRailLink hotkey="G" text="Gates" to="/gates" count={gates.length} />
+                    </li>
+                    <li>
+                        <NavRailLink hotkey="K" text="Keyspaces" to="/keyspaces" count={keyspaces.length} />
+                    </li>
+                    <li>
+                        <NavRailLink hotkey="S" text="Schemas" to="/schemas" count={tds.length} />
+                    </li>
+                    <li>
+                        <NavRailLink hotkey="T" text="Tablets" to="/tablets" count={tablets.length} />
+                    </li>
+                    <li>
+                        <NavRailLink hotkey="V" text="vtctlds" to="/vtctlds" count={vtctlds.length} />
+                    </li>
+                    <li>
+                        <NavRailLink hotkey="W" text="Workflows" to="/workflows" count={workflows.length} />
+                    </li>
+                </ul>
 
-        <ul className={style.navList}>
-          <li>
-            <NavRailLink icon={Icons.download} text="Backups" to="/backups" />
-          </li>
-          <li>
-            <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
-          </li>
-          <li>
-            <NavRailLink icon={Icons.topology} text="Topology" to="/topology" />
-          </li>
-        </ul>
-      </div>
-    </div>
-  );
+                <ul className={style.navList}>
+                    <li>
+                        <NavRailLink icon={Icons.download} text="Backups" to="/backups" />
+                    </li>
+                    <li>
+                        <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
+                    </li>
+                    <li>
+                        <NavRailLink icon={Icons.topology} text="Topology" to="/topology" />
+                    </li>
+                </ul>
+            </div>
+        </div>
+    );
 };
 
 interface LinkProps {
-  count?: number;
-  hotkey?: string;
-  icon?: Icons;
-  text: string;
-  to: string;
+    count?: number;
+    hotkey?: string;
+    icon?: Icons;
+    text: string;
+    to: string;
 }
 
 const NavRailLink = ({ count, hotkey, icon, text, to }: LinkProps) => {
-  return (
-    <NavLink activeClassName={style.navLinkActive} className={style.navLink} to={to}>
-      {icon && <Icon className={style.icon} icon={icon} />}
-      {hotkey && !icon && <div className={style.hotkey} data-hotkey={hotkey.toUpperCase()} />}
-      <div className="ml-4">{text}</div>
-      {typeof count === 'number' && <div className={style.badge}>{count}</div>}
-    </NavLink>
-  );
+    return (
+        <NavLink activeClassName={style.navLinkActive} className={style.navLink} to={to}>
+            {icon && <Icon className={style.icon} icon={icon} />}
+            {hotkey && !icon && <div className={style.hotkey} data-hotkey={hotkey.toUpperCase()} />}
+            <div className="ml-4">{text}</div>
+            {typeof count === 'number' && <div className={style.badge}>{count}</div>}
+        </NavLink>
+    );
 };

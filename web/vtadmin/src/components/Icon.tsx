@@ -17,38 +17,38 @@ import * as React from 'react';
 import * as icons from '../icons';
 
 interface Props {
-  className?: string;
-  icon: Icons;
-  tabIndex?: number;
+    className?: string;
+    icon: Icons;
+    tabIndex?: number;
 }
 
 // All icons are from the VTAdmin Figma icon library:
 // https://www.figma.com/file/By3SoETBRHpOirv3Ctfxdq/Designs
 export const Icon = React.forwardRef<any, Props>(({ icon, ...props }, ref) => {
-  const componentName = icon.charAt(0).toUpperCase() + icon.slice(1);
+    const componentName = icon.charAt(0).toUpperCase() + icon.slice(1);
 
-  const IconComponent = (icons as any)[componentName];
-  if (!IconComponent) {
-    console.warn(`Invalid icon: ${icon}`);
-    return null;
-  }
+    const IconComponent = (icons as any)[componentName];
+    if (!IconComponent) {
+        console.warn(`Invalid icon: ${icon}`);
+        return null;
+    }
 
-  return <IconComponent {...props} ref={ref} />;
+    return <IconComponent {...props} ref={ref} />;
 });
 
 export enum Icons {
-  alertFail = 'alertFail',
-  bug = 'bug',
-  checkSuccess = 'checkSuccess',
-  chevronDown = 'chevronDown',
-  chevronUp = 'chevronUp',
-  circleAdd = 'circleAdd',
-  delete = 'delete',
-  download = 'download',
-  info = 'info',
-  open = 'open',
-  question = 'question',
-  runQuery = 'runQuery',
-  search = 'search',
-  topology = 'topology',
+    alertFail = 'alertFail',
+    bug = 'bug',
+    checkSuccess = 'checkSuccess',
+    chevronDown = 'chevronDown',
+    chevronUp = 'chevronUp',
+    circleAdd = 'circleAdd',
+    delete = 'delete',
+    download = 'download',
+    info = 'info',
+    open = 'open',
+    question = 'question',
+    runQuery = 'runQuery',
+    search = 'search',
+    topology = 'topology',
 }

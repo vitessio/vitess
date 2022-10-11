@@ -68,8 +68,10 @@ import {
     rebuildKeyspaceGraph,
     removeKeyspaceCell,
     createShard,
+    GetTopologyPathParams,
+    getTopologyPath,
 } from '../api/http';
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -553,4 +555,14 @@ export const useCreateShard = (
     return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
         return createShard(params);
     }, options);
+};
+
+/**
+ * useTopologyPath is a query hook that fetches a cell at the specified path in the topology server.
+ */
+export const useTopologyPath = (
+    params: GetTopologyPathParams,
+    options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
+) => {
+    return useQuery(['topology-path', params], () => getTopologyPath(params));
 };

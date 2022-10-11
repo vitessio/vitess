@@ -42,101 +42,101 @@ import { Topology } from './routes/topology/Topology';
 import { ClusterTopology } from './routes/topology/ClusterTopology';
 
 export const App = () => {
-  return (
-    <Router>
-      <div className={style.container}>
-        <div className={style.navContainer}>
-          <NavRail />
-        </div>
-        <SnackbarContainer />
-        <div className={style.mainContainer}>
-          <Switch>
-            <Route path="/backups">
-              <Backups />
-            </Route>
+    return (
+        <Router>
+            <div className={style.container}>
+                <div className={style.navContainer}>
+                    <NavRail />
+                </div>
+                <SnackbarContainer />
+                <div className={style.mainContainer}>
+                    <Switch>
+                        <Route path="/backups">
+                            <Backups />
+                        </Route>
 
-            <Route path="/clusters">
-              <Clusters />
-            </Route>
+                        <Route path="/clusters">
+                            <Clusters />
+                        </Route>
 
-            <Route path="/gates">
-              <Gates />
-            </Route>
+                        <Route path="/gates">
+                            <Gates />
+                        </Route>
 
-            <Route exact path="/keyspaces">
-              <Keyspaces />
-            </Route>
+                        <Route exact path="/keyspaces">
+                            <Keyspaces />
+                        </Route>
 
-            {!isReadOnlyMode() && (
-              <Route exact path="/keyspaces/create">
-                <CreateKeyspace />
-              </Route>
-            )}
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/keyspaces/create">
+                                <CreateKeyspace />
+                            </Route>
+                        )}
 
-            <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
-              <Shard />
-            </Route>
+                        <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
+                            <Shard />
+                        </Route>
 
-            <Route path="/keyspace/:clusterID/:name">
-              <Keyspace />
-            </Route>
+                        <Route path="/keyspace/:clusterID/:name">
+                            <Keyspace />
+                        </Route>
 
-            <Route path="/schemas">
-              <Schemas />
-            </Route>
+                        <Route path="/schemas">
+                            <Schemas />
+                        </Route>
 
-            <Route path="/schema/:clusterID/:keyspace/:table">
-              <Schema />
-            </Route>
+                        <Route path="/schema/:clusterID/:keyspace/:table">
+                            <Schema />
+                        </Route>
 
-            <Route path="/tablets">
-              <Tablets />
-            </Route>
+                        <Route path="/tablets">
+                            <Tablets />
+                        </Route>
 
-            <Route path="/tablet/:clusterID/:alias">
-              <Tablet />
-            </Route>
+                        <Route path="/tablet/:clusterID/:alias">
+                            <Tablet />
+                        </Route>
 
-            <Route path="/vtctlds">
-              <Vtctlds />
-            </Route>
+                        <Route path="/vtctlds">
+                            <Vtctlds />
+                        </Route>
 
-            <Route path="/vtexplain">
-              <VTExplain />
-            </Route>
+                        <Route path="/vtexplain">
+                            <VTExplain />
+                        </Route>
 
-            <Route path="/workflows">
-              <Workflows />
-            </Route>
+                        <Route path="/workflows">
+                            <Workflows />
+                        </Route>
 
-            <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
-              <Stream />
-            </Route>
+                        <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
+                            <Stream />
+                        </Route>
 
-            <Route path="/workflow/:clusterID/:keyspace/:name">
-              <Workflow />
-            </Route>
+                        <Route path="/workflow/:clusterID/:keyspace/:name">
+                            <Workflow />
+                        </Route>
 
-            <Route path="/topology/:clusterID">
-              <ClusterTopology />
-            </Route>
+                        <Route path="/topology/:clusterID">
+                            <ClusterTopology />
+                        </Route>
 
-            <Route path="/topology">
-              <Topology />
-            </Route>
+                        <Route path="/topology">
+                            <Topology />
+                        </Route>
 
-            <Route path="/settings">
-              <Settings />
-            </Route>
+                        <Route path="/settings">
+                            <Settings />
+                        </Route>
 
-            <Redirect exact from="/" to="/schemas" />
+                        <Redirect exact from="/" to="/schemas" />
 
-            <Route>
-              <Error404 />
-            </Route>
-          </Switch>
-        </div>
-      </div>
-    </Router>
-  );
+                        <Route>
+                            <Error404 />
+                        </Route>
+                    </Switch>
+                </div>
+            </div>
+        </Router>
+    );
 };
