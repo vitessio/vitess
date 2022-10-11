@@ -51,17 +51,17 @@ bootstrap.sh @deepthi
 /go/vt/vtgate @harshit-gangal @systay @frouioui @GuptaManan100
 /go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
 /go/vt/vttablet/queryservice @harshit-gangal @systay
-/go/vt/vttablet/tabletmanager @deepthi @shlomi-noach @rsajwani
+/go/vt/vttablet/tabletmanager @deepthi @shlomi-noach @rsajwani @rohit-nayak-ps
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps @mattlord
-/go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach
+/go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach @rohit-nayak-ps
 /go/vt/vttablet/tabletserver/messager @mattlord @rohit-nayak-ps @derekperkins
 /go/vt/wrangler @deepthi @rohit-nayak-ps @mattlord
 /go/vt/workflow @rohit-nayak-ps @mattlord
 /proto/vtadmin.proto @ajm188 @doeg @notfelineit
 /proto/vtctldata.proto @ajm188 @notfelineit
 /proto/vtctlservice.proto @ajm188 @notfelineit
-/test/ @GuptaManan100 @frouioui
-/tools/ @frouioui
+/test/ @GuptaManan100 @frouioui @rohit-nayak-ps
+/tools/ @frouioui @rohit-nayak-ps
 /web/vtadmin @ajm188 @doeg @notfelineit
 /web/vtctld2 @notfelineit @rohit-nayak-ps
