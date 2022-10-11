@@ -81,6 +81,7 @@ const (
 	alterSchemaMigrationsComponentThrottled            = "ALTER TABLE _vt.schema_migrations add column component_throttled tinytext NOT NULL"
 	alterSchemaMigrationsCancelledTimestamp            = "ALTER TABLE _vt.schema_migrations add column cancelled_timestamp timestamp NULL DEFAULT NULL"
 	alterSchemaMigrationsTablePostponeLaunch           = "ALTER TABLE _vt.schema_migrations add column postpone_launch tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsStage                         = "ALTER TABLE _vt.schema_migrations add column stage text not null"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -199,6 +200,11 @@ const (
 	`
 	sqlUpdateSpecialPlan = `UPDATE _vt.schema_migrations
 			SET special_plan=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateStage = `UPDATE _vt.schema_migrations
+			SET stage=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -655,4 +661,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsComponentThrottled,
 	alterSchemaMigrationsCancelledTimestamp,
 	alterSchemaMigrationsTablePostponeLaunch,
+	alterSchemaMigrationsStage,
 }
