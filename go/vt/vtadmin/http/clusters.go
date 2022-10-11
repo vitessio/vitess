@@ -18,12 +18,43 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/errors"
 )
 
 // GetClusters implements the http wrapper for /clusters
 func GetClusters(ctx context.Context, r Request, api *API) *JSONResponse {
 	clusters, err := api.server.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 	return NewJSONResponse(clusters, err)
+}
+
+// GetTopologyPath implements the http wrapper for /cluster/{cluster_id}/topology
+//
+// Query params: none
+//
+// Body params:
+// - path: string
+func GetTopologyPath(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var params struct {
+		Path string `json:"path"`
+	}
+
+	if err := decoder.Decode(&params); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := r.Vars()
+
+	result, err := api.server.GetTopologyPath(ctx, &vtadminpb.GetTopologyPathRequest{
+		ClusterId: vars["cluster_id"],
+		Path:      params.Path,
+	})
+	return NewJSONResponse(result, err)
 }
