@@ -17,120 +17,107 @@ import React from 'react';
 import { MarkerType, Node, Edge } from 'react-flow-renderer';
 import { vtctldata } from '../../../proto/vtadmin';
 
-interface IGetTopologyResponse {
-
-  /** GetTopologyResponse cells */
-  cells?: (ITopologyCell[] | null);
+export interface TopologyCell {
+    name?: string;
+    data?: string;
+    path: string;
+    children?: TopologyCellChild[];
 }
 
-interface ITopologyCell {
+export type TopologyCellChild = string | TopologyCell;
 
-  /** TopologyCell name */
-  name?: (string | null);
-
-  /** TopologyCell data */
-  data?: (string | null);
-
-  /** TopologyCell children */
-  children?: (ITopologyCell[] | null);
-}
-
-export const generateGraph = (topology: IGetTopologyResponse): { nodes: Array<Node>; edges: Array<Edge> } => {
-  const nodes: Array<Node> = [];
-  const edges: Array<Edge> = [];
-
-  let offset = 0;
-  topology.cells?.forEach((cell, i) => {
-    const { nodes: childNodes, edges: childEdges } = getNodesAndEdges(cell, cell.name as string, 0, i + offset);
-    nodes.push(...childNodes);
-    edges.push(...childEdges);
-    offset += maxWidth(cell);
-  });
-
-  return {
-    nodes,
-    edges,
-  };
+export const generateGraph = (
+    topology: vtctldata.GetTopologyPathResponse
+): { nodes: Array<Node>; edges: Array<Edge> } => {
+    return getNodesAndEdges(topology.cell as TopologyCell, '', -1, 0);
 };
 
 const getNodesAndEdges = (
-  cell: ITopologyCell,
-  path: string,
-  depth: number,
-  width: number
+    cell: TopologyCellChild,
+    path: string,
+    depth: number,
+    width: number
 ): { nodes: Array<Node>; edges: Array<Edge> } => {
-  const nodes: Array<Node> = [];
-  const edges: Array<Edge> = [];
+    const isCell = typeof cell !== 'string';
+    const isString = !isCell;
+    const nodes: Array<Node> = [];
+    const edges: Array<Edge> = [];
 
-  const parentNode: Node = {
-    id: path,
-    position: { y: depth * 100, x: width * 150 },
-    style: { width: 'min-content' },
-    data: {
-      label: cell.data ? (
-        <div className="w-fit">
-          <div className="font-bold">{cell.name}</div>
-          <div className="mt-1 bg-gray-100 p-2 text-[10px] text-left font-mono whitespace-normal">
-            {cell.data}
-          </div>
-        </div>
-      ) : (
-        <div className="font-bold">{cell.name}</div>
-      ),
-    },
-  };
+    if (isString || cell.name) {
+        const parentNode: Node = {
+            id: path,
+            position: { y: depth * 100, x: width * 150 },
+            style: { width: 'min-content' },
+            data: {
+                label:
+                    isCell && cell?.data ? (
+                        <div className="w-fit">
+                            <div className="font-bold">{cell.name}</div>
+                            <div className="mt-1 bg-gray-100 p-2 text-[10px] text-left font-mono whitespace-normal">
+                                {cell.data}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="font-bold">{typeof cell === 'string' ? cell : cell.name}</div>
+                    ),
+            },
+        };
 
-  if (depth === 0) {
-    parentNode.type = 'input';
-  }
+        if (depth === 0) {
+            parentNode.type = 'input';
+        }
 
-  if (!cell.children) {
-    parentNode.type = 'output';
-  }
+        if (isCell && !cell?.children) {
+            parentNode.type = 'output';
+        }
 
-  nodes.push(parentNode);
+        nodes.push(parentNode);
+    }
 
-  if (cell.children) {
-    let offset = 0;
-    cell.children.forEach((child, i) => {
-      const childPath = `${path}/${child.name}`;
-      edges.push({
-        id: `${path}-${childPath}`,
-        source: path,
-        target: childPath,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-        },
-      });
-      const { nodes: childNodes, edges: childEdges } = getNodesAndEdges(
-        child,
-        childPath,
-        depth + 1,
-        width + offset
-      );
-      nodes.push(...childNodes);
-      edges.push(...childEdges);
-      offset += maxWidth(child);
-    });
-  }
+    if (isCell && cell?.children) {
+        let offset = 0;
+        cell.children.forEach((child, i) => {
+            const childPath = `${path}/${child}`;
+            if (path !== '') {
+                edges.push({
+                    id: `${path}-${childPath}`,
+                    source: path,
+                    target: childPath,
+                    markerEnd: {
+                        type: MarkerType.ArrowClosed,
+                    },
+                });
+            }
 
-  return {
-    nodes,
-    edges,
-  };
+            const { nodes: childNodes, edges: childEdges } = getNodesAndEdges(
+                child,
+                childPath,
+                depth + 1,
+                width + offset
+            );
+            nodes.push(...childNodes);
+            edges.push(...childEdges);
+            offset += maxWidth(child);
+        });
+    }
+
+    return {
+        nodes,
+        edges,
+    };
 };
 
-const maxWidth = (cell: ITopologyCell): number => {
-  let width = 0;
+const maxWidth = (cell: TopologyCellChild): number => {
+    let width = 0;
 
-  if (!cell.children) {
-    return 1;
-  }
+    if (typeof cell == 'string') {
+        return 1;
+    }
 
-  cell.children?.forEach((child) => {
-    const childWidth = maxWidth(child);
-    width += childWidth;
-  });
+    cell.children?.forEach((child) => {
+        const childWidth = maxWidth(child);
+        width += childWidth;
+    });
 
-  return width;
+    return width;
 };

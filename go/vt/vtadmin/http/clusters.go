@@ -57,29 +57,15 @@ func Validate(ctx context.Context, r Request, api *API) *JSONResponse {
 
 // GetTopologyPath implements the http wrapper for /cluster/{cluster_id}/topology
 //
-// Query params: none
-//
-// Body params:
+// Query params:
 // - path: string
 func GetTopologyPath(ctx context.Context, r Request, api *API) *JSONResponse {
-	decoder := json.NewDecoder(r.Body)
-	defer r.Body.Close()
-
-	var params struct {
-		Path string `json:"path"`
-	}
-
-	if err := decoder.Decode(&params); err != nil {
-		return NewJSONResponse(nil, &errors.BadRequest{
-			Err: err,
-		})
-	}
-
 	vars := r.Vars()
+	query := r.URL.Query()
 
 	result, err := api.server.GetTopologyPath(ctx, &vtadminpb.GetTopologyPathRequest{
 		ClusterId: vars["cluster_id"],
-		Path:      params.Path,
+		Path:      query["path"][0],
 	})
 	return NewJSONResponse(result, err)
 }

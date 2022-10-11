@@ -15,7 +15,7 @@
  */
 import React, { useEffect } from 'react';
 
-// import { useTopology } from '../../../hooks/api';
+import { useTopologyPath } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
@@ -25,91 +25,91 @@ import { Link, useParams } from 'react-router-dom';
 import { generateGraph } from './Nodes';
 
 import ReactFlow, {
-  addEdge,
-  MiniMap,
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
-  Connection,
+    addEdge,
+    MiniMap,
+    Controls,
+    Background,
+    useNodesState,
+    useEdgesState,
+    Connection,
 } from 'react-flow-renderer';
 
 export const ClusterTopology = () => {
-  interface RouteParams {
-    clusterID: string;
-  }
-  useDocumentTitle('Cluster');
-  const { clusterID } = useParams<RouteParams>();
-  // const { data } = useTopology({ clusterID });
-  const data = null
-  const { nodes: initialNodes, edges: initialEdges } = data ? generateGraph(data) : { nodes: [], edges: [] };
+    interface RouteParams {
+        clusterID: string;
+    }
+    useDocumentTitle('Cluster');
+    const { clusterID } = useParams<RouteParams>();
+    const { data } = useTopologyPath({ clusterID, path: '/' });
+    const { nodes: initialNodes, edges: initialEdges } = data ? generateGraph(data) : { nodes: [], edges: [] };
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
-  if (!data) {
+    useEffect(() => {
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data]);
+
+    if (!data) {
+        return (
+            <div>
+                <WorkspaceHeader>
+                    <NavCrumbs>
+                        <Link to="/topology">Topology</Link>
+                    </NavCrumbs>
+
+                    <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
+                </WorkspaceHeader>
+
+                <ContentContainer>404</ContentContainer>
+            </div>
+        );
+    }
+
+    const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
+
     return (
-      <div>
-        <WorkspaceHeader>
-          <NavCrumbs>
-            <Link to="/topology">Topology</Link>
-          </NavCrumbs>
+        <div>
+            <WorkspaceHeader>
+                <NavCrumbs>
+                    <Link to="/topology">Topology</Link>
+                </NavCrumbs>
 
-          <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
-        </WorkspaceHeader>
+                <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
+            </WorkspaceHeader>
 
-        <ContentContainer>404</ContentContainer>
-      </div>
+            <ContentContainer className="lg:w-[1400px] lg:h-[1200px] md:w-[900px] md:h-[800px]">
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    fitView
+                    attributionPosition="top-right"
+                >
+                    <MiniMap
+                        nodeStrokeColor={(n) => {
+                            if (n.style?.background) return n.style.background as string;
+                            if (n.type === 'input') return '#0041d0';
+                            if (n.type === 'output') return '#ff0072';
+                            if (n.type === 'default') return '#1a192b';
+
+                            return '#eee';
+                        }}
+                        nodeColor={(n) => {
+                            if (n.style?.background) return n.style.background as string;
+
+                            return '#fff';
+                        }}
+                        nodeBorderRadius={2}
+                    />
+                    <Controls />
+                    <Background color="#aaa" gap={16} />
+                </ReactFlow>
+            </ContentContainer>
+        </div>
     );
-  }
-
-  const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
-
-  return (
-    <div>
-      <WorkspaceHeader>
-        <NavCrumbs>
-          <Link to="/topology">Topology</Link>
-        </NavCrumbs>
-
-        <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
-      </WorkspaceHeader>
-
-      <ContentContainer className="lg:w-[1400px] lg:h-[1200px] md:w-[900px] md:h-[800px]">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          fitView
-          attributionPosition="top-right"
-        >
-          <MiniMap
-            nodeStrokeColor={(n) => {
-              if (n.style?.background) return n.style.background as string;
-              if (n.type === 'input') return '#0041d0';
-              if (n.type === 'output') return '#ff0072';
-              if (n.type === 'default') return '#1a192b';
-
-              return '#eee';
-            }}
-            nodeColor={(n) => {
-              if (n.style?.background) return n.style.background as string;
-
-              return '#fff';
-            }}
-            nodeBorderRadius={2}
-          />
-          <Controls />
-          <Background color="#aaa" gap={16} />
-        </ReactFlow>
-      </ContentContainer>
-    </div>
-  );
 };

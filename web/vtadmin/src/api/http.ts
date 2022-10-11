@@ -749,7 +749,7 @@ export const createShard = async (params: CreateShardParams) => {
         method: 'post',
         body: JSON.stringify(params),
     });
-    const err = pb.CreateShardRequest.verify(result);
+    const err = vtctldata.CreateShardResponse.verify(result);
     if (err) throw Error(err);
 
     return vtctldata.CreateShardResponse.create(result);
@@ -825,4 +825,20 @@ export const validateVersionShard = async (params: ValidateVersionShardParams) =
     if (err) throw Error(err);
 
     return vtctldata.ValidateVersionShardResponse.create(result);
+}
+export interface GetTopologyPathParams {
+    clusterID: string;
+    path: string;
+}
+
+export const getTopologyPath = async (params: GetTopologyPathParams) => {
+    const req = new URLSearchParams();
+    req.append('path', params.path);
+
+    const { result } = await vtfetch(`/api/cluster/${params.clusterID}/topology?${req}`);
+
+    const err = vtctldata.GetTopologyPathResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetTopologyPathResponse.create(result);
 };
