@@ -301,61 +301,17 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 //   - PlannedReparentShard
 //   - EmergencyReparentShard
 //
+// * any vtorc recovery e.g
+//   - RecoverDeadPrimary
+//   - ElectNewPrimary
+//   - FixPrimary
+//
+// * before any replication repair from replication manager
+//
 // * operations that we don't want to conflict with re-parenting:
 //   - DeleteTablet when it's the shard's current primary
 func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
-	i, ok := ctx.Value(locksKey).(*locksInfo)
-	if !ok {
-		i = &locksInfo{
-			info: make(map[string]*lockInfo),
-		}
-		ctx = context.WithValue(ctx, locksKey, i)
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	// check that we're not already locked
-	mapKey := keyspace + "/" + shard
-	if _, ok = i.info[mapKey]; ok {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for shard %v/%v is already held", keyspace, shard)
-	}
-
-	// lock
-	l := newLock(action)
-	lockDescriptor, err := l.lockShard(ctx, ts, keyspace, shard)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// and update our structure
-	i.info[mapKey] = &lockInfo{
-		lockDescriptor: lockDescriptor,
-		actionNode:     l,
-	}
-	return ctx, func(finalErr *error) {
-		i.mu.Lock()
-		defer i.mu.Unlock()
-
-		if _, ok := i.info[mapKey]; !ok {
-			if *finalErr != nil {
-				log.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
-			} else {
-				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock shard %v/%v multiple times", keyspace, shard)
-			}
-			return
-		}
-
-		err := l.unlockShard(ctx, ts, keyspace, shard, lockDescriptor, *finalErr)
-		if *finalErr != nil {
-			if err != nil {
-				// both error are set, just log the unlock error
-				log.Warningf("unlockShard(%s/%s) failed: %v", keyspace, shard, err)
-			}
-		} else {
-			*finalErr = err
-		}
-		delete(i.info, mapKey)
-	}, nil
+	return ts.internalLockShard(ctx, keyspace, shard, action, true)
 }
 
 // TryLockShard will lock the shard, and return:
@@ -389,6 +345,10 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 // * operations that we don't want to conflict with re-parenting:
 //   - DeleteTablet when it's the shard's current primary
 func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+	return ts.internalLockShard(ctx, keyspace, shard, action, false)
+}
+
+func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action string, isBlocking bool) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -407,7 +367,13 @@ func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action stri
 
 	// lock
 	l := newLock(action)
-	lockDescriptor, err := l.tryLockShard(ctx, ts, keyspace, shard)
+	var lockDescriptor LockDescriptor
+	var err error
+	if isBlocking {
+		lockDescriptor, err = l.lockShard(ctx, ts, keyspace, shard)
+	} else {
+		lockDescriptor, err = l.tryLockShard(ctx, ts, keyspace, shard)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -468,6 +434,17 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 // lockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
 func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
+	return l.internalLockShard(ctx, ts, keyspace, shard, true)
+}
+
+// tryLockShard will lock the shard in the topology server.
+// It is non-blocking call for blocking call lockshard instead.
+// UnlockShard should be called if this returns no error.
+func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
+	return l.internalLockShard(ctx, ts, keyspace, shard, false)
+}
+
+func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
@@ -484,28 +461,8 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 	if err != nil {
 		return nil, err
 	}
-	return ts.globalCell.Lock(ctx, shardPath, j)
-}
-
-// tryLockShard will lock the shard in the topology server.
-// It is non-blocking call for blocking call lockshard instead.
-// UnlockShard should be called if this returns no error.
-func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
-	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
-
-	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
-	defer cancel()
-
-	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
-	span.Annotate("action", l.Action)
-	span.Annotate("keyspace", keyspace)
-	span.Annotate("shard", shard)
-	defer span.Finish()
-
-	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard)
-	j, err := l.ToJSON()
-	if err != nil {
-		return nil, err
+	if isBlocking {
+		return ts.globalCell.Lock(ctx, shardPath, j)
 	}
 	return ts.globalCell.TryLock(ctx, shardPath, j)
 }

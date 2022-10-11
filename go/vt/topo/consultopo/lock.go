@@ -73,16 +73,13 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	// if there is a folder '/locks' with some entries in it then we can assume that keyspace already have a lock
+	// if there is a file 'lock' in it then we can assume that keyspace already have a lock
 	// throw error in this case
 	for _, e := range entries {
 		path := string(e.Key[:])
 		if nodeUnderLockPath.MatchString(path) {
 			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
 		}
-
-		// TODO: instead of list should I call listDir and assume /locks directory only exists if there is a lock
-		// TODO: Should we check if all the children under lock is ephemeral
 	}
 
 	// everything is good lets acquire lock.
