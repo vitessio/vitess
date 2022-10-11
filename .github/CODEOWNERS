@@ -24,7 +24,7 @@ bootstrap.sh @deepthi
 /go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
 /go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
-/go/tools/ @frouioui
+/go/tools/ @frouioui @systay
 /go/vt/dbconnpool @harshit-gangal
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi @mattlord @rsajwani
