@@ -166,3 +166,18 @@ func TestBuiltinASCII(t *testing.T) {
 		compareRemoteExpr(t, conn, query)
 	}
 }
+
+func TestBuiltinRepeat(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	counts := []string{"-1", "1.2", "3"}
+
+	for _, str := range cases {
+		for _, cnt := range counts {
+			query := fmt.Sprintf("Repeat(%s, %s)", str, cnt)
+			compareRemoteExpr(t, conn, query)
+		}
+
+	}
+}

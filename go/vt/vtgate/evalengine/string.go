@@ -243,3 +243,38 @@ func (builtinASCII) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 	_, f := args[0].typeof(env)
 	return sqltypes.Int64, f
 }
+
+type builtinRepeat struct {
+}
+
+func (builtinRepeat) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	t := inarg.typeof()
+	repeatTime := &args[1]
+	if inarg.isNull() || repeatTime.isNull() {
+		result.setNull()
+		return
+	}
+
+	if sqltypes.IsNumber(t) {
+		inarg.makeTextual(env.DefaultCollation)
+	}
+	raw := inarg.value().Raw()
+
+	repeatTime.makeSignedIntegral()
+	var repeatStr []byte
+	for i := 0; i < int(repeatTime.int64()); i++ {
+		repeatStr = append(repeatStr, raw...)
+	}
+	result.setRaw(sqltypes.VarChar, repeatStr, inarg.collation())
+}
+
+func (builtinRepeat) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 2 {
+		throwArgError("REPEAT")
+	}
+	_, f1 := args[0].typeof(env)
+	_, f2 := args[1].typeof(env)
+
+	return sqltypes.VarChar, f1 & f2
+}
