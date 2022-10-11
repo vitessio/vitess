@@ -853,7 +853,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer bufferingContextCancel()
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
-		// e.updateMigrationStage(ctx, onlineDDL.UUID, "toggling buffering: %t", bufferQueries)
+		log.Infof("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
 			// called after new table is in place.
@@ -864,14 +864,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		}
-		// e.updateMigrationStage(ctx, onlineDDL.UUID, "toggled buffering: %t", bufferQueries)
+		log.Infof("toggled buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
 		return nil
 	}
 
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
-			// e.updateMigrationStage(ctx, onlineDDL.UUID, "re-enabling writes")
+			log.Infof("re-enabling writes in migration %v", onlineDDL.UUID)
 			toggleBuffering(false)
 		})
 	}
