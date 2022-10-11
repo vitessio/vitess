@@ -851,7 +851,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer bufferingContextCancel()
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
-		e.updateMigrationStage(ctx, onlineDDL.UUID, "toggling buffering: %t", bufferQueries)
+		// e.updateMigrationStage(ctx, onlineDDL.UUID, "toggling buffering: %t", bufferQueries)
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
 			// called after new table is in place.
@@ -862,14 +862,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 		}
-		e.updateMigrationStage(ctx, onlineDDL.UUID, "toggled buffering: %t", bufferQueries)
+		// e.updateMigrationStage(ctx, onlineDDL.UUID, "toggled buffering: %t", bufferQueries)
 		return nil
 	}
 
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
-			e.updateMigrationStage(ctx, onlineDDL.UUID, "re-enabling writes")
+			// e.updateMigrationStage(ctx, onlineDDL.UUID, "re-enabling writes")
 			toggleBuffering(false)
 		})
 	}
@@ -1011,6 +1011,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}()
 
 	// Tables are now swapped! Migration is successful
+	e.updateMigrationStage(ctx, onlineDDL.UUID, "re-enabling writes")
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied, emptyHint)
 	return nil
