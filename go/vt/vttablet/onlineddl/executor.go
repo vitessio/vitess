@@ -669,7 +669,6 @@ func (e *Executor) isConnectionQueryRunning(ctx context.Context, connID int64, s
 	if err != nil {
 		return false, err
 	}
-	fmt.Printf("========= ZZZ checking process %v contains: %v\n", connID, submatch)
 	return strings.Contains(info, submatch), nil
 }
 
