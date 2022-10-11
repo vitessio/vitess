@@ -6,7 +6,6 @@ bootstrap.sh @deepthi
 /docker/ @derekperkins @dkhenry @mattlord
 /examples/compose @shlomi-noach @GuptaManan100 @frouioui
 /examples/demo @sougou @mattlord
-/examples/legacy_local @deepthi @GuptaManan100 @frouioui
 /examples/local @rohit-nayak-ps @frouioui @mattlord @GuptaManan100
 /examples/operator @GuptaManan100 @frouioui
 /examples/region_sharding @deepthi
