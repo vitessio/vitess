@@ -815,10 +815,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 	defer lockConn.Recycle()
-	defer func() {
-		e.updateMigrationStage(ctx, onlineDDL.UUID, "defer: unlocking tables")
-		_, _ = lockConn.Exec(ctx, sqlUnlockTables, 1, false)
-	}()
+	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return err
@@ -905,8 +902,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// real production
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking tables")
+		lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		defer cancel()
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
-		if _, err := lockConn.Exec(ctx, lockTableQuery.Query, 1, false); err != nil {
+		if _, err := lockConn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
 			return err
 		}
 
@@ -971,18 +970,29 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			// Normal (non-testing) alter table
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "dropping sentry table")
 			dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
-			if _, err := lockConn.Exec(ctx, dropTableQuery.Query, 1, false); err != nil {
-				return err
-			}
 
-			e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
-			if _, err := lockConn.Exec(ctx, sqlUnlockTables, 1, false); err != nil {
-				return err
+			{
+				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+				defer cancel()
+				if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
+					return err
+				}
 			}
-
-			e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for RENAME to complete")
-			if err := <-renameCompleteChan; err != nil {
-				return err
+			{
+				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+				defer cancel()
+				e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
+				if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
+					return err
+				}
+			}
+			{
+				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+				defer cancel()
+				e.updateMigrationStage(lockCtx, onlineDDL.UUID, "waiting for RENAME to complete")
+				if err := <-renameCompleteChan; err != nil {
+					return err
+				}
 			}
 		}
 	}
