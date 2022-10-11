@@ -16,7 +16,7 @@ second_output=$(git status --porcelain)
 diff=$(diff <( echo "$first_output") <( echo "$second_output"))
 
 if [[ "$diff" != "" ]]; then
-  echo "ERROR: Regenerated cache_size files do not match the current version."
+  echo "ERROR: Regenerated cached_size files do not match the current version."
   echo -e "List of files containing differences:\n$diff"
   exit 1
 fi
