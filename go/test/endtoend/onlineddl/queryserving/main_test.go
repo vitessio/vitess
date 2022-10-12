@@ -50,50 +50,66 @@ var (
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
-	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
-		if err != nil {
-			return 1
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_consolidator=false")
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--buffer_size", "10000",
-			"--buffer_window", "20s",
-			"--enable_buffer",
-			"--buffer_drain_concurrency", "100",
-			"--buffer_max_failover_duration", "30s",
-			"--buffer_min_time_between_failovers", "1m0s",
-			"--planner-version", "gen4")
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = clusterInstance.GetVTParams(KeyspaceName)
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	os.Exit(m.Run())
 }
 
-func TestOnlineDDLWithQueryServing(t *testing.T) {
+func createCluster(queryConsolidation bool) int {
+	clusterInstance = cluster.NewCluster(Cell, "localhost")
+
+	// Start topo server
+	err := clusterInstance.StartTopo()
+	if err != nil {
+		return 1
+	}
+
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name:      KeyspaceName,
+		SchemaSQL: SchemaSQL,
+		VSchema:   VSchema,
+	}
+	if !queryConsolidation {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_consolidator=false")
+	}
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+	if err != nil {
+		return 1
+	}
+
+	// Start vtgate
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+		"--buffer_size", "10000",
+		"--buffer_window", "20s",
+		"--enable_buffer",
+		"--buffer_drain_concurrency", "100",
+		"--buffer_max_failover_duration", "30s",
+		"--buffer_min_time_between_failovers", "1m0s",
+		"--planner-version", "gen4")
+	err = clusterInstance.StartVtgate()
+	if err != nil {
+		return 1
+	}
+
+	vtParams = clusterInstance.GetVTParams(KeyspaceName)
+	return 0
+}
+
+func TestOnlineDDLWithQueryServingWithConsolidation(t *testing.T) {
+	require.Zero(t,
+		createCluster(true))
+	defer clusterInstance.Teardown()
+	testOnlineDDLWithQueryServing(t)
+}
+
+func TestOnlineDDLWithQueryServingWithoutConsolidation(t *testing.T) {
+	require.Zero(t,
+		createCluster(false))
+	defer clusterInstance.Teardown()
+	testOnlineDDLWithQueryServing(t)
+}
+
+func testOnlineDDLWithQueryServing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
