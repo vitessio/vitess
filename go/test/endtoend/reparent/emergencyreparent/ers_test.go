@@ -387,7 +387,6 @@ func TestERSForInitialization(t *testing.T) {
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--init_populate_metadata",
 		"--track_schema_versions=true",
 	}
 

@@ -95,6 +95,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 // This is used to check that replication has caught up with the changes on primary.
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
 	timeout := time.Now().Add(1 * time.Minute)
+	lastNumRowsFound := 0
 	for time.Now().Before(timeout) {
 		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
 		// but eventually it will catch up and if not caught up in required time, testcase will fail
@@ -102,9 +103,13 @@ func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string,
 		if qr != nil && len(qr.Rows) == expectedRows {
 			return
 		}
+		if qr != nil {
+			lastNumRowsFound = len(qr.Rows)
+		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	assert.Fail(t, "expected rows not found.")
+	s := fmt.Sprintf("Want %d rows, got %d, in %s (%s.%s)", expectedRows, lastNumRowsFound, vttablet.Alias, ksName, tableName)
+	assert.Fail(t, s)
 }
 
 // VerifyRowsInTablet Verify total number of rows in a tablet
@@ -119,20 +124,6 @@ func PanicHandler(t *testing.T) {
 		return
 	}
 	require.Nilf(t, err, "panic occured in testcase %v", t.Name())
-}
-
-// VerifyLocalMetadata Verify Local Metadata of a tablet
-func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
-	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
-	require.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0][1]), fmt.Sprintf(`BLOB("%s")`, tablet.Alias))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1][1]), fmt.Sprintf(`BLOB("%s.%s")`, ksName, shardName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2][1]), fmt.Sprintf(`BLOB("%s")`, cell))
-	if tablet.Type == "replica" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("neutral")`)
-	} else if tablet.Type == "rdonly" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("must_not")`)
-	}
 }
 
 // ListBackups Lists back preset in shard
@@ -262,8 +253,8 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 		UnixSocket: socketPath,
 		Pass:       password,
 	}
-
-	if keyspace != "" {
+	cp.DbName = keyspace
+	if keyspace != "" && keyspace != "_vt" {
 		cp.DbName = "vt_" + keyspace
 	}
 

@@ -26,8 +26,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/pools"
@@ -83,9 +81,6 @@ var (
 			Type: sqltypes.Int64,
 		},
 	}
-	withDDL = withddl.New([]string{
-		mysql.CreateViewsTable,
-	})
 )
 
 func returnStreamResult(result *sqltypes.Result) error {
@@ -390,7 +385,7 @@ func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlpar
 }
 
 func execWithDDLView(ctx context.Context, conn *StatefulConnection, sql string) (*sqltypes.Result, error) {
-	return withDDL.Exec(ctx, sql, conn.Exec, conn.Exec)
+	return conn.Exec(ctx, sql, 10000, true)
 }
 
 func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlparser.DropView, bindVars map[string]*querypb.BindVariable, viewsMap map[string]int, viewNames []string) error {
@@ -1034,11 +1029,6 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	alterMigration, ok := qre.plan.FullStmt.(*sqlparser.AlterMigration)
 	if !ok {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_MIGRATION plan")
-	}
-
-	// Make sure schema exists
-	if err := qre.tsv.onlineDDLExecutor.PrepareForQueryExecutor(qre.ctx); err != nil {
-		return nil, err
 	}
 
 	switch alterMigration.Type {

@@ -394,3 +394,16 @@ BenchmarkCompressLz4Builtin
     PASS
     cleaning up "/var/folders/96/k7gzd7q10zdb749vr02q7sjh0000gn/T/ee7d47b45ef09786c54fa2d7354d2a68.dat"
 ```
+
+## Refactor
+
+### vtttablet _vt sidecar schema maintenance refactor
+
+v16 changes the way we maintain the _vt schema. Instead of using `withddl` introduced in #6348 we use a declarative
+approach. This is made possible by `schemadiff` which was created initially for Online DDL's declarative strategy.
+
+The desired schema is specified, one per table. A new module `sidecardb`, compares this to the existing schema and
+performs the required create or alter to reach it. This is done on the primary, on every vttablet startup.
+
+The sidecar tables `local_metadata` and `shard_metadata` are no longer in use and all references to them are removed as
+part of this refactor. There were used previously for Orchestrator support, which has been superseded by `vtorc`.

@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -32,17 +31,7 @@ import (
 )
 
 const (
-	vreplicationLogTableName   = "_vt.vreplication_log"
-	createVReplicationLogTable = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
-		id BIGINT(20) AUTO_INCREMENT,
-		vrepl_id INT NOT NULL,
-		type VARBINARY(256) NOT NULL,
-		state VARBINARY(100) NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		message text NOT NULL,
-		count BIGINT(20) NOT NULL DEFAULT 1,
-		PRIMARY KEY (id))`
+	vreplicationLogTableName = "_vt.vreplication_log"
 )
 
 const (
@@ -77,7 +66,7 @@ const (
 func getLastLog(dbClient *vdbClient, vreplID uint32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
 	query := fmt.Sprintf("select id, type, state, message from _vt.vreplication_log where vrepl_id = %d order by id desc limit 1", vreplID)
-	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if qr, err = dbClient.Execute(query); err != nil {
 		return 0, "", "", "", err
 	}
 	if len(qr.Rows) != 1 {
@@ -111,7 +100,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message s
 			strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
 	}
-	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if _, err = dbClient.ExecuteFetch(query, 10000); err != nil {
 		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
 	}
 	return nil

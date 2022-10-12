@@ -32,6 +32,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -58,6 +60,7 @@ import (
 
 func TestTabletServerHealthz(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2232,6 +2235,7 @@ func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *T
 
 func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	db := setupFakeDB(t)
+	sidecardb.AddVTSchemaInitQueries(db)
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
@@ -2279,16 +2283,6 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 		"update test_table set name_string = 'tx3' where pk = 2 and `name` = 1 limit 10001": {
 			RowsAffected: 1,
 		},
-		// queries for twopc
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
-		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
-		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
-		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
-		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
-		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
@@ -2389,6 +2383,7 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
+	sidecardb.AddVTSchemaInitQueries(db)
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}

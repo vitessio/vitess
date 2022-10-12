@@ -24,13 +24,12 @@ import (
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vttablet/onlineddl"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -38,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -105,6 +105,7 @@ var _ queryservice.QueryService = (*explainTablet)(nil)
 
 func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
+	sidecardb.AddVTSchemaInitQueries(db)
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
@@ -388,12 +389,6 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 	for query, result := range schemaQueries {
 		tEnv.addResult(query, result)
 	}
-	for _, query := range onlineddl.ApplyDDL {
-		tEnv.addResult(query, &sqltypes.Result{
-			Fields: []*querypb.Field{{Type: sqltypes.Uint64}},
-			Rows:   [][]sqltypes.Value{},
-		})
-	}
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
@@ -499,7 +494,13 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	// return the pre-computed results for any schema introspection queries
 	tEnv := t.vte.getGlobalTabletEnv()
 	result := tEnv.getResult(query)
-
+	emptyResult := &sqltypes.Result{}
+	if sidecardb.MatchesVTInitQuery(query) {
+		return callback(emptyResult)
+	}
+	if strings.HasPrefix(query, "use _vt") || strings.HasPrefix(query, "CREATE TABLE _vt") || strings.HasPrefix(query, "ALTER TABLE _vt") || strings.HasPrefix(query, "CREATE TABLE IF NOT EXISTS _vt") {
+		return callback(emptyResult)
+	}
 	if result != nil {
 		return callback(result)
 	}

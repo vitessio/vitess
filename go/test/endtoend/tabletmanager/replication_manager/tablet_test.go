@@ -164,15 +164,27 @@ func waitForSourcePort(ctx context.Context, t *testing.T, tablet cluster.Vttable
 	return fmt.Errorf("time out before source port became %v for %v", expectedPort, tablet.Alias)
 }
 
+func getSidecarDbDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
+	vars := primaryTablet.VttabletProcess.GetVars()
+	val, ok := vars["SidecarDbDDLQueryCount"]
+	if !ok {
+		return 0, fmt.Errorf("SidecarDbDDLQueryCount not found in debug/vars")
+	}
+	return int64(val.(float64)), nil
+}
 func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	ctx := context.Background()
 	// Check that initially replication is setup correctly on the replica tablet
 	err := waitForSourcePort(ctx, t, replicaTablet, int32(primaryTablet.MySQLPort))
 	require.NoError(t, err)
 
+	sidecarDDLCount, err := getSidecarDbDDLQueryCount(primaryTablet.VttabletProcess)
+	require.NoError(t, err)
+	// sidecar db should create all _vt tables when vttablet started
+	require.NotZero(t, sidecarDDLCount)
+
 	// Stop the primary tablet
 	stopTablet(t, primaryTablet)
-
 	// Change the MySQL port of the primary tablet
 	newMysqlPort := clusterInstance.GetAndReservePort()
 	primaryTablet.MySQLPort = newMysqlPort
@@ -184,4 +196,9 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	// Let replication manager repair replication
 	err = waitForSourcePort(ctx, t, replicaTablet, int32(newMysqlPort))
 	require.NoError(t, err)
+
+	sidecarDDLCount, err = getSidecarDbDDLQueryCount(primaryTablet.VttabletProcess)
+	require.NoError(t, err)
+	// sidecardb should find the desired _vt schema and not apply any new creates or upgrades when the tablet comes up again
+	require.Zero(t, sidecarDDLCount)
 }

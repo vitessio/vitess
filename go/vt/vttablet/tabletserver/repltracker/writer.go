@@ -24,8 +24,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,19 +40,8 @@ import (
 )
 
 const (
-	sqlCreateSidecarDB      = "create database if not exists %s"
-	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
-  keyspaceShard VARBINARY(256) NOT NULL PRIMARY KEY,
-  tabletUid INT UNSIGNED NOT NULL,
-  ts BIGINT UNSIGNED NOT NULL
-        ) engine=InnoDB`
 	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
 )
-
-var withDDL = withddl.New([]string{
-	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
-	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
-})
 
 // heartbeatWriter runs on primary tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
@@ -221,7 +208,7 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer appConn.Recycle()
-	_, err = withDDL.Exec(ctx, upsert, appConn.ExecuteFetch, allPrivsConn.ExecuteFetch)
+	_, err = appConn.ExecuteFetch(upsert, 10000, false)
 	if err != nil {
 		return err
 	}

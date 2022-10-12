@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/assert"
@@ -1548,6 +1550,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 		"varchar|int64"),
 		"Innodb_rows_read|0",
 	))
+	sidecardb.AddVTSchemaInitQueries(db)
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1560,16 +1563,6 @@ func getTestTableFields() []*querypb.Field {
 
 func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 	queryResultMap := map[string]*sqltypes.Result{
-		// queries for twopc
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
-		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
-		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
-		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
-		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
-		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
@@ -1650,6 +1643,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 
+	sidecardb.AddVTSchemaInitQueries(db)
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}
