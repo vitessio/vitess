@@ -740,6 +740,10 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 
 // cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
+	if err := e.incrementCutoverAttempts(ctx, s.workflow); err != nil {
+		return err
+	}
+
 	tmClient := e.tabletManagerClient()
 	defer tmClient.Close()
 
@@ -3895,6 +3899,17 @@ func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage 
 	log.Infof("updateMigrationStage: uuid=%s, stage=%s", uuid, msg)
 	query, err := sqlparser.ParseAndBind(sqlUpdateStage,
 		sqltypes.StringBindVariable(msg),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) incrementCutoverAttempts(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlIncrementCutoverAttempts,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

@@ -82,6 +82,7 @@ const (
 	alterSchemaMigrationsCancelledTimestamp            = "ALTER TABLE _vt.schema_migrations add column cancelled_timestamp timestamp NULL DEFAULT NULL"
 	alterSchemaMigrationsTablePostponeLaunch           = "ALTER TABLE _vt.schema_migrations add column postpone_launch tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsStage                         = "ALTER TABLE _vt.schema_migrations add column stage text not null"
+	alterSchemaMigrationsCutoverAttempts               = "ALTER TABLE _vt.schema_migrations add column cutover_attempts int unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -208,6 +209,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlIncrementCutoverAttempts = `UPDATE _vt.schema_migrations
+			SET cutover_attempts=cutover_attempts+1
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateReadyForCleanup = `UPDATE _vt.schema_migrations
 			SET retain_artifacts_seconds=-1
 		WHERE
@@ -290,6 +296,8 @@ const (
 			retries=retries + 1,
 			tablet_failure=0,
 			message='',
+			stage='',
+			cutover_attempts=0,
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
@@ -308,6 +316,8 @@ const (
 			retries=retries + 1,
 			tablet_failure=0,
 			message='',
+			stage='',
+			cutover_attempts=0,
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
@@ -658,4 +668,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsCancelledTimestamp,
 	alterSchemaMigrationsTablePostponeLaunch,
 	alterSchemaMigrationsStage,
+	alterSchemaMigrationsCutoverAttempts,
 }
