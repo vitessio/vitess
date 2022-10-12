@@ -1225,6 +1225,15 @@ message ValidateVersionKeyspaceResponse {
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
 
+message ValidateVersionShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message ValidateVersionShardResponse {
+  repeated string results = 1;
+}
+
 message ValidateVSchemaRequest {
   string keyspace = 1;
   repeated string shards = 2;

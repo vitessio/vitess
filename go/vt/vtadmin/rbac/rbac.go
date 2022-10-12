@@ -115,4 +115,6 @@ const (
 	WorkflowResource                 Resource = "Workflow"
 
 	VTExplainResource Resource = "VTExplain"
+
+	TabletFullStatusResource Resource = "TabletFullStatus"
 )

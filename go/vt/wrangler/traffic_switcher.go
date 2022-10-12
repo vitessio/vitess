@@ -211,9 +211,10 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 	ws := workflow.NewServer(wr.ts, wr.tmc)
 	state := &workflow.State{
-		Workflow:       workflowName,
-		SourceKeyspace: ts.SourceKeyspaceName(),
-		TargetKeyspace: targetKeyspace,
+		Workflow:           workflowName,
+		SourceKeyspace:     ts.SourceKeyspaceName(),
+		TargetKeyspace:     targetKeyspace,
+		IsPartialMigration: ts.isPartialMigration,
 	}
 
 	var (
@@ -221,9 +222,11 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		keyspace string
 	)
 
-	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
-	// source of the reverse workflow, which is the target of the workflow initiated by the user for checking routing rules
-	// Similarly we use a target shard of the reverse workflow as the original source to check if writes have been switched
+	// We reverse writes by using the source_keyspace.workflowname_reverse workflow
+	// spec, so we need to use the source of the reverse workflow, which is the
+	// target of the workflow initiated by the user for checking routing rules.
+	// Similarly we use a target shard of the reverse workflow as the original
+	// source to check if writes have been switched.
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
 		keyspace = state.SourceKeyspace
@@ -234,7 +237,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		state.WorkflowType = workflow.TypeMoveTables
 
-		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
+		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
 			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflowName)
 
@@ -242,14 +245,17 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		table := ts.Tables()[0]
 
 		if ts.isPartialMigration { // shard level traffic switching is all or nothing
-			shardRules, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
+			shardRoutingRules, err := wr.ts.GetShardRoutingRules(ctx)
 			if err != nil {
 				return nil, nil, err
 			}
-			for _, sourceShard := range ts.SourceShards() {
-				if _, ok := shardRules[fmt.Sprintf("%s.%s", ts.sourceKeyspace, sourceShard.ShardName())]; ok {
-					state.WritesPartiallySwitched = true // and in effect reads are too
-					break
+
+			rules := shardRoutingRules.Rules
+			for _, rule := range rules {
+				if rule.ToKeyspace == ts.SourceKeyspaceName() {
+					state.ShardsNotYetSwitched = append(state.ShardsNotYetSwitched, rule.Shard)
+				} else {
+					state.ShardsAlreadySwitched = append(state.ShardsAlreadySwitched, rule.Shard)
 				}
 			}
 		} else {
@@ -694,6 +700,9 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw
 	}
 	if !keepRoutingRules {
 		if err := sw.deleteRoutingRules(ctx); err != nil {
+			return err
+		}
+		if err := sw.deleteShardRoutingRules(ctx); err != nil {
 			return err
 		}
 	}
@@ -1513,6 +1522,23 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.TargetKeyspaceName())
 		log.Errorf("%w", err2)
 		return err2
+	}
+	return nil
+}
+
+func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
+	if !ts.isPartialMigration {
+		return nil
+	}
+	srr, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
+	if err != nil {
+		return err
+	}
+	for _, si := range ts.TargetShards() {
+		delete(srr, fmt.Sprintf("%s.%s", ts.targetKeyspace, si.ShardName()))
+	}
+	if err := topotools.SaveShardRoutingRules(ctx, ts.TopoServer(), srr); err != nil {
+		return err
 	}
 	return nil
 }
