@@ -54,7 +54,7 @@ type ConnectionPool struct {
 	connections         pools.IResourcePool
 	capacity            int
 	idleTimeout         time.Duration
-	refreshTimeout      time.Duration
+	maxLifetimeTimeout  time.Duration
 	resolutionFrequency time.Duration
 
 	// info is set at Open() time
@@ -64,8 +64,8 @@ type ConnectionPool struct {
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, refreshTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, refreshTimeout: refreshTimeout, resolutionFrequency: dnsResolutionFrequency}
+func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, maxLifetimeTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
+	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, maxLifetimeTimeout: maxLifetimeTimeout, resolutionFrequency: dnsResolutionFrequency}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -79,8 +79,8 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, ref
 	stats.NewCounterDurationFunc(name+"WaitTime", "Connection pool wait time", cp.WaitTime)
 	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
 	stats.NewGaugeFunc(name+"IdleClosed", "Connection pool idle closed", cp.IdleClosed)
-	stats.NewGaugeDurationFunc(name+"RefreshTimeout", "Connection pool refresh timeout", cp.RefreshTimeout)
-	stats.NewGaugeFunc(name+"RefreshClosed", "Connection pool refresh closed", cp.RefreshClosed)
+	stats.NewGaugeDurationFunc(name+"MaxLifetimeTimeout", "Connection pool refresh timeout", cp.MaxLifetimeTimeout)
+	stats.NewGaugeFunc(name+"MaxLifetimeClosed", "Connection pool refresh closed", cp.MaxLifetimeClosed)
 	stats.NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	return cp
 }
@@ -110,7 +110,7 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, cp.refreshTimeout, nil, refreshCheck, cp.resolutionFrequency)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, cp.maxLifetimeTimeout, nil, refreshCheck, cp.resolutionFrequency)
 }
 
 // connect is used by the resource pool to create a new Resource.
@@ -286,22 +286,22 @@ func (cp *ConnectionPool) IdleClosed() int64 {
 	return p.IdleClosed()
 }
 
-// RefreshTimeout returns the refresh timeout for the pool.
-func (cp *ConnectionPool) RefreshTimeout() time.Duration {
+// MaxLifetimeTimeoutfresh timeout for the pool.
+func (cp *ConnectionPool) MaxLifetimeTimeout() time.Duration {
 	p := cp.pool()
 	if p == nil {
 		return 0
 	}
-	return p.RefreshTimeout()
+	return p.MaxLifetimeTimeout()
 }
 
-// RefreshClosed returns the number of connections closed due to refresh timeout for the pool.
-func (cp *ConnectionPool) RefreshClosed() int64 {
+// MaxLifetimeClosed returns the number of connections closed due to refresh timeout for the pool.
+func (cp *ConnectionPool) MaxLifetimeClosed() int64 {
 	p := cp.pool()
 	if p == nil {
 		return 0
 	}
-	return p.RefreshClosed()
+	return p.MaxLifetimeClosed()
 }
 
 // Exhausted returns the number of times available went to zero for the pool.

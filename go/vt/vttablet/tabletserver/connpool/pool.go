@@ -63,7 +63,7 @@ type Pool struct {
 	prefillParallelism int
 	timeout            time.Duration
 	idleTimeout        time.Duration
-	refreshTimeout     time.Duration
+	maxLifetimeTimeout time.Duration
 	waiterCap          int64
 	waiterCount        sync2.AtomicInt64
 	waiterQueueFull    sync2.AtomicInt64
@@ -76,7 +76,7 @@ type Pool struct {
 // to publish stats only.
 func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
 	idleTimeout := cfg.IdleTimeoutSeconds.Get()
-	refreshTimeout := cfg.RefreshTimeoutSeconds.Get()
+	maxLifetimeTimeout := cfg.MaxLifetimeTimeoutSeconds.Get()
 	cp := &Pool{
 		env:                env,
 		name:               name,
@@ -84,7 +84,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		prefillParallelism: cfg.PrefillParallelism,
 		timeout:            cfg.TimeoutSeconds.Get(),
 		idleTimeout:        idleTimeout,
-		refreshTimeout:     refreshTimeout,
+		maxLifetimeTimeout: maxLifetimeTimeout,
 		waiterCap:          int64(cfg.MaxWaiters),
 		dbaPool:            dbconnpool.NewConnectionPool(name+"_dbaPool", 1, idleTimeout, 0, 0),
 	}
@@ -100,8 +100,8 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
 	env.Exporter().NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
 	env.Exporter().NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
-	env.Exporter().NewGaugeDurationFunc(name+"RefreshTimeout", "Tablet server refresh timeout", cp.RefreshTimeout)
-	env.Exporter().NewCounterFunc(name+"RefreshClosed", "Tablet server conn pool refresh closed", cp.RefreshClosed)
+	env.Exporter().NewGaugeDurationFunc(name+"MaxLifetimeTimeout", "Tablet server refresh timeout", cp.MaxLifetimeTimeout)
+	env.Exporter().NewCounterFunc(name+"MaxLifetimeClosed", "Tablet server conn pool refresh closed", cp.MaxLifetimeClosed)
 	env.Exporter().NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Get)
 	env.Exporter().NewCounterFunc(name+"Get", "Tablet server conn pool get count", cp.GetCount)
@@ -139,7 +139,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		refreshCheck = netutil.DNSTracker(appParams.Host())
 	}
 
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.refreshTimeout, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.maxLifetimeTimeout, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
@@ -359,22 +359,22 @@ func (cp *Pool) IdleClosed() int64 {
 	return p.IdleClosed()
 }
 
-// RefreshTimeout returns the refresh timeout for the pool.
-func (cp *Pool) RefreshTimeout() time.Duration {
+// MaxLifetimeTimeout refresh timeout for the pool.
+func (cp *Pool) MaxLifetimeTimeout() time.Duration {
 	p := cp.pool()
 	if p == nil {
 		return 0
 	}
-	return p.RefreshTimeout()
+	return p.MaxLifetimeTimeout()
 }
 
-// RefreshClosed returns the number of connections closed to refresh timeout for the pool.
-func (cp *Pool) RefreshClosed() int64 {
+// MaxLifetimeClosed returns the number of connections closed to refresh timeout for the pool.
+func (cp *Pool) MaxLifetimeClosed() int64 {
 	p := cp.pool()
 	if p == nil {
 		return 0
 	}
-	return p.RefreshClosed()
+	return p.MaxLifetimeClosed()
 }
 
 // Exhausted returns the number of times available went to zero for the pool.
