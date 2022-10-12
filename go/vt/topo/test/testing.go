@@ -55,11 +55,6 @@ func executeTestSuite(f func(*testing.T, *topo.Server), t *testing.T, ts *topo.S
 func TopoServerTestSuite(t *testing.T, factory func() *topo.Server, ignoreList []string) {
 	var ts *topo.Server
 
-	t.Log("=== checkTryLock")
-	ts = factory()
-	executeTestSuite(checkTryLock, t, ts, ignoreList, "checkTryLock")
-	ts.Close()
-
 	t.Log("=== checkKeyspace")
 	ts = factory()
 	executeTestSuite(checkKeyspace, t, ts, ignoreList, "checkKeyspace")
