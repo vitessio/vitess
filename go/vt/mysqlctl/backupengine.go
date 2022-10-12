@@ -236,6 +236,7 @@ func (m *BackupManifest) HashKey() string {
 	return fmt.Sprintf("%v/%v/%v/%t/%v", m.BackupMethod, m.Position, m.FromPosition, m.Incremental, m.BackupTime)
 }
 
+// ManifestHandleMap is a utility container to map manifests to handles, making it possible to search for, and iterate, handles based on manifests.
 type ManifestHandleMap struct {
 	mp map[string]backupstorage.BackupHandle
 }
@@ -245,6 +246,8 @@ func NewManifestHandleMap() *ManifestHandleMap {
 		mp: map[string]backupstorage.BackupHandle{},
 	}
 }
+
+// Map assigns a handle to a manifest
 func (m *ManifestHandleMap) Map(manifest *BackupManifest, handle backupstorage.BackupHandle) {
 	if manifest == nil {
 		return
@@ -252,10 +255,12 @@ func (m *ManifestHandleMap) Map(manifest *BackupManifest, handle backupstorage.B
 	m.mp[manifest.HashKey()] = handle
 }
 
+// Handle returns the backup handles assigned to given manifest
 func (m *ManifestHandleMap) Handle(manifest *BackupManifest) (handle backupstorage.BackupHandle) {
 	return m.mp[manifest.HashKey()]
 }
 
+// Handles returns an ordered list of handles, by given list of manifests
 func (m *ManifestHandleMap) Handles(manifests []*BackupManifest) (handles []backupstorage.BackupHandle) {
 	handles = make([]backupstorage.BackupHandle, 0, len(manifests))
 	for _, manifest := range manifests {
@@ -284,6 +289,7 @@ func (p *RestorePath) Add(m *BackupManifest) {
 	p.manifests = append(p.manifests, m)
 }
 
+// FullBackupHandle returns the single (if any) full backup handle, which is always the first handle in the sequence
 func (p *RestorePath) FullBackupHandle() backupstorage.BackupHandle {
 	if p.IsEmpty() {
 		return nil
@@ -291,6 +297,7 @@ func (p *RestorePath) FullBackupHandle() backupstorage.BackupHandle {
 	return p.manifestHandleMap.Handle(p.manifests[0])
 }
 
+// IncrementalBackupHandles returns an ordered list of backup handles comprising of the incremental (non-full) path
 func (p *RestorePath) IncrementalBackupHandles() []backupstorage.BackupHandle {
 	if p.IsEmpty() {
 		return nil
@@ -332,9 +339,8 @@ func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs 
 	return nil, nil, ErrNoCompleteBackup
 }
 
-// FindBackupToRestore returns a selected candidate backup to be restored.
-// It returns the most recent backup that is complete, meaning it has a valid
-// MANIFEST file.
+// FindBackupToRestore returns a path, a sequence of backup handles, to be restored.
+// The returned handles stand for valid backups with complete manifests.
 func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (*RestorePath, error) {
 	// if a StartTime is provided in params, then find a backup that was taken at or before that time
 	checkBackupTime := !params.StartTime.IsZero()
