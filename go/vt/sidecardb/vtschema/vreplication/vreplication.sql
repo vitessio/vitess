@@ -1,0 +1,26 @@
+CREATE TABLE _vt.vreplication
+(
+    `id`                    int              NOT NULL AUTO_INCREMENT,
+    `workflow`              varbinary(1000)           DEFAULT NULL,
+    `source`                mediumblob       NOT NULL,
+    `pos`                   varbinary(10000) NOT NULL,
+    `stop_pos`              varbinary(10000)          DEFAULT NULL,
+    `max_tps`               bigint           NOT NULL,
+    `max_replication_lag`   bigint           NOT NULL,
+    `cell`                  varbinary(1000)           DEFAULT NULL,
+    `tablet_types`          varbinary(100)            DEFAULT NULL,
+    `time_updated`          bigint           NOT NULL,
+    `transaction_timestamp` bigint           NOT NULL,
+    `state`                 varbinary(100)   NOT NULL,
+    `message`               varbinary(1000)           DEFAULT NULL,
+    `db_name`               varbinary(255)   NOT NULL,
+    `rows_copied`           bigint           NOT NULL DEFAULT '0',
+    `tags`                  varbinary(1024)  NOT NULL DEFAULT '',
+    `time_heartbeat`        bigint           NOT NULL DEFAULT '0',
+    `workflow_type`         int              NOT NULL DEFAULT '0',
+    `time_throttled`        bigint           NOT NULL DEFAULT '0',
+    `component_throttled`   varchar(255)     NOT NULL DEFAULT '',
+    `workflow_sub_type`     int              NOT NULL DEFAULT '0',
+    PRIMARY KEY (`id`),
+    KEY `workflow_idx` (`workflow`(64))
+) ENGINE = InnoDB
