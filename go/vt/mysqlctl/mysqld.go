@@ -1227,7 +1227,7 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		mysqlbinlogCmd.Dir = dir
 		mysqlbinlogCmd.Env = env
 		log.Infof("applyBinlogFile: running %#v", mysqlbinlogCmd)
-		pipe, err = mysqlbinlogCmd.StdoutPipe()
+		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
 			return err
 		}
@@ -1252,17 +1252,16 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		mysqlCmd = exec.Command(name, args...)
 		mysqlCmd.Dir = dir
 		mysqlCmd.Env = env
-		mysqlCmd.Stdin = pipe
-		// if _, _, err := execCmd(name, args, env, dir, stdout); err != nil {
-		// 	return err
-		// }
+		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
 	}
+	// Run both processes, piped:
 	if err := mysqlbinlogCmd.Start(); err != nil {
 		return err
 	}
 	if err := mysqlCmd.Start(); err != nil {
 		return err
 	}
+	// Wait for both to complete:
 	if err := mysqlbinlogCmd.Wait(); err != nil {
 		return err
 	}

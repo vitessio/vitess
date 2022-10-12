@@ -129,6 +129,12 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&builtinBackupProgress, "builtinbackup_progress", builtinBackupProgress, "how often to send progress updates when backing up large files.")
 }
 
+// isIncrementalBackup is a convenience function to check whether the params indicate an incremental backup request
+func isIncrementalBackup(params BackupParams) bool {
+	return params.IncrementalFromPos != ""
+}
+
+// fullPath returns the full path of the entry, based on its type
 func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	// find the root to use
 	var root string
@@ -148,6 +154,7 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	return path.Join(fe.ParentPath, root, fe.Name), nil
 }
 
+// open attempts t oopen the file
 func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	name, err := fe.fullPath(cnf)
 	if err != nil {
@@ -170,12 +177,8 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	return fd, nil
 }
 
-func isIncrementalBackup(params BackupParams) bool {
-	return params.IncrementalFromPos != ""
-}
-
-// ExecuteBackup returns a boolean that indicates if the backup is usable,
-// and an overall error.
+// ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
+// The function returns a boolean that indicates if the backup is usable, and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 
 	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
@@ -186,8 +189,9 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	return be.executeFullBackup(ctx, params, bh)
 }
 
-// executeIncrementalBackup returns a boolean that indicates if the backup is usable,
-// and an overall error.
+// executeIncrementalBackup runs an incremental backup, based on given 'incremental_from_pos', which can be:
+// - A valid position
+// - "auto", indicating the incremental backup should begin with last successful backup end position.
 func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 	if params.IncrementalFromPos == "auto" {
 		params.Logger.Infof("auto evaluating incremental_from_pos")
@@ -748,6 +752,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	return nil
 }
 
+// executeRestoreFullBackup restores the files from a full backup. The underlying mysql database service is expected to be stopped.
 func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
 		return err
@@ -762,6 +767,10 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 	return nil
 }
 
+// executeRestoreIncrementalBackup executes a restore of an incremental backup, and expect to run on top of a full backup's restore.
+// It restores any (zero or more) binary log files and applies them onto the underlying database one at a time, but only applies those transactions
+// that fall within params.RestoreToPos.GTIDSet. The rest (typically a suffix of the last binary log) are discarded.
+// The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
 
