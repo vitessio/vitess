@@ -102,6 +102,11 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+type ThrottlerConfig struct {
+	enabled bool
+	// threshold float64 // TODO(shlomi)
+}
+
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
@@ -109,7 +114,7 @@ type Throttler struct {
 	shard    string
 
 	check     *ThrottlerCheck
-	isEnabled bool
+	isEnabled int64
 	isLeader  int64
 	isOpen    int64
 
@@ -124,6 +129,8 @@ type Throttler struct {
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlInventoryChan      chan *mysql.Inventory
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
+
+	// applyConfig *ThrottlerConfig // TODO(shlomi)
 
 	mysqlInventory *mysql.Inventory
 
@@ -191,10 +198,8 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 
 	throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 	throttler.initThrottleTabletTypes()
-	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 	throttler.check = NewThrottlerCheck(throttler)
 
-	// TODO(shlomi): Read from database
 	throttler.metricsQuery = replicationLagQuery
 	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
 
@@ -265,24 +270,36 @@ func (throttler *Throttler) initConfig() {
 	}
 }
 
-func (throttler *Throttler) IsEnabled() bool {
-	throttler.enableMutex.Lock()
-	defer throttler.enableMutex.Unlock()
-	return throttler.isEnabled
+func (throttler *Throttler) readConfig(ctx context.Context) error {
+	srvKeyspace, err := throttler.ts.GetSrvKeyspace(ctx, topo.GlobalCell, throttler.keyspace)
+	if err != nil {
+		return err
+	}
+	cfg := &srvKeyspace.ThrottlerConfig
+	fmt.Printf("============ ZZZ cfg=%v\n", cfg)
+	return nil
 }
 
-func (throttler *Throttler) enable(ctx context.Context) error {
+func (throttler *Throttler) IsEnabled() bool {
+	return atomic.LoadInt64(&throttler.isEnabled) > 0
+}
+
+func (throttler *Throttler) Enable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if throttler.isEnabled {
-		return nil
+	if throttler.isEnabled > 0 {
+		return false
 	}
-	throttler.isEnabled = true
+	atomic.StoreInt64(&throttler.isEnabled, 1)
 
 	// TODO(shlomi): Read from database
+	if err := throttler.readConfig(ctx); err != nil {
+		fmt.Printf("======== ZZZ err: %v\n", err)
+	}
 	throttler.metricsQuery = replicationLagQuery
 	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
+	// _ = throttler.updateConfig(ctx, true, throttler.MetricsThreshold.Get()) // TODO(shlomi)
 
 	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
 	throttler.check.SelfChecks(ctx)
@@ -291,32 +308,49 @@ func (throttler *Throttler) enable(ctx context.Context) error {
 	// Make a one-time request for a lease of heartbeats
 	go throttler.heartbeatWriter.RequestHeartbeats()
 
+	return true
+}
+
+func (throttler *Throttler) maybeEnable(ctx context.Context) error {
+	if err := throttler.readConfig(ctx); err != nil {
+		fmt.Printf("======== ZZZ err: %v\n", err)
+	}
+	// 		throttlerConfig, err := throttler.readConfig(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	var throttlerConfig *ThrottlerConfig
+	enable := false
+	switch throttlerConfig {
+	case nil:
+		enable = throttler.env.Config().EnableLagThrottler
+	default:
+		enable = throttlerConfig.enabled
+	}
+	if enable {
+		throttler.Enable(ctx)
+	}
 	return nil
 }
 
-func (throttler *Throttler) maybeEnable(ctx context.Context) {
-	// TODO(shlomi): read from database
-	if throttler.env.Config().EnableLagThrottler {
-		throttler.enable(ctx)
-	}
-}
-
-func (throttler *Throttler) disable() {
+func (throttler *Throttler) Disable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if !throttler.isEnabled {
-		return
+	if throttler.isEnabled == 0 {
+		return false
 	}
-	throttler.isEnabled = false
+	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
+	atomic.StoreInt64(&throttler.isEnabled, 0)
 
-	throttler.throttledApps.Flush()
 	throttler.aggregatedMetrics.Flush()
 	throttler.recentApps.Flush()
 	throttler.nonLowPriorityAppRequestsThrottled.Flush()
 	throttler.nonLowPriorityAppRequestsThrottled.Flush()
+	// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
 
 	throttler.cancelEnableContext()
+	return true
 }
 
 // Open opens database pool and initializes the schema
@@ -327,11 +361,12 @@ func (throttler *Throttler) Open() error {
 		// already open
 		return nil
 	}
-
+	ctx := context.Background()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
-	throttler.maybeEnable(context.Background())
+	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+	throttler.maybeEnable(ctx)
 	return nil
 }
 
@@ -345,7 +380,8 @@ func (throttler *Throttler) Close() {
 		log.Infof("Throttler: throttler is not open")
 		return
 	}
-	throttler.disable()
+	ctx := context.Background()
+	throttler.Disable(ctx)
 	atomic.StoreInt64(&throttler.isLeader, 0)
 
 	log.Infof("Throttler: closing pool")
@@ -861,7 +897,7 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 
 // checkStore checks the aggregated value of given MySQL store
 func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	if !throttler.env.Config().EnableLagThrottler {
+	if !throttler.IsEnabled() {
 		return okMetricCheckResult
 	}
 	return throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)

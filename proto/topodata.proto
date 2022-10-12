@@ -395,6 +395,17 @@ message SrvKeyspace {
 
   // OBSOLETE int32 split_shard_count = 5;
   reserved 5;
+
+  message ThrottlerConfig {
+    // Enabled indicates that the throttler is actually checking state for requests. When disabled, it automatically returns 200 OK for all checks
+    bool enabled = 1;
+
+    // DefaultCheckThreshold is the threshold for the default check - heartbeat lag
+    double default_check_threshold = 2;
+  }
+
+  // ThrottlerConfig has the configuration for the tablet server's lag throttler, and applies to the entire keyspace, across all shards and tablets
+  ThrottlerConfig throttler_config = 6;
 }
 
 // CellInfo contains information about a cell. CellInfo objects are

@@ -965,12 +965,20 @@ func (qre *QueryExecutor) execAlterThrottler() (*sqltypes.Result, error) {
 	// 	return nil, err
 	// }
 	// alterThrottler, ok := qre.plan.FullStmt.(*sqlparser.AlterThrottler)
-	_, ok := qre.plan.FullStmt.(*sqlparser.AlterThrottler)
+	alterThrottler, ok := qre.plan.FullStmt.(*sqlparser.AlterThrottler)
 	if !ok {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_THROTTLER plan")
 	}
+	ctx := context.Background()
+	var affected bool
+	switch alterThrottler.Type {
+	case sqlparser.AlterThrottlerEnableType:
+		affected = qre.tsv.lagThrottler.Enable(ctx)
+	case sqlparser.AlterThrottlerDisableType:
+		affected = qre.tsv.lagThrottler.Disable(ctx)
+	}
 	result := &sqltypes.Result{}
-	if err := qre.tsv.lagThrottler.CheckIsReady(); err == nil {
+	if affected {
 		result.RowsAffected = 1
 	}
 	return result, nil
