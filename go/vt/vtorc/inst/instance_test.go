@@ -19,26 +19,25 @@ package inst
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
 )
 
 func init() {
-	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
 }
 
 var instance1 = Instance{Key: key1}
-var instance2 = Instance{Key: key2}
 
 func TestIsSmallerMajorVersion(t *testing.T) {
 	i55 := Instance{Version: "5.5"}
 	i5517 := Instance{Version: "5.5.17"}
 	i56 := Instance{Version: "5.6"}
 
-	test.S(t).ExpectFalse(i55.IsSmallerMajorVersion(&i5517))
-	test.S(t).ExpectFalse(i56.IsSmallerMajorVersion(&i5517))
-	test.S(t).ExpectTrue(i55.IsSmallerMajorVersion(&i56))
+	require.False(t, i55.IsSmallerMajorVersion(&i5517))
+	require.False(t, i56.IsSmallerMajorVersion(&i5517))
+	require.True(t, i55.IsSmallerMajorVersion(&i56))
 }
 
 func TestIsVersion(t *testing.T) {
@@ -47,192 +46,40 @@ func TestIsVersion(t *testing.T) {
 	i56 := Instance{Version: "5.6.20"}
 	i57 := Instance{Version: "5.7.8-log"}
 
-	test.S(t).ExpectTrue(i51.IsMySQL51())
-	test.S(t).ExpectTrue(i55.IsMySQL55())
-	test.S(t).ExpectTrue(i56.IsMySQL56())
-	test.S(t).ExpectFalse(i55.IsMySQL56())
-	test.S(t).ExpectTrue(i57.IsMySQL57())
-	test.S(t).ExpectFalse(i56.IsMySQL57())
+	require.True(t, i51.IsMySQL51())
+	require.True(t, i55.IsMySQL55())
+	require.True(t, i56.IsMySQL56())
+	require.False(t, i55.IsMySQL56())
+	require.True(t, i57.IsMySQL57())
+	require.False(t, i56.IsMySQL57())
 }
 
 func TestIsSmallerBinlogFormat(t *testing.T) {
 	iStatement := &Instance{Key: key1, BinlogFormat: "STATEMENT"}
 	iRow := &Instance{Key: key2, BinlogFormat: "ROW"}
 	iMixed := &Instance{Key: key3, BinlogFormat: "MIXED"}
-	test.S(t).ExpectTrue(iStatement.IsSmallerBinlogFormat(iRow))
-	test.S(t).ExpectFalse(iStatement.IsSmallerBinlogFormat(iStatement))
-	test.S(t).ExpectFalse(iRow.IsSmallerBinlogFormat(iStatement))
+	require.True(t, iStatement.IsSmallerBinlogFormat(iRow))
+	require.False(t, iStatement.IsSmallerBinlogFormat(iStatement))
+	require.False(t, iRow.IsSmallerBinlogFormat(iStatement))
 
-	test.S(t).ExpectTrue(iStatement.IsSmallerBinlogFormat(iMixed))
-	test.S(t).ExpectTrue(iMixed.IsSmallerBinlogFormat(iRow))
-	test.S(t).ExpectFalse(iMixed.IsSmallerBinlogFormat(iStatement))
-	test.S(t).ExpectFalse(iRow.IsSmallerBinlogFormat(iMixed))
-}
-
-func TestIsDescendant(t *testing.T) {
-	{
-		i57 := Instance{Key: key1, Version: "5.7"}
-		i56 := Instance{Key: key2, Version: "5.6"}
-		isDescendant := i57.IsDescendantOf(&i56)
-		test.S(t).ExpectEquals(isDescendant, false)
-	}
-	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020192-1111-1111-1111-111111111111"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: ""}
-		isDescendant := i57.IsDescendantOf(&i56)
-		test.S(t).ExpectEquals(isDescendant, false)
-	}
-	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: ""}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
-		isDescendant := i57.IsDescendantOf(&i56)
-		test.S(t).ExpectEquals(isDescendant, false)
-	}
-	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
-		isDescendant := i57.IsDescendantOf(&i56)
-		test.S(t).ExpectEquals(isDescendant, false)
-	}
-	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222,00020193-3333-3333-3333-222222222222"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
-		isDescendant := i57.IsDescendantOf(&i56)
-		test.S(t).ExpectEquals(isDescendant, false)
-	}
-	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222,00020192-1111-1111-1111-111111111111"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
-		isDescendant := i57.IsDescendantOf(&i56)
-		test.S(t).ExpectEquals(isDescendant, true)
-	}
-}
-
-func TestCanReplicateFrom(t *testing.T) {
-	i55 := Instance{Key: key1, Version: "5.5"}
-	i56 := Instance{Key: key2, Version: "5.6"}
-
-	var canReplicate bool
-	canReplicate, _ = i56.CanReplicateFrom(&i55)
-	test.S(t).ExpectEquals(canReplicate, false) //binlog not yet enabled
-
-	i55.LogBinEnabled = true
-	i55.LogReplicationUpdatesEnabled = true
-	i56.LogBinEnabled = true
-	i56.LogReplicationUpdatesEnabled = true
-
-	canReplicate, _ = i56.CanReplicateFrom(&i55)
-	test.S(t).ExpectEquals(canReplicate, false) //serverid not set
-	i55.ServerID = 55
-	i56.ServerID = 56
-
-	canReplicate, err := i56.CanReplicateFrom(&i55)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectTrue(canReplicate)
-	canReplicate, _ = i55.CanReplicateFrom(&i56)
-	test.S(t).ExpectFalse(canReplicate)
-
-	iStatement := Instance{Key: key1, BinlogFormat: "STATEMENT", ServerID: 1, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
-	iRow := Instance{Key: key2, BinlogFormat: "ROW", ServerID: 2, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
-	canReplicate, err = iRow.CanReplicateFrom(&iStatement)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectTrue(canReplicate)
-	canReplicate, _ = iStatement.CanReplicateFrom(&iRow)
-	test.S(t).ExpectFalse(canReplicate)
-}
-
-func TestNextGTID(t *testing.T) {
-	{
-		i := Instance{ExecutedGtidSet: "4f6d62ed-df65-11e3-b395-60672090eb04:1,b9b4712a-df64-11e3-b391-60672090eb04:1-6"}
-		nextGTID, err := i.NextGTID()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(nextGTID, "b9b4712a-df64-11e3-b391-60672090eb04:7")
-	}
-	{
-		i := Instance{ExecutedGtidSet: "b9b4712a-df64-11e3-b391-60672090eb04:1-6"}
-		nextGTID, err := i.NextGTID()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(nextGTID, "b9b4712a-df64-11e3-b391-60672090eb04:7")
-	}
-	{
-		i := Instance{ExecutedGtidSet: "b9b4712a-df64-11e3-b391-60672090eb04:6"}
-		nextGTID, err := i.NextGTID()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(nextGTID, "b9b4712a-df64-11e3-b391-60672090eb04:7")
-	}
-}
-
-func TestRemoveInstance(t *testing.T) {
-	{
-		instances := [](*Instance){&instance1, &instance2}
-		test.S(t).ExpectEquals(len(instances), 2)
-		instances = RemoveNilInstances(instances)
-		test.S(t).ExpectEquals(len(instances), 2)
-	}
-	{
-		instances := [](*Instance){&instance1, nil, &instance2}
-		test.S(t).ExpectEquals(len(instances), 3)
-		instances = RemoveNilInstances(instances)
-		test.S(t).ExpectEquals(len(instances), 2)
-	}
-	{
-		instances := [](*Instance){&instance1, &instance2}
-		test.S(t).ExpectEquals(len(instances), 2)
-		instances = RemoveInstance(instances, &key1)
-		test.S(t).ExpectEquals(len(instances), 1)
-		instances = RemoveInstance(instances, &key1)
-		test.S(t).ExpectEquals(len(instances), 1)
-		instances = RemoveInstance(instances, &key2)
-		test.S(t).ExpectEquals(len(instances), 0)
-		instances = RemoveInstance(instances, &key2)
-		test.S(t).ExpectEquals(len(instances), 0)
-	}
-}
-
-func TestHumanReadableDescription(t *testing.T) {
-	i57 := Instance{Version: "5.7.8-log"}
-	{
-		desc := i57.HumanReadableDescription()
-		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,nobinlog]")
-	}
-	{
-		i57.UsingOracleGTID = true
-		i57.LogBinEnabled = true
-		i57.BinlogFormat = "ROW"
-		i57.LogReplicationUpdatesEnabled = true
-		desc := i57.HumanReadableDescription()
-		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,ROW,>>,GTID]")
-	}
-}
-
-func TestTabulatedDescription(t *testing.T) {
-	i57 := Instance{Version: "5.7.8-log"}
-	{
-		desc := i57.TabulatedDescription("|")
-		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|nobinlog|")
-	}
-	{
-		i57.UsingOracleGTID = true
-		i57.LogBinEnabled = true
-		i57.BinlogFormat = "ROW"
-		i57.LogReplicationUpdatesEnabled = true
-		desc := i57.TabulatedDescription("|")
-		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|ROW|>>,GTID")
-	}
+	require.True(t, iStatement.IsSmallerBinlogFormat(iMixed))
+	require.True(t, iMixed.IsSmallerBinlogFormat(iRow))
+	require.False(t, iMixed.IsSmallerBinlogFormat(iStatement))
+	require.False(t, iRow.IsSmallerBinlogFormat(iMixed))
 }
 
 func TestReplicationThreads(t *testing.T) {
 	{
-		test.S(t).ExpectFalse(instance1.ReplicaRunning())
+		require.False(t, instance1.ReplicaRunning())
 	}
 	{
-		test.S(t).ExpectTrue(instance1.ReplicationThreadsExist())
+		require.True(t, instance1.ReplicationThreadsExist())
 	}
 	{
-		test.S(t).ExpectTrue(instance1.ReplicationThreadsStopped())
+		require.True(t, instance1.ReplicationThreadsStopped())
 	}
 	{
 		i := Instance{Key: key1, ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
-		test.S(t).ExpectFalse(i.ReplicationThreadsExist())
+		require.False(t, i.ReplicationThreadsExist())
 	}
 }

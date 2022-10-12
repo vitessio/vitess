@@ -64,6 +64,8 @@ service VTAdmin {
     rpc GetCellsAliases(GetCellsAliasesRequest) returns (GetCellsAliasesResponse) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
+    // GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+    rpc GetFullStatus(GetFullStatusRequest) returns (vtctldata.GetFullStatusResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
     // GetKeyspace returns a keyspace by name in the specified cluster.
@@ -122,6 +124,8 @@ service VTAdmin {
     // tablets in one or more clusters, depending on the request fields (see
     // ReloadSchemasRequest for details).
     rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
+    // ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+    rpc ReloadSchemaShard(ReloadSchemaShardRequest) returns (ReloadSchemaShardResponse) {};
     // RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
     rpc RemoveKeyspaceCell(RemoveKeyspaceCellRequest) returns (RemoveKeyspaceCellResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
@@ -146,6 +150,9 @@ service VTAdmin {
     // * "orchestrator" here refers to external orchestrator, not the newer,
     // Vitess-aware orchestrator, VTOrc.
     rpc TabletExternallyPromoted(TabletExternallyPromotedRequest) returns (TabletExternallyPromotedResponse) {};
+    // Validate validates all nodes in a cluster that are reachable from the global replication graph,
+    // as well as all tablets in discoverable cells, are consistent
+    rpc Validate(ValidateRequest) returns (vtctldata.ValidateResponse) {};
     // ValidateKeyspace validates that all nodes reachable from the specified
     // keyspace are consistent.
     rpc ValidateKeyspace(ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
@@ -153,9 +160,13 @@ service VTAdmin {
     // for shard 0 matches the schema on all of the other tablets in the
     // keyspace.
     rpc ValidateSchemaKeyspace(ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
-	// ValidateVersionKeyspace validates that the version on the primary of
+    // ValidateShard validates that that all nodes reachable from the specified shard are consistent.
+    rpc ValidateShard(ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
+    // ValidateVersionKeyspace validates that the version on the primary of
     // shard 0 matches all of the other tablets in the keyspace.
     rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+    // ValidateVersionShard validates that the version on the primary matches all of the replicas.
+    rpc ValidateVersionShard(ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
     // VTExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
@@ -411,6 +422,11 @@ message GetClustersRequest {}
 
 message GetClustersResponse {
     repeated Cluster clusters = 1;
+}
+
+message GetFullStatusRequest {
+  string cluster_id = 1;
+  topodata.TabletAlias alias = 2;
 }
 
 message GetGatesRequest {
@@ -702,6 +718,20 @@ message ReloadSchemasResponse {
     repeated TabletResult tablet_results = 3;
 }
 
+message ReloadSchemaShardRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string shard = 3;
+  string wait_position = 4;
+  bool include_primary = 5;
+
+  uint32 concurrency = 6;
+}
+
+message ReloadSchemaShardResponse {
+  repeated logutil.Event events = 1;
+}
+
 message RefreshTabletReplicationSourceRequest {
     topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
@@ -787,6 +817,16 @@ message TabletExternallyPromotedResponse {
     topodata.TabletAlias old_primary = 5;
 }
 
+message TabletExternallyReparentedRequest {
+  topodata.TabletAlias alias = 1;
+  repeated string cluster_ids = 2;
+}
+
+message ValidateRequest {
+  string cluster_id = 1;
+  bool ping_tablets = 2;
+}
+
 message ValidateKeyspaceRequest {
     string cluster_id = 1;
     string keyspace = 2;
@@ -798,9 +838,22 @@ message ValidateSchemaKeyspaceRequest {
     string keyspace = 2;
 }
 
+message ValidateShardRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string shard = 3;
+  bool ping_tablets = 4;
+}
+
 message ValidateVersionKeyspaceRequest {
     string cluster_id = 1;
     string keyspace = 2;
+}
+
+message ValidateVersionShardRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  string shard = 3;
 }
 
 message VTExplainRequest {

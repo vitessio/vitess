@@ -18,7 +18,6 @@ package inst
 
 import (
 	"fmt"
-	"regexp"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -36,7 +35,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
+	"github.com/openark/golib/sqlutils"
 )
 
 var analysisChangeWriteAttemptCounter = metrics.NewCounter()
@@ -149,13 +148,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			0
 		) AS count_replicas_failing_to_connect_to_primary,
 		MIN(primary_instance.replication_depth) AS replication_depth,
-		GROUP_CONCAT(
-			concat(
-				replica_instance.Hostname,
-				':',
-				replica_instance.Port
-			)
-		) as replica_hosts,
 		MIN(
 			primary_instance.replica_sql_running = 1
 			AND primary_instance.replica_io_running = 0
@@ -419,9 +411,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.IsBinlogServer = m.GetBool("is_binlog_server")
 		a.ClusterDetails.ReadRecoveryInfo()
 
-		a.Replicas = *NewInstanceKeyMap()
-		_ = a.Replicas.ReadCommaDelimitedList(m.GetString("replica_hosts"))
-
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidMariaDBGTIDReplicas := m.GetUint("count_valid_mariadb_gtid_replicas")
@@ -605,11 +594,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			if a.Analysis == NoProblem && len(a.StructureAnalysis) == 0 && !hints.IncludeNoProblem {
 				return
 			}
-			for _, filter := range config.Config.RecoveryIgnoreHostnameFilters {
-				if matched, _ := regexp.MatchString(filter, a.AnalyzedInstanceKey.Hostname); matched {
-					return
-				}
-			}
 			if a.IsDowntimed {
 				a.SkippableDueToDowntime = true
 			}
@@ -772,43 +756,10 @@ func ExpireInstanceAnalysisChangelog() error {
 			where
 				analysis_timestamp < now() - interval ? hour
 			`,
-		config.Config.UnseenInstanceForgetHours,
+		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
 		log.Error(err)
 	}
 	return err
-}
-
-// ReadReplicationAnalysisChangelog
-func ReadReplicationAnalysisChangelog() (res [](*ReplicationAnalysisChangelog), err error) {
-	query := `
-		select
-      hostname,
-      port,
-			analysis_timestamp,
-			analysis
-		from
-			database_instance_analysis_changelog
-		order by
-			hostname, port, changelog_id
-		`
-	analysisChangelog := &ReplicationAnalysisChangelog{}
-	err = db.QueryVTOrcRowsMap(query, func(m sqlutils.RowMap) error {
-		key := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-
-		if !analysisChangelog.AnalyzedInstanceKey.Equals(&key) {
-			analysisChangelog = &ReplicationAnalysisChangelog{AnalyzedInstanceKey: key, Changelog: []string{}}
-			res = append(res, analysisChangelog)
-		}
-		analysisEntry := fmt.Sprintf("%s;%s,", m.GetString("analysis_timestamp"), m.GetString("analysis"))
-		analysisChangelog.Changelog = append(analysisChangelog.Changelog, analysisEntry)
-
-		return nil
-	})
-
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
 }

@@ -63,8 +63,37 @@ func Parse(fs *flag.FlagSet) {
 		}()
 	}
 
+	TrickGlog() // see the function doc for why.
+
 	flag.CommandLine = fs
 	flag.Parse()
+}
+
+// TrickGlog tricks glog into understanding that flags have been parsed.
+//
+// N.B. Do not delete this function. `glog` is a persnickity package and wants
+// to insist that you parse flags before doing any logging, which is a totally
+// reasonable thing (for example, if you log something at DEBUG before parsing
+// the flag that tells you to only log at WARN or greater).
+//
+// However, `glog` also "insists" that you use the standard library to parse (by
+// checking `flag.Parsed()`), which doesn't cover cases where `glog` flags get
+// installed on some other parsing package, in our case pflag, and therefore are
+// actually being parsed before logging. This is incredibly annoying, because
+// all log lines end up prefixed with:
+//
+//	> "ERROR: logging before flag.Parse"
+//
+// So, we include this little shim to trick `glog` into (correctly, I must
+// add!!!!) realizing that CLI arguments have indeed been parsed. Then, we put
+// os.Args back in their rightful place, so the parsing we actually want to do
+// can proceed as usual.
+func TrickGlog() {
+	args := os.Args[1:]
+	os.Args = os.Args[0:1]
+	goflag.Parse()
+
+	os.Args = append(os.Args, args...)
 }
 
 // Usage invokes the current CommandLine's Usage func, or if not overridden,
@@ -106,8 +135,8 @@ func ParseFlagsForTest() {
 	}
 
 	// parse remaining flags including the log-related ones like --alsologtostderr
-	fs := flag.NewFlagSet("test", flag.ExitOnError)
-	Parse(fs)
+	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	flag.Parse()
 }
 
 // Parsed returns true if the command-line flags have been parsed.

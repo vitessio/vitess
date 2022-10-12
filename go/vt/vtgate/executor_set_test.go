@@ -250,6 +250,12 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set @@socket = '/tmp/change.sock'",
 		err: "variable 'socket' is a read only variable",
+	}, {
+		in:  "set @@query_timeout = 50",
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 50},
+	}, {
+		in:  "set @@query_timeout = 50, query_timeout = 75",
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 75},
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
@@ -375,9 +381,9 @@ func TestExecutorSetMetadata(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
 	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
 
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
 	executor, _, _, _ = createExecutorEnv()

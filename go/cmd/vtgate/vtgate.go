@@ -24,9 +24,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -36,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -48,6 +49,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&cell, "cell", cell, "cell to use")
 	fs.StringVar(&tabletTypesToWait, "tablet_types_to_wait", tabletTypesToWait, "wait till connected for specified tablet types during Gateway initialization")
 	fs.StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+
+	acl.RegisterFlags(fs)
 }
 
 var resilientServer *srvtopo.ResilientServer

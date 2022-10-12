@@ -718,7 +718,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	primary.StopActionLoop(t)
 
 	// set a short timeout so that we don't have to wait 30 seconds
-	*topo.RemoteOperationTimeout = 2 * time.Second
+	topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
 	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */))
 	// verify the full status

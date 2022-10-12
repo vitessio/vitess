@@ -127,6 +127,13 @@ func (m *Session) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.QueryTimeout != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.QueryTimeout))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xc8
+	}
 	if len(m.AdvisoryLock) > 0 {
 		for k := range m.AdvisoryLock {
 			v := m.AdvisoryLock[k]
@@ -1447,6 +1454,9 @@ func (m *Session) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + sov(uint64(v))
 			n += mapEntrySize + 2 + sov(uint64(mapEntrySize))
 		}
+	}
+	if m.QueryTimeout != 0 {
+		n += 2 + sov(uint64(m.QueryTimeout))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -2940,6 +2950,25 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 			}
 			m.AdvisoryLock[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 25:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryTimeout", wireType)
+			}
+			m.QueryTimeout = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.QueryTimeout |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

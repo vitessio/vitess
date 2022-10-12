@@ -33,14 +33,13 @@ const (
 	mysql80    mysqlVersion = "mysql80"
 	mariadb103 mysqlVersion = "mariadb103"
 
-	defaultMySQLVersion mysqlVersion = mysql57
+	defaultMySQLVersion = mysql80
 )
 
 type mysqlVersions []mysqlVersion
 
 var (
 	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-	mysql80OnlyVersions  = []mysqlVersion{mysql80}
 	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
 )
 
@@ -123,10 +122,10 @@ var (
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
-		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
+		"vttablet_prscomplex",
 	}
 
 	clusterSelfHostedList = []string{
@@ -153,7 +152,7 @@ type clusterTest struct {
 	Name, Shard, Platform        string
 	FileName                     string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20, Docker             bool
+	Docker                       bool
 	LimitResourceUsage           bool
 	PartialKeyspace              bool
 }
@@ -162,10 +161,6 @@ type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
 	FileName                                                    string
 	MakeTools, InstallXtraBackup, Docker                        bool
-}
-
-func needsUbuntu20(clusterName string, mysqlVersion mysqlVersion) bool {
-	return mysqlVersion == mysql80 || strings.HasPrefix(clusterName, "vtgate") || strings.HasPrefix(clusterName, "tabletmanager")
 }
 
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
@@ -177,20 +172,12 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
-	case clusterName == "mysql80":
-		return mysql80OnlyVersions
-	case clusterName == "vtorc_8.0":
-		return mysql80OnlyVersions
-	case clusterName == "vreplication_across_db_versions":
-		return []mysqlVersion{mysql80}
+	case clusterName == "vtorc":
+		return allMySQLVersions
 	case clusterName == "xb_backup":
 		return allMySQLVersions
-	case clusterName == "vtctlbackup_sharded_clustertest_heavy":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vtbackup_transform":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vtgate_partial_keyspace":
-		return []mysqlVersion{mysql80}
+	case clusterName == "xb_recovery":
+		return allMySQLVersions
 	default:
 		return defaultMySQLVersions
 	}
@@ -282,11 +269,17 @@ func generateSelfHostedClusterWorkflows() error {
 	clusters := canonnizeList(clusterSelfHostedList)
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
-			directoryName := fmt.Sprintf("cluster_test_%s", cluster)
+			// check mysqlversion
+			mysqlVersionIndicator := ""
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			}
+
+			directoryName := fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator)
 			test := &selfHostedTest{
-				Name:              fmt.Sprintf("Cluster (%s)", cluster),
-				ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-				Platform:          "mysql57",
+				Name:              fmt.Sprintf("Cluster (%s)(%s)", cluster, mysqlVersion),
+				ImageName:         fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator),
+				Platform:          "mysql80",
 				directoryName:     directoryName,
 				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 				Shard:             cluster,
@@ -307,12 +300,8 @@ func generateSelfHostedClusterWorkflows() error {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
-				test.Platform = string(mysql80)
-			}
-			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
-				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 
 			err := setupTestDockerFile(test)
@@ -353,11 +342,8 @@ func generateClusterWorkflows(list []string, tpl string) {
 					break
 				}
 			}
-			if needsUbuntu20(cluster, mysqlVersion) {
-				test.Ubuntu20 = true
-			}
-			if mysqlVersion == mysql80 {
-				test.Platform = string(mysql80)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true

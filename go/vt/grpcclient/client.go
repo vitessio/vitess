@@ -46,6 +46,8 @@ var (
 
 	// every vitess binary that makes grpc client-side calls.
 	grpcclientBinaries = []string{
+		"mysqlctl",
+		"mysqlctld",
 		"vtadmin",
 		"vtbackup",
 		"vtbench",
@@ -68,6 +70,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&initialConnWindowSize, "grpc_initial_conn_window_size", initialConnWindowSize, "gRPC initial connection window size")
 	fs.IntVar(&initialWindowSize, "grpc_initial_window_size", initialWindowSize, "gRPC initial window size")
 	fs.StringVar(&compression, "grpc_compression", compression, "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
+
+	fs.StringVar(&credsFile, "grpc_auth_static_client_creds", credsFile, "When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.")
 }
 
 func init() {

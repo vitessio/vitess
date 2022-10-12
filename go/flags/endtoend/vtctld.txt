@@ -25,17 +25,6 @@ Usage of vtctld:
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
-      --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
-      --db-credentials-server string                                     db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
-      --db-credentials-vault-addr string                                 URL to Vault server
-      --db-credentials-vault-path string                                 Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds
-      --db-credentials-vault-role-mountpoint string                      Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
-      --db-credentials-vault-role-secretidfile string                    Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable
-      --db-credentials-vault-roleid string                               Vault AppRole id; can also be passed using VAULT_ROLEID environment variable
-      --db-credentials-vault-timeout duration                            Timeout for vault API operations (default 10s)
-      --db-credentials-vault-tls-ca string                               Path to CA PEM for validating Vault server certificate
-      --db-credentials-vault-tokenfile string                            Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
-      --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
@@ -50,7 +39,7 @@ Usage of vtctld:
       --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
-      --grpc_auth_static_client_creds string                             when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
+      --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
       --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS

@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -63,6 +64,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&tabletPath, "tablet-path", tabletPath, "tablet alias")
 	fs.StringVar(&tabletConfig, "tablet_config", tabletConfig, "YAML file config for tablet")
 
+	acl.RegisterFlags(fs)
 }
 
 func init() {

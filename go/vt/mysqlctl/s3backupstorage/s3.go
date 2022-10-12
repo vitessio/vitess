@@ -288,7 +288,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 	} else {
 		searchPrefix = objName(dir, "")
 	}
-	log.Infof("objName: %v", searchPrefix)
+	log.Infof("objName: %v", *searchPrefix)
 
 	query := &s3.ListObjectsV2Input{
 		Bucket:    &bucket,

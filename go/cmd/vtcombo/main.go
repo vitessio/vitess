@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -118,7 +119,6 @@ func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
 
 func main() {
 	defer exit.Recover()
-
 	// flag parsing
 	var globalFlags *pflag.FlagSet
 	dbconfigs.RegisterFlags(dbconfigs.All...)
@@ -133,6 +133,8 @@ func main() {
 		fs.AddFlagSet(flags)
 		// Save for later -- see comment directly after ParseFlags for why.
 		globalFlags = fs
+
+		acl.RegisterFlags(fs)
 	})
 
 	servenv.ParseFlags("vtcombo")

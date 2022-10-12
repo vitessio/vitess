@@ -137,7 +137,7 @@
     },
     "vtgate_queries_insert_partial_keyspace": {
       "File": "unused.go",
-      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/dml"],
       "Command": [],
       "Manual": false,
       "Shard": "vtgate_partial_keyspace",

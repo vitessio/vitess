@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -48,6 +49,8 @@ func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.DurationVar(&actionTimeout, "action_timeout", actionTimeout, "timeout for the total command")
 		fs.StringVar(&server, "server", server, "server to use for connection")
+
+		acl.RegisterFlags(fs)
 	})
 }
 
@@ -57,20 +60,14 @@ func init() {
 // VEP-4 will replace the need for this function. See https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md
 func checkDeprecations(args []string) {
 	// utility:
-	findSubstring := func(s string) (arg string, ok bool) {
+	// name this to findSubstring if you need to use it
+	_ = func(s string) (arg string, ok bool) {
 		for _, arg := range args {
 			if strings.Contains(arg, s) {
 				return arg, true
 			}
 		}
 		return "", false
-	}
-	if _, ok := findSubstring("ApplySchema"); ok {
-		if arg, ok := findSubstring("ddl_strategy"); ok {
-			if strings.Contains(arg, "-skip-topo") {
-				log.Warning("-skip-topo is deprecated and will be removed in future versions")
-			}
-		}
 	}
 }
 

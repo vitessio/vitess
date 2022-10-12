@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -574,5 +575,63 @@ func TestMySQL56GTIDSetLast(t *testing.T) {
 	for want, input := range table {
 		got := strings.ToLower(input.Last())
 		assert.Equal(t, want, got)
+	}
+}
+
+func TestSubtract(t *testing.T) {
+	tests := []struct {
+		name       string
+		lhs        string
+		rhs        string
+		difference string
+		wantErr    string
+	}{
+		{
+			name:       "Extra GTID set on left side",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			difference: "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+		}, {
+			name:       "Extra GTID set on right side",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			difference: "",
+		}, {
+			name:       "Empty left side",
+			lhs:        "",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			difference: "",
+		}, {
+			name:       "Empty right side",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			rhs:        "",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+		}, {
+			name:       "Equal sets",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			difference: "",
+		}, {
+			name:    "parsing error in left set",
+			lhs:     "incorrect set",
+			rhs:     "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			wantErr: `invalid MySQL 5.6 GTID set ("incorrect set"): expected uuid:interval`,
+		}, {
+			name:    "parsing error in right set",
+			lhs:     "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:     "incorrect set",
+			wantErr: `invalid MySQL 5.6 GTID set ("incorrect set"): expected uuid:interval`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s: %s-%s", tt.name, tt.lhs, tt.rhs), func(t *testing.T) {
+			got, err := Subtract(tt.lhs, tt.rhs)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.difference, got)
+			}
+		})
 	}
 }

@@ -2,17 +2,12 @@ package ssl_test
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
-	"fmt"
-	nethttp "net/http"
 	"os"
 	"reflect"
 	"strings"
 	"syscall"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/ssl"
 )
 
@@ -57,64 +52,6 @@ func TestNewTLSConfig(t *testing.T) {
 	}
 	if conf.ClientCAs != nil {
 		t.Errorf("Filling in ClientCA somehow without a cert")
-	}
-}
-
-func TestStatus(t *testing.T) {
-	var validOUs []string
-	url := fmt.Sprintf("http://example.com%s", config.Config.StatusEndpoint)
-
-	req, err := nethttp.NewRequest("GET", url, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Config.StatusOUVerify = false
-	if err := ssl.Verify(req, validOUs); err != nil {
-		t.Errorf("Failed even with verification off")
-	}
-	config.Config.StatusOUVerify = true
-	if err := ssl.Verify(req, validOUs); err == nil {
-		t.Errorf("Did not fail on with bad verification")
-	}
-}
-
-func TestVerify(t *testing.T) {
-	var validOUs []string
-
-	req, err := nethttp.NewRequest("GET", "http://example.com/foo", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := ssl.Verify(req, validOUs); err == nil {
-		t.Errorf("Did not fail on lack of TLS config")
-	}
-
-	pemBlock, _ := pem.Decode([]byte(pemCertificate))
-	cert, err := x509.ParseCertificate(pemBlock.Bytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var tcs tls.ConnectionState
-	req.TLS = &tcs
-
-	if err := ssl.Verify(req, validOUs); err == nil {
-		t.Errorf("Found a valid OU without any being available")
-	}
-
-	// Set a fake OU
-	cert.Subject.OrganizationalUnit = []string{"testing"}
-
-	// Pretend our request had a certificate
-	req.TLS.PeerCertificates = []*x509.Certificate{cert}
-	req.TLS.VerifiedChains = [][]*x509.Certificate{req.TLS.PeerCertificates}
-
-	// Look for fake OU
-	validOUs = []string{"testing"}
-
-	if err := ssl.Verify(req, validOUs); err != nil {
-		t.Errorf("Failed to verify certificate OU")
 	}
 }
 
