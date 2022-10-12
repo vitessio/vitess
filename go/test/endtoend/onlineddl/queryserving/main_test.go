@@ -66,6 +66,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_consolidator=false")
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
