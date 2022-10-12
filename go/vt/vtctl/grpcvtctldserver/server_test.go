@@ -11180,6 +11180,118 @@ func TestValidateVersionKeyspace(t *testing.T) {
 	}
 }
 
+func TestValidateVersionShard(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1", "zone2")
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+
+	tablets := []*topodatapb.Tablet{
+		{
+			Keyspace: "ks",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_PRIMARY,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Hostname: "primary",
+		},
+		{
+			Keyspace: "ks",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_REPLICA,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Hostname: "replica",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+		SkipShardCreation:    false,
+	}, tablets...)
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tests := []*struct {
+		name      string
+		req       *vtctldatapb.ValidateVersionShardRequest
+		expected  *vtctldatapb.ValidateVersionShardResponse
+		setup     func()
+		shouldErr bool
+	}{
+		{
+			name: "valid versions",
+			req: &vtctldatapb.ValidateVersionShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.ValidateVersionShardResponse{
+				Results: []string{},
+			},
+			setup: func() {
+				addrVersionMap := map[string]string{
+					"primary:0": "version1",
+					"replica:0": "version1",
+				}
+				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+			},
+			shouldErr: false,
+		},
+		{
+			name: "different versions",
+			req: &vtctldatapb.ValidateVersionShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.ValidateVersionShardResponse{
+				Results: []string{"primary zone1-0000000100 version version1 is different than replica zone1-0000000101 version version:\"version2\""},
+			},
+			setup: func() {
+				addrVersionMap := map[string]string{
+					"primary:0": "version1",
+					"replica:0": "version2",
+				}
+				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+			},
+			shouldErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.setup()
+			resp, err := vtctld.ValidateVersionShard(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestValidateShard(t *testing.T) {
 	t.Parallel()
 
