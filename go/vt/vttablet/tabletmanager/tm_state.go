@@ -138,6 +138,7 @@ func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
 	return nil
 }
 
+//rohit
 func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.ShardInfo, srvKeyspace *topodatapb.SrvKeyspace) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()

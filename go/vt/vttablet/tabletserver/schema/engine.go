@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
@@ -133,6 +132,8 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	if err == nil {
 		conn.Close()
 		se.dbCreationFailed = false
+		//rohit
+		//sidecardb.Init() if primary
 		return nil
 	}
 	if tabletType != topodatapb.TabletType_PRIMARY {
@@ -163,6 +164,9 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+
+	//rohit
+	//sidecardb.Init()
 	return nil
 }
 
