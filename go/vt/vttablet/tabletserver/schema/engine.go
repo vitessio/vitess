@@ -24,6 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
@@ -124,6 +127,21 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
+func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+		_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
+		if err != nil {
+			return nil, err
+		}
+		return conn.ExecuteFetch(query, maxRows, wantFields)
+	}
+	if err := sidecardb.Init(ctx, exec); err != nil {
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
 // EnsureConnectionAndDB ensures that we can connect to mysql.
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
@@ -133,6 +151,9 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	if err == nil {
 		conn.Close()
 		se.dbCreationFailed = false
+		if err := syncVTDatabase(ctx, conn); err != nil {
+			return err
+		}
 		return nil
 	}
 	if tabletType != topodatapb.TabletType_PRIMARY {
@@ -163,6 +184,9 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+	if err := syncVTDatabase(ctx, conn); err != nil {
+		return err
+	}
 	return nil
 }
 

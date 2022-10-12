@@ -69,7 +69,7 @@ type VTSchemaInit struct {
 type Exec func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error)
 
 // Init creates or upgrades the _vt schema based on declarative schema for all _vt tables
-func Init(ctx context.Context, exec Exec, metadataTables bool) error {
+func Init(ctx context.Context, exec Exec) error {
 	PrintCallerDetails()
 	if !InitVTSchemaOnTabletInit {
 		log.Infof("init-vt-schema-on-tablet-init NOT set, not updating _vt schema on tablet init")
@@ -97,12 +97,6 @@ func Init(ctx context.Context, exec Exec, metadataTables bool) error {
 	}
 
 	for _, table := range vtTables {
-		if metadataTables && table.module != "Metadata" {
-			continue
-		}
-		if !metadataTables && table.module == "Metadata" {
-			continue
-		}
 		if err := si.createOrUpgradeTable(table); err != nil {
 			return err
 		}
