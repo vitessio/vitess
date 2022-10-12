@@ -284,6 +284,9 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
 		if params.IsIncrementalRecovery() && !params.DryRun {
+			// The whole point of point-in-time recovery is that we want to restore up to a given position,
+			// and to NOT proceed from that position. We want to disable replication and NOT let the replica catch
+			// up with the primary.
 			params.Logger.Infof("Restore: disabling replication")
 			if err := tm.disableReplication(context.Background()); err != nil {
 				return err
@@ -548,6 +551,9 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	}
 }
 
+// disableReplication stopes and resets replication on the mysql server. It moreover sets impossible replication
+// source params, so that the replica can't possibly reconnect. It would take a `CHANGE [MASTER|REPLICATION SOURCE] TO ...` to
+// make the mysql server replicate again (available via tm.MysqlDaemon.SetReplicationPosition)
 func (tm *TabletManager) disableReplication(ctx context.Context) error {
 	cmds := []string{
 		"STOP SLAVE",
