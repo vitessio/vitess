@@ -136,7 +136,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/...
+        run: $(go env GOPATH)/bin/golangci-lint run go/... || exit 1
 
       - name: Run go mod tidy
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -156,19 +156,19 @@ jobs:
       - name: check_make_parser
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
         run: |
-          tools/check_make_parser.sh
+          tools/check_make_parser.sh || exit 1
 
       ## Sizegen
       - name: check_make_sizegen
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.sizegen == 'true'
         run: |
-          tools/check_make_sizegen.sh
+          tools/check_make_sizegen.sh || exit 1
 
       ## Visitor
       - name: check_make_visitor
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.visitor == 'true'
         run: |
-          misc/git/hooks/asthelpers
+          misc/git/hooks/asthelpers || exit 1
 
       ## Docker
       - name: run ensure_bootstrap_version
@@ -182,4 +182,4 @@ jobs:
       - name: check_make_proto
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
         run: |
-          tools/check_make_proto.sh
+          tools/check_make_proto.sh || exit 1
