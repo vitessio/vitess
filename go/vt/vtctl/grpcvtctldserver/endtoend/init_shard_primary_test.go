@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -52,12 +54,7 @@ func TestInitShardPrimary(t *testing.T) {
 
 	tablet1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
+		mysqlctl.GenerateInitialBinLogEntry(),
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 
@@ -119,12 +116,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 
 	tablet1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
+		mysqlctl.GenerateInitialBinLogEntry(),
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 

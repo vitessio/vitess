@@ -30,6 +30,8 @@ import (
 	"time"
 	"unicode"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -497,8 +499,28 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	return nil
 }
 
+func (db *LocalCluster) createVTSchema() error {
+	var exec2 sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error) {
+		if useVT {
+			if err := db.Execute([]string{sidecardb.UseVTDatabaseQuery}, ""); err != nil {
+				return nil, err
+			}
+		}
+		err := db.Execute([]string{query}, "")
+		return &sqltypes.Result{}, err
+	}
+
+	if err := sidecardb.Init(context.Background(), exec2); err != nil {
+		return err
+	}
+	return nil
+}
 func (db *LocalCluster) createDatabases() error {
 	log.Info("Creating databases in cluster...")
+
+	if err := db.createVTSchema(); err != nil {
+		return err
+	}
 
 	var sql []string
 	for _, kpb := range db.Topology.Keyspaces {
@@ -530,7 +552,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	for _, cmd := range sql {
 		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
-		_, err := conn.ExecuteFetch(cmd, 0, false)
+		_, err := conn.ExecuteFetch(cmd, 10000, false)
 		if err != nil {
 			return err
 		}

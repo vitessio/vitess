@@ -323,3 +323,18 @@ Creating a database with vttestserver was taking ~45 seconds. This can be proble
 In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
 For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this value might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
 this shouldn't be a concern.
+
+## Refactor
+
+### vtttablet _vt sidecar schema maintenance refactor
+
+v16 changes the way we maintain the _vt schema. Instead of using `withddl` introduced in #6348 we use a declarative
+approach. This is made possible by `schemadiff` which was created initially for Online DDL's declarative strategy.
+
+The desired schema is specified, one per table. A new module `sidecardb`, compares this to the existing schema and
+performs the required create or alter to reach it. This is done on the primary, on every vttablet startup.
+
+The sidecar tables `local_metadata` and `shard_metadata` are no longer in use and all references to them are removed as
+part of this refactor. There were used previously for Orchestrator support, which has been superseded by `vtorc`.
+
+

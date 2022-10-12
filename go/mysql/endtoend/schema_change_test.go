@@ -32,7 +32,6 @@ import (
 var ctx = context.Background()
 
 const (
-	createDb        = `create database if not exists _vt`
 	createUserTable = `create table vttest.product (id bigint(20) primary key, name char(10) CHARACTER SET utf8 COLLATE utf8_unicode_ci, created bigint(20))`
 	dropTestTable   = `drop table if exists product`
 )
@@ -41,11 +40,6 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
-
-	_, err = conn.ExecuteFetch(createDb, 1000, true)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(mysql.CreateSchemaCopyTable, 1000, true)
-	require.NoError(t, err)
 
 	tests := []struct {
 		name    string

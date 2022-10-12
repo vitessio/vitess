@@ -24,37 +24,18 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 
 	"context"
 )
 
-// CreateReparentJournal returns the commands to execute to create
-// the _vt.reparent_journal table. It is safe to run these commands
-// even if the table already exists.
-func CreateReparentJournal() []string {
-	return []string{
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS _vt.reparent_journal (
-  time_created_ns BIGINT UNSIGNED NOT NULL,
-  action_name VARBINARY(250) NOT NULL,
-  primary_alias VARBINARY(32) NOT NULL,
-  replication_position VARBINARY(%v) DEFAULT NULL,
-  PRIMARY KEY (time_created_ns))
-ENGINE=InnoDB`, mysql.MaximumPositionSize)}
-}
-
-// AlterReparentJournal returns the commands to execute to change
-// column master_alias -> primary_alias or the other way
-// In 13.0.0 we introduced renaming of primary_alias -> master_alias.
-// This was to support in-place downgrade from a later version.
-// In 14.0.0 we replace that with renaming of master_alias -> primary_alias.
-// This is to support in-place upgrades from 13.0.x to 14.0.x
-func AlterReparentJournal() []string {
-	return []string{
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
-	}
+// GenerateInitialBinLogEntry is used to create a binlog entry when a primary comes up and we need to get a
+// MySQL position so that we can set it as the starting position for replicas to do MySQL Replication from.
+func GenerateInitialBinLogEntry() string {
+	return sidecardb.CreateVTDatabaseQuery
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
@@ -82,6 +63,9 @@ func queryReparentJournal(timeCreatedNS int64) string {
 func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error {
 	for {
 		qr, err := mysqld.FetchSuperQuery(ctx, queryReparentJournal(timeCreatedNS))
+		if err != nil {
+			log.Infof("error query reparent journal %v", err)
+		}
 		if err == nil && len(qr.Rows) == 1 {
 			// we have the row, we're done
 			return nil

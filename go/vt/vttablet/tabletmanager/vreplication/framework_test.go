@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
@@ -47,7 +48,6 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
-	"vitess.io/vitess/go/vt/withddl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -148,34 +148,6 @@ func TestMain(m *testing.M) {
 		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
 		playerEngine.Open(context.Background())
 		defer playerEngine.Close()
-		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-
-		for _, query := range binlogplayer.AlterVReplicationTable {
-			env.Mysqld.ExecuteSuperQuery(context.Background(), query)
-		}
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), alterCopyState); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createPostCopyAction); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createVReplicationLogTable); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
 
 		return m.Run()
 	}()
@@ -448,10 +420,6 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	// Use Clone() because the contents of memory region referenced by
 	// string can change when clients (e.g. vcopier) use unsafe string methods.
 	query = strings.Clone(query)
-	if strings.HasPrefix(query, "use") ||
-		query == withddl.QueryToTriggerWithDDL { // this query breaks unit tests since it errors out
-		return nil, nil
-	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
 	if doNotLogDBQueries {
 		return qr, err
@@ -521,6 +489,9 @@ func shouldIgnoreQuery(query string) bool {
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
 	}
+	if sidecardb.MatchesVTInitQuery(query) {
+		return true
+	}
 	for _, q := range queriesToIgnore {
 		if strings.Contains(query, q) {
 			return true
@@ -530,9 +501,6 @@ func shouldIgnoreQuery(query string) bool {
 }
 
 func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, skippableOnce ...string) {
-	extraQueries := withDDL.DDLs()
-	extraQueries = append(extraQueries, withDDLInitialQueries...)
-	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
 	skippedOnce := false
@@ -551,11 +519,6 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 			// is indeterminable and varies with each test execution.
 			if shouldIgnoreQuery(got) {
 				goto retry
-			}
-			for _, extraQuery := range extraQueries {
-				if got == extraQuery {
-					goto retry
-				}
 			}
 
 			result := validator.AcceptQuery(got)
@@ -602,8 +565,6 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 
 	failed := false
 
-	skipQueries := withDDLInitialQueries
-	skipQueries = append(skipQueries, withDDL.DDLs()...)
 	validator := qh.NewVerifier(expectations)
 
 	for len(validator.Pending()) > 0 {
@@ -617,11 +578,6 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 		case got = <-globalDBQueries:
 			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || shouldIgnoreQuery(got) {
 				goto retry
-			}
-			for _, skipQuery := range skipQueries {
-				if got == skipQuery {
-					goto retry
-				}
 			}
 
 			result := validator.AcceptQuery(got)

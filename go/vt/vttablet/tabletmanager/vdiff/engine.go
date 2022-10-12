@@ -278,7 +278,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 
 	// We have to use ExecIgnore here so as not to block quick tablet state
 	// transitions from primary to non-primary when starting the engine
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRun, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRun, 10000)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +289,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, 10000)
 	if err != nil {
 		return nil, err
 	}
