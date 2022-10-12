@@ -42,6 +42,8 @@ var builtinFunctions = map[string]builtin{
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
 	"isnull": builtinIsNullRewrite,
+	"ifnull": builtinIfNullRewrite,
+	"nullif": builtinNullIfRewrite,
 }
 
 type builtin interface {
@@ -380,7 +382,7 @@ func (builtinCollation) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, fl
 	return sqltypes.VarChar, 0
 }
 
-func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
+func builtinIsNullRewrite(args []Expr, _ TranslationLookup) (Expr, error) {
 	if len(args) != 1 {
 		return nil, argError("ISNULL")
 	}
@@ -389,6 +391,42 @@ func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
 		Op:        sqlparser.IsNullOp,
 		Check:     func(er *EvalResult) bool { return er.isNull() },
 	}, nil
+}
+
+func builtinIfNullRewrite(args []Expr, _ TranslationLookup) (Expr, error) {
+	if len(args) != 2 {
+		return nil, argError("IFNULL")
+	}
+	var result CaseExpr
+	result.cases = append(result.cases, WhenThen{
+		when: &IsExpr{
+			UnaryExpr: UnaryExpr{args[0]},
+			Op:        sqlparser.IsNullOp,
+			Check:     func(er *EvalResult) bool { return er.isNull() },
+		},
+		then: args[1],
+	})
+	result.Else = args[0]
+	return &result, nil
+}
+
+func builtinNullIfRewrite(args []Expr, _ TranslationLookup) (Expr, error) {
+	if len(args) != 2 {
+		return nil, argError("NULLIF")
+	}
+	var result CaseExpr
+	result.cases = append(result.cases, WhenThen{
+		when: &ComparisonExpr{
+			BinaryExpr: BinaryExpr{
+				Left:  args[0],
+				Right: args[1],
+			},
+			Op: compareEQ{},
+		},
+		then: NullExpr,
+	})
+	result.Else = args[0]
+	return &result, nil
 }
 
 type builtinBitCount struct{}

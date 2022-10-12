@@ -93,16 +93,6 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
                     )
             )}
 
-            {warnings.map(
-                (warning, i) =>
-                    warning && (
-                        <div className="text-danger flex items-center" key={i}>
-                            <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
-                            {warning}
-                        </div>
-                    )
-            )}
-
             {/* Don't render the confirmation input if "disabled" prop is set */}
             {requiresConfirmation && !disabled && (
                 <>

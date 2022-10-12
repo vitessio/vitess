@@ -153,6 +153,15 @@ Use ctrl-C to interrupt the command and see partial results if needed.`,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSourceShardDelete,
 	}
+
+	// ValidateVersionShard makes a ValidateVersionShard gRPC request to a vtctld.
+	ValidateVersionShard = &cobra.Command{
+		Use:                   "ValidateVersionShard <keyspace/shard>",
+		Short:                 "Validates that the version on the primary matches all of the replicas.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandValidateVersionShard,
+	}
 )
 
 var createShardOptions = struct {
@@ -546,6 +555,31 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandValidateVersionShard(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.ValidateVersionShard(commandCtx, &vtctldatapb.ValidateVersionShardRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 func init() {
 	CreateShard.Flags().BoolVarP(&createShardOptions.Force, "force", "f", false, "Overwrite an existing shard record, if one exists.")
 	CreateShard.Flags().BoolVarP(&createShardOptions.IncludeParent, "include-parent", "p", false, "Creates the parent keyspace record if does not already exist.")
@@ -574,6 +608,7 @@ func init() {
 	Root.AddCommand(ShardReplicationFix)
 	Root.AddCommand(ShardReplicationPositions)
 	Root.AddCommand(ShardReplicationRemove)
+	Root.AddCommand(ValidateVersionShard)
 
 	SourceShardAdd.Flags().StringVar(&sourceShardAddOptions.KeyRangeStr, "key-range", "", "Key range to use for the SourceShard.")
 	SourceShardAdd.Flags().StringSliceVar(&sourceShardAddOptions.Tables, "tables", nil, "Comma-separated lists of tables to replicate (for MoveTables). Each table name is either an exact match, or a regular expression of the form \"/regexp/\".")

@@ -161,12 +161,11 @@ func addMap(input map[string]any, buf *bytes.Buffer) error {
 
 func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 	buf.WriteString(prepend + `"` + name + `":`)
-	b, err := json.Marshal(obj)
-	if err != nil {
-		return err
-	}
-	buf.Write(b)
-	return nil
+
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+
+	return enc.Encode(obj)
 }
 
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree

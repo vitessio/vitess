@@ -985,8 +985,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "normalized COLLATE value",
 			from:  "create table t1 (id int primary key) engine=innodb",
 			to:    "create table t1 (id int primary key) engine=innodb, collate=UTF8_BIN",
-			diff:  "alter table t1 collate utf8_bin",
-			cdiff: "ALTER TABLE `t1` COLLATE utf8_bin",
+			diff:  "alter table t1 collate utf8mb3_bin",
+			cdiff: "ALTER TABLE `t1` COLLATE utf8mb3_bin",
 		},
 	}
 	standardHints := DiffHints{}
@@ -1616,17 +1616,17 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "maps utf8 to utf8mb3",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_general_ci) charset utf8 collate utf8_general_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_general_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_general_ci",
 		},
 		{
 			name: "lowercase table options for charset and collation",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_general_ci) charset UTF8 collate UTF8_GENERAL_CI",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_general_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_general_ci",
 		},
 		{
 			name: "drops existing collation if it matches table default at column level for non default charset",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb3 collate utf8_unicode_ci) charset utf8mb3 collate utf8_unicode_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_unicode_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_unicode_ci",
 		},
 		{
 			name: "correct case table options for engine",
