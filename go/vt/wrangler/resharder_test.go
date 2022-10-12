@@ -454,10 +454,6 @@ func TestResharderCopySchema(t *testing.T) {
 	env.expectValidation()
 	env.expectNoRefStream()
 
-	// These queries confirm that the copy schema function is getting called.
-	env.tmc.expectVRQuery(100, "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(100, "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'", &sqltypes.Result{})
-
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+

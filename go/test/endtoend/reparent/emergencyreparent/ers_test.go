@@ -388,7 +388,6 @@ func TestERSForInitialization(t *testing.T) {
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
 		"--enable_semi_sync",
-		"--init_populate_metadata",
 		"--track_schema_versions=true",
 	}
 

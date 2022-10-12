@@ -74,7 +74,6 @@ import (
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -159,7 +158,6 @@ func main() {
 
 	servenv.ParseFlags("vtbackup")
 	servenv.Init()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	servenv.OnClose(func() {
 		cancel()
@@ -304,15 +302,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
-		cmds := mysqlctl.CreateReparentJournal()
-		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
-		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
-			return fmt.Errorf("can't initialize database: %v", err)
-		}
-
-		// Execute Alter commands on reparent_journal and ignore errors
-		cmds = mysqlctl.AlterReparentJournal()
-		_ = mysqld.ExecuteSuperQueryList(ctx, cmds)
+		cmd := mysqlctl.GenerateInitialBinLogEntry()
+		_ = mysqld.ExecuteSuperQueryList(ctx, []string{cmd})
 
 		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
@@ -331,7 +322,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Logger:              logutil.NewConsoleLogger(),
 		Concurrency:         concurrency,
 		HookExtraEnv:        extraEnv,
-		LocalMetadata:       map[string]string{},
 		DeleteBeforeRestore: true,
 		DbName:              dbName,
 		Keyspace:            initKeyspace,
@@ -397,6 +387,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err != nil {
 		return err
 	}
+
+	log.Infof("takeBackup: primary position is: %s", primaryPos.String())
 
 	// Remember the time when we fetched the primary position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it

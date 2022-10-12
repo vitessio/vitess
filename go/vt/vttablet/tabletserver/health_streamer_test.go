@@ -171,9 +171,6 @@ func TestReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
-	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
-	db.AddQuery(mysql.CreateViewsTable, &sqltypes.Result{})
 	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -285,9 +282,6 @@ func TestInitialReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
-	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
-	db.AddQuery(mysql.CreateViewsTable, &sqltypes.Result{})
 	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})

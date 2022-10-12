@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS _vt.views
+(
+    TABLE_NAME varchar(64) NOT NULL,
+    VIEW_DEFINITION longtext NOT NULL,
+    CREATE_STATEMENT longtext NOT NULL,
+    PRIMARY KEY (TABLE_NAME)
+) engine = InnoDB

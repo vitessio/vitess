@@ -21,8 +21,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -124,15 +129,62 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
+// syncVTDatabase is called either the first time a primary starts or on consequent loads to possibly upgrade to a
+// new Vitess version. This is the only entry point into the sidecardb module to get the _vt database to the desired
+// schema for the running Vitess version.
+// There is some extra logging in here which can be removed in a future version (>v16) once the new schema init
+// functionality is stable.
+func (se *Engine) syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	log.Infof("In syncVTDatabase")
+	defer func(start time.Time) {
+		log.Infof("syncVTDatabase took %d ms", time.Since(start).Milliseconds())
+	}(time.Now())
+
+	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error) {
+		if useVT {
+			_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return conn.ExecuteFetch(query, maxRows, wantFields)
+	}
+	log.Infof("before sidecardb.Init")
+	if err := sidecardb.Init(ctx, exec); err != nil {
+		log.Errorf("Error in sidecardb.Init: %+v", err)
+		// temporary logging, to be deleted in v17
+		if strings.Contains(err.Error(), "--read-only") {
+			rs, _ := conn.ExecuteFetch("SHOW GLOBAL VARIABLES LIKE '%read_only%'", 100, false)
+			log.Infof("Readonly variable values: %+v", rs.Rows)
+			log.Infof("Got read-only error from _vt database init %s.\n%s", err.Error(), debug.Stack())
+		}
+		if se.env.Config().DB.HasGlobalSettings() {
+			log.Warning("ignoring sidecardb Init error for unmanaged tablets")
+			return nil
+		}
+		log.Errorf("syncVTDatabase error %+v", err)
+		return err
+	}
+	log.Infof("syncVTDatabase done")
+	return nil
+}
+
 // EnsureConnectionAndDB ensures that we can connect to mysql.
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
 	ctx := tabletenv.LocalContext()
-	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
-		conn.Close()
 		se.dbCreationFailed = false
+		// upgrade _vt if required, for a tablet with an existing database
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			if err := se.syncVTDatabase(ctx, conn); err != nil {
+				conn.Close()
+				return err
+			}
+		}
+		conn.Close()
 		return nil
 	}
 	if tabletType != topodatapb.TabletType_PRIMARY {
@@ -163,6 +215,10 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+	// creates _vt schema, the first time the database is created
+	if err := se.syncVTDatabase(ctx, conn); err != nil {
+		return err
+	}
 	return nil
 }
 
