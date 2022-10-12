@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
@@ -4600,7 +4602,11 @@ func TestGetWorkflows(t *testing.T) {
 	}
 }
 
-func TestVTExplain(t *testing.T) {
+func TestVTExplain2(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
+
 	t.Parallel()
 
 	tests := []struct {
@@ -4826,6 +4832,9 @@ func TestVTExplain(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
+			oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+			sidecardb.SetInitVTSchemaFlag(false)
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			t.Parallel()
 
 			toposerver := memorytopo.NewServer("c0_cell1")

@@ -528,6 +528,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+			log.Info(">>>>> setting readonly to false...")
 			// setting read_only OFF will also set super_read_only OFF if it was set
 			if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
 				log.Warningf("SetReadOnly(false) failed during revert: %v", err)

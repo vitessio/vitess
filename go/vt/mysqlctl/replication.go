@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -233,6 +234,7 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 
 // SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
+	log.Infof(">>>>> SetReadOnly %t %s", on, debug.Stack())
 	query := "SET GLOBAL read_only = "
 	if on {
 		query += "ON"

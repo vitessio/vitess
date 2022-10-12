@@ -83,7 +83,8 @@ var (
 	initDbNameOverride string
 	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
-	initTimeout        = 1 * time.Minute
+
+	initTimeout = 1 * time.Minute
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -207,9 +208,9 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet_hostname.", hostname)
+		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet_hostname. Tablet %s", hostname, alias.String())
 	} else {
-		log.Infof("Using hostname: %v from --tablet_hostname flag.", hostname)
+		log.Infof("Using hostname: %v from --tablet_hostname flag. Tablet %s", hostname, alias.String())
 	}
 
 	if initKeyspace == "" || initShard == "" {
@@ -334,6 +335,10 @@ func mergeTags(a, b map[string]string) map[string]string {
 
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval time.Duration) error {
+	defer func() {
+		log.Infof("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
+	}()
+	log.Infof("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
 	tm.tabletAlias = tablet.Alias
@@ -399,12 +404,13 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		// of updating the tablet state and initializing replication.
 		return nil
 	}
-
+	log.Infof("calling initializeReplication")
 	// We should be re-read the tablet from tabletManager and use the type specified there.
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
 	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
 	tm.tmState.Open()
+	log.Infof("TabletManager End")
 	return err
 }
 

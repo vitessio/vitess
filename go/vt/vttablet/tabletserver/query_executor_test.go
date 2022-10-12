@@ -1548,6 +1548,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 		"varchar|int64"),
 		"Innodb_rows_read|0",
 	))
+	db.AddVTSchemaInitQueries()
 }
 
 func getTestTableFields() []*querypb.Field {

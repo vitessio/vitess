@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -44,6 +45,8 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -68,12 +71,14 @@ func TestCreateKeyspace(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -93,6 +98,7 @@ func TestCreateKeyspace(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -113,6 +119,8 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestCreateShard(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -137,12 +145,14 @@ func TestCreateShard(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -163,6 +173,7 @@ func TestCreateShard(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -184,6 +195,8 @@ func TestCreateShard(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -208,12 +221,14 @@ func TestDeleteKeyspace(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -233,6 +248,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -253,6 +269,8 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestDeleteShards(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -277,12 +295,14 @@ func TestDeleteShards(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -307,6 +327,7 @@ func TestDeleteShards(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -332,6 +353,8 @@ func TestDeleteShards(t *testing.T) {
 }
 
 func TestDeleteTablet(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -356,12 +379,14 @@ func TestDeleteTablet(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -382,6 +407,7 @@ func TestDeleteTablet(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -403,6 +429,8 @@ func TestDeleteTablet(t *testing.T) {
 }
 
 func TestEmergencyFailoverShard(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -427,12 +455,14 @@ func TestEmergencyFailoverShard(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -453,6 +483,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -474,6 +505,8 @@ func TestEmergencyFailoverShard(t *testing.T) {
 }
 
 func TestFindSchema(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -503,10 +536,12 @@ func TestFindSchema(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -526,10 +561,12 @@ func TestFindSchema(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -548,10 +585,12 @@ func TestFindSchema(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -573,6 +612,8 @@ func TestFindSchema(t *testing.T) {
 }
 
 func TestGetBackups(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -603,12 +644,14 @@ func TestGetBackups(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -623,6 +666,7 @@ func TestGetBackups(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -637,6 +681,7 @@ func TestGetBackups(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -652,6 +697,8 @@ func TestGetBackups(t *testing.T) {
 }
 
 func TestGetCellInfos(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -682,12 +729,14 @@ func TestGetCellInfos(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -704,6 +753,7 @@ func TestGetCellInfos(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -720,6 +770,7 @@ func TestGetCellInfos(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -737,6 +788,8 @@ func TestGetCellInfos(t *testing.T) {
 }
 
 func TestGetCellsAliases(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -767,12 +820,14 @@ func TestGetCellsAliases(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -787,6 +842,7 @@ func TestGetCellsAliases(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -801,6 +857,7 @@ func TestGetCellsAliases(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -816,6 +873,8 @@ func TestGetCellsAliases(t *testing.T) {
 }
 
 func TestGetClusters(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -840,12 +899,14 @@ func TestGetClusters(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthenticated", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		var actor *rbac.Actor
@@ -859,6 +920,7 @@ func TestGetClusters(t *testing.T) {
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -872,6 +934,7 @@ func TestGetClusters(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -887,6 +950,8 @@ func TestGetClusters(t *testing.T) {
 }
 
 func TestGetGates(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -916,10 +981,12 @@ func TestGetGates(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -937,10 +1004,12 @@ func TestGetGates(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -959,10 +1028,12 @@ func TestGetGates(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -982,6 +1053,8 @@ func TestGetGates(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1006,12 +1079,14 @@ func TestGetKeyspace(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -1029,6 +1104,7 @@ func TestGetKeyspace(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -1047,6 +1123,8 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1077,12 +1155,14 @@ func TestGetKeyspaces(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -1097,6 +1177,7 @@ func TestGetKeyspaces(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -1118,6 +1199,7 @@ func TestGetKeyspaces(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -1140,6 +1222,8 @@ func TestGetKeyspaces(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1163,10 +1247,12 @@ func TestGetSchema(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1188,10 +1274,12 @@ func TestGetSchema(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1214,6 +1302,8 @@ func TestGetSchema(t *testing.T) {
 }
 
 func TestGetSchemas(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1243,10 +1333,12 @@ func TestGetSchemas(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1264,10 +1356,12 @@ func TestGetSchemas(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1292,10 +1386,12 @@ func TestGetSchemas(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1321,6 +1417,8 @@ func TestGetSchemas(t *testing.T) {
 }
 
 func TestGetShardReplicationPositions(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1351,12 +1449,14 @@ func TestGetShardReplicationPositions(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -1371,6 +1471,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -1392,6 +1493,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -1414,6 +1516,8 @@ func TestGetShardReplicationPositions(t *testing.T) {
 }
 
 func TestGetSrvVSchema(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1438,12 +1542,14 @@ func TestGetSrvVSchema(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -1461,6 +1567,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -1479,6 +1586,8 @@ func TestGetSrvVSchema(t *testing.T) {
 }
 
 func TestGetSrvVSchemas(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1509,12 +1618,14 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -1529,6 +1640,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -1550,6 +1662,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -1572,6 +1685,8 @@ func TestGetSrvVSchemas(t *testing.T) {
 }
 
 func TestGetTablet(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1596,12 +1711,14 @@ func TestGetTablet(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -1621,6 +1738,7 @@ func TestGetTablet(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -1641,6 +1759,8 @@ func TestGetTablet(t *testing.T) {
 }
 
 func TestGetTablets(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1671,12 +1791,14 @@ func TestGetTablets(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -1691,6 +1813,7 @@ func TestGetTablets(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -1712,6 +1835,7 @@ func TestGetTablets(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -1734,6 +1858,8 @@ func TestGetTablets(t *testing.T) {
 }
 
 func TestGetVSchema(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1758,12 +1884,14 @@ func TestGetVSchema(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -1781,6 +1909,7 @@ func TestGetVSchema(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -1799,6 +1928,8 @@ func TestGetVSchema(t *testing.T) {
 }
 
 func TestGetVSchemas(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1829,12 +1960,14 @@ func TestGetVSchemas(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -1849,6 +1982,7 @@ func TestGetVSchemas(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -1870,6 +2004,7 @@ func TestGetVSchemas(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -1892,6 +2027,8 @@ func TestGetVSchemas(t *testing.T) {
 }
 
 func TestGetVtctlds(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -1921,10 +2058,12 @@ func TestGetVtctlds(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1942,10 +2081,12 @@ func TestGetVtctlds(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1964,10 +2105,12 @@ func TestGetVtctlds(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}
@@ -1987,6 +2130,8 @@ func TestGetVtctlds(t *testing.T) {
 }
 
 func TestGetWorkflow(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2011,12 +2156,14 @@ func TestGetWorkflow(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2035,6 +2182,7 @@ func TestGetWorkflow(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2054,6 +2202,8 @@ func TestGetWorkflow(t *testing.T) {
 }
 
 func TestGetWorkflows(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2084,12 +2234,14 @@ func TestGetWorkflows(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -2104,6 +2256,7 @@ func TestGetWorkflows(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -2118,6 +2271,7 @@ func TestGetWorkflows(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -2133,6 +2287,8 @@ func TestGetWorkflows(t *testing.T) {
 }
 
 func TestPingTablet(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2157,12 +2313,14 @@ func TestPingTablet(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2182,6 +2340,7 @@ func TestPingTablet(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2202,6 +2361,8 @@ func TestPingTablet(t *testing.T) {
 }
 
 func TestPlannedFailoverShard(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2226,12 +2387,14 @@ func TestPlannedFailoverShard(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2252,6 +2415,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2273,6 +2437,8 @@ func TestPlannedFailoverShard(t *testing.T) {
 }
 
 func TestRefreshState(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2297,12 +2463,14 @@ func TestRefreshState(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2322,6 +2490,7 @@ func TestRefreshState(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2342,6 +2511,8 @@ func TestRefreshState(t *testing.T) {
 }
 
 func TestRefreshTabletReplicationSource(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2366,12 +2537,14 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2391,6 +2564,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2411,6 +2585,8 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 }
 
 func TestReloadSchemas(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2441,12 +2617,14 @@ func TestReloadSchemas(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
@@ -2466,6 +2644,7 @@ func TestReloadSchemas(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
@@ -2484,6 +2663,7 @@ func TestReloadSchemas(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
@@ -2503,6 +2683,8 @@ func TestReloadSchemas(t *testing.T) {
 }
 
 func TestRunHealthCheck(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2527,12 +2709,14 @@ func TestRunHealthCheck(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2552,6 +2736,7 @@ func TestRunHealthCheck(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2572,6 +2757,8 @@ func TestRunHealthCheck(t *testing.T) {
 }
 
 func TestSetReadOnly(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2596,12 +2783,14 @@ func TestSetReadOnly(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2621,6 +2810,7 @@ func TestSetReadOnly(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2641,6 +2831,8 @@ func TestSetReadOnly(t *testing.T) {
 }
 
 func TestSetReadWrite(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2665,12 +2857,14 @@ func TestSetReadWrite(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2690,6 +2884,7 @@ func TestSetReadWrite(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2710,6 +2905,8 @@ func TestSetReadWrite(t *testing.T) {
 }
 
 func TestStartReplication(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2734,12 +2931,14 @@ func TestStartReplication(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2759,6 +2958,7 @@ func TestStartReplication(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2779,6 +2979,8 @@ func TestStartReplication(t *testing.T) {
 }
 
 func TestStopReplication(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2803,12 +3005,14 @@ func TestStopReplication(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2828,6 +3032,7 @@ func TestStopReplication(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2848,6 +3053,8 @@ func TestStopReplication(t *testing.T) {
 }
 
 func TestTabletExternallyPromoted(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2872,12 +3079,14 @@ func TestTabletExternallyPromoted(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2897,6 +3106,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2917,6 +3127,8 @@ func TestTabletExternallyPromoted(t *testing.T) {
 }
 
 func TestVTExplain(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -2941,12 +3153,14 @@ func TestVTExplain(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -2964,6 +3178,7 @@ func TestVTExplain(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -2982,6 +3197,8 @@ func TestVTExplain(t *testing.T) {
 }
 
 func TestValidateKeyspace(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -3006,12 +3223,14 @@ func TestValidateKeyspace(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -3029,6 +3248,7 @@ func TestValidateKeyspace(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -3047,6 +3267,8 @@ func TestValidateKeyspace(t *testing.T) {
 }
 
 func TestValidateSchemaKeyspace(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -3071,12 +3293,14 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -3094,6 +3318,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
@@ -3112,6 +3337,8 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 }
 
 func TestValidateVersionKeyspace(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -3136,12 +3363,14 @@ func TestValidateVersionKeyspace(t *testing.T) {
 
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
@@ -3159,6 +3388,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}

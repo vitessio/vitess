@@ -98,6 +98,7 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 }
 
 func (ts *tmState) Open() {
+	log.Infof("Calling taState.Open()")
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.isOpen {
@@ -181,7 +182,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	log.Infof("Changing Tablet Type: %v", tabletType)
+	log.Infof("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String())
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		PrimaryTermStartTime := logutil.TimeToProto(time.Now())
@@ -253,6 +254,7 @@ func (ts *tmState) UpdateTablet(update func(tablet *topodatapb.Tablet)) {
 }
 
 func (ts *tmState) updateLocked(ctx context.Context) error {
+	log.Infof("Calling taState.updateLocked()")
 	span, ctx := trace.NewSpan(ctx, "tmState.update")
 	defer span.Finish()
 	ts.publishForDisplay()

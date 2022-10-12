@@ -49,6 +49,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
@@ -63,6 +64,8 @@ import (
 
 {{ range .Tests }}
 func Test{{ .Method }}(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -90,6 +93,7 @@ func Test{{ .Method }}(t *testing.T) {
 	{{ if not .SerializeCases }}
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
+		defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
@@ -99,10 +103,12 @@ func Test{{ .Method }}(t *testing.T) {
 	{{ with $test := . -}}
 	{{ range .Cases }}
 	t.Run("{{ .Name }}", func(t *testing.T) {
+		sidecardb.SetInitVTSchemaFlag(false)
 		t.Parallel()
 		{{ if $test.SerializeCases }}
 		api := vtadmin.NewAPI(testClusters(t), opts)
 		t.Cleanup(func() {
+			defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
 			}

@@ -123,16 +123,18 @@ func PanicHandler(t *testing.T) {
 
 // VerifyLocalMetadata Verify Local Metadata of a tablet
 func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
-	/*qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
-	require.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0][1]), fmt.Sprintf(`BLOB("%s")`, tablet.Alias))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1][1]), fmt.Sprintf(`BLOB("%s.%s")`, ksName, shardName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2][1]), fmt.Sprintf(`BLOB("%s")`, cell))
-	if tablet.Type == "replica" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("neutral")`)
-	} else if tablet.Type == "rdonly" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("must_not")`)
-	}*/
+	// local metadata has been deleted in this PR // FIXME: remove this function and references
+
+	//qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
+	//require.Nil(t, err)
+	//assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0][1]), fmt.Sprintf(`BLOB("%s")`, tablet.Alias))
+	//assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1][1]), fmt.Sprintf(`BLOB("%s.%s")`, ksName, shardName))
+	//assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2][1]), fmt.Sprintf(`BLOB("%s")`, cell))
+	//if tablet.Type == "replica" {
+	//	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("neutral")`)
+	//} else if tablet.Type == "rdonly" {
+	//	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("must_not")`)
+	//}
 }
 
 // ListBackups Lists back preset in shard

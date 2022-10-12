@@ -192,7 +192,7 @@ func (te *TxEngine) transition(state txEngineState) {
 func (te *TxEngine) Close() {
 	log.Infof("TxEngine - started Close. Acquiring stateLock lock")
 	te.stateLock.Lock()
-	log.Infof("TxEngine - arcquired stateLock")
+	log.Infof("TxEngine - acquired stateLock")
 	defer func() {
 		te.state = NotServing
 		te.stateLock.Unlock()

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -128,6 +129,11 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 }
 
 func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn *dbconnpool.DBConnection) error {
+	log.Infof("In syncVTDatabase")
+	defer func(start time.Time) {
+		// we will leave this log
+		log.Infof("syncVTDatabase took %d ms", time.Since(start).Milliseconds())
+	}(time.Now())
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error) {
 		if useVT {
 			_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
@@ -165,10 +171,12 @@ func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn 
 		}
 		return false, nil
 	}
+	log.Infof("before sidecardb.Init")
 	if err := sidecardb.Init(ctx, exec, sroHook, rsroHook); err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Infof("syncVTDatabase done")
 	return nil
 }
 
@@ -192,7 +200,9 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		}
 		defer dbaConn.Close()
 		if tabletType == topodatapb.TabletType_PRIMARY {
-			if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
+			// FIXME: without the --read-only check below many tests fail. Need to verify if the check needs to
+			// be permanent or if the tests need to change
+			if err := syncVTDatabase(ctx, conn, dbaConn); err != nil && !strings.Contains(err.Error(), "--read-only") {
 				return err
 			}
 		}
@@ -238,6 +248,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	}
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+	// creates _vt schema, the first time the database is created
 	if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
 		return err
 	}

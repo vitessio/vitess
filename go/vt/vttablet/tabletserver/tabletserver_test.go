@@ -58,6 +58,7 @@ import (
 
 func TestTabletServerHealthz(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2232,6 +2233,7 @@ func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *T
 
 func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	db := setupFakeDB(t)
+	db.AddVTSchemaInitQueries()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)

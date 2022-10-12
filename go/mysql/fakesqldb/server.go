@@ -796,3 +796,20 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 		cols...,
 	))
 }
+
+func (db *DB) AddVTSchemaInitQueries() {
+	queryPatterns := []string{
+		"SHOW DATABASES LIKE '_vt'",
+		"select database.*",
+		"show tables from.*",
+		"use _vt",
+		"CREATE TABLE _vt.*",
+		"CREATE TABLE IF NOT EXISTS _vt.*",
+		"ALTER TABLE _vt.*",
+		"show create table _vt.*",
+	}
+	result := &sqltypes.Result{}
+	for _, q := range queryPatterns {
+		db.AddQueryPattern(q, result)
+	}
+}

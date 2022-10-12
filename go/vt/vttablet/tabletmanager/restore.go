@@ -301,7 +301,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		params.Logger.Infof("Restore: will set tablet type to DRAINED as this is a point in time recovery")
 		originalType = topodatapb.TabletType_DRAINED
 	}
-	params.Logger.Infof("Restore: changing tablet type to %v", originalType)
+	params.Logger.Infof("Restore: changing tablet type to %v for %s", originalType, tm.tabletAlias.String())
 	// Change type back to original type if we're ok to serve.
 	return tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone)
 }

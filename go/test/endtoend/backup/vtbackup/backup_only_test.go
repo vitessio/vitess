@@ -63,6 +63,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	initTablets(t, false, false)
 
 	// Restore the Tablets
+
 	restore(t, primary, "replica", "NOT_SERVING")
 	err := localCluster.VtctlclientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
@@ -243,6 +244,7 @@ func removeBackups(t *testing.T) {
 
 func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	// Initialize tablets
+
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 		err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shardName)
 		require.Nil(t, err)
