@@ -26,5 +26,8 @@ viperutil.Value should be instantiated like:
 	viperutil.NewValue[topodatapb.TabletType](myKey, viperget.TabletType(nil), opts...)
 	// If using a specific viper instance, instead do the following.
 	viperutil.NewValue[topodatapb.TabletType](myKey, viperget.TabletType(myViper), opts...)
+
+This is a subpackage instead of being part of viperutil directly in order to
+avoid an import cycle between go/vt/log and viperutil.
 */
 package viperget
