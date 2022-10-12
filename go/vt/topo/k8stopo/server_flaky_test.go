@@ -18,7 +18,6 @@ package k8stopo
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -114,7 +113,12 @@ func TestKubernetesTopo(t *testing.T) {
 	}
 
 	serverAddr := "default"
-	flag.Set("topo_k8s_kubeconfig", testConfigPath)
+
+	oldKubeConfigPath := kubeconfigPath
+	kubeconfigPath = testConfigPath
+	defer func() {
+		kubeconfigPath = oldKubeConfigPath
+	}()
 
 	// Run the test suite.
 	testIndex := 0

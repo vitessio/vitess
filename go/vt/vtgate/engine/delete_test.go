@@ -591,3 +591,30 @@ func TestDeleteEqualSubshard(t *testing.T) {
 		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
 	})
 }
+
+func TestDeleteMultiEqual(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	del := &Delete{
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   MultiEqual,
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values: []evalengine.Expr{evalengine.NewTupleExpr(
+					evalengine.NewLiteralInt(1),
+					evalengine.NewLiteralInt(5),
+				)},
+			},
+			Query: "dummy_delete",
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "20-"}
+	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"5"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(70bb023c810ca87a)`,
+		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
+	})
+}

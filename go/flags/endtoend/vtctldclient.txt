@@ -83,90 +83,48 @@ Available Commands:
   ValidateSchemaKeyspace      Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.
   ValidateShard               Validates that all nodes reachable from the specified shard are consistent.
   ValidateVersionKeyspace     Validates that the version on the primary tablet of shard 0 matches all of the other tablets in the keyspace.
+  ValidateVersionShard        Validates that the version on the primary matches all of the replicas.
   completion                  Generate the autocompletion script for the specified shell
   help                        Help about any command
 
 Flags:
-      --action_timeout duration                         timeout for the total command (default 1h0m0s)
-      --alsologtostderr                                 log to standard error as well as files
-      --app_idle_timeout duration                       Idle timeout for app connections (default 1m0s)
-      --app_pool_size int                               Size of the connection pool for app connections (default 40)
-      --backup_engine_implementation string             Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
-      --backup_storage_block_size int                   if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup_storage_compress                         if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
-      --backup_storage_hook string                      if set, we send the contents of the backup files through this hook.
-      --backup_storage_number_blocks int                if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
-      --builtinbackup_mysqld_timeout duration           how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
-      --builtinbackup_progress duration                 how often to send progress updates when backing up large files. (default 5s)
-      --compression-engine-name string                  compressor engine used for compression. (default "pargzip")
-      --compression-level int                           what level to pass to the compressor. (default 1)
-      --db-credentials-file string                      db credentials file; send SIGHUP to reload this file
-      --db-credentials-server string                    db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
-      --db-credentials-vault-addr string                URL to Vault server
-      --db-credentials-vault-path string                Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds
-      --db-credentials-vault-role-mountpoint string     Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
-      --db-credentials-vault-role-secretidfile string   Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable
-      --db-credentials-vault-roleid string              Vault AppRole id; can also be passed using VAULT_ROLEID environment variable
-      --db-credentials-vault-timeout duration           Timeout for vault API operations (default 10s)
-      --db-credentials-vault-tls-ca string              Path to CA PEM for validating Vault server certificate
-      --db-credentials-vault-tokenfile string           Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
-      --db-credentials-vault-ttl duration               How long to cache DB credentials from the Vault server (default 30m0s)
-      --dba_idle_timeout duration                       Idle timeout for dba connections (default 1m0s)
-      --dba_pool_size int                               Size of the connection pool for dba connections (default 20)
-      --disable_active_reparents                        if set, do not allow active reparents. Use this to protect a cluster using external reparents.
-      --external-compressor string                      command with arguments to use when compressing a backup.
-      --external-compressor-extension string            extension to use when using an external compressor.
-      --external-decompressor string                    command with arguments to use when decompressing a backup.
-      --grpc_auth_static_client_creds string            When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
-      --grpc_compression string                         Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
-      --grpc_enable_tracing                             Enable gRPC tracing.
-      --grpc_initial_conn_window_size int               gRPC initial connection window size
-      --grpc_initial_window_size int                    gRPC initial window size
-      --grpc_keepalive_time duration                    After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
-      --grpc_keepalive_timeout duration                 After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
-      --grpc_max_message_size int                       Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
-      --grpc_prometheus                                 Enable gRPC monitoring with Prometheus.
-  -h, --help                                            display usage and exit
-      --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
-      --keep_logs_by_mtime duration                     keep logs for this long (using mtime) (zero to keep forever)
-      --log_backtrace_at traceLocation                  when logging hits line file:N, emit a stack trace (default :0)
-      --log_dir string                                  If non-empty, write log files in this directory
-      --log_err_stacks                                  log stack traces for errors
-      --log_rotate_max_size uint                        size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --logtostderr                                     log to standard error instead of files
-      --mysql_server_version string                     MySQL server version to advertise.
-      --mysqlctl_mycnf_template string                  template file to use for generating the my.cnf file during server init
-      --mysqlctl_socket string                          socket file to use for remote mysqlctl actions (empty for local actions)
-      --pool_hostname_resolve_interval duration         if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
-      --pprof strings                                   enable profiling
-      --purge_logs_interval duration                    how often try to remove old logs (default 1h0m0s)
-      --remote_operation_timeout duration               time to wait for a remote operation (default 30s)
-      --replication_connect_retry duration              how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
-      --security_policy string                          the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --server string                                   server to use for connection (required)
-      --stderrthreshold severity                        logs at or above this threshold go to stderr (default 1)
-      --tablet_dir string                               The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
-      --tablet_manager_protocol string                  Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
-      --tablet_protocol string                          Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
-      --topo_global_root string                         the path of the global topology data in the global topology server
-      --topo_global_server_address string               the address of the global topology server
-      --topo_implementation string                      the topology implementation to use
-  -v, --v Level                                         log level for V logs
-      --version                                         print binary version
-      --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging
-      --vtctl_client_protocol string                    Protocol to use to talk to the vtctl server. (default "grpc")
-      --vtctld_grpc_ca string                           the server ca to use to validate servers when connecting
-      --vtctld_grpc_cert string                         the cert to use to connect
-      --vtctld_grpc_crl string                          the server crl to use to validate server certificates when connecting
-      --vtctld_grpc_key string                          the key to use to connect
-      --vtctld_grpc_server_name string                  the server name to use to validate server certificate
-      --xbstream_restore_flags string                   flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
-      --xtrabackup_backup_flags string                  flags to pass to backup command. These should be space separated and will be added to the end of the command
-      --xtrabackup_prepare_flags string                 flags to pass to prepare command. These should be space separated and will be added to the end of the command
-      --xtrabackup_root_path string                     directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
-      --xtrabackup_stream_mode string                   which mode to use if streaming, valid values are tar and xbstream (default "tar")
-      --xtrabackup_stripe_block_size uint               Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
-      --xtrabackup_stripes uint                         If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
-      --xtrabackup_user string                          User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.
+      --action_timeout duration                timeout for the total command (default 1h0m0s)
+      --alsologtostderr                        log to standard error as well as files
+      --emit_stats                             If set, emit stats to push-based monitoring and stats backends
+      --grpc_auth_static_client_creds string   When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc_compression string                Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
+      --grpc_enable_tracing                    Enable gRPC tracing.
+      --grpc_initial_conn_window_size int      gRPC initial connection window size
+      --grpc_initial_window_size int           gRPC initial window size
+      --grpc_keepalive_time duration           After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
+      --grpc_keepalive_timeout duration        After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --grpc_max_message_size int              Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc_prometheus                        Enable gRPC monitoring with Prometheus.
+  -h, --help                                   help for vtctldclient
+      --keep_logs duration                     keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration            keep logs for this long (using mtime) (zero to keep forever)
+      --log_backtrace_at traceLocation         when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                         If non-empty, write log files in this directory
+      --log_rotate_max_size uint               size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logtostderr                            log to standard error instead of files
+      --mysql_server_version string            MySQL server version to advertise.
+      --purge_logs_interval duration           how often try to remove old logs (default 1h0m0s)
+      --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --server string                          server to use for connection (required)
+      --stats_backend string                   The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string        List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings              Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string            Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration             Interval between emitting stats to all registered backends (default 1m0s)
+      --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
+  -v, --v Level                                log level for V logs
+      --version                                version for vtctldclient
+      --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging
+      --vtctl_client_protocol string           Protocol to use to talk to the vtctl server. (default "grpc")
+      --vtctld_grpc_ca string                  the server ca to use to validate servers when connecting
+      --vtctld_grpc_cert string                the cert to use to connect
+      --vtctld_grpc_crl string                 the server crl to use to validate server certificates when connecting
+      --vtctld_grpc_key string                 the key to use to connect
+      --vtctld_grpc_server_name string         the server name to use to validate server certificate
 
 Use "vtctldclient [command] --help" for more information about a command.

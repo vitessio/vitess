@@ -18,10 +18,10 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"time"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/protoutil"
@@ -69,7 +69,7 @@ func init() {
 	})
 }
 
-func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 	incrementalFromPos := subFlags.String("incremental_from_pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
@@ -109,7 +109,7 @@ func (b *backupEventStreamLogger) Send(resp *vtctldatapb.BackupResponse) error {
 	return nil
 }
 
-func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 
@@ -133,7 +133,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
-func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	return nil
 }
 
-func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -199,7 +199,7 @@ func (b *backupRestoreEventStreamLogger) Send(resp *vtctldatapb.RestoreFromBacku
 	return nil
 }
 
-func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	restoreToPos := subFlags.String("restore_to_pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
 	dryRun := subFlags.Bool("dry_run", false, "Only validate restore steps, do not actually restore data")

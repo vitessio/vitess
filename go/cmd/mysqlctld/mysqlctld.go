@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -63,6 +64,8 @@ func init() {
 		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
 		fs.DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
 		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
+
+		acl.RegisterFlags(fs)
 	})
 }
 

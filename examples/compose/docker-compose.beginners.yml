@@ -285,8 +285,7 @@ services:
       - vtctld
       - set_keyspace_durability_policy
     ports:
-      - "13200:8080"
-      - "13000:3000"
+      - "13000:8080"
     volumes:
       - ".:/script"
     environment:
@@ -304,7 +303,7 @@ services:
       - DB_PASS
       - DB_CHARSET
     healthcheck:
-      test: ["CMD-SHELL","curl -s --fail --show-error localhost:3000/api/status"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:8080/debug/health"]
       interval: 5s
       timeout: 10s
       retries: 15

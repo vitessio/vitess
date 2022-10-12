@@ -423,7 +423,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		// the saved replicationPosition before proceeding
 		tmc := tmclient.NewTabletManagerClient()
 		defer tmc.Close()
-		remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		remoteCtx, remoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer remoteCancel()
 
 		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)

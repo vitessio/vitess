@@ -299,13 +299,13 @@ func performResharding(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--v1", "ks.reshardWorkflow", "0", "-80,80-")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--v1", "ks.reshardWorkflow", "0", "--", "-80,80-")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_type=rdonly", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_types=rdonly", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_type=replica", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_types=replica", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	// then serve primary from the split shards

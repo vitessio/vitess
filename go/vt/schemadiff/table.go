@@ -309,10 +309,15 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		opt.Name = strings.ToLower(opt.Name)
 		switch opt.Name {
-		case "charset", "collate":
+		case "charset":
 			opt.String = strings.ToLower(opt.String)
 			if charset, ok := collationEnv.CharsetAlias(opt.String); ok {
 				opt.String = charset
+			}
+		case "collate":
+			opt.String = strings.ToLower(opt.String)
+			if collation, ok := collationEnv.CollationAlias(opt.String); ok {
+				opt.String = collation
 			}
 		case "engine":
 			opt.String = strings.ToUpper(opt.String)
@@ -412,6 +417,12 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// now to utf8 being an alias for utf8mb3.
 		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset.Name); ok {
 			col.Type.Charset.Name = charset
+		}
+
+		// Map any collation aliases to the real collation. This applies mainly right
+		// now to utf8 being an alias for utf8mb3 collations.
+		if collation, ok := collationEnv.CollationAlias(col.Type.Options.Collate); ok {
+			col.Type.Options.Collate = collation
 		}
 
 		// Remove any lengths for integral types since it is deprecated there and

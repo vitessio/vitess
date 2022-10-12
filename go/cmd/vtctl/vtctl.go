@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
@@ -51,6 +52,29 @@ var (
 
 func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
+		// N.B. This is necessary for subcommand pflag parsing when not using
+		// cobra (cobra is where we're headed, but for `vtctl` it's a big lift
+		// before the RC cut).
+		//
+		// Essentially, the situation we have here is that commands look like:
+		//
+		//	`vtctl [global flags] <command> [subcommand flags]`
+		//
+		// Since the default behavior of pflag is to allow "interspersed" flag
+		// and positional arguments, this means that the initial servenv parse
+		// will complain if _any_ subocmmand's flag is provided; for example, if
+		// you were to invoke
+		//
+		//	`vtctl AddCellInfo --root /vitess/global --server_address "1.2.3.4" global
+		//
+		// then you would get the error "unknown flag --root", even though that
+		// is a valid flag for the AddCellInfo flag.
+		//
+		// By disabling interspersal on the top-level parse, anything after the
+		// command name ("AddCellInfo", in this example) will be forwarded to
+		// the subcommand's flag set for further parsing.
+		fs.SetInterspersed(false)
+
 		logger := logutil.NewConsoleLogger()
 		fs.SetOutput(logutil.NewLoggerWriter(logger))
 		fs.Usage = func() {
@@ -65,6 +89,8 @@ func init() {
 
 		fs.DurationVar(&waitTime, "wait-time", waitTime, "time to wait on an action")
 		fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run vtcl detached from the terminal")
+
+		acl.RegisterFlags(fs)
 	})
 }
 
@@ -153,12 +179,14 @@ func main() {
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
 
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+
 		if args[0] == "--" {
+			vtctl.PrintDoubleDashDeprecationNotice(wr)
 			args = args[1:]
 		}
 
 		action = args[0]
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 		err := vtctl.RunCommand(ctx, wr, args)
 		cancel()
 		switch err {

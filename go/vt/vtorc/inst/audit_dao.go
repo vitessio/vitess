@@ -26,9 +26,10 @@ import (
 
 	"github.com/rcrowley/go-metrics"
 
+	"github.com/openark/golib/sqlutils"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 )
 
 // syslogWriter is optional, and defaults to nil (disabled)

@@ -178,15 +178,10 @@ func (st *StatsConn) WatchRecursive(ctx context.Context, path string) ([]*WatchD
 // NewLeaderParticipation is part of the Conn interface
 func (st *StatsConn) NewLeaderParticipation(name, id string) (LeaderParticipation, error) {
 	startTime := time.Now()
-	// TODO(deepthi): delete after v13.0
-	deprecatedKey := []string{"NewMasterParticipation", st.cell}
-	defer topoStatsConnTimings.Record(deprecatedKey, startTime)
-
 	statsKey := []string{"NewLeaderParticipation", st.cell}
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.NewLeaderParticipation(name, id)
 	if err != nil {
-		topoStatsConnErrors.Add(deprecatedKey, int64(1))
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}

@@ -177,7 +177,7 @@ func TestGetSchema(t *testing.T) {
 	utils.MustMatch(t, sd, actual)
 
 	// reset for the next invocation, where we verify that passing
-	// -table_sizes_only does not include the create table statement or columns.
+	// --table_sizes_only does not include the create table statement or columns.
 	logger.Events = nil
 	sd = &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -202,7 +202,7 @@ func TestGetSchema(t *testing.T) {
 
 	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
 		"GetSchema",
-		"-table_sizes_only",
+		"--table_sizes_only",
 		topoproto.TabletAliasString(tablet.Alias),
 	})
 	require.NoError(t, err)

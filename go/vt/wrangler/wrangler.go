@@ -36,7 +36,7 @@ var (
 	// lock actions use RemoteOperationTimeout,
 	// so basing this to be greater than RemoteOperationTimeout is good.
 	// Use this as the default value for Context that need a deadline.
-	DefaultActionTimeout = *topo.RemoteOperationTimeout * 4
+	DefaultActionTimeout = topo.RemoteOperationTimeout * 4
 )
 
 // Wrangler manages complex actions on the topology, like reparents,
