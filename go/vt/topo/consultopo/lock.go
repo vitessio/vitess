@@ -63,7 +63,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 // unlike Lock will return immediately with error 'lock already exists'.
 func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list all the entries under dirPath
-	entries, err := s.List(ctx, dirPath)
+	entries, err := s.ListDir(ctx, dirPath, true)
 	if err != nil {
 		// We need to return the right error codes, like
 		// topo.ErrNoNode and topo.ErrInterrupted, and the
@@ -76,8 +76,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	// if there is a file 'lock' in it then we can assume that keyspace already have a lock
 	// throw error in this case
 	for _, e := range entries {
-		path := string(e.Key[:])
-		if nodeUnderLockPath.MatchString(path) {
+		if nodeUnderLockPath.MatchString(e.Name) && e.Type == topo.TypeFile && e.Ephemeral {
 			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
 		}
 	}

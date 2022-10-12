@@ -33,7 +33,7 @@ import (
 
 // This file contains the lock management code for zktopo.Server.
 
-var nodeUnderLockPath = regexp.MustCompile(fmt.Sprintf("%s/.+", locksPath))
+var nodeUnderLockPath = regexp.MustCompile(fmt.Sprintf("^%s$", locksPath))
 
 // zkLockDescriptor implements topo.LockDescriptor.
 type zkLockDescriptor struct {
@@ -53,7 +53,7 @@ func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 // unlike Lock will return immediately with error 'lock already exists'.
 func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list all the entries under dirPath
-	entries, err := zs.List(ctx, dirPath)
+	entries, err := zs.ListDir(ctx, dirPath, true)
 	if err != nil {
 		// We need to return the right error codes, like
 		// topo.ErrNoNode and topo.ErrInterrupted, and the
@@ -66,13 +66,9 @@ func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.L
 	// if there is a folder '/locks' with some entries in it then we can assume that keyspace already have a lock
 	// throw error in this case
 	for _, e := range entries {
-		path := string(e.Key[:])
-		if nodeUnderLockPath.MatchString(path) {
+		if nodeUnderLockPath.MatchString(e.Name) && e.Type == topo.TypeDirectory {
 			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
 		}
-
-		// TODO: instead of list should I call listDir and assume /locks directory only exists if there is a lock
-		// TODO: Should we check if all the children under lock is ephemeral
 	}
 
 	// everything is good lets acquire lock.
