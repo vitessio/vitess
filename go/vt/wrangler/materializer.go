@@ -227,6 +227,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
 			return err
 		}
+
 		if vschema != nil {
 			// We added to the vschema.
 			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
@@ -891,6 +892,39 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 	return int64(hasher.Sum64() & math.MaxInt64), nil
 }
 
+// createDefaultShardRoutingRules creates a reverse routing rule for
+// each shard in a new partial keyspace migration workflow that does
+// not already have an existing routing rule in place.
+func (wr *Wrangler) createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
+	srr, err := topotools.GetShardRoutingRules(ctx, wr.ts)
+	if err != nil {
+		return err
+	}
+	allShards, err := wr.sourceTs.GetServingShards(ctx, ms.SourceKeyspace)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for _, si := range allShards {
+		fromSource := fmt.Sprintf("%s.%s", ms.SourceKeyspace, si.ShardName())
+		fromTarget := fmt.Sprintf("%s.%s", ms.TargetKeyspace, si.ShardName())
+		if srr[fromSource] == "" && srr[fromTarget] == "" {
+			srr[fromTarget] = ms.SourceKeyspace
+			changed = true
+			wr.Logger().Infof("Added default shard routing rule from %q to %q", fromTarget, fromSource)
+		}
+	}
+	if changed {
+		if err := topotools.SaveShardRoutingRules(ctx, wr.ts, srr); err != nil {
+			return err
+		}
+		if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldatapb.MaterializeSettings) (*materializer, error) {
 	if err := wr.validateNewWorkflow(ctx, ms.TargetKeyspace, ms.Workflow); err != nil {
 		return nil, err
@@ -898,6 +932,11 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	mz, err := wr.buildMaterializer(ctx, ms)
 	if err != nil {
 		return nil, err
+	}
+	if mz.isPartial {
+		if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
+			return nil, err
+		}
 	}
 	if err := mz.deploySchema(ctx); err != nil {
 		return nil, err

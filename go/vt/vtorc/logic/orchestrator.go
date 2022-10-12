@@ -24,12 +24,12 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/discovery"
@@ -105,47 +105,50 @@ func instancePollSecondsDuration() time.Duration {
 	return time.Duration(config.Config.InstancePollSeconds) * time.Second
 }
 
-// acceptSignals registers for OS signals
-func acceptSignals() {
+// acceptSighupSignal registers for SIGHUP signal from the OS to reload the configuration files.
+func acceptSighupSignal() {
 	c := make(chan os.Signal, 1)
 
 	signal.Notify(c, syscall.SIGHUP)
-	signal.Notify(c, syscall.SIGTERM)
 	go func() {
-		for sig := range c {
-			switch sig {
-			case syscall.SIGHUP:
-				log.Infof("Received SIGHUP. Reloading configuration")
-				_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
-				config.Reload()
-				discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
-			case syscall.SIGTERM:
-				log.Infof("Received SIGTERM. Starting shutdown")
-				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
-				discoveryMetrics.StopAutoExpiration()
-				// probably should poke other go routines to stop cleanly here ...
-				_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
-				timeout := time.After(shutdownWaitTime)
-				func() {
-					for {
-						count := atomic.LoadInt32(&shardsLockCounter)
-						if count == 0 {
-							return
-						}
-						select {
-						case <-timeout:
-							log.Infof("wait for lock release timed out. Some locks might not have been released.")
-							return
-						default:
-							time.Sleep(100 * time.Millisecond)
-						}
-					}
-				}()
-				log.Infof("Shutting down vtorc")
-				os.Exit(0)
-			}
+		for range c {
+			log.Infof("Received SIGHUP. Reloading configuration")
+			_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
+			config.Reload()
+			discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
 		}
 	}()
+}
+
+// closeVTOrc runs all the operations required to cleanly shutdown VTOrc
+func closeVTOrc() {
+	log.Infof("Starting VTOrc shutdown")
+	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
+	discoveryMetrics.StopAutoExpiration()
+	// Poke other go routines to stop cleanly here ...
+	_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+	// wait for the locks to be released
+	waitForLocksRelease()
+	log.Infof("VTOrc closed")
+}
+
+// waitForLocksRelease is used to wait for release of locks
+func waitForLocksRelease() {
+	timeout := time.After(shutdownWaitTime)
+	for {
+		count := atomic.LoadInt32(&shardsLockCounter)
+		if count == 0 {
+			break
+		}
+		select {
+		case <-timeout:
+			log.Infof("wait for lock release timed out. Some locks might not have been released.")
+		default:
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		break
+	}
 }
 
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
@@ -358,7 +361,9 @@ func ContinuousDiscovery() {
 	go func() {
 		_ = ometrics.InitMetrics()
 	}()
-	go acceptSignals()
+	go acceptSighupSignal()
+	// On termination of the server, we should close VTOrc cleanly
+	servenv.OnTermSync(closeVTOrc)
 
 	log.Infof("continuous discovery: starting")
 	for {

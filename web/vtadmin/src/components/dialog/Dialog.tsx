@@ -55,7 +55,7 @@ const Dialog: React.FC<DialogProps> = ({
                 className="fixed z-10 inset-0 overflow-y-auto"
                 initialFocus={cancelButtonRef}
                 onClose={(_) => {
-                    onClose && onClose();
+                    onClose?.();
                 }}
             >
                 <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -120,8 +120,7 @@ const Dialog: React.FC<DialogProps> = ({
                                             type="button"
                                             className="btn"
                                             onClick={() => {
-                                                onConfirm && onConfirm();
-                                                onClose && onClose();
+                                                onConfirm?.();
                                             }}
                                         >
                                             {loading ? loadingText : confirmText || 'Confirm'}
@@ -132,8 +131,8 @@ const Dialog: React.FC<DialogProps> = ({
                                             type="button"
                                             className="btn btn-secondary"
                                             onClick={() => {
-                                                onCancel && onCancel();
-                                                onClose && onClose();
+                                                onCancel?.();
+                                                onClose?.();
                                             }}
                                             ref={cancelButtonRef}
                                         >
