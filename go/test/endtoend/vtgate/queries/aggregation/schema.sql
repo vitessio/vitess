@@ -60,6 +60,7 @@ CREATE TABLE t1 (
     `name` varchar(20) NOT NULL,
     `value` varchar(50),
     shardKey bigint,
+    PRIMARY KEY (t1_id),
     UNIQUE KEY `t1id_name` (t1_id, `name`),
     KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
 ) ENGINE InnoDB;
