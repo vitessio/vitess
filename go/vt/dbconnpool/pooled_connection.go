@@ -26,12 +26,11 @@ import (
 // PooledDBConnection re-exposes DBConnection to be used by ConnectionPool.
 type PooledDBConnection struct {
 	*DBConnection
-	timeCreated time.Time
-	pool        *ConnectionPool
+	pool *ConnectionPool
 }
 
-func (pc *PooledDBConnection) TimeCreated() time.Time {
-	return pc.timeCreated
+func (pc *PooledDBConnection) Expired(lifetimeTimeout time.Duration) bool {
+	return false
 }
 
 func (pc *PooledDBConnection) ApplySetting(context.Context, *pools.Setting) error {
@@ -70,6 +69,5 @@ func (pc *PooledDBConnection) Reconnect(ctx context.Context) error {
 		return err
 	}
 	pc.DBConnection = newConn
-	pc.timeCreated = time.Now()
 	return nil
 }

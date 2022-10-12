@@ -100,7 +100,6 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
 	env.Exporter().NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
 	env.Exporter().NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
-	env.Exporter().NewGaugeDurationFunc(name+"MaxLifetimeTimeout", "Tablet server refresh timeout", cp.MaxLifetimeTimeout)
 	env.Exporter().NewCounterFunc(name+"MaxLifetimeClosed", "Tablet server conn pool refresh closed", cp.MaxLifetimeClosed)
 	env.Exporter().NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Get)
@@ -357,15 +356,6 @@ func (cp *Pool) IdleClosed() int64 {
 		return 0
 	}
 	return p.IdleClosed()
-}
-
-// MaxLifetimeTimeout refresh timeout for the pool.
-func (cp *Pool) MaxLifetimeTimeout() time.Duration {
-	p := cp.pool()
-	if p == nil {
-		return 0
-	}
-	return p.MaxLifetimeTimeout()
 }
 
 // MaxLifetimeClosed returns the number of connections closed to refresh timeout for the pool.

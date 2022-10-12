@@ -79,7 +79,6 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, max
 	stats.NewCounterDurationFunc(name+"WaitTime", "Connection pool wait time", cp.WaitTime)
 	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
 	stats.NewGaugeFunc(name+"IdleClosed", "Connection pool idle closed", cp.IdleClosed)
-	stats.NewGaugeDurationFunc(name+"MaxLifetimeTimeout", "Connection pool refresh timeout", cp.MaxLifetimeTimeout)
 	stats.NewGaugeFunc(name+"MaxLifetimeClosed", "Connection pool refresh closed", cp.MaxLifetimeClosed)
 	stats.NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	return cp
@@ -121,7 +120,6 @@ func (cp *ConnectionPool) connect(ctx context.Context) (pools.Resource, error) {
 	}
 	return &PooledDBConnection{
 		DBConnection: c,
-		timeCreated:  time.Now(),
 		pool:         cp,
 	}, nil
 }
@@ -284,15 +282,6 @@ func (cp *ConnectionPool) IdleClosed() int64 {
 		return 0
 	}
 	return p.IdleClosed()
-}
-
-// MaxLifetimeTimeoutfresh timeout for the pool.
-func (cp *ConnectionPool) MaxLifetimeTimeout() time.Duration {
-	p := cp.pool()
-	if p == nil {
-		return 0
-	}
-	return p.MaxLifetimeTimeout()
 }
 
 // MaxLifetimeClosed returns the number of connections closed due to refresh timeout for the pool.

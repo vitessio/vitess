@@ -366,9 +366,9 @@ func (dbc *DBConn) IsClosed() bool {
 	return dbc.conn.IsClosed()
 }
 
-// TimeCreated returns when the connection was opened
-func (dbc *DBConn) TimeCreated() time.Time {
-	return dbc.createdTime
+// Expired returns whether a connection has passed its lifetime
+func (dbc *DBConn) Expired(lifetimeTimeout time.Duration) bool {
+	return lifetimeTimeout > 0 && time.Until(dbc.createdTime.Add(lifetimeTimeout)) < 0
 }
 
 // Recycle returns the DBConn to the pool.

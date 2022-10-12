@@ -559,7 +559,7 @@ func TestMaxLifetimeTimeout(t *testing.T) {
 	assert.EqualValues(t, 1, p.MaxLifetimeClosed())
 }
 
-func TestExtendedMaxLifetimeTimeout(t *testing.T) {
+func TestExtendedLifetimeTimeout(t *testing.T) {
 	// maxLifetimeTimeout 0
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
