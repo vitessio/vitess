@@ -85,11 +85,9 @@ func (pool *RPCPool) Close() { pool.rp.Close() }
 
 func (pool *RPCPool) StatsJSON() string { return pool.rp.StatsJSON() }
 
-type _rpc struct {
-	timeCreated time.Time
-}
+type _rpc struct{}
 
-var rpc = &_rpc{time.Now()}
+var rpc = &_rpc{}
 
 // Close implements Resource for _rpc.
 func (*_rpc) Close() {}
@@ -113,8 +111,8 @@ func (r *_rpc) ResetSetting(context.Context) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ResetSetting")
 }
 
-func (r *_rpc) TimeCreated() time.Time {
-	return rpc.timeCreated
+func (r *_rpc) Expired(time.Duration) bool {
+	return false
 }
 
 // we only ever return the same rpc pointer. it's used as a sentinel and is

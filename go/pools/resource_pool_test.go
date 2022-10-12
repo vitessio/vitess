@@ -80,8 +80,8 @@ func (tr *TestResource) Close() {
 
 var _ Resource = (*TestResource)(nil)
 
-func (tr *TestResource) TimeCreated() time.Time {
-	return tr.timeCreated
+func (tr *TestResource) Expired(lifetimeTimeout time.Duration) bool {
+	return lifetimeTimeout > 0 && time.Until(tr.timeCreated.Add(lifetimeTimeout)) < 0
 }
 
 func logWait(start time.Time) {
@@ -251,7 +251,7 @@ func TestShrinking(t *testing.T) {
 		p.SetCapacity(3)
 		done <- true
 	}()
-	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeTimeout": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
+	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
 	for i := 0; i < 10; i++ {
 		time.Sleep(10 * time.Millisecond)
 		stats := p.StatsJSON()
@@ -270,7 +270,7 @@ func TestShrinking(t *testing.T) {
 		p.Put(resources[i])
 	}
 	stats := p.StatsJSON()
-	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeTimeout": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
+	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 3, count.Get())
 
@@ -387,7 +387,7 @@ func TestClosing(t *testing.T) {
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeTimeout": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
+	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 
 	// Put is allowed when closing
@@ -399,7 +399,7 @@ func TestClosing(t *testing.T) {
 	<-ch
 
 	stats = p.StatsJSON()
-	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeTimeout": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
+	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 0, count.Get())
@@ -428,7 +428,7 @@ func TestReopen(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 5, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeTimeout": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
+	expected := `{"Capacity": 5, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 
 	time.Sleep(650 * time.Millisecond)
@@ -437,7 +437,7 @@ func TestReopen(t *testing.T) {
 	}
 	time.Sleep(50 * time.Millisecond)
 	stats = p.StatsJSON()
-	expected = `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeTimeout": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
+	expected = `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 0, count.Get())
@@ -563,15 +563,15 @@ func TestExtendedMaxLifetimeTimeout(t *testing.T) {
 	// maxLifetimeTimeout 0
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
-	assert.Zero(t, p.ExtendedMaxLifetimeTimeout())
+	assert.Zero(t, p.extendedLifetimeTimeout())
 
 	// maxLifetimeTimeout1
 	maxLifetimeTimeout := 10 * time.Millisecond
 	for i := 0; i < 10; i++ {
 		p = NewResourcePool(PoolFactory, 5, 5, time.Second, maxLifetimeTimeout, logWait, nil, 0)
 		defer p.Close()
-		assert.LessOrEqual(t, maxLifetimeTimeout, p.ExtendedMaxLifetimeTimeout())
-		assert.Greater(t, 2*maxLifetimeTimeout, p.ExtendedMaxLifetimeTimeout())
+		assert.LessOrEqual(t, maxLifetimeTimeout, p.extendedLifetimeTimeout())
+		assert.Greater(t, 2*maxLifetimeTimeout, p.extendedLifetimeTimeout())
 	}
 }
 
@@ -609,7 +609,7 @@ func TestCreateFail(t *testing.T) {
 			t.Errorf("Expecting Failed, received %v", err)
 		}
 		stats := p.StatsJSON()
-		expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeTimeout": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
+		expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
 		assert.Equal(t, expected, stats)
 	}
 }
