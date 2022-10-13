@@ -70,3 +70,4 @@ CREATE TABLE t2 (
     shardKey bigint,
     PRIMARY KEY (id)
 ) ENGINE InnoDB;
+
