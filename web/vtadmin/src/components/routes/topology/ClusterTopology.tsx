@@ -50,9 +50,9 @@ export const ClusterTopology = () => {
   const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
   const onExpand = async (path: string) => {
     const { cell } = await getTopologyPath({ clusterID, path })
-
-    topology.cell.children = getChildren(cell as TopologyCell)
-    setTopology(topology)
+    const newTopo = { ...topology }
+    newTopo.cell.children = getChildren(cell as TopologyCell)
+    setTopology(newTopo)
   }
 
   const getChildren = (cell: TopologyCell): TopologyCellChild[] => {
