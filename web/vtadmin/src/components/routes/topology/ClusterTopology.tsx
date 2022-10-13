@@ -25,125 +25,125 @@ import { Link, useParams } from 'react-router-dom';
 import { generateGraph, TopologyCell, TopologyCellChild } from './Nodes';
 
 import ReactFlow, {
-  addEdge,
-  MiniMap,
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
-  Connection,
+    addEdge,
+    MiniMap,
+    Controls,
+    Background,
+    useNodesState,
+    useEdgesState,
+    Connection,
 } from 'react-flow-renderer';
 import { getTopologyPath } from '../../../api/http';
 
 export const ClusterTopology = () => {
-  interface RouteParams {
-    clusterID: string;
-  }
-  useDocumentTitle('Cluster Topolgy');
-  const { clusterID } = useParams<RouteParams>();
-  const { data } = useTopologyPath({ clusterID, path: '/' });
-  const [topology, setTopology] = useState<{ cell: TopologyCell }>({ cell: data?.cell as TopologyCell })
-
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-
-  const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
-  const onExpand = async (path: string) => {
-    const { cell } = await getTopologyPath({ clusterID, path })
-    const newTopo = { ...topology }
-    newTopo.cell.children = getChildren(cell as TopologyCell)
-    setTopology(newTopo)
-  }
-
-  const getChildren = (cell: TopologyCell): TopologyCellChild[] => {
-    const newChildren: TopologyCellChild[] = []
-
-    topology.cell.children?.forEach((c) => {
-      if (typeof (c) === 'string' && c === cell?.name) {
-        newChildren.push(cell as TopologyCell)
-      }
-      if (typeof (c) == 'string' && c !== cell?.name) {
-        newChildren.push(c)
-      }
-      if (typeof (c) !== 'string') {
-        c.children = getChildren(c)
-        newChildren.push(c)
-      }
-    })
-
-    return newChildren
-  }
-
-  useEffect(() => {
-    const { nodes: initialNodes, edges: initialEdges } = topology ? generateGraph(topology, onExpand) : { nodes: [], edges: [] };
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topology]);
-
-  useEffect(() => {
-    if (data?.cell) {
-      setTopology({ cell: data?.cell as TopologyCell })
+    interface RouteParams {
+        clusterID: string;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data])
+    useDocumentTitle('Cluster Topolgy');
+    const { clusterID } = useParams<RouteParams>();
+    const { data } = useTopologyPath({ clusterID, path: '/' });
+    const [topology, setTopology] = useState<{ cell: TopologyCell }>({ cell: data?.cell as TopologyCell });
 
-  if (!data) {
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+    const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
+    const onExpand = async (path: string) => {
+        const { cell } = await getTopologyPath({ clusterID, path });
+        const newTopo = { ...topology };
+        newTopo.cell.children = placeCell(newTopo.cell, cell as TopologyCell);
+        setTopology(newTopo);
+    };
+
+    const placeCell = (currentCell: TopologyCell, newCell: TopologyCell): TopologyCellChild[] => {
+        const newChildren: TopologyCellChild[] = [];
+        currentCell.children?.forEach((c) => {
+            if (typeof c === 'string' && c === newCell?.name) {
+                newChildren.push(newCell as TopologyCell);
+            }
+            if (typeof c == 'string' && c !== newCell?.name) {
+                newChildren.push(c);
+            }
+            if (typeof c !== 'string') {
+                c.children = placeCell(c, newCell);
+                newChildren.push(c);
+            }
+        });
+        return newChildren;
+    };
+
+    useEffect(() => {
+        const { nodes: initialNodes, edges: initialEdges } = topology
+            ? generateGraph(topology, onExpand)
+            : { nodes: [], edges: [] };
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [topology]);
+
+    useEffect(() => {
+        if (data?.cell) {
+            setTopology({ cell: data?.cell as TopologyCell });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data]);
+
+    if (!data) {
+        return (
+            <div>
+                <WorkspaceHeader>
+                    <NavCrumbs>
+                        <Link to="/topology">Topology</Link>
+                    </NavCrumbs>
+
+                    <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
+                </WorkspaceHeader>
+
+                <ContentContainer>404</ContentContainer>
+            </div>
+        );
+    }
+
     return (
-      <div>
-        <WorkspaceHeader>
-          <NavCrumbs>
-            <Link to="/topology">Topology</Link>
-          </NavCrumbs>
+        <div>
+            <WorkspaceHeader>
+                <NavCrumbs>
+                    <Link to="/topology">Topology</Link>
+                </NavCrumbs>
 
-          <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
-        </WorkspaceHeader>
+                <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
+            </WorkspaceHeader>
 
-        <ContentContainer>404</ContentContainer>
-      </div>
+            <ContentContainer className="lg:w-[1400px] lg:h-[1200px] md:w-[900px] md:h-[800px]">
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    fitView
+                    attributionPosition="top-right"
+                >
+                    <MiniMap
+                        nodeStrokeColor={(n) => {
+                            if (n.style?.background) return n.style.background as string;
+                            if (n.type === 'input') return '#0041d0';
+                            if (n.type === 'output') return '#ff0072';
+                            if (n.type === 'default') return '#1a192b';
+
+                            return '#eee';
+                        }}
+                        nodeColor={(n) => {
+                            if (n.style?.background) return n.style.background as string;
+
+                            return '#fff';
+                        }}
+                        nodeBorderRadius={2}
+                    />
+                    <Controls />
+                    <Background color="#aaa" gap={16} />
+                </ReactFlow>
+            </ContentContainer>
+        </div>
     );
-  }
-
-  return (
-    <div>
-      <WorkspaceHeader>
-        <NavCrumbs>
-          <Link to="/topology">Topology</Link>
-        </NavCrumbs>
-
-        <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
-      </WorkspaceHeader>
-
-      <ContentContainer className="lg:w-[1400px] lg:h-[1200px] md:w-[900px] md:h-[800px]">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          fitView
-          attributionPosition="top-right"
-        >
-          <MiniMap
-            nodeStrokeColor={(n) => {
-              if (n.style?.background) return n.style.background as string;
-              if (n.type === 'input') return '#0041d0';
-              if (n.type === 'output') return '#ff0072';
-              if (n.type === 'default') return '#1a192b';
-
-              return '#eee';
-            }}
-            nodeColor={(n) => {
-              if (n.style?.background) return n.style.background as string;
-
-              return '#fff';
-            }}
-            nodeBorderRadius={2}
-          />
-          <Controls />
-          <Background color="#aaa" gap={16} />
-        </ReactFlow>
-      </ContentContainer>
-    </div>
-  );
 };

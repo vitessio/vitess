@@ -4226,7 +4226,7 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*v
 	}
 	cell := parts[1]
 	relativePath := cellPath[len(cell)+1:]
-	topoCell := vtctldatapb.TopologyCell{Name: parts[len(parts)-1]}
+	topoCell := vtctldatapb.TopologyCell{Name: parts[len(parts)-1], Path: cellPath}
 
 	conn, err := s.ts.ConnForCell(ctx, cell)
 	if err != nil {
