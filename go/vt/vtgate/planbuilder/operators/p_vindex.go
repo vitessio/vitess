@@ -14,58 +14,57 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type Vindex struct {
-	OpCode  engine.VindexOpcode
-	Table   operators.VindexTable
-	Vindex  vindexes.Vindex
+type PhysVindex struct {
+	OpCode engine.VindexOpcode
+	Table  VindexTable
+	Vindex vindexes.Vindex
 	Solved  semantics.TableSet
 	Columns []*sqlparser.ColName
 	Value   sqlparser.Expr
 }
 
 // TableID implements the Operator interface
-func (v *Vindex) TableID() semantics.TableSet {
+func (v *PhysVindex) TableID() semantics.TableSet {
 	return v.Solved
 }
 
 // UnsolvedPredicates implements the Operator interface
-func (v *Vindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
+func (v *PhysVindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	return nil
 }
 
 // CheckValid implements the Operator interface
-func (v *Vindex) CheckValid() error {
+func (v *PhysVindex) CheckValid() error {
 	return nil
 }
 
 // IPhysical implements the PhysicalOperator interface
-func (v *Vindex) IPhysical() {}
+func (v *PhysVindex) IPhysical() {}
 
 // Cost implements the PhysicalOperator interface
-func (v *Vindex) Cost() int {
+func (v *PhysVindex) Cost() int {
 	return int(engine.EqualUnique)
 }
 
 // Clone implements the PhysicalOperator interface
-func (v *Vindex) Clone() operators.PhysicalOperator {
+func (v *PhysVindex) Clone() PhysicalOperator {
 	clone := *v
 	return &clone
 }
 
-var _ operators.PhysicalOperator = (*Vindex)(nil)
+var _ PhysicalOperator = (*PhysVindex)(nil)
 
-func (v *Vindex) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
+func (v *PhysVindex) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
 	idxs := make([]int, len(columns))
 outer:
 	for i, newCol := range columns {
@@ -81,9 +80,9 @@ outer:
 	return idxs, nil
 }
 
-func optimizeVindex(ctx *plancontext.PlanningContext, op *operators.Vindex) (operators.PhysicalOperator, error) {
+func optimizeVindex(ctx *plancontext.PlanningContext, op *Vindex) (PhysicalOperator, error) {
 	solves := ctx.SemTable.TableSetFor(op.Table.Alias)
-	return &Vindex{
+	return &PhysVindex{
 		OpCode: op.OpCode,
 		Table:  op.Table,
 		Vindex: op.Vindex,

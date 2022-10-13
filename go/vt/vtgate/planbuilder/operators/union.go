@@ -14,16 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Union struct {
-	Sources     []operators.PhysicalOperator
+	Sources     []PhysicalOperator
 	SelectStmts []*sqlparser.Select
 	Distinct    bool
 
@@ -31,7 +30,7 @@ type Union struct {
 	Ordering sqlparser.OrderBy
 }
 
-var _ operators.PhysicalOperator = (*Union)(nil)
+var _ PhysicalOperator = (*Union)(nil)
 
 // TableID implements the PhysicalOperator interface
 func (u *Union) TableID() semantics.TableSet {
@@ -65,9 +64,9 @@ func (u *Union) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (u *Union) Clone() operators.PhysicalOperator {
+func (u *Union) Clone() PhysicalOperator {
 	newOp := *u
-	newOp.Sources = make([]operators.PhysicalOperator, 0, len(u.Sources))
+	newOp.Sources = make([]PhysicalOperator, 0, len(u.Sources))
 	for _, source := range u.Sources {
 		newOp.Sources = append(newOp.Sources, source.Clone())
 	}

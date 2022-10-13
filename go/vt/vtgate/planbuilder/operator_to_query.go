@@ -25,8 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -48,7 +46,7 @@ func toSQL(ctx *plancontext.PlanningContext, op operators.PhysicalOperator) sqlp
 
 func buildQuery(op operators.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
-	case *physical.Table:
+	case *operators.Table:
 		dbName := ""
 
 		if op.QTable.IsInfSchema {
@@ -61,7 +59,7 @@ func buildQuery(op operators.PhysicalOperator, qb *queryBuilder) {
 		for _, name := range op.Columns {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
 		}
-	case *physical.ApplyJoin:
+	case *operators.ApplyJoin:
 		buildQuery(op.LHS, qb)
 		// If we are going to add the predicate used in join here
 		// We should not add the predicate's copy of when it was split into
@@ -76,12 +74,12 @@ func buildQuery(op operators.PhysicalOperator, qb *queryBuilder) {
 		} else {
 			qb.joinInnerWith(qbR, op.Predicate)
 		}
-	case *physical.Filter:
+	case *operators.PhysFilter:
 		buildQuery(op.Source, qb)
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
 		}
-	case *physical.Derived:
+	case *operators.PhysDerived:
 		buildQuery(op.Source, qb)
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil

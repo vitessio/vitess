@@ -14,19 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type Derived struct {
-	Source operators.PhysicalOperator
+type PhysDerived struct {
+	Source PhysicalOperator
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -37,33 +36,33 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ operators.PhysicalOperator = (*Derived)(nil)
+var _ PhysicalOperator = (*PhysDerived)(nil)
 
 // TableID implements the PhysicalOperator interface
-func (d *Derived) TableID() semantics.TableSet {
+func (d *PhysDerived) TableID() semantics.TableSet {
 	return d.Source.TableID()
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (d *PhysDerived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return d.Source.UnsolvedPredicates(semTable)
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (d *Derived) CheckValid() error {
+func (d *PhysDerived) CheckValid() error {
 	return d.Source.CheckValid()
 }
 
 // IPhysical implements the PhysicalOperator interface
-func (d *Derived) IPhysical() {}
+func (d *PhysDerived) IPhysical() {}
 
 // Cost implements the PhysicalOperator interface
-func (d *Derived) Cost() int {
+func (d *PhysDerived) Cost() int {
 	return d.Source.Cost()
 }
 
 // Clone implements the PhysicalOperator interface
-func (d *Derived) Clone() operators.PhysicalOperator {
+func (d *PhysDerived) Clone() PhysicalOperator {
 	clone := *d
 	clone.Source = d.Source.Clone()
 	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
@@ -83,7 +82,7 @@ func (d *Derived) Clone() operators.PhysicalOperator {
 // the function will return no error and an index equal to -1.
 // If name is not present and the query does not have a *sqlparser.StarExpr, the function
 // will return an unknown column error.
-func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
+func (d *PhysDerived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 	hasStar := false
 	for j, exp := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
 		switch exp := exp.(type) {
@@ -117,6 +116,6 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 // This logic can also be used to check if this is a derived table that can be had on the left hand side of a vtgate join.
 // Since vtgate joins are always nested loop joins, we can't execute them on the RHS
 // if they do some things, like LIMIT or GROUP BY on wrong columns
-func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
+func (d *PhysDerived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
 }

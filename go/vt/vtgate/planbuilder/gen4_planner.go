@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -212,7 +211,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -326,7 +325,7 @@ func gen4UpdateStmtPlanner(
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +413,7 @@ func gen4DeleteStmtPlanner(
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
 		return nil, err
 	}

@@ -14,64 +14,68 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type Delete struct {
-	QTable           *operators.QueryTable
-	VTable           *vindexes.Table
-	OwnedVindexQuery string
-	AST              *sqlparser.Delete
+type PhysUpdate struct {
+	QTable              *QueryTable
+	VTable              *vindexes.Table
+	Assignments         map[string]sqlparser.Expr
+	ChangedVindexValues map[string]*engine.VindexValues
+	OwnedVindexQuery    string
+	AST                 *sqlparser.Update
 }
 
-var _ operators.PhysicalOperator = (*Delete)(nil)
-var _ operators.IntroducesTable = (*Delete)(nil)
+var _ PhysicalOperator = (*PhysUpdate)(nil)
+var _ IntroducesTable = (*PhysUpdate)(nil)
 
 // TableID implements the PhysicalOperator interface
-func (d *Delete) TableID() semantics.TableSet {
-	return d.QTable.ID
+func (u *PhysUpdate) TableID() semantics.TableSet {
+	return u.QTable.ID
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (d *Delete) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (u *PhysUpdate) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return nil
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (d *Delete) CheckValid() error {
+func (u *PhysUpdate) CheckValid() error {
 	return nil
 }
 
 // IPhysical implements the PhysicalOperator interface
-func (d *Delete) IPhysical() {}
+func (u *PhysUpdate) IPhysical() {}
 
 // Cost implements the PhysicalOperator interface
-func (d *Delete) Cost() int {
+func (u *PhysUpdate) Cost() int {
 	return 1
 }
 
 // Clone implements the PhysicalOperator interface
-func (d *Delete) Clone() operators.PhysicalOperator {
-	return &Delete{
-		QTable:           d.QTable,
-		VTable:           d.VTable,
-		OwnedVindexQuery: d.OwnedVindexQuery,
-		AST:              d.AST,
+func (u *PhysUpdate) Clone() PhysicalOperator {
+	return &PhysUpdate{
+		QTable:              u.QTable,
+		VTable:              u.VTable,
+		Assignments:         u.Assignments,
+		ChangedVindexValues: u.ChangedVindexValues,
+		OwnedVindexQuery:    u.OwnedVindexQuery,
+		AST:                 u.AST,
 	}
 }
 
 // GetQTable implements the IntroducesTable interface
-func (d *Delete) GetQTable() *operators.QueryTable {
-	return d.QTable
+func (u *PhysUpdate) GetQTable() *QueryTable {
+	return u.QTable
 }
 
 // GetVTable implements the IntroducesTable interface
-func (d *Delete) GetVTable() *vindexes.Table {
-	return d.VTable
+func (u *PhysUpdate) GetVTable() *vindexes.Table {
+	return u.VTable
 }

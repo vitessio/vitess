@@ -14,25 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Table struct {
-	QTable  *operators.QueryTable
+	QTable  *QueryTable
 	VTable  *vindexes.Table
 	Columns []*sqlparser.ColName
 }
 
-var _ operators.PhysicalOperator = (*Table)(nil)
-var _ operators.IntroducesTable = (*Table)(nil)
+var _ PhysicalOperator = (*Table)(nil)
+var _ IntroducesTable = (*Table)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
@@ -43,7 +42,7 @@ func (to *Table) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (to *Table) Clone() operators.PhysicalOperator {
+func (to *Table) Clone() PhysicalOperator {
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
@@ -76,12 +75,12 @@ func (to *Table) CheckValid() error {
 }
 
 // Compact implements the PhysicalOperator interface
-func (to *Table) Compact(semTable *semantics.SemTable) (operators.Operator, error) {
+func (to *Table) Compact(semTable *semantics.SemTable) (Operator, error) {
 	return to, nil
 }
 
 // GetQTable implements the IntroducesTable interface
-func (to *Table) GetQTable() *operators.QueryTable {
+func (to *Table) GetQTable() *QueryTable {
 	return to.QTable
 }
 

@@ -14,13 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -29,7 +28,7 @@ import (
 // PushPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 // If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 // where data is fetched from the LHS of the join to be used in the evaluation on the RHS
-func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op operators.PhysicalOperator) (operators.PhysicalOperator, error) {
+func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op PhysicalOperator) (PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *Route:
 		err := op.UpdateRoutingLogic(ctx, expr)
@@ -86,7 +85,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ope
 
 			// finally, if we can't turn the outer join into an inner,
 			// we need to filter after the join has been evaluated
-			return &Filter{
+			return &PhysFilter{
 				Source:     op,
 				Predicates: []sqlparser.Expr{expr},
 			}, nil
@@ -115,14 +114,14 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ope
 	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return &Filter{
+		return &PhysFilter{
 			Source:     op,
 			Predicates: []sqlparser.Expr{expr},
 		}, nil
-	case *Filter:
+	case *PhysFilter:
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
-	case *Derived:
+	case *PhysDerived:
 		tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 		if err != nil {
 			if err == semantics.ErrMultipleTables {
@@ -147,7 +146,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ope
 
 // PushOutputColumns will push the columns to the table they originate from,
 // making sure that intermediate operators pass the data through
-func PushOutputColumns(ctx *plancontext.PlanningContext, op operators.PhysicalOperator, columns ...*sqlparser.ColName) (operators.PhysicalOperator, []int, error) {
+func PushOutputColumns(ctx *plancontext.PlanningContext, op PhysicalOperator, columns ...*sqlparser.ColName) (PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *Route:
 		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
@@ -207,14 +206,14 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op operators.PhysicalOp
 			}
 		}
 		return op, offsets, nil
-	case *Filter:
+	case *PhysFilter:
 		newSrc, ints, err := PushOutputColumns(ctx, op.Source, columns...)
 		op.Source = newSrc
 		return op, ints, err
-	case *Vindex:
+	case *PhysVindex:
 		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err
-	case *Derived:
+	case *PhysDerived:
 		var noQualifierNames []*sqlparser.ColName
 		var offsets []int
 		if len(columns) == 0 {
@@ -260,7 +259,7 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 
 // RemovePredicate is used when we turn a predicate into a plan operator,
 // and the predicate needs to be removed as an AST construct
-func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op operators.PhysicalOperator) (operators.PhysicalOperator, error) {
+func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op PhysicalOperator) (PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *Route:
 		newSrc, err := RemovePredicate(ctx, expr, op.Source)
@@ -303,7 +302,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op o
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr))
 		}
 		return op, nil
-	case *Filter:
+	case *PhysFilter:
 		idx := -1
 		for i, predicate := range op.Predicates {
 			if sqlparser.EqualsExpr(predicate, expr) {

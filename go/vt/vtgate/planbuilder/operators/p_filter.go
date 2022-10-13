@@ -14,54 +14,53 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type Filter struct {
-	Source     operators.PhysicalOperator
+type PhysFilter struct {
+	Source     PhysicalOperator
 	Predicates []sqlparser.Expr
 }
 
-var _ operators.PhysicalOperator = (*Filter)(nil)
+var _ PhysicalOperator = (*PhysFilter)(nil)
 
 // IPhysical implements the PhysicalOperator interface
-func (f *Filter) IPhysical() {}
+func (f *PhysFilter) IPhysical() {}
 
 // TableID implements the PhysicalOperator interface
-func (f *Filter) TableID() semantics.TableSet {
+func (f *PhysFilter) TableID() semantics.TableSet {
 	return f.Source.TableID()
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (f *Filter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (f *PhysFilter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (f *Filter) CheckValid() error {
+func (f *PhysFilter) CheckValid() error {
 	return f.Source.CheckValid()
 }
 
 // Compact implements the PhysicalOperator interface
-func (f *Filter) Compact(semTable *semantics.SemTable) (operators.Operator, error) {
+func (f *PhysFilter) Compact(semTable *semantics.SemTable) (Operator, error) {
 	return f, nil
 }
 
 // Cost implements the PhysicalOperator interface
-func (f *Filter) Cost() int {
+func (f *PhysFilter) Cost() int {
 	return f.Source.Cost()
 }
 
 // Clone implements the PhysicalOperator interface
-func (f *Filter) Clone() operators.PhysicalOperator {
+func (f *PhysFilter) Clone() PhysicalOperator {
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
-	return &Filter{
+	return &PhysFilter{
 		Source:     f.Source.Clone(),
 		Predicates: predicatesClone,
 	}
