@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 )
 
 type queryBuilder struct {
@@ -39,14 +39,14 @@ type queryBuilder struct {
 	tableNames []string
 }
 
-func toSQL(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
+func toSQL(ctx *plancontext.PlanningContext, op operators.PhysicalOperator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
 	q.sortTables()
 	return q.sel
 }
 
-func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
+func buildQuery(op operators.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *physical.Table:
 		dbName := ""

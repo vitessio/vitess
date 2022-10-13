@@ -18,16 +18,16 @@ package physical
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
-	Source     abstract.PhysicalOperator
+	Source     operators.PhysicalOperator
 	Predicates []sqlparser.Expr
 }
 
-var _ abstract.PhysicalOperator = (*Filter)(nil)
+var _ operators.PhysicalOperator = (*Filter)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (f *Filter) IPhysical() {}
@@ -48,7 +48,7 @@ func (f *Filter) CheckValid() error {
 }
 
 // Compact implements the PhysicalOperator interface
-func (f *Filter) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (f *Filter) Compact(semTable *semantics.SemTable) (operators.Operator, error) {
 	return f, nil
 }
 
@@ -58,7 +58,7 @@ func (f *Filter) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (f *Filter) Clone() abstract.PhysicalOperator {
+func (f *Filter) Clone() operators.PhysicalOperator {
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
 	return &Filter{

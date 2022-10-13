@@ -18,20 +18,20 @@ package physical
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Delete struct {
-	QTable           *abstract.QueryTable
+	QTable           *operators.QueryTable
 	VTable           *vindexes.Table
 	OwnedVindexQuery string
 	AST              *sqlparser.Delete
 }
 
-var _ abstract.PhysicalOperator = (*Delete)(nil)
-var _ abstract.IntroducesTable = (*Delete)(nil)
+var _ operators.PhysicalOperator = (*Delete)(nil)
+var _ operators.IntroducesTable = (*Delete)(nil)
 
 // TableID implements the PhysicalOperator interface
 func (d *Delete) TableID() semantics.TableSet {
@@ -57,7 +57,7 @@ func (d *Delete) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (d *Delete) Clone() abstract.PhysicalOperator {
+func (d *Delete) Clone() operators.PhysicalOperator {
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,
@@ -67,7 +67,7 @@ func (d *Delete) Clone() abstract.PhysicalOperator {
 }
 
 // GetQTable implements the IntroducesTable interface
-func (d *Delete) GetQTable() *abstract.QueryTable {
+func (d *Delete) GetQTable() *operators.QueryTable {
 	return d.QTable
 }
 

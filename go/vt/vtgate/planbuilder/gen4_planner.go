@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -203,7 +203,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(selStmt, semTable)
+	logical, err := operators.CreateLogicalOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -315,7 +315,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(updStmt, semTable)
+	logical, err := operators.CreateLogicalOperatorFromAST(updStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +403,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(deleteStmt, semTable)
+	logical, err := operators.CreateLogicalOperatorFromAST(deleteStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +546,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 }
 
 func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := abstract.CreateQPFromUnion(union)
+	qp, err := operators.CreateQPFromUnion(union)
 	if err != nil {
 		return nil, err
 	}

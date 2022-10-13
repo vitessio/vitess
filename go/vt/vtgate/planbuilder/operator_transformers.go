@@ -31,7 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, isRoot bool) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.PhysicalOperator, isRoot bool) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *physical.Route:
 		return transformRoutePlan(ctx, op)
@@ -283,7 +283,7 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *physical.Route) sq
 
 func getAllTableNames(op *physical.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := physical.VisitOperators(op, func(op abstract.PhysicalOperator) (bool, error) {
+	err := physical.VisitOperators(op, func(op operators.PhysicalOperator) (bool, error) {
 		tbl, isTbl := op.(*physical.Table)
 		var name string
 		if isTbl {
@@ -506,7 +506,7 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *physical.Uni
 	return sources, nil
 }
 
-func createLogicalPlan(ctx *plancontext.PlanningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlan(ctx *plancontext.PlanningContext, source operators.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformToLogicalPlan(ctx, source, false)
 	if err != nil {
 		return nil, err

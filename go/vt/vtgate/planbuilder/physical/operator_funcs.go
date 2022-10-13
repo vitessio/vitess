@@ -20,7 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -29,7 +29,7 @@ import (
 // PushPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 // If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 // where data is fetched from the LHS of the join to be used in the evaluation on the RHS
-func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
+func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op operators.PhysicalOperator) (operators.PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *Route:
 		err := op.UpdateRoutingLogic(ctx, expr)
@@ -147,7 +147,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abs
 
 // PushOutputColumns will push the columns to the table they originate from,
 // making sure that intermediate operators pass the data through
-func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
+func PushOutputColumns(ctx *plancontext.PlanningContext, op operators.PhysicalOperator, columns ...*sqlparser.ColName) (operators.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *Route:
 		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
@@ -260,7 +260,7 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 
 // RemovePredicate is used when we turn a predicate into a plan operator,
 // and the predicate needs to be removed as an AST construct
-func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
+func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op operators.PhysicalOperator) (operators.PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *Route:
 		newSrc, err := RemovePredicate(ctx, expr, op.Source)

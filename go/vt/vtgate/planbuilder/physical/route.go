@@ -21,7 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -30,7 +30,7 @@ import (
 
 type (
 	Route struct {
-		Source abstract.PhysicalOperator
+		Source operators.PhysicalOperator
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -84,7 +84,7 @@ type (
 	}
 )
 
-var _ abstract.PhysicalOperator = (*Route)(nil)
+var _ operators.PhysicalOperator = (*Route)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
@@ -120,7 +120,7 @@ func (r *Route) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (r *Route) Clone() abstract.PhysicalOperator {
+func (r *Route) Clone() operators.PhysicalOperator {
 	cloneRoute := *r
 	cloneRoute.Source = r.Source.Clone()
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
@@ -456,7 +456,7 @@ func (r *Route) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (r *Route) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (r *Route) Compact(semTable *semantics.SemTable) (operators.Operator, error) {
 	return r, nil
 }
 

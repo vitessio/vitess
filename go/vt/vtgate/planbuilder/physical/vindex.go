@@ -19,7 +19,7 @@ package physical
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -27,7 +27,7 @@ import (
 
 type Vindex struct {
 	OpCode  engine.VindexOpcode
-	Table   abstract.VindexTable
+	Table   operators.VindexTable
 	Vindex  vindexes.Vindex
 	Solved  semantics.TableSet
 	Columns []*sqlparser.ColName
@@ -58,12 +58,12 @@ func (v *Vindex) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (v *Vindex) Clone() abstract.PhysicalOperator {
+func (v *Vindex) Clone() operators.PhysicalOperator {
 	clone := *v
 	return &clone
 }
 
-var _ abstract.PhysicalOperator = (*Vindex)(nil)
+var _ operators.PhysicalOperator = (*Vindex)(nil)
 
 func (v *Vindex) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
 	idxs := make([]int, len(columns))
@@ -81,7 +81,7 @@ outer:
 	return idxs, nil
 }
 
-func optimizeVindex(ctx *plancontext.PlanningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
+func optimizeVindex(ctx *plancontext.PlanningContext, op *operators.Vindex) (operators.PhysicalOperator, error) {
 	solves := ctx.SemTable.TableSetFor(op.Table.Alias)
 	return &Vindex{
 		OpCode: op.OpCode,

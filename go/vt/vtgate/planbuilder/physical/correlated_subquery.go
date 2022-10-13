@@ -18,13 +18,13 @@ package physical
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
 	CorrelatedSubQueryOp struct {
-		Outer, Inner abstract.PhysicalOperator
+		Outer, Inner operators.PhysicalOperator
 		Extracted    *sqlparser.ExtractedSubquery
 
 		// JoinCols are the columns from the LHS used for the join.
@@ -36,20 +36,20 @@ type (
 	}
 
 	SubQueryOp struct {
-		Outer, Inner abstract.PhysicalOperator
+		Outer, Inner operators.PhysicalOperator
 		Extracted    *sqlparser.ExtractedSubquery
 	}
 
 	SubQueryInner struct {
-		Inner abstract.LogicalOperator
+		Inner operators.LogicalOperator
 
 		// ExtractedSubquery contains all information we need about this subquery
 		ExtractedSubquery *sqlparser.ExtractedSubquery
 	}
 )
 
-var _ abstract.PhysicalOperator = (*SubQueryOp)(nil)
-var _ abstract.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
+var _ operators.PhysicalOperator = (*SubQueryOp)(nil)
+var _ operators.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
 
 // TableID implements the PhysicalOperator interface
 func (s *SubQueryOp) TableID() semantics.TableSet {
@@ -79,7 +79,7 @@ func (s *SubQueryOp) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (s *SubQueryOp) Clone() abstract.PhysicalOperator {
+func (s *SubQueryOp) Clone() operators.PhysicalOperator {
 	result := &SubQueryOp{
 		Outer:     s.Outer.Clone(),
 		Inner:     s.Inner.Clone(),
@@ -110,7 +110,7 @@ func (c *CorrelatedSubQueryOp) Cost() int {
 	return c.Inner.Cost() + c.Outer.Cost()
 }
 
-func (c *CorrelatedSubQueryOp) Clone() abstract.PhysicalOperator {
+func (c *CorrelatedSubQueryOp) Clone() operators.PhysicalOperator {
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
 	copy(columns, c.LHSColumns)
 	result := &CorrelatedSubQueryOp{

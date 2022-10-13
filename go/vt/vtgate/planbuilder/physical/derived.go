@@ -20,13 +20,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Derived struct {
-	Source abstract.PhysicalOperator
+	Source operators.PhysicalOperator
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -37,7 +37,7 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ abstract.PhysicalOperator = (*Derived)(nil)
+var _ operators.PhysicalOperator = (*Derived)(nil)
 
 // TableID implements the PhysicalOperator interface
 func (d *Derived) TableID() semantics.TableSet {
@@ -63,7 +63,7 @@ func (d *Derived) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (d *Derived) Clone() abstract.PhysicalOperator {
+func (d *Derived) Clone() operators.PhysicalOperator {
 	clone := *d
 	clone.Source = d.Source.Clone()
 	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)

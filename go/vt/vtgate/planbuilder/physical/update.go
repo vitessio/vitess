@@ -19,13 +19,13 @@ package physical
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Update struct {
-	QTable              *abstract.QueryTable
+	QTable              *operators.QueryTable
 	VTable              *vindexes.Table
 	Assignments         map[string]sqlparser.Expr
 	ChangedVindexValues map[string]*engine.VindexValues
@@ -33,8 +33,8 @@ type Update struct {
 	AST                 *sqlparser.Update
 }
 
-var _ abstract.PhysicalOperator = (*Update)(nil)
-var _ abstract.IntroducesTable = (*Update)(nil)
+var _ operators.PhysicalOperator = (*Update)(nil)
+var _ operators.IntroducesTable = (*Update)(nil)
 
 // TableID implements the PhysicalOperator interface
 func (u *Update) TableID() semantics.TableSet {
@@ -60,7 +60,7 @@ func (u *Update) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (u *Update) Clone() abstract.PhysicalOperator {
+func (u *Update) Clone() operators.PhysicalOperator {
 	return &Update{
 		QTable:              u.QTable,
 		VTable:              u.VTable,
@@ -72,7 +72,7 @@ func (u *Update) Clone() abstract.PhysicalOperator {
 }
 
 // GetQTable implements the IntroducesTable interface
-func (u *Update) GetQTable() *abstract.QueryTable {
+func (u *Update) GetQTable() *operators.QueryTable {
 	return u.QTable
 }
 

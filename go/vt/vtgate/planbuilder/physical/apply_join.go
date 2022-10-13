@@ -18,14 +18,14 @@ package physical
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // ApplyJoin is a nested loop join - for each row on the LHS,
 // we'll execute the plan on the RHS, feeding data from left to right
 type ApplyJoin struct {
-	LHS, RHS abstract.PhysicalOperator
+	LHS, RHS operators.PhysicalOperator
 
 	// Columns stores the column indexes of the columns coming from the left and right side
 	// negative value comes from LHS and positive from RHS
@@ -44,7 +44,7 @@ type ApplyJoin struct {
 	Predicate sqlparser.Expr
 }
 
-var _ abstract.PhysicalOperator = (*ApplyJoin)(nil)
+var _ operators.PhysicalOperator = (*ApplyJoin)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (a *ApplyJoin) IPhysical() {}
@@ -69,7 +69,7 @@ func (a *ApplyJoin) CheckValid() error {
 }
 
 // Compact implements the PhysicalOperator interface
-func (a *ApplyJoin) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (a *ApplyJoin) Compact(semTable *semantics.SemTable) (operators.Operator, error) {
 	return a, nil
 }
 
@@ -79,7 +79,7 @@ func (a *ApplyJoin) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (a *ApplyJoin) Clone() abstract.PhysicalOperator {
+func (a *ApplyJoin) Clone() operators.PhysicalOperator {
 	varsClone := map[string]int{}
 	for key, value := range a.Vars {
 		varsClone[key] = value
