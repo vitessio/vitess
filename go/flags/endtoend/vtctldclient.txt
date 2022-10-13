@@ -26,6 +26,7 @@ Available Commands:
   ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.
   ExecuteHook                 Runs the specified hook on the given tablet.
   FindAllShardsInKeyspace     Returns a map of shard names to shard references for a given keyspace.
+  GenerateShardRanges         Print a set of shard ranges assuming a keyspace with N shards.
   GetBackups                  Lists backups for the given shard.
   GetCellInfo                 Gets the CellInfo object for the given cell.
   GetCellInfoNames            Lists the names of all cells in the cluster.
