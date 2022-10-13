@@ -111,7 +111,11 @@ Usage of vtbackup:
       --mycnf_slow_log_path string                      mysql slow query log path
       --mycnf_socket_file string                        mysql socket file
       --mycnf_tmp_dir string                            mysql tmp directory
+      --mysql_auth_server_static_file string            JSON File to read the users/passwords from.
+      --mysql_auth_server_static_string string          JSON representation of the users/passwords config.
+      --mysql_auth_static_reload_interval duration      Ticker to reload credentials
       --mysql_port int                                  mysql port (default 3306)
+      --mysql_server_flush_delay duration               Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_version string                     MySQL server version to advertise.
       --mysql_socket string                             path to the mysql socket
       --mysql_timeout duration                          how long to wait for mysqld startup (default 5m0s)

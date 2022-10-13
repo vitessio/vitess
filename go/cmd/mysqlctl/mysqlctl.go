@@ -47,8 +47,6 @@ func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
 	servenv.RegisterFlags()
-	servenv.RegisterGRPCServerFlags()
-	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
 	// mysqlctl only starts and stops mysql, only needs dba.
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
