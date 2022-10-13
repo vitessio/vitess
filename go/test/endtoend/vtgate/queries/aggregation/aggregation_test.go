@@ -352,7 +352,7 @@ func TestEmptyTableAggr(t *testing.T) {
 		})
 	}
 
-	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (3,'a1','foo',100), (3,'b1','bar',200)")
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200)")
 
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
