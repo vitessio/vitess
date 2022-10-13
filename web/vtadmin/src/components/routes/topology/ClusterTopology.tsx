@@ -41,40 +41,40 @@ export const ClusterTopology = () => {
   useDocumentTitle('Cluster Topolgy');
   const { clusterID } = useParams<RouteParams>();
   const { data } = useTopologyPath({ clusterID, path: '/' });
-  const [topology, setTopology] = useState<{ cell: TopologyCell }>({ cell: data?.cell as TopologyCell })
+  const [topology, setTopology] = useState<{ cell: TopologyCell }>({ cell: data?.cell as TopologyCell });
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
   const onExpand = async (path: string) => {
-    const { cell } = await getTopologyPath({ clusterID, path })
-    const newTopo = { ...topology }
-    newTopo.cell.children = getChildren(cell as TopologyCell)
-    setTopology(newTopo)
-  }
+    const { cell } = await getTopologyPath({ clusterID, path });
+    const newTopo = { ...topology };
+    newTopo.cell.children = placeCell(newTopo.cell, cell as TopologyCell);
+    setTopology(newTopo);
+  };
 
-  const getChildren = (cell: TopologyCell): TopologyCellChild[] => {
-    const newChildren: TopologyCellChild[] = []
-
-    topology.cell.children?.forEach((c) => {
-      if (typeof (c) === 'string' && c === cell?.name) {
-        newChildren.push(cell as TopologyCell)
+  const placeCell = (currentCell: TopologyCell, newCell: TopologyCell): TopologyCellChild[] => {
+    const newChildren: TopologyCellChild[] = [];
+    currentCell.children?.forEach((c) => {
+      if (typeof c === 'string' && c === newCell?.name) {
+        newChildren.push(newCell as TopologyCell);
       }
-      if (typeof (c) == 'string' && c !== cell?.name) {
-        newChildren.push(c)
+      if (typeof c == 'string' && c !== newCell?.name) {
+        newChildren.push(c);
       }
-      if (typeof (c) !== 'string') {
-        c.children = getChildren(c)
-        newChildren.push(c)
+      if (typeof c !== 'string') {
+        c.children = placeCell(c, newCell);
+        newChildren.push(c);
       }
-    })
-
-    return newChildren
-  }
+    });
+    return newChildren;
+  };
 
   useEffect(() => {
-    const { nodes: initialNodes, edges: initialEdges } = topology ? generateGraph(topology, onExpand) : { nodes: [], edges: [] };
+    const { nodes: initialNodes, edges: initialEdges } = topology
+      ? generateGraph(topology, onExpand)
+      : { nodes: [], edges: [] };
     setNodes(initialNodes);
     setEdges(initialEdges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,10 +82,10 @@ export const ClusterTopology = () => {
 
   useEffect(() => {
     if (data?.cell) {
-      setTopology({ cell: data?.cell as TopologyCell })
+      setTopology({ cell: data?.cell as TopologyCell });
     }
-  }, [data]
-  )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   if (!data) {
     return (
