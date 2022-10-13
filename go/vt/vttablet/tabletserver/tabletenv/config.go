@@ -325,7 +325,7 @@ type ConnPoolConfig struct {
 	Size                      int     `json:"size,omitempty"`
 	TimeoutSeconds            Seconds `json:"timeoutSeconds,omitempty"`
 	IdleTimeoutSeconds        Seconds `json:"idleTimeoutSeconds,omitempty"`
-	MaxLifetimeTimeoutSeconds Seconds `json:"refreshTimeoutSeconds,omitempty"`
+	MaxLifetimeTimeoutSeconds Seconds `json:"maxLifetimeTimeoutSeconds,omitempty"`
 	PrefillParallelism        int     `json:"prefillParallelism,omitempty"`
 	MaxWaiters                int     `json:"maxWaiters,omitempty"`
 }
@@ -493,7 +493,7 @@ var defaultConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
 		Size:                      16,
 		IdleTimeoutSeconds:        30 * 60,
-		MaxLifetimeTimeoutSeconds: 0, // Refresh disabled
+		MaxLifetimeTimeoutSeconds: 0, // Pool does not expire
 		MaxWaiters:                5000,
 	},
 	OlapReadPool: ConnPoolConfig{

@@ -41,11 +41,12 @@ func TestConfigParse(t *testing.T) {
 			},
 		},
 		OltpReadPool: ConnPoolConfig{
-			Size:               16,
-			TimeoutSeconds:     10,
-			IdleTimeoutSeconds: 20,
-			PrefillParallelism: 30,
-			MaxWaiters:         40,
+			Size:                      16,
+			TimeoutSeconds:            10,
+			IdleTimeoutSeconds:        20,
+			PrefillParallelism:        30,
+			MaxWaiters:                40,
+			MaxLifetimeTimeoutSeconds: 50,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000,
@@ -78,6 +79,7 @@ olapReadPool: {}
 oltp: {}
 oltpReadPool:
   idleTimeoutSeconds: 20
+  maxLifetimeTimeoutSeconds: 50
   maxWaiters: 40
   prefillParallelism: 30
   size: 16
@@ -104,6 +106,7 @@ oltpReadPool:
   idleTimeoutSeconds: 20
   prefillParallelism: 30
   maxWaiters: 40
+  maxLifetimeTimeoutSeconds: 50
 `)
 	gotCfg := cfg
 	gotCfg.DB = cfg.DB.Clone()
@@ -172,11 +175,12 @@ func TestClone(t *testing.T) {
 
 	cfg1 := &TabletConfig{
 		OltpReadPool: ConnPoolConfig{
-			Size:               16,
-			TimeoutSeconds:     10,
-			IdleTimeoutSeconds: 20,
-			PrefillParallelism: 30,
-			MaxWaiters:         40,
+			Size:                      16,
+			TimeoutSeconds:            10,
+			IdleTimeoutSeconds:        20,
+			PrefillParallelism:        30,
+			MaxWaiters:                40,
+			MaxLifetimeTimeoutSeconds: 50,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000000,
