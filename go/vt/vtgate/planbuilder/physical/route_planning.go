@@ -175,10 +175,10 @@ func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table
 }
 
 /*
-	The greedy planner will plan a query by finding first finding the best route plan for every table.
-    Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
-	and removes the two inputs to this cheapest plan and instead adds the join.
-	As an optimization, it first only considers joining tables that have predicates defined between them
+		The greedy planner will plan a query by finding first finding the best route plan for every table.
+	    Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
+		and removes the two inputs to this cheapest plan and instead adds the join.
+		As an optimization, it first only considers joining tables that have predicates defined between them
 */
 func greedySolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
 	routeOps, err := seedOperatorList(ctx, qg)
