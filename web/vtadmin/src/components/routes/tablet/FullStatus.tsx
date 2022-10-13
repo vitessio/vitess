@@ -1,24 +1,23 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useGetFullStatus } from '../../../hooks/api';
-import { topodata, vtadmin } from '../../../proto/vtadmin';
+import { vtadmin } from '../../../proto/vtadmin';
 import { formatAlias } from '../../../util/tablets';
 import { Code } from '../../Code';
 import style from './Tablet.module.scss';
-import { isNil } from 'lodash-es';
 
 interface Props {
     tablet: vtadmin.Tablet;
 }
 
-function stateReplacer(key: any, val: any) {
+function stateReplacer(key: string, val: number) {
     if (key === 'io_state' || key === 'sql_state') {
         if (val === 3) {
-            return 'Replication Running';
+            return 'Running';
         } else if (val === 2) {
-            return 'Replication Connected';
+            return 'Connecting';
         } else if (val === 1) {
-            return 'Replication Stopped';
+            return 'Stopped';
         }
     }
     return val;
@@ -44,19 +43,12 @@ const FullStatus: React.FC<Props> = ({ tablet }) => {
             </div>
         );
     }
-    if (!isNil(data) && !isNil(data.status)) {
-        if (data.status.semi_sync_primary_enabled !== true) {
-            data.status.semi_sync_primary_enabled = false;
-        }
-        if (data.status.semi_sync_replica_enabled !== true) {
-            data.status.semi_sync_replica_enabled = false;
-        }
-        if (data.status.semi_sync_primary_status !== true) {
-            data.status.semi_sync_primary_status = false;
-        }
-        if (data.status.semi_sync_replica_status !== true) {
-            data.status.semi_sync_replica_status = false;
-        }
+
+    if (data && data.status) {
+        data.status.semi_sync_primary_enabled = !!data.status.semi_sync_primary_enabled;
+        data.status.semi_sync_replica_enabled = !!data.status.semi_sync_replica_enabled;
+        data.status.semi_sync_primary_status = !!data.status.semi_sync_primary_status;
+        data.status.semi_sync_replica_status = !!data.status.semi_sync_replica_status;
     }
 
     return <Code code={JSON.stringify(data, stateReplacer, 2)} />;
