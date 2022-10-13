@@ -61,6 +61,7 @@ type Value[T any] struct {
 	hasDefault bool
 
 	resolve func(string) T
+	bound   bool
 	loaded  bool
 }
 
@@ -89,6 +90,12 @@ func NewValue[T any](key string, getFunc func(string) T, opts ...Option[T]) *Val
 // additional aliases for the value's key. This function panics if a flag name
 // is specified that is not defined on the flag set.
 func (val *Value[T]) Bind(v *viper.Viper, fs *pflag.FlagSet) {
+	if val.bound {
+		return
+	}
+
+	val.bound = true
+
 	if v == nil {
 		v = viper.GetViper()
 	}
@@ -139,6 +146,9 @@ func (val *Value[T]) Bind(v *viper.Viper, fs *pflag.FlagSet) {
 
 // Fetch returns the underlying value from the backing viper.
 func (val *Value[T]) Fetch() T {
+	// Prior to fetching anything, bind the value to the global viper if it
+	// hasn't been bound to some viper already.
+	val.Bind(nil, nil)
 	val.value, val.loaded = val.resolve(val.key), true
 	return val.value
 }
