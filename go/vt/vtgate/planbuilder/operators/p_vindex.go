@@ -25,9 +25,9 @@ import (
 )
 
 type PhysVindex struct {
-	OpCode engine.VindexOpcode
-	Table  VindexTable
-	Vindex vindexes.Vindex
+	OpCode  engine.VindexOpcode
+	Table   VindexTable
+	Vindex  vindexes.Vindex
 	Solved  semantics.TableSet
 	Columns []*sqlparser.ColName
 	Value   sqlparser.Expr

@@ -17,9 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -34,54 +32,6 @@ var _ LogicalOperator = (*Join)(nil)
 
 // iLogical implements the LogicalOperator interface
 func (*Join) iLogical() {}
-
-// PushPredicate implements the Operator interface
-func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	deps := semTable.RecursiveDeps(expr)
-	switch {
-	case deps.IsSolvedBy(j.LHS.TableID()):
-		lhs, err := j.LHS.PushPredicate(expr, semTable)
-		if err != nil {
-			return nil, err
-		}
-		j.LHS = lhs
-		return j, nil
-
-	case deps.IsSolvedBy(j.RHS.TableID()):
-		j.tryConvertToInnerJoin(expr, semTable)
-
-		if !j.LeftJoin {
-			rhs, err := j.RHS.PushPredicate(expr, semTable)
-			if err != nil {
-				return nil, err
-			}
-			j.RHS = rhs
-			return j, err
-		}
-
-		op := &Filter{
-			Source:     j,
-			Predicates: []sqlparser.Expr{expr},
-		}
-		return op, nil
-
-	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
-		j.tryConvertToInnerJoin(expr, semTable)
-
-		if !j.LeftJoin {
-			j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
-			return j, nil
-		}
-
-		op := &Filter{
-			Source:     j,
-			Predicates: []sqlparser.Expr{expr},
-		}
-		return op, nil
-	}
-
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
-}
 
 // When a predicate uses information from an outer table, we can convert from an outer join to an inner join
 // if the predicate is "null-intolerant".

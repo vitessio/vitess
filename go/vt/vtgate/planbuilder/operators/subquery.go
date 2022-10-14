@@ -17,9 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -51,11 +49,6 @@ func (s *SubQuery) TableID() semantics.TableSet {
 		ts = ts.Merge(inner.Inner.TableID())
 	}
 	return ts
-}
-
-// PushPredicate implements the Operator interface
-func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) (LogicalOperator, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
 }
 
 // UnsolvedPredicates implements the Operator interface

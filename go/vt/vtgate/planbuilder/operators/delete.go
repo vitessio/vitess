@@ -17,9 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -48,11 +46,6 @@ func (d *Delete) CheckValid() error {
 
 // iLogical implements the LogicalOperator interface
 func (d *Delete) iLogical() {}
-
-// PushPredicate implements the LogicalOperator interface
-func (d *Delete) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't accept predicates")
-}
 
 // Compact implements the LogicalOperator interface
 func (d *Delete) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {

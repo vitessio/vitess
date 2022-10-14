@@ -17,9 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -38,25 +36,6 @@ func (*Derived) iLogical() {}
 // TableID implements the Operator interface
 func (d *Derived) TableID() semantics.TableSet {
 	return d.Inner.TableID()
-}
-
-// PushPredicate implements the Operator interface
-func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	tableInfo, err := semTable.TableInfoForExpr(expr)
-	if err != nil {
-		if err == semantics.ErrMultipleTables {
-			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
-		}
-		return nil, err
-	}
-
-	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	if err != nil {
-		return nil, err
-	}
-	newSrc, err := d.Inner.PushPredicate(newExpr, semTable)
-	d.Inner = newSrc
-	return d, err
 }
 
 // UnsolvedPredicates implements the Operator interface

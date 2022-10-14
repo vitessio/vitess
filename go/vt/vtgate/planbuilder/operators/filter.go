@@ -46,24 +46,6 @@ func (f *Filter) CheckValid() error {
 	return f.Source.CheckValid()
 }
 
-// PushPredicate implements the LogicalOperator interface
-func (f *Filter) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	op, err := f.Source.PushPredicate(expr, semTable)
-	if err != nil {
-		return nil, err
-	}
-
-	if filter, isFilter := op.(*Filter); isFilter {
-		filter.Predicates = append(f.Predicates, filter.Predicates...)
-		return filter, err
-	}
-
-	return &Filter{
-		Source:     op,
-		Predicates: f.Predicates,
-	}, nil
-}
-
 // Compact implements the LogicalOperator interface
 func (f *Filter) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
 	if len(f.Predicates) == 0 {

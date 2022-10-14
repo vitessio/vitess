@@ -60,17 +60,6 @@ var _ LogicalOperator = (*QueryGraph)(nil)
 
 func (*QueryGraph) iLogical() {}
 
-// PushPredicate implements the Operator interface
-func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		err := qg.collectPredicate(e, semTable)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return qg, nil
-}
-
 // TableID implements the Operator interface
 func (qg *QueryGraph) TableID() semantics.TableSet {
 	var ts semantics.TableSet
