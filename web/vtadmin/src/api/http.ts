@@ -761,8 +761,7 @@ export interface GetTopologyPathParams {
 }
 
 export const getTopologyPath = async (params: GetTopologyPathParams) => {
-    const req = new URLSearchParams();
-    req.append('path', params.path);
+    const req = new URLSearchParams({ path: params.path });
     const { result } = await vtfetch(`/api/cluster/${params.clusterID}/topology?${req}`);
 
     const err = vtctldata.GetTopologyPathResponse.verify(result);
