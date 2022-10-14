@@ -5702,6 +5702,47 @@
     }
   },
   {
+    "comment": "deconstruct tuple equality comparisons",
+    "query": "select id from user where (id, name) = (34, 'apa')",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id, name) = (34, 'apa')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where (id, `name`) = (34, 'apa')",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id, name) = (34, 'apa')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 34 and `name` = 'apa'",
+        "Table": "`user`",
+        "Values": [
+          "INT64(34)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "multi column vindex with both IN predicate and equality predicate",
     "query": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7",
     "v3-plan": {

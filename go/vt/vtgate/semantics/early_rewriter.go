@@ -79,6 +79,23 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		if newNode != nil {
 			node.Expr = newNode
 		}
+	case *sqlparser.ComparisonExpr:
+		lft, lftOK := node.Left.(sqlparser.ValTuple)
+		rgt, rgtOK := node.Right.(sqlparser.ValTuple)
+		if !lftOK || !rgtOK || len(lft) != len(rgt) || node.Operator != sqlparser.EqualOp {
+			return nil
+		}
+		var predicates []sqlparser.Expr
+		for i, l := range lft {
+			r := rgt[i]
+			predicates = append(predicates, &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left:     l,
+				Right:    r,
+				Escape:   node.Escape,
+			})
+		}
+		cursor.Replace(sqlparser.AndExpressions(predicates...))
 	}
 	return nil
 }
