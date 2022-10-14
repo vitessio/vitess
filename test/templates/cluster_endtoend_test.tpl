@@ -83,7 +83,7 @@ jobs:
         sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
 
         {{else}}
-q
+
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
         # Setup MySQL 8.0
