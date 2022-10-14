@@ -4128,6 +4128,7 @@
     }
   },
   {
+    "comment": "select * from samecolvin where col = :col",
     "query": "select * from samecolvin where col = :col",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -6340,6 +6341,43 @@
       },
       "TablesUsed": [
         "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "Self referencing columns in HAVING should work",
+    "query": "select a+2 as a from user having a = 42",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select a+2 as a from user having a = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a + 2 as a from `user` where 1 != 1",
+        "Query": "select a + 2 as a from `user` having a = 42",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select a+2 as a from user having a = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a + 2 as a from `user` where 1 != 1",
+        "Query": "select a + 2 as a from `user` where a + 2 = 42",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }
