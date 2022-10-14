@@ -5957,6 +5957,94 @@ func TestGetTablets(t *testing.T) {
 	}
 }
 
+func TestGetTopologyPath(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2", "cell3")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	err := ts.CreateKeyspace(ctx, "keyspace1", &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	testutil.AddTablets(ctx, t, ts, nil, &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+		Hostname:      "localhost",
+		Keyspace:      "keyspace1",
+		MysqlHostname: "localhost",
+		MysqlPort:     17100,
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		path      string
+		shouldErr bool
+		expected  *vtctldatapb.GetTopologyPathResponse
+	}{
+		{
+			name: "root path",
+			path: "/",
+			expected: &vtctldatapb.GetTopologyPathResponse{
+				Cell: &vtctldatapb.TopologyCell{
+					Path:     "/",
+					Children: []string{"global", "cell1", "cell2", "cell3"},
+				},
+			},
+		},
+		{
+			name:      "invalid path",
+			path:      "",
+			shouldErr: true,
+		},
+		{
+			name: "global path",
+			path: "/global",
+			expected: &vtctldatapb.GetTopologyPathResponse{
+				Cell: &vtctldatapb.TopologyCell{
+					Name:     "global",
+					Path:     "/global",
+					Children: []string{"cells", "keyspaces"},
+				},
+			},
+		},
+		{
+			name: "terminal data path",
+			path: "/cell1/tablets/cell1-0000000100/Tablet",
+			expected: &vtctldatapb.GetTopologyPathResponse{
+				Cell: &vtctldatapb.TopologyCell{
+					Name: "Tablet",
+					Path: "/cell1/tablets/cell1-0000000100/Tablet",
+					Data: "alias:{cell:\"cell1\" uid:100} hostname:\"localhost\" keyspace:\"keyspace1\" mysql_hostname:\"localhost\" mysql_port:17100",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			resp, err := vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{
+				Path: tt.path,
+			})
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestGetVSchema(t *testing.T) {
 	t.Parallel()
 
