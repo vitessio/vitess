@@ -10,6 +10,7 @@
 - [Mysql Compatibility](#mysql-compatibility)
 - [Durability Policy](#durability-policy)
 - [New EXPLAIN format](#new-explain-format)
+- [VTOrc](#VTOrc)
 
 ## Known Issues
 
