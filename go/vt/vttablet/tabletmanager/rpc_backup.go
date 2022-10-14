@@ -17,18 +17,16 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -89,16 +87,6 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
 			return err
 		}
-		// Tell Orchestrator we're stopped on purpose for some Vitess task.
-		// Do this in the background, as it's best-effort.
-		go func() {
-			if tm.orc == nil {
-				return
-			}
-			if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to run an offline backup"); err != nil {
-				logger.Warningf("Orchestrator BeginMaintenance failed: %v", err)
-			}
-		}()
 	}
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
@@ -134,17 +122,6 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("mysql backup command returned error: %v", returnErr)
 			}
 			returnErr = err
-		} else {
-			// Tell Orchestrator we're no longer stopped on purpose.
-			// Do this in the background, as it's best-effort.
-			go func() {
-				if tm.orc == nil {
-					return
-				}
-				if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
-					logger.Warningf("Orchestrator EndMaintenance failed: %v", err)
-				}
-			}()
 		}
 	}
 
