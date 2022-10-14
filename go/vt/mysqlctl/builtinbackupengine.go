@@ -160,9 +160,10 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
-
 	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
-
+	if backupStorageHook != "" {
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
+	}
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
@@ -300,7 +301,6 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 // backupFiles finds the list of files to backup, and creates the backup.
 func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
-
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
 	fes, _, err := findFilesToBackup(params.Cnf)
@@ -590,6 +590,9 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 
 	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
 		return nil, err
+	}
+	if bm.TransformHook != "" {
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
 	}
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
