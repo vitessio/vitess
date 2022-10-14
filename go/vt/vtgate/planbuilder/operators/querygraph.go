@@ -162,9 +162,10 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 // UnsolvedPredicates implements the Operator interface
 func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
+	tables := tableID(qg)
 	for _, join := range qg.innerJoins {
 		set, exprs := join.deps, join.exprs
-		if !set.IsSolvedBy(tableID(qg)) {
+		if !set.IsSolvedBy(tables) {
 			result = append(result, exprs...)
 		}
 	}

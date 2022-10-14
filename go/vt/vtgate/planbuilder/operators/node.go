@@ -1,6 +1,8 @@
 package operators
 
-import "vitess.io/vitess/go/vt/vtgate/semantics"
+import (
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+)
 
 func inputs(op LogicalOperator) []LogicalOperator {
 	switch op := op.(type) {
@@ -32,14 +34,25 @@ type tableIDIntroducer interface {
 	Introduces() semantics.TableSet
 }
 
-func tableID(op LogicalOperator) (result semantics.TableSet) {
-	queue := []LogicalOperator{op}
+func visitTopDown(root LogicalOperator, visitor func(LogicalOperator) error) error {
+	queue := []LogicalOperator{root}
 	for len(queue) > 0 {
 		this := queue[0]
 		queue = append(queue[1:], inputs(this)...)
+		err := visitor(this)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func tableID(op LogicalOperator) (result semantics.TableSet) {
+	_ = visitTopDown(op, func(this LogicalOperator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {
 			result.MergeInPlace(tbl.Introduces())
 		}
-	}
+		return nil
+	})
 	return
 }

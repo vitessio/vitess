@@ -72,21 +72,7 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 
 // UnsolvedPredicates implements the Operator interface
 func (j *Join) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	ts := tableID(j)
-	var result []sqlparser.Expr
-	for _, expr := range j.LHS.UnsolvedPredicates(semTable) {
-		deps := semTable.DirectDeps(expr)
-		if !deps.IsSolvedBy(ts) {
-			result = append(result, expr)
-		}
-	}
-	for _, expr := range j.RHS.UnsolvedPredicates(semTable) {
-		deps := semTable.DirectDeps(expr)
-		if !deps.IsSolvedBy(ts) {
-			result = append(result, expr)
-		}
-	}
-	return result
+	return append(j.LHS.UnsolvedPredicates(semTable), j.RHS.UnsolvedPredicates(semTable)...)
 }
 
 // CheckValid implements the Operator interface

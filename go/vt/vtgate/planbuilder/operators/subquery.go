@@ -46,22 +46,10 @@ type SubQueryInner struct {
 
 // UnsolvedPredicates implements the Operator interface
 func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	ts := tableID(s)
-	var result []sqlparser.Expr
+	result := s.Outer.UnsolvedPredicates(semTable)
 
-	for _, expr := range s.Outer.UnsolvedPredicates(semTable) {
-		deps := semTable.DirectDeps(expr)
-		if !deps.IsSolvedBy(ts) {
-			result = append(result, expr)
-		}
-	}
 	for _, inner := range s.Inner {
-		for _, expr := range inner.Inner.UnsolvedPredicates(semTable) {
-			deps := semTable.DirectDeps(expr)
-			if !deps.IsSolvedBy(ts) {
-				result = append(result, expr)
-			}
-		}
+		result = append(result, inner.Inner.UnsolvedPredicates(semTable)...)
 	}
 	return result
 }
