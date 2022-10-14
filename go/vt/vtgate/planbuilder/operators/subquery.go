@@ -83,8 +83,3 @@ func (s *SubQuery) CheckValid() error {
 	}
 	return s.Outer.CheckValid()
 }
-
-// Compact implements the Operator interface
-func (s *SubQuery) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return s, nil
-}

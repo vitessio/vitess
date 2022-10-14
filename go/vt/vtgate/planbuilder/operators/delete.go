@@ -46,8 +46,3 @@ func (d *Delete) CheckValid() error {
 
 // iLogical implements the LogicalOperator interface
 func (d *Delete) iLogical() {}
-
-// Compact implements the LogicalOperator interface
-func (d *Delete) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	return d, nil
-}

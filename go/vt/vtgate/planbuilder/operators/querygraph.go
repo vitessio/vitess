@@ -175,8 +175,3 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 func (qg *QueryGraph) CheckValid() error {
 	return nil
 }
-
-// Compact implements the Operator interface
-func (qg *QueryGraph) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return qg, nil
-}

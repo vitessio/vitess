@@ -45,12 +45,3 @@ func (f *Filter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Ex
 func (f *Filter) CheckValid() error {
 	return f.Source.CheckValid()
 }
-
-// Compact implements the LogicalOperator interface
-func (f *Filter) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	if len(f.Predicates) == 0 {
-		return f.Source, nil
-	}
-
-	return f, nil
-}

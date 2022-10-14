@@ -47,8 +47,3 @@ func (u *Update) CheckValid() error {
 
 // iLogical implements the LogicalOperator interface
 func (u *Update) iLogical() {}
-
-// Compact implements the LogicalOperator interface
-func (u *Update) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	return u, nil
-}

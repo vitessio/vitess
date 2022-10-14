@@ -68,8 +68,3 @@ func (v *Vindex) CheckValid() error {
 
 	return nil
 }
-
-// Compact implements the Operator interface
-func (v *Vindex) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return v, nil
-}

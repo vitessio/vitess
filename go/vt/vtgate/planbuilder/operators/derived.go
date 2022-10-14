@@ -47,8 +47,3 @@ func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.E
 func (d *Derived) CheckValid() error {
 	return d.Inner.CheckValid()
 }
-
-// Compact implements the Operator interface
-func (d *Derived) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return d, nil
-}
