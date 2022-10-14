@@ -21,21 +21,36 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Compact implements the Operator interface
-func (c *Concatenate) Compact(*semantics.SemTable) (LogicalOperator, error) {
+// Compact will optimise the operator tree into a smaller but equivalent version
+func Compact(op LogicalOperator, semTable *semantics.SemTable) (LogicalOperator, error) {
+	switch op := op.(type) {
+	case *Concatenate:
+		compactConcatenate(op)
+	case *Filter:
+		if len(op.Predicates) == 0 {
+			return op.Source, nil
+		}
+	case *Join:
+		return compactJoin(op, semTable)
+	}
+
+	return op, nil
+}
+
+func compactConcatenate(op *Concatenate) {
 	var newSources []LogicalOperator
 	var newSels []*sqlparser.Select
-	for i, source := range c.Sources {
+	for i, source := range op.Sources {
 		other, isConcat := source.(*Concatenate)
 		if !isConcat {
 			newSources = append(newSources, source)
-			newSels = append(newSels, c.SelectStmts[i])
+			newSels = append(newSels, op.SelectStmts[i])
 			continue
 		}
 		switch {
 		case other.Limit == nil && len(other.OrderBy) == 0 && !other.Distinct:
 			fallthrough
-		case c.Distinct && other.Limit == nil:
+		case op.Distinct && other.Limit == nil:
 			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
 			newSources = append(newSources, other.Sources...)
 			newSels = append(newSels, other.SelectStmts...)
@@ -45,71 +60,30 @@ func (c *Concatenate) Compact(*semantics.SemTable) (LogicalOperator, error) {
 			newSels = append(newSels, nil)
 		}
 	}
-	c.Sources = newSources
-	c.SelectStmts = newSels
-	return c, nil
+	op.Sources = newSources
+	op.SelectStmts = newSels
 }
 
-// Compact implements the LogicalOperator interface
-func (d *Delete) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	return d, nil
-}
-
-// Compact implements the Operator interface
-func (d *Derived) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return d, nil
-}
-
-// Compact implements the LogicalOperator interface
-func (f *Filter) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	if len(f.Predicates) == 0 {
-		return f.Source, nil
-	}
-
-	return f, nil
-}
-
-// Compact implements the Operator interface
-func (j *Join) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	if j.LeftJoin {
+func compactJoin(op *Join, semTable *semantics.SemTable) (LogicalOperator, error) {
+	if op.LeftJoin {
 		// we can't merge outer joins into a single QG
-		return j, nil
+		return op, nil
 	}
 
-	lqg, lok := j.LHS.(*QueryGraph)
-	rqg, rok := j.RHS.(*QueryGraph)
+	lqg, lok := op.LHS.(*QueryGraph)
+	rqg, rok := op.RHS.(*QueryGraph)
 	if !lok || !rok {
-		return j, nil
+		return op, nil
 	}
 
-	op := &QueryGraph{
+	newOp := &QueryGraph{
 		Tables:     append(lqg.Tables, rqg.Tables...),
 		innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
 		NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
-	err := op.collectPredicate(j.Predicate, semTable)
+	err := newOp.collectPredicate(op.Predicate, semTable)
 	if err != nil {
 		return nil, err
 	}
-	return op, nil
-}
-
-// Compact implements the Operator interface
-func (qg *QueryGraph) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return qg, nil
-}
-
-// Compact implements the Operator interface
-func (s *SubQuery) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return s, nil
-}
-
-// Compact implements the LogicalOperator interface
-func (u *Update) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	return u, nil
-}
-
-// Compact implements the Operator interface
-func (v *Vindex) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return v, nil
+	return newOp, nil
 }

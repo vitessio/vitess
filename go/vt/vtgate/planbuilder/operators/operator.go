@@ -41,9 +41,6 @@ type (
 	LogicalOperator interface {
 		Operator
 		iLogical()
-
-		// Compact will optimise the operator tree into a smaller but equivalent version
-		Compact(semTable *semantics.SemTable) (LogicalOperator, error)
 	}
 
 	PhysicalOperator interface {
@@ -179,7 +176,7 @@ func CreateLogicalOperatorFromAST(selStmt sqlparser.Statement, semTable *semanti
 	if err != nil {
 		return nil, err
 	}
-	return op.Compact(semTable)
+	return Compact(op, semTable)
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
