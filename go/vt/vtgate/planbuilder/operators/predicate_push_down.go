@@ -24,9 +24,23 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// PushPredicate implements the Operator interface
-func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return pushPredicateOnConcatenate(expr, semTable, c)
+func LogicalPushPredicate(op LogicalOperator, expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	switch op := op.(type) {
+	case *Concatenate:
+		return pushPredicateOnConcatenate(expr, semTable, op)
+	case *Derived:
+		return pushPredicateOnDerived(expr, semTable, op)
+	case *Filter:
+		return pushPredicateOnFilter(expr, semTable, op)
+	case *Join:
+		return pushPredicateOnJoin(expr, semTable, op)
+	case *QueryGraph:
+		return pushPredicateOnQG(expr, semTable, op)
+	case *Vindex:
+		return pushPredicateOnVindex(expr, semTable, op)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[%T] can't accept predicates", op)
+	}
 }
 
 func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTable, c *Concatenate) (LogicalOperator, error) {
@@ -39,7 +53,7 @@ func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTabl
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 		}
 
-		newSrc, err := source.PushPredicate(expr, semTable)
+		newSrc, err := LogicalPushPredicate(source, expr, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -47,11 +61,6 @@ func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTabl
 	}
 	c.Sources = newSources
 	return c, nil
-}
-
-// PushPredicate implements the Operator interface
-func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return pushPredicateOnDerived(expr, semTable, d)
 }
 
 func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d *Derived) (LogicalOperator, error) {
@@ -67,18 +76,13 @@ func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d
 	if err != nil {
 		return nil, err
 	}
-	newSrc, err := d.Inner.PushPredicate(newExpr, semTable)
+	newSrc, err := LogicalPushPredicate(d.Inner, newExpr, semTable)
 	d.Inner = newSrc
 	return d, err
 }
 
-// PushPredicate implements the LogicalOperator interface
-func (f *Filter) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return pushPredicateOnFilter(expr, semTable, f)
-}
-
 func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f *Filter) (LogicalOperator, error) {
-	op, err := f.Source.PushPredicate(expr, semTable)
+	op, err := LogicalPushPredicate(f.Source, expr, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -94,16 +98,11 @@ func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f 
 	}, nil
 }
 
-// PushPredicate implements the Operator interface
-func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return pushPredicateOnJoin(expr, semTable, j)
-}
-
 func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *Join) (LogicalOperator, error) {
 	deps := semTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(j.LHS.TableID()):
-		lhs, err := j.LHS.PushPredicate(expr, semTable)
+		lhs, err := LogicalPushPredicate(j.LHS, expr, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +113,7 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 		j.tryConvertToInnerJoin(expr, semTable)
 
 		if !j.LeftJoin {
-			rhs, err := j.RHS.PushPredicate(expr, semTable)
+			rhs, err := LogicalPushPredicate(j.RHS, expr, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -146,11 +145,6 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
-// PushPredicate implements the Operator interface
-func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return pushPredicateOnQG(expr, semTable, qg)
-}
-
 func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *QueryGraph) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(e, semTable)
@@ -159,11 +153,6 @@ func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *Qu
 		}
 	}
 	return qg, nil
-}
-
-// PushPredicate implements the Operator interface
-func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return pushPredicateOnVindex(expr, semTable, v)
 }
 
 func pushPredicateOnVindex(expr sqlparser.Expr, semTable *semantics.SemTable, v *Vindex) (LogicalOperator, error) {
@@ -207,19 +196,4 @@ func pushPredicateOnVindex(expr sqlparser.Expr, semTable *semantics.SemTable, v 
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}
 	return v, nil
-}
-
-// PushPredicate implements the Operator interface
-func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) (LogicalOperator, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
-}
-
-// PushPredicate implements the LogicalOperator interface
-func (u *Update) PushPredicate(sqlparser.Expr, *semantics.SemTable) (LogicalOperator, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't accept predicates")
-}
-
-// PushPredicate implements the LogicalOperator interface
-func (d *Delete) PushPredicate(sqlparser.Expr, *semantics.SemTable) (LogicalOperator, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't accept predicates")
 }
