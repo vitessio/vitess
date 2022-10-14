@@ -182,12 +182,8 @@ func rewriteHavingClause(node *sqlparser.Select) {
 					return false
 				}
 				originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
-				if isInMap {
-					if sqlparser.ContainsAggregation(originalExpr) {
-						hasAggr = true
-					} else {
-						cursor.Replace(originalExpr)
-					}
+				if isInMap && sqlparser.ContainsAggregation(originalExpr) {
+					hasAggr = true
 				}
 				return false
 			default:
