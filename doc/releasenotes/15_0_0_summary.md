@@ -1,14 +1,14 @@
 ## Summary
 
 - [Breaking Changes](#breaking-changes)
-- [Command-line syntax deprecations](#command-line-syntax-deprecations)
-- [New command line flags and behavior](#new-command-line-flags-and-behavior)
+- [Command-line Syntax Deprecations](#command-line-syntax-deprecations)
+- [New Command Line Flags and Behavior](#new-command-line-flags-and-behavior)
 - [Online DDL changes](#online-ddl-changes)
-- [Tablet throttler](#tablet-throttler)
+- [Tablet Throttler](#tablet-throttler)
 - [VDiff2](#vdiff2)
 - [Mysql Compatibility](#mysql-compatibility)
 - [Durability Policy](#durability-policy)
-- [New EXPLAIN format](#new-explain-format)
+- [New EXPLAIN Format](#new-explain-format)
 - [VTOrc](#vtorc)
 
 ## Known Issues
@@ -82,7 +82,7 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 `--mysql-server-pool-conn-read-buffers` enables pooling of buffers used to read from incoming
 connections, similar to the way pooling happens for write buffers. Defaults to off.
 
-### <a id="vdiff2"/>VDiff2
+### <a id="vdiff2"/>VDiff v2
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
@@ -113,6 +113,12 @@ $ vtctlclient --server=localhost:15999 VDiff --v2 --format=json customer.commerc
 	"CompletedAt": "2022-06-26 22:44:31"
 }
 ```
+
+We leverage this resume capability to automatically restart a VDiff2 workflow that encountered a retryable error.
+
+We also made a number of other enhancements like progress reporting and features needed to make it a full replacement for VDiff v1. You can see more details in the tracking ticket for the VDiff2 feature complete target: https://github.com/vitessio/vitess/issues/10494
+
+Now that VDiff v2 is feature complete in 15.0, we hope to make it GA in 16.0.
 
 Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vreplication/vdiff2/) for additional information.
 
