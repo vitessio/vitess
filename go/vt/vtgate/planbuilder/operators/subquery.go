@@ -42,18 +42,3 @@ type SubQueryInner struct {
 	// ExtractedSubquery contains all information we need about this subquery
 	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
-
-// CheckValid implements the Operator interface
-func (s *SubQuery) CheckValid() error {
-	for _, inner := range s.Inner {
-		err := inner.Inner.CheckValid()
-		if err != nil {
-			return err
-		}
-	}
-	return s.Outer.CheckValid()
-}
-
-func (i *SubQueryInner) CheckValid() error {
-	return i.Inner.CheckValid()
-}

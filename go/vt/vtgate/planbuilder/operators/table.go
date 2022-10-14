@@ -69,11 +69,6 @@ func (to *Table) CheckValid() error {
 	return nil
 }
 
-// Compact implements the PhysicalOperator interface
-func (to *Table) Compact(semTable *semantics.SemTable) (Operator, error) {
-	return to, nil
-}
-
 // GetQTable implements the IntroducesTable interface
 func (to *Table) GetQTable() *QueryTable {
 	return to.QTable

@@ -26,23 +26,19 @@ import (
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
-	Operator interface {
-
-		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
-		CheckValid() error
-	}
 
 	LogicalOperator interface {
-		Operator
 		iLogical()
 	}
 
 	PhysicalOperator interface {
-		Operator
 		IPhysical()
 
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
+
+		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
+		CheckValid() error
 
 		// Cost is simply the number of routes in the operator tree
 		Cost() int

@@ -41,11 +41,6 @@ func (f *PhysFilter) CheckValid() error {
 	return f.Source.CheckValid()
 }
 
-// Compact implements the PhysicalOperator interface
-func (f *PhysFilter) Compact(semTable *semantics.SemTable) (Operator, error) {
-	return f, nil
-}
-
 // Cost implements the PhysicalOperator interface
 func (f *PhysFilter) Cost() int {
 	return f.Source.Cost()

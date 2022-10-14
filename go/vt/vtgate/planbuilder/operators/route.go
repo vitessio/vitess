@@ -449,11 +449,6 @@ func (r *Route) CheckValid() error {
 	return r.Source.CheckValid()
 }
 
-// Compact implements the Operator interface
-func (r *Route) Compact(semTable *semantics.SemTable) (Operator, error) {
-	return r, nil
-}
-
 func (r *Route) IsSingleShard() bool {
 	switch r.RouteOpCode {
 	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:

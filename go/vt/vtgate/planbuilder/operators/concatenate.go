@@ -32,14 +32,3 @@ type Concatenate struct {
 var _ LogicalOperator = (*Concatenate)(nil)
 
 func (*Concatenate) iLogical() {}
-
-// CheckValid implements the Operator interface
-func (c *Concatenate) CheckValid() error {
-	for _, source := range c.Sources {
-		err := source.CheckValid()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}

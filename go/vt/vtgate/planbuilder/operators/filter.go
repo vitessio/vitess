@@ -29,8 +29,3 @@ var _ LogicalOperator = (*Filter)(nil)
 
 // iLogical implements the LogicalOperator interface
 func (f *Filter) iLogical() {}
-
-// CheckValid implements the LogicalOperator interface
-func (f *Filter) CheckValid() error {
-	return f.Source.CheckValid()
-}

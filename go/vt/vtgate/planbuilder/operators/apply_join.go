@@ -62,11 +62,6 @@ func (a *ApplyJoin) CheckValid() error {
 	return a.RHS.CheckValid()
 }
 
-// Compact implements the PhysicalOperator interface
-func (a *ApplyJoin) Compact(semTable *semantics.SemTable) (Operator, error) {
-	return a, nil
-}
-
 // Cost implements the PhysicalOperator interface
 func (a *ApplyJoin) Cost() int {
 	return a.LHS.Cost() + a.RHS.Cost()

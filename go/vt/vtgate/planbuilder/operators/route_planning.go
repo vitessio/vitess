@@ -830,35 +830,18 @@ func isDualTable(route *Route) bool {
 	return src.VTable.Name.String() == "dual" && src.QTable.Table.Qualifier.IsEmpty()
 }
 
-func leaves(op Operator) (sources []Operator) {
+func leaves(op PhysicalOperator) (sources []PhysicalOperator) {
 	switch op := op.(type) {
 	// these are the leaves
-	case *QueryGraph, *Vindex, *Table:
-		return []Operator{op}
-
-		// logical
-	case *Concatenate:
-		for _, source := range op.Sources {
-			sources = append(sources, leaves(source)...)
-		}
-		return
-	case *Derived:
-		return []Operator{op.Inner}
-	case *Join:
-		return []Operator{op.LHS, op.RHS}
-	case *SubQuery:
-		sources = []Operator{op.Outer}
-		for _, inner := range op.Inner {
-			sources = append(sources, inner.Inner)
-		}
-		return
+	case *Table:
+		return []PhysicalOperator{op}
 		// physical
 	case *ApplyJoin:
-		return []Operator{op.LHS, op.RHS}
+		return []PhysicalOperator{op.LHS, op.RHS}
 	case *PhysFilter:
-		return []Operator{op.Source}
+		return []PhysicalOperator{op.Source}
 	case *Route:
-		return []Operator{op.Source}
+		return []PhysicalOperator{op.Source}
 	}
 
 	panic(fmt.Sprintf("leaves unknown type: %T", op))

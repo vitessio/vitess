@@ -74,3 +74,15 @@ func unresolvedPredicates(op LogicalOperator, st *semantics.SemTable) (result []
 	})
 	return
 }
+
+func CheckValid(op LogicalOperator) error {
+	type checked interface {
+		CheckValid() error
+	}
+	return visitTopDown(op, func(this LogicalOperator) error {
+		if chk, ok := this.(checked); ok {
+			return chk.CheckValid()
+		}
+		return nil
+	})
+}

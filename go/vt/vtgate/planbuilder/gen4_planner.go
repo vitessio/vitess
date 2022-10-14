@@ -206,7 +206,7 @@ func newBuildSelectPlan(
 	if err != nil {
 		return nil, nil, err
 	}
-	err = logical.CheckValid()
+	err = operators.CheckValid(logical)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -318,7 +318,7 @@ func gen4UpdateStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-	err = logical.CheckValid()
+	err = operators.CheckValid(logical)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +406,7 @@ func gen4DeleteStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-	err = logical.CheckValid()
+	err = operators.CheckValid(logical)
 	if err != nil {
 		return nil, err
 	}

@@ -31,8 +31,3 @@ type Derived struct {
 var _ LogicalOperator = (*Derived)(nil)
 
 func (*Derived) iLogical() {}
-
-// CheckValid implements the Operator interface
-func (d *Derived) CheckValid() error {
-	return d.Inner.CheckValid()
-}
