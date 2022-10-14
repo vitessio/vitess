@@ -609,7 +609,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
 	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
 	if bm.CompressionEngine == PargzipCompressor {
-		params.Logger.Warningf(`engine \"pargzip\" doesn't support decompression, using \"pgzip\" instead`)
+		params.Logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
 		bm.CompressionEngine = PgzipCompressor
 		defer func() {
 			bm.CompressionEngine = PargzipCompressor
