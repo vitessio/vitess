@@ -1181,6 +1181,12 @@ func (api *API) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyP
 		return nil, err
 	}
 
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.TopologyResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.Vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{Path: req.Path})
 }
 
