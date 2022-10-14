@@ -26,6 +26,10 @@ import (
 
 // PushPredicate implements the Operator interface
 func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	return pushPredicateOnConcatenate(expr, semTable, c)
+}
+
+func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTable, c *Concatenate) (LogicalOperator, error) {
 	newSources := make([]LogicalOperator, 0, len(c.Sources))
 	for index, source := range c.Sources {
 		if len(c.SelectStmts[index].SelectExprs) != 1 {
@@ -47,6 +51,10 @@ func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.Sem
 
 // PushPredicate implements the Operator interface
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	return pushPredicateOnDerived(expr, semTable, d)
+}
+
+func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d *Derived) (LogicalOperator, error) {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrMultipleTables {
@@ -66,6 +74,10 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 
 // PushPredicate implements the LogicalOperator interface
 func (f *Filter) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	return pushPredicateOnFilter(expr, semTable, f)
+}
+
+func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f *Filter) (LogicalOperator, error) {
 	op, err := f.Source.PushPredicate(expr, semTable)
 	if err != nil {
 		return nil, err
@@ -84,6 +96,10 @@ func (f *Filter) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable
 
 // PushPredicate implements the Operator interface
 func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	return pushPredicateOnJoin(expr, semTable, j)
+}
+
+func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *Join) (LogicalOperator, error) {
 	deps := semTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(j.LHS.TableID()):
@@ -132,6 +148,10 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 
 // PushPredicate implements the Operator interface
 func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	return pushPredicateOnQG(expr, semTable, qg)
+}
+
+func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *QueryGraph) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(e, semTable)
 		if err != nil {
@@ -143,6 +163,10 @@ func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.Sem
 
 // PushPredicate implements the Operator interface
 func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	return pushPredicateOnVindex(expr, semTable, v)
+}
+
+func pushPredicateOnVindex(expr sqlparser.Expr, semTable *semantics.SemTable, v *Vindex) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := semTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
