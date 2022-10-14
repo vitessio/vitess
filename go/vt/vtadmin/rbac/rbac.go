@@ -90,7 +90,8 @@ type Resource string
 
 // Resource definitions.
 const (
-	ClusterResource Resource = "Cluster"
+	ClusterResource  Resource = "Cluster"
+	TopologyResource Resource = "Topology"
 
 	/* generic topo resources */
 
