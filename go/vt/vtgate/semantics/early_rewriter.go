@@ -25,10 +25,11 @@ import (
 )
 
 type earlyRewriter struct {
-	binder  *binder
-	scoper  *scoper
-	clause  string
-	warning string
+	binder          *binder
+	scoper          *scoper
+	clause          string
+	warning         string
+	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -92,7 +93,7 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 			selExprs = append(selExprs, selectExpr)
 			continue
 		}
-		starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
+		starExpanded, colNames, err := r.expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
 		if err != nil {
 			return err
 		}
@@ -254,7 +255,7 @@ func rewriteJoinUsing(
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
 }
 
-func expandTableColumns(
+func (r *earlyRewriter) expandTableColumns(
 	starExpr *sqlparser.StarExpr,
 	tables []TableInfo,
 	joinUsing map[TableSet]map[string]TableSet,
@@ -263,6 +264,7 @@ func expandTableColumns(
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
+	expandedColumns := map[sqlparser.TableName][]*sqlparser.ColName{}
 	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() && !tbl.matches(starExpr.TableName) {
 			continue
@@ -277,8 +279,9 @@ func expandTableColumns(
 			return false, nil, err
 		}
 
-		withAlias := len(tables) > 1
-		withQualifier := withAlias || !tbl.getExpr().As.IsEmpty()
+		needsQualifier := len(tables) > 1
+		tableAliased := !tbl.getExpr().As.IsEmpty()
+		withQualifier := needsQualifier || tableAliased
 		currTable := tbl.getTableSet(org)
 		usingCols := joinUsing[currTable]
 		if usingCols == nil {
@@ -293,10 +296,23 @@ func expandTableColumns(
 			} else {
 				colName = sqlparser.NewColName(col.Name)
 			}
-			if withAlias {
+			if needsQualifier {
 				alias = sqlparser.NewIdentifierCI(col.Name)
 			}
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+			vt := tbl.GetVindexTable()
+			if vt != nil {
+				keyspace := vt.Keyspace
+				var ks sqlparser.IdentifierCS
+				if keyspace != nil {
+					ks = sqlparser.NewIdentifierCS(keyspace.Name)
+				}
+				tblName := sqlparser.TableName{
+					Name:      tblName.Name,
+					Qualifier: ks,
+				}
+				expandedColumns[tblName] = append(expandedColumns[tblName], colName)
+			}
 		}
 
 		/*
@@ -337,6 +353,9 @@ func expandTableColumns(
 	if unknownTbl {
 		// This will only happen for case when starExpr has qualifier.
 		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+	}
+	if starExpanded {
+		r.expandedColumns = expandedColumns
 	}
 	return starExpanded, colNames, nil
 }
