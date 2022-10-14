@@ -34,11 +34,6 @@ func (d *Delete) Introduces() semantics.TableSet {
 	return d.Table.ID
 }
 
-// UnsolvedPredicates implements the LogicalOperator interface
-func (d *Delete) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
 // CheckValid implements the LogicalOperator interface
 func (d *Delete) CheckValid() error {
 	return nil

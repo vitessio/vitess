@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Concatenate represents a UNION ALL/DISTINCT.
@@ -33,14 +32,6 @@ type Concatenate struct {
 var _ LogicalOperator = (*Concatenate)(nil)
 
 func (*Concatenate) iLogical() {}
-
-// UnsolvedPredicates implements the Operator interface
-func (c *Concatenate) UnsolvedPredicates(st *semantics.SemTable) (result []sqlparser.Expr) {
-	for _, source := range c.Sources {
-		result = append(result, source.UnsolvedPredicates(st)...)
-	}
-	return
-}
 
 // CheckValid implements the Operator interface
 func (c *Concatenate) CheckValid() error {

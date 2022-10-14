@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Derived represents a derived table in the query
@@ -32,11 +31,6 @@ type Derived struct {
 var _ LogicalOperator = (*Derived)(nil)
 
 func (*Derived) iLogical() {}
-
-// UnsolvedPredicates implements the Operator interface
-func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return d.Inner.UnsolvedPredicates(semTable)
-}
 
 // CheckValid implements the Operator interface
 func (d *Derived) CheckValid() error {

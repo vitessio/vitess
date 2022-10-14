@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
@@ -30,11 +29,6 @@ var _ LogicalOperator = (*Filter)(nil)
 
 // iLogical implements the LogicalOperator interface
 func (f *Filter) iLogical() {}
-
-// UnsolvedPredicates implements the LogicalOperator interface
-func (f *Filter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return f.Source.UnsolvedPredicates(semTable)
-}
 
 // CheckValid implements the LogicalOperator interface
 func (f *Filter) CheckValid() error {

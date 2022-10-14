@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // SubQuery stores the information about subquery
@@ -44,16 +43,6 @@ type SubQueryInner struct {
 	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
 
-// UnsolvedPredicates implements the Operator interface
-func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	result := s.Outer.UnsolvedPredicates(semTable)
-
-	for _, inner := range s.Inner {
-		result = append(result, inner.Inner.UnsolvedPredicates(semTable)...)
-	}
-	return result
-}
-
 // CheckValid implements the Operator interface
 func (s *SubQuery) CheckValid() error {
 	for _, inner := range s.Inner {
@@ -63,10 +52,6 @@ func (s *SubQuery) CheckValid() error {
 		}
 	}
 	return s.Outer.CheckValid()
-}
-
-func (i *SubQueryInner) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return i.Inner.UnsolvedPredicates(semTable)
 }
 
 func (i *SubQueryInner) CheckValid() error {

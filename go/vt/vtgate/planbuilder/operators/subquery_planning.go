@@ -24,7 +24,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (PhysicalO
 			return nil, err
 		}
 
-		preds := inner.Inner.UnsolvedPredicates(ctx.SemTable)
+		preds := unresolvedPredicates(inner.Inner, ctx.SemTable)
 		merger := func(a, b *Route) (*Route, error) {
 			return mergeSubQueryOp(ctx, a, b, inner)
 		}

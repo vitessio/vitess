@@ -35,10 +35,6 @@ type (
 	LogicalOperator interface {
 		Operator
 		iLogical()
-
-		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
-		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
-		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 
 	PhysicalOperator interface {

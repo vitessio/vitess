@@ -70,11 +70,6 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 	}
 }
 
-// UnsolvedPredicates implements the Operator interface
-func (j *Join) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return append(j.LHS.UnsolvedPredicates(semTable), j.RHS.UnsolvedPredicates(semTable)...)
-}
-
 // CheckValid implements the Operator interface
 func (j *Join) CheckValid() error {
 	err := j.LHS.CheckValid()

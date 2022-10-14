@@ -55,11 +55,6 @@ func (v *Vindex) Introduces() semantics.TableSet {
 
 const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
-// UnsolvedPredicates implements the Operator interface
-func (v *Vindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
 // CheckValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {

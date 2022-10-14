@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -52,6 +53,23 @@ func tableID(op LogicalOperator) (result semantics.TableSet) {
 		if tbl, ok := this.(tableIDIntroducer); ok {
 			result.MergeInPlace(tbl.Introduces())
 		}
+		return nil
+	})
+	return
+}
+
+type unresolved interface {
+	// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
+	// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
+	UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
+}
+
+func unresolvedPredicates(op LogicalOperator, st *semantics.SemTable) (result []sqlparser.Expr) {
+	_ = visitTopDown(op, func(this LogicalOperator) error {
+		if tbl, ok := this.(unresolved); ok {
+			result = append(result, tbl.UnsolvedPredicates(st)...)
+		}
+
 		return nil
 	})
 	return

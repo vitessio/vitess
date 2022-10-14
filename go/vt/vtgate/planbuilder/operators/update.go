@@ -35,11 +35,6 @@ func (u *Update) Introduces() semantics.TableSet {
 	return u.Table.ID
 }
 
-// UnsolvedPredicates implements the LogicalOperator interface
-func (u *Update) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
 // CheckValid implements the LogicalOperator interface
 func (u *Update) CheckValid() error {
 	return nil
