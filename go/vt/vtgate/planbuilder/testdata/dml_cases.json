@@ -264,6 +264,29 @@
     }
   },
   {
+    "comment": "delete from sequence",
+    "query": "DELETE FROM seq",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "DELETE FROM seq",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from seq",
+        "Table": "seq"
+      },
+      "TablesUsed": [
+        "main.seq"
+      ]
+    }
+  },
+  {
     "comment": "update by primary keyspace id",
     "query": "update user set val = 1 where id = 1",
     "v3-plan": {
