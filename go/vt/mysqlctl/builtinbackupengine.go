@@ -162,7 +162,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
 	if backupStorageHook != "" {
-		log.Warning("Flag --backup_storage_hook is deprecated, consider using ExternalCompressorCmd/ExternalDecompressorCmd instead.")
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor-cmd and --external-decompressor-cmd instead.")
 	}
 	// Save initial state so we can restore.
 	replicaStartRequired := false
@@ -592,7 +592,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 		return nil, err
 	}
 	if bm.TransformHook != "" {
-		log.Warning("Flag --backup_storage_hook is deprecated, consider using ExternalCompressorCmd/ExternalDecompressorCmd instead.")
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor-cmd and --external-decompressor-cmd instead.")
 	}
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
