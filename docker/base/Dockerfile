@@ -21,7 +21,7 @@
 # TODO(mberlin): Remove the symlink and this note once
 # https://github.com/docker/hub-feedback/issues/292 is fixed.
 
-ARG bootstrap_version=10.1
+ARG bootstrap_version=10.2
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
 FROM "${image}"
