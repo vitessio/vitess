@@ -4292,7 +4292,7 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*v
 	data, _, dataErr := conn.Get(ctx, relativePath)
 
 	if dataErr == nil {
-		result, err := decodeContent(relativePath, data, false)
+		result, err := topo.DecodeContent(relativePath, data, false)
 		if err != nil {
 			err := vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
 			return nil, err
