@@ -35,8 +35,8 @@ type PhysUpdate struct {
 var _ PhysicalOperator = (*PhysUpdate)(nil)
 var _ IntroducesTable = (*PhysUpdate)(nil)
 
-// TableID implements the PhysicalOperator interface
-func (u *PhysUpdate) TableID() semantics.TableSet {
+// Introduces implements the PhysicalOperator interface
+func (u *PhysUpdate) Introduces() semantics.TableSet {
 	return u.QTable.ID
 }
 

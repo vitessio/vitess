@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type PhysDerived struct {
@@ -37,11 +36,6 @@ type PhysDerived struct {
 }
 
 var _ PhysicalOperator = (*PhysDerived)(nil)
-
-// TableID implements the PhysicalOperator interface
-func (d *PhysDerived) TableID() semantics.TableSet {
-	return d.Source.TableID()
-}
 
 // CheckValid implements the PhysicalOperator interface
 func (d *PhysDerived) CheckValid() error {

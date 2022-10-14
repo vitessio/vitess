@@ -328,7 +328,7 @@ func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (Physica
 			acc = plan
 			continue
 		}
-		joinPredicates := qg.GetPredicates(acc.TableID(), plan.TableID())
+		joinPredicates := qg.GetPredicates(TableID(acc), TableID(plan))
 		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
 		if err != nil {
 			return nil, err
@@ -601,7 +601,7 @@ func findBestJoin(
 			if i == j {
 				continue
 			}
-			joinPredicates := qg.GetPredicates(lhs.TableID(), rhs.TableID())
+			joinPredicates := qg.GetPredicates(TableID(lhs), TableID(rhs))
 			if len(joinPredicates) == 0 && !crossJoinsOK {
 				// if there are no predicates joining the two tables,
 				// creating a join between them would produce a
@@ -624,7 +624,7 @@ func findBestJoin(
 }
 
 func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs PhysicalOperator, joinPredicates []sqlparser.Expr) (PhysicalOperator, error) {
-	solves := tableSetPair{left: lhs.TableID(), right: rhs.TableID()}
+	solves := tableSetPair{left: TableID(lhs), right: TableID(rhs)}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
 		return cachedPlan, nil
@@ -1216,12 +1216,12 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 		// rows as early as possible making join cheaper on the vtgate level.
 		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
 		singleSideDeps := false
-		lhsTables := node.LHS.TableID()
+		lhsTables := TableID(node.LHS)
 		if depsForExpr.IsSolvedBy(lhsTables) {
 			lhsPreds = append(lhsPreds, expr)
 			singleSideDeps = true
 		}
-		if depsForExpr.IsSolvedBy(node.RHS.TableID()) {
+		if depsForExpr.IsSolvedBy(TableID(node.RHS)) {
 			rhsPreds = append(rhsPreds, expr)
 			singleSideDeps = true
 		}

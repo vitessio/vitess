@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -42,11 +41,6 @@ type (
 
 var _ PhysicalOperator = (*SubQueryOp)(nil)
 var _ PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
-
-// TableID implements the PhysicalOperator interface
-func (s *SubQueryOp) TableID() semantics.TableSet {
-	return s.Inner.TableID().Merge(s.Outer.TableID())
-}
 
 // CheckValid implements the PhysicalOperator interface
 func (s *SubQueryOp) CheckValid() error {
@@ -73,10 +67,6 @@ func (s *SubQueryOp) Clone() PhysicalOperator {
 		Extracted: s.Extracted,
 	}
 	return result
-}
-
-func (c *CorrelatedSubQueryOp) TableID() semantics.TableSet {
-	return c.Inner.TableID().Merge(c.Outer.TableID())
 }
 
 func (c *CorrelatedSubQueryOp) CheckValid() error {

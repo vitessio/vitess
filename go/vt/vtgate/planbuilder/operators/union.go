@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Union struct {
@@ -31,15 +30,6 @@ type Union struct {
 }
 
 var _ PhysicalOperator = (*Union)(nil)
-
-// TableID implements the PhysicalOperator interface
-func (u *Union) TableID() semantics.TableSet {
-	ts := semantics.EmptyTableSet()
-	for _, source := range u.Sources {
-		ts.MergeInPlace(source.TableID())
-	}
-	return ts
-}
 
 // CheckValid implements the PhysicalOperator interface
 func (u *Union) CheckValid() error {

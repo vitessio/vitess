@@ -5,7 +5,30 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func inputs(op LogicalOperator) []LogicalOperator {
+func inputsP(op PhysicalOperator) []PhysicalOperator {
+	switch op := op.(type) {
+	case *ApplyJoin:
+		return []PhysicalOperator{op.LHS, op.RHS}
+	case *CorrelatedSubQueryOp:
+		return []PhysicalOperator{op.Outer, op.Inner}
+	case *PhysDerived:
+		return []PhysicalOperator{op.Source}
+	case *PhysFilter:
+		return []PhysicalOperator{op.Source}
+	case *Route:
+		return []PhysicalOperator{op.Source}
+	case *SubQueryOp:
+		return []PhysicalOperator{op.Outer, op.Inner}
+	case *Union:
+		return op.Sources
+	case *Table, *PhysVindex, *PhysDelete, *PhysUpdate:
+		return nil
+	}
+
+	panic("switch should be exhaustive")
+}
+
+func inputsL(op LogicalOperator) []LogicalOperator {
 	switch op := op.(type) {
 	case *Concatenate:
 		return op.Sources
@@ -35,11 +58,24 @@ type tableIDIntroducer interface {
 	Introduces() semantics.TableSet
 }
 
-func visitTopDown(root LogicalOperator, visitor func(LogicalOperator) error) error {
+func visitTopDownL(root LogicalOperator, visitor func(LogicalOperator) error) error {
 	queue := []LogicalOperator{root}
 	for len(queue) > 0 {
 		this := queue[0]
-		queue = append(queue[1:], inputs(this)...)
+		queue = append(queue[1:], inputsL(this)...)
+		err := visitor(this)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func visitTopDownP(root PhysicalOperator, visitor func(PhysicalOperator) error) error {
+	queue := []PhysicalOperator{root}
+	for len(queue) > 0 {
+		this := queue[0]
+		queue = append(queue[1:], inputsP(this)...)
 		err := visitor(this)
 		if err != nil {
 			return err
@@ -49,7 +85,16 @@ func visitTopDown(root LogicalOperator, visitor func(LogicalOperator) error) err
 }
 
 func tableID(op LogicalOperator) (result semantics.TableSet) {
-	_ = visitTopDown(op, func(this LogicalOperator) error {
+	_ = visitTopDownL(op, func(this LogicalOperator) error {
+		if tbl, ok := this.(tableIDIntroducer); ok {
+			result.MergeInPlace(tbl.Introduces())
+		}
+		return nil
+	})
+	return
+}
+func TableID(op PhysicalOperator) (result semantics.TableSet) {
+	_ = visitTopDownP(op, func(this PhysicalOperator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {
 			result.MergeInPlace(tbl.Introduces())
 		}
@@ -65,7 +110,7 @@ type unresolved interface {
 }
 
 func unresolvedPredicates(op LogicalOperator, st *semantics.SemTable) (result []sqlparser.Expr) {
-	_ = visitTopDown(op, func(this LogicalOperator) error {
+	_ = visitTopDownL(op, func(this LogicalOperator) error {
 		if tbl, ok := this.(unresolved); ok {
 			result = append(result, tbl.UnsolvedPredicates(st)...)
 		}
@@ -79,7 +124,7 @@ func CheckValid(op LogicalOperator) error {
 	type checked interface {
 		CheckValid() error
 	}
-	return visitTopDown(op, func(this LogicalOperator) error {
+	return visitTopDownL(op, func(this LogicalOperator) error {
 		if chk, ok := this.(checked); ok {
 			return chk.CheckValid()
 		}

@@ -54,8 +54,8 @@ func (to *Table) Clone() PhysicalOperator {
 	}
 }
 
-// TableID implements the PhysicalOperator interface
-func (to *Table) TableID() semantics.TableSet {
+// Introduces implements the PhysicalOperator interface
+func (to *Table) Introduces() semantics.TableSet {
 	return to.QTable.ID
 }
 

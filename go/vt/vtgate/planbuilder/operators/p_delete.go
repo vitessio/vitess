@@ -32,8 +32,8 @@ type PhysDelete struct {
 var _ PhysicalOperator = (*PhysDelete)(nil)
 var _ IntroducesTable = (*PhysDelete)(nil)
 
-// TableID implements the PhysicalOperator interface
-func (d *PhysDelete) TableID() semantics.TableSet {
+// Introduces implements the PhysicalOperator interface
+func (d *PhysDelete) Introduces() semantics.TableSet {
 	return d.QTable.ID
 }
 

@@ -140,7 +140,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 			},
 		},
 		Select:    sel,
-		tables:    op.TableID(),
+		tables:    operators.TableID(op),
 		condition: condition,
 	}, nil
 

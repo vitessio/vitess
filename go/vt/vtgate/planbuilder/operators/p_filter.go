@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type PhysFilter struct {
@@ -30,11 +29,6 @@ var _ PhysicalOperator = (*PhysFilter)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (f *PhysFilter) IPhysical() {}
-
-// TableID implements the PhysicalOperator interface
-func (f *PhysFilter) TableID() semantics.TableSet {
-	return f.Source.TableID()
-}
 
 // CheckValid implements the PhysicalOperator interface
 func (f *PhysFilter) CheckValid() error {

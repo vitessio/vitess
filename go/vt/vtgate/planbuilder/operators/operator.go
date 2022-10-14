@@ -34,9 +34,6 @@ type (
 	PhysicalOperator interface {
 		IPhysical()
 
-		// TableID returns a TableSet of the tables contained within
-		TableID() semantics.TableSet
-
 		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
 		CheckValid() error
 

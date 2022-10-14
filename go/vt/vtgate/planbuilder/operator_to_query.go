@@ -52,7 +52,7 @@ func buildQuery(op operators.PhysicalOperator, qb *queryBuilder) {
 		if op.QTable.IsInfSchema {
 			dbName = op.QTable.Table.Qualifier.String()
 		}
-		qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID(), op.QTable.Alias.Hints)
+		qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), operators.TableID(op), op.QTable.Alias.Hints)
 		for _, pred := range op.QTable.Predicates {
 			qb.addPredicate(pred)
 		}
@@ -89,7 +89,7 @@ func buildQuery(op operators.PhysicalOperator, qb *queryBuilder) {
 		sel.GroupBy = opQuery.GroupBy
 		sel.Having = opQuery.Having
 		sel.SelectExprs = opQuery.SelectExprs
-		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
+		qb.addTableExpr(op.Alias, op.Alias, operators.TableID(op), &sqlparser.DerivedTable{
 			Select: sel,
 		}, nil, op.ColumnAliases)
 		for _, col := range op.Columns {

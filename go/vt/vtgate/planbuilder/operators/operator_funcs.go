@@ -44,14 +44,14 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Phy
 	case *ApplyJoin:
 		deps := ctx.SemTable.RecursiveDeps(expr)
 		switch {
-		case deps.IsSolvedBy(op.LHS.TableID()):
+		case deps.IsSolvedBy(TableID(op.LHS)):
 			newSrc, err := PushPredicate(ctx, expr, op.LHS)
 			if err != nil {
 				return nil, err
 			}
 			op.LHS = newSrc
 			return op, err
-		case deps.IsSolvedBy(op.RHS.TableID()):
+		case deps.IsSolvedBy(TableID(op.RHS)):
 			if !op.LeftJoin {
 				newSrc, err := PushPredicate(ctx, expr, op.RHS)
 				if err != nil {
@@ -64,8 +64,8 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Phy
 			// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
 			// where tbl is on the rhs of the left outer join
 			if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-				(sqlparser.IsColName(cmp.Left) && ctx.SemTable.RecursiveDeps(cmp.Left).IsSolvedBy(op.RHS.TableID()) ||
-					sqlparser.IsColName(cmp.Right) && ctx.SemTable.RecursiveDeps(cmp.Right).IsSolvedBy(op.RHS.TableID())) {
+				(sqlparser.IsColName(cmp.Left) && ctx.SemTable.RecursiveDeps(cmp.Left).IsSolvedBy(TableID(op.RHS)) ||
+					sqlparser.IsColName(cmp.Right) && ctx.SemTable.RecursiveDeps(cmp.Right).IsSolvedBy(TableID(op.RHS))) {
 				// When the predicate we are pushing is using information from an outer table, we can
 				// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
 				// the predicate will not return true if the table columns are null.
@@ -89,8 +89,8 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Phy
 				Source:     op,
 				Predicates: []sqlparser.Expr{expr},
 			}, nil
-		case deps.IsSolvedBy(op.TableID()):
-			bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, op.LHS.TableID())
+		case deps.IsSolvedBy(TableID(op)):
+			bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(op))
 			if err != nil {
 				return nil, err
 			}
@@ -157,7 +157,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op PhysicalOperator, co
 		var lhs, rhs []*sqlparser.ColName
 		for _, col := range columns {
 			col.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-			if ctx.SemTable.RecursiveDeps(col).IsSolvedBy(op.LHS.TableID()) {
+			if ctx.SemTable.RecursiveDeps(col).IsSolvedBy(TableID(op.LHS)) {
 				lhs = append(lhs, col)
 				toTheLeft = append(toTheLeft, true)
 			} else {
@@ -271,7 +271,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op P
 	case *ApplyJoin:
 		isRemoved := false
 		deps := ctx.SemTable.RecursiveDeps(expr)
-		if deps.IsSolvedBy(op.LHS.TableID()) {
+		if deps.IsSolvedBy(TableID(op.LHS)) {
 			newSrc, err := RemovePredicate(ctx, expr, op.LHS)
 			if err != nil {
 				return nil, err
@@ -280,7 +280,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op P
 			isRemoved = true
 		}
 
-		if deps.IsSolvedBy(op.RHS.TableID()) {
+		if deps.IsSolvedBy(TableID(op.RHS)) {
 			newSrc, err := RemovePredicate(ctx, expr, op.RHS)
 			if err != nil {
 				return nil, err

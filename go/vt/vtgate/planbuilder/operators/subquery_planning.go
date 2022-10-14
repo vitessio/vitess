@@ -90,7 +90,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch n := node.(type) {
 		case *sqlparser.AliasedTableExpr:
-			ts := outer.TableID()
+			ts := TableID(outer)
 			ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
 		}
 		return true, nil
@@ -326,7 +326,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
 			// check whether the column name belongs to the other side of the join tree
-			if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(resultInnerOp.TableID()) {
+			if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultInnerOp)) {
 				// get the bindVariable for that column name and replace it in the subquery
 				bindVar := ctx.ReservedVars.ReserveColName(node)
 				cursor.Replace(sqlparser.NewArgument(bindVar))
@@ -352,10 +352,10 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(resultInnerOp.TableID())
+	tableSet.RemoveInPlace(TableID(resultInnerOp))
 	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(resultInnerOp.TableID())
+	tableSet.RemoveInPlace(TableID(resultInnerOp))
 	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 
 	// return any error while rewriting
@@ -382,7 +382,7 @@ func createCorrelatedSubqueryOp(
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
-				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(resultOuterOp.TableID()) {
+				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table

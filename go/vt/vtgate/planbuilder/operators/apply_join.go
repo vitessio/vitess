@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // ApplyJoin is a nested loop join - for each row on the LHS,
@@ -47,11 +46,6 @@ var _ PhysicalOperator = (*ApplyJoin)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (a *ApplyJoin) IPhysical() {}
-
-// TableID implements the PhysicalOperator interface
-func (a *ApplyJoin) TableID() semantics.TableSet {
-	return a.LHS.TableID().Merge(a.RHS.TableID())
-}
 
 // CheckValid implements the PhysicalOperator interface
 func (a *ApplyJoin) CheckValid() error {

@@ -33,8 +33,8 @@ type PhysVindex struct {
 	Value   sqlparser.Expr
 }
 
-// TableID implements the Operator interface
-func (v *PhysVindex) TableID() semantics.TableSet {
+// Introduces implements the Operator interface
+func (v *PhysVindex) Introduces() semantics.TableSet {
 	return v.Solved
 }
 

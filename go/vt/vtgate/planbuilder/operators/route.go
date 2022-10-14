@@ -88,11 +88,6 @@ var _ PhysicalOperator = (*Route)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
 
-// TableID implements the Operator interface
-func (r *Route) TableID() semantics.TableSet {
-	return r.Source.TableID()
-}
-
 // Cost implements the Operator interface
 func (r *Route) Cost() int {
 	switch r.RouteOpCode {
