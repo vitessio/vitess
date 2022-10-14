@@ -27,9 +27,6 @@ import (
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
 	Operator interface {
-		// TableID returns a TableSet of the tables contained within
-		TableID() semantics.TableSet
-
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
 		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
@@ -39,6 +36,19 @@ type (
 	}
 
 	LogicalOperator interface {
+		/*
+			switch op := op.(type) {
+			case *Concatenate:
+			case *Delete:
+			case *Derived:
+			case *Filter:
+			case *Join:
+			case *QueryGraph:
+			case *SubQuery:
+			case *Update:
+			case *Vindex:
+			}
+		*/
 		Operator
 		iLogical()
 	}
@@ -46,8 +56,13 @@ type (
 	PhysicalOperator interface {
 		Operator
 		IPhysical()
+
+		// TableID returns a TableSet of the tables contained within
+		TableID() semantics.TableSet
+
 		// Cost is simply the number of routes in the operator tree
 		Cost() int
+
 		// Clone creates a copy of the operator that can be updated without changing the original
 		Clone() PhysicalOperator
 	}

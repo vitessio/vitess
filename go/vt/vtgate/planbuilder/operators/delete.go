@@ -29,8 +29,8 @@ type Delete struct {
 
 var _ LogicalOperator = (*Delete)(nil)
 
-// TableID implements the LogicalOperator interface
-func (d *Delete) TableID() semantics.TableSet {
+// Introduces implements the tableIDIntroducer interface
+func (d *Delete) Introduces() semantics.TableSet {
 	return d.Table.ID
 }
 

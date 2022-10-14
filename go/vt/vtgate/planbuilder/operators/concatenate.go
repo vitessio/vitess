@@ -34,15 +34,6 @@ var _ LogicalOperator = (*Concatenate)(nil)
 
 func (*Concatenate) iLogical() {}
 
-// TableID implements the Operator interface
-func (c *Concatenate) TableID() semantics.TableSet {
-	var tableSet semantics.TableSet
-	for _, source := range c.Sources {
-		tableSet.MergeInPlace(source.TableID())
-	}
-	return tableSet
-}
-
 // UnsolvedPredicates implements the Operator interface
 func (c *Concatenate) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	return nil

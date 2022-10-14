@@ -54,8 +54,8 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 			return
 		}
 
-		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(j.RHS.TableID()) ||
-			sqlparser.IsColName(expr.Right) && semTable.RecursiveDeps(expr.Right).IsSolvedBy(j.RHS.TableID()) {
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(tableID(j.RHS)) ||
+			sqlparser.IsColName(expr.Right) && semTable.RecursiveDeps(expr.Right).IsSolvedBy(tableID(j.RHS)) {
 			j.LeftJoin = false
 		}
 
@@ -64,20 +64,15 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 			return
 		}
 
-		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(j.RHS.TableID()) {
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(tableID(j.RHS)) {
 			j.LeftJoin = false
 		}
 	}
 }
 
-// TableID implements the Operator interface
-func (j *Join) TableID() semantics.TableSet {
-	return j.RHS.TableID().Merge(j.LHS.TableID())
-}
-
 // UnsolvedPredicates implements the Operator interface
 func (j *Join) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	ts := j.TableID()
+	ts := tableID(j)
 	var result []sqlparser.Expr
 	for _, expr := range j.LHS.UnsolvedPredicates(semTable) {
 		deps := semTable.DirectDeps(expr)

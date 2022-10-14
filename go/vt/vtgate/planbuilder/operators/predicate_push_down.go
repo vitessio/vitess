@@ -101,7 +101,7 @@ func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f 
 func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *Join) (LogicalOperator, error) {
 	deps := semTable.RecursiveDeps(expr)
 	switch {
-	case deps.IsSolvedBy(j.LHS.TableID()):
+	case deps.IsSolvedBy(tableID(j.LHS)):
 		lhs, err := LogicalPushPredicate(j.LHS, expr, semTable)
 		if err != nil {
 			return nil, err
@@ -109,7 +109,7 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 		j.LHS = lhs
 		return j, nil
 
-	case deps.IsSolvedBy(j.RHS.TableID()):
+	case deps.IsSolvedBy(tableID(j.RHS)):
 		j.tryConvertToInnerJoin(expr, semTable)
 
 		if !j.LeftJoin {
@@ -127,7 +127,7 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 		}
 		return op, nil
 
-	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
+	case deps.IsSolvedBy(tableID(j)):
 		j.tryConvertToInnerJoin(expr, semTable)
 
 		if !j.LeftJoin {

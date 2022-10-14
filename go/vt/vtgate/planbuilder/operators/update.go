@@ -30,8 +30,8 @@ type Update struct {
 
 var _ LogicalOperator = (*Update)(nil)
 
-// TableID implements the LogicalOperator interface
-func (u *Update) TableID() semantics.TableSet {
+// Introduces implements the LogicalOperator interface
+func (u *Update) Introduces() semantics.TableSet {
 	return u.Table.ID
 }
 

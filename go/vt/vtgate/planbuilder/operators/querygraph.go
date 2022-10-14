@@ -60,8 +60,8 @@ var _ LogicalOperator = (*QueryGraph)(nil)
 
 func (*QueryGraph) iLogical() {}
 
-// TableID implements the Operator interface
-func (qg *QueryGraph) TableID() semantics.TableSet {
+// Introduces implements the tableIDIntroducer interface
+func (qg *QueryGraph) Introduces() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
 		ts = ts.Merge(table.ID)
@@ -164,7 +164,7 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 	var result []sqlparser.Expr
 	for _, join := range qg.innerJoins {
 		set, exprs := join.deps, join.exprs
-		if !set.IsSolvedBy(qg.TableID()) {
+		if !set.IsSolvedBy(tableID(qg)) {
 			result = append(result, exprs...)
 		}
 	}

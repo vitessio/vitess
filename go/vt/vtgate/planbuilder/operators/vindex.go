@@ -48,8 +48,8 @@ var _ LogicalOperator = (*Vindex)(nil)
 
 func (*Vindex) iLogical() {}
 
-// TableID implements the Operator interface
-func (v *Vindex) TableID() semantics.TableSet {
+// Introduces implements the Operator interface
+func (v *Vindex) Introduces() semantics.TableSet {
 	return v.Table.TableID
 }
 

@@ -31,11 +31,6 @@ var _ LogicalOperator = (*Filter)(nil)
 // iLogical implements the LogicalOperator interface
 func (f *Filter) iLogical() {}
 
-// TableID implements the LogicalOperator interface
-func (f *Filter) TableID() semantics.TableSet {
-	return f.Source.TableID()
-}
-
 // UnsolvedPredicates implements the LogicalOperator interface
 func (f *Filter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return f.Source.UnsolvedPredicates(semTable)

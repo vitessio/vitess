@@ -28,8 +28,10 @@ type SubQuery struct {
 }
 
 var _ LogicalOperator = (*SubQuery)(nil)
+var _ LogicalOperator = (*SubQueryInner)(nil)
 
-func (*SubQuery) iLogical() {}
+func (*SubQuery) iLogical()      {}
+func (*SubQueryInner) iLogical() {}
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
@@ -42,18 +44,9 @@ type SubQueryInner struct {
 	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
 
-// TableID implements the Operator interface
-func (s *SubQuery) TableID() semantics.TableSet {
-	ts := s.Outer.TableID()
-	for _, inner := range s.Inner {
-		ts = ts.Merge(inner.Inner.TableID())
-	}
-	return ts
-}
-
 // UnsolvedPredicates implements the Operator interface
 func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	ts := s.TableID()
+	ts := tableID(s)
 	var result []sqlparser.Expr
 
 	for _, expr := range s.Outer.UnsolvedPredicates(semTable) {
@@ -82,4 +75,12 @@ func (s *SubQuery) CheckValid() error {
 		}
 	}
 	return s.Outer.CheckValid()
+}
+
+func (i *SubQueryInner) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	return i.Inner.UnsolvedPredicates(semTable)
+}
+
+func (i *SubQueryInner) CheckValid() error {
+	return i.Inner.CheckValid()
 }

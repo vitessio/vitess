@@ -33,11 +33,6 @@ var _ LogicalOperator = (*Derived)(nil)
 
 func (*Derived) iLogical() {}
 
-// TableID implements the Operator interface
-func (d *Derived) TableID() semantics.TableSet {
-	return d.Inner.TableID()
-}
-
 // UnsolvedPredicates implements the Operator interface
 func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return d.Inner.UnsolvedPredicates(semTable)
