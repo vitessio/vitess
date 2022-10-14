@@ -126,6 +126,7 @@ Usage of vtgate:
       --pprof strings                                                    enable profiling
       --proxy_protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
+      --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")

@@ -1187,6 +1187,15 @@
 			"Shard": "topo_connection_cache",
 			"RetryMax": 1,
 			"Tags": []
+		},
+		"prscomplex": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/prscomplex"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vttablet_prscomplex",
+			"RetryMax": 1,
+			"Tags": [""]
 		}
 	}
 }

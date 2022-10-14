@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true", "--query-timeout=100")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {

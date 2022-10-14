@@ -8,6 +8,8 @@ import {
     useReloadSchemaShard,
     useTabletExternallyPromoted,
     useTablets,
+    useValidateShard,
+    useValidateVersionShard,
 } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel';
@@ -19,9 +21,10 @@ import { TextInput } from '../../TextInput';
 import { NumberInput } from '../../NumberInput';
 import { Select } from '../../inputs/Select';
 import { formatAlias, formatDisplayType } from '../../../util/tablets';
-import { logutil, vtadmin } from '../../../proto/vtadmin';
+import { logutil, vtadmin, vtctldata } from '../../../proto/vtadmin';
 import Dialog from '../../dialog/Dialog';
 import EventLogEntry from './EventLogEntry';
+import ValidationResults from '../../ValidationResults';
 interface RouteParams {
     clusterID: string;
     keyspace: string;
@@ -40,7 +43,7 @@ const Advanced: React.FC = () => {
     const { data: tablets = [] } = useTablets();
 
     // dialog parameters
-    const [isOpen, setIsOpen] = useState(false);
+    const [failoverDialogIsOpen, setFailoverDialogIsOpen] = useState(false);
     const [dialogTitle, setDialogTitle] = useState('');
     const [dialogDescription, setDialogDescription] = useState('');
     const [events, setEvents] = useState<logutil.IEvent[]>([]);
@@ -117,7 +120,7 @@ const Advanced: React.FC = () => {
                         plannedReparentTablet?.tablet?.alias
                     )}.`
                 );
-                setIsOpen(true);
+                setFailoverDialogIsOpen(true);
                 setEvents(result.events);
             },
             onError: (error) =>
@@ -142,7 +145,7 @@ const Advanced: React.FC = () => {
                         emergencyReparentTablet?.tablet?.alias
                     )}.`
                 );
-                setIsOpen(true);
+                setFailoverDialogIsOpen(true);
                 setEvents(result.events);
             },
             onError: (error) =>
@@ -151,6 +154,62 @@ const Advanced: React.FC = () => {
                         emergencyReparentTablet?.tablet?.alias
                     )}: ${error}`
                 ),
+        }
+    );
+
+    // validation dialog parameters
+    const [validateDialogTitle, setValidateDialogTitle] = useState('');
+    const [validateDialogDescription, setValidateDialogDescription] = useState('');
+    const onCloseValidateDialog = () => {
+        setValidateDialogIsOpen(false);
+        setValidateDialogTitle('');
+        setValidateDialogDescription('');
+        setValidateShardResponse(null);
+        setValidateVersionShardResponse(null);
+    };
+
+    // validateShard parameters
+    const [pingTablets, setPingTablets] = useState(false);
+    const [validateDialogIsOpen, setValidateDialogIsOpen] = useState(false);
+    const [validateShardResponse, setValidateShardResponse] = useState<vtctldata.ValidateShardResponse | null>(null);
+
+    const validateShardMutation = useValidateShard(
+        {
+            clusterID: params.clusterID,
+            keyspace: params.keyspace,
+            shard: params.shard,
+            pingTablets,
+        },
+        {
+            onSuccess: (result) => {
+                setValidateDialogTitle('Validate Shard');
+                setValidateDialogDescription(`Successfully validated ${params.shard}.`);
+                setValidateDialogIsOpen(true);
+                setValidateShardResponse(result);
+            },
+            onError: (error) => warn(`There was an error validating shard ${params.shard}: ${error}`),
+        }
+    );
+
+    const [
+        validateVersionShardResponse,
+        setValidateVersionShardResponse,
+    ] = useState<vtctldata.ValidateVersionShardResponse | null>(null);
+
+    const validateVersionShardMutation = useValidateVersionShard(
+        {
+            clusterID: params.clusterID,
+            keyspace: params.keyspace,
+            shard: params.shard,
+        },
+        {
+            onSuccess: (result) => {
+                setValidateDialogTitle('Validate Version Shard');
+                setValidateDialogDescription(`Successfully validated versions on ${params.shard}.`);
+                setValidateDialogIsOpen(true);
+                setValidateShardResponse(result);
+            },
+            onError: (error) => warn(`There was an error validating versions on shard ${params.shard}: ${error}`),
         }
     );
 
@@ -171,8 +230,9 @@ const Advanced: React.FC = () => {
         <>
             <Dialog
                 className="min-w-[500px]"
-                isOpen={isOpen}
-                onClose={() => setIsOpen(false)}
+                isOpen={failoverDialogIsOpen}
+                onClose={() => setFailoverDialogIsOpen(false)}
+                onConfirm={() => setFailoverDialogIsOpen(false)}
                 title={dialogTitle}
                 hideCancel
                 confirmText="Dismiss"
@@ -187,9 +247,71 @@ const Advanced: React.FC = () => {
                     </div>
                 </>
             </Dialog>
+            <Dialog
+                className="min-w-[500px]"
+                isOpen={validateDialogIsOpen}
+                onClose={onCloseValidateDialog}
+                onConfirm={onCloseValidateDialog}
+                title={validateDialogTitle}
+                hideCancel
+                confirmText="Dismiss"
+            >
+                <>
+                    <div className="mt-8 mb-4">{validateDialogDescription}</div>
+                    {validateShardResponse && (
+                        <ValidationResults
+                            resultsByShard={validateShardResponse || validateVersionShardResponse}
+                            shard={shardName}
+                        />
+                    )}
+                </>
+            </Dialog>
             <div className="pt-4">
                 <div className="my-8">
                     <h3 className="mb-4">Status</h3>
+                    <div>
+                        <ActionPanel
+                            description={
+                                <>
+                                    Validates that all nodes reachable from the specified shard{' '}
+                                    <span className="font-bold">{shardName}</span> are consistent.
+                                </>
+                            }
+                            documentationLink="https://vitess.io/docs/reference/programs/vtctldclient/vtctldclient_validateshard/#vtctldclient-validateshard"
+                            loadingText="Validating shard..."
+                            loadedText="Validate"
+                            mutation={validateShardMutation as UseMutationResult}
+                            title="Validate Shard"
+                            body={
+                                <>
+                                    <div className="mt-2">
+                                        <div className="flex items-center">
+                                            <Toggle
+                                                className="mr-2"
+                                                enabled={pingTablets}
+                                                onChange={() => setPingTablets(!pingTablets)}
+                                            />
+                                            <Label label="Ping Tablets" />
+                                        </div>
+                                        When set, all tablets are pinged during the validation process.
+                                    </div>
+                                </>
+                            }
+                        />
+                        <ActionPanel
+                            description={
+                                <>
+                                    Validates that the version on the primary matches all of the replicas on shard{' '}
+                                    <span className="font-bold">{shardName}</span>.
+                                </>
+                            }
+                            documentationLink="https://vitess.io/docs/reference/programs/vtctl/schema-version-permissions/#validateversionshard"
+                            loadingText="Validating shard versions..."
+                            loadedText="Validate"
+                            mutation={validateVersionShardMutation as UseMutationResult}
+                            title="Validate Version Shard"
+                        />
+                    </div>
                 </div>
             </div>
             <div className="pt-4">
@@ -281,6 +403,7 @@ const Advanced: React.FC = () => {
                                                 selectedItem={tablet}
                                                 placeholder="Tablet"
                                                 description="This chosen tablet will be considered the shard primary (but Vitess won't change the replication setup)."
+                                                required
                                             />
                                         </div>
                                     </div>
@@ -353,6 +476,7 @@ const Advanced: React.FC = () => {
                                     <div className="mt-2">
                                         <div className="flex items-center">
                                             <Select
+                                                required
                                                 onChange={(t) => setPlannedReparentTablet(t as vtadmin.Tablet)}
                                                 label="Tablet"
                                                 items={tabletsInCluster}
@@ -386,6 +510,7 @@ const Advanced: React.FC = () => {
                                     <div className="mt-2">
                                         <div className="flex items-center">
                                             <Select
+                                                required
                                                 onChange={(t) => setEmergencyReparentTablet(t as vtadmin.Tablet)}
                                                 label="Tablet"
                                                 items={tabletsInCluster}
