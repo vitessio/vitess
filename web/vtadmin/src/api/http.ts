@@ -754,7 +754,6 @@ export const createShard = async (params: CreateShardParams) => {
 
     return vtctldata.CreateShardResponse.create(result);
 };
-
 export interface ValidateParams {
     clusterID: string;
     pingTablets: boolean;
