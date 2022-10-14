@@ -115,6 +115,7 @@ var (
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
+		"vtorc",
 		"xb_recovery",
 		"mysql80",
 		"vreplication_across_db_versions",
@@ -127,9 +128,7 @@ var (
 		"vtgate_partial_keyspace",
 	}
 
-	clusterSelfHostedList = []string{
-		"vtorc",
-	}
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
