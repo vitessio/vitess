@@ -20,22 +20,22 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	"vitess.io/vitess/go/vt/vtorc/logic"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
 // bring down primary, let orc promote replica
 // covers the test case master-failover from orchestrator
+// Also tests that VTOrc can handle multiple failures, if the durability policies allow it
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1, "")
+	}, 1, "semi_sync")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -58,21 +58,28 @@ func TestDownPrimary(t *testing.T) {
 	assert.NotNil(t, replica, "could not find replica tablet")
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
-	// check that the replication is setup correctly before we failover
-	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+	// Start a cross-cell replica
+	crossCellReplica := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
 
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
+
+	// Make the rdonly tablet unavailable
+	err := rdonly.MysqlctlProcess.Stop()
+	require.NoError(t, err)
 	// Make the current primary database unavailable.
-	err := curPrimary.MysqlctlProcess.Stop()
+	err = curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+		utils.PermanentlyRemoveVttablet(clusterInfo, rdonly)
 	}()
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	// also check that the replication is working correctly after failover
-	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
 }
 

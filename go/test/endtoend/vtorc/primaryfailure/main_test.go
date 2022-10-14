@@ -21,9 +21,8 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 )
 
 var clusterInfo *utils.VTOrcClusterInfo
@@ -34,7 +33,7 @@ func TestMain(m *testing.M) {
 	cellInfos = append(cellInfos, &utils.CellInfo{
 		CellName:    utils.Cell1,
 		NumReplicas: 12,
-		NumRdonly:   2,
+		NumRdonly:   3,
 		UIDBase:     100,
 	})
 	cellInfos = append(cellInfos, &utils.CellInfo{
