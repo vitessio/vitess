@@ -573,7 +573,7 @@ export const useTopologyPath = (
     options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
 ) => {
     return useQuery(['topology-path', params], () => getTopologyPath(params));
-}
+};
 /**
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
  * as well as all tablets in discoverable cells, are consistent.

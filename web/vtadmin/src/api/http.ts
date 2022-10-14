@@ -769,7 +769,7 @@ export const getTopologyPath = async (params: GetTopologyPathParams) => {
     if (err) throw Error(err);
 
     return vtctldata.GetTopologyPathResponse.create(result);
-}
+};
 export interface ValidateParams {
     clusterID: string;
     pingTablets: boolean;
