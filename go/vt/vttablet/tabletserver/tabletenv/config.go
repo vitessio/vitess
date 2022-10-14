@@ -23,17 +23,15 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/flagutil"
-	"vitess.io/vitess/go/vt/servenv"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
 )
 
@@ -163,7 +161,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatBoolVar(fs, &enableConsolidatorReplicas, "enable_consolidator_replicas", false, "This option enables the query consolidator only on replicas.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator-stream-query-size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
-	flagutil.DualFormatBoolVar(fs, &currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "(DEPRECATED) This option fetches & caches fields (columns) when storing query plans")
+	flagutil.DualFormatBoolVar(fs, &currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
+	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "This flag is deprecated.")
+	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "This flag is deprecated.")
 
 	fs.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")
