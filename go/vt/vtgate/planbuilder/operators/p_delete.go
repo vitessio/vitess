@@ -37,11 +37,6 @@ func (d *PhysDelete) TableID() semantics.TableSet {
 	return d.QTable.ID
 }
 
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (d *PhysDelete) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
 // CheckValid implements the PhysicalOperator interface
 func (d *PhysDelete) CheckValid() error {
 	return nil

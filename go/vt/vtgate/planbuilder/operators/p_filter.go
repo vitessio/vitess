@@ -36,11 +36,6 @@ func (f *PhysFilter) TableID() semantics.TableSet {
 	return f.Source.TableID()
 }
 
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (f *PhysFilter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
 // CheckValid implements the PhysicalOperator interface
 func (f *PhysFilter) CheckValid() error {
 	return f.Source.CheckValid()

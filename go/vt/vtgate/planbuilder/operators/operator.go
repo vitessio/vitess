@@ -27,30 +27,18 @@ import (
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
 	Operator interface {
-		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
-		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
-		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 
 		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
 		CheckValid() error
 	}
 
 	LogicalOperator interface {
-		/*
-			switch op := op.(type) {
-			case *Concatenate:
-			case *Delete:
-			case *Derived:
-			case *Filter:
-			case *Join:
-			case *QueryGraph:
-			case *SubQuery:
-			case *Update:
-			case *Vindex:
-			}
-		*/
 		Operator
 		iLogical()
+
+		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
+		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
+		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 
 	PhysicalOperator interface {

@@ -48,11 +48,6 @@ func (s *SubQueryOp) TableID() semantics.TableSet {
 	return s.Inner.TableID().Merge(s.Outer.TableID())
 }
 
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (s *SubQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return append(s.Outer.UnsolvedPredicates(semTable), s.Inner.UnsolvedPredicates(semTable)...)
-}
-
 // CheckValid implements the PhysicalOperator interface
 func (s *SubQueryOp) CheckValid() error {
 	err := s.Inner.CheckValid()
@@ -82,10 +77,6 @@ func (s *SubQueryOp) Clone() PhysicalOperator {
 
 func (c *CorrelatedSubQueryOp) TableID() semantics.TableSet {
 	return c.Inner.TableID().Merge(c.Outer.TableID())
-}
-
-func (c *CorrelatedSubQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return append(c.Outer.UnsolvedPredicates(semTable), c.Inner.UnsolvedPredicates(semTable)...)
 }
 
 func (c *CorrelatedSubQueryOp) CheckValid() error {

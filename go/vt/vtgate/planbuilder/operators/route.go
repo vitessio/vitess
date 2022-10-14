@@ -444,11 +444,6 @@ func (r *Route) canImprove() bool {
 	return r.RouteOpCode != engine.None
 }
 
-// UnsolvedPredicates implements the Operator interface
-func (r *Route) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return r.Source.UnsolvedPredicates(semTable)
-}
-
 // CheckValid implements the Operator interface
 func (r *Route) CheckValid() error {
 	return r.Source.CheckValid()

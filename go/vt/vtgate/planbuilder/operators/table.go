@@ -64,11 +64,6 @@ func (to *Table) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a Table. It is meant to be immutable")
 }
 
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (to *Table) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
 // CheckValid implements the PhysicalOperator interface
 func (to *Table) CheckValid() error {
 	return nil

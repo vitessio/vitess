@@ -53,11 +53,6 @@ func (a *ApplyJoin) TableID() semantics.TableSet {
 	return a.LHS.TableID().Merge(a.RHS.TableID())
 }
 
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (a *ApplyJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
 // CheckValid implements the PhysicalOperator interface
 func (a *ApplyJoin) CheckValid() error {
 	err := a.LHS.CheckValid()

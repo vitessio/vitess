@@ -41,11 +41,6 @@ func (u *Union) TableID() semantics.TableSet {
 	return ts
 }
 
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (u *Union) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
 // CheckValid implements the PhysicalOperator interface
 func (u *Union) CheckValid() error {
 	return nil

@@ -40,11 +40,6 @@ func (u *PhysUpdate) TableID() semantics.TableSet {
 	return u.QTable.ID
 }
 
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (u *PhysUpdate) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
 // CheckValid implements the PhysicalOperator interface
 func (u *PhysUpdate) CheckValid() error {
 	return nil

@@ -38,11 +38,6 @@ func (v *PhysVindex) TableID() semantics.TableSet {
 	return v.Solved
 }
 
-// UnsolvedPredicates implements the Operator interface
-func (v *PhysVindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
 // CheckValid implements the Operator interface
 func (v *PhysVindex) CheckValid() error {
 	return nil
