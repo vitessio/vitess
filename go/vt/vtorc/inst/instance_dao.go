@@ -27,11 +27,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openark/golib/sqlutils"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
-
-	"github.com/openark/golib/sqlutils"
 
 	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
@@ -454,7 +453,7 @@ Cleanup:
 	// tried to check the instance. last_attempted_check is also
 	// updated on success by writeInstance.
 	latency.Start("backend")
-	_ = UpdateInstanceLastChecked(&instance.Key, partialSuccess)
+	_ = UpdateInstanceLastChecked(instanceKey, partialSuccess)
 	latency.Stop("backend")
 	return nil, err
 }
