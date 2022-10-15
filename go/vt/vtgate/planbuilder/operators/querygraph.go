@@ -180,12 +180,9 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 		innerJoins: nil,
 		NoDeps:     nil,
 	}
-	for _, table := range qg.Tables {
-		result.Tables = append(result.Tables, table)
-	}
-	for _, join := range qg.innerJoins {
-		result.innerJoins = append(result.innerJoins, join)
-	}
+
+	result.Tables = append([]*QueryTable{}, qg.Tables...)
+	result.innerJoins = append([]*innerJoin{}, qg.innerJoins...)
 	result.NoDeps = qg.NoDeps
 	return result
 }

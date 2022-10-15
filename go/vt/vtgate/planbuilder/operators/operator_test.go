@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"

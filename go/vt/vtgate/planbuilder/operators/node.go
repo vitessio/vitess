@@ -2,6 +2,7 @@ package operators
 
 import (
 	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
