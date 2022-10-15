@@ -48,9 +48,6 @@ type (
 
 var _ Operator = (*Vindex)(nil)
 
-// ThisIsAnOperator implements the Operator interface
-func (*Vindex) ThisIsAnOperator() {}
-
 // Introduces implements the Operator interface
 func (v *Vindex) Introduces() semantics.TableSet {
 	return v.Table.TableID

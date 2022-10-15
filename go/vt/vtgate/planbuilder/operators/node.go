@@ -60,16 +60,12 @@ func CostOf(op Operator) (cost int) {
 }
 
 func Clone(op Operator) Operator {
-	cl, ok := op.(clonable)
-	if !ok {
-		panic(fmt.Sprintf("tried to clone an operator that is not cloneable: %T", op))
-	}
 	inputs := op.Inputs()
 	clones := make([]Operator, len(inputs))
 	for i, input := range inputs {
 		clones[i] = Clone(input)
 	}
-	return cl.Clone(clones)
+	return op.Clone(clones)
 }
 
 func checkSize(inputs []Operator, shouldBe int) {

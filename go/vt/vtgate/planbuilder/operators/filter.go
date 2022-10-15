@@ -30,9 +30,6 @@ var _ PhysicalOperator = (*Filter)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (f *Filter) IPhysical() {}
 
-// ThisIsAnOperator implements the Operator interface
-func (f *Filter) ThisIsAnOperator() {}
-
 // Clone implements the PhysicalOperator interface
 func (f *Filter) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)

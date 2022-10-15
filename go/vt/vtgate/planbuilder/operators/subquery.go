@@ -29,12 +29,6 @@ type SubQuery struct {
 var _ Operator = (*SubQuery)(nil)
 var _ Operator = (*SubQueryInner)(nil)
 
-// ThisIsAnOperator implements the Operator interface
-func (*SubQuery) ThisIsAnOperator() {}
-
-// ThisIsAnOperator implements the Operator interface
-func (*SubQueryInner) ThisIsAnOperator() {}
-
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
 	// Inner is the Operator inside the parenthesis of the subquery.

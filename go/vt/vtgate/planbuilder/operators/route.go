@@ -88,9 +88,6 @@ var _ PhysicalOperator = (*Route)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
 
-// ThisIsAnOperator implements the Operator interface
-func (*Route) ThisIsAnOperator() {}
-
 // Cost implements the Operator interface
 func (r *Route) Cost() int {
 	switch r.RouteOpCode {

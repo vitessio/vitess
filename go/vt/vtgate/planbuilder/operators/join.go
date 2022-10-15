@@ -30,9 +30,6 @@ type Join struct {
 
 var _ Operator = (*Join)(nil)
 
-// ThisIsAnOperator implements the Operator interface
-func (*Join) ThisIsAnOperator() {}
-
 // When a predicate uses information from an outer table, we can convert from an outer join to an inner join
 // if the predicate is "null-intolerant".
 //

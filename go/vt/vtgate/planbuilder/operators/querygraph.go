@@ -61,9 +61,6 @@ type (
 
 var _ Operator = (*QueryGraph)(nil)
 
-// ThisIsAnOperator implements the Operator interface
-func (*QueryGraph) ThisIsAnOperator() {}
-
 // Introduces implements the tableIDIntroducer interface
 func (qg *QueryGraph) Introduces() semantics.TableSet {
 	var ts semantics.TableSet

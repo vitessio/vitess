@@ -41,9 +41,6 @@ func (d *PhysDelete) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (d *PhysDelete) IPhysical() {}
 
-// ThisIsAnOperator implements the Operator interface
-func (d *PhysDelete) ThisIsAnOperator() {}
-
 // Clone implements the PhysicalOperator interface
 func (d *PhysDelete) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)

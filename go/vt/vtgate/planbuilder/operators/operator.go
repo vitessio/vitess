@@ -27,8 +27,6 @@ import (
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
 	Operator interface {
-		ThisIsAnOperator()
-
 		Clone(inputs []Operator) Operator
 		Inputs() []Operator
 	}
@@ -37,11 +35,6 @@ type (
 	PhysicalOperator interface {
 		Operator
 		IPhysical()
-	}
-
-	clonable interface {
-		// Clone creates a copy of the operator that can be updated without changing the original
-		Clone(inputs []Operator) Operator
 	}
 
 	// tableIDIntroducer is used to signal that this operator introduces data from a new source

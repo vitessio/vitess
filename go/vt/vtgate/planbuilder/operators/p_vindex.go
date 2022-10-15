@@ -43,9 +43,6 @@ func (v *PhysVindex) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (v *PhysVindex) IPhysical() {}
 
-// ThisIsAnOperator implements the Operator interface
-func (v *PhysVindex) ThisIsAnOperator() {}
-
 // Clone implements the PhysicalOperator interface
 func (v *PhysVindex) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)

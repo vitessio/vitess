@@ -37,9 +37,6 @@ func (u *Update) Introduces() semantics.TableSet {
 	return u.Table.ID
 }
 
-// ThisIsAnOperator implements the Operator interface
-func (u *Update) ThisIsAnOperator() {}
-
 func (u *Update) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	return u
