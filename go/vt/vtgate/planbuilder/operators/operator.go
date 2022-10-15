@@ -27,6 +27,11 @@ import (
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
+	// While planning, the operator tree starts with logical operators, and later moves to physical operators.
+	// The difference between the two is that when we get to a physical operator, we have made decisions on in
+	// which order to do the joins, and how to split them up across shards and keyspaces.
+	// In some situation we go straight to the physical operator - when there are no options to consider,
+	// we can go straight to the end result.
 	Operator interface {
 		Clone(inputs []Operator) Operator
 		Inputs() []Operator
@@ -63,6 +68,7 @@ type (
 		CheckValid() error
 	}
 
+	// helper type that implements Inputs() returning nil
 	noInputs struct{}
 )
 
@@ -74,80 +80,90 @@ func (noInputs) Inputs() []Operator {
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		switch tbl := tableExpr.Expr.(type) {
-		case sqlparser.TableName:
-			tableID := ctx.SemTable.TableSetFor(tableExpr)
-			tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
-			if err != nil {
-				return nil, err
-			}
-
-			if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
-				solves := ctx.SemTable.TableSetFor(tableExpr)
-				return &Vindex{
-					Table: VindexTable{
-						TableID: tableID,
-						Alias:   tableExpr,
-						Table:   tbl,
-						VTable:  vt.Table.GetVindexTable(),
-					},
-					Vindex: vt.Vindex,
-					Solved: solves,
-				}, nil
-			}
-			qg := newQueryGraph()
-			isInfSchema := tableInfo.IsInfSchema()
-			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
-			qg.Tables = append(qg.Tables, qt)
-			return qg, nil
-		case *sqlparser.DerivedTable:
-			inner, err := CreateLogicalOperatorFromAST(ctx, tbl.Select)
-			if err != nil {
-				return nil, err
-			}
-			return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
-		}
+		return getOperatorFromAliasedTableExpr(ctx, tableExpr)
 	case *sqlparser.JoinTableExpr:
-		switch tableExpr.Join {
-		case sqlparser.NormalJoinType:
-			lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
-			if err != nil {
-				return nil, err
-			}
-			rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr)
-			if err != nil {
-				return nil, err
-			}
-			op := createJoin(lhs, rhs)
-			if tableExpr.Condition.On != nil {
-				op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
-				if err != nil {
-					return nil, err
-				}
-			}
-			return op, nil
-		case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-			lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
-			if err != nil {
-				return nil, err
-			}
-			rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr)
-			if err != nil {
-				return nil, err
-			}
-			if tableExpr.Join == sqlparser.RightJoinType {
-				lhs, rhs = rhs, lhs
-			}
-			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
-		}
+		return getOperatorFromJoinTableExpr(ctx, tableExpr)
 	case *sqlparser.ParenTableExpr:
 		return crossJoin(ctx, tableExpr.Exprs)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T table type", tableExpr)
+	}
+}
+
+func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (Operator, error) {
+	lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	switch tableExpr.Join {
+	case sqlparser.NormalJoinType:
+		return createInnerJoin(ctx, tableExpr, lhs, rhs)
+	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
+		return createOuterJoin(tableExpr, lhs, rhs)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
+	}
+}
+
+func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
+	if tableExpr.Join == sqlparser.RightJoinType {
+		lhs, rhs = rhs, lhs
+	}
+	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
+}
+
+func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
+	op := createJoin(lhs, rhs)
+	if tableExpr.Condition.On != nil {
+		var err error
+		op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return op, nil
+}
+
+func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (Operator, error) {
+	switch tbl := tableExpr.Expr.(type) {
+	case sqlparser.TableName:
+		tableID := ctx.SemTable.TableSetFor(tableExpr)
+		tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
+		if err != nil {
+			return nil, err
+		}
+
+		if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
+			solves := ctx.SemTable.TableSetFor(tableExpr)
+			return &Vindex{
+				Table: VindexTable{
+					TableID: tableID,
+					Alias:   tableExpr,
+					Table:   tbl,
+					VTable:  vt.Table.GetVindexTable(),
+				},
+				Vindex: vt.Vindex,
+				Solved: solves,
+			}, nil
+		}
+		qg := newQueryGraph()
+		isInfSchema := tableInfo.IsInfSchema()
+		qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
+		qg.Tables = append(qg.Tables, qt)
+		return qg, nil
+	case *sqlparser.DerivedTable:
+		inner, err := CreateLogicalOperatorFromAST(ctx, tbl.Select)
+		if err != nil {
+			return nil, err
+		}
+		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
 	}
 }
 
