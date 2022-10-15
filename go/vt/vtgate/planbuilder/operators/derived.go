@@ -23,11 +23,12 @@ import (
 // Derived represents a derived table in the query
 type Derived struct {
 	Sel           sqlparser.SelectStatement
-	Inner         LogicalOperator
+	Inner         Operator
 	Alias         string
 	ColumnAliases sqlparser.Columns
 }
 
-var _ LogicalOperator = (*Derived)(nil)
+var _ Operator = (*Derived)(nil)
 
-func (*Derived) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (*Derived) ThisIsAnOperator() {}

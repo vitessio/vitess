@@ -25,12 +25,12 @@ import (
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
-
-	LogicalOperator interface {
-		iLogical()
+	Operator interface {
+		ThisIsAnOperator()
 	}
 
 	PhysicalOperator interface {
+		Operator
 		IPhysical()
 	}
 
@@ -59,7 +59,7 @@ type (
 	}
 )
 
-func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (LogicalOperator, error) {
+func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (Operator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
@@ -134,8 +134,8 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 	}
 }
 
-func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (LogicalOperator, error) {
-	var output LogicalOperator
+func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operator, error) {
+	var output Operator
 	for _, tableExpr := range exprs {
 		op, err := getOperatorFromTableExpr(tableExpr, semTable)
 		if err != nil {
@@ -160,7 +160,7 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 }
 
 // CreateLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateLogicalOperatorFromAST(selStmt sqlparser.Statement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
+func CreateLogicalOperatorFromAST(selStmt sqlparser.Statement, semTable *semantics.SemTable) (op Operator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(node, semTable)
@@ -179,7 +179,7 @@ func CreateLogicalOperatorFromAST(selStmt sqlparser.Statement, semTable *semanti
 	return Compact(op, semTable)
 }
 
-func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
+func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
 	opLHS, err := CreateLogicalOperatorFromAST(node.Left, semTable)
 	if err != nil {
 		return nil, err
@@ -196,14 +196,14 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	return &Concatenate{
 		Distinct:    node.Distinct,
 		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
-		Sources:     []LogicalOperator{opLHS, opRHS},
+		Sources:     []Operator{opLHS, opRHS},
 		OrderBy:     node.OrderBy,
 		Limit:       node.Limit,
 	}, nil
 }
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
-func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (LogicalOperator, error) {
+func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
 	subq, err := createSubqueryFromStatement(sel, semTable)
 	if err != nil {
 		return nil, err
@@ -229,7 +229,7 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	return subq, nil
 }
 
-func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.SemTable) (LogicalOperator, error) {
+func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.SemTable) (Operator, error) {
 	tableInfo, qt, err := createQueryTableForDML(updStmt.TableExprs[0], semTable, updStmt.Where)
 	if err != nil {
 		return nil, err
@@ -292,7 +292,7 @@ func createQueryTableForDML(tableExpr sqlparser.TableExpr, semTable *semantics.S
 	return tableInfo, qt, nil
 }
 
-func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.SemTable) (LogicalOperator, error) {
+func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.SemTable) (Operator, error) {
 	tableInfo, qt, err := createQueryTableForDML(deleteStmt.TableExprs[0], semTable, deleteStmt.Where)
 	if err != nil {
 		return nil, err
@@ -349,7 +349,7 @@ func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 	}
 }
 
-func createJoin(LHS, RHS LogicalOperator) LogicalOperator {
+func createJoin(LHS, RHS Operator) Operator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {

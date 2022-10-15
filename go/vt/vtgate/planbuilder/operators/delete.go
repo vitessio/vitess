@@ -27,17 +27,12 @@ type Delete struct {
 	AST       *sqlparser.Delete
 }
 
-var _ LogicalOperator = (*Delete)(nil)
+var _ Operator = (*Delete)(nil)
 
 // Introduces implements the tableIDIntroducer interface
 func (d *Delete) Introduces() semantics.TableSet {
 	return d.Table.ID
 }
 
-// CheckValid implements the LogicalOperator interface
-func (d *Delete) CheckValid() error {
-	return nil
-}
-
-// iLogical implements the LogicalOperator interface
-func (d *Delete) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (d *Delete) ThisIsAnOperator() {}

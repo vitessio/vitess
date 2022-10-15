@@ -44,7 +44,7 @@ type (
 	opCacheMap map[tableSetPair]PhysicalOperator
 )
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree LogicalOperator) (PhysicalOperator, error) {
+func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (PhysicalOperator, error) {
 	switch op := opTree.(type) {
 	case *QueryGraph:
 		return optimizeQueryGraph(ctx, op)
@@ -225,7 +225,7 @@ func createPhysicalOperatorFromDelete(ctx *plancontext.PlanningContext, op *Dele
 		return nil, err
 	}
 
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(tableID(op), op.Table.Predicates, vindexTable)
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(TableID(op), op.Table.Predicates, vindexTable)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +284,7 @@ func getUpdateVindexInformation(op *Update, vindexTable *vindexes.Table) ([]*Vin
 	if !vindexTable.Keyspace.Sharded {
 		return nil, nil, "", nil
 	}
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(tableID(op), op.Table.Predicates, vindexTable)
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(TableID(op), op.Table.Predicates, vindexTable)
 	if err != nil {
 		return nil, nil, "", err
 	}

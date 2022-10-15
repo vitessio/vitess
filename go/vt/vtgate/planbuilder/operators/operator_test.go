@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"

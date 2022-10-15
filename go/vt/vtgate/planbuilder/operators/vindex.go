@@ -44,9 +44,10 @@ type (
 	}
 )
 
-var _ LogicalOperator = (*Vindex)(nil)
+var _ Operator = (*Vindex)(nil)
 
-func (*Vindex) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (*Vindex) ThisIsAnOperator() {}
 
 // Introduces implements the Operator interface
 func (v *Vindex) Introduces() semantics.TableSet {

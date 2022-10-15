@@ -22,7 +22,7 @@ import (
 )
 
 // Compact will optimise the operator tree into a smaller but equivalent version
-func Compact(op LogicalOperator, semTable *semantics.SemTable) (LogicalOperator, error) {
+func Compact(op Operator, semTable *semantics.SemTable) (Operator, error) {
 	switch op := op.(type) {
 	case *Concatenate:
 		compactConcatenate(op)
@@ -38,7 +38,7 @@ func Compact(op LogicalOperator, semTable *semantics.SemTable) (LogicalOperator,
 }
 
 func compactConcatenate(op *Concatenate) {
-	var newSources []LogicalOperator
+	var newSources []Operator
 	var newSels []*sqlparser.Select
 	for i, source := range op.Sources {
 		other, isConcat := source.(*Concatenate)
@@ -64,7 +64,7 @@ func compactConcatenate(op *Concatenate) {
 	op.SelectStmts = newSels
 }
 
-func compactJoin(op *Join, semTable *semantics.SemTable) (LogicalOperator, error) {
+func compactJoin(op *Join, semTable *semantics.SemTable) (Operator, error) {
 	if op.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return op, nil

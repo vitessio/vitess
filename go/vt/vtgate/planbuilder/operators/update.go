@@ -28,17 +28,12 @@ type Update struct {
 	AST         *sqlparser.Update
 }
 
-var _ LogicalOperator = (*Update)(nil)
+var _ Operator = (*Update)(nil)
 
-// Introduces implements the LogicalOperator interface
+// Introduces implements the Operator interface
 func (u *Update) Introduces() semantics.TableSet {
 	return u.Table.ID
 }
 
-// CheckValid implements the LogicalOperator interface
-func (u *Update) CheckValid() error {
-	return nil
-}
-
-// iLogical implements the LogicalOperator interface
-func (u *Update) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (u *Update) ThisIsAnOperator() {}

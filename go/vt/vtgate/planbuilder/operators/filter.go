@@ -21,11 +21,11 @@ import (
 )
 
 type Filter struct {
-	Source     LogicalOperator
+	Source     Operator
 	Predicates []sqlparser.Expr
 }
 
-var _ LogicalOperator = (*Filter)(nil)
+var _ Operator = (*Filter)(nil)
 
-// iLogical implements the LogicalOperator interface
-func (f *Filter) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (f *Filter) ThisIsAnOperator() {}

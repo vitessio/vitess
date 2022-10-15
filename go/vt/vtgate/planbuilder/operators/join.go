@@ -23,15 +23,15 @@ import (
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  LogicalOperator
+	LHS, RHS  Operator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
 }
 
-var _ LogicalOperator = (*Join)(nil)
+var _ Operator = (*Join)(nil)
 
-// iLogical implements the LogicalOperator interface
-func (*Join) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (*Join) ThisIsAnOperator() {}
 
 // When a predicate uses information from an outer table, we can convert from an outer join to an inner join
 // if the predicate is "null-intolerant".
@@ -54,8 +54,8 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 			return
 		}
 
-		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(tableID(j.RHS)) ||
-			sqlparser.IsColName(expr.Right) && semTable.RecursiveDeps(expr.Right).IsSolvedBy(tableID(j.RHS)) {
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) ||
+			sqlparser.IsColName(expr.Right) && semTable.RecursiveDeps(expr.Right).IsSolvedBy(TableID(j.RHS)) {
 			j.LeftJoin = false
 		}
 
@@ -64,7 +64,7 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 			return
 		}
 
-		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(tableID(j.RHS)) {
+		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) {
 			j.LeftJoin = false
 		}
 	}

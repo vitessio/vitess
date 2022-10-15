@@ -42,6 +42,9 @@ func (u *PhysUpdate) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (u *PhysUpdate) IPhysical() {}
 
+// ThisIsAnOperator implements the Operator interface
+func (u *PhysUpdate) ThisIsAnOperator() {}
+
 // Clone implements the PhysicalOperator interface
 func (u *PhysUpdate) Clone(inputs []PhysicalOperator) PhysicalOperator {
 	checkSize(inputs, 0)

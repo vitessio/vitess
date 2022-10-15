@@ -29,24 +29,44 @@ func inputsP(op PhysicalOperator) []PhysicalOperator {
 	panic("switch should be exhaustive")
 }
 
-func inputsL(op LogicalOperator) []LogicalOperator {
+func inputsL(op Operator) []Operator {
 	switch op := op.(type) {
+	case *ApplyJoin:
+		return []Operator{op.LHS, op.RHS}
+	case *CorrelatedSubQueryOp:
+		return []Operator{op.Outer, op.Inner}
+	case *PhysDerived:
+		return []Operator{op.Source}
+	case *PhysFilter:
+		return []Operator{op.Source}
+	case *Route:
+		return []Operator{op.Source}
+	case *SubQueryOp:
+		return []Operator{op.Outer, op.Inner}
+	case *Union:
+		var sources []Operator
+		for _, source := range op.Sources {
+			sources = append(sources, source)
+		}
+		return sources
+	case *Table, *PhysVindex, *PhysDelete, *PhysUpdate:
+		return nil
 	case *Concatenate:
 		return op.Sources
 	case *Derived:
-		return []LogicalOperator{op.Inner}
+		return []Operator{op.Inner}
 	case *Filter:
-		return []LogicalOperator{op.Source}
+		return []Operator{op.Source}
 	case *Join:
-		return []LogicalOperator{op.LHS, op.RHS}
+		return []Operator{op.LHS, op.RHS}
 	case *SubQuery:
-		inputs := []LogicalOperator{op.Outer}
+		inputs := []Operator{op.Outer}
 		for _, inner := range op.Inner {
 			inputs = append(inputs, inner)
 		}
 		return inputs
 	case *SubQueryInner:
-		return []LogicalOperator{op.Inner}
+		return []Operator{op.Inner}
 	case *Delete, *QueryGraph, *Update, *Vindex:
 		return nil
 	}
@@ -54,8 +74,8 @@ func inputsL(op LogicalOperator) []LogicalOperator {
 	panic("switch should be exhaustive")
 }
 
-func visitTopDownL(root LogicalOperator, visitor func(LogicalOperator) error) error {
-	queue := []LogicalOperator{root}
+func visitTopDownL(root Operator, visitor func(Operator) error) error {
+	queue := []Operator{root}
 	for len(queue) > 0 {
 		this := queue[0]
 		queue = append(queue[1:], inputsL(this)...)
@@ -80,8 +100,8 @@ func visitTopDownP(root PhysicalOperator, visitor func(PhysicalOperator) error) 
 	return nil
 }
 
-func tableID(op LogicalOperator) (result semantics.TableSet) {
-	_ = visitTopDownL(op, func(this LogicalOperator) error {
+func TableID(op Operator) (result semantics.TableSet) {
+	_ = visitTopDownL(op, func(this Operator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {
 			result.MergeInPlace(tbl.Introduces())
 		}
@@ -90,18 +110,8 @@ func tableID(op LogicalOperator) (result semantics.TableSet) {
 	return
 }
 
-func TableID(op PhysicalOperator) (result semantics.TableSet) {
-	_ = visitTopDownP(op, func(this PhysicalOperator) error {
-		if tbl, ok := this.(tableIDIntroducer); ok {
-			result.MergeInPlace(tbl.Introduces())
-		}
-		return nil
-	})
-	return
-}
-
-func unresolvedPredicates(op LogicalOperator, st *semantics.SemTable) (result []sqlparser.Expr) {
-	_ = visitTopDownL(op, func(this LogicalOperator) error {
+func unresolvedPredicates(op Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
+	_ = visitTopDownL(op, func(this Operator) error {
 		if tbl, ok := this.(unresolved); ok {
 			result = append(result, tbl.UnsolvedPredicates(st)...)
 		}
@@ -111,11 +121,11 @@ func unresolvedPredicates(op LogicalOperator, st *semantics.SemTable) (result []
 	return
 }
 
-func CheckValid(op LogicalOperator) error {
+func CheckValid(op Operator) error {
 	type checked interface {
 		CheckValid() error
 	}
-	return visitTopDownL(op, func(this LogicalOperator) error {
+	return visitTopDownL(op, func(this Operator) error {
 		if chk, ok := this.(checked); ok {
 			return chk.CheckValid()
 		}
@@ -123,8 +133,8 @@ func CheckValid(op LogicalOperator) error {
 	})
 }
 
-func CostOf(op PhysicalOperator) (cost int) {
-	_ = visitTopDownP(op, func(op PhysicalOperator) error {
+func CostOf(op Operator) (cost int) {
+	_ = visitTopDownL(op, func(op Operator) error {
 		if costlyOp, ok := op.(costly); ok {
 			cost += costlyOp.Cost()
 		}

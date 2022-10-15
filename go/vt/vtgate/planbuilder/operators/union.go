@@ -34,6 +34,9 @@ var _ PhysicalOperator = (*Union)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
+// ThisIsAnOperator implements the Operator interface
+func (u *Union) ThisIsAnOperator() {}
+
 // Clone implements the PhysicalOperator interface
 func (u *Union) Clone(inputs []PhysicalOperator) PhysicalOperator {
 	newOp := *u

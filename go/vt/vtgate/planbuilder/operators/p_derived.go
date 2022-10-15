@@ -40,6 +40,9 @@ var _ PhysicalOperator = (*PhysDerived)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (d *PhysDerived) IPhysical() {}
 
+// ThisIsAnOperator implements the Operator interface
+func (d *PhysDerived) ThisIsAnOperator() {}
+
 // Clone implements the PhysicalOperator interface
 func (d *PhysDerived) Clone(inputs []PhysicalOperator) PhysicalOperator {
 	checkSize(inputs, 1)

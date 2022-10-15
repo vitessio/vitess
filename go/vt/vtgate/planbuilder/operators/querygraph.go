@@ -56,9 +56,10 @@ type (
 	}
 )
 
-var _ LogicalOperator = (*QueryGraph)(nil)
+var _ Operator = (*QueryGraph)(nil)
 
-func (*QueryGraph) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (*QueryGraph) ThisIsAnOperator() {}
 
 // Introduces implements the tableIDIntroducer interface
 func (qg *QueryGraph) Introduces() semantics.TableSet {
@@ -162,7 +163,7 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 // UnsolvedPredicates implements the Operator interface
 func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
-	tables := tableID(qg)
+	tables := TableID(qg)
 	for _, join := range qg.innerJoins {
 		set, exprs := join.deps, join.exprs
 		if !set.IsSolvedBy(tables) {
@@ -170,9 +171,4 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 		}
 	}
 	return result
-}
-
-// CheckValid implements the Operator interface
-func (qg *QueryGraph) CheckValid() error {
-	return nil
 }

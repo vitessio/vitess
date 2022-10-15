@@ -45,6 +45,9 @@ var _ PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (s *SubQueryOp) IPhysical() {}
 
+// ThisIsAnOperator implements the Operator interface
+func (s *SubQueryOp) ThisIsAnOperator() {}
+
 // Clone implements the PhysicalOperator interface
 func (s *SubQueryOp) Clone(inputs []PhysicalOperator) PhysicalOperator {
 	checkSize(inputs, 2)
@@ -56,7 +59,11 @@ func (s *SubQueryOp) Clone(inputs []PhysicalOperator) PhysicalOperator {
 	return result
 }
 
+// IPhysical implements the PhysicalOperator interface
 func (c *CorrelatedSubQueryOp) IPhysical() {}
+
+// ThisIsAnOperator implements the Operator interface=
+func (c *CorrelatedSubQueryOp) ThisIsAnOperator() {}
 
 func (c *CorrelatedSubQueryOp) Clone(inputs []PhysicalOperator) PhysicalOperator {
 	checkSize(inputs, 2)

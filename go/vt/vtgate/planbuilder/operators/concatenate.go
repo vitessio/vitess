@@ -24,11 +24,12 @@ import (
 type Concatenate struct {
 	Distinct    bool
 	SelectStmts []*sqlparser.Select
-	Sources     []LogicalOperator
+	Sources     []Operator
 	OrderBy     sqlparser.OrderBy
 	Limit       *sqlparser.Limit
 }
 
-var _ LogicalOperator = (*Concatenate)(nil)
+var _ Operator = (*Concatenate)(nil)
 
-func (*Concatenate) iLogical() {}
+// ThisIsAnOperator implements the Operator interface
+func (*Concatenate) ThisIsAnOperator() {}

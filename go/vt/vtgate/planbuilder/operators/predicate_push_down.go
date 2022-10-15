@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func LogicalPushPredicate(op LogicalOperator, expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+func LogicalPushPredicate(op Operator, expr sqlparser.Expr, semTable *semantics.SemTable) (Operator, error) {
 	switch op := op.(type) {
 	case *Concatenate:
 		return pushPredicateOnConcatenate(expr, semTable, op)
@@ -43,8 +43,8 @@ func LogicalPushPredicate(op LogicalOperator, expr sqlparser.Expr, semTable *sem
 	}
 }
 
-func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTable, c *Concatenate) (LogicalOperator, error) {
-	newSources := make([]LogicalOperator, 0, len(c.Sources))
+func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTable, c *Concatenate) (Operator, error) {
+	newSources := make([]Operator, 0, len(c.Sources))
 	for index, source := range c.Sources {
 		if len(c.SelectStmts[index].SelectExprs) != 1 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
@@ -63,7 +63,7 @@ func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTabl
 	return c, nil
 }
 
-func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d *Derived) (LogicalOperator, error) {
+func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d *Derived) (Operator, error) {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrMultipleTables {
@@ -81,7 +81,7 @@ func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d
 	return d, err
 }
 
-func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f *Filter) (LogicalOperator, error) {
+func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f *Filter) (Operator, error) {
 	op, err := LogicalPushPredicate(f.Source, expr, semTable)
 	if err != nil {
 		return nil, err
@@ -98,10 +98,10 @@ func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f 
 	}, nil
 }
 
-func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *Join) (LogicalOperator, error) {
+func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *Join) (Operator, error) {
 	deps := semTable.RecursiveDeps(expr)
 	switch {
-	case deps.IsSolvedBy(tableID(j.LHS)):
+	case deps.IsSolvedBy(TableID(j.LHS)):
 		lhs, err := LogicalPushPredicate(j.LHS, expr, semTable)
 		if err != nil {
 			return nil, err
@@ -109,7 +109,7 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 		j.LHS = lhs
 		return j, nil
 
-	case deps.IsSolvedBy(tableID(j.RHS)):
+	case deps.IsSolvedBy(TableID(j.RHS)):
 		j.tryConvertToInnerJoin(expr, semTable)
 
 		if !j.LeftJoin {
@@ -127,7 +127,7 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 		}
 		return op, nil
 
-	case deps.IsSolvedBy(tableID(j)):
+	case deps.IsSolvedBy(TableID(j)):
 		j.tryConvertToInnerJoin(expr, semTable)
 
 		if !j.LeftJoin {
@@ -145,7 +145,7 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
-func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *QueryGraph) (LogicalOperator, error) {
+func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *QueryGraph) (Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(e, semTable)
 		if err != nil {
@@ -155,7 +155,7 @@ func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *Qu
 	return qg, nil
 }
 
-func pushPredicateOnVindex(expr sqlparser.Expr, semTable *semantics.SemTable, v *Vindex) (LogicalOperator, error) {
+func pushPredicateOnVindex(expr sqlparser.Expr, semTable *semantics.SemTable, v *Vindex) (Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := semTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
