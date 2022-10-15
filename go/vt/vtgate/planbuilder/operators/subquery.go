@@ -44,7 +44,7 @@ func (s *SubQueryInner) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	return &SubQueryInner{
 		Inner:             inputs[0],
-		ExtractedSubquery: sqlparser.CloneRefOfExtractedSubquery(s.ExtractedSubquery),
+		ExtractedSubquery: s.ExtractedSubquery,
 	}
 }
 

@@ -75,7 +75,7 @@ func (j *Join) Clone(inputs []Operator) Operator {
 	return &Join{
 		LHS:       inputs[0],
 		RHS:       inputs[1],
-		Predicate: sqlparser.CloneExpr(j.Predicate),
+		Predicate: j.Predicate,
 		LeftJoin:  j.LeftJoin,
 	}
 }

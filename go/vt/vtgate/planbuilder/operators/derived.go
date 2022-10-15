@@ -48,7 +48,7 @@ func (d *Derived) Clone(inputs []Operator) Operator {
 	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
 	clone.Columns = make([]*sqlparser.ColName, 0, len(d.Columns))
 	for _, x := range d.Columns {
-		clone.Columns = append(clone.Columns, sqlparser.CloneRefOfColName(x))
+		clone.Columns = append(clone.Columns, x)
 	}
 	clone.ColumnsOffset = make([]int, 0, len(d.ColumnsOffset))
 	copy(clone.ColumnsOffset, d.ColumnsOffset)

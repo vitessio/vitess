@@ -186,6 +186,6 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 	for _, join := range qg.innerJoins {
 		result.innerJoins = append(result.innerJoins, join)
 	}
-	result.NoDeps = sqlparser.CloneExpr(qg.NoDeps)
+	result.NoDeps = qg.NoDeps
 	return result
 }
