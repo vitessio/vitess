@@ -31,11 +31,12 @@ var _ PhysicalOperator = (*PhysFilter)(nil)
 func (f *PhysFilter) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (f *PhysFilter) Clone() PhysicalOperator {
+func (f *PhysFilter) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 1)
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
 	return &PhysFilter{
-		Source:     f.Source.Clone(),
+		Source:     inputs[0],
 		Predicates: predicatesClone,
 	}
 }

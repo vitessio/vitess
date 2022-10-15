@@ -41,9 +41,10 @@ var _ PhysicalOperator = (*PhysDerived)(nil)
 func (d *PhysDerived) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (d *PhysDerived) Clone() PhysicalOperator {
+func (d *PhysDerived) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 1)
 	clone := *d
-	clone.Source = d.Source.Clone()
+	clone.Source = inputs[0]
 	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
 	clone.Columns = make([]*sqlparser.ColName, 0, len(d.Columns))
 	for _, x := range d.Columns {

@@ -48,7 +48,8 @@ var _ PhysicalOperator = (*ApplyJoin)(nil)
 func (a *ApplyJoin) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (a *ApplyJoin) Clone() PhysicalOperator {
+func (a *ApplyJoin) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 2)
 	varsClone := map[string]int{}
 	for key, value := range a.Vars {
 		varsClone[key] = value
@@ -58,8 +59,8 @@ func (a *ApplyJoin) Clone() PhysicalOperator {
 	lhsColumns := make([]*sqlparser.ColName, len(a.LHSColumns))
 	copy(lhsColumns, a.LHSColumns)
 	return &ApplyJoin{
-		LHS:        a.LHS.Clone(),
-		RHS:        a.RHS.Clone(),
+		LHS:        inputs[0],
+		RHS:        inputs[1],
 		Columns:    columnsClone,
 		Vars:       varsClone,
 		LeftJoin:   a.LeftJoin,

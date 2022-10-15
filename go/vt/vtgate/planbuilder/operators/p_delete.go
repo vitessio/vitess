@@ -40,7 +40,8 @@ func (d *PhysDelete) Introduces() semantics.TableSet {
 func (d *PhysDelete) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (d *PhysDelete) Clone() PhysicalOperator {
+func (d *PhysDelete) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 0)
 	return &PhysDelete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,

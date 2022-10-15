@@ -32,9 +32,30 @@ type (
 
 	PhysicalOperator interface {
 		IPhysical()
+	}
 
+	clonable interface {
 		// Clone creates a copy of the operator that can be updated without changing the original
-		Clone() PhysicalOperator
+		Clone(inputs []PhysicalOperator) PhysicalOperator
+	}
+
+	// tableIDIntroducer is used to signal that this operator introduces data from a new source
+	tableIDIntroducer interface {
+		Introduces() semantics.TableSet
+	}
+
+	unresolved interface {
+		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
+		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
+		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
+	}
+
+	costly interface {
+		// Cost returns the cost for this operator. All the costly operators in the tree are summed together to get the
+		// total cost of the operator tree.
+		// TODO: We should really calculate this using cardinality estimation,
+		//       but until then this is better than nothing
+		Cost() int
 	}
 )
 

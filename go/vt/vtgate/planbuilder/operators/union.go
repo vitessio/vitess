@@ -35,11 +35,9 @@ var _ PhysicalOperator = (*Union)(nil)
 func (u *Union) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (u *Union) Clone() PhysicalOperator {
+func (u *Union) Clone(inputs []PhysicalOperator) PhysicalOperator {
 	newOp := *u
-	newOp.Sources = make([]PhysicalOperator, 0, len(u.Sources))
-	for _, source := range u.Sources {
-		newOp.Sources = append(newOp.Sources, source.Clone())
-	}
+	checkSize(inputs, len(u.Sources))
+	newOp.Sources = inputs
 	return &newOp
 }

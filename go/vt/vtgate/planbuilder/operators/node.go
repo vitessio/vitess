@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"fmt"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -53,11 +54,6 @@ func inputsL(op LogicalOperator) []LogicalOperator {
 	panic("switch should be exhaustive")
 }
 
-// tableIDIntroducer is used to signal that this operator introduces data from a new source
-type tableIDIntroducer interface {
-	Introduces() semantics.TableSet
-}
-
 func visitTopDownL(root LogicalOperator, visitor func(LogicalOperator) error) error {
 	queue := []LogicalOperator{root}
 	for len(queue) > 0 {
@@ -104,12 +100,6 @@ func TableID(op PhysicalOperator) (result semantics.TableSet) {
 	return
 }
 
-type unresolved interface {
-	// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
-	// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
-	UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
-}
-
 func unresolvedPredicates(op LogicalOperator, st *semantics.SemTable) (result []sqlparser.Expr) {
 	_ = visitTopDownL(op, func(this LogicalOperator) error {
 		if tbl, ok := this.(unresolved); ok {
@@ -133,10 +123,6 @@ func CheckValid(op LogicalOperator) error {
 	})
 }
 
-type costly interface {
-	Cost() int
-}
-
 func CostOf(op PhysicalOperator) (cost int) {
 	_ = visitTopDownP(op, func(op PhysicalOperator) error {
 		if costlyOp, ok := op.(costly); ok {
@@ -145,4 +131,23 @@ func CostOf(op PhysicalOperator) (cost int) {
 		return nil
 	})
 	return
+}
+
+func Clone(op PhysicalOperator) PhysicalOperator {
+	cl, ok := op.(clonable)
+	if !ok {
+		panic(fmt.Sprintf("tried to clone an operator that is not cloneable: %T", op))
+	}
+	inputs := inputsP(op)
+	clones := make([]PhysicalOperator, len(inputs))
+	for i, input := range inputs {
+		clones[i] = Clone(input)
+	}
+	return cl.Clone(clones)
+}
+
+func checkSize(inputs []PhysicalOperator, shouldBe int) {
+	if len(inputs) != shouldBe {
+		panic(fmt.Sprintf("BUG: got the wrong number of inputs: got %d, expected %d", len(inputs), shouldBe))
+	}
 }

@@ -46,10 +46,11 @@ var _ PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
 func (s *SubQueryOp) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (s *SubQueryOp) Clone() PhysicalOperator {
+func (s *SubQueryOp) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 2)
 	result := &SubQueryOp{
-		Outer:     s.Outer.Clone(),
-		Inner:     s.Inner.Clone(),
+		Outer:     inputs[0],
+		Inner:     inputs[1],
 		Extracted: s.Extracted,
 	}
 	return result
@@ -57,12 +58,13 @@ func (s *SubQueryOp) Clone() PhysicalOperator {
 
 func (c *CorrelatedSubQueryOp) IPhysical() {}
 
-func (c *CorrelatedSubQueryOp) Clone() PhysicalOperator {
+func (c *CorrelatedSubQueryOp) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 2)
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
 	copy(columns, c.LHSColumns)
 	result := &CorrelatedSubQueryOp{
-		Outer:      c.Outer.Clone(),
-		Inner:      c.Inner.Clone(),
+		Outer:      inputs[0],
+		Inner:      inputs[1],
 		Extracted:  c.Extracted,
 		LHSColumns: columns,
 	}

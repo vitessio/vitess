@@ -36,7 +36,8 @@ var _ PhysicalOperator = (*Table)(nil)
 func (to *Table) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (to *Table) Clone() PhysicalOperator {
+func (to *Table) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 0)
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))

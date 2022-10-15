@@ -678,8 +678,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs PhysicalOperator, jo
 		}
 
 		join := &ApplyJoin{
-			LHS:      rhs.Clone(),
-			RHS:      lhs.Clone(),
+			LHS:      Clone(rhs),
+			RHS:      Clone(lhs),
 			Vars:     map[string]int{},
 			LeftJoin: !inner,
 		}
@@ -688,8 +688,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs PhysicalOperator, jo
 	}
 
 	join := &ApplyJoin{
-		LHS:      lhs.Clone(),
-		RHS:      rhs.Clone(),
+		LHS:      Clone(lhs),
+		RHS:      Clone(rhs),
 		Vars:     map[string]int{},
 		LeftJoin: !inner,
 	}
@@ -751,7 +751,7 @@ func tryMerge(
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 ) (PhysicalOperator, error) {
-	aRoute, bRoute := operatorsToRoutes(a.Clone(), b.Clone())
+	aRoute, bRoute := operatorsToRoutes(Clone(a), Clone(b))
 	if aRoute == nil || bRoute == nil {
 		return nil, nil
 	}
@@ -1214,7 +1214,7 @@ func pushJoinPredicateOnRoute(ctx *plancontext.PlanningContext, exprs []sqlparse
 }
 
 func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *ApplyJoin) (PhysicalOperator, error) {
-	node = node.Clone().(*ApplyJoin)
+	node = Clone(node).(*ApplyJoin)
 	var rhsPreds []sqlparser.Expr
 	var lhsPreds []sqlparser.Expr
 	var lhsVarsName []string
@@ -1279,7 +1279,7 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 }
 
 func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *PhysDerived) (PhysicalOperator, error) {
-	node = node.Clone().(*PhysDerived)
+	node = Clone(node).(*PhysDerived)
 
 	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
 	for _, expr := range exprs {

@@ -43,7 +43,8 @@ func (u *PhysUpdate) Introduces() semantics.TableSet {
 func (u *PhysUpdate) IPhysical() {}
 
 // Clone implements the PhysicalOperator interface
-func (u *PhysUpdate) Clone() PhysicalOperator {
+func (u *PhysUpdate) Clone(inputs []PhysicalOperator) PhysicalOperator {
+	checkSize(inputs, 0)
 	return &PhysUpdate{
 		QTable:              u.QTable,
 		VTable:              u.VTable,
