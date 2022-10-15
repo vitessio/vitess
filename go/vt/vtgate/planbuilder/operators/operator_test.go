@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -114,7 +113,7 @@ func TestOperator(t *testing.T) {
 	}
 }
 
-func testString(op Operator) string {
+func testString(op interface{}) string { // TODO
 	switch op := op.(type) {
 	case *QueryGraph:
 		return fmt.Sprintf("QueryGraph: %s", op.testString())
