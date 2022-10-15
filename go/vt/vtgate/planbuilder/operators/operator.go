@@ -34,9 +34,6 @@ type (
 	PhysicalOperator interface {
 		IPhysical()
 
-		// Cost is simply the number of routes in the operator tree
-		Cost() int
-
 		// Clone creates a copy of the operator that can be updated without changing the original
 		Clone() PhysicalOperator
 	}

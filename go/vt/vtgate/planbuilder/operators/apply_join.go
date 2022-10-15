@@ -47,11 +47,6 @@ var _ PhysicalOperator = (*ApplyJoin)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (a *ApplyJoin) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (a *ApplyJoin) Cost() int {
-	return a.LHS.Cost() + a.RHS.Cost()
-}
-
 // Clone implements the PhysicalOperator interface
 func (a *ApplyJoin) Clone() PhysicalOperator {
 	varsClone := map[string]int{}

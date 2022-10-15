@@ -41,11 +41,6 @@ func (v *PhysVindex) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (v *PhysVindex) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (v *PhysVindex) Cost() int {
-	return int(engine.EqualUnique)
-}
-
 // Clone implements the PhysicalOperator interface
 func (v *PhysVindex) Clone() PhysicalOperator {
 	clone := *v

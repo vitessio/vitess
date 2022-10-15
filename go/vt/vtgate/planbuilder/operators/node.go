@@ -132,3 +132,17 @@ func CheckValid(op LogicalOperator) error {
 		return nil
 	})
 }
+
+type costly interface {
+	Cost() int
+}
+
+func CostOf(op PhysicalOperator) (cost int) {
+	_ = visitTopDownP(op, func(op PhysicalOperator) error {
+		if costlyOp, ok := op.(costly); ok {
+			cost += costlyOp.Cost()
+		}
+		return nil
+	})
+	return
+}

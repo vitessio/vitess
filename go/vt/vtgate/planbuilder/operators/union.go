@@ -34,15 +34,6 @@ var _ PhysicalOperator = (*Union)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (u *Union) Cost() int {
-	cost := 0
-	for _, source := range u.Sources {
-		cost += source.Cost()
-	}
-	return cost
-}
-
 // Clone implements the PhysicalOperator interface
 func (u *Union) Clone() PhysicalOperator {
 	newOp := *u

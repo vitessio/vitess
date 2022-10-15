@@ -43,11 +43,6 @@ func (u *PhysUpdate) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (u *PhysUpdate) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (u *PhysUpdate) Cost() int {
-	return 1
-}
-
 // Clone implements the PhysicalOperator interface
 func (u *PhysUpdate) Clone() PhysicalOperator {
 	return &PhysUpdate{

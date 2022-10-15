@@ -30,11 +30,6 @@ var _ PhysicalOperator = (*PhysFilter)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (f *PhysFilter) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (f *PhysFilter) Cost() int {
-	return f.Source.Cost()
-}
-
 // Clone implements the PhysicalOperator interface
 func (f *PhysFilter) Clone() PhysicalOperator {
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))

@@ -40,11 +40,6 @@ var _ PhysicalOperator = (*PhysDerived)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (d *PhysDerived) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (d *PhysDerived) Cost() int {
-	return d.Source.Cost()
-}
-
 // Clone implements the PhysicalOperator interface
 func (d *PhysDerived) Clone() PhysicalOperator {
 	clone := *d

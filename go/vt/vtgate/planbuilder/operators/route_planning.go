@@ -612,7 +612,7 @@ func findBestJoin(
 			if err != nil {
 				return nil, 0, 0, err
 			}
-			if bestPlan == nil || plan.Cost() < bestPlan.Cost() {
+			if bestPlan == nil || CostOf(plan) < CostOf(bestPlan) {
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
 				lIdx = i

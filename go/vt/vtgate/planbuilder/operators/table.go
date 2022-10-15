@@ -36,11 +36,6 @@ var _ IntroducesTable = (*Table)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (to *Table) Cost() int {
-	return 0
-}
-
 // Clone implements the PhysicalOperator interface
 func (to *Table) Clone() PhysicalOperator {
 	var columns []*sqlparser.ColName

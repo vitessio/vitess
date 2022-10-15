@@ -40,11 +40,6 @@ func (d *PhysDelete) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (d *PhysDelete) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (d *PhysDelete) Cost() int {
-	return 1
-}
-
 // Clone implements the PhysicalOperator interface
 func (d *PhysDelete) Clone() PhysicalOperator {
 	return &PhysDelete{
