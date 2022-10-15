@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -100,12 +101,10 @@ func TestOperator(t *testing.T) {
 			require.NoError(t, err)
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
-			optree, err := CreateLogicalOperatorFromAST(stmt, semTable)
+			ctx := plancontext.NewPlanningContext(nil, semTable, nil, 0)
+			optree, err := CreateLogicalOperatorFromAST(ctx, stmt)
 			require.NoError(t, err)
 			output := testString(optree)
-			if tc.expected != output {
-				fmt.Println(1)
-			}
 			assert.Equal(t, tc.expected, output)
 			if t.Failed() {
 				fmt.Println(output)
@@ -126,8 +125,8 @@ func testString(op interface{}) string { // TODO
 		}
 		return fmt.Sprintf("Join: {\n\tLHS: %s\n\tRHS: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
 	case *Derived:
-		inner := indent(testString(op.Inner))
-		query := sqlparser.String(op.Sel)
+		inner := indent(testString(op.Source))
+		query := sqlparser.String(op.Query)
 		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.Alias, query, inner)
 	case *SubQuery:
 		var inners []string
