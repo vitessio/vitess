@@ -63,7 +63,9 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (
 	case *Update:
 		return createPhysicalOperatorFromUpdate(ctx, op)
 	case *Delete:
-		return createPhysicalOperatorFromDelete(ctx, op)
+		panic(4)
+	case PhysicalOperator:
+		return op, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
@@ -216,50 +218,6 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 		}
 	}
 	return vindexTable, opCode, dest, nil
-}
-
-func createPhysicalOperatorFromDelete(ctx *plancontext.PlanningContext, op *Delete) (*Route, error) {
-	var ovq string
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, op.TableInfo, op.Table, "delete")
-	if err != nil {
-		return nil, err
-	}
-
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(TableID(op), op.Table.Predicates, vindexTable)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(vindexTable.Owned) > 0 {
-		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: op.Table.Alias.As}
-		ovq = generateOwnedVindexQuery(tblExpr, op.AST, vindexTable, primaryVindex.Columns)
-	}
-
-	r := &Route{
-		Source: &PhysDelete{
-			QTable:           op.Table,
-			VTable:           vindexTable,
-			OwnedVindexQuery: ovq,
-			AST:              op.AST,
-		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vindexAndPredicates,
-		TargetDestination: dest,
-	}
-
-	for _, predicate := range op.Table.Predicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
-	}
-	return r, nil
 }
 
 func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) string {

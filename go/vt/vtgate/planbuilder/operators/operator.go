@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -308,10 +309,45 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
-	u := &Delete{
-		Table:     qt,
-		AST:       deleteStmt,
-		TableInfo: tableInfo,
+	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, tableInfo, qt, "delete")
+	if err != nil {
+		return nil, err
+	}
+
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
+	if err != nil {
+		return nil, err
+	}
+
+	var ovq string
+	if len(vindexTable.Owned) > 0 {
+		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: qt.Alias.As}
+		ovq = generateOwnedVindexQuery(tblExpr, deleteStmt, vindexTable, primaryVindex.Columns)
+	}
+
+	r := &Route{
+		Source: &Delete{
+			QTable:           qt,
+			VTable:           vindexTable,
+			OwnedVindexQuery: ovq,
+			AST:              deleteStmt,
+		},
+		RouteOpCode:       opCode,
+		Keyspace:          vindexTable.Keyspace,
+		VindexPreds:       vindexAndPredicates,
+		TargetDestination: dest,
+	}
+
+	for _, predicate := range qt.Predicates {
+		err := r.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if r.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
+		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
 	}
 
 	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
@@ -319,9 +355,9 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 	if subq == nil {
-		return u, nil
+		return r, nil
 	}
-	subq.Outer = u
+	subq.Outer = r
 	return subq, nil
 }
 

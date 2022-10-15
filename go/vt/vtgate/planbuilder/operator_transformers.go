@@ -111,7 +111,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	switch src := op.Source.(type) {
 	case *operators.PhysUpdate:
 		return transformUpdatePlan(ctx, op, src)
-	case *operators.PhysDelete:
+	case *operators.Delete:
 		return transformDeletePlan(ctx, op, src)
 	}
 	tableNames, err := getAllTableNames(op)
@@ -190,7 +190,7 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.PhysDelete) (logicalPlan, error) {
+func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
 	var vindex vindexes.Vindex
 	var values []evalengine.Expr
 	if op.Selected != nil {
