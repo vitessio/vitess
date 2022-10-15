@@ -71,3 +71,7 @@ func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 		LHSColumns: lhsColumns,
 	}
 }
+
+func (a *ApplyJoin) Inputs() []Operator {
+	return []Operator{a.LHS, a.RHS}
+}

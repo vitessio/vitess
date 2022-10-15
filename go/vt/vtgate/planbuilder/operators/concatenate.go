@@ -39,3 +39,7 @@ func (c *Concatenate) Clone(inputs []Operator) Operator {
 	clone.Sources = inputs
 	return &clone
 }
+
+func (c *Concatenate) Inputs() []Operator {
+	return c.Sources
+}

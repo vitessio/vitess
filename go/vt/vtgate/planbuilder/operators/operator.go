@@ -30,6 +30,7 @@ type (
 		ThisIsAnOperator()
 
 		Clone(inputs []Operator) Operator
+		Inputs() []Operator
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan
@@ -67,7 +68,13 @@ type (
 		// all the necessary information is in the operator
 		CheckValid() error
 	}
+
+	noInputs struct{}
 )
+
+func (noInputs) Inputs() []Operator {
+	return nil
+}
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
 	switch tableExpr := tableExpr.(type) {

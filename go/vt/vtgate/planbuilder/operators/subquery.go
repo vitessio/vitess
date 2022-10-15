@@ -53,6 +53,11 @@ func (s *SubQueryInner) Clone(inputs []Operator) Operator {
 		ExtractedSubquery: sqlparser.CloneRefOfExtractedSubquery(s.ExtractedSubquery),
 	}
 }
+
+func (s *SubQueryInner) Inputs() []Operator {
+	return []Operator{s.Inner}
+}
+
 func (s *SubQuery) Clone(inputs []Operator) Operator {
 	checkSize(inputs, len(s.Inner)+1)
 	result := &SubQuery{
@@ -66,4 +71,12 @@ func (s *SubQuery) Clone(inputs []Operator) Operator {
 		result.Inner = append(result.Inner, inner)
 	}
 	return result
+}
+
+func (s *SubQuery) Inputs() []Operator {
+	operators := []Operator{s.Outer}
+	for _, inner := range s.Inner {
+		operators = append(operators, inner)
+	}
+	return operators
 }

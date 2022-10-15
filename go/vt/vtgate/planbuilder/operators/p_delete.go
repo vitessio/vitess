@@ -27,6 +27,8 @@ type PhysDelete struct {
 	VTable           *vindexes.Table
 	OwnedVindexQuery string
 	AST              *sqlparser.Delete
+
+	noInputs
 }
 
 var _ PhysicalOperator = (*PhysDelete)(nil)

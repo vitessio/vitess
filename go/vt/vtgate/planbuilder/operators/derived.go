@@ -102,3 +102,7 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
 }
+
+func (d *Derived) Inputs() []Operator {
+	return []Operator{d.Source}
+}

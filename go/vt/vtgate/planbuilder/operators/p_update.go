@@ -30,6 +30,8 @@ type PhysUpdate struct {
 	ChangedVindexValues map[string]*engine.VindexValues
 	OwnedVindexQuery    string
 	AST                 *sqlparser.Update
+
+	noInputs
 }
 
 var _ PhysicalOperator = (*PhysUpdate)(nil)

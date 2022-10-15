@@ -130,6 +130,10 @@ func (r *Route) Clone(inputs []Operator) Operator {
 	return &cloneRoute
 }
 
+func (r *Route) Inputs() []Operator {
+	return []Operator{r.Source}
+}
+
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	r.SeenPredicates = append(r.SeenPredicates, expr)
 	return r.tryImprovingVindex(ctx, expr)

@@ -31,6 +31,8 @@ type PhysVindex struct {
 	Solved  semantics.TableSet
 	Columns []*sqlparser.ColName
 	Value   sqlparser.Expr
+
+	noInputs
 }
 
 // Introduces implements the Operator interface

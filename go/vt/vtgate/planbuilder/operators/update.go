@@ -26,6 +26,8 @@ type Update struct {
 	TableInfo   semantics.TableInfo
 	Assignments map[string]sqlparser.Expr
 	AST         *sqlparser.Update
+
+	noInputs
 }
 
 var _ Operator = (*Update)(nil)

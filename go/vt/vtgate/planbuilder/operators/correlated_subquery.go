@@ -59,6 +59,10 @@ func (s *SubQueryOp) Clone(inputs []Operator) Operator {
 	return result
 }
 
+func (s *SubQueryOp) Inputs() []Operator {
+	return []Operator{s.Outer, s.Inner}
+}
+
 // IPhysical implements the PhysicalOperator interface
 func (c *CorrelatedSubQueryOp) IPhysical() {}
 
@@ -76,4 +80,8 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []Operator) Operator {
 		LHSColumns: columns,
 	}
 	return result
+}
+
+func (c *CorrelatedSubQueryOp) Inputs() []Operator {
+	return []Operator{c.Outer, c.Inner}
 }

@@ -39,6 +39,8 @@ type (
 
 		// NoDeps contains the predicates that can be evaluated anywhere.
 		NoDeps sqlparser.Expr
+
+		noInputs
 	}
 
 	innerJoin struct {

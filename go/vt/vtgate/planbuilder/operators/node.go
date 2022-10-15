@@ -6,50 +6,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func inputs(op Operator) []Operator {
-	switch op := op.(type) {
-	case *ApplyJoin:
-		return []Operator{op.LHS, op.RHS}
-	case *CorrelatedSubQueryOp:
-		return []Operator{op.Outer, op.Inner}
-	case *Route:
-		return []Operator{op.Source}
-	case *SubQueryOp:
-		return []Operator{op.Outer, op.Inner}
-	case *Union:
-		var sources []Operator
-		for _, source := range op.Sources {
-			sources = append(sources, source)
-		}
-		return sources
-	case *Concatenate:
-		return op.Sources
-	case *Derived:
-		return []Operator{op.Source}
-	case *Filter:
-		return []Operator{op.Source}
-	case *Join:
-		return []Operator{op.LHS, op.RHS}
-	case *SubQuery:
-		inputs := []Operator{op.Outer}
-		for _, inner := range op.Inner {
-			inputs = append(inputs, inner)
-		}
-		return inputs
-	case *SubQueryInner:
-		return []Operator{op.Inner}
-	case *Delete, *QueryGraph, *Update, *Vindex, *Table, *PhysVindex, *PhysDelete, *PhysUpdate:
-		return nil
-	}
-
-	panic("switch should be exhaustive")
-}
-
 func VisitTopDown(root Operator, visitor func(Operator) error) error {
 	queue := []Operator{root}
 	for len(queue) > 0 {
 		this := queue[0]
-		queue = append(queue[1:], inputs(this)...)
+		queue = append(queue[1:], this.Inputs()...)
 		err := visitor(this)
 		if err != nil {
 			return err
@@ -103,7 +64,7 @@ func Clone(op Operator) Operator {
 	if !ok {
 		panic(fmt.Sprintf("tried to clone an operator that is not cloneable: %T", op))
 	}
-	inputs := inputs(op)
+	inputs := op.Inputs()
 	clones := make([]Operator, len(inputs))
 	for i, input := range inputs {
 		clones[i] = Clone(input)

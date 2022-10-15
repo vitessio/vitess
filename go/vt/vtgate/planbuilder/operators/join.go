@@ -82,3 +82,7 @@ func (j *Join) Clone(inputs []Operator) Operator {
 		LeftJoin:  j.LeftJoin,
 	}
 }
+
+func (j *Join) Inputs() []Operator {
+	return []Operator{j.LHS, j.RHS}
+}

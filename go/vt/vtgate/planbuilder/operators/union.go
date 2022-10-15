@@ -44,3 +44,7 @@ func (u *Union) Clone(inputs []Operator) Operator {
 	newOp.Sources = inputs
 	return &newOp
 }
+
+func (u *Union) Inputs() []Operator {
+	return u.Sources
+}

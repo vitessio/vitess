@@ -28,6 +28,8 @@ type Table struct {
 	QTable  *QueryTable
 	VTable  *vindexes.Table
 	Columns []*sqlparser.ColName
+
+	noInputs
 }
 
 var _ PhysicalOperator = (*Table)(nil)

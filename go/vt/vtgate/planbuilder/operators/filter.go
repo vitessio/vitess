@@ -43,3 +43,7 @@ func (f *Filter) Clone(inputs []Operator) Operator {
 		Predicates: predicatesClone,
 	}
 }
+
+func (d *Filter) Inputs() []Operator {
+	return []Operator{d.Source}
+}

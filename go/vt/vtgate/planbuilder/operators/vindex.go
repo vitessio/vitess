@@ -32,6 +32,8 @@ type (
 		Table  VindexTable
 		Vindex vindexes.Vindex
 		Value  sqlparser.Expr
+
+		noInputs
 	}
 
 	// VindexTable contains information about the vindex table we want to query

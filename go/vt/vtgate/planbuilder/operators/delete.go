@@ -25,6 +25,8 @@ type Delete struct {
 	Table     *QueryTable
 	TableInfo semantics.TableInfo
 	AST       *sqlparser.Delete
+
+	noInputs
 }
 
 var _ Operator = (*Delete)(nil)
