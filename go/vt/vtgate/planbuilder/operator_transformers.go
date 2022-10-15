@@ -55,7 +55,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformCorrelatedSubQueryPlan(ctx, op)
 	case *operators.PhysDerived:
 		return transformDerivedPlan(ctx, op)
-	case *operators.PhysFilter:
+	case *operators.Filter:
 		plan, err := transformToLogicalPlan(ctx, op.Source, false)
 		if err != nil {
 			return nil, err

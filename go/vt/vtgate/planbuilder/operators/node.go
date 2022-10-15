@@ -14,8 +14,6 @@ func inputs(op Operator) []Operator {
 		return []Operator{op.Outer, op.Inner}
 	case *PhysDerived:
 		return []Operator{op.Source}
-	case *PhysFilter:
-		return []Operator{op.Source}
 	case *Route:
 		return []Operator{op.Source}
 	case *SubQueryOp:

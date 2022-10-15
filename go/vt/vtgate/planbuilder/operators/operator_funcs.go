@@ -85,7 +85,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 
 			// finally, if we can't turn the outer join into an inner,
 			// we need to filter after the join has been evaluated
-			return &PhysFilter{
+			return &Filter{
 				Source:     op,
 				Predicates: []sqlparser.Expr{expr},
 			}, nil
@@ -114,11 +114,11 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return &PhysFilter{
+		return &Filter{
 			Source:     op,
 			Predicates: []sqlparser.Expr{expr},
 		}, nil
-	case *PhysFilter:
+	case *Filter:
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
 	case *PhysDerived:
@@ -206,7 +206,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op Operator, columns ..
 			}
 		}
 		return op, offsets, nil
-	case *PhysFilter:
+	case *Filter:
 		newSrc, ints, err := PushOutputColumns(ctx, op.Source, columns...)
 		op.Source = newSrc
 		return op, ints, err
@@ -302,7 +302,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op O
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr))
 		}
 		return op, nil
-	case *PhysFilter:
+	case *Filter:
 		idx := -1
 		for i, predicate := range op.Predicates {
 			if sqlparser.EqualsExpr(predicate, expr) {

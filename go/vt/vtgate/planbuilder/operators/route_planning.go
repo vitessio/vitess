@@ -75,7 +75,7 @@ func optimizeFilter(ctx *plancontext.PlanningContext, op *Filter) (Operator, err
 		return nil, err
 	}
 
-	filter := &PhysFilter{
+	filter := &Filter{
 		Predicates: op.Predicates,
 	}
 
@@ -350,7 +350,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Opera
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source = &PhysFilter{
+			plan.Source = &Filter{
 				Source:     plan.Source,
 				Predicates: []sqlparser.Expr{qg.NoDeps},
 			}
@@ -837,7 +837,7 @@ func leaves(op Operator) (sources []Operator) {
 		// physical
 	case *ApplyJoin:
 		return []Operator{op.LHS, op.RHS}
-	case *PhysFilter:
+	case *Filter:
 		return []Operator{op.Source}
 	case *Route:
 		return []Operator{op.Source}
@@ -1124,7 +1124,7 @@ func pushJoinPredicates(
 		return PushPredicate(ctx, sqlparser.AndExpressions(exprs...), op)
 	case *PhysDerived:
 		return pushJoinPredicateOnDerived(ctx, exprs, op)
-	case *PhysFilter:
+	case *Filter:
 		op.Predicates = append(op.Predicates, exprs...)
 		return op, nil
 	default:

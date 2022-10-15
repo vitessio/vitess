@@ -25,7 +25,21 @@ type Filter struct {
 	Predicates []sqlparser.Expr
 }
 
-var _ Operator = (*Filter)(nil)
+var _ PhysicalOperator = (*Filter)(nil)
+
+// IPhysical implements the PhysicalOperator interface
+func (f *Filter) IPhysical() {}
 
 // ThisIsAnOperator implements the Operator interface
 func (f *Filter) ThisIsAnOperator() {}
+
+// Clone implements the PhysicalOperator interface
+func (f *Filter) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 1)
+	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
+	copy(predicatesClone, f.Predicates)
+	return &Filter{
+		Source:     inputs[0],
+		Predicates: predicatesClone,
+	}
+}

@@ -74,7 +74,7 @@ func buildQuery(op operators.Operator, qb *queryBuilder) {
 		} else {
 			qb.joinInnerWith(qbR, op.Predicate)
 		}
-	case *operators.PhysFilter:
+	case *operators.Filter:
 		buildQuery(op.Source, qb)
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
