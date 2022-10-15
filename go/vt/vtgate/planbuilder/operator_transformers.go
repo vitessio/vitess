@@ -47,7 +47,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformApplyJoinPlan(ctx, op)
 	case *operators.Union:
 		return transformUnionPlan(ctx, op, isRoot)
-	case *operators.PhysVindex:
+	case *operators.Vindex:
 		return transformVindexPlan(ctx, op)
 	case *operators.SubQueryOp:
 		return transformSubQueryPlan(ctx, op)

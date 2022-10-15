@@ -54,8 +54,6 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (
 		return optimizeDerived(ctx, op)
 	case *SubQuery:
 		return optimizeSubQuery(ctx, op)
-	case *Vindex:
-		return optimizeVindex(ctx, op)
 	case *Concatenate:
 		return optimizeUnion(ctx, op)
 	case *Filter:

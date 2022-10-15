@@ -210,7 +210,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op Operator, columns ..
 		newSrc, ints, err := PushOutputColumns(ctx, op.Source, columns...)
 		op.Source = newSrc
 		return op, ints, err
-	case *PhysVindex:
+	case *Vindex:
 		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err
 	case *Derived:

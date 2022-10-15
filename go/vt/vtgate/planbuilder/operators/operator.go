@@ -82,12 +82,17 @@ func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlpar
 			}
 
 			if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
-				return &Vindex{Table: VindexTable{
-					TableID: tableID,
-					Alias:   tableExpr,
-					Table:   tbl,
-					VTable:  vt.Table.GetVindexTable(),
-				}, Vindex: vt.Vindex}, nil
+				solves := ctx.SemTable.TableSetFor(tableExpr)
+				return &Vindex{
+					Table: VindexTable{
+						TableID: tableID,
+						Alias:   tableExpr,
+						Table:   tbl,
+						VTable:  vt.Table.GetVindexTable(),
+					},
+					Vindex: vt.Vindex,
+					Solved: solves,
+				}, nil
 			}
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,12 +26,13 @@ import (
 )
 
 type (
-	// Vindex stores the information about the vindex query
 	Vindex struct {
-		OpCode engine.VindexOpcode
-		Table  VindexTable
-		Vindex vindexes.Vindex
-		Value  sqlparser.Expr
+		OpCode  engine.VindexOpcode
+		Table   VindexTable
+		Vindex  vindexes.Vindex
+		Solved  semantics.TableSet
+		Columns []*sqlparser.ColName
+		Value   sqlparser.Expr
 
 		noInputs
 	}
@@ -46,14 +47,40 @@ type (
 	}
 )
 
-var _ Operator = (*Vindex)(nil)
+const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // Introduces implements the Operator interface
 func (v *Vindex) Introduces() semantics.TableSet {
-	return v.Table.TableID
+	return v.Solved
 }
 
-const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
+// IPhysical implements the PhysicalOperator interface
+func (v *Vindex) IPhysical() {}
+
+// Clone implements the PhysicalOperator interface
+func (v *Vindex) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
+	clone := *v
+	return &clone
+}
+
+var _ PhysicalOperator = (*Vindex)(nil)
+
+func (v *Vindex) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
+	idxs := make([]int, len(columns))
+outer:
+	for i, newCol := range columns {
+		for j, existingCol := range v.Columns {
+			if sqlparser.EqualsExpr(newCol, existingCol) {
+				idxs[i] = j
+				continue outer
+			}
+		}
+		idxs[i] = len(v.Columns)
+		v.Columns = append(v.Columns, newCol)
+	}
+	return idxs, nil
+}
 
 // CheckValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
@@ -62,9 +89,4 @@ func (v *Vindex) CheckValid() error {
 	}
 
 	return nil
-}
-
-func (v *Vindex) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 0)
-	return v
 }
