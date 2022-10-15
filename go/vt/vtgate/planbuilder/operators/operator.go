@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type (
@@ -36,12 +35,6 @@ type (
 
 		// Clone creates a copy of the operator that can be updated without changing the original
 		Clone() PhysicalOperator
-	}
-
-	// IntroducesTable is used to make it possible to gather information about the table an operator introduces
-	IntroducesTable interface {
-		GetQTable() *QueryTable
-		GetVTable() *vindexes.Table
 	}
 )
 

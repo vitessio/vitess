@@ -31,7 +31,6 @@ type Table struct {
 }
 
 var _ PhysicalOperator = (*Table)(nil)
-var _ IntroducesTable = (*Table)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
@@ -57,14 +56,4 @@ func (to *Table) Introduces() semantics.TableSet {
 // PushPredicate implements the PhysicalOperator interface
 func (to *Table) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a Table. It is meant to be immutable")
-}
-
-// GetQTable implements the IntroducesTable interface
-func (to *Table) GetQTable() *QueryTable {
-	return to.QTable
-}
-
-// GetVTable implements the IntroducesTable interface
-func (to *Table) GetVTable() *vindexes.Table {
-	return to.VTable
 }

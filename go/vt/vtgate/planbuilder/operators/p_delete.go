@@ -30,7 +30,6 @@ type PhysDelete struct {
 }
 
 var _ PhysicalOperator = (*PhysDelete)(nil)
-var _ IntroducesTable = (*PhysDelete)(nil)
 
 // Introduces implements the PhysicalOperator interface
 func (d *PhysDelete) Introduces() semantics.TableSet {
@@ -48,14 +47,4 @@ func (d *PhysDelete) Clone() PhysicalOperator {
 		OwnedVindexQuery: d.OwnedVindexQuery,
 		AST:              d.AST,
 	}
-}
-
-// GetQTable implements the IntroducesTable interface
-func (d *PhysDelete) GetQTable() *QueryTable {
-	return d.QTable
-}
-
-// GetVTable implements the IntroducesTable interface
-func (d *PhysDelete) GetVTable() *vindexes.Table {
-	return d.VTable
 }

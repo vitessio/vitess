@@ -930,16 +930,25 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a PhysicalOperator, exp 
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = VisitOperators(a, func(rel PhysicalOperator) (bool, error) {
-			to, isTableOp := rel.(IntroducesTable)
+			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
 				return true, nil
 			}
-			if deps.IsSolvedBy(to.GetQTable().ID) {
-				for _, vindex := range to.GetVTable().ColumnVindexes {
-					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
-					if isSingle && vindex.Columns[0].Equal(col.Name) {
-						singCol = sC
-						return false, io.EOF
+			id := to.Introduces()
+			if deps.IsSolvedBy(id) {
+				tableInfo, err := ctx.SemTable.TableInfoFor(id)
+				if err != nil {
+					// an error here is OK, we just can't ask this operator about its column vindexes
+					return true, nil
+				}
+				vtable := tableInfo.GetVindexTable()
+				if vtable != nil {
+					for _, vindex := range vtable.ColumnVindexes {
+						sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+						if isSingle && vindex.Columns[0].Equal(col.Name) {
+							singCol = sC
+							return false, io.EOF
+						}
 					}
 				}
 			}

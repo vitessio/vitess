@@ -33,7 +33,6 @@ type PhysUpdate struct {
 }
 
 var _ PhysicalOperator = (*PhysUpdate)(nil)
-var _ IntroducesTable = (*PhysUpdate)(nil)
 
 // Introduces implements the PhysicalOperator interface
 func (u *PhysUpdate) Introduces() semantics.TableSet {
@@ -53,14 +52,4 @@ func (u *PhysUpdate) Clone() PhysicalOperator {
 		OwnedVindexQuery:    u.OwnedVindexQuery,
 		AST:                 u.AST,
 	}
-}
-
-// GetQTable implements the IntroducesTable interface
-func (u *PhysUpdate) GetQTable() *QueryTable {
-	return u.QTable
-}
-
-// GetVTable implements the IntroducesTable interface
-func (u *PhysUpdate) GetVTable() *vindexes.Table {
-	return u.VTable
 }
