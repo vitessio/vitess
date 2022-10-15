@@ -18,26 +18,41 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Update struct {
-	Table       *QueryTable
-	TableInfo   semantics.TableInfo
-	Assignments map[string]sqlparser.Expr
-	AST         *sqlparser.Update
+	QTable              *QueryTable
+	VTable              *vindexes.Table
+	Assignments         map[string]sqlparser.Expr
+	ChangedVindexValues map[string]*engine.VindexValues
+	OwnedVindexQuery    string
+	AST                 *sqlparser.Update
 
 	noInputs
 }
 
-var _ Operator = (*Update)(nil)
+var _ PhysicalOperator = (*Update)(nil)
 
-// Introduces implements the Operator interface
+// Introduces implements the PhysicalOperator interface
 func (u *Update) Introduces() semantics.TableSet {
-	return u.Table.ID
+	return u.QTable.ID
 }
 
+// IPhysical implements the PhysicalOperator interface
+func (u *Update) IPhysical() {}
+
+// Clone implements the PhysicalOperator interface
 func (u *Update) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
-	return u
+	return &Update{
+		QTable:              u.QTable,
+		VTable:              u.VTable,
+		Assignments:         u.Assignments,
+		ChangedVindexValues: u.ChangedVindexValues,
+		OwnedVindexQuery:    u.OwnedVindexQuery,
+		AST:                 u.AST,
+	}
 }

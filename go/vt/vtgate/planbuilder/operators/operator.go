@@ -251,11 +251,41 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		assignments[set.Name.Name.String()] = set.Expr
 	}
 
-	u := &Update{
-		Table:       qt,
-		Assignments: assignments,
-		AST:         updStmt,
-		TableInfo:   tableInfo,
+	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, tableInfo, qt, "update")
+	if err != nil {
+		return nil, err
+	}
+
+	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &Route{
+		Source: &Update{
+			QTable:              qt,
+			VTable:              vindexTable,
+			Assignments:         assignments,
+			ChangedVindexValues: cvv,
+			OwnedVindexQuery:    ovq,
+			AST:                 updStmt,
+		},
+		RouteOpCode:       opCode,
+		Keyspace:          vindexTable.Keyspace,
+		VindexPreds:       vp,
+		TargetDestination: dest,
+	}
+
+	for _, predicate := range qt.Predicates {
+		err := r.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if r.RouteOpCode == engine.Scatter && updStmt.Limit != nil {
+		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
 	}
 
 	subq, err := createSubqueryFromStatement(ctx, updStmt)
@@ -263,9 +293,9 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, err
 	}
 	if subq == nil {
-		return u, nil
+		return r, nil
 	}
-	subq.Outer = u
+	subq.Outer = r
 	return subq, nil
 }
 

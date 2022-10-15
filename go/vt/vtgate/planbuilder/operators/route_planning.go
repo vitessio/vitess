@@ -60,10 +60,6 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (
 		return optimizeUnion(ctx, op)
 	case *Filter:
 		return optimizeFilter(ctx, op)
-	case *Update:
-		return createPhysicalOperatorFromUpdate(ctx, op)
-	case *Delete:
-		panic(4)
 	case PhysicalOperator:
 		return op, nil
 	default:
@@ -152,47 +148,6 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (Opera
 	}
 }
 
-func createPhysicalOperatorFromUpdate(ctx *plancontext.PlanningContext, op *Update) (Operator, error) {
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, op.TableInfo, op.Table, "update")
-	if err != nil {
-		return nil, err
-	}
-
-	vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
-	if err != nil {
-		return nil, err
-	}
-
-	r := &Route{
-		Source: &PhysUpdate{
-			QTable:              op.Table,
-			VTable:              vindexTable,
-			Assignments:         op.Assignments,
-			ChangedVindexValues: cvv,
-			OwnedVindexQuery:    ovq,
-			AST:                 op.AST,
-		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vp,
-		TargetDestination: dest,
-	}
-
-	for _, predicate := range op.Table.Predicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
-	}
-
-	return r, nil
-}
-
 func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantics.TableInfo, table *QueryTable, dmlType string) (*vindexes.Table, engine.Opcode, key.Destination, error) {
 	vindexTable := tableInfo.GetVindexTable()
 	opCode := engine.Unsharded
@@ -238,16 +193,22 @@ func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete
 	return buf.String()
 }
 
-func getUpdateVindexInformation(op *Update, vindexTable *vindexes.Table) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
+func getUpdateVindexInformation(
+	updStmt *sqlparser.Update,
+	vindexTable *vindexes.Table,
+	tableID semantics.TableSet,
+	predicates []sqlparser.Expr,
+) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
 	if !vindexTable.Keyspace.Sharded {
 		return nil, nil, "", nil
 	}
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(TableID(op), op.Table.Predicates, vindexTable)
+
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(tableID, predicates, vindexTable)
 	if err != nil {
 		return nil, nil, "", err
 	}
 
-	changedVindexValues, ownedVindexQuery, err := buildChangedVindexesValues(op.AST, vindexTable, primaryVindex.Columns)
+	changedVindexValues, ownedVindexQuery, err := buildChangedVindexesValues(updStmt, vindexTable, primaryVindex.Columns)
 	if err != nil {
 		return nil, nil, "", err
 	}

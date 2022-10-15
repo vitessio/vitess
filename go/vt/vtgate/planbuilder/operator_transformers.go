@@ -109,7 +109,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
-	case *operators.PhysUpdate:
+	case *operators.Update:
 		return transformUpdatePlan(ctx, op, src)
 	case *operators.Delete:
 		return transformDeletePlan(ctx, op, src)
@@ -146,7 +146,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 }
 
-func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.PhysUpdate) (logicalPlan, error) {
+func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
 	var vindex vindexes.Vindex
 	var values []evalengine.Expr
 	if op.Selected != nil {

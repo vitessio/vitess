@@ -164,7 +164,7 @@ func testString(op interface{}) string { // TODO
 		}
 		return fmt.Sprintf("Concatenate%s {\n%s\n}", dist, strings.Join(inners, ",\n"))
 	case *Update:
-		tbl := "table: " + op.Table.testString()
+		tbl := "table: " + op.QTable.testString()
 		var assignments []string
 		// sort to produce stable results, otherwise test is flaky
 		keys := make([]string, 0, len(op.Assignments))
