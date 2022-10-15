@@ -22,8 +22,8 @@ import (
 
 // SubQuery stores the information about subquery
 type SubQuery struct {
-	Inner []*SubQueryInner
 	Outer Operator
+	Inner []*SubQueryInner
 }
 
 var _ Operator = (*SubQuery)(nil)
@@ -44,4 +44,26 @@ type SubQueryInner struct {
 
 	// ExtractedSubquery contains all information we need about this subquery
 	ExtractedSubquery *sqlparser.ExtractedSubquery
+}
+
+func (s *SubQueryInner) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 1)
+	return &SubQueryInner{
+		Inner:             inputs[0],
+		ExtractedSubquery: sqlparser.CloneRefOfExtractedSubquery(s.ExtractedSubquery),
+	}
+}
+func (s *SubQuery) Clone(inputs []Operator) Operator {
+	checkSize(inputs, len(s.Inner)+1)
+	result := &SubQuery{
+		Outer: inputs[0],
+	}
+	for idx := range s.Inner {
+		inner, ok := inputs[idx+1].(*SubQueryInner)
+		if !ok {
+			panic("got bad input")
+		}
+		result.Inner = append(result.Inner, inner)
+	}
+	return result
 }

@@ -69,3 +69,16 @@ func (j *Join) tryConvertToInnerJoin(ctx *plancontext.PlanningContext, expr sqlp
 		}
 	}
 }
+
+func (j *Join) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 2)
+	clone := *j
+	clone.LHS = inputs[0]
+	clone.RHS = inputs[1]
+	return &Join{
+		LHS:       inputs[0],
+		RHS:       inputs[1],
+		Predicate: sqlparser.CloneExpr(j.Predicate),
+		LeftJoin:  j.LeftJoin,
+	}
+}

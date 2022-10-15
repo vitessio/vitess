@@ -173,3 +173,20 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 	}
 	return result
 }
+
+func (qg *QueryGraph) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
+	result := &QueryGraph{
+		Tables:     nil,
+		innerJoins: nil,
+		NoDeps:     nil,
+	}
+	for _, table := range qg.Tables {
+		result.Tables = append(result.Tables, table)
+	}
+	for _, join := range qg.innerJoins {
+		result.innerJoins = append(result.innerJoins, join)
+	}
+	result.NoDeps = sqlparser.CloneExpr(qg.NoDeps)
+	return result
+}

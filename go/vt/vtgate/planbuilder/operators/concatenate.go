@@ -33,3 +33,9 @@ var _ Operator = (*Concatenate)(nil)
 
 // ThisIsAnOperator implements the Operator interface
 func (*Concatenate) ThisIsAnOperator() {}
+
+func (c *Concatenate) Clone(inputs []Operator) Operator {
+	clone := *c
+	clone.Sources = inputs
+	return &clone
+}

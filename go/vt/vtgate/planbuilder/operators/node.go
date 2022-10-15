@@ -22,8 +22,6 @@ func inputs(op Operator) []Operator {
 			sources = append(sources, source)
 		}
 		return sources
-	case *Table, *PhysVindex, *PhysDelete, *PhysUpdate:
-		return nil
 	case *Concatenate:
 		return op.Sources
 	case *Derived:
@@ -40,7 +38,7 @@ func inputs(op Operator) []Operator {
 		return inputs
 	case *SubQueryInner:
 		return []Operator{op.Inner}
-	case *Delete, *QueryGraph, *Update, *Vindex:
+	case *Delete, *QueryGraph, *Update, *Vindex, *Table, *PhysVindex, *PhysDelete, *PhysUpdate:
 		return nil
 	}
 

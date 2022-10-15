@@ -28,6 +28,8 @@ type (
 	// Operator forms the tree of operators, representing the declarative query provided.
 	Operator interface {
 		ThisIsAnOperator()
+
+		Clone(inputs []Operator) Operator
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan

@@ -64,3 +64,8 @@ func (v *Vindex) CheckValid() error {
 
 	return nil
 }
+
+func (v *Vindex) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
+	return v
+}

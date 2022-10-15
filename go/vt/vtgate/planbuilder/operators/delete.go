@@ -36,3 +36,8 @@ func (d *Delete) Introduces() semantics.TableSet {
 
 // ThisIsAnOperator implements the Operator interface
 func (d *Delete) ThisIsAnOperator() {}
+
+func (d *Delete) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
+	return d
+}
