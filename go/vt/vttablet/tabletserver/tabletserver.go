@@ -863,6 +863,8 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			if transactionID != 0 {
 				connID = transactionID
 			}
+			logStats.ReservedID = reservedID
+			logStats.TransactionID = transactionID
 
 			var connSetting *pools.Setting
 			if len(settings) > 0 {

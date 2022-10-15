@@ -126,6 +126,7 @@ var (
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
+		"vttablet_prscomplex",
 	}
 
 	clusterSelfHostedList       = []string{}
