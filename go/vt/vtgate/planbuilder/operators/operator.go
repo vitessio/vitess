@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -66,13 +67,13 @@ type (
 	}
 )
 
-func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (Operator, error) {
+func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
 		case sqlparser.TableName:
-			tableID := semTable.TableSetFor(tableExpr)
-			tableInfo, err := semTable.TableInfoFor(tableID)
+			tableID := ctx.SemTable.TableSetFor(tableExpr)
+			tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
 			if err != nil {
 				return nil, err
 			}
@@ -91,7 +92,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
-			inner, err := CreateLogicalOperatorFromAST(tbl.Select, semTable)
+			inner, err := CreateLogicalOperatorFromAST(ctx, tbl.Select)
 			if err != nil {
 				return nil, err
 			}
@@ -102,28 +103,28 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 	case *sqlparser.JoinTableExpr:
 		switch tableExpr.Join {
 		case sqlparser.NormalJoinType:
-			lhs, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
+			lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
 			if err != nil {
 				return nil, err
 			}
-			rhs, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
+			rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr)
 			if err != nil {
 				return nil, err
 			}
 			op := createJoin(lhs, rhs)
 			if tableExpr.Condition.On != nil {
-				op, err = LogicalPushPredicate(op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), semTable)
+				op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
 				if err != nil {
 					return nil, err
 				}
 			}
 			return op, nil
 		case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-			lhs, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
+			lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
 			if err != nil {
 				return nil, err
 			}
-			rhs, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
+			rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr)
 			if err != nil {
 				return nil, err
 			}
@@ -135,16 +136,16 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
 	case *sqlparser.ParenTableExpr:
-		return crossJoin(tableExpr.Exprs, semTable)
+		return crossJoin(ctx, tableExpr.Exprs)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T table type", tableExpr)
 	}
 }
 
-func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operator, error) {
+func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (Operator, error) {
 	var output Operator
 	for _, tableExpr := range exprs {
-		op, err := getOperatorFromTableExpr(tableExpr, semTable)
+		op, err := getOperatorFromTableExpr(ctx, tableExpr)
 		if err != nil {
 			return nil, err
 		}
@@ -167,27 +168,27 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 }
 
 // CreateLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateLogicalOperatorFromAST(selStmt sqlparser.Statement, semTable *semantics.SemTable) (op Operator, err error) {
+func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
-		op, err = createOperatorFromSelect(node, semTable)
+		op, err = createOperatorFromSelect(ctx, node)
 	case *sqlparser.Union:
-		op, err = createOperatorFromUnion(node, semTable)
+		op, err = createOperatorFromUnion(ctx, node)
 	case *sqlparser.Update:
-		op, err = createOperatorFromUpdate(node, semTable)
+		op, err = createOperatorFromUpdate(ctx, node)
 	case *sqlparser.Delete:
-		op, err = createOperatorFromDelete(node, semTable)
+		op, err = createOperatorFromDelete(ctx, node)
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 	}
 	if err != nil {
 		return nil, err
 	}
-	return Compact(op, semTable)
+	return Compact(ctx, op)
 }
 
-func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
-	opLHS, err := CreateLogicalOperatorFromAST(node.Left, semTable)
+func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
+	opLHS, err := CreateLogicalOperatorFromAST(ctx, node.Left)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +197,7 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	if isRHSUnion {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
 	}
-	opRHS, err := CreateLogicalOperatorFromAST(node.Right, semTable)
+	opRHS, err := CreateLogicalOperatorFromAST(ctx, node.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -210,23 +211,23 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 }
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
-func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
-	subq, err := createSubqueryFromStatement(sel, semTable)
+func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (Operator, error) {
+	subq, err := createSubqueryFromStatement(ctx, sel)
 	if err != nil {
 		return nil, err
 	}
-	op, err := crossJoin(sel.From, semTable)
+	op, err := crossJoin(ctx, sel.From)
 	if err != nil {
 		return nil, err
 	}
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = LogicalPushPredicate(op, sqlparser.RemoveKeyspaceFromColName(expr), semTable)
+			op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(expr))
 			if err != nil {
 				return nil, err
 			}
-			addColumnEquality(semTable, expr)
+			addColumnEquality(ctx, expr)
 		}
 	}
 	if subq == nil {
@@ -236,8 +237,8 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	return subq, nil
 }
 
-func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.SemTable) (Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(updStmt.TableExprs[0], semTable, updStmt.Where)
+func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, error) {
+	tableInfo, qt, err := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +255,7 @@ func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.Sem
 		TableInfo:   tableInfo,
 	}
 
-	subq, err := createSubqueryFromStatement(updStmt, semTable)
+	subq, err := createSubqueryFromStatement(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +266,7 @@ func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.Sem
 	return subq, nil
 }
 
-func createQueryTableForDML(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
+func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
 	alTbl, ok := tableExpr.(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
@@ -275,8 +276,8 @@ func createQueryTableForDML(tableExpr sqlparser.TableExpr, semTable *semantics.S
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
 	}
 
-	tableID := semTable.TableSetFor(alTbl)
-	tableInfo, err := semTable.TableInfoFor(tableID)
+	tableID := ctx.SemTable.TableSetFor(alTbl)
+	tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -299,8 +300,8 @@ func createQueryTableForDML(tableExpr sqlparser.TableExpr, semTable *semantics.S
 	return tableInfo, qt, nil
 }
 
-func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.SemTable) (Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(deleteStmt.TableExprs[0], semTable, deleteStmt.Where)
+func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (Operator, error) {
+	tableInfo, qt, err := createQueryTableForDML(ctx, deleteStmt.TableExprs[0], deleteStmt.Where)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +312,7 @@ func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.
 		TableInfo: tableInfo,
 	}
 
-	subq, err := createSubqueryFromStatement(deleteStmt, semTable)
+	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -322,13 +323,13 @@ func createOperatorFromDelete(deleteStmt *sqlparser.Delete, semTable *semantics.
 	return subq, nil
 }
 
-func createSubqueryFromStatement(stmt sqlparser.Statement, semTable *semantics.SemTable) (*SubQuery, error) {
-	if len(semTable.SubqueryMap[stmt]) == 0 {
+func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
+	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
 		return nil, nil
 	}
 	subq := &SubQuery{}
-	for _, sq := range semTable.SubqueryMap[stmt] {
-		opInner, err := CreateLogicalOperatorFromAST(sq.Subquery.Select, semTable)
+	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
+		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
 		if err != nil {
 			return nil, err
 		}
@@ -340,7 +341,7 @@ func createSubqueryFromStatement(stmt sqlparser.Statement, semTable *semantics.S
 	return subq, nil
 }
 
-func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
+func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	switch expr := expr.(type) {
 	case *sqlparser.ComparisonExpr:
 		if expr.Operator != sqlparser.EqualOp {
@@ -348,10 +349,10 @@ func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 		}
 
 		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
-			semTable.AddColumnEquality(left, expr.Right)
+			ctx.SemTable.AddColumnEquality(left, expr.Right)
 		}
 		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
-			semTable.AddColumnEquality(right, expr.Left)
+			ctx.SemTable.AddColumnEquality(right, expr.Left)
 		}
 	}
 }

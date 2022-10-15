@@ -18,7 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
@@ -43,7 +43,7 @@ func (*Join) ThisIsAnOperator() {}
 // side did not match, we might as well turn the join into an inner join.
 //
 // This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
-func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.SemTable) {
+func (j *Join) tryConvertToInnerJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	if !j.LeftJoin {
 		return
 	}
@@ -54,8 +54,8 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 			return
 		}
 
-		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) ||
-			sqlparser.IsColName(expr.Right) && semTable.RecursiveDeps(expr.Right).IsSolvedBy(TableID(j.RHS)) {
+		if sqlparser.IsColName(expr.Left) && ctx.SemTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) ||
+			sqlparser.IsColName(expr.Right) && ctx.SemTable.RecursiveDeps(expr.Right).IsSolvedBy(TableID(j.RHS)) {
 			j.LeftJoin = false
 		}
 
@@ -64,7 +64,7 @@ func (j *Join) tryConvertToInnerJoin(expr sqlparser.Expr, semTable *semantics.Se
 			return
 		}
 
-		if sqlparser.IsColName(expr.Left) && semTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) {
+		if sqlparser.IsColName(expr.Left) && ctx.SemTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) {
 			j.LeftJoin = false
 		}
 	}

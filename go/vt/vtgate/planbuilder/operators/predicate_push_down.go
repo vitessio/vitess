@@ -21,29 +21,30 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func LogicalPushPredicate(op Operator, expr sqlparser.Expr, semTable *semantics.SemTable) (Operator, error) {
+func LogicalPushPredicate(ctx *plancontext.PlanningContext, op Operator, expr sqlparser.Expr) (Operator, error) {
 	switch op := op.(type) {
 	case *Concatenate:
-		return pushPredicateOnConcatenate(expr, semTable, op)
+		return pushPredicateOnConcatenate(ctx, expr, op)
 	case *Derived:
-		return pushPredicateOnDerived(expr, semTable, op)
+		return pushPredicateOnDerived(ctx, expr, op)
 	case *Filter:
-		return pushPredicateOnFilter(expr, semTable, op)
+		return pushPredicateOnFilter(ctx, expr, op)
 	case *Join:
-		return pushPredicateOnJoin(expr, semTable, op)
+		return pushPredicateOnJoin(ctx, expr, op)
 	case *QueryGraph:
-		return pushPredicateOnQG(expr, semTable, op)
+		return pushPredicateOnQG(ctx, expr, op)
 	case *Vindex:
-		return pushPredicateOnVindex(expr, semTable, op)
+		return pushPredicateOnVindex(ctx, expr, op)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[%T] can't accept predicates", op)
 	}
 }
 
-func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTable, c *Concatenate) (Operator, error) {
+func pushPredicateOnConcatenate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, c *Concatenate) (Operator, error) {
 	newSources := make([]Operator, 0, len(c.Sources))
 	for index, source := range c.Sources {
 		if len(c.SelectStmts[index].SelectExprs) != 1 {
@@ -53,7 +54,7 @@ func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTabl
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 		}
 
-		newSrc, err := LogicalPushPredicate(source, expr, semTable)
+		newSrc, err := LogicalPushPredicate(ctx, source, expr)
 		if err != nil {
 			return nil, err
 		}
@@ -63,8 +64,8 @@ func pushPredicateOnConcatenate(expr sqlparser.Expr, semTable *semantics.SemTabl
 	return c, nil
 }
 
-func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d *Derived) (Operator, error) {
-	tableInfo, err := semTable.TableInfoForExpr(expr)
+func pushPredicateOnDerived(ctx *plancontext.PlanningContext, expr sqlparser.Expr, d *Derived) (Operator, error) {
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrMultipleTables {
 			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
@@ -76,13 +77,13 @@ func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d
 	if err != nil {
 		return nil, err
 	}
-	newSrc, err := LogicalPushPredicate(d.Source, newExpr, semTable)
+	newSrc, err := LogicalPushPredicate(ctx, d.Source, newExpr)
 	d.Source = newSrc
 	return d, err
 }
 
-func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f *Filter) (Operator, error) {
-	op, err := LogicalPushPredicate(f.Source, expr, semTable)
+func pushPredicateOnFilter(ctx *plancontext.PlanningContext, expr sqlparser.Expr, f *Filter) (Operator, error) {
+	op, err := LogicalPushPredicate(ctx, f.Source, expr)
 	if err != nil {
 		return nil, err
 	}
@@ -98,11 +99,11 @@ func pushPredicateOnFilter(expr sqlparser.Expr, semTable *semantics.SemTable, f 
 	}, nil
 }
 
-func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *Join) (Operator, error) {
-	deps := semTable.RecursiveDeps(expr)
+func pushPredicateOnJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr, j *Join) (Operator, error) {
+	deps := ctx.SemTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(TableID(j.LHS)):
-		lhs, err := LogicalPushPredicate(j.LHS, expr, semTable)
+		lhs, err := LogicalPushPredicate(ctx, j.LHS, expr)
 		if err != nil {
 			return nil, err
 		}
@@ -110,10 +111,10 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 		return j, nil
 
 	case deps.IsSolvedBy(TableID(j.RHS)):
-		j.tryConvertToInnerJoin(expr, semTable)
+		j.tryConvertToInnerJoin(ctx, expr)
 
 		if !j.LeftJoin {
-			rhs, err := LogicalPushPredicate(j.RHS, expr, semTable)
+			rhs, err := LogicalPushPredicate(ctx, j.RHS, expr)
 			if err != nil {
 				return nil, err
 			}
@@ -128,7 +129,7 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 		return op, nil
 
 	case deps.IsSolvedBy(TableID(j)):
-		j.tryConvertToInnerJoin(expr, semTable)
+		j.tryConvertToInnerJoin(ctx, expr)
 
 		if !j.LeftJoin {
 			j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
@@ -145,9 +146,9 @@ func pushPredicateOnJoin(expr sqlparser.Expr, semTable *semantics.SemTable, j *J
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
-func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *QueryGraph) (Operator, error) {
+func pushPredicateOnQG(ctx *plancontext.PlanningContext, expr sqlparser.Expr, qg *QueryGraph) (Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		err := qg.collectPredicate(e, semTable)
+		err := qg.collectPredicate(ctx, e)
 		if err != nil {
 			return nil, err
 		}
@@ -155,9 +156,9 @@ func pushPredicateOnQG(expr sqlparser.Expr, semTable *semantics.SemTable, qg *Qu
 	return qg, nil
 }
 
-func pushPredicateOnVindex(expr sqlparser.Expr, semTable *semantics.SemTable, v *Vindex) (Operator, error) {
+func pushPredicateOnVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr, v *Vindex) (Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		deps := semTable.RecursiveDeps(e)
+		deps := ctx.SemTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
 		}

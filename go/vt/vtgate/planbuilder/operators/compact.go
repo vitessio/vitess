@@ -18,11 +18,11 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Compact will optimise the operator tree into a smaller but equivalent version
-func Compact(op Operator, semTable *semantics.SemTable) (Operator, error) {
+func Compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
 	switch op := op.(type) {
 	case *Concatenate:
 		compactConcatenate(op)
@@ -31,7 +31,7 @@ func Compact(op Operator, semTable *semantics.SemTable) (Operator, error) {
 			return op.Source, nil
 		}
 	case *Join:
-		return compactJoin(op, semTable)
+		return compactJoin(ctx, op)
 	}
 
 	return op, nil
@@ -64,7 +64,7 @@ func compactConcatenate(op *Concatenate) {
 	op.SelectStmts = newSels
 }
 
-func compactJoin(op *Join, semTable *semantics.SemTable) (Operator, error) {
+func compactJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, error) {
 	if op.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return op, nil
@@ -81,7 +81,7 @@ func compactJoin(op *Join, semTable *semantics.SemTable) (Operator, error) {
 		innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
 		NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
-	err := newOp.collectPredicate(op.Predicate, semTable)
+	err := newOp.collectPredicate(ctx, op.Predicate)
 	if err != nil {
 		return nil, err
 	}

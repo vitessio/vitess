@@ -202,7 +202,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	logical, err := operators.CreateLogicalOperatorFromAST(selStmt, semTable)
+	logical, err := operators.CreateLogicalOperatorFromAST(ctx, selStmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -314,7 +314,9 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	logical, err := operators.CreateLogicalOperatorFromAST(updStmt, semTable)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+
+	logical, err := operators.CreateLogicalOperatorFromAST(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -322,8 +324,6 @@ func gen4UpdateStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
@@ -402,7 +402,8 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	logical, err := operators.CreateLogicalOperatorFromAST(deleteStmt, semTable)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	logical, err := operators.CreateLogicalOperatorFromAST(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -410,8 +411,6 @@ func gen4DeleteStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
 	if err != nil {

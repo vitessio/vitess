@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -88,11 +89,11 @@ func newQueryGraph() *QueryGraph {
 	return &QueryGraph{}
 }
 
-func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) collectPredicates(ctx *plancontext.PlanningContext, sel *sqlparser.Select) error {
 	predicates := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 
 	for _, predicate := range predicates {
-		err := qg.collectPredicate(predicate, semTable)
+		err := qg.collectPredicate(ctx, predicate)
 		if err != nil {
 			return err
 		}
@@ -122,8 +123,8 @@ func (qg *QueryGraph) addJoinPredicates(ts semantics.TableSet, expr sqlparser.Ex
 	})
 }
 
-func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.RecursiveDeps(predicate)
+func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) error {
+	deps := ctx.SemTable.RecursiveDeps(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
