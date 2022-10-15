@@ -47,7 +47,7 @@ var _ PhysicalOperator = (*ApplyJoin)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (a *ApplyJoin) IPhysical() {}
 
-// Clone implements the PhysicalOperator interface
+// Clone implements the Operator interface
 func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	varsClone := map[string]int{}
@@ -69,6 +69,7 @@ func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 	}
 }
 
+// Inputs implements the Operator interface
 func (a *ApplyJoin) Inputs() []Operator {
 	return []Operator{a.LHS, a.RHS}
 }

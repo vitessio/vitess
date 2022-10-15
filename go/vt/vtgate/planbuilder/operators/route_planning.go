@@ -44,6 +44,17 @@ type (
 	opCacheMap map[tableSetPair]Operator
 )
 
+func mapToPhys(ctx *plancontext.PlanningContext, ops []Operator) (sources []Operator, err error) {
+	for _, in := range ops {
+		physOp, err := CreatePhysicalOperator(ctx, in)
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, physOp)
+	}
+	return
+}
+
 func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (Operator, error) {
 	switch op := opTree.(type) {
 	case *QueryGraph:
@@ -54,12 +65,14 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (
 		return optimizeDerived(ctx, op)
 	case *SubQuery:
 		return optimizeSubQuery(ctx, op)
-	case *Concatenate:
-		return optimizeUnion(ctx, op)
 	case *Filter:
 		return optimizeFilter(ctx, op)
 	case PhysicalOperator:
-		return op, nil
+		inputs, err := mapToPhys(ctx, op.Inputs())
+		if err != nil {
+			return nil, err
+		}
+		return op.Clone(inputs), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
@@ -928,25 +941,6 @@ func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredic
 		}
 	}
 	return false
-}
-
-func optimizeUnion(ctx *plancontext.PlanningContext, op *Concatenate) (Operator, error) {
-	var sources []Operator
-
-	for _, source := range op.Sources {
-		qt, err := CreatePhysicalOperator(ctx, source)
-		if err != nil {
-			return nil, err
-		}
-
-		sources = append(sources, qt)
-	}
-	return &Union{
-		Sources:     sources,
-		SelectStmts: op.SelectStmts,
-		Distinct:    op.Distinct,
-		Ordering:    op.OrderBy,
-	}, nil
 }
 
 func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {

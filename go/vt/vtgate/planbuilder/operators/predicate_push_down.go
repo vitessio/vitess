@@ -27,7 +27,7 @@ import (
 
 func LogicalPushPredicate(ctx *plancontext.PlanningContext, op Operator, expr sqlparser.Expr) (Operator, error) {
 	switch op := op.(type) {
-	case *Concatenate:
+	case *Union:
 		return pushPredicateOnConcatenate(ctx, expr, op)
 	case *Derived:
 		return pushPredicateOnDerived(ctx, expr, op)
@@ -44,7 +44,7 @@ func LogicalPushPredicate(ctx *plancontext.PlanningContext, op Operator, expr sq
 	}
 }
 
-func pushPredicateOnConcatenate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, c *Concatenate) (Operator, error) {
+func pushPredicateOnConcatenate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, c *Union) (Operator, error) {
 	newSources := make([]Operator, 0, len(c.Sources))
 	for index, source := range c.Sources {
 		if len(c.SelectStmts[index].SelectExprs) != 1 {

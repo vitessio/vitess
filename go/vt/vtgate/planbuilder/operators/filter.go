@@ -30,7 +30,7 @@ var _ PhysicalOperator = (*Filter)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (f *Filter) IPhysical() {}
 
-// Clone implements the PhysicalOperator interface
+// Clone implements the Operator interface
 func (f *Filter) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
@@ -41,6 +41,7 @@ func (f *Filter) Clone(inputs []Operator) Operator {
 	}
 }
 
+// Inputs implements the Operator interface
 func (d *Filter) Inputs() []Operator {
 	return []Operator{d.Source}
 }

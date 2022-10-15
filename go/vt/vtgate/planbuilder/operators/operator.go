@@ -66,6 +66,7 @@ type (
 	noInputs struct{}
 )
 
+// Inputs implements the Operator interface
 func (noInputs) Inputs() []Operator {
 	return nil
 }
@@ -209,12 +210,12 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	if err != nil {
 		return nil, err
 	}
-	return &Concatenate{
+
+	return &Union{
 		Distinct:    node.Distinct,
 		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
 		Sources:     []Operator{opLHS, opRHS},
-		OrderBy:     node.OrderBy,
-		Limit:       node.Limit,
+		Ordering:    node.OrderBy,
 	}, nil
 }
 

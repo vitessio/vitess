@@ -40,16 +40,13 @@ Concatenate {
 
 (select id from unsharded union all select id from unsharded_auto limit 10) union select id from x order by id
 Concatenate(distinct) {
-	Concatenate {
-		QueryGraph: {
-		Tables:
-			TableSet{0}:unsharded
-		},
-		QueryGraph: {
-		Tables:
-			TableSet{1}:unsharded_auto
-		},
-		limit 10
+	QueryGraph: {
+	Tables:
+		TableSet{0}:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		TableSet{1}:unsharded_auto
 	},
 	QueryGraph: {
 	Tables:

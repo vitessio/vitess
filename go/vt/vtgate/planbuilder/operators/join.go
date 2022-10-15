@@ -67,6 +67,7 @@ func (j *Join) tryConvertToInnerJoin(ctx *plancontext.PlanningContext, expr sqlp
 	}
 }
 
+// Clone implements the Operator interface
 func (j *Join) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	clone := *j
@@ -80,6 +81,7 @@ func (j *Join) Clone(inputs []Operator) Operator {
 	}
 }
 
+// Inputs implements the Operator interface
 func (j *Join) Inputs() []Operator {
 	return []Operator{j.LHS, j.RHS}
 }

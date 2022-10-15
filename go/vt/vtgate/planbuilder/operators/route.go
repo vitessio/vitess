@@ -113,7 +113,7 @@ func (r *Route) Cost() int {
 	return 1
 }
 
-// Clone implements the PhysicalOperator interface
+// Clone implements the Operator interface
 func (r *Route) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	cloneRoute := *r
@@ -127,6 +127,7 @@ func (r *Route) Clone(inputs []Operator) Operator {
 	return &cloneRoute
 }
 
+// Inputs implements the Operator interface
 func (r *Route) Inputs() []Operator {
 	return []Operator{r.Source}
 }

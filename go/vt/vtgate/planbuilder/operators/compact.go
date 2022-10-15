@@ -24,7 +24,7 @@ import (
 // Compact will optimise the operator tree into a smaller but equivalent version
 func Compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
 	switch op := op.(type) {
-	case *Concatenate:
+	case *Union:
 		compactConcatenate(op)
 	case *Filter:
 		if len(op.Predicates) == 0 {
@@ -37,20 +37,20 @@ func Compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
 	return op, nil
 }
 
-func compactConcatenate(op *Concatenate) {
+func compactConcatenate(op *Union) {
 	var newSources []Operator
 	var newSels []*sqlparser.Select
 	for i, source := range op.Sources {
-		other, isConcat := source.(*Concatenate)
+		other, isConcat := source.(*Union)
 		if !isConcat {
 			newSources = append(newSources, source)
 			newSels = append(newSels, op.SelectStmts[i])
 			continue
 		}
 		switch {
-		case other.Limit == nil && len(other.OrderBy) == 0 && !other.Distinct:
+		case len(other.Ordering) == 0 && !other.Distinct:
 			fallthrough
-		case op.Distinct && other.Limit == nil:
+		case op.Distinct:
 			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
 			newSources = append(newSources, other.Sources...)
 			newSels = append(newSels, other.SelectStmts...)

@@ -40,6 +40,7 @@ type SubQueryInner struct {
 	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
 
+// Clone implements the Operator interface
 func (s *SubQueryInner) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	return &SubQueryInner{
@@ -48,10 +49,12 @@ func (s *SubQueryInner) Clone(inputs []Operator) Operator {
 	}
 }
 
+// Inputs implements the Operator interface
 func (s *SubQueryInner) Inputs() []Operator {
 	return []Operator{s.Inner}
 }
 
+// Clone implements the Operator interface
 func (s *SubQuery) Clone(inputs []Operator) Operator {
 	checkSize(inputs, len(s.Inner)+1)
 	result := &SubQuery{
@@ -67,6 +70,7 @@ func (s *SubQuery) Clone(inputs []Operator) Operator {
 	return result
 }
 
+// Inputs implements the Operator interface
 func (s *SubQuery) Inputs() []Operator {
 	operators := []Operator{s.Outer}
 	for _, inner := range s.Inner {

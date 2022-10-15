@@ -147,16 +147,13 @@ func testString(op interface{}) string { // TODO
 	case *Vindex:
 		value := sqlparser.String(op.Value)
 		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
-	case *Concatenate:
+	case *Union:
 		var inners []string
 		for _, source := range op.Sources {
 			inners = append(inners, indent(testString(source)))
 		}
-		if len(op.OrderBy) > 0 {
-			inners = append(inners, indent(sqlparser.String(op.OrderBy)[1:]))
-		}
-		if op.Limit != nil {
-			inners = append(inners, indent(sqlparser.String(op.Limit)[1:]))
+		if len(op.Ordering) > 0 {
+			inners = append(inners, indent(sqlparser.String(op.Ordering)[1:]))
 		}
 		dist := ""
 		if op.Distinct {

@@ -37,7 +37,7 @@ var _ PhysicalOperator = (*Table)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
 
-// Clone implements the PhysicalOperator interface
+// Clone implements the Operator interface
 func (to *Table) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	var columns []*sqlparser.ColName
