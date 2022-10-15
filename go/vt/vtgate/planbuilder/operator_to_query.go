@@ -79,7 +79,7 @@ func buildQuery(op operators.Operator, qb *queryBuilder) {
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
 		}
-	case *operators.PhysDerived:
+	case *operators.Derived:
 		buildQuery(op.Source, qb)
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil

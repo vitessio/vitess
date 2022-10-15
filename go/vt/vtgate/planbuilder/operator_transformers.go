@@ -53,7 +53,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformSubQueryPlan(ctx, op)
 	case *operators.CorrelatedSubQueryOp:
 		return transformCorrelatedSubQueryPlan(ctx, op)
-	case *operators.PhysDerived:
+	case *operators.Derived:
 		return transformDerivedPlan(ctx, op)
 	case *operators.Filter:
 		plan, err := transformToLogicalPlan(ctx, op.Source, false)
@@ -540,7 +540,7 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []co
 	return colls
 }
 
-func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.PhysDerived) (logicalPlan, error) {
+func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Derived) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased

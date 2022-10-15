@@ -76,8 +76,8 @@ func pushPredicateOnDerived(expr sqlparser.Expr, semTable *semantics.SemTable, d
 	if err != nil {
 		return nil, err
 	}
-	newSrc, err := LogicalPushPredicate(d.Inner, newExpr, semTable)
-	d.Inner = newSrc
+	newSrc, err := LogicalPushPredicate(d.Source, newExpr, semTable)
+	d.Source = newSrc
 	return d, err
 }
 

@@ -92,7 +92,7 @@ func optimizeFilter(ctx *plancontext.PlanningContext, op *Filter) (Operator, err
 }
 
 func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, error) {
-	opInner, err := CreatePhysicalOperator(ctx, op.Inner)
+	opInner, err := CreatePhysicalOperator(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -102,9 +102,9 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, e
 		return buildDerivedOp(op, opInner), nil
 	}
 
-	derived := &PhysDerived{
+	derived := &Derived{
 		Source:        innerRoute.Source,
-		Query:         op.Sel,
+		Query:         op.Query,
 		Alias:         op.Alias,
 		ColumnAliases: op.ColumnAliases,
 	}
@@ -119,10 +119,10 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, e
 	return innerRoute, nil
 }
 
-func buildDerivedOp(op *Derived, opInner Operator) *PhysDerived {
-	return &PhysDerived{
+func buildDerivedOp(op *Derived, opInner Operator) *Derived {
+	return &Derived{
 		Source:        opInner,
-		Query:         op.Sel,
+		Query:         op.Query,
 		Alias:         op.Alias,
 		ColumnAliases: op.ColumnAliases,
 	}
@@ -644,7 +644,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) bool 
 	required := false
 
 	_ = VisitTopDown(op, func(current Operator) error {
-		derived, isDerived := current.(*PhysDerived)
+		derived, isDerived := current.(*Derived)
 
 		if isDerived && !derived.IsMergeable(ctx) {
 			required = true
@@ -1122,7 +1122,7 @@ func pushJoinPredicates(
 		return pushJoinPredicateOnRoute(ctx, exprs, op)
 	case *Table:
 		return PushPredicate(ctx, sqlparser.AndExpressions(exprs...), op)
-	case *PhysDerived:
+	case *Derived:
 		return pushJoinPredicateOnDerived(ctx, exprs, op)
 	case *Filter:
 		op.Predicates = append(op.Predicates, exprs...)
@@ -1209,8 +1209,8 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 	return node, nil
 }
 
-func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *PhysDerived) (Operator, error) {
-	node = Clone(node).(*PhysDerived)
+func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *Derived) (Operator, error) {
+	node = Clone(node).(*Derived)
 
 	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
 	for _, expr := range exprs {

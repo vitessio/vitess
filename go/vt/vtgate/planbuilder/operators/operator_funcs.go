@@ -121,7 +121,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 	case *Filter:
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
-	case *PhysDerived:
+	case *Derived:
 		tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 		if err != nil {
 			if err == semantics.ErrMultipleTables {
@@ -213,7 +213,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op Operator, columns ..
 	case *PhysVindex:
 		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err
-	case *PhysDerived:
+	case *Derived:
 		var noQualifierNames []*sqlparser.ColName
 		var offsets []int
 		if len(columns) == 0 {

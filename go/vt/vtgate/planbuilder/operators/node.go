@@ -12,8 +12,6 @@ func inputs(op Operator) []Operator {
 		return []Operator{op.LHS, op.RHS}
 	case *CorrelatedSubQueryOp:
 		return []Operator{op.Outer, op.Inner}
-	case *PhysDerived:
-		return []Operator{op.Source}
 	case *Route:
 		return []Operator{op.Source}
 	case *SubQueryOp:
@@ -29,7 +27,7 @@ func inputs(op Operator) []Operator {
 	case *Concatenate:
 		return op.Sources
 	case *Derived:
-		return []Operator{op.Inner}
+		return []Operator{op.Source}
 	case *Filter:
 		return []Operator{op.Source}
 	case *Join:
