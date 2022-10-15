@@ -93,6 +93,7 @@ func tableID(op LogicalOperator) (result semantics.TableSet) {
 	})
 	return
 }
+
 func TableID(op PhysicalOperator) (result semantics.TableSet) {
 	_ = visitTopDownP(op, func(this PhysicalOperator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {

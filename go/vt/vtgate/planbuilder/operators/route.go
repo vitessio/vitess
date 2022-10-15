@@ -439,11 +439,6 @@ func (r *Route) canImprove() bool {
 	return r.RouteOpCode != engine.None
 }
 
-// CheckValid implements the Operator interface
-func (r *Route) CheckValid() error {
-	return r.Source.CheckValid()
-}
-
 func (r *Route) IsSingleShard() bool {
 	switch r.RouteOpCode {
 	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:

@@ -42,15 +42,6 @@ type (
 var _ PhysicalOperator = (*SubQueryOp)(nil)
 var _ PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
 
-// CheckValid implements the PhysicalOperator interface
-func (s *SubQueryOp) CheckValid() error {
-	err := s.Inner.CheckValid()
-	if err != nil {
-		return err
-	}
-	return s.Outer.CheckValid()
-}
-
 // IPhysical implements the PhysicalOperator interface
 func (s *SubQueryOp) IPhysical() {}
 
@@ -67,14 +58,6 @@ func (s *SubQueryOp) Clone() PhysicalOperator {
 		Extracted: s.Extracted,
 	}
 	return result
-}
-
-func (c *CorrelatedSubQueryOp) CheckValid() error {
-	err := c.Inner.CheckValid()
-	if err != nil {
-		return err
-	}
-	return c.Outer.CheckValid()
 }
 
 func (c *CorrelatedSubQueryOp) IPhysical() {}

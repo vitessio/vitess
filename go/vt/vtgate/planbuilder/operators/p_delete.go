@@ -37,11 +37,6 @@ func (d *PhysDelete) Introduces() semantics.TableSet {
 	return d.QTable.ID
 }
 
-// CheckValid implements the PhysicalOperator interface
-func (d *PhysDelete) CheckValid() error {
-	return nil
-}
-
 // IPhysical implements the PhysicalOperator interface
 func (d *PhysDelete) IPhysical() {}
 

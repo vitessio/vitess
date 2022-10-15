@@ -30,11 +30,6 @@ var _ PhysicalOperator = (*PhysFilter)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (f *PhysFilter) IPhysical() {}
 
-// CheckValid implements the PhysicalOperator interface
-func (f *PhysFilter) CheckValid() error {
-	return f.Source.CheckValid()
-}
-
 // Cost implements the PhysicalOperator interface
 func (f *PhysFilter) Cost() int {
 	return f.Source.Cost()

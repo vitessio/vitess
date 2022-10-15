@@ -34,9 +34,6 @@ type (
 	PhysicalOperator interface {
 		IPhysical()
 
-		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
-		CheckValid() error
-
 		// Cost is simply the number of routes in the operator tree
 		Cost() int
 

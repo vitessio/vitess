@@ -37,11 +37,6 @@ type PhysDerived struct {
 
 var _ PhysicalOperator = (*PhysDerived)(nil)
 
-// CheckValid implements the PhysicalOperator interface
-func (d *PhysDerived) CheckValid() error {
-	return d.Source.CheckValid()
-}
-
 // IPhysical implements the PhysicalOperator interface
 func (d *PhysDerived) IPhysical() {}
 

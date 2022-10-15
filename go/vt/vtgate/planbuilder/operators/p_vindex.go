@@ -38,11 +38,6 @@ func (v *PhysVindex) Introduces() semantics.TableSet {
 	return v.Solved
 }
 
-// CheckValid implements the Operator interface
-func (v *PhysVindex) CheckValid() error {
-	return nil
-}
-
 // IPhysical implements the PhysicalOperator interface
 func (v *PhysVindex) IPhysical() {}
 

@@ -40,11 +40,6 @@ func (u *PhysUpdate) Introduces() semantics.TableSet {
 	return u.QTable.ID
 }
 
-// CheckValid implements the PhysicalOperator interface
-func (u *PhysUpdate) CheckValid() error {
-	return nil
-}
-
 // IPhysical implements the PhysicalOperator interface
 func (u *PhysUpdate) IPhysical() {}
 

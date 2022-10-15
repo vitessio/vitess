@@ -47,15 +47,6 @@ var _ PhysicalOperator = (*ApplyJoin)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (a *ApplyJoin) IPhysical() {}
 
-// CheckValid implements the PhysicalOperator interface
-func (a *ApplyJoin) CheckValid() error {
-	err := a.LHS.CheckValid()
-	if err != nil {
-		return err
-	}
-	return a.RHS.CheckValid()
-}
-
 // Cost implements the PhysicalOperator interface
 func (a *ApplyJoin) Cost() int {
 	return a.LHS.Cost() + a.RHS.Cost()

@@ -31,11 +31,6 @@ type Union struct {
 
 var _ PhysicalOperator = (*Union)(nil)
 
-// CheckValid implements the PhysicalOperator interface
-func (u *Union) CheckValid() error {
-	return nil
-}
-
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
