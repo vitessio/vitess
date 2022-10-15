@@ -112,6 +112,10 @@ func preventGlogVFlagFromClobberingVersionFlagShorthand(fs *flag.FlagSet) {
 	// N.B. we use goflag.Lookup instead of this package's Lookup, because we
 	// explicitly want to check only the goflags.
 	if f := goflag.Lookup("v"); f != nil {
+		if fs.Lookup("v") != nil { // This check is exactly what AddGoFlagSet does.
+			return
+		}
+
 		pf := flag.PFlagFromGoFlag(f)
 		pf.Shorthand = ""
 
