@@ -24,7 +24,7 @@ import (
 )
 
 type PhysDerived struct {
-	Source PhysicalOperator
+	Source Operator
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -44,7 +44,7 @@ func (d *PhysDerived) IPhysical() {}
 func (d *PhysDerived) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (d *PhysDerived) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (d *PhysDerived) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	clone := *d
 	clone.Source = inputs[0]

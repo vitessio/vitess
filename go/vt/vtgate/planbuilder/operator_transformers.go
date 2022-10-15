@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.PhysicalOperator, isRoot bool) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Operator, isRoot bool) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -281,7 +281,7 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 
 func getAllTableNames(op *operators.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := operators.VisitOperators(op, func(op operators.PhysicalOperator) (bool, error) {
+	err := operators.VisitTopDown(op, func(op operators.Operator) error {
 		tbl, isTbl := op.(*operators.Table)
 		var name string
 		if isTbl {
@@ -292,7 +292,7 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 			}
 			tableNameMap[name] = nil
 		}
-		return true, nil
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -504,7 +504,7 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *operators.Un
 	return sources, nil
 }
 
-func createLogicalPlan(ctx *plancontext.PlanningContext, source operators.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlan(ctx *plancontext.PlanningContext, source operators.Operator, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformToLogicalPlan(ctx, source, false)
 	if err != nil {
 		return nil, err

@@ -10,7 +10,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (PhysicalOperator, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, error) {
 	outerOp, err := CreatePhysicalOperator(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	return outer, nil
 }
 
-func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op PhysicalOperator) bool {
+func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op Operator) bool {
 	validVindex := func(expr sqlparser.Expr) bool {
 		sc := findColumnVindex(ctx, op, expr)
 		return sc != nil && sc.IsUnique()
@@ -185,11 +185,11 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 
 func tryMergeSubQueryOp(
 	ctx *plancontext.PlanningContext,
-	outer, subq PhysicalOperator,
+	outer, subq Operator,
 	subQueryInner *SubQueryInner,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
-) (PhysicalOperator, error) {
+) (Operator, error) {
 	switch outerOp := outer.(type) {
 	case *Route:
 		return tryMergeSubqueryWithRoute(ctx, subq, outerOp, joinPredicates, merger, subQueryInner)
@@ -202,12 +202,12 @@ func tryMergeSubQueryOp(
 
 func tryMergeSubqueryWithRoute(
 	ctx *plancontext.PlanningContext,
-	subq PhysicalOperator,
+	subq Operator,
 	outerOp *Route,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 	subQueryInner *SubQueryInner,
-) (PhysicalOperator, error) {
+) (Operator, error) {
 	subqueryRoute, isRoute := subq.(*Route)
 	if !isRoute {
 		return nil, nil
@@ -259,7 +259,7 @@ func tryMergeSubqueryWithRoute(
 
 func tryMergeSubqueryWithJoin(
 	ctx *plancontext.PlanningContext,
-	subq PhysicalOperator,
+	subq Operator,
 	outerOp *ApplyJoin,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
@@ -314,10 +314,10 @@ func tryMergeSubqueryWithJoin(
 // the child of joinTree which does not contain the subquery is the otherTree
 func rewriteColumnsInSubqueryOpForJoin(
 	ctx *plancontext.PlanningContext,
-	innerOp PhysicalOperator,
+	innerOp Operator,
 	outerTree *ApplyJoin,
 	subQueryInner *SubQueryInner,
-) (PhysicalOperator, error) {
+) (Operator, error) {
 	resultInnerOp := innerOp
 	var rewriteError error
 	// go over the entire expression in the subquery
@@ -364,7 +364,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 func createCorrelatedSubqueryOp(
 	ctx *plancontext.PlanningContext,
-	innerOp, outerOp PhysicalOperator,
+	innerOp, outerOp Operator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,
 ) (*CorrelatedSubQueryOp, error) {

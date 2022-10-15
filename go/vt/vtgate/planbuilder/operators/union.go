@@ -21,7 +21,7 @@ import (
 )
 
 type Union struct {
-	Sources     []PhysicalOperator
+	Sources     []Operator
 	SelectStmts []*sqlparser.Select
 	Distinct    bool
 
@@ -38,7 +38,7 @@ func (u *Union) IPhysical() {}
 func (u *Union) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (u *Union) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (u *Union) Clone(inputs []Operator) Operator {
 	newOp := *u
 	checkSize(inputs, len(u.Sources))
 	newOp.Sources = inputs

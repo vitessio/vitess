@@ -37,14 +37,14 @@ type queryBuilder struct {
 	tableNames []string
 }
 
-func toSQL(ctx *plancontext.PlanningContext, op operators.PhysicalOperator) sqlparser.SelectStatement {
+func toSQL(ctx *plancontext.PlanningContext, op operators.Operator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
 	q.sortTables()
 	return q.sel
 }
 
-func buildQuery(op operators.PhysicalOperator, qb *queryBuilder) {
+func buildQuery(op operators.Operator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *operators.Table:
 		dbName := ""

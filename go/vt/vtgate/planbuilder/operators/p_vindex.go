@@ -45,7 +45,7 @@ func (v *PhysVindex) IPhysical() {}
 func (v *PhysVindex) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (v *PhysVindex) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (v *PhysVindex) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	clone := *v
 	return &clone

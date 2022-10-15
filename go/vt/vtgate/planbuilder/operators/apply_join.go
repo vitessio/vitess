@@ -23,7 +23,7 @@ import (
 // ApplyJoin is a nested loop join - for each row on the LHS,
 // we'll execute the plan on the RHS, feeding data from left to right
 type ApplyJoin struct {
-	LHS, RHS PhysicalOperator
+	LHS, RHS Operator
 
 	// Columns stores the column indexes of the columns coming from the left and right side
 	// negative value comes from LHS and positive from RHS
@@ -51,7 +51,7 @@ func (a *ApplyJoin) IPhysical() {}
 func (a *ApplyJoin) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (a *ApplyJoin) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	varsClone := map[string]int{}
 	for key, value := range a.Vars {

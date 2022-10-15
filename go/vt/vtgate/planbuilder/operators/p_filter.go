@@ -21,7 +21,7 @@ import (
 )
 
 type PhysFilter struct {
-	Source     PhysicalOperator
+	Source     Operator
 	Predicates []sqlparser.Expr
 }
 
@@ -34,7 +34,7 @@ func (f *PhysFilter) IPhysical() {}
 func (f *PhysFilter) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (f *PhysFilter) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (f *PhysFilter) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)

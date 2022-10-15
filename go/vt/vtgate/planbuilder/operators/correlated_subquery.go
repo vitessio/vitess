@@ -22,7 +22,7 @@ import (
 
 type (
 	CorrelatedSubQueryOp struct {
-		Outer, Inner PhysicalOperator
+		Outer, Inner Operator
 		Extracted    *sqlparser.ExtractedSubquery
 
 		// JoinCols are the columns from the LHS used for the join.
@@ -34,7 +34,7 @@ type (
 	}
 
 	SubQueryOp struct {
-		Outer, Inner PhysicalOperator
+		Outer, Inner Operator
 		Extracted    *sqlparser.ExtractedSubquery
 	}
 )
@@ -49,7 +49,7 @@ func (s *SubQueryOp) IPhysical() {}
 func (s *SubQueryOp) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (s *SubQueryOp) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (s *SubQueryOp) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	result := &SubQueryOp{
 		Outer:     inputs[0],
@@ -65,7 +65,7 @@ func (c *CorrelatedSubQueryOp) IPhysical() {}
 // ThisIsAnOperator implements the Operator interface=
 func (c *CorrelatedSubQueryOp) ThisIsAnOperator() {}
 
-func (c *CorrelatedSubQueryOp) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (c *CorrelatedSubQueryOp) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
 	copy(columns, c.LHSColumns)

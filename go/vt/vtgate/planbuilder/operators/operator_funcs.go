@@ -28,7 +28,7 @@ import (
 // PushPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 // If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 // where data is fetched from the LHS of the join to be used in the evaluation on the RHS
-func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op PhysicalOperator) (PhysicalOperator, error) {
+func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
 	switch op := op.(type) {
 	case *Route:
 		err := op.UpdateRoutingLogic(ctx, expr)
@@ -146,7 +146,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Phy
 
 // PushOutputColumns will push the columns to the table they originate from,
 // making sure that intermediate operators pass the data through
-func PushOutputColumns(ctx *plancontext.PlanningContext, op PhysicalOperator, columns ...*sqlparser.ColName) (PhysicalOperator, []int, error) {
+func PushOutputColumns(ctx *plancontext.PlanningContext, op Operator, columns ...*sqlparser.ColName) (PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *Route:
 		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
@@ -259,7 +259,7 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 
 // RemovePredicate is used when we turn a predicate into a plan operator,
 // and the predicate needs to be removed as an AST construct
-func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op PhysicalOperator) (PhysicalOperator, error) {
+func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
 	switch op := op.(type) {
 	case *Route:
 		newSrc, err := RemovePredicate(ctx, expr, op.Source)

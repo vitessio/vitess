@@ -46,7 +46,7 @@ func (u *PhysUpdate) IPhysical() {}
 func (u *PhysUpdate) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (u *PhysUpdate) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (u *PhysUpdate) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	return &PhysUpdate{
 		QTable:              u.QTable,

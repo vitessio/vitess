@@ -43,7 +43,7 @@ func (d *PhysDelete) IPhysical() {}
 func (d *PhysDelete) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (d *PhysDelete) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (d *PhysDelete) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	return &PhysDelete{
 		QTable:           d.QTable,

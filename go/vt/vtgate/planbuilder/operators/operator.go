@@ -29,6 +29,7 @@ type (
 		ThisIsAnOperator()
 	}
 
+	// PhysicalOperator means that this operator is ready to be turned into a logical plan
 	PhysicalOperator interface {
 		Operator
 		IPhysical()
@@ -36,7 +37,7 @@ type (
 
 	clonable interface {
 		// Clone creates a copy of the operator that can be updated without changing the original
-		Clone(inputs []PhysicalOperator) PhysicalOperator
+		Clone(inputs []Operator) Operator
 	}
 
 	// tableIDIntroducer is used to signal that this operator introduces data from a new source
@@ -56,6 +57,12 @@ type (
 		// TODO: We should really calculate this using cardinality estimation,
 		//       but until then this is better than nothing
 		Cost() int
+	}
+
+	checked interface {
+		// CheckValid allows operators that need a final check before being used, to make sure that
+		// all the necessary information is in the operator
+		CheckValid() error
 	}
 )
 

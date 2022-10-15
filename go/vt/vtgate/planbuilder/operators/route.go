@@ -29,7 +29,7 @@ import (
 
 type (
 	Route struct {
-		Source PhysicalOperator
+		Source Operator
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -117,7 +117,7 @@ func (r *Route) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (r *Route) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (r *Route) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]

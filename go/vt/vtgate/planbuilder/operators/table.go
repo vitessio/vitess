@@ -39,7 +39,7 @@ func (to *Table) IPhysical() {}
 func (to *Table) ThisIsAnOperator() {}
 
 // Clone implements the PhysicalOperator interface
-func (to *Table) Clone(inputs []PhysicalOperator) PhysicalOperator {
+func (to *Table) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
