@@ -739,7 +739,7 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERNoSuchTable { // the table may not exist
 				return
 			}
-			log.Warningf("Failed to optimize the copy_state table: %v", err)
+			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
 		}
 		// This will automatically set the value to 1 or the current max value in the table, whichever is greater
 		sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
@@ -747,7 +747,8 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			Query:   []byte(sqlResetAutoInc),
 			MaxRows: uint64(0),
 		}); err != nil {
-			log.Warningf("Failed to reset the auto_increment value for the copy_state table: %v", err)
+			log.Warningf("Failed to reset the auto_increment value for the copy_state table on %q: %v",
+				tablet.Alias.String(), err)
 		}
 	}()
 }
