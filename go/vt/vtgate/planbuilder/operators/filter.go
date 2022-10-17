@@ -42,6 +42,6 @@ func (f *Filter) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (d *Filter) Inputs() []Operator {
-	return []Operator{d.Source}
+func (f *Filter) Inputs() []Operator {
+	return []Operator{f.Source}
 }
