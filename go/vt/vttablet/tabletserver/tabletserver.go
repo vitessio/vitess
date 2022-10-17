@@ -1278,7 +1278,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		return state, nil, err
 	}
 
-	result, err = tsv.execute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options)
+	result, err = tsv.execute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, nil, options)
 	return state, result, err
 }
 
@@ -1328,7 +1328,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 		return state, err
 	}
 
-	err = tsv.streamExecute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options, callback)
+	err = tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, nil, options, callback)
 	return state, err
 }
 

@@ -4093,6 +4093,61 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 	return resp, err
 }
 
+// ValidateVersionShard validates all versions are the same in all
+// tablets in a shard
+func (s *VtctldServer) ValidateVersionShard(ctx context.Context, req *vtctldatapb.ValidateVersionShardRequest) (resp *vtctldatapb.ValidateVersionShardResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateVersionShard")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	shard, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		err = fmt.Errorf("GetShard(%s) failed: %v", req.Shard, err)
+		return nil, err
+	}
+
+	if !shard.HasPrimary() {
+		err = fmt.Errorf("no primary in shard %v/%v", req.Keyspace, req.Shard)
+		return nil, err
+	}
+
+	log.Infof("Gathering version for primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	primaryVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: shard.PrimaryAlias,
+	})
+	if err != nil {
+		err = fmt.Errorf("GetVersion(%s) failed: %v", topoproto.TabletAliasString(shard.PrimaryAlias), err)
+		return nil, err
+	}
+
+	aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		err = fmt.Errorf("FindAllTabletAliasesInShard(%s, %s) failed: %v", req.Keyspace, req.Shard, err)
+		return nil, err
+	}
+
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for _, alias := range aliases {
+		if topoproto.TabletAliasEqual(alias, shard.PrimaryAlias) {
+			continue
+		}
+
+		wg.Add(1)
+		go s.diffVersion(ctx, primaryVersion.Version, shard.PrimaryAlias, alias, &wg, &er)
+	}
+
+	wg.Wait()
+
+	response := vtctldatapb.ValidateVersionShardResponse{}
+	if er.HasErrors() {
+		response.Results = append(response.Results, er.ErrorStrings()...)
+	}
+
+	return &response, nil
+}
+
 // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
 func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest) (resp *vtctldatapb.ValidateVSchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateVSchema")
@@ -4211,3 +4266,20 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 }
 
 var getVersionFromTablet = getVersionFromTabletDebugVars
+
+// helper method to asynchronously get and diff a version
+func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+	defer wg.Done()
+	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
+	replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		er.RecordError(fmt.Errorf("unable to get version for tablet %v: %v", alias, err))
+		return
+	}
+
+	if primaryVersion != replicaVersion.Version {
+		er.RecordError(fmt.Errorf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(primaryAlias), primaryVersion, topoproto.TabletAliasString(alias), replicaVersion))
+	}
+}

@@ -11,6 +11,7 @@
 - [Mysql Compatibility](#mysql-compatibility)
 - [Durability Policy](#durability-policy)
 - [New EXPLAIN format](#new-explain-format)
+- [VTOrc](#vtorc)
 
 ## Known Issues
 
@@ -27,7 +28,7 @@
 - The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
 - `vtctl` commands that take shard names and ranges as positional arguments (e.g. `vtctl Reshard ks.workflow -80 -40,40-80`) need to have their positional arguments separated from their flag arguments by a double-dash separator to avoid the new parsing library from mistaking them as flags (e.g. `vtctl Reshard ks.workflow -- -80 -40,40-80`).
 
-#### Vindex Interface
+#### <a id="vindex-interface"/>Vindex Interface
 
 All the vindex interface methods are changed by adding `context.Context` as an input parameter.
 
@@ -41,7 +42,7 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 This only affects users who have added their own custom vindex implementation. 
 They are required to change their implementation with these new interface method expectations.
 
-#### LogStats Table and Keyspace deprecated
+#### <a id="logstats-table-and-keyspace-deprecated"/>LogStats Table and Keyspace deprecated
 
 Information about which tables are used was being reported through the `Keyspace` and `Table` fields on LogStats.
 For multi-table queries, this output can be confusing, so we have added `TablesUsed`, that is a string array, listing all tables and which keyspace they are on.
@@ -58,7 +59,7 @@ The connection pool with prefilled connections have been removed. The pool now d
 Following flags are deprecated: `queryserver-config-pool-prefill-parallelism`, `queryserver-config-stream-pool-prefill-parallelism`, `queryserver-config-transaction-prefill-parallelism`
 and will be removed in future version.
 
-### Command-line syntax deprecations
+### <a id="command-line-syntax-deprecations"/>Command-line syntax deprecations
 
 #### vttablet startup flag deletions
 The following VTTablet flags were deprecated in 7.0. They have now been deleted
@@ -76,14 +77,14 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 - --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
 
-### New command line flags and behavior
+### <a id="new-command-line-flags-and-behavior"/>New command line flags and behavior
 
 #### vtgate --mysql-server-pool-conn-read-buffers
 
 `--mysql-server-pool-conn-read-buffers` enables pooling of buffers used to read from incoming
 connections, similar to the way pooling happens for write buffers. Defaults to off.
 
-### VDiff2
+### <a id="vdiff2"/>VDiff2
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
@@ -189,7 +190,7 @@ require transactional guarantees such as consistency or atomicity.
 Until now, you could only specify the caller-id for the security context used to authorize queries.
 As of now, you can specify the principal of the caller, and any groups they belong to.
 
-### Online DDL changes
+### <a id="online-ddl-changes"/>Online DDL changes
 
 #### Concurrent vitess migrations
 
@@ -218,7 +219,7 @@ ALTER VITESS_MIGRATION COMPLETE ALL
 
 This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open-ended (`--postpone-completion`).
 
-### Tablet throttler
+### <a id="tablet-throttler"/>Tablet throttler
 
 #### API changes
 
@@ -240,7 +241,7 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
   "ThrottlerProbesTotal": 74,
 ```
 
-### Mysql Compatibility
+### <a id="mysql-compatibility"/>Mysql Compatibility
 
 #### System Settings
 Vitess supported system settings from release 7.0 onwards, but it was always with a pinch of salt.
@@ -259,20 +260,20 @@ In future releases, we will make this flag enabled by default.
 Lookup vindexes now support a new parameter `multi_shard_autocommit`. If this is set to `true`, lookup vindex dml queries will be sent as autocommit to all shards instead of being wrapped in a transaction.
 This is different from the existing `autocommit` parameter where the query is sent in its own transaction separate from the ongoing transaction if any i.e. begin -> lookup query execs -> commit/rollback
 
-### Durability Policy
+### <a id="durability-policy"/>Durability Policy
 
 #### Cross Cell
 
 A new durability policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
 send semi-sync ACKs. This ensures that any committed write exists in at least 2 tablets belonging to different cells.
 
-### New EXPLAIN format
+### <a id="new-explain-format"/>New EXPLAIN format
 
 #### FORMAT=vtexplain
 
 With this new `explain` format, you can get an output that is very similar to the command line `vtexplain` app, but from a running `vtgate`, through a MySQL query.
 
-### VTOrc
+### <a id="vtorc"/>VTOrc
 
 #### Old UI Removal and Replacement
 

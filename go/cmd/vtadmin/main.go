@@ -168,7 +168,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
 	// gRPC server flags
-	rootCmd.Flags().BoolVar(&opts.AllowReflection, "grpc-allow-reflection", false, "whether to register the gRPC server for reflection; this is required to use tools like `grpc_cli`")
+	rootCmd.Flags().BoolVar(&opts.AllowReflection, "grpc-allow-reflection", false, "whether to register the gRPC server for reflection; this is required to use tools like grpc_cli")
 	rootCmd.Flags().BoolVar(&opts.EnableChannelz, "grpc-enable-channelz", false, "whether to enable the channelz service on the gRPC server")
 
 	// HTTP server flags

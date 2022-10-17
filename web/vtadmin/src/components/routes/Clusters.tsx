@@ -14,18 +14,17 @@
  * limitations under the License.
  */
 import { orderBy } from 'lodash-es';
-import * as React from 'react';
+import React from 'react';
 
 import { useClusters } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
 import { vtadmin as pb } from '../../proto/vtadmin';
-import { DataCell } from '../dataTable/DataCell';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
-
+import ClusterRow from './clusters/ClusterRow';
 export const Clusters = () => {
     useDocumentTitle('Clusters');
     const clustersQuery = useClusters();
@@ -35,12 +34,7 @@ export const Clusters = () => {
     }, [clustersQuery.data]);
 
     const renderRows = (rows: pb.Cluster[]) =>
-        rows.map((cluster, idx) => (
-            <tr key={idx}>
-                <DataCell>{cluster.name}</DataCell>
-                <DataCell>{cluster.id}</DataCell>
-            </tr>
-        ));
+        rows.map((cluster, idx) => <ClusterRow cluster={cluster} key={`cluster_${idx}`} />);
 
     return (
         <div>
@@ -50,7 +44,7 @@ export const Clusters = () => {
 
             <ContentContainer>
                 <div className="max-w-screen-sm">
-                    <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
+                    <DataTable columns={['Name', 'Id', 'Validate']} data={rows} renderRows={renderRows} />
                     <QueryLoadingPlaceholder query={clustersQuery} />
                 </div>
             </ContentContainer>
