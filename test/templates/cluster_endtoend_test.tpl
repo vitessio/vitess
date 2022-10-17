@@ -69,6 +69,8 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
+        {{if .InstallXtraBackup}}
+
         # Setup Percona Server for MySQL 8.0
         sudo apt-get update
         sudo apt-get install -y lsb-release gnupg2 curl
@@ -79,6 +81,21 @@ jobs:
 
         # Install everything else we need, and configure
         sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
+
+        {{else}}
+
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        # Setup MySQL 8.0
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get update
+        # Install everything else we need, and configure
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils
+
+        {{end}}
+
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
