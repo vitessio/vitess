@@ -824,7 +824,7 @@ export const validateVersionShard = async (params: ValidateVersionShardParams) =
     if (err) throw Error(err);
 
     return vtctldata.ValidateVersionShardResponse.create(result);
-}
+};
 export interface GetTopologyPathParams {
     clusterID: string;
     path: string;

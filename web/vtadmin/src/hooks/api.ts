@@ -609,7 +609,7 @@ export const useValidateVersionShard = (
     return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
         return validateVersionShard(params);
     }, options);
-  }
+};
 /*
  * useTopologyPath is a query hook that fetches a cell at the specified path in the topology server.
  */
