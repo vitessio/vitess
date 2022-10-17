@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -341,6 +342,8 @@ func ParseFlags(cmd string) {
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 
+	readViperConfig(cmd)
+
 	logutil.PurgeLogs()
 }
 
@@ -371,9 +374,21 @@ func ParseFlagsWithArgs(cmd string) []string {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
 
+	readViperConfig(cmd)
+
 	logutil.PurgeLogs()
 
 	return args
+}
+
+func readViperConfig(cmd string) {
+	if err := viperutil.ReadInDefaultConfig(); err != nil {
+		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
+	}
+
+	// TODO: MergeConfigMap with servenv's local viper (which does not exist
+	// yet) before returning.
+	return
 }
 
 // Flag installations for packages that servenv imports. We need to register
@@ -428,6 +443,8 @@ func init() {
 	OnParse(log.RegisterFlags)
 	// Flags in package logutil are installed for all binaries.
 	OnParse(logutil.RegisterFlags)
+	// Flags in package viperutil are installed for all binaries.
+	OnParse(viperutil.RegisterDefaultConfigFlags)
 }
 
 func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {

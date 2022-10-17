@@ -131,6 +131,41 @@ var (
 
 The problem _here_ (in addition to it being admittedly a little sneaky), is that if you were to open a new file in the same package, your IDE would very likely pick up the "viper" string and simply import the package without the alias (which also has a `GetString` function), and now you have two files in the same package, one working with the local variable, and the other working with the global registry, and it would be _verrrrry_ tricky to notice in code review. To address that we could write a simple linter to verify that (with the exception of explicitly allow-listed modules), all Vitess modules only ever import `viper` as the aliased version.
 
+## Config File(s)
+
+All vitess components will support taking a single, static (i.e. not "watched" via `WatchConfig`) configuration file.
+
+The file will be loaded via `ReadInConfig`.
+We will log a warning if no file was found, but will not abort (see [docs][viper_read_in_config_docs]).
+
+Subsystems may allow for specifying additional (optionally dynamic, per their discretion, but see Caveats below) config files loaded separately from the main config.
+They may choose to follow the global example of not aborting on `viper.ConfigFileNotFoundError` or not, per their discretion (**provided deviation from the norm is captured in that subsystems config flag usage**).
+
+Flags for all binaries:
+- `--config-path`
+    - Default: `$(pwd)`
+    - EnvVar: `VT_CONFIG_PATH` (parsed exactly like a `$PATH` style shell variable).
+    - FlagType: `StringSlice`
+    - Behavior: Paths for `ReadInConfig` to search.
+- `--config-type` (default: "")
+    - Default: `""`
+    - EnvVar: `VT_CONFIG_TYPE`
+    - FlagType: `flagutil.StringEnum`
+        - Values: everything contained in `viper.SupportedExts`, case-insensitive.
+    - Behavior: Force viper to use a particular unmarshalling strategy; required if the config file does not have an extension (by default, viper infers the config type from the file extension).
+- `--config-name` (default: "vtconfig")
+    - Default: `"vtconfig"`
+    - EnvVar: `VT_CONFIG_NAME`
+    - FlagType: `string`
+    - Behavior: Instructs `ReadInConfig` to only look in `ConfigPaths` for files named with this name (with any supported extension, unless `ConfigType` is also set, in which case only with that extension).
+- `--config-file`
+    - Default: `""`
+    - EnvVar: `VT_CONFIG_FILE`
+    - FlagType: `string`
+    - Behavior: Instructs `ReadInConfig` to search in `ConfigPaths` for explicitly a file with this name. Takes precedence over `ConfigName`.
+
+TODO: if we go with Approach 2.1 or Approach 2.2 in the above section, we need to work out a way to propagate the `ReadInConfig` outlined here from the global viper back to each of the package-local vipers.
+
 ## `go/viperutil`
 
 ## `go/viperutil/viperget`
@@ -144,5 +179,7 @@ The problem _here_ (in addition to it being admittedly a little sneaky), is that
 - [ ] Any config files/paths added _after_ calling `WatchConfig` will not get picked up.
 
 [viper]: https://github.com/spf13/viper
+[viper_read_in_config_docs]: https://github.com/spf13/viper#reading-config-files
+
 [hugo]: https://github.com/gohugoio/hugo
 [kops]: https://github.com/kubernetes/kops
