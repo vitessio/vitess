@@ -14,6 +14,6 @@ Usage of vtaclcheck:
       --security_policy string           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --static-auth-file string          The path of the auth_server_static JSON file to check
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 1)
-  -v, --v Level                          log level for V logs
-      --version                          print binary version
+      --v Level                          log level for V logs
+  -v, --version                          print binary version
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
