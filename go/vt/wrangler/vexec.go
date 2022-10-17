@@ -220,7 +220,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
 					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
-					vx.wr.optimizeCopyStateTable(ctx, primary.Tablet)
+					vx.wr.optimizeCopyStateTable(primary.Tablet)
 				}
 				mu.Lock()
 				results[primary] = qr
