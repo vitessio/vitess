@@ -79,8 +79,8 @@ Usage of vtexplain:
       --topo_global_root string                      the path of the global topology data in the global topology server
       --topo_global_server_address string            the address of the global topology server
       --topo_implementation string                   the topology implementation to use
-  -v, --v Level                                      log level for V logs
-      --version                                      print binary version
+      --v Level                                      log level for V logs
+  -v, --version                                      print binary version
       --vmodule moduleSpec                           comma-separated list of pattern=N settings for file-filtered logging
       --vschema string                               Identifies the VTGate routing schema
       --vschema-file string                          Identifies the VTGate routing schema file
