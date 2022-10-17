@@ -213,6 +213,15 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
 	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
+
+	t.Run("Verify CopyState Is Optimized Afterwards", func(t *testing.T) {
+		tabletMap := vc.getVttabletsInKeyspace(t, defaultCell, "customer", topodatapb.TabletType_PRIMARY.String())
+		require.NotNil(t, tabletMap)
+		require.Greater(t, len(tabletMap), 0)
+		for _, tablet := range tabletMap {
+			verifyCopyStateIsOptimized(t, tablet)
+		}
+	})
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
