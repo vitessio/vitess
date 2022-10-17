@@ -105,7 +105,7 @@ type xtraBackupManifest struct {
 }
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerXtraBackupEngineFlags)
 	}
 }
