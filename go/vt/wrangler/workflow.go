@@ -724,9 +724,9 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 // Note: it's not critical that this executes successfully any given time, it's
 // only important that we try to do this periodically so that things stay in an
 // optimal state over long periods of time. For this reason, the work is done
-// asynchronously in the background on the given tablet and any errors are only
+// asynchronously in the background on the given tablet and any failures are
 // logged as warnings. Because it's done in the background we use the AllPrivs
-// account to be sure that we don't execute the writes if READ-ONLY is set on
+// account to be sure that we don't execute the writes if READ_ONLY is set on
 // the MySQL instance.
 func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 	go func() {
@@ -739,7 +739,7 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERNoSuchTable { // the table may not exist
 				return
 			}
-			wr.Logger().Errorf("Error optimizing the copy_state table: %v", err)
+			log.Warningf("Failed to optimize the copy_state table: %v", err)
 		}
 		// This will automatically set the value to 1 or the current max value in the table, whichever is greater
 		sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
@@ -747,7 +747,7 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			Query:   []byte(sqlResetAutoInc),
 			MaxRows: uint64(0),
 		}); err != nil {
-			wr.Logger().Errorf("Error resetting the auto_increment value for the copy_state table: %v", err)
+			log.Warningf("Failed to reset the auto_increment value for the copy_state table: %v", err)
 		}
 	}()
 }
