@@ -7,6 +7,13 @@ jobs:
     {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-latest{{end}}
 
     steps:
+    - name: Skip CI
+      run: |
+      if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
+        echo "skipping CI due to the 'Skip CI' label"
+        exit 1
+      fi
+
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
