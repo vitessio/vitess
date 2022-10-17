@@ -55,6 +55,6 @@ func (c Charset_binary) Convert(_, in []byte, _ types.Charset) ([]byte, error) {
 	return in, nil
 }
 
-func (Charset_binary) CharLen(src []byte) int {
+func (Charset_binary) Length(src []byte) int {
 	return len(src)
 }

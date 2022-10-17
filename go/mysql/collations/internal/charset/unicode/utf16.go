@@ -91,19 +91,6 @@ func (Charset_utf16be) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (c Charset_utf16be) CharLen(src []byte) int {
-	cnt := 0
-	for i := 0; i < len(src); {
-		if ok, inc := c.DecodeRune(src[i:]); ok != utf8.RuneError {
-			i = i + inc
-			cnt = cnt + 1
-		} else {
-			break
-		}
-	}
-	return cnt
-}
-
 type Charset_utf16le struct{}
 
 func (Charset_utf16le) Name() string {
@@ -162,19 +149,6 @@ func (Charset_utf16le) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (c Charset_utf16le) CharLen(src []byte) int {
-	cnt := 0
-	for i := 0; i < len(src); {
-		if ok, inc := c.DecodeRune(src[i:]); ok != utf8.RuneError {
-			i = i + inc
-			cnt = cnt + 1
-		} else {
-			break
-		}
-	}
-	return cnt
-}
-
 type Charset_ucs2 struct{}
 
 func (Charset_ucs2) Name() string {
@@ -212,7 +186,7 @@ func (Charset_ucs2) SupportsSupplementaryChars() bool {
 	return false
 }
 
-func (Charset_ucs2) CharLen(src []byte) int {
+func (Charset_ucs2) Length(src []byte) int {
 	cnt := len(src)
 	if cnt%2 != 0 {
 		return cnt/2 + 1

@@ -196,10 +196,7 @@ func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collat
 	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
 }
 
-// Return the number of codepoints in the given collation
-func CharLen(collation Collation, input []byte) int {
-	if cla, ok := collation.Charset().(charset.CharLengthAwareCharset); ok {
-		return cla.CharLen(input)
-	}
-	return -1
+// Length returns the number of codepoints in the input based on the given collation
+func Length(collation Collation, input []byte) int {
+	return charset.Length(collation.Charset(), input)
 }

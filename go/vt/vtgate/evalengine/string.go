@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -27,27 +29,25 @@ type builtinLower struct{}
 
 func (builtinLower) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
-	raw := inarg.value().Raw()
-	t := inarg.typeof()
 
-	if inarg.isNull() {
+	switch {
+	case inarg.isNull():
 		result.setNull()
-		return
-	}
 
-	coll := collations.Local().LookupByID(inarg.Collation())
+	case sqltypes.IsNumber(inarg.typeof()):
+		inarg.makeTextual(env.DefaultCollation)
+		result.setRaw(sqltypes.VarChar, inarg.bytes(), inarg.collation())
 
-	if sqltypes.IsNumber(t) {
-		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
-		var dst []byte
-		dst = csa.ToLower(dst, raw)
+	default:
+		coll := collations.Local().LookupByID(inarg.collation().Collation)
+		csa, ok := coll.(collations.CaseAwareCollation)
+		if !ok {
+			throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
+		}
+
+		dst := csa.ToLower(nil, inarg.bytes())
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
-	} else {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}
-
 }
 
 func (builtinLower) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -74,25 +74,24 @@ type builtinUpper struct{}
 
 func (builtinUpper) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
-	raw := inarg.value().Raw()
-	t := inarg.typeof()
 
-	if inarg.isNull() {
+	switch {
+	case inarg.isNull():
 		result.setNull()
-		return
-	}
 
-	coll := collations.Local().LookupByID(inarg.Collation())
+	case sqltypes.IsNumber(inarg.typeof()):
+		inarg.makeTextual(env.DefaultCollation)
+		result.setRaw(sqltypes.VarChar, inarg.bytes(), inarg.collation())
 
-	if sqltypes.IsNumber(t) {
-		inarg.makeTextualAndConvert(env.DefaultCollation)
-		result.setRaw(sqltypes.VarChar, inarg.Value().Raw(), inarg.collation())
-	} else if csa, ok := coll.(collations.CaseAwareCollation); ok {
-		var dst []byte
-		dst = csa.ToUpper(dst, raw)
+	default:
+		coll := collations.Local().LookupByID(inarg.collation().Collation)
+		csa, ok := coll.(collations.CaseAwareCollation)
+		if !ok {
+			throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
+		}
+
+		dst := csa.ToUpper(nil, inarg.bytes())
 		result.setRaw(sqltypes.VarChar, dst, inarg.collation())
-	} else {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
 	}
 }
 
@@ -120,26 +119,14 @@ type builtinCharLength struct{}
 
 func (builtinCharLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
-	t := inarg.typeof()
-	raw := inarg.value().Raw()
-
 	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
 	coll := collations.Local().LookupByID(inarg.collation().Collation)
-
-	if sqltypes.IsNumber(t) {
-		inarg.makeTextualAndConvert(env.DefaultCollation)
-		cnt := int64(len(inarg.value().Raw()))
-		result.setInt64(cnt)
-	} else if cnt := collations.CharLen(coll, raw); cnt >= 0 {
-		result.setInt64(int64(cnt))
-	} else {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented"))
-	}
-
+	cnt := collations.Length(coll, inarg.toRawBytes())
+	result.setInt64(int64(cnt))
 }
 
 func (builtinCharLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -171,7 +158,7 @@ func (builtinOctetLength) call(env *ExpressionEnv, args []EvalResult, result *Ev
 		return
 	}
 
-	cnt := len(inarg.value().RawStr())
+	cnt := len(inarg.toRawBytes())
 	result.setInt64(int64(cnt))
 }
 
@@ -205,7 +192,7 @@ func (builtinBitLength) call(env *ExpressionEnv, args []EvalResult, result *Eval
 		return
 	}
 
-	cnt := len(inarg.value().RawStr())
+	cnt := len(inarg.toRawBytes())
 	result.setInt64(int64(cnt * 8))
 }
 
@@ -249,24 +236,23 @@ type builtinRepeat struct {
 
 func (builtinRepeat) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
-	t := inarg.typeof()
 	repeatTime := &args[1]
 	if inarg.isNull() || repeatTime.isNull() {
 		result.setNull()
 		return
 	}
 
-	if sqltypes.IsNumber(t) {
+	if sqltypes.IsNumber(inarg.typeof()) {
 		inarg.makeTextual(env.DefaultCollation)
 	}
-	raw := inarg.value().Raw()
 
 	repeatTime.makeSignedIntegral()
-	var repeatStr []byte
-	for i := 0; i < int(repeatTime.int64()); i++ {
-		repeatStr = append(repeatStr, raw...)
+	repeat := int(repeatTime.int64())
+	if repeat < 0 {
+		repeat = 0
 	}
-	result.setRaw(sqltypes.VarChar, repeatStr, inarg.collation())
+
+	result.setRaw(sqltypes.VarChar, bytes.Repeat(inarg.bytes(), repeat), inarg.collation())
 }
 
 func (builtinRepeat) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -274,7 +260,8 @@ func (builtinRepeat) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, fla
 		throwArgError("REPEAT")
 	}
 	_, f1 := args[0].typeof(env)
-	_, f2 := args[1].typeof(env)
+	// typecheck the right-hand argument but ignore its flags
+	args[1].typeof(env)
 
-	return sqltypes.VarChar, f1 & f2
+	return sqltypes.VarChar, f1
 }
