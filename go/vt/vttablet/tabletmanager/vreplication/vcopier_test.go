@@ -122,10 +122,10 @@ func TestPlayerCopyCharPK(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(idc,val) values ('a\\0',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"a\\\\x00\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"a\\\\x00\\"}'.*`,
 		`update dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
 		"insert into dst(idc,val) values ('c\\0',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"c\\\\x00\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"c\\\\x00\\"}'.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -223,12 +223,12 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(idc,val) values ('a',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}'.*`,
 		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 		"insert into dst(idc,val) values ('B',3)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}'.*`,
 		"insert into dst(idc,val) values ('c',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}'.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -327,10 +327,10 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}'.*`,
 		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
 		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}'.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -400,7 +400,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,id2) values (1,1), (2,2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -412,7 +412,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		// copy dst2
 		"begin",
 		"insert into dst2(id,id2) values (1,21), (2,22)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
@@ -505,7 +505,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,val,val2,d) values (1,'aaa','aaa',0), (2,'bbb','bbb',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -636,16 +636,16 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
 		"insert into dst(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		// Third row copied without going back to catchup state.
 		"insert into dst(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}'.*`,
 		"/delete from _vt.copy_state.*dst",
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
@@ -751,16 +751,16 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into src(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
 		"insert into src(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		// Third row copied without going back to catchup state.
 		"insert into src(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}'.*`,
 		"/delete from _vt.copy_state.*src",
 		// Copy is done. Go into running state.
 		"/update _vt.vreplication set state='Running'",
@@ -862,8 +862,8 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst1", encodeString(fmt.Sprintf("%v", lastpk))),
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', null)", qr.InsertID, "not_copied"),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst1", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', null)", qr.InsertID, "not_copied"),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -904,11 +904,11 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		"update dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
 		// Copy
 		"insert into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id1\\" type:INT32} fields:{name:\\"id2\\" type:INT32} rows:{lengths:2 lengths:1 values:\\"126\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id1\\" type:INT32} fields:{name:\\"id2\\" type:INT32} rows:{lengths:2 lengths:1 values:\\"126\\"}'.*`,
 		"/delete from _vt.copy_state.*dst1",
 		// Copy again. There should be no events for catchup.
 		"insert into not_copied(id,val) values (1,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\\"id\\\" type:INT32} rows:{lengths:1 values:\\\"1\\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\\"id\\\" type:INT32} rows:{lengths:1 values:\\\"1\\\"}'.*`,
 		"/delete from _vt.copy_state.*not_copied",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -979,7 +979,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -1002,7 +1002,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
 		// Copy
 		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
-		`/update _vt.copy_state set lastpk.*`,
+		`/insert into _vt.copy_state .*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -1065,7 +1065,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -1087,7 +1087,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Copy
 		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
-		`/update _vt.copy_state set lastpk.*`,
+		`/insert into _vt.copy_state .*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -1193,7 +1193,7 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -1272,7 +1272,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -1347,11 +1347,11 @@ func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		"/update _vt.vreplication set state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > '.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		"insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > '.*`,
 		// copy of dst2 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
 		"/update _vt.vreplication set state",
@@ -1419,7 +1419,7 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,dt) values (1,'2020-01-12'), (2,'0000-00-00')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -1505,7 +1505,7 @@ func TestCopyInvisibleColumns(t *testing.T) {
 		"/update _vt.vreplication set state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}'.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		"/update _vt.vreplication set state",
