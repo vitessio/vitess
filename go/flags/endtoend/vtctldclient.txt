@@ -45,6 +45,7 @@ Available Commands:
   GetTablet                   Outputs a JSON structure that contains information about the tablet.
   GetTabletVersion            Print the version of a tablet from its debug vars.
   GetTablets                  Looks up tablets according to filter criteria.
+  GetTopologyPath             Gets the file located at the specified path in the topology server.
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   InitShardPrimary            Sets the initial primary for the shard.

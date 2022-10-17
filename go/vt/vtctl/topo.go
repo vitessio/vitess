@@ -21,18 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 
 	"github.com/spf13/pflag"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // This file contains the topo command group for vtctl.
@@ -55,59 +48,6 @@ func init() {
 		params: "[--cell <cell>] [--to_topo] <src> <dst>",
 		help:   "Copies a file from topo to local file structure, or the other way around",
 	})
-}
-
-// DecodeContent uses the filename to imply a type, and proto-decodes
-// the right object, then echoes it as a string.
-func DecodeContent(filename string, data []byte, json bool) (string, error) {
-	name := path.Base(filename)
-	dir := path.Dir(filename)
-	var p proto.Message
-	switch name {
-	case topo.CellInfoFile:
-		p = new(topodatapb.CellInfo)
-	case topo.KeyspaceFile:
-		p = new(topodatapb.Keyspace)
-	case topo.ShardFile:
-		p = new(topodatapb.Shard)
-	case topo.VSchemaFile:
-		p = new(vschemapb.Keyspace)
-	case topo.ShardReplicationFile:
-		p = new(topodatapb.ShardReplication)
-	case topo.TabletFile:
-		p = new(topodatapb.Tablet)
-	case topo.SrvVSchemaFile:
-		p = new(vschemapb.SrvVSchema)
-	case topo.SrvKeyspaceFile:
-		p = new(topodatapb.SrvKeyspace)
-	case topo.RoutingRulesFile:
-		p = new(vschemapb.RoutingRules)
-	default:
-		switch dir {
-		case "/" + topo.GetExternalVitessClusterDir():
-			p = new(topodatapb.ExternalVitessCluster)
-		default:
-		}
-		if p == nil {
-			if json {
-				return "", fmt.Errorf("unknown topo protobuf type for %v", name)
-			}
-			return string(data), nil
-		}
-	}
-
-	if err := proto.Unmarshal(data, p); err != nil {
-		return string(data), err
-	}
-
-	var marshalled []byte
-	var err error
-	if json {
-		marshalled, err = protojson.Marshal(p)
-	} else {
-		marshalled, err = prototext.Marshal(p)
-	}
-	return string(marshalled), err
 }
 
 func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -214,7 +154,7 @@ func (d ProtoTopologyDecoder) decode(ctx context.Context, topoPaths []string, co
 			wr.Logger().Printf("path=%v version=%v\n", topoPath, version)
 		}
 
-		decoded, err := DecodeContent(topoPath, data, false)
+		decoded, err := topo.DecodeContent(topoPath, data, false)
 		if err != nil {
 			wr.Logger().Warningf("TopoCat: cannot proto decode %v: %v", topoPath, err)
 			decoded = string(data)
@@ -269,7 +209,7 @@ func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, con
 			continue
 		}
 
-		decoded, err := DecodeContent(topoPath, data, true)
+		decoded, err := topo.DecodeContent(topoPath, data, true)
 		if err != nil {
 			hasError = true
 			wr.Logger().Printf("TopoCat: cannot proto decode %v: %v", topoPath, err)
