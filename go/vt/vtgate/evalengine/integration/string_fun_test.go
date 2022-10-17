@@ -170,9 +170,32 @@ func TestBuiltinASCII(t *testing.T) {
 func TestBuiltinRepeat(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
-
 	counts := []string{"-1", "1.2", "3"}
-
+	cases := []string{
+		"\"Å å\"",
+		"NULL",
+		"\"\"",
+		"\"a\"",
+		"\"abc\"",
+		"1",
+		"-1",
+		"0123",
+		"0xAACC",
+		"3.1415926",
+		"\"中文测试\"",
+		"\"日本語テスト\"",
+		"\"한국어 시험\"",
+		"\"😊😂🤢\"",
+		"'123'",
+		"9223372036854775807",
+		"-9223372036854775808",
+		"999999999999999999999999",
+		"-999999999999999999999999",
+		"_latin1 X'ÂÄÌå'",
+		"_binary 'Müller' ",
+		"_utf8mb4 'abcABCÅå'",
+		"_utf8mb3 'abcABCÅå'",
+	}
 	for _, str := range cases {
 		for _, cnt := range counts {
 			query := fmt.Sprintf("Repeat(%s, %s)", str, cnt)
