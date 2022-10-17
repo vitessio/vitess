@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (onlineddl_vrepl_suite)
+name: Cluster (vttablet_prscomplex)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_vrepl_suite)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vttablet_prscomplex)')
   cancel-in-progress: true
 
 env:
@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (onlineddl_vrepl_suite)
+    name: Run endtoend tests on Cluster (vttablet_prscomplex)
     runs-on: ubuntu-20.04
 
     steps:
@@ -48,13 +48,13 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_onlineddl_vrepl_suite.yml'
+            - '.github/workflows/cluster_endtoend_vttablet_prscomplex.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.7
+        go-version: 1.18.5
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -114,7 +114,7 @@ jobs:
         set -x
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard onlineddl_vrepl_suite | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vttablet_prscomplex | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()

@@ -314,39 +314,6 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	}, exp.Expr)
 }
 
-func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.SelectExpr {
-	for _, expr := range qp.SelectExprs {
-		if expr.Aggr {
-			continue
-		}
-		if !qp.isExprInGroupByExprs(expr) {
-			return expr.Col
-		}
-	}
-	for _, order := range qp.OrderExprs {
-		if !qp.isOrderByExprInGroupBy(order) {
-			return &sqlparser.AliasedExpr{
-				Expr: order.Inner.Expr,
-			}
-		}
-	}
-	return nil
-}
-
-func (qp *QueryProjection) isOrderByExprInGroupBy(order OrderBy) bool {
-	// ORDER BY NULL or Aggregation functions need not be present in group by
-	_, isAggregate := order.WeightStrExpr.(sqlparser.AggrFunc)
-	if sqlparser.IsNull(order.Inner.Expr) || isAggregate {
-		return true
-	}
-	for _, groupByExpr := range qp.groupByExprs {
-		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
-			return true
-		}
-	}
-	return false
-}
-
 func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
 	for _, groupByExpr := range qp.groupByExprs {
 		exp, err := expr.GetExpr()
@@ -457,10 +424,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 orderBy:
 	for _, orderExpr := range qp.OrderExprs {
-		if qp.isOrderByExprInGroupBy(orderExpr) {
-			continue orderBy
-		}
-		orderExpr := orderExpr.Inner.Expr
+		orderExpr := orderExpr.WeightStrExpr
 		for _, expr := range qp.SelectExprs {
 			col, ok := expr.Col.(*sqlparser.AliasedExpr)
 			if !ok {
