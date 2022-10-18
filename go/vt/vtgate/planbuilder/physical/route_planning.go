@@ -226,6 +226,19 @@ func createPhysicalOperatorFromDelete(ctx *plancontext.PlanningContext, op *abst
 		return nil, err
 	}
 
+	if !vindexTable.Keyspace.Sharded {
+		return &Route{
+			Source: &Delete{
+				QTable: op.Table,
+				VTable: vindexTable,
+				AST:    op.AST,
+			},
+			RouteOpCode:       opCode,
+			Keyspace:          vindexTable.Keyspace,
+			TargetDestination: dest,
+		}, nil
+	}
+
 	primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
 	if err != nil {
 		return nil, err
