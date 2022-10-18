@@ -23,11 +23,15 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+var enableWithDDLForTests bool
 
 const QueryToTriggerWithDDL = "SELECT _vt_no_such_column__init_schema FROM _vt.vreplication LIMIT 1"
 
@@ -63,10 +67,16 @@ func (wd *WithDDL) DDLs() []string {
 // func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 // func(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any) (*sqltypes.Result, error) {
+
 	execQuery, err := wd.unify(ctx, fQuery)
 	if err != nil {
 		return nil, err
 	}
+
+	if sidecardb.InitVTSchemaOnTabletInit || !enableWithDDLForTests {
+		return execQuery(query)
+	}
+
 	execDDL, err := wd.unify(ctx, fDDL)
 	if err != nil {
 		return nil, err
@@ -75,6 +85,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any)
 	if err == nil {
 		return qr, nil
 	}
+
 	if !wd.isSchemaError(err) {
 		return nil, err
 	}
