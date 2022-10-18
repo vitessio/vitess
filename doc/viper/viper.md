@@ -166,6 +166,10 @@ Flags for all binaries:
 
 TODO: if we go with Approach 2.1 or Approach 2.2 in the above section, we need to work out a way to propagate the `ReadInConfig` outlined here from the global viper back to each of the package-local vipers.
 
+### Watching Configs
+
+TODO: see `go/viperutil/vipersync`
+
 ## `go/viperutil`
 
 ## `go/viperutil/viperget`
