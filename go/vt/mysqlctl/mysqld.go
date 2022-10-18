@@ -116,6 +116,7 @@ func init() {
 
 func registerAppFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&appIdleTimeout, "app_idle_timeout", appIdleTimeout, "Idle timeout for app connections")
+	fs.IntVar(&appPoolSize, "app_pool_size", appPoolSize, "Size of the connection pool for app connections")
 }
 
 func registerMySQLDFlags(fs *pflag.FlagSet) {
@@ -132,7 +133,6 @@ func registerReparentFlags(fs *pflag.FlagSet) {
 func registerDbaFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&dbaPoolSize, "dba_pool_size", dbaPoolSize, "Size of the connection pool for dba connections")
 	fs.DurationVar(&DbaIdleTimeout, "dba_idle_timeout", DbaIdleTimeout, "Idle timeout for dba connections")
-	fs.IntVar(&appPoolSize, "app_pool_size", appPoolSize, "Size of the connection pool for app connections")
 }
 
 // NewMysqld creates a Mysqld object based on the provided configuration

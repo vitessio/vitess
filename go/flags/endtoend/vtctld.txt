@@ -2,6 +2,7 @@ Usage of vtctld:
       --action_timeout duration                                          time to wait for an action before resorting to force (default 2m0s)
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
+      --app_pool_size int                                                Size of the connection pool for app connections (default 40)
       --azblob_backup_account_key_file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob_backup_account_name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
       --azblob_backup_container_name string                              Azure Blob Container Name.
