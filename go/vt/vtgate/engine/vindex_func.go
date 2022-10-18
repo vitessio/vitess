@@ -139,8 +139,8 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 	result := &sqltypes.Result{
 		Fields: vf.Fields,
 	}
+	var destination key.Destination
 	for i, value := range values {
-		var destination key.Destination
 		if vf.Vindex.IsUnique() {
 			destination = destinations[i]
 		} else {
