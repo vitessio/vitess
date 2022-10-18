@@ -1032,3 +1032,17 @@ func TestFailInfiniteSessions(t *testing.T) {
 			client.Release())
 	}
 }
+
+func TestReserveQueryTimeout(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.ReserveExecute("select sleep(19)", []string{"set sql_mode = ''"}, nil)
+	assert.NoError(t, err)
+	assert.NoError(t,
+		client.Release())
+
+	_, err = client.ReserveStreamExecute("select sleep(19)", []string{"set sql_mode = ''"}, nil)
+	assert.NoError(t, err)
+	assert.NoError(t,
+		client.Release())
+}

@@ -101,6 +101,9 @@ type (
 		Collation collations.ID
 
 		Warning string
+
+		// ExpandedColumns is a map of all the added columns for a given table.
+		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 	}
 
 	columnName struct {
