@@ -44,7 +44,7 @@ type (
 	InExpr struct {
 		BinaryExpr
 		Negate bool
-		Hashed map[uintptr]int
+		Hashed map[HashCode]int
 	}
 
 	ComparisonOp interface {
