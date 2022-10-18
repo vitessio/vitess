@@ -82,8 +82,6 @@ type RestoreParams struct {
 	Concurrency int
 	// Extra env variables for pre-restore and post-restore transform hooks
 	HookExtraEnv map[string]string
-	// Metadata to write into database after restore. See PopulateMetadataTables
-	LocalMetadata map[string]string
 	// DeleteBeforeRestore tells us whether existing data should be deleted before
 	// restoring. This is always set to false when starting a tablet with -restore_from_backup,
 	// but is set to true when executing a RestoreFromBackup command on an already running vttablet
