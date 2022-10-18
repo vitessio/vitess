@@ -122,19 +122,19 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 	} else {
 		values = append(values, k.Value())
 	}
+	destinations, err := vf.Vindex.Map(ctx, vcursor, values)
+	if err != nil {
+		return nil, err
+	}
 	result := &sqltypes.Result{
 		Fields: vf.Fields,
 	}
-	for _, value := range values {
+	for i, value := range values {
 		vkey, err := evalengine.Cast(value, sqltypes.VarBinary)
 		if err != nil {
 			return nil, err
 		}
-		destinations, err := vf.Vindex.Map(ctx, vcursor, []sqltypes.Value{value})
-		if err != nil {
-			return nil, err
-		}
-		switch d := destinations[0].(type) {
+		switch d := destinations[i].(type) {
 		case key.DestinationKeyRange:
 			if d.KeyRange != nil {
 				row, err := vf.buildRow(vkey, nil, d.KeyRange)
