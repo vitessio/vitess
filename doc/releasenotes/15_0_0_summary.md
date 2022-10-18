@@ -1,6 +1,7 @@
 ## Summary
 
 - [Breaking Changes](#breaking-changes)
+- [Deprecations](#deprecations)
 - [Command-line Syntax Deprecations](#command-line-syntax-deprecations)
 - [New Command Line Flags and Behavior](#new-command-line-flags-and-behavior)
 - [Online DDL changes](#online-ddl-changes)
@@ -26,6 +27,17 @@
 - The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
 - `vtctl` commands that take shard names and ranges as positional arguments (e.g. `vtctl Reshard ks.workflow -80 -40,40-80`) need to have their positional arguments separated from their flag arguments by a double-dash separator to avoid the new parsing library from mistaking them as flags (e.g. `vtctl Reshard ks.workflow -- -80 -40,40-80`).
 
+#### vttablet flag deletions
+The following VTTablet flags were deprecated in 7.0. They have now been deleted
+- `--queryserver-config-message-conn-pool-size`
+- `--queryserver-config-message-conn-pool-prefill-parallelism`
+- `--client-found-rows-pool-size` A different existing flag `--queryserver-config-transaction-cap` will be used instead
+- `--transaction_shutdown_grace_period` Use `--shutdown_grace_period` instead
+- `--queryserver-config-max-dml-rows`
+- `--queryserver-config-allowunsafe-dmls`
+- `--pool-name-prefix`
+- `--enable-autocommit` Autocommit is always allowed
+
 #### Vindex Interface
 
 All the vindex interface methods are changed by adding `context.Context` as an input parameter.
@@ -39,6 +51,8 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 
 This only affects users who have added their own custom vindex implementation. 
 They are required to change their implementation with these new interface method expectations.
+
+### <a id="deprecations"/>Deprecations
 
 #### LogStats Table and Keyspace deprecated
 
@@ -54,29 +68,17 @@ Consider using VTOrc instead of Orchestrator as VTOrc goes GA in this release.
 #### Connection Pool Prefill
 
 The connection pool with prefilled connections have been removed. The pool now does lazy connection creation.
-Following flags are deprecated: `queryserver-config-pool-prefill-parallelism`, `queryserver-config-stream-pool-prefill-parallelism`, `queryserver-config-transaction-prefill-parallelism`
-and will be removed in future version.
 
 ### <a id="command-line-syntax-deprecations"/>Command-line syntax deprecations
 
-#### vttablet startup flag deletions
-The following VTTablet flags were deprecated in 7.0. They have now been deleted
-- --queryserver-config-message-conn-pool-size
-- --queryserver-config-message-conn-pool-prefill-parallelism
-- --client-found-rows-pool-size --queryserver-config-transaction-cap will be used instead
-- --transaction_shutdown_grace_period Use --shutdown_grace_period instead
-- --queryserver-config-max-dml-rows
-- --queryserver-config-allowunsafe-dmls
-- --pool-name-prefix
-- --enable-autocommit Autocommit is always allowed
-
 #### vttablet startup flag deprecations
-- --enable-query-plan-field-caching has been deprecated. It will be removed in v16.
-- --enable_semi_sync has been deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
-- --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
+- `--enable-query-plan-field-caching` has been deprecated. It will be removed in v16.
+- `--enable_semi_sync` has been deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+- `--queryserver-config-pool-prefill-parallelism`, `--queryserver-config-stream-pool-prefill-parallelism` and `--queryserver-config-transaction-prefill-parallelism` have all been deprecated. They will be removed in v16.
+- `--backup_storage_hook` has been deprecated, consider using one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
 #### vtbackup flag deprecations
-- --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.
+- `--backup_storage_hook` has been deprecated, consider using one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
 ### <a id="new-command-line-flags-and-behavior"/>New command line flags and behavior
 
@@ -136,11 +138,11 @@ Backup/Restore now allow you many more options for compression and decompression
 There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
 use-case. Here are the flags that control this feature
 
-- --compression-engine-name
-- --external-compressor
-- --external-decompressor
-- --external-compressor-extension
-- --compression-level
+- `--compression-engine-name`
+- `--external-compressor`
+- `--external-decompressor`
+- `--external-compressor-extension`
+- `--compression-level`
 
 `--compression-engine-name` specifies the engine used for compression. It can have one of the following values
 
@@ -150,20 +152,19 @@ use-case. Here are the flags that control this feature
 - zstd
 - external
 
-where 'external' is set only when using a custom command or tool other than the ones that are already provided. 
-If you want to use any of the built-in compressors, simply set one of the above values for `--compression-engine-name`. The value
+If you want to use any of the built-in compressors, simply set one of the above values other than `external` for `--compression-engine-name`. The value
 specified in `--compression-engine-name` is saved in the backup MANIFEST, which is later read by the restore process to decide which
 engine to use for decompression. Default value for engine is 'pgzip'.
 
 If you would like to use a custom command or external tool for compression/decompression then you need to provide the full command with
 arguments to the `--external-compressor` and `--external-decompressor` flags. `--external-compressor-extension` flag also needs to be provided
 so that compressed files are created with the correct extension. If the external command is not using any of the built-in compression engines
-(i-e pgzip, pargzip, lz4 or zstd) then you need to set `--compression-engine-name` to value 'external'.
+(i.e. pgzip, pargzip, lz4 or zstd) then you need to set `--compression-engine-name` to value 'external'.
 
-Please note that if you want the current production behavior then you don't need to change any of these flags.
+Please note that if you want to keep the current behavior then you don't need to provide any of these flags.
 You can read more about backup & restore [here] (https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/).
 
-If you decided to switch from an external compressor to one of the built-in supported compressors (i-e pgzip, pargzip, lz4 or zstd) at any point
+If you decided to switch from an external compressor to one of the built-in supported compressors (i.e. pgzip, pargzip, lz4 or zstd) at any point
 in the future, you will need to do it in two steps.
 
 - step #1, set `--external-compressor` and `--external-compressor-extension` flag values to empty and change `--compression-engine-name` to desired value.
@@ -251,13 +252,13 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
 ### <a id="mysql-compatibility"/>Mysql Compatibility
 
 #### System Settings
-Vitess supported system settings from release 7.0 onwards, but it was always with a pinch of salt.
-As soon as a client session changes a default system setting, the mysql connection gets blocked for it.
-This leads to clients running out of mysql connections. 
-The clients were instructed to use this to a minimum and try to set those changed system settings as default on the mysql.
+Vitess has had support for system settings from release 7.0 onwards, but this support came with some caveats.
+As soon as a client session changes a default system setting, a mysql connection gets reserved for it.
+This can sometimes lead to clients running out of mysql connections. 
+Users were instructed to minimize the use of this feature and to try to set the desired system settings as defaults in the mysql config.
 
-With this release, Vitess can handle system settings changes in a much better way and the clients can use it more freely.
-Vitess now pools those changed settings and does not reserve it for any particular session. 
+With this release, Vitess can handle system settings changes in a much better way and clients can use them more freely.
+Vitess now has the ability to pool changed settings without reserving connections for any particular session. 
 
 This feature can be enabled by setting `queryserver-enable-settings-pool` flag on the vttablet. It is disabled by default.
 In future releases, we will make this flag enabled by default.
