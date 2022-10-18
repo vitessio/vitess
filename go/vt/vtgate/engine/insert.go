@@ -229,11 +229,8 @@ func (ins *Insert) GetTableName() string {
 
 // TryExecute performs a non-streaming exec.
 func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if ins.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(ins.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)
+	defer cancelFunc()
 
 	switch ins.Opcode {
 	case InsertUnsharded:
@@ -272,6 +269,12 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 			return nil
 		}
 
+		// should process only one chunk at a time.
+		// as parallel chunk insert will try to use the same transaction in the vttablet
+		// this will cause transaction in use error.
+		mu.Lock()
+		defer mu.Unlock()
+
 		var insertID int64
 		var qr *sqltypes.Result
 		var err error
@@ -284,8 +287,6 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 			return err
 		}
 
-		mu.Lock()
-		defer mu.Unlock()
 		output.RowsAffected += qr.RowsAffected
 		// InsertID needs to be updated to the least insertID value in sqltypes.Result
 		if output.InsertID == 0 || output.InsertID > uint64(insertID) {

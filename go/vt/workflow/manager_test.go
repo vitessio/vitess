@@ -55,7 +55,7 @@ func TestManagerSimpleRun(t *testing.T) {
 	wg, _, cancel := StartManager(m)
 
 	// Create a Sleep job.
-	uuid, err := m.Create(context.Background(), sleepFactoryName, []string{"-duration", "60"})
+	uuid, err := m.Create(context.Background(), sleepFactoryName, []string{"--duration", "60"})
 	if err != nil {
 		t.Fatalf("cannot create sleep workflow: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestManagerRestart(t *testing.T) {
 	wg, _, cancel := StartManager(m)
 
 	// Create a Sleep job.
-	uuid, err := m.Create(context.Background(), sleepFactoryName, []string{"-duration", "60"})
+	uuid, err := m.Create(context.Background(), sleepFactoryName, []string{"--duration", "60"})
 	if err != nil {
 		t.Fatalf("cannot create sleep workflow: %v", err)
 	}

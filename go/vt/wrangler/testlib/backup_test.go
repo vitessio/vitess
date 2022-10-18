@@ -69,10 +69,10 @@ func TestBackupRestoreWithPargzip(t *testing.T) {
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.CompressionEngineName = "pgzip"
-	*mysqlctl.ExternalCompressorCmd = ""
-	*mysqlctl.ExternalCompressorExt = ""
-	*mysqlctl.ExternalDecompressorCmd = ""
+	mysqlctl.CompressionEngineName = "pgzip"
+	mysqlctl.ExternalCompressorCmd = ""
+	mysqlctl.ExternalCompressorExt = ""
+	mysqlctl.ExternalDecompressorCmd = ""
 }
 
 func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
@@ -113,16 +113,16 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	backupstorage.BackupStorageImplementation = "file"
 	if cDetails != nil {
 		if cDetails.CompressionEngineName != "" {
-			*mysqlctl.CompressionEngineName = cDetails.CompressionEngineName
+			mysqlctl.CompressionEngineName = cDetails.CompressionEngineName
 		}
 		if cDetails.ExternalCompressorCmd != "" {
-			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
+			mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
 		}
 		if cDetails.ExternalCompressorExt != "" {
-			*mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
+			mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
 		}
 		if cDetails.ExternalDecompressorCmd != "" {
-			*mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
+			mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
 		}
 	}
 
@@ -718,7 +718,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	primary.StopActionLoop(t)
 
 	// set a short timeout so that we don't have to wait 30 seconds
-	*topo.RemoteOperationTimeout = 2 * time.Second
+	topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
 	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */))
 	// verify the full status
@@ -728,11 +728,11 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 }
 
 func TestDisableActiveReparents(t *testing.T) {
-	*mysqlctl.DisableActiveReparents = true
+	mysqlctl.DisableActiveReparents = true
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		// When you mess with globals you must remember to reset them
-		*mysqlctl.DisableActiveReparents = false
+		mysqlctl.DisableActiveReparents = false
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)

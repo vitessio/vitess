@@ -158,6 +158,20 @@ func (session *SafeSession) ResetTx() {
 	}
 }
 
+// SetQueryTimeout sets the query timeout
+func (session *SafeSession) SetQueryTimeout(queryTimeout int64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.QueryTimeout = queryTimeout
+}
+
+// GetQueryTimeout gets the query timeout
+func (session *SafeSession) GetQueryTimeout() int64 {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.QueryTimeout
+}
+
 // Reset clears the session
 func (session *SafeSession) Reset() {
 	session.mu.Lock()

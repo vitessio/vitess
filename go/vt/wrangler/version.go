@@ -21,11 +21,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 
 	"context"
 
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -78,62 +76,18 @@ func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.Tabl
 	return resp.Version, err
 }
 
-// helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
-	defer wg.Done()
-	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
-	replicaVersion, err := wr.GetVersion(ctx, alias)
-	if err != nil {
-		er.RecordError(err)
-		return
-	}
-
-	if primaryVersion != replicaVersion {
-		er.RecordError(fmt.Errorf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(primaryAlias), primaryVersion, topoproto.TabletAliasString(alias), replicaVersion))
-	}
-}
-
 // ValidateVersionShard validates all versions are the same in all
 // tablets in a shard
 func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard string) error {
-	si, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
+	res, err := wr.VtctldServer().ValidateVersionShard(ctx, &vtctldatapb.ValidateVersionShardRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+	})
 
-	// get version from the primary, or error
-	if !si.HasPrimary() {
-		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
+	if len(res.Results) > 0 {
+		return fmt.Errorf("version diffs: %v", res.Results)
 	}
-	log.Infof("Gathering version for primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
-	primaryVersion, err := wr.GetVersion(ctx, si.PrimaryAlias)
-	if err != nil {
-		return err
-	}
-
-	// read all the aliases in the shard, that is all tablets that are
-	// replicating from the primary
-	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	// then diff with all replicas
-	er := concurrency.AllErrorRecorder{}
-	wg := sync.WaitGroup{}
-	for _, alias := range aliases {
-		if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
-			continue
-		}
-
-		wg.Add(1)
-		go wr.diffVersion(ctx, primaryVersion, si.PrimaryAlias, alias, &wg, &er)
-	}
-	wg.Wait()
-	if er.HasErrors() {
-		return fmt.Errorf("version diffs: %v", er.Error().Error())
-	}
-	return nil
+	return err
 }
 
 // ValidateVersionKeyspace validates all versions are the same in all

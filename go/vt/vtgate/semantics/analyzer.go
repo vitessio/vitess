@@ -56,7 +56,11 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 
 	b := newBinder(s, a, a.tables, a.typer)
 	a.binder = b
-	a.rewriter = &earlyRewriter{scoper: s, binder: b}
+	a.rewriter = &earlyRewriter{
+		scoper:          s,
+		binder:          b,
+		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
+	}
 	s.binder = b
 	return a
 }
@@ -98,6 +102,7 @@ func (a analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID)
 		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
 		Collation:         coll,
+		ExpandedColumns:   a.rewriter.expandedColumns,
 	}
 }
 

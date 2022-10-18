@@ -150,6 +150,8 @@ type VtctldClient interface {
 	ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error)
 	// ApplySchema applies a schema to a keyspace.
 	ApplySchema(ctx context.Context, in *vtctldata.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error)
+	// ApplyShardRoutingRules applies the VSchema shard routing rules.
+	ApplyShardRoutingRules(ctx context.Context, in *vtctldata.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyShardRoutingRulesResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error)
 	// Backup uses the BackupEngine and BackupStorage services on the specified
@@ -225,6 +227,8 @@ type VtctldClient interface {
 	GetSchema(ctx context.Context, in *vtctldata.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(ctx context.Context, in *vtctldata.GetShardRequest, opts ...grpc.CallOption) (*vtctldata.GetShardResponse, error)
+	// GetShardRoutingRules returns the VSchema shard routing rules.
+	GetShardRoutingRules(ctx context.Context, in *vtctldata.GetShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetShardRoutingRulesResponse, error)
 	// GetSrvKeyspaceNames returns a mapping of cell name to the keyspaces served
 	// in that cell.
 	GetSrvKeyspaceNames(ctx context.Context, in *vtctldata.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspaceNamesResponse, error)
@@ -240,6 +244,8 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
+	// GetTopologyPath returns the topology cell at a given path.
+	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
@@ -386,6 +392,8 @@ type VtctldClient interface {
 	ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(ctx context.Context, in *vtctldata.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
 }
@@ -428,6 +436,15 @@ func (c *vtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldata.Appl
 func (c *vtctldClient) ApplySchema(ctx context.Context, in *vtctldata.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error) {
 	out := new(vtctldata.ApplySchemaResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplySchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ApplyShardRoutingRules(ctx context.Context, in *vtctldata.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyShardRoutingRulesResponse, error) {
+	out := new(vtctldata.ApplyShardRoutingRulesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyShardRoutingRules", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -732,6 +749,15 @@ func (c *vtctldClient) GetShard(ctx context.Context, in *vtctldata.GetShardReque
 	return out, nil
 }
 
+func (c *vtctldClient) GetShardRoutingRules(ctx context.Context, in *vtctldata.GetShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetShardRoutingRulesResponse, error) {
+	out := new(vtctldata.GetShardRoutingRulesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetShardRoutingRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetSrvKeyspaceNames(ctx context.Context, in *vtctldata.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspaceNamesResponse, error) {
 	out := new(vtctldata.GetSrvKeyspaceNamesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSrvKeyspaceNames", in, out, opts...)
@@ -780,6 +806,15 @@ func (c *vtctldClient) GetTablet(ctx context.Context, in *vtctldata.GetTabletReq
 func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error) {
 	out := new(vtctldata.GetTabletsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTablets", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error) {
+	out := new(vtctldata.GetTopologyPathResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTopologyPath", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1169,6 +1204,15 @@ func (c *vtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldat
 	return out, nil
 }
 
+func (c *vtctldClient) ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error) {
+	out := new(vtctldata.ValidateVersionShardResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateVersionShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error) {
 	out := new(vtctldata.ValidateVSchemaResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateVSchema", in, out, opts...)
@@ -1196,6 +1240,8 @@ type VtctldServer interface {
 	ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error)
 	// ApplySchema applies a schema to a keyspace.
 	ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error)
+	// ApplyShardRoutingRules applies the VSchema shard routing rules.
+	ApplyShardRoutingRules(context.Context, *vtctldata.ApplyShardRoutingRulesRequest) (*vtctldata.ApplyShardRoutingRulesResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error)
 	// Backup uses the BackupEngine and BackupStorage services on the specified
@@ -1271,6 +1317,8 @@ type VtctldServer interface {
 	GetSchema(context.Context, *vtctldata.GetSchemaRequest) (*vtctldata.GetSchemaResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error)
+	// GetShardRoutingRules returns the VSchema shard routing rules.
+	GetShardRoutingRules(context.Context, *vtctldata.GetShardRoutingRulesRequest) (*vtctldata.GetShardRoutingRulesResponse, error)
 	// GetSrvKeyspaceNames returns a mapping of cell name to the keyspaces served
 	// in that cell.
 	GetSrvKeyspaceNames(context.Context, *vtctldata.GetSrvKeyspaceNamesRequest) (*vtctldata.GetSrvKeyspaceNamesResponse, error)
@@ -1286,6 +1334,8 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
+	// GetTopologyPath returns the topology cell at a given path.
+	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
@@ -1432,6 +1482,8 @@ type VtctldServer interface {
 	ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(context.Context, *vtctldata.ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
 	mustEmbedUnimplementedVtctldServer()
@@ -1452,6 +1504,9 @@ func (UnimplementedVtctldServer) ApplyRoutingRules(context.Context, *vtctldata.A
 }
 func (UnimplementedVtctldServer) ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
+}
+func (UnimplementedVtctldServer) ApplyShardRoutingRules(context.Context, *vtctldata.ApplyShardRoutingRulesRequest) (*vtctldata.ApplyShardRoutingRulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyShardRoutingRules not implemented")
 }
 func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyVSchema not implemented")
@@ -1537,6 +1592,9 @@ func (UnimplementedVtctldServer) GetSchema(context.Context, *vtctldata.GetSchema
 func (UnimplementedVtctldServer) GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
 }
+func (UnimplementedVtctldServer) GetShardRoutingRules(context.Context, *vtctldata.GetShardRoutingRulesRequest) (*vtctldata.GetShardRoutingRulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShardRoutingRules not implemented")
+}
 func (UnimplementedVtctldServer) GetSrvKeyspaceNames(context.Context, *vtctldata.GetSrvKeyspaceNamesRequest) (*vtctldata.GetSrvKeyspaceNamesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspaceNames not implemented")
 }
@@ -1554,6 +1612,9 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 }
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
+}
+func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
 }
 func (UnimplementedVtctldServer) GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
@@ -1675,6 +1736,9 @@ func (UnimplementedVtctldServer) ValidateShard(context.Context, *vtctldata.Valid
 func (UnimplementedVtctldServer) ValidateVersionKeyspace(context.Context, *vtctldata.ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionKeyspace not implemented")
 }
+func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionShard not implemented")
+}
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
 }
@@ -1759,6 +1823,24 @@ func _Vtctld_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ApplySchema(ctx, req.(*vtctldata.ApplySchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ApplyShardRoutingRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ApplyShardRoutingRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ApplyShardRoutingRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ApplyShardRoutingRules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ApplyShardRoutingRules(ctx, req.(*vtctldata.ApplyShardRoutingRulesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2273,6 +2355,24 @@ func _Vtctld_GetShard_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetShardRoutingRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetShardRoutingRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetShardRoutingRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetShardRoutingRules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetShardRoutingRules(ctx, req.(*vtctldata.GetShardRoutingRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_GetSrvKeyspaceNames_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.GetSrvKeyspaceNamesRequest)
 	if err := dec(in); err != nil {
@@ -2377,6 +2477,24 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTablets(ctx, req.(*vtctldata.GetTabletsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetTopologyPathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetTopologyPath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetTopologyPath",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetTopologyPath(ctx, req.(*vtctldata.GetTopologyPathRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3104,6 +3222,24 @@ func _Vtctld_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ValidateVersionShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateVersionShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateVersionShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateVersionShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateVersionShard(ctx, req.(*vtctldata.ValidateVersionShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ValidateVSchemaRequest)
 	if err := dec(in); err != nil {
@@ -3144,6 +3280,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplySchema",
 			Handler:    _Vtctld_ApplySchema_Handler,
+		},
+		{
+			MethodName: "ApplyShardRoutingRules",
+			Handler:    _Vtctld_ApplyShardRoutingRules_Handler,
 		},
 		{
 			MethodName: "ApplyVSchema",
@@ -3250,6 +3390,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_GetShard_Handler,
 		},
 		{
+			MethodName: "GetShardRoutingRules",
+			Handler:    _Vtctld_GetShardRoutingRules_Handler,
+		},
+		{
 			MethodName: "GetSrvKeyspaceNames",
 			Handler:    _Vtctld_GetSrvKeyspaceNames_Handler,
 		},
@@ -3272,6 +3416,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablets",
 			Handler:    _Vtctld_GetTablets_Handler,
+		},
+		{
+			MethodName: "GetTopologyPath",
+			Handler:    _Vtctld_GetTopologyPath_Handler,
 		},
 		{
 			MethodName: "GetVersion",
@@ -3428,6 +3576,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVersionKeyspace",
 			Handler:    _Vtctld_ValidateVersionKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateVersionShard",
+			Handler:    _Vtctld_ValidateVersionShard_Handler,
 		},
 		{
 			MethodName: "ValidateVSchema",

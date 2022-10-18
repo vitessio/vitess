@@ -18,6 +18,8 @@ package vreplication
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -67,7 +69,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	return nil
 }
 
-func createMoveTablesWorkflow(t *testing.T, tables string) error {
+func createMoveTablesWorkflow(t *testing.T, tables string) {
 	if tables == "" {
 		tables = tablesToMove
 	}
@@ -78,7 +80,6 @@ func createMoveTablesWorkflow(t *testing.T, tables string) error {
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiff1(t, ksWorkflow, "")
-	return nil
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
@@ -103,6 +104,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
 			args = append(args, "--source", sourceKs, "--tables", tables)
+			if sourceShards != "" {
+				args = append(args, "--source_shards", sourceShards)
+			}
 		} else {
 			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
 		}
@@ -121,7 +125,6 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		return fmt.Errorf("%s: %s", err, output)
 	}
 	return nil
-
 }
 
 func tstWorkflowSwitchReads(t *testing.T, tabletTypes, cells string) {
@@ -252,6 +255,17 @@ func TestBasicV2Workflows(t *testing.T) {
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
 	log.Flush()
+}
+
+func getVtctldGRPCURL() string {
+	return net.JoinHostPort("localhost", strconv.Itoa(vc.Vtctld.GrpcPort))
+}
+
+func applyShardRoutingRules(t *testing.T, rules string) {
+	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "ApplyShardRoutingRules", "--rules", rules})
+	log.Infof("ApplyShardRoutingRules err: %+v, output: %+v", err, output)
+	require.NoError(t, err, output)
+	require.NotNil(t, output)
 }
 
 /*
@@ -595,6 +609,30 @@ func setupCustomerKeyspace(t *testing.T) {
 	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 	targetReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
 	targetRdonlyTab1 = custKs.Shards["-80"].Tablets["zone1-202"].Vttablet
+}
+
+func setupCustomer2Keyspace(t *testing.T) {
+	c2shards := []string{"-80", "80-"}
+	c2keyspace := "customer2"
+	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, c2keyspace, strings.Join(c2shards, ","),
+		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 1200, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, c2shard := range c2shards {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", c2keyspace, c2shard), 1); err != nil {
+			t.Fatal(err)
+		}
+		if defaultReplicas > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", c2keyspace, c2shard), defaultReplicas); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if defaultRdonly > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", c2keyspace, c2shard), defaultRdonly); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 }
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {

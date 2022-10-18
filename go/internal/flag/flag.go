@@ -44,6 +44,7 @@ import (
 //
 // See VEP-4, phase 1 for details: https://github.com/vitessio/enhancements/blob/c766ea905e55409cddeb666d6073cd2ac4c9783e/veps/vep-4.md#phase-1-preparation
 func Parse(fs *flag.FlagSet) {
+	preventGlogVFlagFromClobberingVersionFlagShorthand(fs)
 	fs.AddGoFlagSet(goflag.CommandLine)
 
 	if fs.Lookup("help") == nil {
@@ -63,8 +64,63 @@ func Parse(fs *flag.FlagSet) {
 		}()
 	}
 
+	TrickGlog() // see the function doc for why.
+
 	flag.CommandLine = fs
 	flag.Parse()
+}
+
+// TrickGlog tricks glog into understanding that flags have been parsed.
+//
+// N.B. Do not delete this function. `glog` is a persnickity package and wants
+// to insist that you parse flags before doing any logging, which is a totally
+// reasonable thing (for example, if you log something at DEBUG before parsing
+// the flag that tells you to only log at WARN or greater).
+//
+// However, `glog` also "insists" that you use the standard library to parse (by
+// checking `flag.Parsed()`), which doesn't cover cases where `glog` flags get
+// installed on some other parsing package, in our case pflag, and therefore are
+// actually being parsed before logging. This is incredibly annoying, because
+// all log lines end up prefixed with:
+//
+//	> "ERROR: logging before flag.Parse"
+//
+// So, we include this little shim to trick `glog` into (correctly, I must
+// add!!!!) realizing that CLI arguments have indeed been parsed. Then, we put
+// os.Args back in their rightful place, so the parsing we actually want to do
+// can proceed as usual.
+func TrickGlog() {
+	args := os.Args[1:]
+	os.Args = os.Args[0:1]
+	goflag.Parse()
+
+	os.Args = append(os.Args, args...)
+}
+
+// The default behavior of PFlagFromGoFlag (which is called on each flag when
+// calling AddGoFlagSet) is to allow any flags with single-character names to be
+// accessible both as, for example, `-v` and `--v`.
+//
+// This prevents us from exposing version via `--version|-v` (pflag will actually
+// panic when it goes to add the glog log-level flag), so we intervene to blank
+// out the Shorthand for _just_ that flag before adding the rest of the goflags
+// to a particular pflag FlagSet.
+//
+// IMPORTANT: This must be called prior to AddGoFlagSet in both Parse and
+// ParseFlagsForTest.
+func preventGlogVFlagFromClobberingVersionFlagShorthand(fs *flag.FlagSet) {
+	// N.B. we use goflag.Lookup instead of this package's Lookup, because we
+	// explicitly want to check only the goflags.
+	if f := goflag.Lookup("v"); f != nil {
+		if fs.Lookup("v") != nil { // This check is exactly what AddGoFlagSet does.
+			return
+		}
+
+		pf := flag.PFlagFromGoFlag(f)
+		pf.Shorthand = ""
+
+		fs.AddFlag(pf)
+	}
 }
 
 // Usage invokes the current CommandLine's Usage func, or if not overridden,
@@ -106,8 +162,9 @@ func ParseFlagsForTest() {
 	}
 
 	// parse remaining flags including the log-related ones like --alsologtostderr
-	fs := flag.NewFlagSet("test", flag.ExitOnError)
-	Parse(fs)
+	preventGlogVFlagFromClobberingVersionFlagShorthand(flag.CommandLine)
+	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	flag.Parse()
 }
 
 // Parsed returns true if the command-line flags have been parsed.

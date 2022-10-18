@@ -64,7 +64,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab1(id,val) values (1,'a'), (2,'b')",
-		"/update _vt.copy_state",
+		"/insert into _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
@@ -96,7 +96,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab2(id,val) values (1,'a'), (2,'b')",
-		"/update _vt.copy_state",
+		"/insert into _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
@@ -121,7 +121,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab3(id,val) values (1,'a'), (2,'b')",
-		"/update _vt.copy_state",
+		"/insert into _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
@@ -194,7 +194,7 @@ func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
 }
 
 func startExternalVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelr func()) {
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

@@ -278,8 +278,14 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case LaunchMigrationType:
+		alterType = "launch"
+	case LaunchAllMigrationType:
+		alterType = "launch all"
 	case CompleteMigrationType:
 		alterType = "complete"
+	case CompleteAllMigrationType:
+		alterType = "complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -299,6 +305,9 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	}
 	if node.Ratio != nil {
 		buf.astPrintf(node, " ratio %v", node.Ratio)
+	}
+	if node.Shards != "" {
+		buf.astPrintf(node, " vitess_shards '%s'", node.Shards)
 	}
 }
 

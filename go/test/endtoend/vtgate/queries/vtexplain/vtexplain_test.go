@@ -27,6 +27,7 @@ import (
 )
 
 func TestVtGateVtExplain(t *testing.T) {
+	vtParams := clusterInstance.GetVTParams(shardedKs)
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

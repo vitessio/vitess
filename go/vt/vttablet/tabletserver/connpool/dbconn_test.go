@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -24,15 +25,13 @@ import (
 	"testing"
 	"time"
 
-	"context"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -459,4 +458,64 @@ func TestDBConnStreamKill(t *testing.T) {
 		10, querypb.ExecuteOptions_ALL)
 
 	assert.Contains(t, err.Error(), "(errno 2013) due to")
+}
+
+func TestDBConnReconnect(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+
+	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	oldConnID := dbConn.conn.ID()
+	// close the connection and let the dbconn reconnect to start a new connection when required.
+	dbConn.conn.Close()
+
+	query := "select 1"
+	db.AddQuery(query, &sqltypes.Result{})
+
+	_, err = dbConn.Exec(context.Background(), query, 1, false)
+	require.NoError(t, err)
+	require.NotEqual(t, oldConnID, dbConn.conn.ID())
+}
+
+func TestDBConnReApplySetting(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.OrderMatters()
+
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+
+	ctx := context.Background()
+	dbConn, err := NewDBConn(ctx, connPool, db.ConnParams())
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	// apply system settings.
+	setQ := "set @@sql_mode='ANSI_QUOTES'"
+	db.AddExpectedQuery(setQ, nil)
+	err = dbConn.ApplySetting(ctx, pools.NewSetting(setQ, "set @@sql_mode = default"))
+	require.NoError(t, err)
+
+	// close the connection and let the dbconn reconnect to start a new connection when required.
+	oldConnID := dbConn.conn.ID()
+	dbConn.conn.Close()
+
+	// new conn should also have the same settings.
+	// set query will be executed first on the new connection and then the query.
+	db.AddExpectedQuery(setQ, nil)
+	query := "select 1"
+	db.AddExpectedQuery(query, nil)
+	_, err = dbConn.Exec(ctx, query, 1, false)
+	require.NoError(t, err)
+	require.NotEqual(t, oldConnID, dbConn.conn.ID())
+
+	db.VerifyAllExecutedOrFail()
 }

@@ -258,9 +258,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 }
 
 func TestMaxMemoryRows(t *testing.T) {
-	save := *maxMemoryRows
-	*maxMemoryRows = 3
-	defer func() { *maxMemoryRows = save }()
+	save := maxMemoryRows
+	maxMemoryRows = 3
+	defer func() { maxMemoryRows = save }()
 
 	createSandbox("TestMaxMemoryRows")
 	hc := discovery.NewFakeHealthCheck(nil)

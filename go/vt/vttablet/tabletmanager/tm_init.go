@@ -452,7 +452,7 @@ func (tm *TabletManager) Close() {
 		return nil
 	}
 
-	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer updateCancel()
 
 	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {
@@ -865,7 +865,7 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (primary *topo.TabletInfo, err error) {
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
-	if *mysqlctl.DisableActiveReparents {
+	if mysqlctl.DisableActiveReparents {
 		return nil, nil
 	}
 
