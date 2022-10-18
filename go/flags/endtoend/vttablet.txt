@@ -149,6 +149,7 @@ Usage of vttablet:
       --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
+      --init-vt-schema-on-tablet-init                                    EXPERIMENTAL: _vt schema is created on tablet init and not separately and/or using WithDDL (default true)
       --init_db_name_override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init_keyspace string                                             (init parameter) keyspace to use for this tablet
       --init_populate_metadata                                           (init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.
