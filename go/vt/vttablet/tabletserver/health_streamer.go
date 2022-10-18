@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -405,6 +407,9 @@ func (hs *healthStreamer) reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	if sidecardb.InitVTSchemaOnTabletInit { // _vt schema should be the desired one by now
+		return true, nil
+	}
 	for _, query := range mysql.VTDatabaseInit {
 		_, err := conn.Exec(hs.ctx, query, 1, false)
 		if err != nil {

@@ -85,8 +85,7 @@ var (
 	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
 
-	initPopulateMetadata bool
-	initTimeout          = 1 * time.Minute
+	initTimeout = 1 * time.Minute
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -98,7 +97,6 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 
-	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 }
 
@@ -150,11 +148,6 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
-
-	// MetadataManager manages the local metadata tables for a tablet. It
-	// exists, and is exported, to support swapping a nil pointer in test code,
-	// in which case metadata creation/population is skipped.
-	MetadataManager *mysqlctl.MetadataManager
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -743,7 +736,6 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 }
 
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
-	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
@@ -776,23 +768,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	// optionally populate metadata records
-	if initPopulateMetadata {
-		localMetadata := tm.getLocalMetadataValues(tablet.Type)
-		if tm.Cnf != nil { // we are managing mysqld
-			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
-			if err := tm.MysqlDaemon.Wait(ctx, tm.Cnf); err != nil {
-				return false, err
-			}
-		}
-
-		if tm.MetadataManager != nil {
-			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-			if err != nil {
-				return false, vterrors.Wrap(err, "failed to --init_populate_metadata")
-			}
-		}
-	}
 	return false, nil
 }
 
