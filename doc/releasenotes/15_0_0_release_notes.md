@@ -76,6 +76,9 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 - --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
 
+#### vtbackup flag deprecations
+- --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.
+
 ### New command line flags and behavior
 
 #### vtgate --mysql-server-pool-conn-read-buffers

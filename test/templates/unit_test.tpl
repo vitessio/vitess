@@ -46,7 +46,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.5
+        go-version: 1.18.7
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
