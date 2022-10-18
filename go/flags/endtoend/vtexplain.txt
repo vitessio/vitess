@@ -1,7 +1,5 @@
 Usage of vtexplain:
       --alsologtostderr                              log to standard error as well as files
-      --app_idle_timeout duration                    Idle timeout for app connections (default 1m0s)
-      --app_pool_size int                            Size of the connection pool for app connections (default 40)
       --batch-interval duration                      Interval between logical time slots. (default 10ms)
       --dbname string                                Optional database target to override normal routing
       --default_tablet_type topodatapb.TabletType    The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)

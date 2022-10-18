@@ -97,7 +97,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtbackup", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtbackup", "vtctld"} {
 		servenv.OnParseFor(cmd, registerBackupFlags)
 	}
 }
