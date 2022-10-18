@@ -226,7 +226,7 @@ func createPhysicalOperatorFromDelete(ctx *plancontext.PlanningContext, op *abst
 		return nil, err
 	}
 
-	if opCode == engine.Unsharded {
+	if !vindexTable.Keyspace.Sharded {
 		return &Route{
 			Source: &Delete{
 				QTable: op.Table,
