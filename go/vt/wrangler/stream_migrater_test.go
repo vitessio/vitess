@@ -90,7 +90,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped')
 			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", resultid12, nil)
@@ -256,7 +256,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped')
 			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2, 3, 4)", resultid1234, nil)
@@ -408,7 +408,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped')
 			dbclient.addQuery("select id from _vt.vreplication where id in (1)", resultid1, nil)
@@ -542,7 +542,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped')
 			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", resultid12, nil)
@@ -709,7 +709,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped')
 			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", resultid12, nil)
@@ -883,7 +883,7 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped')
 			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", resultid12, nil)
@@ -991,7 +991,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped'): fail this
 			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", nil, fmt.Errorf("intentionally failed"))
@@ -1153,7 +1153,7 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 		}
 	}
 	stopStreams()
@@ -1221,7 +1221,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 				"int64|varbinary|varchar|varbinary|int64|int64"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1)", resultid1, nil)
+			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1)", resultid1, nil)
 		}
 	}
 	stopStreams()
@@ -1415,9 +1415,9 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 				sourceRows[i]...),
 				nil)
 			if i == 0 {
-				dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
+				dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
 			} else {
-				dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+				dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 			}
 		}
 	}

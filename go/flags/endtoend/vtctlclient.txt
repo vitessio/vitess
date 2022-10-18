@@ -30,8 +30,8 @@ Usage of vtctlclient:
       --tracing-enable-logging                 whether to enable logging in the tracing service
       --tracing-sampling-rate float            sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string           sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
-  -v, --v Level                                log level for V logs
-      --version                                print binary version
+      --v Level                                log level for V logs
+  -v, --version                                print binary version
       --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging
       --vtctl_client_protocol string           Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld_grpc_ca string                  the server ca to use to validate servers when connecting

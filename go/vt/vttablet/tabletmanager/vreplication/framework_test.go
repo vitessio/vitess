@@ -161,6 +161,11 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), alterCopyState); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
 		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createVReplicationLogTable); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

@@ -119,8 +119,8 @@ Usage of vttestserver:
       --topo_zk_tls_cert string                                          the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
       --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
       --transaction_mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
-  -v, --v Level                                                          log level for V logs
-      --version                                                          print binary version
+      --v Level                                                          log level for V logs
+  -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
       --vtctl_client_protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
