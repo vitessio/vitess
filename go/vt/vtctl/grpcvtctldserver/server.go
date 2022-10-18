@@ -1813,6 +1813,39 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}, nil
 }
 
+// GetTopologyPath is part of the vtctlservicepb.VtctldServer interface.
+// It returns the cell located at the provided path in the topology server.
+func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.GetTopologyPathRequest) (*vtctldatapb.GetTopologyPathResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTopology")
+	defer span.Finish()
+
+	// handle toplevel display: global, then one line per cell.
+	if req.Path == "/" {
+		cells, err := s.ts.GetKnownCells(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp := vtctldatapb.GetTopologyPathResponse{
+			Cell: &vtctldatapb.TopologyCell{
+				Path: req.Path,
+				// the toplevel display has no name, just children
+				Children: append([]string{topo.GlobalCell}, cells...),
+			},
+		}
+		return &resp, nil
+	}
+
+	// otherwise, delegate to getTopologyCell to parse the path and return the cell there
+	cell, err := s.getTopologyCell(ctx, req.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetTopologyPathResponse{
+		Cell: cell,
+	}, nil
+}
+
 // GetVersion returns the version of a tablet from its debug vars
 func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersionRequest) (resp *vtctldatapb.GetVersionResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetVersion")
@@ -4236,6 +4269,54 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
+}
+
+// getTopologyCell is a helper method that returns a topology cell given its path.
+func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*vtctldatapb.TopologyCell, error) {
+	// extract cell and relative path
+	parts := strings.Split(cellPath, "/")
+	if parts[0] != "" || len(parts) < 2 {
+		err := vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid path: %s", cellPath)
+		return nil, err
+	}
+	cell := parts[1]
+	relativePath := cellPath[len(cell)+1:]
+	topoCell := vtctldatapb.TopologyCell{Name: parts[len(parts)-1], Path: cellPath}
+
+	conn, err := s.ts.ConnForCell(ctx, cell)
+	if err != nil {
+		err := vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "error fetching connection to cell %s: %v", cell, err)
+		return nil, err
+	}
+
+	data, _, dataErr := conn.Get(ctx, relativePath)
+
+	if dataErr == nil {
+		result, err := topo.DecodeContent(relativePath, data, false)
+		if err != nil {
+			err := vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
+			return nil, err
+		}
+		topoCell.Data = result
+		// since there is data at this cell, it cannot be a directory cell
+		// so we can early return the topocell
+		return &topoCell, nil
+	}
+
+	children, childrenErr := conn.ListDir(ctx, relativePath, false /*full*/)
+
+	if childrenErr != nil && dataErr != nil {
+		err := vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
+		return nil, err
+	}
+
+	topoCell.Children = make([]string, len(children))
+
+	for i, c := range children {
+		topoCell.Children[i] = c.Name
+	}
+
+	return &topoCell, nil
 }
 
 // Helper function to get version of a tablet from its debug vars
