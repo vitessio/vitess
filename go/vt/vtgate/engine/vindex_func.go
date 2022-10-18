@@ -126,6 +126,11 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 	if err != nil {
 		return nil, err
 	}
+	if len(destinations) != len(values) {
+		// should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Vindex.Map() length mismatch: input values count is %d, output destinations count is %d",
+			len(values), len(destinations))
+	}
 	result := &sqltypes.Result{
 		Fields: vf.Fields,
 	}
