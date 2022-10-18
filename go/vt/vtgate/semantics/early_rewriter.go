@@ -146,7 +146,19 @@ func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 					continue
 				}
 				if ae.As.Equal(col.Name) {
-					inner.Replace(ae.Expr)
+					safeToRewrite := true
+					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
+						switch cursor.Node().(type) {
+						case *sqlparser.ColName:
+							safeToRewrite = false
+						case sqlparser.AggrFunc:
+							return false
+						}
+						return true
+					}, nil)
+					if safeToRewrite {
+						inner.Replace(ae.Expr)
+					}
 				}
 			}
 		}
