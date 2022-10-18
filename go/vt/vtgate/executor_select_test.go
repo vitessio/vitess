@@ -783,7 +783,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
 			sqltypes.NewVarChar("UNSPECIFIED"),
-			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("UNSPECIFIED"),
 			// these have been set at the beginning of the test
 			sqltypes.NewVarChar("a fine gtid"),
 			sqltypes.NewFloat64(13),
@@ -2912,6 +2912,7 @@ func TestSelectLock(t *testing.T) {
 		AdvisoryLock: map[string]int64{"lock name": 1},
 		FoundRows:    1,
 		RowCount:     -1,
+		Options:      &querypb.ExecuteOptions{},
 	}
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")

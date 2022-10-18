@@ -48,46 +48,46 @@ func TestExecutorSet(t *testing.T) {
 		err string
 	}{{
 		in:  "set @@autocommit = true",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = 1, client_found_rows = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
 	}, {
 		in:  "set @@session.autocommit = true",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@session.`autocommit` = true",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = true",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = on",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = ON",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = 'on'",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = `on`",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = \"on\"",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = false",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = off",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = OFF",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set AUTOCOMMIT = 0",
-		out: &vtgatepb.Session{},
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set AUTOCOMMIT = 'aa'",
 		err: "variable 'autocommit' can't be set to the value: 'aa' is not a boolean",
@@ -117,19 +117,19 @@ func TestExecutorSet(t *testing.T) {
 		err: "variable 'client_found_rows' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction_mode = 'single'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_SINGLE},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_SINGLE, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction_mode = 'multi'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction_mode = 'twopc'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction_mode = twopc",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction_mode = 'aa'",
 		err: "invalid transaction_mode: aa",
@@ -156,7 +156,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "incorrect argument type to variable 'workload': INT64",
 	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set sql_select_limit = 5",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
@@ -171,25 +171,25 @@ func TestExecutorSet(t *testing.T) {
 		err: "variable 'autocommit' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set autocommit = 1+0",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set autocommit = default",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set foo = 1",
 		err: "Unknown system variable '@@foo = 1'",
 	}, {
 		in:  "set names utf8",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set names ascii",
 		err: "charset/name ascii is not supported",
 	}, {
 		in:  "set charset utf8",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set character set default",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set character set ascii",
 		err: "charset/name ascii is not supported",
@@ -207,55 +207,55 @@ func TestExecutorSet(t *testing.T) {
 		err: "variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set session transaction isolation level repeatable read",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set session transaction isolation level read committed",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set session transaction isolation level read uncommitted",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set session transaction isolation level serializable",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction isolation level serializable",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set session transaction read write",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@enable_system_settings = on",
-		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@enable_system_settings = off",
-		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@enable_system_settings = 1",
-		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@enable_system_settings = 0",
-		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@enable_system_settings = true",
-		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@enable_system_settings = false",
-		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@socket = '/tmp/change.sock'",
 		err: "variable 'socket' is a read only variable",
 	}, {
 		in:  "set @@query_timeout = 50",
-		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 50},
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 50, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@query_timeout = 50, query_timeout = 75",
-		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 75},
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 75, Options: &querypb.ExecuteOptions{}},
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
@@ -439,13 +439,13 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 		err string
 	}{{
 		in:  "set @FOO = 'bar'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{"bar"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{"bar"}), Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @foo = 2",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{2}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{2}), Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []any{sqltypes.DecimalFloat(2.1), "baz"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []any{sqltypes.DecimalFloat(2.1), "baz"}), Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
