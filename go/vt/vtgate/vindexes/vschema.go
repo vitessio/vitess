@@ -196,9 +196,9 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(source, vschema)
+	buildRoutingRule(source, vschema)
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
-	buildRoutingRule(source, vschema)
 	buildShardRoutingRule(source, vschema)
 	return vschema
 }
@@ -414,7 +414,23 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			seqks, seqtab, err := sqlparser.ParseTable(table.AutoIncrement.Sequence)
 			var seq *Table
 			if err == nil {
-				seq, err = vschema.FindTable(seqks, seqtab)
+				if seqks == "" {
+					// If we don't have a fully qualified table name
+					// first, check if we have a table in the current keyspace (or have a routing rule for it).
+					seq, err = vschema.FindRoutedTable(ksname, seqtab, topodatapb.TabletType_PRIMARY)
+
+					if err == nil && seq == nil {
+						// As a fallback, check global routing rules
+						seq, err = vschema.FindRoutedTable("", seqtab, topodatapb.TabletType_PRIMARY)
+					}
+				} else {
+					// If we have a fully qualified table, try to find it (or its routing target)
+					seq, err = vschema.FindRoutedTable(seqks, seqtab, topodatapb.TabletType_PRIMARY)
+				}
+
+				if seq == nil && err == nil {
+					err = fmt.Errorf("table %s not found", seqtab)
+				}
 			}
 			if err != nil {
 				// Better to remove the table than to leave it partially initialized.

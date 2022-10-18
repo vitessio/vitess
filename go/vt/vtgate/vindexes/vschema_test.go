@@ -2071,6 +2071,306 @@ func TestSequence(t *testing.T) {
 	}
 }
 
+func TestRoutedSequenceWithQualifiedName(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{
+					FromTable: "sharded.seq",
+					ToTables: []string{
+						"unsharded.seq",
+					},
+				},
+			},
+		},
+
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				RequireExplicitRouting: true,
+				Tables: map[string]*vschemapb.Table{
+					"seq": {
+						Type: "sequence",
+					},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+						Params: map[string]string{
+							"stfu1": "1",
+						},
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "sharded.seq",
+						},
+					},
+				},
+			},
+		},
+	}
+	got := BuildVSchema(&good)
+
+	err := got.Keyspaces["sharded"].Error
+	require.NoError(t, err)
+	err1 := got.Keyspaces["unsharded"].Error
+	if err1 != nil {
+		t.Error(err1)
+	}
+	ksu := &Keyspace{
+		Name: "unsharded",
+	}
+	kss := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	seq := &Table{
+		Name:     sqlparser.NewIdentifierCS("seq"),
+		Keyspace: ksu,
+		Type:     "sequence",
+	}
+	vindex1 := &stFU{
+		name: "stfu1",
+		Params: map[string]string{
+			"stfu1": "1",
+		},
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewIdentifierCS("t1"),
+		Keyspace: kss,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
+			},
+		},
+		AutoIncrement: &AutoIncrement{
+			Column:   sqlparser.NewIdentifierCI("c1"),
+			Sequence: seq,
+		},
+	}
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[0],
+	}
+	duala := &Table{
+		Name:     sqlparser.NewIdentifierCS("dual"),
+		Keyspace: ksu,
+		Type:     TypeReference,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewIdentifierCS("dual"),
+		Keyspace: kss,
+		Type:     TypeReference,
+	}
+	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{
+			"sharded.seq": {
+				Tables: []*Table{
+					seq,
+				},
+			},
+		},
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dualb,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stfu1": vindex1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Keyspace: ksu,
+				Tables: map[string]*Table{
+					"seq":  seq,
+					"dual": duala,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+			"sharded": {
+				Keyspace: kss,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dualb,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
+				},
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
+func TestRoutedSequenceWithUnqualifiedName(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{
+					FromTable: "sharded.seq",
+					ToTables: []string{
+						"unsharded.seq",
+					},
+				},
+			},
+		},
+
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				RequireExplicitRouting: true,
+				Tables: map[string]*vschemapb.Table{
+					"seq": {
+						Type: "sequence",
+					},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+						Params: map[string]string{
+							"stfu1": "1",
+						},
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "seq",
+						},
+					},
+				},
+			},
+		},
+	}
+	got := BuildVSchema(&good)
+
+	err := got.Keyspaces["sharded"].Error
+	require.NoError(t, err)
+	err1 := got.Keyspaces["unsharded"].Error
+	if err1 != nil {
+		t.Error(err1)
+	}
+	ksu := &Keyspace{
+		Name: "unsharded",
+	}
+	kss := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	seq := &Table{
+		Name:     sqlparser.NewIdentifierCS("seq"),
+		Keyspace: ksu,
+		Type:     "sequence",
+	}
+	vindex1 := &stFU{
+		name: "stfu1",
+		Params: map[string]string{
+			"stfu1": "1",
+		},
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewIdentifierCS("t1"),
+		Keyspace: kss,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
+			},
+		},
+		AutoIncrement: &AutoIncrement{
+			Column:   sqlparser.NewIdentifierCI("c1"),
+			Sequence: seq,
+		},
+	}
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[0],
+	}
+	duala := &Table{
+		Name:     sqlparser.NewIdentifierCS("dual"),
+		Keyspace: ksu,
+		Type:     TypeReference,
+	}
+	dualb := &Table{
+		Name:     sqlparser.NewIdentifierCS("dual"),
+		Keyspace: kss,
+		Type:     TypeReference,
+	}
+	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{
+			"sharded.seq": {
+				Tables: []*Table{
+					seq,
+				},
+			},
+		},
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dualb,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stfu1": vindex1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Keyspace: ksu,
+				Tables: map[string]*Table{
+					"seq":  seq,
+					"dual": duala,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+			"sharded": {
+				Keyspace: kss,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dualb,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
+				},
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
 func TestBadSequence(t *testing.T) {
 	bad := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
