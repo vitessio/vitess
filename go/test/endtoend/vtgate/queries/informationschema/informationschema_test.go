@@ -214,8 +214,13 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtConnParams)
 	require.NoError(t, err)
 
-	utils.Exec(t, conn, "start transaction")
-	utils.Exec(t, conn, `select connection_id()`)
-	utils.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)
-	utils.Exec(t, conn, "rollback")
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, conn, "start transaction")
+			utils.Exec(t, conn, `select connection_id()`)
+			utils.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)
+			utils.Exec(t, conn, "rollback")
+		})
+	}
 }

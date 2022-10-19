@@ -142,19 +142,14 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 	return fields, nil
 }
 
-func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (results []*sqltypes.Result, err error) {
+func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	if vcursor.Session().InTransaction() {
 		// as we are in a transaction, we need to execute all queries inside a single transaction
 		// therefore it needs a sequential execution.
-		results, err = c.sequentialExec(ctx, vcursor, bindVars, wantfields)
-	} else {
-		// not in transaction, so execute in parallel.
-		results, err = c.parallelExec(ctx, vcursor, bindVars, wantfields)
+		return c.sequentialExec(ctx, vcursor, bindVars, wantfields)
 	}
-	if err != nil {
-		return nil, err
-	}
-	return results, nil
+	// not in transaction, so execute in parallel.
+	return c.parallelExec(ctx, vcursor, bindVars, wantfields)
 }
 
 func (c *Concatenate) parallelExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
@@ -199,6 +194,16 @@ func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindV
 
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if vcursor.Session().InTransaction() {
+		// as we are in a transaction, we need to execute all queries inside a single transaction
+		// therefore it needs a sequential execution.
+		return c.sequentialStreamExec(ctx, vcursor, bindVars, wantfields, callback)
+	}
+	// not in transaction, so execute in parallel.
+	return c.parallelStreamExec(ctx, vcursor, bindVars, wantfields, callback)
+}
+
+func (c *Concatenate) parallelStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var outerErr error
 
@@ -262,6 +267,35 @@ func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	}
 	wg.Wait()
 	return outerErr
+}
+
+func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	var seenFields []*querypb.Field
+	for _, source := range c.Sources {
+		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			// if we have fields to compare, make sure all the fields are all the same
+			if resultChunk.Fields != nil {
+				if seenFields == nil {
+					seenFields = resultChunk.Fields
+					return callback(resultChunk)
+				}
+				err := c.compareFields(seenFields, resultChunk.Fields)
+				if err != nil {
+					return err
+				}
+			}
+			// check if context has expired.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return callback(resultChunk)
+
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetFields fetches the field info.
