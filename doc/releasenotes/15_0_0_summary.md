@@ -25,6 +25,7 @@
 - The deprecated vtgate/vtexplain/vtcombo flag `--planner_version` has been removed. Please use `--planner-version` instead.
 - The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
 - `vtctl` commands that take shard names and ranges as positional arguments (e.g. `vtctl Reshard ks.workflow -80 -40,40-80`) need to have their positional arguments separated from their flag arguments by a double-dash separator to avoid the new parsing library from mistaking them as flags (e.g. `vtctl Reshard ks.workflow -- -80 -40,40-80`).
+- The `--cell` flag in the `vtgate` binary no longer has a default value. It is a required argument that has to be specified for the binary to run. Please explicitly specify the flag, if dependent on the flag's default value.
 
 #### Vindex Interface
 
@@ -71,8 +72,8 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --enable-autocommit Autocommit is always allowed
 
 #### vttablet startup flag deprecations
-- --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
-- --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+- --enable-query-plan-field-caching has been deprecated. It will be removed in v16.
+- --enable_semi_sync has been deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 - --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
 
 ### New command line flags and behavior
