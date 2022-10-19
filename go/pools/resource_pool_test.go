@@ -505,8 +505,8 @@ func TestIdleTimeout(t *testing.T) {
 	assert.EqualValues(t, 2, p.IdleClosed())
 }
 
-func TestMaxLifetimeTimeout(t *testing.T) {
-	// maxLifetimeTimeout 0
+func TestMaxLifetime(t *testing.T) {
+	// maxLifetime 0
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
@@ -526,7 +526,7 @@ func TestMaxLifetimeTimeout(t *testing.T) {
 	assert.EqualValues(t, 1, count.Get())
 	assert.EqualValues(t, 0, p.MaxLifetimeClosed())
 
-	// maxLifetimeTimeout > 1
+	// maxLifetime > 0
 	ctx = context.Background()
 	lastID.Set(0)
 	count.Set(0)
@@ -560,18 +560,18 @@ func TestMaxLifetimeTimeout(t *testing.T) {
 }
 
 func TestExtendedLifetimeTimeout(t *testing.T) {
-	// maxLifetimeTimeout 0
+	// maxLifetime 0
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
-	assert.Zero(t, p.extendedLifetimeTimeout())
+	assert.Zero(t, p.extendedMaxLifetime())
 
-	// maxLifetimeTimeout1
-	maxLifetimeTimeout := 10 * time.Millisecond
+	// maxLifetime > 0
+	maxLifetime := 10 * time.Millisecond
 	for i := 0; i < 10; i++ {
-		p = NewResourcePool(PoolFactory, 5, 5, time.Second, maxLifetimeTimeout, logWait, nil, 0)
+		p = NewResourcePool(PoolFactory, 5, 5, time.Second, maxLifetime, logWait, nil, 0)
 		defer p.Close()
-		assert.LessOrEqual(t, maxLifetimeTimeout, p.extendedLifetimeTimeout())
-		assert.Greater(t, 2*maxLifetimeTimeout, p.extendedLifetimeTimeout())
+		assert.LessOrEqual(t, maxLifetime, p.extendedMaxLifetime())
+		assert.Greater(t, 2*maxLifetime, p.extendedMaxLifetime())
 	}
 }
 

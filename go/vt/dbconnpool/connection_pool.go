@@ -54,7 +54,7 @@ type ConnectionPool struct {
 	connections         pools.IResourcePool
 	capacity            int
 	idleTimeout         time.Duration
-	maxLifetimeTimeout  time.Duration
+	maxLifetime         time.Duration
 	resolutionFrequency time.Duration
 
 	// info is set at Open() time
@@ -64,8 +64,8 @@ type ConnectionPool struct {
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, maxLifetimeTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, maxLifetimeTimeout: maxLifetimeTimeout, resolutionFrequency: dnsResolutionFrequency}
+func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, maxLifetime time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
+	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, maxLifetime: maxLifetime, resolutionFrequency: dnsResolutionFrequency}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -109,7 +109,7 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, cp.maxLifetimeTimeout, nil, refreshCheck, cp.resolutionFrequency)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, cp.maxLifetime, nil, refreshCheck, cp.resolutionFrequency)
 }
 
 // connect is used by the resource pool to create a new Resource.

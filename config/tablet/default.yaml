@@ -52,12 +52,12 @@ db:
     preferTcp: false
 
 oltpReadPool:
-  size: 16                     # queryserver-config-pool-size
-  timeoutSeconds: 0            # queryserver-config-query-pool-timeout
-  idleTimeoutSeconds: 1800     # queryserver-config-idle-timeout
-  maxLifetimeTimeoutSeconds: 0 # queryserver-config-max-lifetime-timeout
-  prefillParallelism: 0        # queryserver-config-pool-prefill-parallelism
-  maxWaiters: 50000            # queryserver-config-query-pool-waiter-cap
+  size: 16                 # queryserver-config-pool-size
+  timeoutSeconds: 0        # queryserver-config-query-pool-timeout
+  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+  maxLifetimeSeconds: 0    # queryserver-config-max-lifetime
+  prefillParallelism: 0    # queryserver-config-pool-prefill-parallelism
+  maxWaiters: 50000        # queryserver-config-query-pool-waiter-cap
 
 olapReadPool:
   size: 200                # queryserver-config-stream-pool-size

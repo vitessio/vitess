@@ -98,9 +98,9 @@ type (
 		maxLifetimeClosed sync2.AtomicInt64
 		exhausted         sync2.AtomicInt64
 
-		capacity           sync2.AtomicInt64
-		idleTimeout        sync2.AtomicDuration
-		maxLifetimeTimeout sync2.AtomicDuration
+		capacity    sync2.AtomicInt64
+		idleTimeout sync2.AtomicDuration
+		maxLifetime sync2.AtomicDuration
 
 		resources chan resourceWrapper
 		factory   Factory
@@ -153,24 +153,24 @@ func (s *Setting) GetResetQuery() string {
 // If a resource is unused beyond idleTimeout, it's replaced
 // with a new one.
 // An idleTimeout of 0 means that there is no timeout.
-// An maxLifetimeTimeout of 0 means that there is no timeout.
+// An maxLifetime of 0 means that there is no timeout.
 // A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
 // refreshCheck is a function we consult at refreshInterval
 // intervals to determine if the pool should be drained and reopened
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, maxLifetimeTimeout time.Duration, logWait func(time.Time), refreshCheck RefreshCheck, refreshInterval time.Duration) *ResourcePool {
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, maxLifetime time.Duration, logWait func(time.Time), refreshCheck RefreshCheck, refreshInterval time.Duration) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
 	rp := &ResourcePool{
-		resources:          make(chan resourceWrapper, maxCap),
-		settingResources:   make(chan resourceWrapper, maxCap),
-		factory:            factory,
-		available:          sync2.NewAtomicInt64(int64(capacity)),
-		capacity:           sync2.NewAtomicInt64(int64(capacity)),
-		idleTimeout:        sync2.NewAtomicDuration(idleTimeout),
-		maxLifetimeTimeout: sync2.NewAtomicDuration(maxLifetimeTimeout),
-		logWait:            logWait,
+		resources:        make(chan resourceWrapper, maxCap),
+		settingResources: make(chan resourceWrapper, maxCap),
+		factory:          factory,
+		available:        sync2.NewAtomicInt64(int64(capacity)),
+		capacity:         sync2.NewAtomicInt64(int64(capacity)),
+		idleTimeout:      sync2.NewAtomicDuration(idleTimeout),
+		maxLifetime:      sync2.NewAtomicDuration(maxLifetime),
+		logWait:          logWait,
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
@@ -410,7 +410,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 			timeUsed: time.Now(),
 		}
 		hasSettings = resource.IsSettingApplied()
-		if resource.Expired(rp.extendedLifetimeTimeout()) {
+		if resource.Expired(rp.extendedMaxLifetime()) {
 			rp.maxLifetimeClosed.Add(1)
 			resource.Close()
 			resource = nil
@@ -590,13 +590,13 @@ func (rp *ResourcePool) IdleClosed() int64 {
 	return rp.idleClosed.Get()
 }
 
-// extendedLifetimeTimeout returns random duration within range [maxLifetimeTimeout, 2*maxLifetimeTimeout)
-func (rp *ResourcePool) extendedLifetimeTimeout() time.Duration {
-	maxLifetimeTimeout := rp.maxLifetimeTimeout.Get()
-	if maxLifetimeTimeout == 0 {
+// extendedLifetimeTimeout returns random duration within range [maxLifetime, 2*maxLifetime)
+func (rp *ResourcePool) extendedMaxLifetime() time.Duration {
+	maxLifetime := rp.maxLifetime.Get()
+	if maxLifetime == 0 {
 		return 0
 	}
-	return maxLifetimeTimeout + time.Duration(rand.Int63n(maxLifetimeTimeout.Nanoseconds()))
+	return maxLifetime + time.Duration(rand.Int63n(maxLifetime.Nanoseconds()))
 }
 
 // MaxLifetimeClosed returns the count of resources closed due to refresh timeout.

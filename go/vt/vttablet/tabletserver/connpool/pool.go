@@ -63,7 +63,7 @@ type Pool struct {
 	prefillParallelism int
 	timeout            time.Duration
 	idleTimeout        time.Duration
-	maxLifetimeTimeout time.Duration
+	maxLifetime        time.Duration
 	waiterCap          int64
 	waiterCount        sync2.AtomicInt64
 	waiterQueueFull    sync2.AtomicInt64
@@ -76,7 +76,7 @@ type Pool struct {
 // to publish stats only.
 func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
 	idleTimeout := cfg.IdleTimeoutSeconds.Get()
-	maxLifetimeTimeout := cfg.MaxLifetimeTimeoutSeconds.Get()
+	maxLifetime := cfg.MaxLifetimeSeconds.Get()
 	cp := &Pool{
 		env:                env,
 		name:               name,
@@ -84,7 +84,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		prefillParallelism: cfg.PrefillParallelism,
 		timeout:            cfg.TimeoutSeconds.Get(),
 		idleTimeout:        idleTimeout,
-		maxLifetimeTimeout: maxLifetimeTimeout,
+		maxLifetime:        maxLifetime,
 		waiterCap:          int64(cfg.MaxWaiters),
 		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0, 0),
 	}
@@ -138,7 +138,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		refreshCheck = netutil.DNSTracker(appParams.Host())
 	}
 
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.maxLifetimeTimeout, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.maxLifetime, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
