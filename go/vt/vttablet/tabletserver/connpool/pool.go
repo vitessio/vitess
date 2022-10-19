@@ -86,7 +86,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		idleTimeout:        idleTimeout,
 		maxLifetime:        maxLifetime,
 		waiterCap:          int64(cfg.MaxWaiters),
-		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0, 0),
+		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, maxLifetime, 0),
 	}
 	if name == "" {
 		return cp
