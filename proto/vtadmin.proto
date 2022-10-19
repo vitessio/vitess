@@ -90,6 +90,8 @@ service VTAdmin {
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
     // GetTablets returns all tablets across all the specified clusters.
     rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
+    // GetTopologyPath returns the cell located at the specified path in the topology server.
+    rpc GetTopologyPath(GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse){};
     // GetVSchema returns a VSchema for the specified keyspace in the specified
     // cluster.
     rpc GetVSchema(GetVSchemaRequest) returns (VSchema) {};
@@ -517,6 +519,11 @@ message GetTabletsRequest {
 
 message GetTabletsResponse {
     repeated Tablet tablets = 1;
+}
+
+message GetTopologyPathRequest {
+  string cluster_id = 1;
+  string path = 2;
 }
 
 message GetVSchemaRequest {

@@ -366,10 +366,28 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
+	del := &Delete{
+		QTable: qt,
+		VTable: vindexTable,
+		AST:    deleteStmt,
+	}
+	route := &Route{
+		Source:            del,
+		RouteOpCode:       opCode,
+		Keyspace:          vindexTable.Keyspace,
+		TargetDestination: dest,
+	}
+
+	if !vindexTable.Keyspace.Sharded {
+		return route, nil
+	}
+
 	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
 	if err != nil {
 		return nil, err
 	}
+
+	route.VindexPreds = vindexAndPredicates
 
 	var ovq string
 	if len(vindexTable.Owned) > 0 {
@@ -377,27 +395,16 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		ovq = generateOwnedVindexQuery(tblExpr, deleteStmt, vindexTable, primaryVindex.Columns)
 	}
 
-	r := &Route{
-		Source: &Delete{
-			QTable:           qt,
-			VTable:           vindexTable,
-			OwnedVindexQuery: ovq,
-			AST:              deleteStmt,
-		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vindexAndPredicates,
-		TargetDestination: dest,
-	}
+	del.OwnedVindexQuery = ovq
 
 	for _, predicate := range qt.Predicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
+		err := route.UpdateRoutingLogic(ctx, predicate)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if r.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
+	if route.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
 		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
 	}
@@ -407,9 +414,9 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 	if subq == nil {
-		return r, nil
+		return route, nil
 	}
-	subq.Outer = r
+	subq.Outer = route
 	return subq, nil
 }
 

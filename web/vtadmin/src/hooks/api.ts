@@ -68,6 +68,8 @@ import {
     rebuildKeyspaceGraph,
     removeKeyspaceCell,
     createShard,
+    GetTopologyPathParams,
+    getTopologyPath,
     validate,
     ValidateParams,
     validateShard,
@@ -563,6 +565,15 @@ export const useCreateShard = (
     }, options);
 };
 
+/**
+ * useTopologyPath is a query hook that fetches a cell at the specified path in the topology server.
+ */
+export const useTopologyPath = (
+    params: GetTopologyPathParams,
+    options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
+) => {
+    return useQuery(['topology-path', params], () => getTopologyPath(params));
+};
 /**
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
  * as well as all tablets in discoverable cells, are consistent.

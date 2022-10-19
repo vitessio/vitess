@@ -62,6 +62,11 @@ const (
   table_name varbinary(128),
   lastpk varbinary(2000),
   primary key (vrepl_id, table_name))`
+
+	alterCopyState = `alter table _vt.copy_state
+  add column id bigint unsigned not null auto_increment first,
+  drop primary key, add primary key(id),
+  add key (vrepl_id, table_name)`
 )
 
 var withDDL *withddl.WithDDL
@@ -77,6 +82,7 @@ func init() {
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
+	allddls = append(allddls, alterCopyState)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
@@ -93,6 +99,10 @@ var waitRetryTime = 1 * time.Second
 
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
+
+// How frequntly vcopier will garbage collect old copy_state rows.
+// By default, do it in between every 2nd and 3rd rows copied update.
+var copyStateGCInterval = (rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2)
 
 // Engine is the engine for handling vreplication.
 type Engine struct {
