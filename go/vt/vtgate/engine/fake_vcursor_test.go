@@ -50,6 +50,10 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) InTransaction() bool {
+	return false
+}
+
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
 	//TODO implement me
 	panic("implement me")
