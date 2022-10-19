@@ -723,6 +723,23 @@ message GetTabletsResponse {
   repeated topodata.Tablet tablets = 1;
 }
 
+message GetTopologyPathRequest {
+  string path = 1;
+}
+
+message GetTopologyPathResponse {
+  TopologyCell cell = 1;
+}
+
+message TopologyCell {
+  string name = 1;
+  string path = 2;
+  // Data is the file contents of the cell located at path.
+  // It is only populated if the cell is a terminal node.
+  string data = 3;
+  repeated string children = 4;
+}
+
 message GetVSchemaRequest {
   string keyspace = 1;
 }
@@ -1223,6 +1240,15 @@ message ValidateVersionKeyspaceRequest {
 message ValidateVersionKeyspaceResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message ValidateVersionShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message ValidateVersionShardResponse {
+  repeated string results = 1;
 }
 
 message ValidateVSchemaRequest {

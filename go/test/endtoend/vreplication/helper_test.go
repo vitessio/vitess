@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -502,4 +503,60 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
 			time.Sleep(defaultTick)
 		}
 	}
+}
+
+// getShardRoutingRules returns the shard routing rules stored in the
+// topo. It returns the rules sorted by shard,to_keyspace and with all
+// newlines and whitespace removed so that we have predictable,
+// compact, and easy to compare results for tests.
+func getShardRoutingRules(t *testing.T) string {
+	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
+	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
+	require.Nilf(t, err, output)
+	require.NotNil(t, output)
+
+	// Sort the rules by shard,to_keyspace
+	jsonOutput := gjson.Parse(output)
+	rules := jsonOutput.Get("rules").Array()
+	sort.Slice(rules, func(i, j int) bool {
+		shardI := rules[i].Get("shard").String()
+		shardJ := rules[j].Get("shard").String()
+		if shardI == shardJ {
+			return rules[i].Get("to_keyspace").String() < rules[j].Get("to_keyspace").String()
+		}
+		return shardI < shardJ
+	})
+	sb := strings.Builder{}
+	for i := 0; i < len(rules); i++ {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(rules[i].String())
+	}
+	output = fmt.Sprintf(`{"rules":[%s]}`, sb.String())
+
+	// Remove newlines and whitespace
+	re := regexp.MustCompile(`[\n\s]+`)
+	output = re.ReplaceAllString(output, "")
+	output = strings.TrimSpace(output)
+	return output
+}
+
+func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
+	// Update information_schem with the latest data
+	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
+	require.NoError(t, err)
+
+	// Verify that there's no delete marked rows and we reset the auto-inc value
+	res, err := tablet.QueryTablet("select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'",
+		"", false)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Equal(t, 1, len(res.Rows))
+	dataFree, err := res.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), dataFree, "data_free should be 0")
+	autoIncrement, err := res.Rows[0][1].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), autoIncrement, "auto_increment should be 1")
 }

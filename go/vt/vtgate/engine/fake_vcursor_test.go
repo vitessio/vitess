@@ -50,6 +50,10 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) InTransaction() bool {
+	return false
+}
+
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
 	//TODO implement me
 	panic("implement me")
@@ -222,6 +226,13 @@ func (t *noopVCursor) SetAutocommit(context.Context, bool) error {
 
 func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
+}
+
+func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
+}
+
+func (t *noopVCursor) GetQueryTimeout(queryTimeoutFromComments int) int {
+	return queryTimeoutFromComments
 }
 
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {

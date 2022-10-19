@@ -550,7 +550,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	// the initial pos before proceeding
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	remoteCtx, remoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer remoteCancel()
 	posStr, err := tmc.PrimaryPosition(remoteCtx, primary.Tablet)
 	if err != nil {

@@ -583,7 +583,6 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 // This does not start any process and user have to explicitly start all
 // the required services (ex topo, vtgate, mysql and vttablet)
 func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Shard) (err error) {
-
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
 	if !cluster.ReusingVTDATAROOT {
@@ -598,7 +597,6 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 	// Create shard
 	for _, shard := range shards {
 		for _, tablet := range shard.Vttablets {
-
 			// Setup MysqlctlProcess
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
 			// Setup VttabletProcess

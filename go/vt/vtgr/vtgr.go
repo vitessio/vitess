@@ -104,7 +104,7 @@ func OpenTabletDiscoveryWithAcitve(ctx context.Context, cellsToWatch, clustersTo
 		tmclient.NewTabletManagerClient(),
 	)
 	var shards []*controller.GRShard
-	ctx, cancel := context.WithTimeout(vtgr.ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(vtgr.ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	for _, ks := range clustersToWatch {
 		if strings.Contains(ks, "/") {

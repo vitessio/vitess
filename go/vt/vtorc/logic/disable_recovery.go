@@ -32,9 +32,10 @@ package logic
 import (
 	"fmt"
 
+	"github.com/openark/golib/sqlutils"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 )
 
 // IsRecoveryDisabled returns true if Recoveries are disabled globally

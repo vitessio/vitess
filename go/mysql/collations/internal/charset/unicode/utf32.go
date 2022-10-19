@@ -57,3 +57,11 @@ func (Charset_utf32) DecodeRune(p []byte) (rune, int) {
 func (Charset_utf32) SupportsSupplementaryChars() bool {
 	return true
 }
+
+func (Charset_utf32) CharLen(src []byte) int {
+	cnt := len(src)
+	if cnt%4 != 0 {
+		return cnt/4 + 1
+	}
+	return cnt / 4
+}

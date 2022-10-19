@@ -25,17 +25,6 @@ Usage of vtctld:
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
-      --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
-      --db-credentials-server string                                     db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
-      --db-credentials-vault-addr string                                 URL to Vault server
-      --db-credentials-vault-path string                                 Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds
-      --db-credentials-vault-role-mountpoint string                      Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
-      --db-credentials-vault-role-secretidfile string                    Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable
-      --db-credentials-vault-roleid string                               Vault AppRole id; can also be passed using VAULT_ROLEID environment variable
-      --db-credentials-vault-timeout duration                            Timeout for vault API operations (default 10s)
-      --db-credentials-vault-tls-ca string                               Path to CA PEM for validating Vault server certificate
-      --db-credentials-vault-tokenfile string                            Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
-      --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
@@ -162,8 +151,8 @@ Usage of vtctld:
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
-  -v, --v Level                                                          log level for V logs
-      --version                                                          print binary version
+      --v Level                                                          log level for V logs
+  -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vtctl_healthcheck_retry_delay duration                           delay before retrying a failed healthcheck (default 5s)
       --vtctl_healthcheck_timeout duration                               the health check timeout period (default 1m0s)

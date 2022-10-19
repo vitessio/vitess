@@ -40,7 +40,7 @@ var (
 )
 
 func registerVersionFlag(fs *pflag.FlagSet) {
-	fs.BoolVar(&version, "version", version, "print binary version")
+	fs.BoolVarP(&version, "version", "v", version, "print binary version")
 }
 
 // AppVersion is the struct to store build info.

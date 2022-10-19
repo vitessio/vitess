@@ -19,12 +19,12 @@ package inst
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
 )
 
 func init() {
-	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
 }
 
@@ -48,162 +48,162 @@ func TestInstanceKeyEquals(t *testing.T) {
 		Version: "5.5",
 	}
 
-	test.S(t).ExpectEquals(i1.Key, i2.Key)
+	require.Equal(t, i1.Key, i2.Key)
 
 	i2.Key.Port = 3307
-	test.S(t).ExpectNotEquals(i1.Key, i2.Key)
+	require.NotEqual(t, i1.Key, i2.Key)
 }
 
 func TestNewResolveInstanceKey(t *testing.T) {
 	{
 		i, err := NewResolveInstanceKey("127.0.0.1", 3308)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(i.Hostname, "127.0.0.1")
-		test.S(t).ExpectEquals(i.Port, 3308)
+		require.NoError(t, err)
+		require.Equal(t, i.Hostname, "127.0.0.1")
+		require.Equal(t, i.Port, 3308)
 	}
 	{
 		_, err := NewResolveInstanceKey("", 3309)
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		i, err := NewResolveInstanceKey("127.0.0.1", 0)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectFalse(i.IsValid())
+		require.NoError(t, err)
+		require.False(t, i.IsValid())
 	}
 }
 
 func TestParseResolveInstanceKey(t *testing.T) {
 	{
 		key, err := ParseResolveInstanceKey("myhost:1234")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(key.Hostname, "myhost")
-		test.S(t).ExpectEquals(key.Port, 1234)
+		require.NoError(t, err)
+		require.Equal(t, key.Hostname, "myhost")
+		require.Equal(t, key.Port, 1234)
 	}
 	{
 		key, err := ParseResolveInstanceKey("myhost")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(key.Hostname, "myhost")
-		test.S(t).ExpectEquals(key.Port, 3306)
+		require.NoError(t, err)
+		require.Equal(t, key.Hostname, "myhost")
+		require.Equal(t, key.Port, 3306)
 	}
 	{
 		key, err := ParseResolveInstanceKey("10.0.0.3:3307")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(key.Hostname, "10.0.0.3")
-		test.S(t).ExpectEquals(key.Port, 3307)
+		require.NoError(t, err)
+		require.Equal(t, key.Hostname, "10.0.0.3")
+		require.Equal(t, key.Port, 3307)
 	}
 	{
 		key, err := ParseResolveInstanceKey("10.0.0.3")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(key.Hostname, "10.0.0.3")
-		test.S(t).ExpectEquals(key.Port, 3306)
+		require.NoError(t, err)
+		require.Equal(t, key.Hostname, "10.0.0.3")
+		require.Equal(t, key.Port, 3306)
 	}
 	{
 		key, err := ParseResolveInstanceKey("[2001:db8:1f70::999:de8:7648:6e8]:3308")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(key.Hostname, "2001:db8:1f70::999:de8:7648:6e8")
-		test.S(t).ExpectEquals(key.Port, 3308)
+		require.NoError(t, err)
+		require.Equal(t, key.Hostname, "2001:db8:1f70::999:de8:7648:6e8")
+		require.Equal(t, key.Port, 3308)
 	}
 	{
 		key, err := ParseResolveInstanceKey("::1")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(key.Hostname, "::1")
-		test.S(t).ExpectEquals(key.Port, 3306)
+		require.NoError(t, err)
+		require.Equal(t, key.Hostname, "::1")
+		require.Equal(t, key.Port, 3306)
 	}
 	{
 		key, err := ParseResolveInstanceKey("0:0:0:0:0:0:0:0")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(key.Hostname, "0:0:0:0:0:0:0:0")
-		test.S(t).ExpectEquals(key.Port, 3306)
+		require.NoError(t, err)
+		require.Equal(t, key.Hostname, "0:0:0:0:0:0:0:0")
+		require.Equal(t, key.Port, 3306)
 	}
 	{
 		_, err := ParseResolveInstanceKey("[2001:xxxx:1f70::999:de8:7648:6e8]:3308")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseResolveInstanceKey("10.0.0.4:")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseResolveInstanceKey("10.0.0.4:5.6.7")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 }
 
 func TestNewResolveInstanceKeyStrings(t *testing.T) {
 	{
 		i, err := NewResolveInstanceKeyStrings("127.0.0.1", "3306")
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(i.Hostname, "127.0.0.1")
-		test.S(t).ExpectEquals(i.Port, 3306)
+		require.NoError(t, err)
+		require.Equal(t, i.Hostname, "127.0.0.1")
+		require.Equal(t, i.Port, 3306)
 	}
 	{
 		_, err := NewResolveInstanceKeyStrings("127.0.0.1", "")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 	{
 		_, err := NewResolveInstanceKeyStrings("127.0.0.1", "3306x")
-		test.S(t).ExpectNotNil(err)
+		require.Error(t, err)
 	}
 }
 
 func TestInstanceKeyValid(t *testing.T) {
-	test.S(t).ExpectTrue(key1.IsValid())
+	require.True(t, key1.IsValid())
 	i, err := ParseResolveInstanceKey("_:3306")
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectFalse(i.IsValid())
+	require.NoError(t, err)
+	require.False(t, i.IsValid())
 	i, err = ParseResolveInstanceKey("//myhost:3306")
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectFalse(i.IsValid())
+	require.NoError(t, err)
+	require.False(t, i.IsValid())
 }
 
 func TestInstanceKeyDetach(t *testing.T) {
-	test.S(t).ExpectFalse(key1.IsDetached())
+	require.False(t, key1.IsDetached())
 	detached1 := key1.DetachedKey()
-	test.S(t).ExpectTrue(detached1.IsDetached())
+	require.True(t, detached1.IsDetached())
 	detached2 := key1.DetachedKey()
-	test.S(t).ExpectTrue(detached2.IsDetached())
-	test.S(t).ExpectTrue(detached1.Equals(detached2))
+	require.True(t, detached2.IsDetached())
+	require.True(t, detached1.Equals(detached2))
 
 	reattached1 := detached1.ReattachedKey()
-	test.S(t).ExpectFalse(reattached1.IsDetached())
-	test.S(t).ExpectTrue(reattached1.Equals(&key1))
+	require.False(t, reattached1.IsDetached())
+	require.True(t, reattached1.Equals(&key1))
 	reattached2 := reattached1.ReattachedKey()
-	test.S(t).ExpectFalse(reattached2.IsDetached())
-	test.S(t).ExpectTrue(reattached1.Equals(reattached2))
+	require.False(t, reattached2.IsDetached())
+	require.True(t, reattached1.Equals(reattached2))
 }
 
 func TestIsIPv4(t *testing.T) {
-	test.S(t).ExpectFalse(key1.IsIPv4())
+	require.False(t, key1.IsIPv4())
 	{
 		k, _ := ParseRawInstanceKey("mysql-server-1:3306")
-		test.S(t).ExpectFalse(k.IsIPv4())
+		require.False(t, k.IsIPv4())
 	}
 	{
 		k, _ := ParseRawInstanceKey("mysql-server-1")
-		test.S(t).ExpectFalse(k.IsIPv4())
+		require.False(t, k.IsIPv4())
 	}
 	{
 		k, _ := ParseRawInstanceKey("my.sql.server.1")
-		test.S(t).ExpectFalse(k.IsIPv4())
+		require.False(t, k.IsIPv4())
 	}
 	{
 		k, _ := ParseRawInstanceKey("mysql-server-1:3306")
-		test.S(t).ExpectFalse(k.IsIPv4())
+		require.False(t, k.IsIPv4())
 	}
 	{
 		k, _ := ParseRawInstanceKey("127.0.0:3306")
-		test.S(t).ExpectFalse(k.IsIPv4())
+		require.False(t, k.IsIPv4())
 	}
 	{
 		k, _ := ParseRawInstanceKey("127::0::0::1:3306")
-		test.S(t).ExpectFalse(k.IsIPv4())
+		require.False(t, k.IsIPv4())
 	}
 	{
 		k, _ := ParseRawInstanceKey("127.0.0.1:3306")
-		test.S(t).ExpectTrue(k.IsIPv4())
+		require.True(t, k.IsIPv4())
 	}
 	{
 		k, _ := ParseRawInstanceKey("127.0.0.1")
-		test.S(t).ExpectTrue(k.IsIPv4())
+		require.True(t, k.IsIPv4())
 	}
 }

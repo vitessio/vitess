@@ -494,6 +494,12 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid DDL strategy: %s", str)
 		}
 		vcursor.Session().SetDDLStrategy(str)
+	case sysvars.QueryTimeout.Name:
+		queryTimeout, err := svss.evalAsInt64(env)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetQueryTimeout(queryTimeout)
 	case sysvars.SessionEnableSystemSettings.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSessionEnableSystemSettings)
 	case sysvars.Charset.Name, sysvars.Names.Name:

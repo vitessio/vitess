@@ -10,6 +10,13 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Skip CI
+        run: |
+          if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
       - name: Check if workflow needs to be skipped
         id: skip-workflow
         run: |
@@ -22,7 +29,7 @@ jobs:
 
       - name: Check out code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Check for changes in relevant files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'

@@ -33,7 +33,7 @@ var grpcAuthServerFlagHooks []func(*pflag.FlagSet)
 // RegisterGRPCServerAuthFlags registers flags required to enable server-side
 // authentication in vitess gRPC services.
 //
-// `go/cmd/*`` entrypoints should call this function before
+// `go/cmd/*` entrypoints should call this function before
 // ParseFlags(WithArgs)? if they wish to expose Authenticator functionality.
 func RegisterGRPCServerAuthFlags() {
 	OnParse(func(fs *pflag.FlagSet) {

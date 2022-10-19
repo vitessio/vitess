@@ -513,6 +513,7 @@ func TestCreateDBAndTable(t *testing.T) {
 			"ALTER TABLE _vt.vreplication ADD COLUMN workflow_sub_type int NOT NULL DEFAULT 0",
 			"create table if not exists _vt.resharding_journal.*",
 			"create table if not exists _vt.copy_state.*",
+			"alter table _vt.copy_state.*",
 		}
 		for _, ddl := range ddls {
 			dbClient.ExpectRequestRE(ddl, &sqltypes.Result{}, nil)

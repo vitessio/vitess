@@ -33,8 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtgr/inst"
 	"vitess.io/vitess/go/vt/vtgr/log"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 var (

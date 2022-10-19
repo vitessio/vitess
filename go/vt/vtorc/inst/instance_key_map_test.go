@@ -20,12 +20,12 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vtorc/config"
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
 )
 
 func init() {
-	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
 }
 
@@ -35,16 +35,16 @@ func TestGetInstanceKeys(t *testing.T) {
 		m.AddKey(key1)
 		m.AddKey(key2)
 		keys := m.GetInstanceKeys()
-		test.S(t).ExpectEquals(keys[0], key1)
-		test.S(t).ExpectEquals(keys[1], key2)
+		require.Equal(t, keys[0], key1)
+		require.Equal(t, keys[1], key2)
 	}
 	for range rand.Perm(10) { // Just running many iterations to cover multiple possible map iteration ordering. Perm() is just used as an array generator here.
 		m := *NewInstanceKeyMap()
 		m.AddKey(key2)
 		m.AddKey(key1)
 		keys := m.GetInstanceKeys()
-		test.S(t).ExpectEquals(keys[0], key1)
-		test.S(t).ExpectEquals(keys[1], key2)
+		require.Equal(t, keys[0], key1)
+		require.Equal(t, keys[1], key2)
 	}
 }
 
@@ -53,25 +53,25 @@ func TestInstanceKeyMapToJSON(t *testing.T) {
 	m.AddKey(key1)
 	m.AddKey(key2)
 	json, err := m.ToJSON()
-	test.S(t).ExpectNil(err)
+	require.NoError(t, err)
 	ok := (json == `[{"Hostname":"host1","Port":3306},{"Hostname":"host2","Port":3306}]`) || (json == `[{"Hostname":"host2","Port":3306},{"Hostname":"host1","Port":3306}]`)
-	test.S(t).ExpectTrue(ok)
+	require.True(t, ok)
 }
 
 func TestInstanceKeyMapReadJSON(t *testing.T) {
 	json := `[{"Hostname":"host1","Port":3306},{"Hostname":"host2","Port":3306}]`
 	m := *NewInstanceKeyMap()
 	_ = m.ReadJSON(json)
-	test.S(t).ExpectEquals(len(m), 2)
-	test.S(t).ExpectTrue(m[key1])
-	test.S(t).ExpectTrue(m[key2])
+	require.Equal(t, len(m), 2)
+	require.True(t, m[key1])
+	require.True(t, m[key2])
 }
 
 func TestEmptyInstanceKeyMapToCommaDelimitedList(t *testing.T) {
 	m := *NewInstanceKeyMap()
 	res := m.ToCommaDelimitedList()
 
-	test.S(t).ExpectEquals(res, "")
+	require.Equal(t, res, "")
 }
 
 func TestInstanceKeyMapToCommaDelimitedList(t *testing.T) {
@@ -81,7 +81,7 @@ func TestInstanceKeyMapToCommaDelimitedList(t *testing.T) {
 	res := m.ToCommaDelimitedList()
 
 	ok := (res == `host1:3306,host2:3306`) || (res == `host2:3306,host1:3306`)
-	test.S(t).ExpectTrue(ok)
+	require.True(t, ok)
 }
 
 func TestIntersect(t *testing.T) {
@@ -95,7 +95,7 @@ func TestIntersect(t *testing.T) {
 		other.AddKey(key2)
 
 		intersected := m.Intersect(other)
-		test.S(t).ExpectEquals(len(*intersected), 1)
+		require.Equal(t, len(*intersected), 1)
 	}
 	{
 		m := NewInstanceKeyMap()
@@ -106,7 +106,7 @@ func TestIntersect(t *testing.T) {
 		other.AddKey(key2)
 
 		intersected := m.Intersect(other)
-		test.S(t).ExpectEquals(len(*intersected), 0)
+		require.Equal(t, len(*intersected), 0)
 	}
 	{
 		m := NewInstanceKeyMap()
@@ -119,7 +119,7 @@ func TestIntersect(t *testing.T) {
 		other.AddKey(key2)
 
 		intersected := m.Intersect(other)
-		test.S(t).ExpectEquals(len(*intersected), 2)
+		require.Equal(t, len(*intersected), 2)
 	}
 
 }

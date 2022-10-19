@@ -119,7 +119,7 @@ var (
 // RegisterGRPCServerFlags registers flags required to run a gRPC server via Run
 // or RunDefault.
 //
-// `go/cmd/*`` entrypoints should call this function before
+// `go/cmd/*` entrypoints should call this function before
 // ParseFlags(WithArgs)? if they wish to run a gRPC server.
 func RegisterGRPCServerFlags() {
 	OnParse(func(fs *pflag.FlagSet) {

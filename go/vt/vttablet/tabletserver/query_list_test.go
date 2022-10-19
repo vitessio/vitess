@@ -17,10 +17,11 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"context"
+	"github.com/stretchr/testify/require"
 )
 
 type testConn struct {
@@ -48,7 +49,7 @@ func TestQueryList(t *testing.T) {
 	qd := NewQueryDetail(context.Background(), &testConn{id: connID})
 	ql.Add(qd)
 
-	if qd1, ok := ql.queryDetails[connID]; !ok || qd1.connID != connID {
+	if qd1, ok := ql.queryDetails[connID]; !ok || qd1[0].connID != connID {
 		t.Errorf("failed to add to QueryList")
 	}
 
@@ -65,4 +66,27 @@ func TestQueryList(t *testing.T) {
 	if _, ok := ql.queryDetails[connID]; ok {
 		t.Errorf("failed to remove from QueryList")
 	}
+}
+
+func TestQueryListChangeConnIDInMiddle(t *testing.T) {
+	ql := NewQueryList("test")
+	connID := int64(1)
+	qd1 := NewQueryDetail(context.Background(), &testConn{id: connID})
+	ql.Add(qd1)
+
+	conn := &testConn{id: connID}
+	qd2 := NewQueryDetail(context.Background(), conn)
+	ql.Add(qd2)
+
+	require.Len(t, ql.queryDetails[1], 2)
+
+	// change the connID in the middle
+	conn.id = 2
+
+	// remove the same object.
+	ql.Remove(qd2)
+
+	require.Len(t, ql.queryDetails[1], 1)
+	require.Equal(t, qd1, ql.queryDetails[1][0])
+	require.NotEqual(t, qd2, ql.queryDetails[1][0])
 }

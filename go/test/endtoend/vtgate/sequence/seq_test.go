@@ -47,9 +47,9 @@ var (
 	)Engine=InnoDB;
 
 	create table sequence_test_seq (
-		id int default 0, 
-		next_id bigint default null, 
-		cache bigint default null, 
+		id int default 0,
+		next_id bigint default null,
+		cache bigint default null,
 		primary key(id)
 	) comment 'vitess_sequence' Engine=InnoDB;
 
@@ -60,13 +60,13 @@ INSERT INTO id_seq (id, next_id, cache) values (0, 1, 1000);
 	`
 
 	unshardedVSchema = `
-		{	
+		{
 			"sharded":false,
 			"vindexes": {
 				"hash_index": {
 					"type": "hash"
 				}
-			},	
+			},
 			"tables": {
 				"sequence_test":{
 					"auto_increment":{
@@ -147,7 +147,7 @@ CREATE TABLE allDefaults (
 				"column": "id",
 				"sequence": "id_seq"
 			  }
-			},			
+			},
 			"allDefaults": {
 			  "columnVindexes": [
 				{
@@ -263,6 +263,12 @@ func TestSeq(t *testing.T) {
 	want := "Duplicate entry"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("wrong insert: %v, must contain %s", err, want)
+	}
+
+	utils.Exec(t, conn, "DELETE FROM sequence_test_seq")
+	qr = utils.Exec(t, conn, "select * from sequence_test_seq")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 }
 
