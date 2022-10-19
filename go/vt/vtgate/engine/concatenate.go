@@ -142,13 +142,29 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 	return fields, nil
 }
 
-func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(ctx)
-	defer cancel()
+func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (results []*sqltypes.Result, err error) {
+	if vcursor.Session().InTransaction() {
+		// as we are in a transaction, we need to execute all queries inside a single transaction
+		// therefore it needs a sequential execution.
+		results, err = c.sequentialExec(ctx, vcursor, bindVars, wantfields)
+	} else {
+		// not in transaction, so execute in parallel.
+		results, err = c.parallelExec(ctx, vcursor, bindVars, wantfields)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func (c *Concatenate) parallelExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
-	var wg sync.WaitGroup
 	var outerErr error
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
 		vars := copyBindVars(bindVars)
@@ -164,8 +180,19 @@ func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars
 		}()
 	}
 	wg.Wait()
-	if outerErr != nil {
-		return nil, outerErr
+	return results, outerErr
+}
+
+func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, len(c.Sources))
+	for i, source := range c.Sources {
+		currIndex, currSource := i, source
+		vars := copyBindVars(bindVars)
+		result, err := vcursor.ExecutePrimitive(ctx, currSource, vars, wantfields)
+		if err != nil {
+			return nil, err
+		}
+		results[currIndex] = result
 	}
 	return results, nil
 }
