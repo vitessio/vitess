@@ -122,7 +122,7 @@ type stateManager struct {
 	// checkMySQLThrottler ensures that CheckMysql
 	// doesn't get spammed.
 	checkMySQLThrottler *sync2.Semaphore
-	checkMySQLRunning   bool
+	checkMySQLRunning   sync2.AtomicBool
 
 	timebombDuration      time.Duration
 	unhealthyThreshold    sync2.AtomicDuration
@@ -310,11 +310,11 @@ func (sm *stateManager) checkMySQL() {
 		return
 	}
 	log.Infof("CheckMySQL started")
-	sm.checkMySQLRunning = true
+	sm.checkMySQLRunning.Set(true)
 	go func() {
 		defer func() {
 			time.Sleep(1 * time.Second)
-			sm.checkMySQLRunning = false
+			sm.checkMySQLRunning.Set(false)
 			sm.checkMySQLThrottler.Release()
 			log.Infof("CheckMySQL finished")
 		}()
@@ -337,7 +337,7 @@ func (sm *stateManager) checkMySQL() {
 
 // isCheckMySQLRunning returns 1 if CheckMySQL function is in progress
 func (sm *stateManager) isCheckMySQLRunning() int64 {
-	if sm.checkMySQLRunning {
+	if sm.checkMySQLRunning.Get() {
 		return 1
 	}
 	return 0
