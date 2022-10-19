@@ -29,7 +29,7 @@ type PooledDBConnection struct {
 	pool *ConnectionPool
 }
 
-func (pc *PooledDBConnection) Expired(lifetimeTimeout time.Duration) bool {
+func (pc *PooledDBConnection) Expired(time.Duration) bool {
 	return false
 }
 

@@ -65,7 +65,7 @@ type (
 	// is the responsibility of the caller.
 	Resource interface {
 		Close()
-		Expired(lifetimeTimeout time.Duration) bool
+		Expired(time.Duration) bool
 		ApplySetting(ctx context.Context, setting *Setting) error
 		IsSettingApplied() bool
 		IsSameSetting(setting string) bool
