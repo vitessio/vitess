@@ -1118,7 +1118,7 @@ type BinlogSource struct {
 	// for the filter.
 	Filter *Filter `protobuf:"bytes,6,opt,name=filter,proto3" json:"filter,omitempty"`
 	// OnDdl specifies the action to be taken when a DDL is encountered.
-	OnDdl OnDDLAction `protobuf:"varint,7,opt,name=on_ddl,json=onDdl,proto3,enum=binlogdata.OnDDLAction" json:"on_ddl,omitempty"`
+	OnDdl OnDDLAction `protobuf:"varint,7,opt,name=on_ddl,json=onDdl,proto3,enum=binlogdata.OnDDLAction" json:"-"`
 	// Source is an external mysql. This attribute should be set to the username
 	// to use in the connection
 	ExternalMysql string `protobuf:"bytes,8,opt,name=external_mysql,json=externalMysql,proto3" json:"external_mysql,omitempty"`

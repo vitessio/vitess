@@ -117,6 +117,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -2070,11 +2071,14 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+	onDDL := "IGNORE"
+	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	_ = subFlags.Bool("v1", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+	onDDL = strings.ToUpper(onDDL)
 	if subFlags.NArg() != 3 {
 		return fmt.Errorf("three arguments are required: <keyspace.workflow>, source_shards, target_shards")
 	}
@@ -2085,7 +2089,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
 	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells,
-		*tabletTypes, *autoStart, *stopAfterCopy)
+		*tabletTypes, onDDL, *autoStart, *stopAfterCopy)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -2104,11 +2108,14 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
+	onDDL := "IGNORE"
+	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	_ = subFlags.Bool("v1", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+	onDDL = strings.ToUpper(onDDL)
 	if *workflow == "" {
 		return fmt.Errorf("a workflow name must be specified")
 	}
@@ -2129,7 +2136,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *autoStart, *stopAfterCopy, "", *dropForeignKeys, "", nil)
+		*excludes, *autoStart, *stopAfterCopy, "", *dropForeignKeys, "", onDDL, nil)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -2181,6 +2188,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
 	maxReplicationLagAllowed := subFlags.Duration("max_replication_lag_allowed", defaultMaxReplicationLagAllowed, "Allow traffic to be switched only if vreplication lag is below this (in seconds)")
 
+	onDDL := "IGNORE"
+	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
+
 	// MoveTables and Migrate params
 	tables := subFlags.String("tables", "", "MoveTables only. A table spec or a list of tables. Either table_specs or --all needs to be specified.")
 	allTables := subFlags.Bool("all", false, "MoveTables only. Move all tables from the source keyspace. Either table_specs or --all needs to be specified.")
@@ -2213,6 +2223,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("two arguments are needed: action, keyspace.workflow")
 	}
+
+	onDDL = strings.ToUpper(onDDL)
+	if _, ok := binlogdata.OnDDLAction_value[onDDL]; !ok {
+		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
+	}
+
 	action := subFlags.Arg(0)
 	ksWorkflow := subFlags.Arg(1)
 	target, workflowName, err := splitKeyspaceWorkflow(ksWorkflow)
@@ -2231,6 +2247,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		DryRun:         *dryRun,
 		AutoStart:      *autoStart,
 		StopAfterCopy:  *stopAfterCopy,
+		OnDDL:          onDDL,
 	}
 
 	printDetails := func() error {
@@ -2334,6 +2351,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
+		vrwp.OnDDL = onDDL
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:

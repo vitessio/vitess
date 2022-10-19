@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -372,6 +373,8 @@ type ReplicationStatusResult struct {
 	SourceTimeZone string
 	// TargetTimeZone is set to the original SourceTimeZone, in reverse streams, if it was provided to the workflow
 	TargetTimeZone string
+	// OnDDL specifies the action to be taken when a DDL is encountered.
+	OnDDL string `json:"OnDDL,omitempty"`
 }
 
 // ReplicationLocation represents a location that data is either replicating from, or replicating into.
@@ -592,6 +595,11 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			sourceKeyspace = sk
 			sourceShards.Insert(status.Bls.Shard)
 			rsrStatus = append(rsrStatus, status)
+
+			// Only show the OnDDL setting if it's not the default of 0/IGNORE.
+			if status.Bls.OnDdl != binlogdatapb.OnDDLAction_IGNORE {
+				rsr.OnDDL = binlogdata.OnDDLAction_name[int32(status.Bls.OnDdl)]
+			}
 
 			if status.Message == workflow2.Frozen {
 				rsr.Frozen = true

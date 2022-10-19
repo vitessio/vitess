@@ -49,6 +49,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
+	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -122,7 +123,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropForeignKeys bool, sourceTimeZone string, sourceShards []string) error {
+	externalCluster string, dropForeignKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -248,6 +249,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		StopAfterCopy:         stopAfterCopy,
 		ExternalCluster:       externalCluster,
 		SourceShards:          sourceShards,
+		OnDdl:                 onDDL,
 	}
 	if sourceTimeZone != "" {
 		ms.SourceTimeZone = sourceTimeZone
@@ -1235,6 +1237,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			ExternalCluster: mz.ms.ExternalCluster,
 			SourceTimeZone:  mz.ms.SourceTimeZone,
 			TargetTimeZone:  mz.ms.TargetTimeZone,
+			OnDdl:           binlogdatapb.OnDDLAction(binlogdata.OnDDLAction_value[mz.ms.OnDdl]),
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
