@@ -270,15 +270,24 @@ func (c *Concatenate) parallelStreamExec(ctx context.Context, vcursor VCursor, b
 }
 
 func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	// all the below fields ensure that the fields are sent only once.
 	var seenFields []*querypb.Field
-	for _, source := range c.Sources {
+	var fieldsMu sync.Mutex
+	var fieldsSent bool
+
+	for idx, source := range c.Sources {
 		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 			// if we have fields to compare, make sure all the fields are all the same
-			if resultChunk.Fields != nil {
-				if seenFields == nil {
+			if idx == 0 {
+				fieldsMu.Lock()
+				defer fieldsMu.Unlock()
+				if !fieldsSent {
+					fieldsSent = true
 					seenFields = resultChunk.Fields
 					return callback(resultChunk)
 				}
+			}
+			if resultChunk.Fields != nil {
 				err := c.compareFields(seenFields, resultChunk.Fields)
 				if err != nil {
 					return err
