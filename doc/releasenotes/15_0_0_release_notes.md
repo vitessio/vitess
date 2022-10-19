@@ -1,4 +1,4 @@
-# Release of Vitess v15.0.0-rc1
+# Release of Vitess v15.0.0
 ## Summary
 
 - **[Breaking Changes](#breaking-changes)**
