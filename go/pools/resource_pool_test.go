@@ -505,6 +505,90 @@ func TestIdleTimeout(t *testing.T) {
 	assert.EqualValues(t, 2, p.IdleClosed())
 }
 
+func TestIdleTimeoutWithSettings(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait, nil, 0)
+	defer p.Close()
+
+	r, err := p.Get(ctx, sFooBar)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 0, p.IdleClosed())
+
+	p.Put(r)
+	assert.EqualValues(t, 1, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 0, p.IdleClosed())
+
+	time.Sleep(15 * time.Millisecond)
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 1, p.IdleClosed())
+
+	r, err = p.Get(ctx, sFooBar)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 1, p.IdleClosed())
+
+	// sleep to let the idle closer run while all resources are in use
+	// then make sure things are still as we expect
+	time.Sleep(15 * time.Millisecond)
+	assert.EqualValues(t, 2, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 1, p.IdleClosed())
+
+	p.Put(r)
+	r, err = p.Get(ctx, sFooBar)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 1, p.IdleClosed())
+
+	// the idle close thread wakes up every 1/100 of the idle time, so ensure
+	// the timeout change applies to newly added resources
+	p.SetIdleTimeout(1000 * time.Millisecond)
+	p.Put(r)
+
+	time.Sleep(15 * time.Millisecond)
+	assert.EqualValues(t, 2, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 1, p.IdleClosed())
+
+	// Get and Put to refresh timeUsed
+	r, err = p.Get(ctx, sFooBar)
+	require.NoError(t, err)
+	p.Put(r)
+	p.SetIdleTimeout(10 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
+	assert.EqualValues(t, 3, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 2, p.IdleClosed())
+}
+
+func TestIdleTimeoutCreateFail(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait, nil, 0)
+	defer p.Close()
+	for _, setting := range []*Setting{nil, sFoo} {
+		r, err := p.Get(ctx, setting)
+		require.NoError(t, err)
+		// Change the factory before putting back
+		// to prevent race with the idle closer, who will
+		// try to use it.
+		p.factory = FailFactory
+		p.Put(r)
+		time.Sleep(15 * time.Millisecond)
+		assert.Zero(t, p.Active())
+
+		// reset factory for next run.
+		p.factory = PoolFactory
+	}
+}
+
 func TestMaxLifetime(t *testing.T) {
 	// maxLifetime 0
 	ctx := context.Background()
@@ -572,28 +656,6 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 		defer p.Close()
 		assert.LessOrEqual(t, maxLifetime, p.extendedMaxLifetime())
 		assert.Greater(t, 2*maxLifetime, p.extendedMaxLifetime())
-	}
-}
-
-func TestIdleTimeoutCreateFail(t *testing.T) {
-	ctx := context.Background()
-	lastID.Set(0)
-	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait, nil, 0)
-	defer p.Close()
-	for _, setting := range []*Setting{nil, sFoo} {
-		r, err := p.Get(ctx, setting)
-		require.NoError(t, err)
-		// Change the factory before putting back
-		// to prevent race with the idle closer, who will
-		// try to use it.
-		p.factory = FailFactory
-		p.Put(r)
-		time.Sleep(15 * time.Millisecond)
-		assert.Zero(t, p.Active())
-
-		// reset factory for next run.
-		p.factory = PoolFactory
 	}
 }
 

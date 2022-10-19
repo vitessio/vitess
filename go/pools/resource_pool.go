@@ -418,7 +418,6 @@ func (rp *ResourcePool) Put(resource Resource) {
 	}
 	if resource == nil {
 		// Create new resource
-		fmt.Println("reopen")
 		rp.reopenResource(&wrapper)
 		recreated = true
 	}
