@@ -796,6 +796,11 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 
 // SetConsolidator implements the SessionActions interface
 func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
+	// Avoid creating session Options when they do not yet exist and the
+	// consolidator is unspecified.
+	if consolidator == querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED && vc.safeSession.GetOptions() == nil {
+		return
+	}
 	vc.safeSession.GetOrCreateOptions().Consolidator = consolidator
 }
 
