@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package abstract
+package operators
 
 import (
 	"bufio"
@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -100,12 +102,10 @@ func TestOperator(t *testing.T) {
 			require.NoError(t, err)
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
-			optree, err := CreateLogicalOperatorFromAST(stmt, semTable)
+			ctx := plancontext.NewPlanningContext(nil, semTable, nil, 0)
+			optree, err := CreateLogicalOperatorFromAST(ctx, stmt)
 			require.NoError(t, err)
 			output := testString(optree)
-			if tc.expected != output {
-				fmt.Println(1)
-			}
 			assert.Equal(t, tc.expected, output)
 			if t.Failed() {
 				fmt.Println(output)
@@ -114,7 +114,7 @@ func TestOperator(t *testing.T) {
 	}
 }
 
-func testString(op Operator) string {
+func testString(op interface{}) string { // TODO
 	switch op := op.(type) {
 	case *QueryGraph:
 		return fmt.Sprintf("QueryGraph: %s", op.testString())
@@ -126,8 +126,8 @@ func testString(op Operator) string {
 		}
 		return fmt.Sprintf("Join: {\n\tLHS: %s\n\tRHS: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
 	case *Derived:
-		inner := indent(testString(op.Inner))
-		query := sqlparser.String(op.Sel)
+		inner := indent(testString(op.Source))
+		query := sqlparser.String(op.Query)
 		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.Alias, query, inner)
 	case *SubQuery:
 		var inners []string
@@ -147,16 +147,13 @@ func testString(op Operator) string {
 	case *Vindex:
 		value := sqlparser.String(op.Value)
 		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
-	case *Concatenate:
+	case *Union:
 		var inners []string
 		for _, source := range op.Sources {
 			inners = append(inners, indent(testString(source)))
 		}
-		if len(op.OrderBy) > 0 {
-			inners = append(inners, indent(sqlparser.String(op.OrderBy)[1:]))
-		}
-		if op.Limit != nil {
-			inners = append(inners, indent(sqlparser.String(op.Limit)[1:]))
+		if len(op.Ordering) > 0 {
+			inners = append(inners, indent(sqlparser.String(op.Ordering)[1:]))
 		}
 		dist := ""
 		if op.Distinct {
@@ -164,7 +161,7 @@ func testString(op Operator) string {
 		}
 		return fmt.Sprintf("Concatenate%s {\n%s\n}", dist, strings.Join(inners, ",\n"))
 	case *Update:
-		tbl := "table: " + op.Table.testString()
+		tbl := "table: " + op.QTable.testString()
 		var assignments []string
 		// sort to produce stable results, otherwise test is flaky
 		keys := make([]string, 0, len(op.Assignments))

@@ -1,17 +1,32 @@
-package physical
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, error) {
 	outerOp, err := CreatePhysicalOperator(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -25,7 +40,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (
 			return nil, err
 		}
 
-		preds := inner.Inner.UnsolvedPredicates(ctx.SemTable)
+		preds := unresolvedPredicates(inner.Inner, ctx.SemTable)
 		merger := func(a, b *Route) (*Route, error) {
 			return mergeSubQueryOp(ctx, a, b, inner)
 		}
@@ -82,7 +97,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (
 	return outerOp, nil
 }
 
-func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *abstract.SubQueryInner) (*Route, error) {
+func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner) (*Route, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
 
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
@@ -91,7 +106,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch n := node.(type) {
 		case *sqlparser.AliasedTableExpr:
-			ts := outer.TableID()
+			ts := TableID(outer)
 			ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
 		}
 		return true, nil
@@ -144,7 +159,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	return outer, nil
 }
 
-func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op abstract.PhysicalOperator) bool {
+func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op Operator) bool {
 	validVindex := func(expr sqlparser.Expr) bool {
 		sc := findColumnVindex(ctx, op, expr)
 		return sc != nil && sc.IsUnique()
@@ -186,11 +201,11 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 
 func tryMergeSubQueryOp(
 	ctx *plancontext.PlanningContext,
-	outer, subq abstract.PhysicalOperator,
+	outer, subq Operator,
 	subQueryInner *SubQueryInner,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
-) (abstract.PhysicalOperator, error) {
+) (Operator, error) {
 	switch outerOp := outer.(type) {
 	case *Route:
 		return tryMergeSubqueryWithRoute(ctx, subq, outerOp, joinPredicates, merger, subQueryInner)
@@ -203,12 +218,12 @@ func tryMergeSubQueryOp(
 
 func tryMergeSubqueryWithRoute(
 	ctx *plancontext.PlanningContext,
-	subq abstract.PhysicalOperator,
+	subq Operator,
 	outerOp *Route,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 	subQueryInner *SubQueryInner,
-) (abstract.PhysicalOperator, error) {
+) (Operator, error) {
 	subqueryRoute, isRoute := subq.(*Route)
 	if !isRoute {
 		return nil, nil
@@ -260,12 +275,12 @@ func tryMergeSubqueryWithRoute(
 
 func tryMergeSubqueryWithJoin(
 	ctx *plancontext.PlanningContext,
-	subq abstract.PhysicalOperator,
+	subq Operator,
 	outerOp *ApplyJoin,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 	subQueryInner *SubQueryInner,
-) (abstract.PhysicalOperator, error) {
+) (PhysicalOperator, error) {
 	// Trying to merge the subquery with the left-hand or right-hand side of the join
 
 	if outerOp.LeftJoin {
@@ -315,10 +330,10 @@ func tryMergeSubqueryWithJoin(
 // the child of joinTree which does not contain the subquery is the otherTree
 func rewriteColumnsInSubqueryOpForJoin(
 	ctx *plancontext.PlanningContext,
-	innerOp abstract.PhysicalOperator,
+	innerOp Operator,
 	outerTree *ApplyJoin,
 	subQueryInner *SubQueryInner,
-) (abstract.PhysicalOperator, error) {
+) (Operator, error) {
 	resultInnerOp := innerOp
 	var rewriteError error
 	// go over the entire expression in the subquery
@@ -327,7 +342,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
 			// check whether the column name belongs to the other side of the join tree
-			if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(resultInnerOp.TableID()) {
+			if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultInnerOp)) {
 				// get the bindVariable for that column name and replace it in the subquery
 				bindVar := ctx.ReservedVars.ReserveColName(node)
 				cursor.Replace(sqlparser.NewArgument(bindVar))
@@ -353,10 +368,10 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(resultInnerOp.TableID())
+	tableSet.RemoveInPlace(TableID(resultInnerOp))
 	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(resultInnerOp.TableID())
+	tableSet.RemoveInPlace(TableID(resultInnerOp))
 	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 
 	// return any error while rewriting
@@ -365,7 +380,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 func createCorrelatedSubqueryOp(
 	ctx *plancontext.PlanningContext,
-	innerOp, outerOp abstract.PhysicalOperator,
+	innerOp, outerOp Operator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,
 ) (*CorrelatedSubQueryOp, error) {
@@ -383,7 +398,7 @@ func createCorrelatedSubqueryOp(
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
-				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(resultOuterOp.TableID()) {
+				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table

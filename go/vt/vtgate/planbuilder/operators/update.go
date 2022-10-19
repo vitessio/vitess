@@ -14,53 +14,39 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Update struct {
-	QTable              *abstract.QueryTable
+	QTable              *QueryTable
 	VTable              *vindexes.Table
 	Assignments         map[string]sqlparser.Expr
 	ChangedVindexValues map[string]*engine.VindexValues
 	OwnedVindexQuery    string
 	AST                 *sqlparser.Update
+
+	noInputs
 }
 
-var _ abstract.PhysicalOperator = (*Update)(nil)
-var _ abstract.IntroducesTable = (*Update)(nil)
+var _ PhysicalOperator = (*Update)(nil)
 
-// TableID implements the PhysicalOperator interface
-func (u *Update) TableID() semantics.TableSet {
+// Introduces implements the PhysicalOperator interface
+func (u *Update) Introduces() semantics.TableSet {
 	return u.QTable.ID
-}
-
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (u *Update) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
-// CheckValid implements the PhysicalOperator interface
-func (u *Update) CheckValid() error {
-	return nil
 }
 
 // IPhysical implements the PhysicalOperator interface
 func (u *Update) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (u *Update) Cost() int {
-	return 1
-}
-
-// Clone implements the PhysicalOperator interface
-func (u *Update) Clone() abstract.PhysicalOperator {
+// Clone implements the Operator interface
+func (u *Update) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
 	return &Update{
 		QTable:              u.QTable,
 		VTable:              u.VTable,
@@ -69,14 +55,4 @@ func (u *Update) Clone() abstract.PhysicalOperator {
 		OwnedVindexQuery:    u.OwnedVindexQuery,
 		AST:                 u.AST,
 	}
-}
-
-// GetQTable implements the IntroducesTable interface
-func (u *Update) GetQTable() *abstract.QueryTable {
-	return u.QTable
-}
-
-// GetVTable implements the IntroducesTable interface
-func (u *Update) GetVTable() *vindexes.Table {
-	return u.VTable
 }

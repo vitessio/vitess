@@ -14,19 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Derived struct {
-	Source abstract.PhysicalOperator
+	Source Operator
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -37,40 +35,18 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ abstract.PhysicalOperator = (*Derived)(nil)
-
-// TableID implements the PhysicalOperator interface
-func (d *Derived) TableID() semantics.TableSet {
-	return d.Source.TableID()
-}
-
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return d.Source.UnsolvedPredicates(semTable)
-}
-
-// CheckValid implements the PhysicalOperator interface
-func (d *Derived) CheckValid() error {
-	return d.Source.CheckValid()
-}
+var _ PhysicalOperator = (*Derived)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (d *Derived) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (d *Derived) Cost() int {
-	return d.Source.Cost()
-}
-
-// Clone implements the PhysicalOperator interface
-func (d *Derived) Clone() abstract.PhysicalOperator {
+// Clone implements the Operator interface
+func (d *Derived) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 1)
 	clone := *d
-	clone.Source = d.Source.Clone()
+	clone.Source = inputs[0]
 	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
-	clone.Columns = make([]*sqlparser.ColName, 0, len(d.Columns))
-	for _, x := range d.Columns {
-		clone.Columns = append(clone.Columns, sqlparser.CloneRefOfColName(x))
-	}
+	clone.Columns = append([]*sqlparser.ColName{}, d.Columns...)
 	clone.ColumnsOffset = make([]int, 0, len(d.ColumnsOffset))
 	copy(clone.ColumnsOffset, d.ColumnsOffset)
 	return &clone
@@ -119,4 +95,9 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 // if they do some things, like LIMIT or GROUP BY on wrong columns
 func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
+}
+
+// Inputs implements the Operator interface
+func (d *Derived) Inputs() []Operator {
+	return []Operator{d.Source}
 }

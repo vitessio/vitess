@@ -14,14 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -30,7 +29,7 @@ import (
 
 type (
 	Route struct {
-		Source abstract.PhysicalOperator
+		Source Operator
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -84,15 +83,10 @@ type (
 	}
 )
 
-var _ abstract.PhysicalOperator = (*Route)(nil)
+var _ PhysicalOperator = (*Route)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
-
-// TableID implements the Operator interface
-func (r *Route) TableID() semantics.TableSet {
-	return r.Source.TableID()
-}
 
 // Cost implements the Operator interface
 func (r *Route) Cost() int {
@@ -119,10 +113,11 @@ func (r *Route) Cost() int {
 	return 1
 }
 
-// Clone implements the PhysicalOperator interface
-func (r *Route) Clone() abstract.PhysicalOperator {
+// Clone implements the Operator interface
+func (r *Route) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 1)
 	cloneRoute := *r
-	cloneRoute.Source = r.Source.Clone()
+	cloneRoute.Source = inputs[0]
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
 	for i, pred := range r.VindexPreds {
 		// we do this to create a copy of the struct
@@ -130,6 +125,11 @@ func (r *Route) Clone() abstract.PhysicalOperator {
 		cloneRoute.VindexPreds[i] = &p
 	}
 	return &cloneRoute
+}
+
+// Inputs implements the Operator interface
+func (r *Route) Inputs() []Operator {
+	return []Operator{r.Source}
 }
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
@@ -443,21 +443,6 @@ func (r *Route) PickBestAvailableVindex() {
 // canImprove returns true if additional predicates could help improving this plan
 func (r *Route) canImprove() bool {
 	return r.RouteOpCode != engine.None
-}
-
-// UnsolvedPredicates implements the Operator interface
-func (r *Route) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return r.Source.UnsolvedPredicates(semTable)
-}
-
-// CheckValid implements the Operator interface
-func (r *Route) CheckValid() error {
-	return r.Source.CheckValid()
-}
-
-// Compact implements the Operator interface
-func (r *Route) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
-	return r, nil
 }
 
 func (r *Route) IsSingleShard() bool {
