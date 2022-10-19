@@ -599,6 +599,17 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			// Only show the OnDDL setting if it's not the default of 0/IGNORE.
 			if status.Bls.OnDdl != binlogdatapb.OnDDLAction_IGNORE {
 				rsr.OnDDL = binlogdata.OnDDLAction_name[int32(status.Bls.OnDdl)]
+				// Unset it in the proto so that we do not show the
+				// low-level enum int in the JSON marshalled output
+				// as e.g. `"on_ddl": 1` is not meaningful or helpful
+				// for the end user and we instead show the mapped
+				// string value using the top-level "OnDDL" json key.
+				// Note: this is done here only because golang does
+				// not currently support setting json tags in proto
+				// declarations so that I could request it always be
+				// ommitted from marshalled JSON output:
+				// https://github.com/golang/protobuf/issues/52
+				status.Bls.OnDdl = 0
 			}
 
 			if status.Message == workflow2.Frozen {
