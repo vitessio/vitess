@@ -83,6 +83,7 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 		return vterrors.Wrap(err, "buildResharder")
 	}
 
+	rs.onDDL = onDDL
 	rs.stopAfterCopy = stopAfterCopy
 	if !skipSchemaCopy {
 		if err := rs.copySchema(ctx); err != nil {

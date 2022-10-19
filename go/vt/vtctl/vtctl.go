@@ -437,13 +437,13 @@ var commands = []commandGroup{
 			{
 				name:   "Reshard",
 				method: commandReshard,
-				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>]  [--skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
+				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>]  [--skip_schema_copy] [--on-ddl=<act>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
 				help:   "Start a Resharding process. Example: Reshard --cells='zone1,alias1' --tablet_types='PRIMARY,REPLICA,RDONLY'  ks.workflow001 -- '0' '-80,80-'",
 			},
 			{
 				name:   "MoveTables",
 				method: commandMoveTables,
-				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
+				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--on-ddl=<act>] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
@@ -2078,9 +2078,12 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	onDDL = strings.ToUpper(onDDL)
 	if subFlags.NArg() != 3 {
 		return fmt.Errorf("three arguments are required: <keyspace.workflow>, source_shards, target_shards")
+	}
+	onDDL = strings.ToUpper(onDDL)
+	if _, ok := binlogdata.OnDDLAction_value[onDDL]; !ok {
+		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
 	}
 	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
@@ -2116,6 +2119,9 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		return err
 	}
 	onDDL = strings.ToUpper(onDDL)
+	if _, ok := binlogdata.OnDDLAction_value[onDDL]; !ok {
+		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
+	}
 	if *workflow == "" {
 		return fmt.Errorf("a workflow name must be specified")
 	}
