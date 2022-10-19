@@ -9,7 +9,7 @@ Usage of vtgate:
       --buffer_size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
       --buffer_window duration                                           Duration for how long a request should be buffered at most. (default 10s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
-      --cell string                                                      cell to use (default "test_nj")
+      --cell string                                                      cell to use
       --cells_to_watch string                                            comma-separated list of cells for watching tablets
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
@@ -189,8 +189,8 @@ Usage of vtgate:
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
-  -v, --v Level                                                          log level for V logs
-      --version                                                          print binary version
+      --v Level                                                          log level for V logs
+  -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtctld_addr string                                               address of a vtctld instance
