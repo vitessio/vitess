@@ -3,33 +3,33 @@
 
 - **[Breaking Changes](#breaking-changes)**
   - [Vindex Interface](#vindex-interface)
-  - [LogStats Table and Keyspace deprecated](#logstats-table-and-keyspace-deprecated)
+  - [LogStats Table and Keyspace Deprecated](#logstats-table-and-keyspace-deprecated)
   - [Orchestrator Integration Deprecation](#orchestrator-integration-deprecation)
   - [Connection Pool Prefill](#connection-pool-prefill)
-- **[Command-line syntax deprecations](#command-line-syntax-deprecations)**
-  - [vttablet startup flag deletions](#vttablet-startup-flag-deletions)
-  - [vttablet startup flag deprectaitons](#vttablet-startup-flag-deprecations)
-  - [vtbackup flag deprecations](#vtbackup-flag-deprecations)
+- **[Command-Line Syntax Deprecations](#command-line-syntax-deprecations)**
+  - [VTTablet Startup Flag Deletions](#vttablet-startup-flag-deletions)
+  - [VTTablet Startup Flag Deprecations](#vttablet-startup-flag-deprecations)
+  - [VTBackup Flag Deprecations](#vtbackup-flag-deprecations)
 - **[VTGate](#vtgate)**
   - [vtgate --mysql-server-pool-conn-read-buffers](#vtgate---mysql-server-pool-conn-read-buffers)
 - **[VDiff2](#vdiff2)**
-  - [Resume workflow](#resume-workflow) 
+  - [Resume Workflow](#resume-workflow) 
   - [vtctl GetSchema --table-schema-only](#vtctl-getschema---table-schema-only)
-  - [Support for additional compressors and decompressors during backup & restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
-  - [Independent OLAP and OLTP transactional timeouts](#independent-olap-and-oltp-transactional-timeouts)
-  - [Support for specifying group information in calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
-- **[Online DDL changes](#online-ddl-changes)**
-  - [Concurrent vitess migrations](#concurrent-vitess-migrations)
-  - [vtctl command changes](#vtctl-command-changes)
-  - [New syntax](#new-syntax)
-- **[Tablet throttler](#tablet-throttler)**
-  - [API changes](#api-changes)
+  - [Support for Additional Compressors and Decompressors During Backup & Restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
+  - [Independent OLAP and OLTP Transactional Timeouts](#independent-olap-and-oltp-transactional-timeouts)
+  - [Support for Specifying Group Information in Calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
+- **[Online DDL Changes](#online-ddl-changes)**
+  - [Concurrent Vitess Migrations](#concurrent-vitess-migrations)
+  - [VTCtl Command Changes](#vtctl-command-changes)
+  - [New Syntax](#new-syntax)
+- **[Tablet Throttler](#tablet-throttler)**
+  - [API Changes](#api-changes)
 - **[Mysql Compatibility](#mysql-compatibility)**
   - [System Settings](#system-settings)
   - [Lookup Vindexes](#lookup-vindexes)
 - **[Durability Policy](#durability-policy)**
   - [Cross Cell](#cross-cell)
-- **[New EXPLAIN format](#new-explain-format)**
+- **[New EXPLAIN Format](#new-explain-format)**
   - [FORMAT=vtexplain](#formatvtexplain)
 - **[VTOrc](#vtorc)**
   - [Old UI Removal and Replacement](#old-ui-removal-and-replacement)
@@ -66,7 +66,7 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 This only affects users who have added their own custom vindex implementation. 
 They are required to change their implementation with these new interface method expectations.
 
-#### LogStats Table and Keyspace deprecated
+#### LogStats Table and Keyspace Deprecated
 
 Information about which tables are used was being reported through the `Keyspace` and `Table` fields on LogStats.
 For multi-table queries, this output can be confusing, so we have added `TablesUsed`, that is a string array, listing all tables and which keyspace they are on.
@@ -83,9 +83,9 @@ The connection pool with prefilled connections have been removed. The pool now d
 Following flags are deprecated: `queryserver-config-pool-prefill-parallelism`, `queryserver-config-stream-pool-prefill-parallelism`, `queryserver-config-transaction-prefill-parallelism`
 and will be removed in future version.
 
-### Command-line syntax deprecations
+### Command-Line Syntax Deprecations
 
-#### vttablet startup flag deletions
+#### VTTablet Startup Flag Deletions
 The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --queryserver-config-message-conn-pool-size
 - --queryserver-config-message-conn-pool-prefill-parallelism
@@ -96,12 +96,12 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --pool-name-prefix
 - --enable-autocommit Autocommit is always allowed
 
-#### vttablet startup flag deprecations
+#### VTTablet Startup Flag Deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 - --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 - --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
 
-#### vtbackup flag deprecations
+#### VTBackup Flag Deprecations
 - --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.
 
 ### VTGate
@@ -113,7 +113,7 @@ connections, similar to the way pooling happens for write buffers. Defaults to o
 
 ### VDiff2
 
-#### Resume workflow
+#### Resume Workflow
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
@@ -151,7 +151,7 @@ Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vrep
 
 The new flag `--table-schema-only` skips column introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in the `schema` field.
 
-#### Support for additional compressors and decompressors during backup & restore
+#### Support for Additional Compressors and Decompressors During Backup & Restore
 Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(`pgzip`).
 There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
 use-case. Here are the flags that control this feature
@@ -193,7 +193,7 @@ The reason you cannot change all the values together is because the restore proc
 should be used to process the previous backup. Please make sure you have thought out all possible scenarios for restore before transitioning from one
 compression engine to another.
 
-#### Independent OLAP and OLTP transactional timeouts
+#### Independent OLAP and OLTP Transactional Timeouts
 
 `--queryserver-config-olap-transaction-timeout` specifies the timeout applied
 to a transaction created within an OLAP workload. The default value is `30`
@@ -211,15 +211,15 @@ other.
 The main use case is to run queries spanning a long period of time which
 require transactional guarantees such as consistency or atomicity.
 
-#### Support for specifying group information in calls to VTGate
+#### Support for Specifying Group Information in Calls to VTGate
 
 `--grpc-use-effective-groups` allows non-SSL callers to specify groups information for a caller.
 Until now, you could only specify the caller-id for the security context used to authorize queries.
 As of now, you can specify the principal of the caller, and any groups they belong to.
 
-### Online DDL changes
+### Online DDL Changes
 
-#### Concurrent vitess migrations
+#### Concurrent Vitess Migrations
 
 All Online DDL migrations using the `vitess` strategy are now eligible to run concurrently, given `--allow-concurrent` DDL strategy flag. Until now, only `CREATE`, `DROP` and `REVERT` migrations were eligible, and now `ALTER` migrations are supported, as well. The terms for `ALTER` migrations concurrency:
 
@@ -230,13 +230,13 @@ All Online DDL migrations using the `vitess` strategy are now eligible to run co
 
 The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migrations will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
 
-#### vtctl command changes 
+#### VTCtl Command Changes 
 All `online DDL show` commands can now be run with a few additional parameters
 - `--order` , order migrations in the output by either ascending or descending order of their `id` fields.
 - `--skip`  , skip specified number of migrations in the output.
 - `--limit` , limit results to a specified number of migrations in the output.
 
-#### New syntax
+#### New Syntax
 
 The following is now supported:
 
@@ -246,9 +246,9 @@ ALTER VITESS_MIGRATION COMPLETE ALL
 
 This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open-ended (`--postpone-completion`).
 
-### Tablet throttler
+### Tablet Throttler
 
-#### API changes
+#### API Changes
 
 API endpoint `/debug/vars` now exposes throttler metrics, such as number of hits and errors per app per check type. Example:
 
@@ -294,7 +294,7 @@ This is different from the existing `autocommit` parameter where the query is se
 A new durability policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
 send semi-sync ACKs. This ensures that any committed write exists in at least 2 tablets belonging to different cells.
 
-### New EXPLAIN format
+### New EXPLAIN Format
 
 #### FORMAT=vtexplain
 
