@@ -66,7 +66,7 @@ Usage of vtgr:
       --topo_zk_tls_ca string                      the server ca to use to validate servers when connecting to the zk topo server
       --topo_zk_tls_cert string                    the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
       --topo_zk_tls_key string                     the key to use to connect to the zk topo server, enables TLS
-  -v, --v Level                                    log level for V logs
-      --version                                    print binary version
+      --v Level                                    log level for V logs
+  -v, --version                                    print binary version
       --vmodule moduleSpec                         comma-separated list of pattern=N settings for file-filtered logging
       --vtgr_config string                         Config file for vtgr.
