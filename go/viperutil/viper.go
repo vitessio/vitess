@@ -61,8 +61,8 @@ type Value[T any] struct {
 	hasDefault bool
 
 	resolve func(string) T
-	bound   bool
-	loaded  bool
+	bound   chan struct{}
+	loaded  chan struct{}
 }
 
 // NewValue returns a viper-backed value with the given key, lookup function,
@@ -71,11 +71,16 @@ func NewValue[T any](key string, getFunc func(string) T, opts ...Option[T]) *Val
 	val := &Value[T]{
 		key:     key,
 		resolve: getFunc,
+		bound:   make(chan struct{}, 1),
+		loaded:  make(chan struct{}, 1),
 	}
 
 	for _, opt := range opts {
 		opt(val)
 	}
+
+	val.bound <- struct{}{}
+	val.loaded <- struct{}{}
 
 	return val
 }
@@ -90,12 +95,20 @@ func NewValue[T any](key string, getFunc func(string) T, opts ...Option[T]) *Val
 // additional aliases for the value's key. This function panics if a flag name
 // is specified that is not defined on the flag set.
 func (val *Value[T]) Bind(v *viper.Viper, fs *pflag.FlagSet) {
-	if val.bound {
-		return
+	val.tryBind(v, fs)
+}
+
+func (val *Value[T]) tryBind(v *viper.Viper, fs *pflag.FlagSet) {
+	select {
+	case _, ok := <-val.bound:
+		if ok {
+			val.bind(v, fs)
+			close(val.bound)
+		}
 	}
+}
 
-	val.bound = true
-
+func (val *Value[T]) bind(v *viper.Viper, fs *pflag.FlagSet) {
 	if v == nil {
 		v = viper.GetViper()
 	}
@@ -148,16 +161,21 @@ func (val *Value[T]) Bind(v *viper.Viper, fs *pflag.FlagSet) {
 func (val *Value[T]) Fetch() T {
 	// Prior to fetching anything, bind the value to the global viper if it
 	// hasn't been bound to some viper already.
-	val.Bind(nil, nil)
-	val.value, val.loaded = val.resolve(val.key), true
-	return val.value
+	val.tryBind(nil, nil)
+	return val.resolve(val.key)
 }
 
 // Get returns the underlying value, loading from the backing viper only on
 // first use. For dynamic reloading, use Fetch.
 func (val *Value[T]) Get() T {
-	if !val.loaded {
-		val.Fetch()
+	val.tryBind(nil, nil)
+	select {
+	case _, ok := <-val.loaded:
+		if ok {
+			// We're the first to load; resolve the key and set the value.
+			val.value = val.resolve(val.key)
+			close(val.loaded)
+		}
 	}
 
 	return val.value
@@ -167,7 +185,20 @@ func (val *Value[T]) Get() T {
 // previously loaded (either via Fetch or Get), and the value was not created
 // with a WithDefault option, the return value is whatever the zero value for
 // the type T is.
-func (val *Value[T]) Value() T {
+func (val *Value[T]) Value() (value T) {
+	select {
+	case _, ok := <-val.loaded:
+		if ok {
+			// No one has loaded yet, and no one is loading.
+			// Return the value passed to us in the constructor, and
+			// put the sentinel value back so another Get call can proceed
+			// to actually load from the backing viper.
+			value = val.value
+			val.loaded <- struct{}{}
+			return value
+		}
+	}
+
 	return val.value
 }
 
