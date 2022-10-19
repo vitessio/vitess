@@ -1,16 +1,41 @@
 # Release of Vitess v15.0.0-rc1
 ## Summary
 
-- [Vindex Interface](#vindex-interface)
-- [LogStats Table and Keyspace deprecated](#logstats-table-and-keyspace-deprecated)
-- [Command-line syntax deprecations](#command-line-syntax-deprecations)
-- [New command line flags and behavior](#new-command-line-flags-and-behavior)
-- [Online DDL changes](#online-ddl-changes)
-- [Tablet throttler](#tablet-throttler)
-- [VDiff2](#vdiff2)
-- [Mysql Compatibility](#mysql-compatibility)
-- [Durability Policy](#durability-policy)
-- [New EXPLAIN format](#new-explain-format)
+- **[Breaking Changes](#breaking-changes)**
+  - [Vindex Interface](#vindex-interface)
+  - [LogStats Table and Keyspace deprecated](#logstats-table-and-keyspace-deprecated)
+  - [Orchestrator Integration Deprecation](#orchestrator-integration-deprecation)
+  - [Connection Pool Prefill](#connection-pool-prefill)
+- **[Command-line syntax deprecations](#command-line-syntax-deprecations)**
+  - [vttablet startup flag deletions](#vttablet-startup-flag-deletions)
+  - [vttablet startup flag deprectaitons](#vttablet-startup-flag-deprecations)
+  - [vtbackup flag deprecations](#vtbackup-flag-deprecations)
+- **[VTGate](#vtgate)**
+  - [vtgate --mysql-server-pool-conn-read-buffers](#vtgate---mysql-server-pool-conn-read-buffers)
+- **[VDiff2](#vdiff2)**
+  - [Resume workflow](#resume-workflow) 
+  - [vtctl GetSchema --table-schema-only](#vtctl-getschema---table-schema-only)
+  - [Support for additional compressors and decompressors during backup & restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
+  - [Independent OLAP and OLTP transactional timeouts](#independent-olap-and-oltp-transactional-timeouts)
+  - [Support for specifying group information in calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
+- **[Online DDL changes](#online-ddl-changes)**
+  - [Concurrent vitess migrations](#concurrent-vitess-migrations)
+  - [vtctl command changes](#vtctl-command-changes)
+  - [New syntax](#new-syntax)
+- **[Tablet throttler](#tablet-throttler)**
+  - [API changes](#api-changes)
+- **[Mysql Compatibility](#mysql-compatibility)**
+  - [System Settings](#system-settings)
+  - [Lookup Vindexes](#lookup-vindexes)
+- **[Durability Policy](#durability-policy)**
+  - [Cross Cell](#cross-cell)
+- **[New EXPLAIN format](#new-explain-format)**
+  - [FORMAT=vtexplain](#formatvtexplain)
+- **[VTOrc](#vtorc)**
+  - [Old UI Removal and Replacement](#old-ui-removal-and-replacement)
+  - [Configuration Refactor and New Flags](#configuration-refactor-and-new-flags)
+  - [Example Upgrade](#example-upgrade)
+  - [Default Configuration Files](#default-configuration-files)
 
 ## Known Issues
 
@@ -79,7 +104,7 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 #### vtbackup flag deprecations
 - --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.
 
-### New command line flags and behavior
+### VTGate
 
 #### vtgate --mysql-server-pool-conn-read-buffers
 
@@ -87,6 +112,8 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 connections, similar to the way pooling happens for write buffers. Defaults to off.
 
 ### VDiff2
+
+#### Resume workflow
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
@@ -119,8 +146,6 @@ $ vtctlclient --server=localhost:15999 VDiff --v2 --format=json customer.commerc
 ```
 
 Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vreplication/vdiff2/) for additional information.
-
-### New command line flags and behavior
 
 #### vtctl GetSchema --table-schema-only
 
@@ -205,7 +230,7 @@ All Online DDL migrations using the `vitess` strategy are now eligible to run co
 
 The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migrations will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
 
-#### vtctl command changes. 
+#### vtctl command changes 
 All `online DDL show` commands can now be run with a few additional parameters
 - `--order` , order migrations in the output by either ascending or descending order of their `id` fields.
 - `--skip`  , skip specified number of migrations in the output.
