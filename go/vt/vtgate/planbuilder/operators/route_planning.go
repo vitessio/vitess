@@ -95,38 +95,21 @@ func optimizeFilter(op *Filter) (Operator, bool, error) {
 }
 
 func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, bool, error) {
-
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
-		return buildDerivedOp(op, op.Source), false, nil
-	}
-
-	// TODO: I THINK THIS SHOULD GO!
-
-	derived := &Derived{
-		Source:        innerRoute.Source,
-		Query:         op.Query,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
+		return op, false, nil
 	}
 
 	if innerRoute.RouteOpCode == engine.EqualUnique {
 		// no need to check anything if we are sure that we will only hit a single shard
-	} else if !derived.IsMergeable(ctx) {
-		return buildDerivedOp(op, op.Source), false, nil
+	} else if !op.IsMergeable(ctx) {
+		return op, false, nil
 	}
 
-	innerRoute.Source = derived
+	op.Source = innerRoute.Source
+	innerRoute.Source = op
+
 	return innerRoute, true, nil
-}
-
-func buildDerivedOp(op *Derived, opInner Operator) *Derived {
-	return &Derived{
-		Source:        opInner,
-		Query:         op.Query,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
-	}
 }
 
 func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, bool, error) {
