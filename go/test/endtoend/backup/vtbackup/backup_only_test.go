@@ -189,52 +189,9 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go func(t *testing.T, ctx context.Context, mysqlSocket string) {
-		params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
-
-		for {
-			select {
-			case <-time.After(100 * time.Millisecond):
-				// Connect to vtbackup mysqld.
-				conn, err := mysql.Connect(ctx, &params)
-				if err != nil {
-					// Keep trying, vtbackup mysqld may not be ready yet.
-					continue
-				}
-
-				// Check if server supports disable/enable redo log.
-				qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
-				require.Nil(t, err)
-				// If not, there's nothing to test.
-				if len(qr.Rows) == 0 {
-					return
-				}
-
-				// MY-013600
-				// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-				qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
-				require.Nil(t, err)
-				if len(qr.Rows) != 1 {
-					// Keep trying, possible we haven't disabled yet.
-					continue
-				}
-
-				// MY-013601
-				// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-				qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
-				require.Nil(t, err)
-				if len(qr.Rows) != 1 {
-					// Keep trying, possible we haven't disabled yet.
-					continue
-				}
-
-				// Success
-				return
-			case <-ctx.Done():
-				require.Fail(t, "Failed to verify disable/enable redo log.")
-			}
-		}
-	}(t, ctx, mysqlSocket.Name())
+	if !initialBackup {
+		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+	}
 
 	log.Infof("starting backup tablet %s", time.Now())
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
@@ -368,5 +325,52 @@ func tearDown(t *testing.T, initMysql bool) {
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
 		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
 		require.Nil(t, err)
+	}
+}
+
+func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket string) {
+	params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
+
+	for {
+		select {
+		case <-time.After(100 * time.Millisecond):
+			// Connect to vtbackup mysqld.
+			conn, err := mysql.Connect(ctx, &params)
+			if err != nil {
+				// Keep trying, vtbackup mysqld may not be ready yet.
+				continue
+			}
+
+			// Check if server supports disable/enable redo log.
+			qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
+			require.Nil(t, err)
+			// If not, there's nothing to test.
+			if len(qr.Rows) == 0 {
+				return
+			}
+
+			// MY-013600
+			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
+			require.Nil(t, err)
+			if len(qr.Rows) != 1 {
+				// Keep trying, possible we haven't disabled yet.
+				continue
+			}
+
+			// MY-013601
+			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
+			require.Nil(t, err)
+			if len(qr.Rows) != 1 {
+				// Keep trying, possible we haven't disabled yet.
+				continue
+			}
+
+			// Success
+			return
+		case <-ctx.Done():
+			require.Fail(t, "Failed to verify disable/enable redo log.")
+		}
 	}
 }
