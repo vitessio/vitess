@@ -122,41 +122,24 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 	} else {
 		values = append(values, k.Value())
 	}
-	var destinations []key.Destination
-	// For unique vindexes we can optimize list handling by making a single
-	// call to Map where we must get a 1 to 1 mapping of values to destinations.
-	if vf.Vindex.IsUnique() {
-		destinations, err = vf.Vindex.Map(ctx, vcursor, values)
-		if err != nil {
-			return nil, err
-		}
-		if len(destinations) != len(values) {
-			// should never happen with a unique vindex
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unique Vindex.Map() length mismatch: input values count is %d, output destinations count is %d",
-				len(values), len(destinations))
-		}
-	}
 	result := &sqltypes.Result{
 		Fields: vf.Fields,
 	}
-	var destination key.Destination
+	destinations, err := vf.Vindex.Map(ctx, vcursor, values)
+	if err != nil {
+		return nil, err
+	}
+	if len(destinations) != len(values) {
+		// should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unique Vindex.Map() length mismatch: input values count is %d, output destinations count is %d",
+			len(values), len(destinations))
+	}
 	for i, value := range values {
-		if vf.Vindex.IsUnique() {
-			destination = destinations[i]
-		} else {
-			destinations, err = vf.Vindex.Map(ctx, vcursor, []sqltypes.Value{value})
-			if err != nil {
-				return nil, err
-			}
-			// Use the first destination from the non-unique vindex since
-			// the table output only supports 1 to 1 mappings.
-			destination = destinations[0]
-		}
 		vkey, err := evalengine.Cast(value, sqltypes.VarBinary)
 		if err != nil {
 			return nil, err
 		}
-		switch d := destination.(type) {
+		switch d := destinations[i].(type) {
 		case key.DestinationKeyRange:
 			if d.KeyRange != nil {
 				row, err := vf.buildRow(vkey, nil, d.KeyRange)
