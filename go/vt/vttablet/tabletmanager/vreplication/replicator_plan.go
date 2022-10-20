@@ -231,12 +231,12 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	sqlbuffer.Reset()
 	sqlbuffer.WriteString(tp.BulkInsertFront.Query)
 	sqlbuffer.WriteString(" values ")
 
-	for i, row := range rows.Rows {
+	for i, row := range rows {
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
