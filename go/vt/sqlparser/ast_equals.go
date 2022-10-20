@@ -1689,7 +1689,8 @@ func EqualsRefOfAlterVschema(a, b *AlterVschema) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfVindexSpec(a.VindexSpec, b.VindexSpec) &&
 		EqualsSliceOfIdentifierCI(a.VindexCols, b.VindexCols) &&
-		EqualsRefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec)
+		EqualsRefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec) &&
+		EqualsSelectStatement(a.Statement, b.Statement)
 }
 
 // EqualsRefOfAndExpr does deep equals between the two objects.

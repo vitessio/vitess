@@ -1129,6 +1129,8 @@ func (action DDLAction) ToString() string {
 		return AddSequenceStr
 	case AddAutoIncDDLAction:
 		return AddAutoIncStr
+	case CreateViewDDLAction:
+		return CreateViewStr
 	default:
 		return "Unknown DDL Action"
 	}

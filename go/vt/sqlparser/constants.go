@@ -64,6 +64,7 @@ const (
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
+	CreateViewStr       = "create view"
 
 	// Partition and subpartition type strings
 	HashTypeStr  = "hash"
@@ -449,6 +450,7 @@ const (
 	AddSequenceDDLAction
 	AddAutoIncDDLAction
 	RevertDDLAction
+	CreateViewDDLAction
 )
 
 // Constants for scope of variables

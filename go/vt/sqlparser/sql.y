@@ -3186,6 +3186,14 @@ alter_statement:
         },
     }
   }
+| ALTER comment_opt VSCHEMA CREATE VIEW table_name AS select_statement
+  {
+    $$ = &AlterVschema{
+        Action: CreateViewDDLAction,
+        Table: $6,
+        Statement: $8,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY
   {
     $$ = &AlterMigration{
