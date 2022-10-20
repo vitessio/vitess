@@ -14,36 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Table struct {
-	QTable  *abstract.QueryTable
+	QTable  *QueryTable
 	VTable  *vindexes.Table
 	Columns []*sqlparser.ColName
+
+	noInputs
 }
 
-var _ abstract.PhysicalOperator = (*Table)(nil)
-var _ abstract.IntroducesTable = (*Table)(nil)
+var _ PhysicalOperator = (*Table)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (to *Table) Cost() int {
-	return 0
-}
-
-// Clone implements the PhysicalOperator interface
-func (to *Table) Clone() abstract.PhysicalOperator {
+// Clone implements the Operator interface
+func (to *Table) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
@@ -55,37 +51,12 @@ func (to *Table) Clone() abstract.PhysicalOperator {
 	}
 }
 
-// TableID implements the PhysicalOperator interface
-func (to *Table) TableID() semantics.TableSet {
+// Introduces implements the PhysicalOperator interface
+func (to *Table) Introduces() semantics.TableSet {
 	return to.QTable.ID
 }
 
 // PushPredicate implements the PhysicalOperator interface
 func (to *Table) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a Table. It is meant to be immutable")
-}
-
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (to *Table) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
-// CheckValid implements the PhysicalOperator interface
-func (to *Table) CheckValid() error {
-	return nil
-}
-
-// Compact implements the PhysicalOperator interface
-func (to *Table) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
-	return to, nil
-}
-
-// GetQTable implements the IntroducesTable interface
-func (to *Table) GetQTable() *abstract.QueryTable {
-	return to.QTable
-}
-
-// GetVTable implements the IntroducesTable interface
-func (to *Table) GetVTable() *vindexes.Table {
-	return to.VTable
 }

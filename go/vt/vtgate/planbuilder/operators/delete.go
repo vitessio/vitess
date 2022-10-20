@@ -14,64 +14,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Delete struct {
-	QTable           *abstract.QueryTable
+	QTable           *QueryTable
 	VTable           *vindexes.Table
 	OwnedVindexQuery string
 	AST              *sqlparser.Delete
+
+	noInputs
 }
 
-var _ abstract.PhysicalOperator = (*Delete)(nil)
-var _ abstract.IntroducesTable = (*Delete)(nil)
+var _ PhysicalOperator = (*Delete)(nil)
 
-// TableID implements the PhysicalOperator interface
-func (d *Delete) TableID() semantics.TableSet {
+// Introduces implements the PhysicalOperator interface
+func (d *Delete) Introduces() semantics.TableSet {
 	return d.QTable.ID
-}
-
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (d *Delete) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return nil
-}
-
-// CheckValid implements the PhysicalOperator interface
-func (d *Delete) CheckValid() error {
-	return nil
 }
 
 // IPhysical implements the PhysicalOperator interface
 func (d *Delete) IPhysical() {}
 
-// Cost implements the PhysicalOperator interface
-func (d *Delete) Cost() int {
-	return 1
-}
-
-// Clone implements the PhysicalOperator interface
-func (d *Delete) Clone() abstract.PhysicalOperator {
+// Clone implements the Operator interface
+func (d *Delete) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,
 		OwnedVindexQuery: d.OwnedVindexQuery,
 		AST:              d.AST,
 	}
-}
-
-// GetQTable implements the IntroducesTable interface
-func (d *Delete) GetQTable() *abstract.QueryTable {
-	return d.QTable
-}
-
-// GetVTable implements the IntroducesTable interface
-func (d *Delete) GetVTable() *vindexes.Table {
-	return d.VTable
 }

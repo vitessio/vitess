@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"bytes"
@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -42,157 +41,105 @@ type (
 		left, right semantics.TableSet
 	}
 
-	opCacheMap map[tableSetPair]abstract.PhysicalOperator
+	opCacheMap map[tableSetPair]Operator
 )
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
-	switch op := opTree.(type) {
-	case *abstract.QueryGraph:
-		return optimizeQueryGraph(ctx, op)
-	case *abstract.Join:
-		return optimizeJoin(ctx, op)
-	case *abstract.Derived:
-		return optimizeDerived(ctx, op)
-	case *abstract.SubQuery:
-		return optimizeSubQuery(ctx, op)
-	case *abstract.Vindex:
-		return optimizeVindex(ctx, op)
-	case *abstract.Concatenate:
-		return optimizeUnion(ctx, op)
-	case *abstract.Filter:
-		return optimizeFilter(ctx, op)
-	case *abstract.Update:
-		return createPhysicalOperatorFromUpdate(ctx, op)
-	case *abstract.Delete:
-		return createPhysicalOperatorFromDelete(ctx, op)
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
-	}
-}
+// TransformToPhysical takes an operator tree and rewrites any parts that have not yet been planned as physical operators.
+// This is where a lot of the optimisations of the query plans are done.
+// Here we try to merge query parts into the same route primitives. At the end of this process,
+// all the operators in the tree are guaranteed to be PhysicalOperators
+func TransformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
+	op, _, err := rewriteBottomUp(ctx, in, func(context *plancontext.PlanningContext, operator Operator) (newOp Operator, changed bool, err error) {
+		switch op := operator.(type) {
+		case *QueryGraph:
+			return optimizeQueryGraph(ctx, op)
+		case *Join:
+			return optimizeJoin(ctx, op)
+		case *Derived:
+			return optimizeDerived(ctx, op)
+		case *SubQuery:
+			return optimizeSubQuery(ctx, op)
+		case *Filter:
+			return optimizeFilter(op)
+		default:
+			return operator, false, nil
+		}
+	})
 
-func optimizeFilter(ctx *plancontext.PlanningContext, op *abstract.Filter) (abstract.PhysicalOperator, error) {
-	src, err := CreatePhysicalOperator(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	filter := &Filter{
-		Predicates: op.Predicates,
+	err = VisitTopDown(op, func(op Operator) error {
+		if _, isPhys := op.(PhysicalOperator); !isPhys {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	if route, ok := src.(*Route); ok {
+	return op, nil
+}
+
+func optimizeFilter(op *Filter) (Operator, bool, error) {
+	if route, ok := op.Source.(*Route); ok {
 		// let's push the filter into the route
-		filter.Source = route.Source
-		route.Source = filter
-		return route, nil
+		op.Source = route.Source
+		route.Source = op
+		return route, true, nil
 	}
 
-	filter.Source = src
-
-	return filter, nil
+	return op, false, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *abstract.Derived) (abstract.PhysicalOperator, error) {
-	opInner, err := CreatePhysicalOperator(ctx, op.Inner)
-	if err != nil {
-		return nil, err
-	}
-
-	innerRoute, ok := opInner.(*Route)
+func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, bool, error) {
+	innerRoute, ok := op.Source.(*Route)
 	if !ok {
-		return buildDerivedOp(op, opInner), nil
-	}
-
-	derived := &Derived{
-		Source:        innerRoute.Source,
-		Query:         op.Sel,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
+		return op, false, nil
 	}
 
 	if innerRoute.RouteOpCode == engine.EqualUnique {
 		// no need to check anything if we are sure that we will only hit a single shard
-	} else if !derived.IsMergeable(ctx) {
-		return buildDerivedOp(op, opInner), nil
+	} else if !op.IsMergeable(ctx) {
+		return op, false, nil
 	}
 
-	innerRoute.Source = derived
-	return innerRoute, nil
+	op.Source = innerRoute.Source
+	innerRoute.Source = op
+
+	return innerRoute, true, nil
 }
 
-func buildDerivedOp(op *abstract.Derived, opInner abstract.PhysicalOperator) *Derived {
-	return &Derived{
-		Source:        opInner,
-		Query:         op.Sel,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
-	}
-}
-
-func optimizeJoin(ctx *plancontext.PlanningContext, op *abstract.Join) (abstract.PhysicalOperator, error) {
-	lhs, err := CreatePhysicalOperator(ctx, op.LHS)
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, bool, error) {
+	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	rhs, err := CreatePhysicalOperator(ctx, op.RHS)
-	if err != nil {
-		return nil, err
-	}
-
-	return mergeOrJoin(ctx, lhs, rhs, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+	return join, true, nil
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result Operator, changed bool, err error) {
+	changed = true
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
-		return leftToRightSolve(ctx, op)
+		result, err = leftToRightSolve(ctx, op)
 	default:
-		return greedySolve(ctx, op)
+		result, err = greedySolve(ctx, op)
 	}
+
+	unresolved := op.UnsolvedPredicates(ctx.SemTable)
+	if len(unresolved) > 0 {
+		// if we have any predicates that none of the joins or tables took care of,
+		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
+		result = &Filter{Source: result, Predicates: unresolved}
+	}
+
+	return
 }
 
-func createPhysicalOperatorFromUpdate(ctx *plancontext.PlanningContext, op *abstract.Update) (abstract.PhysicalOperator, error) {
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, op.TableInfo, op.Table, "update")
-	if err != nil {
-		return nil, err
-	}
-
-	vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
-	if err != nil {
-		return nil, err
-	}
-
-	r := &Route{
-		Source: &Update{
-			QTable:              op.Table,
-			VTable:              vindexTable,
-			Assignments:         op.Assignments,
-			ChangedVindexValues: cvv,
-			OwnedVindexQuery:    ovq,
-			AST:                 op.AST,
-		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vp,
-		TargetDestination: dest,
-	}
-
-	for _, predicate := range op.Table.Predicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
-	}
-
-	return r, nil
-}
-
-func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantics.TableInfo, table *abstract.QueryTable, dmlType string) (*vindexes.Table, engine.Opcode, key.Destination, error) {
+func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantics.TableInfo, table *QueryTable, dmlType string) (*vindexes.Table, engine.Opcode, key.Destination, error) {
 	vindexTable := tableInfo.GetVindexTable()
 	opCode := engine.Unsharded
 	if vindexTable.Keyspace.Sharded {
@@ -219,63 +166,6 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 	return vindexTable, opCode, dest, nil
 }
 
-func createPhysicalOperatorFromDelete(ctx *plancontext.PlanningContext, op *abstract.Delete) (*Route, error) {
-	var ovq string
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, op.TableInfo, op.Table, "delete")
-	if err != nil {
-		return nil, err
-	}
-
-	if !vindexTable.Keyspace.Sharded {
-		return &Route{
-			Source: &Delete{
-				QTable: op.Table,
-				VTable: vindexTable,
-				AST:    op.AST,
-			},
-			RouteOpCode:       opCode,
-			Keyspace:          vindexTable.Keyspace,
-			TargetDestination: dest,
-		}, nil
-	}
-
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(vindexTable.Owned) > 0 {
-		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: op.Table.Alias.As}
-		ovq = generateOwnedVindexQuery(tblExpr, op.AST, vindexTable, primaryVindex.Columns)
-	}
-
-	r := &Route{
-		Source: &Delete{
-			QTable:           op.Table,
-			VTable:           vindexTable,
-			OwnedVindexQuery: ovq,
-			AST:              op.AST,
-		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vindexAndPredicates,
-		TargetDestination: dest,
-	}
-
-	for _, predicate := range op.Table.Predicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
-	}
-	return r, nil
-}
-
 func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	for idx, col := range ksidCols {
@@ -294,16 +184,22 @@ func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete
 	return buf.String()
 }
 
-func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
+func getUpdateVindexInformation(
+	updStmt *sqlparser.Update,
+	vindexTable *vindexes.Table,
+	tableID semantics.TableSet,
+	predicates []sqlparser.Expr,
+) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
 	if !vindexTable.Keyspace.Sharded {
 		return nil, nil, "", nil
 	}
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
+
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(tableID, predicates, vindexTable)
 	if err != nil {
 		return nil, nil, "", err
 	}
 
-	changedVindexValues, ownedVindexQuery, err := buildChangedVindexesValues(op.AST, vindexTable, primaryVindex.Columns)
+	changedVindexValues, ownedVindexQuery, err := buildChangedVindexesValues(updStmt, vindexTable, primaryVindex.Columns)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -316,7 +212,7 @@ func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table
 		and removes the two inputs to this cheapest plan and instead adds the join.
 		As an optimization, it first only considers joining tables that have predicates defined between them
 */
-func greedySolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+func greedySolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (Operator, error) {
 	routeOps, err := seedOperatorList(ctx, qg)
 	planCache := opCacheMap{}
 	if err != nil {
@@ -330,19 +226,19 @@ func greedySolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abs
 	return op, nil
 }
 
-func leftToRightSolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (Operator, error) {
 	plans, err := seedOperatorList(ctx, qg)
 	if err != nil {
 		return nil, err
 	}
 
-	var acc abstract.PhysicalOperator
+	var acc Operator
 	for _, plan := range plans {
 		if acc == nil {
 			acc = plan
 			continue
 		}
-		joinPredicates := qg.GetPredicates(acc.TableID(), plan.TableID())
+		joinPredicates := qg.GetPredicates(TableID(acc), TableID(plan))
 		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
 		if err != nil {
 			return nil, err
@@ -353,8 +249,8 @@ func leftToRightSolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph)
 }
 
 // seedOperatorList returns a route for each table in the qg
-func seedOperatorList(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) ([]abstract.PhysicalOperator, error) {
-	plans := make([]abstract.PhysicalOperator, len(qg.Tables))
+func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Operator, error) {
+	plans := make([]Operator, len(qg.Tables))
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
@@ -374,7 +270,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph)
 	return plans, nil
 }
 
-func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, solves semantics.TableSet) (*Route, error) {
+func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves semantics.TableSet) (*Route, error) {
 	if table.IsInfSchema {
 		return createInfSchemaRoute(ctx, table)
 	}
@@ -527,12 +423,12 @@ func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
 	return nil
 }
 
-func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable) (*Route, error) {
+func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (*Route, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
-	var src abstract.PhysicalOperator = &Table{
+	var src Operator = &Table{
 		QTable: table,
 		VTable: &vindexes.Table{
 			Name:     table.Table.Name,
@@ -566,7 +462,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *abstract.Quer
 	return r, nil
 }
 
-func mergeRoutes(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph, physicalOps []abstract.PhysicalOperator, planCache opCacheMap, crossJoinsOK bool) (abstract.PhysicalOperator, error) {
+func mergeRoutes(ctx *plancontext.PlanningContext, qg *QueryGraph, physicalOps []Operator, planCache opCacheMap, crossJoinsOK bool) (Operator, error) {
 	if len(physicalOps) == 0 {
 		return nil, nil
 	}
@@ -599,23 +495,23 @@ func mergeRoutes(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph, phys
 	return physicalOps[0], nil
 }
 
-func removeAt(plans []abstract.PhysicalOperator, idx int) []abstract.PhysicalOperator {
+func removeAt(plans []Operator, idx int) []Operator {
 	return append(plans[:idx], plans[idx+1:]...)
 }
 
 func findBestJoin(
 	ctx *plancontext.PlanningContext,
-	qg *abstract.QueryGraph,
-	plans []abstract.PhysicalOperator,
+	qg *QueryGraph,
+	plans []Operator,
 	planCache opCacheMap,
 	crossJoinsOK bool,
-) (bestPlan abstract.PhysicalOperator, lIdx int, rIdx int, err error) {
+) (bestPlan Operator, lIdx int, rIdx int, err error) {
 	for i, lhs := range plans {
 		for j, rhs := range plans {
 			if i == j {
 				continue
 			}
-			joinPredicates := qg.GetPredicates(lhs.TableID(), rhs.TableID())
+			joinPredicates := qg.GetPredicates(TableID(lhs), TableID(rhs))
 			if len(joinPredicates) == 0 && !crossJoinsOK {
 				// if there are no predicates joining the two tables,
 				// creating a join between them would produce a
@@ -626,7 +522,7 @@ func findBestJoin(
 			if err != nil {
 				return nil, 0, 0, err
 			}
-			if bestPlan == nil || plan.Cost() < bestPlan.Cost() {
+			if bestPlan == nil || CostOf(plan) < CostOf(bestPlan) {
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
 				lIdx = i
@@ -637,8 +533,8 @@ func findBestJoin(
 	return bestPlan, lIdx, rIdx, nil
 }
 
-func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr) (abstract.PhysicalOperator, error) {
-	solves := tableSetPair{left: lhs.TableID(), right: rhs.TableID()}
+func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs Operator, joinPredicates []sqlparser.Expr) (Operator, error) {
+	solves := tableSetPair{left: TableID(lhs), right: TableID(rhs)}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
 		return cachedPlan, nil
@@ -654,25 +550,24 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 
 // requiresSwitchingSides will return true if any of the operators with the root from the given operator tree
 // is of the type that should not be on the RHS of a join
-func requiresSwitchingSides(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) bool {
+func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) bool {
 	required := false
 
-	_ = VisitOperators(op, func(current abstract.PhysicalOperator) (bool, error) {
+	_ = VisitTopDown(op, func(current Operator) error {
 		derived, isDerived := current.(*Derived)
 
 		if isDerived && !derived.IsMergeable(ctx) {
 			required = true
-
-			return false, nil
+			return io.EOF
 		}
 
-		return true, nil
+		return nil
 	})
 
 	return required
 }
 
-func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
+func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, inner bool) (Operator, error) {
 	merger := func(a, b *Route) (*Route, error) {
 		return createRouteOperatorForJoin(a, b, joinPredicates, inner)
 	}
@@ -692,8 +587,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOpe
 		}
 
 		join := &ApplyJoin{
-			LHS:      rhs.Clone(),
-			RHS:      lhs.Clone(),
+			LHS:      Clone(rhs),
+			RHS:      Clone(lhs),
 			Vars:     map[string]int{},
 			LeftJoin: !inner,
 		}
@@ -702,8 +597,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOpe
 	}
 
 	join := &ApplyJoin{
-		LHS:      lhs.Clone(),
-		RHS:      rhs.Clone(),
+		LHS:      Clone(lhs),
+		RHS:      Clone(rhs),
 		Vars:     map[string]int{},
 		LeftJoin: !inner,
 	}
@@ -747,7 +642,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 
 type mergeFunc func(a, b *Route) (*Route, error)
 
-func operatorsToRoutes(a, b abstract.PhysicalOperator) (*Route, *Route) {
+func operatorsToRoutes(a, b Operator) (*Route, *Route) {
 	aRoute, ok := a.(*Route)
 	if !ok {
 		return nil, nil
@@ -761,11 +656,11 @@ func operatorsToRoutes(a, b abstract.PhysicalOperator) (*Route, *Route) {
 
 func tryMerge(
 	ctx *plancontext.PlanningContext,
-	a, b abstract.PhysicalOperator,
+	a, b Operator,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
-) (abstract.PhysicalOperator, error) {
-	aRoute, bRoute := operatorsToRoutes(a.Clone(), b.Clone())
+) (Operator, error) {
+	aRoute, bRoute := operatorsToRoutes(Clone(a), Clone(b))
 	if aRoute == nil || bRoute == nil {
 		return nil, nil
 	}
@@ -844,35 +739,18 @@ func isDualTable(route *Route) bool {
 	return src.VTable.Name.String() == "dual" && src.QTable.Table.Qualifier.IsEmpty()
 }
 
-func leaves(op abstract.Operator) (sources []abstract.Operator) {
+func leaves(op Operator) (sources []Operator) {
 	switch op := op.(type) {
 	// these are the leaves
-	case *abstract.QueryGraph, *abstract.Vindex, *Table:
-		return []abstract.Operator{op}
-
-		// logical
-	case *abstract.Concatenate:
-		for _, source := range op.Sources {
-			sources = append(sources, leaves(source)...)
-		}
-		return
-	case *abstract.Derived:
-		return []abstract.Operator{op.Inner}
-	case *abstract.Join:
-		return []abstract.Operator{op.LHS, op.RHS}
-	case *abstract.SubQuery:
-		sources = []abstract.Operator{op.Outer}
-		for _, inner := range op.Inner {
-			sources = append(sources, inner.Inner)
-		}
-		return
+	case *Table:
+		return []Operator{op}
 		// physical
 	case *ApplyJoin:
-		return []abstract.Operator{op.LHS, op.RHS}
+		return []Operator{op.LHS, op.RHS}
 	case *Filter:
-		return []abstract.Operator{op.Source}
+		return []Operator{op.Source}
 	case *Route:
-		return []abstract.Operator{op.Source}
+		return []Operator{op.Source}
 	}
 
 	panic(fmt.Sprintf("leaves unknown type: %T", op))
@@ -935,7 +813,7 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 	return rVindex == lVindex
 }
 
-func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOperator, exp sqlparser.Expr) vindexes.SingleColumn {
+func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparser.Expr) vindexes.SingleColumn {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
@@ -960,21 +838,30 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a abstract.PhysicalOpera
 
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
-		_ = VisitOperators(a, func(rel abstract.PhysicalOperator) (bool, error) {
-			to, isTableOp := rel.(abstract.IntroducesTable)
+		_ = VisitTopDown(a, func(rel Operator) error {
+			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
-				return true, nil
+				return nil
 			}
-			if deps.IsSolvedBy(to.GetQTable().ID) {
-				for _, vindex := range to.GetVTable().ColumnVindexes {
-					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
-					if isSingle && vindex.Columns[0].Equal(col.Name) {
-						singCol = sC
-						return false, io.EOF
+			id := to.Introduces()
+			if deps.IsSolvedBy(id) {
+				tableInfo, err := ctx.SemTable.TableInfoFor(id)
+				if err != nil {
+					// an error here is OK, we just can't ask this operator about its column vindexes
+					return nil
+				}
+				vtable := tableInfo.GetVindexTable()
+				if vtable != nil {
+					for _, vindex := range vtable.ColumnVindexes {
+						sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+						if isSingle && vindex.Columns[0].Equal(col.Name) {
+							singCol = sC
+							return io.EOF
+						}
 					}
 				}
 			}
-			return false, nil
+			return nil
 		})
 		if singCol != nil {
 			return singCol
@@ -1034,93 +921,6 @@ func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredic
 		}
 	}
 	return false
-}
-
-// VisitOperators visits all the operators.
-func VisitOperators(op abstract.PhysicalOperator, f func(tbl abstract.PhysicalOperator) (bool, error)) error {
-	kontinue, err := f(op)
-	if err != nil {
-		return err
-	}
-	if !kontinue {
-		return nil
-	}
-
-	switch op := op.(type) {
-	case *Table, *Vindex, *Update:
-		// leaf - no children to visit
-	case *Route:
-		err := VisitOperators(op.Source, f)
-		if err != nil {
-			return err
-		}
-	case *ApplyJoin:
-		err := VisitOperators(op.LHS, f)
-		if err != nil {
-			return err
-		}
-		err = VisitOperators(op.RHS, f)
-		if err != nil {
-			return err
-		}
-	case *Filter:
-		err := VisitOperators(op.Source, f)
-		if err != nil {
-			return err
-		}
-	case *CorrelatedSubQueryOp:
-		err := VisitOperators(op.Outer, f)
-		if err != nil {
-			return err
-		}
-		err = VisitOperators(op.Inner, f)
-		if err != nil {
-			return err
-		}
-	case *SubQueryOp:
-		err := VisitOperators(op.Outer, f)
-		if err != nil {
-			return err
-		}
-		err = VisitOperators(op.Inner, f)
-		if err != nil {
-			return err
-		}
-	case *Derived:
-		err := VisitOperators(op.Source, f)
-		if err != nil {
-			return err
-		}
-	case *Union:
-		for _, source := range op.Sources {
-			err := VisitOperators(source, f)
-			if err != nil {
-				return err
-			}
-		}
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown operator type while visiting - %T", op)
-	}
-	return nil
-}
-
-func optimizeUnion(ctx *plancontext.PlanningContext, op *abstract.Concatenate) (abstract.PhysicalOperator, error) {
-	var sources []abstract.PhysicalOperator
-
-	for _, source := range op.Sources {
-		qt, err := CreatePhysicalOperator(ctx, source)
-		if err != nil {
-			return nil, err
-		}
-
-		sources = append(sources, qt)
-	}
-	return &Union{
-		Sources:     sources,
-		SelectStmts: op.SelectStmts,
-		Distinct:    op.Distinct,
-		Ordering:    op.OrderBy,
-	}, nil
 }
 
 func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {
@@ -1200,8 +1000,8 @@ func hexEqual(a, b *sqlparser.Literal) bool {
 func pushJoinPredicates(
 	ctx *plancontext.PlanningContext,
 	exprs []sqlparser.Expr,
-	op abstract.PhysicalOperator,
-) (abstract.PhysicalOperator, error) {
+	op Operator,
+) (Operator, error) {
 	if len(exprs) == 0 {
 		return op, nil
 	}
@@ -1223,7 +1023,7 @@ func pushJoinPredicates(
 	}
 }
 
-func pushJoinPredicateOnRoute(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, op *Route) (abstract.PhysicalOperator, error) {
+func pushJoinPredicateOnRoute(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, op *Route) (Operator, error) {
 	for _, expr := range exprs {
 		err := op.UpdateRoutingLogic(ctx, expr)
 		if err != nil {
@@ -1235,8 +1035,8 @@ func pushJoinPredicateOnRoute(ctx *plancontext.PlanningContext, exprs []sqlparse
 	return op, err
 }
 
-func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *ApplyJoin) (abstract.PhysicalOperator, error) {
-	node = node.Clone().(*ApplyJoin)
+func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *ApplyJoin) (Operator, error) {
+	node = Clone(node).(*ApplyJoin)
 	var rhsPreds []sqlparser.Expr
 	var lhsPreds []sqlparser.Expr
 	var lhsVarsName []string
@@ -1247,12 +1047,12 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 		// rows as early as possible making join cheaper on the vtgate level.
 		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
 		singleSideDeps := false
-		lhsTables := node.LHS.TableID()
+		lhsTables := TableID(node.LHS)
 		if depsForExpr.IsSolvedBy(lhsTables) {
 			lhsPreds = append(lhsPreds, expr)
 			singleSideDeps = true
 		}
-		if depsForExpr.IsSolvedBy(node.RHS.TableID()) {
+		if depsForExpr.IsSolvedBy(TableID(node.RHS)) {
 			rhsPreds = append(rhsPreds, expr)
 			singleSideDeps = true
 		}
@@ -1300,8 +1100,8 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 	return node, nil
 }
 
-func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *Derived) (abstract.PhysicalOperator, error) {
-	node = node.Clone().(*Derived)
+func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *Derived) (Operator, error) {
+	node = Clone(node).(*Derived)
 
 	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
 	for _, expr := range exprs {

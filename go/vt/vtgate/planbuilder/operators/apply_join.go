@@ -14,18 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package physical
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // ApplyJoin is a nested loop join - for each row on the LHS,
 // we'll execute the plan on the RHS, feeding data from left to right
 type ApplyJoin struct {
-	LHS, RHS abstract.PhysicalOperator
+	LHS, RHS Operator
 
 	// Columns stores the column indexes of the columns coming from the left and right side
 	// negative value comes from LHS and positive from RHS
@@ -44,42 +42,14 @@ type ApplyJoin struct {
 	Predicate sqlparser.Expr
 }
 
-var _ abstract.PhysicalOperator = (*ApplyJoin)(nil)
+var _ PhysicalOperator = (*ApplyJoin)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (a *ApplyJoin) IPhysical() {}
 
-// TableID implements the PhysicalOperator interface
-func (a *ApplyJoin) TableID() semantics.TableSet {
-	return a.LHS.TableID().Merge(a.RHS.TableID())
-}
-
-// UnsolvedPredicates implements the PhysicalOperator interface
-func (a *ApplyJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
-// CheckValid implements the PhysicalOperator interface
-func (a *ApplyJoin) CheckValid() error {
-	err := a.LHS.CheckValid()
-	if err != nil {
-		return err
-	}
-	return a.RHS.CheckValid()
-}
-
-// Compact implements the PhysicalOperator interface
-func (a *ApplyJoin) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
-	return a, nil
-}
-
-// Cost implements the PhysicalOperator interface
-func (a *ApplyJoin) Cost() int {
-	return a.LHS.Cost() + a.RHS.Cost()
-}
-
-// Clone implements the PhysicalOperator interface
-func (a *ApplyJoin) Clone() abstract.PhysicalOperator {
+// Clone implements the Operator interface
+func (a *ApplyJoin) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 2)
 	varsClone := map[string]int{}
 	for key, value := range a.Vars {
 		varsClone[key] = value
@@ -89,12 +59,17 @@ func (a *ApplyJoin) Clone() abstract.PhysicalOperator {
 	lhsColumns := make([]*sqlparser.ColName, len(a.LHSColumns))
 	copy(lhsColumns, a.LHSColumns)
 	return &ApplyJoin{
-		LHS:        a.LHS.Clone(),
-		RHS:        a.RHS.Clone(),
+		LHS:        inputs[0],
+		RHS:        inputs[1],
 		Columns:    columnsClone,
 		Vars:       varsClone,
 		LeftJoin:   a.LeftJoin,
 		Predicate:  sqlparser.CloneExpr(a.Predicate),
 		LHSColumns: lhsColumns,
 	}
+}
+
+// Inputs implements the Operator interface
+func (a *ApplyJoin) Inputs() []Operator {
+	return []Operator{a.LHS, a.RHS}
 }

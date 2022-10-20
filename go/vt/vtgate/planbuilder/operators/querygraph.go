@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package abstract
+package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -38,6 +39,8 @@ type (
 
 		// NoDeps contains the predicates that can be evaluated anywhere.
 		NoDeps sqlparser.Expr
+
+		noInputs
 	}
 
 	innerJoin struct {
@@ -56,23 +59,10 @@ type (
 	}
 )
 
-var _ LogicalOperator = (*QueryGraph)(nil)
+var _ Operator = (*QueryGraph)(nil)
 
-func (*QueryGraph) iLogical() {}
-
-// PushPredicate implements the Operator interface
-func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		err := qg.collectPredicate(e, semTable)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return qg, nil
-}
-
-// TableID implements the Operator interface
-func (qg *QueryGraph) TableID() semantics.TableSet {
+// Introduces implements the tableIDIntroducer interface
+func (qg *QueryGraph) Introduces() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
 		ts = ts.Merge(table.ID)
@@ -98,11 +88,11 @@ func newQueryGraph() *QueryGraph {
 	return &QueryGraph{}
 }
 
-func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) collectPredicates(ctx *plancontext.PlanningContext, sel *sqlparser.Select) error {
 	predicates := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 
 	for _, predicate := range predicates {
-		err := qg.collectPredicate(predicate, semTable)
+		err := qg.collectPredicate(ctx, predicate)
 		if err != nil {
 			return err
 		}
@@ -132,8 +122,8 @@ func (qg *QueryGraph) addJoinPredicates(ts semantics.TableSet, expr sqlparser.Ex
 	})
 }
 
-func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.RecursiveDeps(predicate)
+func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) error {
+	deps := ctx.SemTable.RecursiveDeps(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
@@ -170,24 +160,30 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 	}
 }
 
-// UnsolvedPredicates implements the Operator interface
+// UnsolvedPredicates implements the unresolved interface
 func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
+	tables := TableID(qg)
 	for _, join := range qg.innerJoins {
 		set, exprs := join.deps, join.exprs
-		if !set.IsSolvedBy(qg.TableID()) {
+		if !set.IsSolvedBy(tables) {
 			result = append(result, exprs...)
 		}
 	}
 	return result
 }
 
-// CheckValid implements the Operator interface
-func (qg *QueryGraph) CheckValid() error {
-	return nil
-}
+// Clone implements the Operator interface
+func (qg *QueryGraph) Clone(inputs []Operator) Operator {
+	checkSize(inputs, 0)
+	result := &QueryGraph{
+		Tables:     nil,
+		innerJoins: nil,
+		NoDeps:     nil,
+	}
 
-// Compact implements the Operator interface
-func (qg *QueryGraph) Compact(*semantics.SemTable) (LogicalOperator, error) {
-	return qg, nil
+	result.Tables = append([]*QueryTable{}, qg.Tables...)
+	result.innerJoins = append([]*innerJoin{}, qg.innerJoins...)
+	result.NoDeps = qg.NoDeps
+	return result
 }

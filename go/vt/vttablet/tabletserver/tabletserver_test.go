@@ -1253,6 +1253,34 @@ func TestMessageStream(t *testing.T) {
 	}
 }
 
+func TestCheckMySQLGauge(t *testing.T) {
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// Check that initially checkMySQLGauge has 0 value
+	assert.EqualValues(t, 0, tsv.checkMysqlGaugeFunc.Get())
+	tsv.CheckMySQL()
+	// After the checkMySQL call checkMySQLGauge should have 1 value
+	assert.EqualValues(t, 1, tsv.checkMysqlGaugeFunc.Get())
+
+	// Wait for CheckMySQL to finish.
+	// This wait is required because CheckMySQL waits for 1 second after it finishes execution
+	// before letting go of the acquired locks.
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timedout waiting for CheckMySQL to finish")
+		default:
+			if tsv.checkMysqlGaugeFunc.Get() == 0 {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 func TestMessageAck(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
