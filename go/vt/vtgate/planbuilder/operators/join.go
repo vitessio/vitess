@@ -85,3 +85,36 @@ func (j *Join) Clone(inputs []Operator) Operator {
 func (j *Join) Inputs() []Operator {
 	return []Operator{j.LHS, j.RHS}
 }
+
+func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
+	if tableExpr.Join == sqlparser.RightJoinType {
+		lhs, rhs = rhs, lhs
+	}
+	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
+}
+
+func createJoin(LHS, RHS Operator) Operator {
+	lqg, lok := LHS.(*QueryGraph)
+	rqg, rok := RHS.(*QueryGraph)
+	if lok && rok {
+		op := &QueryGraph{
+			Tables:     append(lqg.Tables, rqg.Tables...),
+			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
+			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
+		}
+		return op
+	}
+	return &Join{LHS: LHS, RHS: RHS}
+}
+
+func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
+	op := createJoin(lhs, rhs)
+	if tableExpr.Condition.On != nil {
+		var err error
+		op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return op, nil
+}

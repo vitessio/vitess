@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -100,9 +99,8 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, b
 		return op, false, nil
 	}
 
-	if innerRoute.RouteOpCode == engine.EqualUnique {
+	if !(innerRoute.RouteOpCode == engine.EqualUnique) && !op.IsMergeable(ctx) {
 		// no need to check anything if we are sure that we will only hit a single shard
-	} else if !op.IsMergeable(ctx) {
 		return op, false, nil
 	}
 
@@ -268,94 +266,6 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Opera
 		plans[i] = plan
 	}
 	return plans, nil
-}
-
-func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves semantics.TableSet) (*Route, error) {
-	if table.IsInfSchema {
-		return createInfSchemaRoute(ctx, table)
-	}
-	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(table.Table)
-	if target != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
-	}
-	if err != nil {
-		return nil, err
-	}
-	if vschemaTable.Name.String() != table.Table.Name.String() {
-		// we are dealing with a routed table
-		name := table.Table.Name
-		table.Table.Name = vschemaTable.Name
-		astTable, ok := table.Alias.Expr.(sqlparser.TableName)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
-		}
-		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
-		astTable.Name = realTableName
-		if table.Alias.As.IsEmpty() {
-			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
-			table.Alias.As = sqlparser.NewIdentifierCS(name.String())
-		}
-	}
-	plan := &Route{
-		Source: &Table{
-			QTable: table,
-			VTable: vschemaTable,
-		},
-		Keyspace: vschemaTable.Keyspace,
-	}
-
-	for _, columnVindex := range vschemaTable.ColumnVindexes {
-		plan.VindexPreds = append(plan.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})
-	}
-
-	switch {
-	case vschemaTable.Type == vindexes.TypeSequence:
-		plan.RouteOpCode = engine.Next
-	case vschemaTable.Type == vindexes.TypeReference:
-		plan.RouteOpCode = engine.Reference
-	case !vschemaTable.Keyspace.Sharded:
-		plan.RouteOpCode = engine.Unsharded
-	case vschemaTable.Pinned != nil:
-		// Pinned tables have their keyspace ids already assigned.
-		// Use the Binary vindex, which is the identity function
-		// for keyspace id.
-		plan.RouteOpCode = engine.EqualUnique
-		vindex, _ := vindexes.NewBinary("binary", nil)
-		plan.Selected = &VindexOption{
-			Ready:       true,
-			Values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
-			ValueExprs:  nil,
-			Predicates:  nil,
-			OpCode:      engine.EqualUnique,
-			FoundVindex: vindex,
-			Cost: Cost{
-				OpCode: engine.EqualUnique,
-			},
-		}
-	default:
-		plan.RouteOpCode = engine.Scatter
-	}
-	for _, predicate := range table.Predicates {
-		err = plan.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
-		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
-		for _, pred := range table.Predicates {
-			rewritten := tryRewriteOrToIn(pred)
-			if rewritten != nil {
-				err = plan.UpdateRoutingLogic(ctx, rewritten)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	return plan, nil
 }
 
 func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {

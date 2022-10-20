@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // SubQuery stores the information about subquery
@@ -77,4 +78,22 @@ func (s *SubQuery) Inputs() []Operator {
 		operators = append(operators, inner)
 	}
 	return operators
+}
+
+func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
+	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
+		return nil, nil
+	}
+	subq := &SubQuery{}
+	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
+		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
+		if err != nil {
+			return nil, err
+		}
+		subq.Inner = append(subq.Inner, &SubQueryInner{
+			ExtractedSubquery: sq,
+			Inner:             opInner,
+		})
+	}
+	return subq, nil
 }
