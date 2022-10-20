@@ -709,6 +709,12 @@ var commands = []commandGroup{
 				help:   "Outputs a JSON structure that contains information about the SrvKeyspace.",
 			},
 			{
+				name:   "UpdateThrottlerConfig",
+				method: commandUpdateThrottlerConfig,
+				params: "[--enable] [--disable] [--default_threshold=<float64>] <keyspace>",
+				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
+			},
+			{
 				name:   "GetSrvVSchema",
 				method: commandGetSrvVSchema,
 				params: "<cell>",
@@ -3642,6 +3648,56 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("missing keyspace %q in cell %q", keyspace, cell)
 	}
 	return printJSON(wr.Logger(), cellKs)
+}
+
+func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) (err error) {
+	enable := subFlags.Bool("enable", false, "Enable the throttler")
+	disable := subFlags.Bool("disable", false, "Disable the throttler")
+	defaultThreshold := subFlags.Float64("default_threshold", 0, "threshold for the default throttler check")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace> arguments are required for the SetThrottlerConfig command")
+	}
+	if *enable && *disable {
+		return fmt.Errorf("--enable and --disable are mutually exclusive")
+	}
+
+	keyspace := subFlags.Arg(0)
+
+	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+		if throttlerConfig == nil {
+			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+		}
+		if throttlerConfig.DefaultCheckThreshold == 0 {
+			throttlerConfig.DefaultCheckThreshold = 1.0
+		}
+		if *defaultThreshold > 0 {
+			throttlerConfig.DefaultCheckThreshold = *defaultThreshold
+		}
+		if *enable {
+			throttlerConfig.Enabled = true
+		}
+		if *disable {
+			throttlerConfig.Enabled = false
+		}
+		return throttlerConfig
+	}
+
+	ctx, unlock, lockErr := wr.TopoServer().LockKeyspace(ctx, keyspace, "UpdateThrottlerConfig")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	updatedCells, err := wr.TopoServer().UpdateSrvKeyspaceThrottlerConfig(ctx, keyspace, []string{}, update)
+	if err != nil {
+		return err
+	}
+
+	return printJSON(wr.Logger(), updatedCells)
 }
 
 func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {

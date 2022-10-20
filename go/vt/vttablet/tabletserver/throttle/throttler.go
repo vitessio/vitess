@@ -103,8 +103,8 @@ func init() {
 }
 
 type ThrottlerConfig struct {
-	enabled bool
-	// threshold float64 // TODO(shlomi)
+	enabled   bool
+	threshold float64
 }
 
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
@@ -112,6 +112,7 @@ type ThrottlerConfig struct {
 type Throttler struct {
 	keyspace string
 	shard    string
+	cell     string
 
 	check     *ThrottlerCheck
 	isEnabled int64
@@ -130,7 +131,7 @@ type Throttler struct {
 	mysqlInventoryChan      chan *mysql.Inventory
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
 
-	// applyConfig *ThrottlerConfig // TODO(shlomi)
+	applyConfig *ThrottlerConfig
 
 	mysqlInventory *mysql.Inventory
 
@@ -169,11 +170,12 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, ts *topo.Server, cell string, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
 		isLeader: 0,
 		isOpen:   0,
 
+		cell:            cell,
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		ts:              ts,
@@ -270,14 +272,21 @@ func (throttler *Throttler) initConfig() {
 	}
 }
 
-func (throttler *Throttler) readConfig(ctx context.Context) error {
-	srvKeyspace, err := throttler.ts.GetSrvKeyspace(ctx, topo.GlobalCell, throttler.keyspace)
+func (throttler *Throttler) readConfig(ctx context.Context) (*ThrottlerConfig, error) {
+	srvKeyspace, err := throttler.ts.GetSrvKeyspace(ctx, throttler.cell, throttler.keyspace)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	cfg := &srvKeyspace.ThrottlerConfig
-	fmt.Printf("============ ZZZ cfg=%v\n", cfg)
-	return nil
+	if cfg := srvKeyspace.ThrottlerConfig; cfg != nil {
+		return &ThrottlerConfig{
+			enabled:   cfg.GetEnabled(),
+			threshold: cfg.GetDefaultCheckThreshold(),
+		}, nil
+	}
+	return &ThrottlerConfig{
+		enabled:   throttler.env.Config().EnableLagThrottler,
+		threshold: throttleThreshold.Seconds(),
+	}, nil
 }
 
 func (throttler *Throttler) IsEnabled() bool {
@@ -293,10 +302,10 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 	}
 	atomic.StoreInt64(&throttler.isEnabled, 1)
 
-	// TODO(shlomi): Read from database
-	if err := throttler.readConfig(ctx); err != nil {
-		fmt.Printf("======== ZZZ err: %v\n", err)
-	}
+	// // TODO(shlomi): Read from database
+	// if err := throttler.readConfig(ctx); err != nil {
+	// 	fmt.Printf("======== ZZZ err: %v\n", err)
+	// }
 	throttler.metricsQuery = replicationLagQuery
 	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
 	// _ = throttler.updateConfig(ctx, true, throttler.MetricsThreshold.Get()) // TODO(shlomi)
@@ -312,9 +321,7 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 }
 
 func (throttler *Throttler) maybeEnable(ctx context.Context) error {
-	if err := throttler.readConfig(ctx); err != nil {
-		fmt.Printf("======== ZZZ err: %v\n", err)
-	}
+	// // TODO(shlomi): Read from database
 	// 		throttlerConfig, err := throttler.readConfig(ctx)
 	// if err != nil {
 	// 	return err
