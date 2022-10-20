@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -77,28 +78,56 @@ func RegisterFlags() {
 	})
 }
 
-// NewMycnfFromFlags creates a Mycnf object from command-line flags.
+// NewMycnfFromFlags creates a Mycnf object from the command line flags.
 //
-// RegisterFlags should have been called before calling
+// Multiple modes are supported:
+//   - at least mycnf_server_id is set on the command line
+//     --> then we read all parameters from the command line, and not from
+//     any my.cnf file.
+//   - mycnf_server_id is not passed in, but mycnf-file is passed in
+//     --> then we read that mycnf file
+//   - mycnf_server_id and mycnf-file are not passed in:
+//     --> then we use the default location of the my.cnf file for the
+//     provided uid and read that my.cnf file.
+//
+// RegisterCommandLineFlags should have been called before calling
 // this, otherwise we'll panic.
-func NewMycnfFromFlags(tabletUID uint32) *Mycnf {
-	return &Mycnf{
-		ServerID:              uint32(flagServerID),
-		MysqlPort:             int32(flagMysqlPort),
-		DataDir:               flagDataDir,
-		InnodbDataHomeDir:     flagInnodbDataHomeDir,
-		InnodbLogGroupHomeDir: flagInnodbLogGroupHomeDir,
-		SocketFile:            flagSocketFile,
-		GeneralLogPath:        flagGeneralLogPath,
-		ErrorLogPath:          flagErrorLogPath,
-		SlowLogPath:           flagSlowLogPath,
-		RelayLogPath:          flagRelayLogPath,
-		RelayLogIndexPath:     flagRelayLogIndexPath,
-		RelayLogInfoPath:      flagRelayLogInfoPath,
-		BinLogPath:            flagBinLogPath,
-		MasterInfoFile:        flagMasterInfoFile,
-		PidFile:               flagPidFile,
-		TmpDir:                flagTmpDir,
-		SecureFilePriv:        flagSecureFilePriv,
+func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
+	if flagServerID != 0 {
+		log.Info("mycnf_server_id is specified, using command line parameters for mysql config")
+		return &Mycnf{
+			ServerID:              uint32(flagServerID),
+			MysqlPort:             int32(flagMysqlPort),
+			DataDir:               flagDataDir,
+			InnodbDataHomeDir:     flagInnodbDataHomeDir,
+			InnodbLogGroupHomeDir: flagInnodbLogGroupHomeDir,
+			SocketFile:            flagSocketFile,
+			GeneralLogPath:        flagGeneralLogPath,
+			ErrorLogPath:          flagErrorLogPath,
+			SlowLogPath:           flagSlowLogPath,
+			RelayLogPath:          flagRelayLogPath,
+			RelayLogIndexPath:     flagRelayLogIndexPath,
+			RelayLogInfoPath:      flagRelayLogInfoPath,
+			BinLogPath:            flagBinLogPath,
+			MasterInfoFile:        flagMasterInfoFile,
+			PidFile:               flagPidFile,
+			TmpDir:                flagTmpDir,
+			SecureFilePriv:        flagSecureFilePriv,
+
+			// This is probably not going to be used by anybody,
+			// but fill in a default value. (Note it's used by
+			// mysqld.Start, in which case it is correct).
+			Path: MycnfFile(uint32(flagServerID)),
+		}, nil
 	}
+
+	if flagMycnfFile == "" {
+		flagMycnfFile = MycnfFile(uid)
+		log.Infof("No mycnf_server_id, no mycnf-file specified, using default config for server id %v: %v", uid, flagMycnfFile)
+	} else {
+		log.Infof("No mycnf_server_id specified, using mycnf-file file %v", flagMycnfFile)
+	}
+	mycnf = NewMycnf(uid, 0)
+	mycnf.Path = flagMycnfFile
+	return ReadMycnf(mycnf)
 }

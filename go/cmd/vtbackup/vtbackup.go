@@ -59,7 +59,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math"
+	"math/big"
 	"os"
 	"strings"
 	"syscall"
@@ -81,7 +84,6 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -104,13 +106,11 @@ var (
 	initialBackup       bool
 	allowFirstBackup    bool
 	restartBeforeBackup bool
-	keepTemporaryFiles  bool
 	// vttablet-like flags
 	initDbNameOverride string
 	initKeyspace       string
 	initShard          string
 	concurrency        = 4
-	tabletPath         string
 	// mysqlctld-like flags
 	mysqlPort        = 3306
 	mysqlSocket      string
@@ -128,12 +128,10 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&allowFirstBackup, "allow_first_backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	fs.BoolVar(&restartBeforeBackup, "restart_before_backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
 	// vttablet-like flags
-	fs.BoolVar(&keepTemporaryFiles, "keep-temporary-files", keepTemporaryFiles, "Retain temporary files and directories after exit.")
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	fs.StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
 	fs.IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
-	fs.StringVar(&tabletPath, "tablet-path", tabletPath, "tablet alias")
 	// mysqlctld-like flags
 	fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
 	fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
@@ -226,28 +224,33 @@ func main() {
 }
 
 func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
-	tabletAlias, err := getTabletAlias()
+	// This is an imaginary tablet alias. The value doesn't matter for anything,
+	// except that we generate a random UID to ensure the target backup
+	// directory is unique if multiple vtbackup instances are launched for the
+	// same shard, at exactly the same second, pointed at the same backup
+	// storage location.
+	bigN, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	if err != nil {
-		return fmt.Errorf("failed to get tablet alias: %v", err)
+		return fmt.Errorf("can't generate random tablet UID: %v", err)
+	}
+	tabletAlias := &topodatapb.TabletAlias{
+		Cell: "vtbackup",
+		Uid:  uint32(bigN.Uint64()),
 	}
 
 	// Clean up our temporary data dir if we exit for any reason, to make sure
 	// every invocation of vtbackup starts with a clean slate, and it does not
 	// accumulate garbage (and run out of disk space) if it's restarted.
 	tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
-	if !keepTemporaryFiles {
-		defer func() {
-			log.Infof("Removing temporary tablet directory: %v", tabletDir)
-			if err := os.RemoveAll(tabletDir); err != nil {
-				log.Warningf("Failed to remove temporary tablet directory: %v", err)
-			}
-		}()
-	} else {
-		log.Infof("Will retain temporary tablet directory: %v", tabletDir)
-	}
+	defer func() {
+		log.Infof("Removing temporary tablet directory: %v", tabletDir)
+		if err := os.RemoveAll(tabletDir); err != nil {
+			log.Warningf("Failed to remove temporary tablet directory: %v", err)
+		}
+	}()
 
 	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnfFromSources(tabletAlias.Uid, mysqlSocket, int32(mysqlPort))
+	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, int32(mysqlPort))
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
@@ -256,7 +259,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err := mysqld.Init(initCtx, mycnf, initDBSQLFile); err != nil {
 		return fmt.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
 	}
-
 	// Shut down mysqld when we're done.
 	defer func() {
 		// Be careful not to use the original context, because we don't want to
@@ -736,16 +738,4 @@ func checkBackupComplete(ctx context.Context, backup backupstorage.BackupHandle)
 
 	log.Infof("Found complete backup %v taken at position %v", backup.Name(), manifest.Position.String())
 	return nil
-}
-
-func getTabletAlias() (*topodatapb.TabletAlias, error) {
-	if tabletPath != "" {
-		tabletAlias, err := topoproto.ParseTabletAlias(tabletPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse --tablet-path: %v", err)
-		}
-		return tabletAlias, nil
-	}
-
-	return topotools.RandomTabletAlias("vtbackup")
 }

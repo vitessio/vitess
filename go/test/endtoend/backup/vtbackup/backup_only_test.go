@@ -17,22 +17,17 @@ limitations under the License.
 package vtbackup
 
 import (
-	"bufio"
-	"errors"
+	"context"
 	"fmt"
-	"io"
 	"os"
 	"path"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	mysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 
 	"github.com/stretchr/testify/require"
 
@@ -177,87 +172,73 @@ func firstBackupTest(t *testing.T, tabletType string) {
 }
 
 func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
-	tabletAlias, err := topotools.RandomTabletAlias("vtbackup_test")
+	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
 	require.Nil(t, err)
-	tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
-	defer os.RemoveAll(tabletDir)
-	mysqlErrorLog := path.Join(tabletDir, "error.log")
+	defer os.Remove(mysqlSocket.Name())
 
 	// Take the back using vtbackup executable
 	extraArgs := []string{
 		"--allow_first_backup",
 		"--db-credentials-file", dbCredentialFile,
-		"--tablet-path", topoproto.TabletAliasString(tabletAlias),
-		"--keep-temporary-files",
-		"--mycnf_error_log_path", mysqlErrorLog,
+		"--mysql_socket", mysqlSocket.Name(),
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func(t *testing.T, ctx context.Context, mysqlSocket string) {
+		params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
+
+		for {
+			select {
+			case <-time.After(100 * time.Millisecond):
+				// Connect to vtbackup mysqld.
+				conn, err := mysql.Connect(ctx, &params)
+				if err != nil {
+					// Keep trying, vtbackup mysqld may not be ready yet.
+					continue
+				}
+
+				// Check if server supports disable/enable redo log.
+				qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
+				require.Nil(t, err)
+				// If not, there's nothing to test.
+				if len(qr.Rows) == 0 {
+					return
+				}
+
+				// MY-013600
+				// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
+				qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
+				require.Nil(t, err)
+				if len(qr.Rows) != 1 {
+					// Keep trying, possible we haven't disabled yet.
+					continue
+				}
+
+				// MY-013601
+				// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
+				qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
+				require.Nil(t, err)
+				if len(qr.Rows) != 1 {
+					// Keep trying, possible we haven't disabled yet.
+					continue
+				}
+
+				// Success
+				return
+			case <-ctx.Done():
+				require.Fail(t, "Failed to verify disable/enable redo log.")
+			}
+		}
+	}(t, ctx, mysqlSocket.Name())
+
 	log.Infof("starting backup tablet %s", time.Now())
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
-
-	help, _ := localCluster.ShowVtbackupHelp()
-	if !initialBackup && strings.Contains(string(help), "--keep-temporary-files") {
-		// vtbackup should first disable and then enable the redo log on MySQL >= 8.0.21.
-		var disabledRedoLog int
-		var enabledRedoLog int
-		var gte8021 bool
-
-		errorFile, err := os.OpenFile(mysqlErrorLog, os.O_RDONLY, 0644)
-		require.Nil(t, err, "failed to open mysql error log: %v", err)
-		defer errorFile.Close()
-
-		scanner := bufio.NewScanner(bufio.NewReader(errorFile))
-		for scanner.Scan() {
-			text := scanner.Text()
-
-			// MY-010931
-			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_server_startup_msg
-			if strings.Contains(text, "MY-010931") {
-				r, err := regexp.Compile(`Version: '([0-9]+)\.([0-9]+)\.([0-9]+).*'`) // .* is for -xx (e.g. Percona)
-				require.Nil(t, err)
-				v := r.FindStringSubmatch(text)
-				require.Equal(t, 4, len(v))
-				ver := mysqlctl.ServerVersion{}
-				ver.Major, err = strconv.Atoi(string(v[1]))
-				require.Nil(t, err)
-				ver.Minor, err = strconv.Atoi(string(v[2]))
-				require.Nil(t, err)
-				ver.Patch, err = strconv.Atoi(string(v[3]))
-				require.Nil(t, err)
-				gte8021 = ver.Major > 8 ||
-					ver.Major == 8 && ver.Minor > 0 ||
-					ver.Major == 8 && ver.Minor == 0 && ver.Patch >= 21
-			}
-
-			// MY-013600
-			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-			if strings.Contains(text, "MY-013600") {
-				disabledRedoLog++
-			}
-
-			// MY-013601
-			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-			if strings.Contains(text, "MY-013601") {
-				enabledRedoLog++
-			}
-		}
-
-		if !errors.Is(err, io.EOF) {
-			require.Nil(t, err)
-		}
-
-		if gte8021 {
-			require.Equal(t, 1, disabledRedoLog)
-			require.Equal(t, 1, enabledRedoLog)
-		} else {
-			require.Equal(t, 0, disabledRedoLog)
-			require.Equal(t, 0, enabledRedoLog)
-		}
-	}
 }
 
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {

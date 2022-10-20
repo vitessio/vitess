@@ -52,20 +52,9 @@ type VtbackupProcess struct {
 	exit chan error
 }
 
-func (vtbackup *VtbackupProcess) Help() ([]byte, error) {
-	vtbackup.proc = exec.Command(
-		vtbackup.Binary,
-		"--help",
-	)
-
-	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
-	log.Infof("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " "))
-
-	return vtbackup.proc.CombinedOutput()
-}
-
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
+
 	vtbackup.proc = exec.Command(
 		vtbackup.Binary,
 		"--topo_implementation", vtbackup.CommonArg.TopoImplementation,

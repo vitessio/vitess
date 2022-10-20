@@ -998,22 +998,7 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBa
 		initalBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
-}
 
-func (cluster *LocalProcessCluster) ShowVtbackupHelp() ([]byte, error) {
-	log.Info("Getting vtbackup --help")
-	cluster.VtbackupProcess = *VtbackupProcessInstance(
-		cluster.GetAndReserveTabletUID(),
-		cluster.GetAndReservePort(),
-		"",
-		"",
-		"",
-		"",
-		cluster.Hostname,
-		cluster.TmpDirectory,
-		cluster.TopoPort,
-		false)
-	return cluster.VtbackupProcess.Help()
 }
 
 // GetAndReservePort gives port for required process

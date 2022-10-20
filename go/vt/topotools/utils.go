@@ -17,10 +17,6 @@ limitations under the License.
 package topotools
 
 import (
-	"crypto/rand"
-	"fmt"
-	"math"
-	"math/big"
 	"reflect"
 	"sync"
 
@@ -138,21 +134,4 @@ func MapKeys(m any) []any {
 		keys = append(keys, kv.Interface())
 	}
 	return keys
-}
-
-// RandomTabletAlias generates an imaginary tablet alias.
-//
-// It generates a random UID which is useful, for example, to ensure that a
-// backup directory is unique if multiple vtbackup instances are launched
-// for the same shard, at exactly the same second, pointed at the same
-// backup storage location.
-func RandomTabletAlias(cell string) (*topodatapb.TabletAlias, error) {
-	bigN, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
-	if err != nil {
-		return nil, fmt.Errorf("can't generate random tablet UID: %v", err)
-	}
-	return &topodatapb.TabletAlias{
-		Cell: cell,
-		Uid:  uint32(bigN.Uint64()),
-	}, nil
 }
