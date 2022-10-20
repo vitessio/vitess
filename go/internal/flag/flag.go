@@ -138,15 +138,16 @@ func filterTestFlags() ([]string, []string) {
 	args := os.Args
 	var testFlags []string
 	var otherArgs []string
-	isRunFlag := false
+	hasExtraTestRunArg := false
 	for i := 0; 0 < len(args) && i < len(args); i++ {
-		// This additional logic for the test.run flag is required for running single unit tests in GoLand,
-		// due to the way it uses "go tool test2json" to run the test.
-		if strings.HasPrefix(args[i], goTestFlagSuffix) || isRunFlag {
-			isRunFlag = false
+		// This additional logic to check for the test.run flag is required for running single unit tests in GoLand,
+		// due to the way it uses "go tool test2json" to run the test. The CLI `go test` specifies the test as "-test.run=TestHeartbeat",
+		// but test2json as "-test.run TestHeartbeat". So in the latter case we need to also add the arg following test.run
+		if strings.HasPrefix(args[i], goTestFlagSuffix) || hasExtraTestRunArg {
+			hasExtraTestRunArg = false
 			testFlags = append(testFlags, args[i])
 			if args[i] == goTestRunFlag {
-				isRunFlag = true
+				hasExtraTestRunArg = true
 			}
 			continue
 		}
