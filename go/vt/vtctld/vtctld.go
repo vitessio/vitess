@@ -66,9 +66,9 @@ func registerVtctldFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&durabilityPolicy, "durability_policy", durabilityPolicy, "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
 	fs.StringVar(&webDir, "web_dir", webDir, "NOT USED, here for backward compatibility")
-	fs.MarkDeprecated("web_dir", "it will be removed in the future releases.")
+	fs.MarkDeprecated("web_dir", "it will be removed in a future releases.")
 	fs.StringVar(&webDir2, "web_dir2", webDir2, "NOT USED, here for backward compatibility")
-	fs.MarkDeprecated("web_dir2", "it will be removed in the future releases.")
+	fs.MarkDeprecated("web_dir2", "it will be removed in a future releases.")
 }
 
 // InitVtctld initializes all the vtctld functionality.
