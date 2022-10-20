@@ -17,8 +17,6 @@ limitations under the License.
 package grpccommon
 
 import (
-	"sync"
-
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
@@ -30,8 +28,6 @@ var (
 	// accept. Larger messages will be rejected.
 	// Note: We're using 16 MiB as default value because that's the default in MySQL
 	maxMessageSize = 16 * 1024 * 1024
-	// enableTracing sets a flag to enable grpc client/server tracing.
-	enableTracing bool
 	// enablePrometheus sets a flag to enable grpc client/server grpc monitoring.
 	enablePrometheus bool
 )
@@ -43,21 +39,8 @@ var (
 // command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&maxMessageSize, "grpc_max_message_size", maxMessageSize, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
-	fs.BoolVar(&enableTracing, "grpc_enable_tracing", enableTracing, "Enable gRPC tracing.")
+	fs.BoolVar(&grpc.EnableTracing, "grpc_enable_tracing", grpc.EnableTracing, "Enable gRPC tracing.")
 	fs.BoolVar(&enablePrometheus, "grpc_prometheus", enablePrometheus, "Enable gRPC monitoring with Prometheus.")
-}
-
-var (
-	enableTracingOnce sync.Once
-)
-
-// EnableTracingOpt enables grpc tracing if requested.
-// It must be called before any grpc server or client is created but is safe
-// to be called multiple times.
-func EnableTracingOpt() {
-	enableTracingOnce.Do(func() {
-		grpc.EnableTracing = enableTracing
-	})
 }
 
 // EnableGRPCPrometheus returns the value of the --grpc_prometheus flag.
