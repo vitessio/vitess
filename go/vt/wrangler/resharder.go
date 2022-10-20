@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
@@ -330,7 +329,7 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				Shard:         source.ShardName(),
 				Filter:        filter,
 				StopAfterCopy: rs.stopAfterCopy,
-				OnDdl:         binlogdatapb.OnDDLAction(binlogdata.OnDDLAction_value[rs.onDDL]),
+				OnDdl:         binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[rs.onDDL]),
 			}
 			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
 				int64(binlogdatapb.VReplicationWorkflowType_Reshard),

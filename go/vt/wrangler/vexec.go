@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -598,7 +597,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 
 			// Only show the OnDDL setting if it's not the default of 0/IGNORE.
 			if status.Bls.OnDdl != binlogdatapb.OnDDLAction_IGNORE {
-				rsr.OnDDL = binlogdata.OnDDLAction_name[int32(status.Bls.OnDdl)]
+				rsr.OnDDL = binlogdatapb.OnDDLAction_name[int32(status.Bls.OnDdl)]
 				// Unset it in the proto so that we do not show the
 				// low-level enum int in the JSON marshalled output
 				// as e.g. `"on_ddl": 1` is not meaningful or helpful

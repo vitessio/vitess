@@ -49,7 +49,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -1237,7 +1236,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			ExternalCluster: mz.ms.ExternalCluster,
 			SourceTimeZone:  mz.ms.SourceTimeZone,
 			TargetTimeZone:  mz.ms.TargetTimeZone,
-			OnDdl:           binlogdatapb.OnDDLAction(binlogdata.OnDDLAction_value[mz.ms.OnDdl]),
+			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{

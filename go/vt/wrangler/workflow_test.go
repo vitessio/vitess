@@ -30,11 +30,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -49,7 +49,7 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicatio
 		Cells:                           cells,
 		TabletTypes:                     tabletTypes,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
-		OnDDL:                           binlogdata.OnDDLAction_name[int32(binlogdata.OnDDLAction_EXEC)],
+		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)],
 	}
 	mtwf := &VReplicationWorkflow{
 		workflowType: MoveTablesWorkflow,
@@ -280,7 +280,7 @@ func TestMoveTablesV2(t *testing.T) {
 		TabletTypes:                     "REPLICA,RDONLY,PRIMARY",
 		Timeout:                         DefaultActionTimeout,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
-		OnDDL:                           binlogdata.OnDDLAction_name[int32(binlogdata.OnDDLAction_STOP)],
+		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_STOP)],
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
@@ -473,7 +473,7 @@ func TestReshardV2(t *testing.T) {
 		TabletTypes:                     "replica,rdonly,primary",
 		Timeout:                         DefaultActionTimeout,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
-		OnDDL:                           binlogdata.OnDDLAction_name[int32(binlogdata.OnDDLAction_EXEC_IGNORE)],
+		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC_IGNORE)],
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
 	defer tme.stopTablets(t)

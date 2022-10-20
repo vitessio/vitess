@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -43,7 +43,7 @@ const mzSelectIDQuery = "select id from _vt.vreplication where db_name='vt_targe
 const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 const mzCheckJournal = "/select val from _vt.resharding_journal where id="
 
-var onDDL = binlogdata.OnDDLAction_name[int32(binlogdata.OnDDLAction_IGNORE)]
+var onDDL = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
 
 func TestMigrateTables(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{

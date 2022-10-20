@@ -108,6 +108,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -122,14 +123,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	"vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
@@ -2088,7 +2081,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 		return fmt.Errorf("three arguments are required: <keyspace.workflow>, source_shards, target_shards")
 	}
 	onDDL = strings.ToUpper(onDDL)
-	if _, ok := binlogdata.OnDDLAction_value[onDDL]; !ok {
+	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
 		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
 	}
 	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
@@ -2125,7 +2118,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		return err
 	}
 	onDDL = strings.ToUpper(onDDL)
-	if _, ok := binlogdata.OnDDLAction_value[onDDL]; !ok {
+	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
 		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
 	}
 	if *workflow == "" {
@@ -2237,7 +2230,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	}
 
 	onDDL = strings.ToUpper(onDDL)
-	if _, ok := binlogdata.OnDDLAction_value[onDDL]; !ok {
+	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
 		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
 	}
 
