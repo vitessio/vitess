@@ -55,15 +55,15 @@ export const Gates = () => {
                     <div className="text-sm text-secondary">{gate.cluster}</div>
                 </DataCell>
                 <DataCell className="whitespace-nowrap">
-                        {gate.fqdn ? (
-                            <div className="font-bold">
-                                <a href={`//${gate.fqdn}`} rel="noopener noreferrer" target="_blank">
-                                    {gate.hostname}
-                                </a>
-                            </div>
-                        ) : (
-                            gate.hostname
-                        )}
+                    {gate.fqdn ? (
+                        <div className="font-bold">
+                            <a href={`//${gate.fqdn}`} rel="noopener noreferrer" target="_blank">
+                                {gate.hostname}
+                            </a>
+                        </div>
+                    ) : (
+                        gate.hostname
+                    )}
                 </DataCell>
                 <DataCell className="whitespace-nowrap">{gate.cell}</DataCell>
                 <DataCell>{(gate.keyspaces || []).join(', ')}</DataCell>
