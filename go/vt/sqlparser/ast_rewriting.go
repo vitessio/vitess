@@ -410,7 +410,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 			break
 		}
 		if SystemSchema(er.keyspace) {
-			if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
+			if aliasTableName.Qualifier.IsEmpty() {
 				aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
 				node.Expr = aliasTableName
 				cursor.Replace(node)

@@ -318,7 +318,10 @@ var executorVSchema = `
 				}
 			]
     	}
-	}
+	},
+    "views":{
+        "user_details_view": "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"
+     }
 }
 `
 
