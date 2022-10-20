@@ -129,16 +129,10 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 		result, err = greedySolve(ctx, op)
 	}
 
-	id := TableID(op)
-	var unresolved []sqlparser.Expr
-	for _, join := range op.innerJoins {
-		set, exprs := join.deps, join.exprs
-		if !set.IsSolvedBy(id) {
-			unresolved = append(unresolved, exprs...)
-		}
-	}
-
+	unresolved := op.UnsolvedPredicates(ctx.SemTable)
 	if len(unresolved) > 0 {
+		// if we have any predicates that none of the joins or tables took care of,
+		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
 		result = &Filter{Source: result, Predicates: unresolved}
 	}
 
