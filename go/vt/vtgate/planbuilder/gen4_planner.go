@@ -206,6 +206,10 @@ func newBuildSelectPlan(
 	if err != nil {
 		return nil, nil, err
 	}
+	logical, err = operators.Compact(ctx, logical)
+	if err != nil {
+		return nil, nil, err
+	}
 	err = operators.CheckValid(logical)
 	if err != nil {
 		return nil, nil, err

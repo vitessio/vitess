@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -89,4 +90,32 @@ func checkSize(inputs []Operator, shouldBe int) {
 	if len(inputs) != shouldBe {
 		panic(fmt.Sprintf("BUG: got the wrong number of inputs: got %d, expected %d", len(inputs), shouldBe))
 	}
+}
+
+type rewriterFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, changed bool, err error)
+
+func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter rewriterFunc) (Operator, bool, error) {
+	oldInputs := root.Inputs()
+	anythingChanged := false
+	newInputs := make([]Operator, len(oldInputs))
+	for i, operator := range oldInputs {
+		in, changed, err := rewriteBottomUp(ctx, operator, rewriter)
+		if err != nil {
+			return nil, false, err
+		}
+		if changed {
+			anythingChanged = true
+		}
+		newInputs[i] = in
+	}
+
+	if anythingChanged {
+		root = root.Clone(newInputs)
+	}
+
+	newOp, b, err := rewriter(ctx, root)
+	if err != nil {
+		return nil, false, err
+	}
+	return newOp, anythingChanged || b, nil
 }

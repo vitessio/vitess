@@ -68,6 +68,11 @@ type (
 		CheckValid() error
 	}
 
+	compactable interface {
+		// implement this interface for operators that have easy to see optimisations
+		compact(ctx *plancontext.PlanningContext) (Operator, bool, error)
+	}
+
 	// helper type that implements Inputs() returning nil
 	noInputs struct{}
 )
@@ -209,7 +214,7 @@ func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 	if err != nil {
 		return nil, err
 	}
-	return Compact(ctx, op)
+	return op, nil
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
