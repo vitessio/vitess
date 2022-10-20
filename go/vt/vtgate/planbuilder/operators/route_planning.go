@@ -44,7 +44,11 @@ type (
 	opCacheMap map[tableSetPair]Operator
 )
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
+// TransformToPhysical takes an operator tree and rewrites any parts that have not yet been planned as physical operators.
+// This is where a lot of the optimisations of the query plans are done.
+// Here we try to merge query parts into the same route primitives. At the end of this process,
+// all the operators in the tree are guaranteed to be PhysicalOperators
+func TransformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
 	op, _, err := rewriteBottomUp(ctx, in, func(context *plancontext.PlanningContext, operator Operator) (newOp Operator, changed bool, err error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
@@ -61,7 +65,22 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, in Operator) (Oper
 			return operator, false, nil
 		}
 	})
-	return op, err
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = VisitTopDown(op, func(op Operator) error {
+		if _, isPhys := op.(PhysicalOperator); !isPhys {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return op, nil
 }
 
 func optimizeFilter(op *Filter) (Operator, bool, error) {
