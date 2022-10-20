@@ -239,7 +239,10 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	return newCount == count+1
 }
 
-func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string) {
+// waitForWorkflowState waits for the given workflow to reach the provided state.
+// You can pass optional key value pairs of the form "key==value" to wait for
+// worfklow sub-state such as "Message==for vdiff". Invalid checks are ignored.
+func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
@@ -253,9 +256,21 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
 				if streamId.String() == "PrimaryReplicationStatuses" {
 					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+						// we need to wait for all streams to have the desired state
 						state = attributeValue.Get("State").String()
-						if state != wantState {
-							done = false // we need to wait for all streams to have the desired state
+						if state == wantState {
+							for i := 0; i < len(fieldEqualityChecks); i++ {
+								if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
+									key := kvparts[0]
+									val := kvparts[1]
+									res := attributeValue.Get(key).String()
+									if !strings.EqualFold(res, val) {
+										done = false
+									}
+								}
+							}
+						} else {
+							done = false
 						}
 						return true
 					})
@@ -270,8 +285,13 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 		}
 		select {
 		case <-timer.C:
-			require.FailNowf(t, "workflow %q did not fully reach the expected state of %q before the timeout of %s; last seen output: %s",
-				ksWorkflow, wantState, workflowStateTimeout, output)
+			var extraRequirements string
+			if len(fieldEqualityChecks) > 0 {
+				extraRequirements = fmt.Sprintf(" with the additional requirements of \"%v\"", fieldEqualityChecks)
+			}
+			require.FailNowf(t, "workflow state not reached",
+				"Workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
+				ksWorkflow, wantState, extraRequirements, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
 		}
