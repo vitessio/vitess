@@ -182,6 +182,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.QueryInterrupted:             {num: ERQueryInterrupted, state: SSQueryInterrupted},
 	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
 	vterrors.SyntaxError:                  {num: ERSyntaxError, state: SSClientError},
+	vterrors.TableExists:                  {num: ERTableExists, state: SSTableExists},
 	vterrors.UnsupportedPS:                {num: ERUnsupportedPS, state: SSUnknownSQLState},
 	vterrors.UnknownSystemVariable:        {num: ERUnknownSystemVariable, state: SSUnknownSQLState},
 	vterrors.UnknownTable:                 {num: ERUnknownTable, state: SSUnknownTable},
