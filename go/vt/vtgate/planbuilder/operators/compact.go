@@ -23,34 +23,39 @@ import (
 
 // Compact will optimise the operator tree into a smaller but equivalent version
 func Compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
-	switch op := op.(type) {
-	case *Union:
-		compactConcatenate(op)
-	case *Filter:
-		if len(op.Predicates) == 0 {
-			return op.Source, nil
+	newOp, _, err := rewriteBottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op Operator) (Operator, bool, error) {
+		newOp, ok := op.(compactable)
+		if !ok {
+			return op, false, nil
 		}
-	case *Join:
-		return compactJoin(ctx, op)
-	}
-
-	return op, nil
+		return newOp.compact(ctx)
+	})
+	return newOp, err
 }
 
-func compactConcatenate(op *Union) {
+func (f *Filter) compact(*plancontext.PlanningContext) (Operator, bool, error) {
+	if len(f.Predicates) == 0 {
+		return f.Source, true, nil
+	}
+	return f, false, nil
+}
+
+func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 	var newSources []Operator
 	var newSels []*sqlparser.Select
-	for i, source := range op.Sources {
-		other, isConcat := source.(*Union)
-		if !isConcat {
+	anythingChanged := false
+	for i, source := range u.Sources {
+		other, isUnion := source.(*Union)
+		if !isUnion {
 			newSources = append(newSources, source)
-			newSels = append(newSels, op.SelectStmts[i])
+			newSels = append(newSels, u.SelectStmts[i])
 			continue
 		}
+		anythingChanged = true
 		switch {
 		case len(other.Ordering) == 0 && !other.Distinct:
 			fallthrough
-		case op.Distinct:
+		case u.Distinct:
 			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
 			newSources = append(newSources, other.Sources...)
 			newSels = append(newSels, other.SelectStmts...)
@@ -60,20 +65,23 @@ func compactConcatenate(op *Union) {
 			newSels = append(newSels, nil)
 		}
 	}
-	op.Sources = newSources
-	op.SelectStmts = newSels
+	if anythingChanged {
+		u.Sources = newSources
+		u.SelectStmts = newSels
+	}
+	return u, anythingChanged, nil
 }
 
-func compactJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, error) {
-	if op.LeftJoin {
+func (j *Join) compactJoin(ctx *plancontext.PlanningContext) (Operator, bool, error) {
+	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
-		return op, nil
+		return j, false, nil
 	}
 
-	lqg, lok := op.LHS.(*QueryGraph)
-	rqg, rok := op.RHS.(*QueryGraph)
+	lqg, lok := j.LHS.(*QueryGraph)
+	rqg, rok := j.RHS.(*QueryGraph)
 	if !lok || !rok {
-		return op, nil
+		return j, false, nil
 	}
 
 	newOp := &QueryGraph{
@@ -81,9 +89,9 @@ func compactJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, error) {
 		innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
 		NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
-	err := newOp.collectPredicate(ctx, op.Predicate)
+	err := newOp.collectPredicate(ctx, j.Predicate)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return newOp, nil
+	return newOp, true, nil
 }
