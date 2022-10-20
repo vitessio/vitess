@@ -17,6 +17,7 @@ type Viper struct {
 	live *viper.Viper
 	keys map[string]*syncedKey
 
+	subscribers    []chan<- struct{}
 	watchingConfig bool
 }
 
@@ -61,6 +62,13 @@ func NewViper(v *viper.Viper) *Viper {
 		for _, ch := range chs {
 			close(ch)
 		}
+
+		for _, ch := range sv.subscribers {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
 	})
 
 	return sv
@@ -73,6 +81,14 @@ func (v *Viper) WatchConfig() {
 
 	v.watchingConfig = true
 	v.disk.WatchConfig()
+}
+
+func (v *Viper) Notify(ch chan<- struct{}) {
+	if v.watchingConfig {
+		panic("cannot Notify after starting to watch config")
+	}
+
+	v.subscribers = append(v.subscribers, ch)
 }
 
 func BindValue[T any](v *Viper, value *viperutil.Value[T], fs *pflag.FlagSet) {
