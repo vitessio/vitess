@@ -112,3 +112,15 @@ func TestQueryTimeout(t *testing.T) {
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.001) from dual")
 	assert.NoError(t, err)
 }
+
+func TestViews(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1,10),(2,20),(3,30),(4,40),(5,1),(6,3),(7,5)")
+
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, "select * from t1_view", `[[INT64(10)] [INT64(20)] [INT64(30)] [INT64(40)] [INT64(1)] [INT64(3)] [INT64(5)]]`)
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, "select t1.* from t1 join t1_view on t1.id1 = t1_view.id2", `[[INT64(1) INT64(10)] [INT64(3) INT64(30)] [INT64(5) INT64(1)]]`)
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, "select * from t1 where id2 = (select max(id2) from t1_view)", `[[INT64(4) INT64(40)]]`)
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ * from t1 , (select min(x.id2) as tid from t1_view as x) t where t1.id1 = t.tid", `[[INT64(1) INT64(10) INT64(1)]]`)
+}

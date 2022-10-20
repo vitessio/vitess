@@ -14,5 +14,8 @@
         }
       ]
     }
+  },
+  "views": {
+    "t1_view": "select id2 from t1"
   }
 }
