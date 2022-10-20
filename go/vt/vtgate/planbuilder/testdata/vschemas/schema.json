@@ -459,6 +459,9 @@
         },
         "seq": {
           "type": "sequence"
+        },
+        "unsharded_ref": {
+          "type": "reference"
         }
       }
     },

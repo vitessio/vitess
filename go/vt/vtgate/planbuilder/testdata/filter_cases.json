@@ -6421,5 +6421,79 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "HAVING predicates that use table columns are safe to rewrite if we can move them to the WHERE clause",
+    "query": "select user.col + 2 as a from user having a = 42",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.col + 2 as a from user having a = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col + 2 as a from `user` where 1 != 1",
+        "Query": "select `user`.col + 2 as a from `user` having a = 42",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.col + 2 as a from user having a = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col + 2 as a from `user` where 1 != 1",
+        "Query": "select `user`.col + 2 as a from `user` where `user`.col + 2 = 42",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "HAVING predicates that use table columns should not get rewritten on unsharded keyspaces",
+    "query": "select col + 2 as a from unsharded having a = 42",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select col + 2 as a from unsharded having a = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select col + 2 as a from unsharded where 1 != 1",
+        "Query": "select col + 2 as a from unsharded having a = 42",
+        "Table": "unsharded"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select col + 2 as a from unsharded having a = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select col + 2 as a from unsharded where 1 != 1",
+        "Query": "select col + 2 as a from unsharded having a = 42",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
   }
 ]

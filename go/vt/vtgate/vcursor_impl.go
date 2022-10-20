@@ -870,6 +870,10 @@ func (vc *vcursorImpl) SetCommitOrder(co vtgatepb.CommitOrder) {
 	vc.safeSession.SetCommitOrder(co)
 }
 
+func (vc *vcursorImpl) InTransaction() bool {
+	return vc.safeSession.InTransaction()
+}
+
 // GetDBDDLPluginName implements the VCursor interface
 func (vc *vcursorImpl) GetDBDDLPluginName() string {
 	return dbDDLPlugin
