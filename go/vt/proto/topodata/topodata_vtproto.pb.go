@@ -1016,9 +1016,26 @@ func (m *SrvKeyspace_ThrottlerConfig) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.DefaultCheckThreshold != 0 {
+	if m.CheckAsCheckSelf {
+		i--
+		if m.CheckAsCheckSelf {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.CustomQuery) > 0 {
+		i -= len(m.CustomQuery)
+		copy(dAtA[i:], m.CustomQuery)
+		i = encodeVarint(dAtA, i, uint64(len(m.CustomQuery)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Threshold != 0 {
 		i -= 8
-		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.DefaultCheckThreshold))))
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Threshold))))
 		i--
 		dAtA[i] = 0x11
 	}
@@ -1767,8 +1784,15 @@ func (m *SrvKeyspace_ThrottlerConfig) SizeVT() (n int) {
 	if m.Enabled {
 		n += 2
 	}
-	if m.DefaultCheckThreshold != 0 {
+	if m.Threshold != 0 {
 		n += 9
+	}
+	l = len(m.CustomQuery)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.CheckAsCheckSelf {
+		n += 2
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -4543,7 +4567,7 @@ func (m *SrvKeyspace_ThrottlerConfig) UnmarshalVT(dAtA []byte) error {
 			m.Enabled = bool(v != 0)
 		case 2:
 			if wireType != 1 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DefaultCheckThreshold", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Threshold", wireType)
 			}
 			var v uint64
 			if (iNdEx + 8) > l {
@@ -4551,7 +4575,59 @@ func (m *SrvKeyspace_ThrottlerConfig) UnmarshalVT(dAtA []byte) error {
 			}
 			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
-			m.DefaultCheckThreshold = float64(math.Float64frombits(v))
+			m.Threshold = float64(math.Float64frombits(v))
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CustomQuery", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CustomQuery = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CheckAsCheckSelf", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.CheckAsCheckSelf = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

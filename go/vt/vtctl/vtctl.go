@@ -3651,9 +3651,13 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) (err error) {
+	noValueIndicator := "~"
 	enable := subFlags.Bool("enable", false, "Enable the throttler")
 	disable := subFlags.Bool("disable", false, "Disable the throttler")
-	defaultThreshold := subFlags.Float64("default_threshold", 0, "threshold for the default throttler check")
+	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
+	customQuery := subFlags.String("custom_query", noValueIndicator, "custom throttler check query")
+	checkAsCheckSelf := subFlags.Bool("check_as_check_self", false, "/throttler/check requests behave as is /throttler/check-self was called")
+	checkAsCheckShard := subFlags.Bool("check_as_check_shard", false, "use standard behavior for /throttler/check requests")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -3671,17 +3675,27 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
 		}
-		if throttlerConfig.DefaultCheckThreshold == 0 {
-			throttlerConfig.DefaultCheckThreshold = 1.0
-		}
-		if *defaultThreshold > 0 {
-			throttlerConfig.DefaultCheckThreshold = *defaultThreshold
+		if *customQuery != noValueIndicator {
+			// custom query provided
+			throttlerConfig.CustomQuery = *customQuery
+			throttlerConfig.Threshold = *threshold // allowed to be zero/negative because who knows what kind of custom query this is
+		} else {
+			// no custom query, throttler works by querying replication lag. We only allow positive values
+			if *threshold > 0 {
+				throttlerConfig.Threshold = *threshold
+			}
 		}
 		if *enable {
 			throttlerConfig.Enabled = true
 		}
 		if *disable {
 			throttlerConfig.Enabled = false
+		}
+		if *checkAsCheckSelf {
+			throttlerConfig.CheckAsCheckSelf = true
+		}
+		if *checkAsCheckShard {
+			throttlerConfig.CheckAsCheckSelf = false
 		}
 		return throttlerConfig
 	}
