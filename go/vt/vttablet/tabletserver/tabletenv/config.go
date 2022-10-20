@@ -165,8 +165,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator-stream-query-size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
 	flagutil.DualFormatBoolVar(fs, &currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
-	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in the future releases.")
-	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in the future releases.")
+	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in the future release.")
+	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in the future release.")
 
 	fs.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")

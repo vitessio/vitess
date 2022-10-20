@@ -107,7 +107,7 @@ func init() {
 		servenv.OnParseFor(cmd, registerReparentFlags)
 	}
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
-		servenv.OnParseFor(cmd, registerDbaFlags)
+		servenv.OnParseFor(cmd, registerPoolFlags)
 	}
 }
 
@@ -122,7 +122,7 @@ func registerReparentFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 }
 
-func registerDbaFlags(fs *pflag.FlagSet) {
+func registerPoolFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&dbaPoolSize, "dba_pool_size", dbaPoolSize, "Size of the connection pool for dba connections")
 	fs.DurationVar(&DbaIdleTimeout, "dba_idle_timeout", DbaIdleTimeout, "Idle timeout for dba connections")
 	fs.DurationVar(&appIdleTimeout, "app_idle_timeout", appIdleTimeout, "Idle timeout for app connections")
