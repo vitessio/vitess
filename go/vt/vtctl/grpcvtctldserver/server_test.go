@@ -494,6 +494,9 @@ func TestApplyVSchema(t *testing.T) {
 					RoutingRules: &vschemapb.RoutingRules{
 						Rules: []*vschemapb.RoutingRule{},
 					},
+					ShardRoutingRules: &vschemapb.ShardRoutingRules{
+						Rules: []*vschemapb.ShardRoutingRule{},
+					},
 				}
 				utils.MustMatch(t, changedSrvVSchema, finalSrvVSchema)
 			}
@@ -5954,6 +5957,94 @@ func TestGetTablets(t *testing.T) {
 	}
 }
 
+func TestGetTopologyPath(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2", "cell3")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	err := ts.CreateKeyspace(ctx, "keyspace1", &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	testutil.AddTablets(ctx, t, ts, nil, &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+		Hostname:      "localhost",
+		Keyspace:      "keyspace1",
+		MysqlHostname: "localhost",
+		MysqlPort:     17100,
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		path      string
+		shouldErr bool
+		expected  *vtctldatapb.GetTopologyPathResponse
+	}{
+		{
+			name: "root path",
+			path: "/",
+			expected: &vtctldatapb.GetTopologyPathResponse{
+				Cell: &vtctldatapb.TopologyCell{
+					Path:     "/",
+					Children: []string{"global", "cell1", "cell2", "cell3"},
+				},
+			},
+		},
+		{
+			name:      "invalid path",
+			path:      "",
+			shouldErr: true,
+		},
+		{
+			name: "global path",
+			path: "/global",
+			expected: &vtctldatapb.GetTopologyPathResponse{
+				Cell: &vtctldatapb.TopologyCell{
+					Name:     "global",
+					Path:     "/global",
+					Children: []string{"cells", "keyspaces"},
+				},
+			},
+		},
+		{
+			name: "terminal data path",
+			path: "/cell1/tablets/cell1-0000000100/Tablet",
+			expected: &vtctldatapb.GetTopologyPathResponse{
+				Cell: &vtctldatapb.TopologyCell{
+					Name: "Tablet",
+					Path: "/cell1/tablets/cell1-0000000100/Tablet",
+					Data: "alias:{cell:\"cell1\" uid:100} hostname:\"localhost\" keyspace:\"keyspace1\" mysql_hostname:\"localhost\" mysql_port:17100",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			resp, err := vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{
+				Path: tt.path,
+			})
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestGetVSchema(t *testing.T) {
 	t.Parallel()
 
@@ -11166,6 +11257,118 @@ func TestValidateVersionKeyspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
 			resp, err := vtctld.ValidateVersionKeyspace(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestValidateVersionShard(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1", "zone2")
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+
+	tablets := []*topodatapb.Tablet{
+		{
+			Keyspace: "ks",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_PRIMARY,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Hostname: "primary",
+		},
+		{
+			Keyspace: "ks",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_REPLICA,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Hostname: "replica",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+		SkipShardCreation:    false,
+	}, tablets...)
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tests := []*struct {
+		name      string
+		req       *vtctldatapb.ValidateVersionShardRequest
+		expected  *vtctldatapb.ValidateVersionShardResponse
+		setup     func()
+		shouldErr bool
+	}{
+		{
+			name: "valid versions",
+			req: &vtctldatapb.ValidateVersionShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.ValidateVersionShardResponse{
+				Results: []string{},
+			},
+			setup: func() {
+				addrVersionMap := map[string]string{
+					"primary:0": "version1",
+					"replica:0": "version1",
+				}
+				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+			},
+			shouldErr: false,
+		},
+		{
+			name: "different versions",
+			req: &vtctldatapb.ValidateVersionShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.ValidateVersionShardResponse{
+				Results: []string{"primary zone1-0000000100 version version1 is different than replica zone1-0000000101 version version:\"version2\""},
+			},
+			setup: func() {
+				addrVersionMap := map[string]string{
+					"primary:0": "version1",
+					"replica:0": "version2",
+				}
+				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+			},
+			shouldErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.setup()
+			resp, err := vtctld.ValidateVersionShard(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

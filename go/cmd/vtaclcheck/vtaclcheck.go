@@ -17,43 +17,29 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtaclcheck"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
-var (
-	aclFileFlag        = flag.String("acl_file", "", "The path of the JSON ACL file to check")
-	staticAuthFileFlag = flag.String("static_auth_file", "", "The path of the auth_server_static JSON file to check")
-
-	// vtaclcheckFlags lists all the flags that should show in usage
-	vtaclcheckFlags = []string{
-		"acl_file",
-		"static_auth_file",
-	}
-)
+var aclFile, staticAuthFile string
 
 func init() {
 	logger := logutil.NewConsoleLogger()
-	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
-		FlagFilter: func(f *flag.Flag) bool {
-			for _, name := range vtaclcheckFlags {
-				if f.Name == name {
-					return true
-				}
-			}
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		fs.StringVar(&aclFile, "acl-file", aclFile, "The path of the JSON ACL file to check")
+		fs.StringVar(&staticAuthFile, "static-auth-file", staticAuthFile, "The path of the auth_server_static JSON file to check")
 
-			return false
-		},
+		acl.RegisterFlags(fs)
+
+		fs.SetOutput(logutil.NewLoggerWriter(logger))
 	})
 }
 
@@ -63,20 +49,20 @@ func main() {
 
 	servenv.ParseFlags("vtaclcheck")
 
-	err := parseAndRun()
+	err := run()
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 		exit.Return(1)
 	}
 }
 
-func parseAndRun() error {
+func run() error {
 	opts := &vtaclcheck.Options{
-		ACLFile:        *aclFileFlag,
-		StaticAuthFile: *staticAuthFileFlag,
+		ACLFile:        aclFile,
+		StaticAuthFile: staticAuthFile,
 	}
 
-	log.V(100).Infof("acl_file %s\nstatic_auth_file %s\n", *aclFileFlag, *staticAuthFileFlag)
+	log.V(100).Infof("acl_file %s\nstatic_auth_file %s\n", aclFile, staticAuthFile)
 
 	if err := vtaclcheck.Init(opts); err != nil {
 		return err

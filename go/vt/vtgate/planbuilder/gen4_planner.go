@@ -17,13 +17,14 @@ limitations under the License.
 package planbuilder
 
 import (
+	"errors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -38,6 +39,8 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
 		case *sqlparser.Update:
 			return gen4UpdateStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
+		case *sqlparser.Delete:
+			return gen4DeleteStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
@@ -199,16 +202,20 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(selStmt, semTable)
+	logical, err := operators.CreateLogicalOperatorFromAST(ctx, selStmt)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = logical.CheckValid()
+	logical, err = operators.Compact(ctx, logical)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = operators.CheckValid(logical)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -217,6 +224,8 @@ func newBuildSelectPlan(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	plan = optimizePlan(plan)
 
 	plan, err = planHorizon(ctx, plan, selStmt, true)
 	if err != nil {
@@ -240,6 +249,28 @@ func newBuildSelectPlan(
 	}
 
 	return plan, semTable, nil
+}
+
+// optimizePlan removes unnecessary simpleProjections that have been created while planning
+func optimizePlan(plan logicalPlan) logicalPlan {
+	newPlan, _ := visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
+		this, ok := plan.(*simpleProjection)
+		if !ok {
+			return true, plan, nil
+		}
+
+		input, ok := this.input.(*simpleProjection)
+		if !ok {
+			return true, plan, nil
+		}
+
+		for i, col := range this.eSimpleProj.Cols {
+			this.eSimpleProj.Cols[i] = input.eSimpleProj.Cols[col]
+		}
+		this.input = input.input
+		return true, this, nil
+	})
+	return newPlan
 }
 
 func gen4UpdateStmtPlanner(
@@ -287,18 +318,18 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(updStmt, semTable)
-	if err != nil {
-		return nil, err
-	}
-	err = logical.CheckValid()
-	if err != nil {
-		return nil, err
-	}
-
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	logical, err := operators.CreateLogicalOperatorFromAST(ctx, updStmt)
+	if err != nil {
+		return nil, err
+	}
+	err = operators.CheckValid(logical)
+	if err != nil {
+		return nil, err
+	}
+
+	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
 		return nil, err
 	}
@@ -322,9 +353,96 @@ func gen4UpdateStmtPlanner(
 	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
 }
 
-func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema) (err error) {
+func gen4DeleteStmtPlanner(
+	version querypb.ExecuteOptions_PlannerVersion,
+	deleteStmt *sqlparser.Delete,
+	reservedVars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+) (*planResult, error) {
+	if deleteStmt.With != nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
+	}
+
+	var err error
+	if len(deleteStmt.TableExprs) == 1 && len(deleteStmt.Targets) == 1 {
+		deleteStmt, err = rewriteSingleTbl(deleteStmt)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+	semTable, err := semantics.Analyze(deleteStmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+	err = rewriteRoutedTables(deleteStmt, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
+		edml := engine.NewDML()
+		edml.Keyspace = ks
+		edml.Table = tables
+		edml.Opcode = engine.Unsharded
+		edml.Query = generateQuery(deleteStmt)
+		del := &engine.Delete{DML: edml}
+		return newPlanResult(del, tablesFromSemantics(semTable)...), nil
+	}
+
+	if err := checkIfDeleteSupported(deleteStmt, semTable); err != nil {
+		return nil, err
+	}
+
+	err = queryRewrite(semTable, reservedVars, deleteStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	logical, err := operators.CreateLogicalOperatorFromAST(ctx, deleteStmt)
+	if err != nil {
+		return nil, err
+	}
+	err = operators.CheckValid(logical)
+	if err != nil {
+		return nil, err
+	}
+
+	physOp, err := operators.CreatePhysicalOperator(ctx, logical)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err = pushCommentDirectivesOnPlan(plan, deleteStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	setLockOnAllSelect(plan)
+
+	if err := plan.WireupGen4(ctx); err != nil {
+		return nil, err
+	}
+
+	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
+}
+
+func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) (err error) {
 	// Rewrite routed tables
-	_ = sqlparser.Rewrite(updStmt, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
 		aliasTbl, isAlias := cursor.Node().(*sqlparser.AliasedTableExpr)
 		if !isAlias {
 			return err == nil
@@ -430,7 +548,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 }
 
 func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := abstract.CreateQPFromUnion(union)
+	qp, err := operators.CreateQPFromUnion(union)
 	if err != nil {
 		return nil, err
 	}
@@ -467,4 +585,55 @@ func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) (lo
 	}
 
 	return plan, nil
+}
+
+// checkIfDeleteSupported checks if the delete query is supported or we must return an error.
+func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable) error {
+	if semTable.NotUnshardedErr != nil {
+		return semTable.NotUnshardedErr
+	}
+
+	// Delete is only supported for a single TableExpr which is supposed to be an aliased expression
+	multiShardErr := errors.New("unsupported: multi-shard or vindex write statement")
+	if len(del.TableExprs) != 1 {
+		return multiShardErr
+	}
+	aliasedTableExpr, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !isAliasedExpr {
+		return multiShardErr
+	}
+
+	if len(del.Targets) > 1 {
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
+	}
+
+	// Get the table information and the vindex table from it
+	ti, err := semTable.TableInfoFor(semTable.TableSetFor(aliasedTableExpr))
+	if err != nil {
+		return err
+	}
+	isSharded := false
+	vt := ti.GetVindexTable()
+	if vt != nil && vt.Keyspace != nil {
+		isSharded = vt.Keyspace.Sharded
+	}
+
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Subquery, *sqlparser.DerivedTable:
+			// We have a subquery, so we must fail the planning.
+			// If this subquery and the table expression were all belonging to the same unsharded keyspace,
+			// we would have already created a plan for them before doing these checks.
+			if isSharded {
+				return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
+			}
+			return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
+		}
+		return true, nil
+	}, del)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

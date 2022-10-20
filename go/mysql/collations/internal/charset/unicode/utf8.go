@@ -177,6 +177,10 @@ func (Charset_utf8mb3) SupportsSupplementaryChars() bool {
 	return false
 }
 
+func (Charset_utf8mb3) Length(src []byte) int {
+	return utf8.RuneCount(src)
+}
+
 type Charset_utf8mb4 struct{}
 
 func (Charset_utf8mb4) Name() string {
@@ -206,4 +210,8 @@ func (Charset_utf8mb4) SupportsSupplementaryChars() bool {
 
 func (Charset_utf8mb4) Validate(p []byte) bool {
 	return utf8.Valid(p)
+}
+
+func (Charset_utf8mb4) Length(src []byte) int {
+	return utf8.RuneCount(src)
 }

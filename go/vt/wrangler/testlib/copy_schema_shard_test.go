@@ -172,7 +172,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	if useShardAsSource {
 		source = "ks/-80"
 	}
-	if err := vp.Run([]string{"CopySchemaShard", "-include-views", source, "ks/-40"}); err != nil {
+	if err := vp.Run([]string{"CopySchemaShard", "--include-views", source, "ks/-40"}); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
 

@@ -357,6 +357,22 @@ func (e *Executor) triggerNextCheckInterval() {
 	}
 }
 
+// matchesShards checks whether given comma delimited shard names include this tablet's shard. If the input param is empty then
+// that implicitly means "true"
+func (e *Executor) matchesShards(commaDelimitedShards string) bool {
+	shards := textutil.SplitDelimitedList(commaDelimitedShards)
+	if len(shards) == 0 {
+		// Nothing explicitly defined, so implicitly all shards are allowed
+		return true
+	}
+	for _, shard := range shards {
+		if shard == e.shard {
+			return true
+		}
+	}
+	return false
+}
+
 // countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
 // normally an accurate number, but can be inexact because the exdcutor peridocially reviews
 // e.ownedRunningMigrations and adds/removes migrations based on actual migration state.
@@ -423,20 +439,19 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 
 // isAnyConflictingMigrationRunning checks if there's any running migration that conflicts with the
 // given migration, such that they can't both run concurrently.
-func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) bool {
-	conflictFound := false
+func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) (conflictFound bool, conflictingMigration *schema.OnlineDDL) {
 	e.ownedRunningMigrations.Range(func(_, val any) bool {
 		runningMigration, ok := val.(*schema.OnlineDDL)
 		if !ok {
 			return true // continue iteration
 		}
 		if e.proposedMigrationConflictsWithRunningMigration(runningMigration, onlineDDL) {
-			conflictFound = true
+			conflictingMigration = runningMigration
 			return false // stop iteration, no need to review other migrations
 		}
 		return true // continue iteration
 	})
-	return conflictFound
+	return (conflictingMigration != nil), conflictingMigration
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -1177,8 +1192,8 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	// make sure there's no vreplication workflow running under same name
 	_ = e.terminateVReplMigration(ctx, onlineDDL.UUID)
 
-	if e.isAnyConflictingMigrationRunning(onlineDDL) {
-		return ErrExecutorMigrationAlreadyRunning
+	if conflictFound, conflictingMigration := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+		return vterrors.Wrapf(ErrExecutorMigrationAlreadyRunning, "conflicting migration: %v over table: %v", conflictingMigration.UUID, conflictingMigration.Table)
 	}
 
 	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
@@ -1263,7 +1278,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		{
 			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
 			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
-				binlogdatapb.VReplicationWorkflowType_ONLINEDDL, v.workflow)
+				binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
 			if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
 			}
@@ -1284,8 +1299,8 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 // Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	if e.isAnyConflictingMigrationRunning(onlineDDL) {
-		return ErrExecutorMigrationAlreadyRunning
+	if conflictFound, conflictingMigration := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+		return vterrors.Wrapf(ErrExecutorMigrationAlreadyRunning, "conflicting migration: %v over table: %v", conflictingMigration.UUID, conflictingMigration.Table)
 	}
 
 	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
@@ -1502,8 +1517,8 @@ exit $exit_code
 // Validation included testing the backend MySQL server and the pt-online-schema-change binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	if e.isAnyConflictingMigrationRunning(onlineDDL) {
-		return ErrExecutorMigrationAlreadyRunning
+	if conflictFound, conflictingMigration := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+		return vterrors.Wrapf(ErrExecutorMigrationAlreadyRunning, "conflicting migration: %v over table: %v", conflictingMigration.UUID, conflictingMigration.Table)
 	}
 
 	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
@@ -1901,6 +1916,7 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string, 
 	if err != nil {
 		return result, err
 	}
+	log.Infof("CancelPendingMigrations: iterating %v migrations %s", len(uuids))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
@@ -1911,6 +1927,7 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string, 
 		}
 		result.AppendResult(res)
 	}
+	log.Infof("CancelPendingMigrations: done iterating %v migrations %s", len(uuids))
 	return result, nil
 }
 
@@ -1993,9 +2010,15 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
+		postponeLaunch := row.AsBool("postpone_launch", false)
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		readyToComplete := row.AsBool("ready_to_complete", false)
 		ddlAction := row["ddl_action"].ToString()
+
+		if postponeLaunch {
+			// We don't even look into this migration until its postpone_launch flag is cleared
+			continue
+		}
 
 		if !readyToComplete {
 			// Whether postponsed or not, CREATE and DROP operations are inherently "ready to complete"
@@ -2981,7 +3004,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			if err != nil {
 				return nil, err
 			}
-			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
+			if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); !conflictFound {
 				if e.countOwnedRunningMigrations() < maxConcurrentOnlineDDLs {
 					// This migration seems good to go
 					return onlineDDL, err
@@ -4080,7 +4103,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in CLEANUP: %s", uuid)
 	}
-	log.Infof("CompleteMigration: request to cleanup migration %s", uuid)
+	log.Infof("CleanupMigration: request to cleanup migration %s", uuid)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -4094,7 +4117,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("CompleteMigration: migration %s marked as ready to clean up", uuid)
+	log.Infof("CleanupMigration: migration %s marked as ready to clean up", uuid)
 	return rs, nil
 }
 
@@ -4142,6 +4165,7 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 	if err != nil {
 		return result, err
 	}
+	log.Infof("CompletePendingMigrations: iterating %v migrations %s", len(uuids))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
@@ -4152,6 +4176,69 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 		}
 		result.AppendResult(res)
 	}
+	log.Infof("CompletePendingMigrations: done iterating %v migrations %s", len(uuids))
+	return result, nil
+}
+
+// LaunchMigration clears the postpone_launch flag for a given migration, assuming it was set in the first place
+func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg string) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in EXECUTE: %s", uuid)
+	}
+	if !e.matchesShards(shardsArg) {
+		// Does not apply  to this shard!
+		return &sqltypes.Result{}, nil
+	}
+	log.Infof("LaunchMigration: request to execute migration %s", uuid)
+
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlUpdateLaunchMigration,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer e.triggerNextCheckInterval()
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("LaunchMigration: migration %s marked as unpostponed", uuid)
+	return rs, nil
+}
+
+// LaunchMigrations launches all launch-postponed queued migrations for this keyspace
+func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return result, err
+	}
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
+	if err != nil {
+		return result, err
+	}
+	rows := r.Named().Rows
+	log.Infof("LaunchMigrations: iterating %v migrations %s", len(rows))
+	result = &sqltypes.Result{}
+	for _, row := range rows {
+		uuid := row["migration_uuid"].ToString()
+		log.Infof("LaunchMigrations: unpostponing %s", uuid)
+		res, err := e.LaunchMigration(ctx, uuid, "")
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	log.Infof("LaunchMigrations: done iterating %v migrations %s", len(uuids))
 	return result, nil
 }
 
@@ -4221,6 +4308,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
+		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeLaunch()),
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
 		sqltypes.BoolBindVariable(allowConcurrentMigration),
 		sqltypes.StringBindVariable(revertedUUID),

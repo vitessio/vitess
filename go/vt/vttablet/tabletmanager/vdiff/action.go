@@ -115,28 +115,36 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 	// Assign defaults to sourceCell and targetCell if not specified.
 	sourceCell := options.PickerOptions.SourceCell
 	targetCell := options.PickerOptions.TargetCell
-	if sourceCell == "" && targetCell == "" {
-		cells, err := vde.ts.GetCellInfoNames(vde.ctx)
+	var defaultCell string
+	var err error
+	if sourceCell == "" || targetCell == "" {
+		defaultCell, err = vde.getDefaultCell()
 		if err != nil {
 			return nil, err
 		}
-		if len(cells) == 0 {
-			// Unreachable
-			return nil, fmt.Errorf("there are no cells in the topo")
-		}
-		sourceCell = cells[0]
-		targetCell = sourceCell
 	}
 	if sourceCell == "" {
-		sourceCell = targetCell
+		sourceCell = defaultCell
 	}
 	if targetCell == "" {
-		targetCell = sourceCell
+		targetCell = defaultCell
 	}
 	options.PickerOptions.SourceCell = sourceCell
 	options.PickerOptions.TargetCell = targetCell
 
 	return options, nil
+}
+
+func (vde *Engine) getDefaultCell() (string, error) {
+	cells, err := vde.ts.GetCellInfoNames(vde.ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(cells) == 0 {
+		// Unreachable
+		return "", fmt.Errorf("there are no cells in the topo")
+	}
+	return cells[0], nil
 }
 
 func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {

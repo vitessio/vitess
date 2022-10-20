@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=11
+ARG bootstrap_version=12
 ARG image="vitess/bootstrap:${bootstrap_version}-percona57"
 
 FROM "${image}" AS builder
@@ -50,7 +50,6 @@ ENV PATH $VTROOT/bin:$PATH
 
 # Copy artifacts from builder layer.
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/orchestrator /vt/web/orchestrator
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 
 # Create mount point for actual data (e.g. MySQL data dir)

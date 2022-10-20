@@ -111,7 +111,7 @@
 		},
 		"backup_only": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -120,7 +120,7 @@
 		},
 		"backup_transform": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -463,6 +463,15 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_replication_manager": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/replication_manager"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "18",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"tabletmanager_consul": {
 			"File": "unused.go",
 			"Args": [
@@ -614,7 +623,7 @@
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/dml"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
@@ -786,6 +795,15 @@
 		"vtgate_transaction": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_transaction_restart": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/restart"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
@@ -987,12 +1005,30 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 2,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_partialmovetables": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTables"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_vschema_load": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVSchemaChangesUnderLoad"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
@@ -1015,6 +1051,15 @@
 			"Manual": false,
 			"Shard": "vreplication_basic",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vstream_flush_binlog": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVStreamFlushBinlog"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_failover": {
@@ -1062,9 +1107,9 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
-		"vtorc_graceful_takeover": {
+		"vtorc_api": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/api"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
@@ -1086,33 +1131,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_primary_failure_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_graceful_takeover_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_general_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/general"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
 			"RetryMax": 3,
 			"Tags": []
 		},
@@ -1178,6 +1196,15 @@
 			"Shard": "topo_connection_cache",
 			"RetryMax": 1,
 			"Tags": []
+		},
+		"prscomplex": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/prscomplex"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vttablet_prscomplex",
+			"RetryMax": 1,
+			"Tags": [""]
 		}
 	}
 }

@@ -102,9 +102,9 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 	}, nil
 }
 
-// PickForStreaming picks an available tablet
+// PickForStreaming picks an available tablet.
 // All tablets that belong to tp.cells are evaluated and one is
-// chosen at random
+// chosen at random.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
 	rand.Seed(time.Now().UnixNano())
 	// keep trying at intervals (tabletPickerRetryDelay) until a tablet is found
@@ -172,7 +172,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 	// Since there is only one primary, we ignore cell and find the primary
 	aliases := make([]*topodatapb.TabletAlias, 0)
 	if len(tp.tabletTypes) == 1 && tp.tabletTypes[0] == topodatapb.TabletType_PRIMARY {
-		shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 		si, err := tp.ts.GetShard(shortCtx, tp.keyspace, tp.shard)
 		if err != nil {
@@ -185,12 +185,12 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 		for _, cell := range tp.cells {
 			// check if cell is actually an alias
 			// non-blocking read so that this is fast
-			shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 			_, err := tp.ts.GetCellInfo(shortCtx, cell, false)
 			if err != nil {
 				// not a valid cell, check whether it is a cell alias
-				shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()
 				alias, err := tp.ts.GetCellsAlias(shortCtx, cell, false)
 				// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
@@ -205,7 +205,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			}
 		}
 		for _, cell := range actualCells {
-			shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 			// match cell, keyspace and shard
 			sri, err := tp.ts.GetShardReplication(shortCtx, cell, tp.keyspace, tp.shard)
@@ -222,7 +222,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 	if len(aliases) == 0 {
 		return nil
 	}
-	shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases)
 	if err != nil {

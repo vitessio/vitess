@@ -40,7 +40,7 @@ var (
 )
 
 func registerVersionFlag(fs *pflag.FlagSet) {
-	fs.BoolVar(&version, "version", version, "print binary version")
+	fs.BoolVarP(&version, "version", "v", version, "print binary version")
 }
 
 // AppVersion is the struct to store build info.
@@ -91,8 +91,8 @@ func (v *versionInfo) String() string {
 }
 
 func (v *versionInfo) MySQLVersion() string {
-	if *MySQLServerVersion != "" {
-		return *MySQLServerVersion
+	if mySQLServerVersion != "" {
+		return mySQLServerVersion
 	}
 	return "5.7.9-vitess-" + v.version
 }

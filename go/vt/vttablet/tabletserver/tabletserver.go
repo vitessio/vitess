@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -124,6 +125,9 @@ type TabletServer struct {
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias *topodatapb.TabletAlias
+
+	// This field is only stored for testing
+	checkMysqlGaugeFunc *stats.GaugeFunc
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -205,6 +209,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
+	tsv.checkMysqlGaugeFunc = tsv.exporter.NewGaugeFunc("CheckMySQLRunning", "Check MySQL operation currently in progress", tsv.sm.isCheckMySQLRunning)
 	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.sm.IsServingString))
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
@@ -490,7 +495,14 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			if tsv.txThrottler.Throttle() {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
-			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, settings, options)
+			var connSetting *pools.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, connSetting, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
@@ -742,8 +754,8 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
+			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				return err
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
@@ -752,6 +764,14 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
+
+			var connSetting *pools.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
@@ -763,7 +783,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				logStats:       logStats,
 				tsv:            tsv,
 				tabletType:     target.GetTabletType(),
-				settings:       settings,
+				setting:        connSetting,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -839,13 +859,23 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			if err != nil {
 				return err
 			}
-			if !plan.IsValid(reservedID != 0, len(settings) > 0) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without reserved connection", plan.PlanID.String())
+			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				return err
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
 			if transactionID != 0 {
 				connID = transactionID
+			}
+			logStats.ReservedID = reservedID
+			logStats.TransactionID = transactionID
+
+			var connSetting *pools.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
 			}
 			qre := &QueryExecutor{
 				query:          query,
@@ -857,7 +887,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				ctx:            ctx,
 				logStats:       logStats,
 				tsv:            tsv,
-				settings:       settings,
+				setting:        connSetting,
 			}
 			return qre.Stream(callback)
 		},
@@ -1252,7 +1282,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		return state, nil, err
 	}
 
-	result, err = tsv.execute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options)
+	result, err = tsv.execute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, nil, options)
 	return state, result, err
 }
 
@@ -1302,7 +1332,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 		return state, err
 	}
 
-	err = tsv.streamExecute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options, callback)
+	err = tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, nil, options, callback)
 	return state, err
 }
 
@@ -1645,7 +1675,7 @@ func (tsv *TabletServer) IsServing() bool {
 // to no more than once per second.
 // The function satisfies tabletenv.Env.
 func (tsv *TabletServer) CheckMySQL() {
-	tsv.sm.CheckMySQL()
+	tsv.sm.checkMySQL()
 }
 
 // TopoServer returns the topo server.

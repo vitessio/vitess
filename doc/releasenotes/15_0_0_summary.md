@@ -22,6 +22,10 @@
 - The deprecated `--cpu_profile` flag has been removed. Please use the `--pprof` flag instead.
 - The deprecated `--mem-profile-rate` flag has been removed. Please use `--pprof=mem` instead.
 - The deprecated `--mutex-profile-fraction` flag has been removed. Please use `--pprof=mutex` instead.
+- The deprecated vtgate/vtexplain/vtcombo flag `--planner_version` has been removed. Please use `--planner-version` instead.
+- The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
+- `vtctl` commands that take shard names and ranges as positional arguments (e.g. `vtctl Reshard ks.workflow -80 -40,40-80`) need to have their positional arguments separated from their flag arguments by a double-dash separator to avoid the new parsing library from mistaking them as flags (e.g. `vtctl Reshard ks.workflow -- -80 -40,40-80`).
+- The `--cell` flag in the `vtgate` binary no longer has a default value. It is a required argument that has to be specified for the binary to run. Please explicitly specify the flag, if dependent on the flag's default value.
 
 #### Vindex Interface
 
@@ -43,6 +47,11 @@ Information about which tables are used was being reported through the `Keyspace
 For multi-table queries, this output can be confusing, so we have added `TablesUsed`, that is a string array, listing all tables and which keyspace they are on.
 `Keyspace` and `Table` fields are deprecated and will be removed in the v16 release of Vitess.
 
+#### Orchestrator Integration Deprecation
+
+Orchestrator integration in `vttablet` has been deprecated. It will continue to work in this release but is liable to be removed in future releases.
+Consider using VTOrc instead of Orchestrator as VTOrc goes GA in this release.
+
 #### Connection Pool Prefill
 
 The connection pool with prefilled connections have been removed. The pool now does lazy connection creation.
@@ -63,17 +72,25 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --enable-autocommit Autocommit is always allowed
 
 #### vttablet startup flag deprecations
-- --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
-- --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+- --enable-query-plan-field-caching has been deprecated. It will be removed in v16.
+- --enable_semi_sync has been deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+- --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
+
+### New command line flags and behavior
+
+#### vtgate --mysql-server-pool-conn-read-buffers
+
+`--mysql-server-pool-conn-read-buffers` enables pooling of buffers used to read from incoming
+connections, similar to the way pooling happens for write buffers. Defaults to off.
 
 ### VDiff2
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
-$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer resume 4c664dc2-eba9-11ec-9ef7-920702940ee0
+$ vtctlclient --server=localhost:15999 VDiff --v2 customer.commerce2customer resume 4c664dc2-eba9-11ec-9ef7-920702940ee0
 VDiff 4c664dc2-eba9-11ec-9ef7-920702940ee0 resumed on target shards, use show to view progress
 
-$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer show last
+$ vtctlclient --server=localhost:15999 VDiff --v2 customer.commerce2customer show last
 
 VDiff Summary for customer.commerce2customer (4c664dc2-eba9-11ec-9ef7-920702940ee0)
 State:        completed
@@ -84,7 +101,7 @@ CompletedAt:  2022-06-26 22:44:31
 
 Use "--format=json" for more detailed output.
 
-$ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.commerce2customer show last
+$ vtctlclient --server=localhost:15999 VDiff --v2 --format=json customer.commerce2customer show last
 {
 	"Workflow": "commerce2customer",
 	"Keyspace": "customer",
@@ -166,6 +183,12 @@ other.
 The main use case is to run queries spanning a long period of time which
 require transactional guarantees such as consistency or atomicity.
 
+#### Support for specifying group information in calls to VTGate
+
+`--grpc-use-effective-groups` allows non-SSL callers to specify groups information for a caller.
+Until now, you could only specify the caller-id for the security context used to authorize queries.
+As of now, you can specify the principal of the caller, and any groups they belong to.
+
 ### Online DDL changes
 
 #### Concurrent vitess migrations
@@ -219,6 +242,18 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
 
 ### Mysql Compatibility
 
+#### System Settings
+Vitess supported system settings from release 7.0 onwards, but it was always with a pinch of salt.
+As soon as a client session changes a default system setting, the mysql connection gets blocked for it.
+This leads to clients running out of mysql connections. 
+The clients were instructed to use this to a minimum and try to set those changed system settings as default on the mysql.
+
+With this release, Vitess can handle system settings changes in a much better way and the clients can use it more freely.
+Vitess now pools those changed settings and does not reserve it for any particular session. 
+
+This feature can be enabled by setting `queryserver-enable-settings-pool` flag on the vttablet. It is disabled by default.
+In future releases, we will make this flag enabled by default.
+
 #### Lookup Vindexes
 
 Lookup vindexes now support a new parameter `multi_shard_autocommit`. If this is set to `true`, lookup vindex dml queries will be sent as autocommit to all shards instead of being wrapped in a transaction.
@@ -236,3 +271,96 @@ send semi-sync ACKs. This ensures that any committed write exists in at least 2 
 #### FORMAT=vtexplain
 
 With this new `explain` format, you can get an output that is very similar to the command line `vtexplain` app, but from a running `vtgate`, through a MySQL query.
+
+### VTOrc
+
+#### Old UI Removal and Replacement
+
+The old UI that VTOrc inherited from `Orchestrator` has been removed. A replacement UI, more consistent with the other Vitess binaries has been created.
+In order to use the new UI, `--port` flag has to be provided. 
+
+Along with the UI, the old APIs have also been deprecated. However, some of them have been ported over to the new UI - 
+
+| Old API                          | New API                          | Additional notes                                                      |
+|----------------------------------|----------------------------------|-----------------------------------------------------------------------|
+| `/api/problems`                  | `/api/problems`                  | The new API also supports filtering using the keyspace and shard name |
+| `/api/disable-global-recoveries` | `/api/disable-global-recoveries` | Functionally remains the same                                         |
+| `/api/enable-global-recoveries`  | `/api/enable-global-recoveries`  | Functionally remains the same                                         |
+| `/api/health`                    | `/debug/health`                  | Functionally remains the same                                         |
+| `/api/replication-analysis`      | `/api/replication-analysis`      | Functionally remains the same. Output is now JSON format.             |
+
+Apart from these APIs, we also now have `/debug/status`, `/debug/vars` and `/debug/liveness` available in the new UI.
+
+#### Configuration Refactor and New Flags 
+
+Since VTOrc was forked from `Orchestrator`, it inherited a lot of configurations that don't make sense for the Vitess use-case.
+All of such configurations have been removed.
+
+VTOrc ignores the configurations that it doesn't understand. So old configurations can be kept around on upgrading and won't cause any issues.
+They will just be ignored.
+
+For all the configurations that are kept, flags have been added for them and the flags are the desired way to pass these configurations going forward.
+The config file will be deprecated and removed in upcoming releases. The following is a list of all the configurations that are kept and the associated flags added.
+
+|          Configurations Kept          |           Flags Introduced            |
+|:-------------------------------------:|:-------------------------------------:|
+|            SQLite3DataFile            |         `--sqlite-data-file`          |
+|          InstancePollSeconds          |        `--instance-poll-time`         |
+|    SnapshotTopologiesIntervalHours    |    `--snapshot-topology-interval`     |
+|    ReasonableReplicationLagSeconds    |    `--reasonable-replication-lag`     |
+|             AuditLogFile              |        `--audit-file-location`        |
+|             AuditToSyslog             |         `--audit-to-backend`          |
+|           AuditToBackendDB            |          `--audit-to-syslog`          |
+|            AuditPurgeDays             |       `--audit-purge-duration`        |
+|      RecoveryPeriodBlockSeconds       |  `--recovery-period-block-duration`   |
+| PreventCrossDataCenterPrimaryFailover |    `--prevent-cross-cell-failover`    |
+|        LockShardTimeoutSeconds        |        `--lock-shard-timeout`         |
+|      WaitReplicasTimeoutSeconds       |       `--wait-replicas-timeout`       |
+|     TopoInformationRefreshSeconds     | `--topo-information-refresh-duration` |
+|          RecoveryPollSeconds          |      `--recovery-poll-duration`       |
+
+Apart from configurations, some flags from VTOrc have also been removed -
+- `sibling`
+- `destination`
+- `discovery`
+- `skip-unresolve`
+- `skip-unresolve-check`
+- `noop`
+- `binlog`
+- `statement`
+- `grab-election`
+- `promotion-rule`
+- `skip-continuous-registration`
+- `enable-database-update`
+- `ignore-raft-setup`
+- `tag`
+
+The ideal way to ensure backward compatibility is to remove the flags listed above while on the previous release. Then upgrade VTOrc.
+After upgrading, remove the config file and instead pass the flags that are introduced.
+
+#### Example Upgrade
+
+If you are running VTOrc with the flags `--ignore-raft-setup --clusters_to_watch="ks/0" --config="path/to/config"` and the following configuration
+```json
+{
+  "Debug": true,
+  "ListenAddress": ":6922",
+  "MySQLTopologyUser": "orc_client_user",
+  "MySQLTopologyPassword": "orc_client_user_password",
+  "MySQLReplicaUser": "vt_repl",
+  "MySQLReplicaPassword": "",
+  "RecoveryPeriodBlockSeconds": 1,
+  "InstancePollSeconds": 1,
+  "PreventCrossDataCenterPrimaryFailover": true
+}
+```
+First drop the flag `--ignore-raft-setup` while on the previous release. So, you'll be running VTOrc with `--clusters_to_watch="ks/0" --config="path/to/config"` and the same configuration listed above.
+
+Now you can upgrade your VTOrc version continuing to use the same flags and configurations, and it will continue to work just the same. If you wish to use the new UI, then you can add the `--port` flag as well.
+
+After upgrading, you can drop the configuration entirely and use the new flags like `--clusters_to_watch="ks/0" --recovery-period-block-duration=1s --instance-poll-time=1s --prevent-cross-cell-failover`
+
+#### Default Configuration Files
+
+The default files that VTOrc searches for configurations in have also changed from `"/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json"` to
+`"/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json"`.

@@ -36,10 +36,11 @@ limitations under the License.
 package acl
 
 import (
-	"flag"
 	"fmt"
 	"net/http"
 	"sync"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -54,7 +55,7 @@ const (
 )
 
 var (
-	securityPolicy = flag.String("security_policy", "", "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
+	securityPolicy string
 	policies       = make(map[string]Policy)
 	once           sync.Once
 	currentPolicy  Policy
@@ -71,6 +72,10 @@ type Policy interface {
 	CheckAccessHTTP(req *http.Request, role string) error
 }
 
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&securityPolicy, "security_policy", securityPolicy, "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
+}
+
 // RegisterPolicy registers a security policy. This function must be called
 // before the first call to CheckAccess happens, preferably through an init.
 // This will ensure that the requested policy can be found by other acl
@@ -83,16 +88,16 @@ func RegisterPolicy(name string, policy Policy) {
 }
 
 func savePolicy() {
-	if *securityPolicy == "" {
+	if securityPolicy == "" {
 		// Setting the policy to nil means Allow All from Anyone.
 		currentPolicy = nil
 		return
 	}
-	if policy, ok := policies[*securityPolicy]; ok {
+	if policy, ok := policies[securityPolicy]; ok {
 		currentPolicy = policy
 		return
 	}
-	log.Warningf("security_policy %q not found; using fallback policy (deny-all)", *securityPolicy)
+	log.Warningf("security_policy %q not found; using fallback policy (deny-all)", securityPolicy)
 	currentPolicy = denyAllPolicy{}
 }
 

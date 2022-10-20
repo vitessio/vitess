@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -45,6 +46,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -67,7 +69,7 @@ type Engine struct {
 	wg sync.WaitGroup
 
 	mu              sync.Mutex
-	isOpen          bool
+	isOpen          int32 // 0 or 1 in place of atomic.Bool added in go 1.19
 	streamIdx       int
 	streamers       map[int]*uvstreamer
 	rowStreamers    map[int]*rowStreamer
@@ -97,6 +99,7 @@ type Engine struct {
 	errorCounts               *stats.CountersWithSingleLabel
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
+	vstreamerFlushedBinlogs   *stats.Counter
 
 	throttlerClient *throttle.Client
 }
@@ -133,6 +136,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vstreamersCreated:         env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
 		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
+		vstreamerFlushedBinlogs:   env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
 	}
 	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })
@@ -148,30 +152,24 @@ func (vse *Engine) InitDBConfig(keyspace, shard string) {
 
 // Open starts the Engine service.
 func (vse *Engine) Open() {
-	vse.mu.Lock()
-	defer vse.mu.Unlock()
-	if vse.isOpen {
-		return
-	}
 	log.Info("VStreamer: opening")
-	vse.isOpen = true
+	// If it's not already open, then open it now.
+	atomic.CompareAndSwapInt32(&vse.isOpen, 0, 1)
 }
 
 // IsOpen checks if the engine is opened
 func (vse *Engine) IsOpen() bool {
-	vse.mu.Lock()
-	defer vse.mu.Unlock()
-	return vse.isOpen
+	return atomic.LoadInt32(&vse.isOpen) == 1
 }
 
 // Close closes the Engine service.
 func (vse *Engine) Close() {
 	func() {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return
 		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 		// cancels are non-blocking.
 		for _, s := range vse.streamers {
 			s.Cancel()
@@ -182,7 +180,7 @@ func (vse *Engine) Close() {
 		for _, s := range vse.resultStreamers {
 			s.Cancel()
 		}
-		vse.isOpen = false
+		atomic.StoreInt32(&vse.isOpen, 0)
 	}()
 
 	// Wait only after releasing the lock because the end of every
@@ -207,11 +205,11 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 	// Create stream and add it to the map.
 	streamer, idx, err := func() (*uvstreamer, int, error) {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
@@ -248,11 +246,11 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 
 		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
 		idx := vse.streamIdx
@@ -283,11 +281,11 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	// Create stream and add it to the map.
 	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
-		vse.mu.Lock()
-		defer vse.mu.Unlock()
-		if !vse.isOpen {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
 		resultStreamer := newResultStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), query, send, vse)
 		idx := vse.streamIdx
 		vse.resultStreamers[idx] = resultStreamer
@@ -441,7 +439,7 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 			}
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 			case <-time.After(backoff):
 				// Exponential backoff with 1.5 as a factor
 				if backoff != backoffLimit {

@@ -28,11 +28,10 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtgr/config"
+	"vitess.io/vitess/go/vt/vtgr/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtgr/inst"
 )
 
 var (
@@ -459,7 +458,7 @@ func execInstance(instanceKey *inst.InstanceKey, query string, args ...any) erro
 	if err := verifyInstance(instanceKey); err != nil {
 		return err
 	}
-	sqlDb, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
+	sqlDb, err := OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		log.Errorf("error exec %v: %v", query, err)
 		return err
@@ -473,7 +472,7 @@ func execInstanceWithTopo(instanceKey *inst.InstanceKey, query string, args ...a
 	if err := verifyInstance(instanceKey); err != nil {
 		return err
 	}
-	sqlDb, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	sqlDb, err := OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		log.Errorf("error exec %v: %v", query, err)
 		return err
@@ -487,7 +486,7 @@ func fetchInstance(instanceKey *inst.InstanceKey, query string, onRow func(sqlut
 	if err := verifyInstance(instanceKey); err != nil {
 		return err
 	}
-	sqlDb, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
+	sqlDb, err := OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
 	}

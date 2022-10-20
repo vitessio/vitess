@@ -39,8 +39,8 @@ func TestBackupMysqlctldWithlz4Compression(t *testing.T) {
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.CompressionEngineName = "pgzip"
-	*mysqlctl.ExternalCompressorCmd = ""
-	*mysqlctl.ExternalCompressorExt = ""
-	*mysqlctl.ExternalDecompressorCmd = ""
+	mysqlctl.CompressionEngineName = "pgzip"
+	mysqlctl.ExternalCompressorCmd = ""
+	mysqlctl.ExternalCompressorExt = ""
+	mysqlctl.ExternalDecompressorCmd = ""
 }

@@ -389,3 +389,58 @@ func TestTempTableOnReserveExecute(t *testing.T) {
 	require.NoError(t,
 		client.Release())
 }
+
+func TestInfiniteSessions(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	qr, err := client.Execute("select @@max_connections", nil)
+	require.NoError(t, err)
+	maxConn, err := qr.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+
+	// twice the number of sessions than the pool size.
+	numOfSessions := int(maxConn * 2)
+
+	// read session
+	for i := 0; i < numOfSessions; i++ {
+		client := framework.NewClient()
+		_, err := client.ReserveExecute("select 1", []string{"set sql_mode = ''"}, nil)
+		require.NoError(t, err)
+	}
+
+	// write session
+	for i := 0; i < numOfSessions; i++ {
+		client := framework.NewClient()
+		_, err := client.ReserveBeginExecute("select 1", []string{"set sql_mode = ''"}, nil, nil)
+		require.NoError(t, err)
+		require.NoError(t,
+			client.Commit())
+	}
+}
+
+func TestSetQueriesMultipleWays(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Release()
+	_, err := client.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute("set sql_safe_updates = 1", nil)
+	require.NoError(t, err)
+
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client2 := framework.NewClient()
+	_, err = client2.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
+	require.NoError(t, err)
+
+	// this should not panic.
+	_, err = client.Execute("set sql_safe_updates = 1", nil)
+	require.NoError(t, err)
+}

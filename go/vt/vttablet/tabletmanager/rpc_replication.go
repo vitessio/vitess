@@ -39,12 +39,14 @@ import (
 )
 
 var setSuperReadOnly bool
+var disableReplicationManager bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable_semi_sync", false, "")
 	fs.MarkDeprecated("enable_semi_sync", "--enable_semi_sync is deprecated; please set the correct durability policy on the keyspace instead.")
 
 	fs.BoolVar(&setSuperReadOnly, "use_super_read_only", setSuperReadOnly, "Set super_read_only flag when performing planned failover.")
+	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 }
 
 func init() {

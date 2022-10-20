@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"sync/atomic"
 	"time"
@@ -98,5 +99,14 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		Errors:       atomic.LoadUint64(&p.Errors),
 		TablesUsed:   p.TablesUsed,
 	}
-	return json.Marshal(marshalPlan)
+
+	b := new(bytes.Buffer)
+	enc := json.NewEncoder(b)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(marshalPlan)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
 }

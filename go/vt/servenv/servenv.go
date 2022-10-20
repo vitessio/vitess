@@ -37,9 +37,6 @@ import (
 	"syscall"
 	"time"
 
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/event"
@@ -51,6 +48,8 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	// register the HTTP handlers for profiling
+	_ "net/http/pprof"
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
 
@@ -265,7 +264,7 @@ var (
 	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
 )
 
-// OnParse registers a callback function to register flags on the flagset that
+// OnParse registers a callback function to register flags on the flagset that are
 // used by any caller of servenv.Parse or servenv.ParseWithArgs.
 func OnParse(f func(fs *pflag.FlagSet)) {
 	flagHooksM.Lock()
@@ -306,10 +305,7 @@ func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
-	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
-	for _, hook := range getFlagHooksFor(cmd) {
-		hook(fs)
-	}
+	fs := GetFlagSetFor(cmd)
 
 	_flag.Parse(fs)
 
@@ -325,12 +321,20 @@ func ParseFlags(cmd string) {
 	}
 }
 
-// ParseFlagsWithArgs initializes flags and returns the positional arguments
-func ParseFlagsWithArgs(cmd string) []string {
+// GetFlagSetFor returns the flag set for a given command.
+// This has to exported for the Vitess-operator to use
+func GetFlagSetFor(cmd string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
 	for _, hook := range getFlagHooksFor(cmd) {
 		hook(fs)
 	}
+
+	return fs
+}
+
+// ParseFlagsWithArgs initializes flags and returns the positional arguments
+func ParseFlagsWithArgs(cmd string) []string {
+	fs := GetFlagSetFor(cmd)
 
 	_flag.Parse(fs)
 
@@ -359,7 +363,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vttablet",
 	} {
@@ -373,7 +376,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vtgateclienttest",
 		"vtgr",
@@ -387,4 +389,22 @@ func init() {
 	OnParse(log.RegisterFlags)
 	// Flags in package logutil are installed for all binaries.
 	OnParse(logutil.RegisterFlags)
+}
+
+func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
+	topoBinaries := []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctld",
+		"vtgate",
+		"vtgr",
+		"vttablet",
+		"vttestserver",
+		"zk",
+		"vtorc",
+	}
+	for _, cmd := range topoBinaries {
+		OnParseFor(cmd, registerFlags)
+	}
 }

@@ -188,13 +188,13 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
 func (vc *vcursorImpl) MaxMemoryRows() int {
-	return *maxMemoryRows
+	return maxMemoryRows
 }
 
 // ExceedsMaxMemoryRows returns a boolean indicating whether the maxMemoryRows value has been exceeded.
 // Returns false if the max memory rows override directive is set to true.
 func (vc *vcursorImpl) ExceedsMaxMemoryRows(numRows int) bool {
-	return !vc.ignoreMaxMemoryRows && numRows > *maxMemoryRows
+	return !vc.ignoreMaxMemoryRows && numRows > maxMemoryRows
 }
 
 // SetIgnoreMaxMemoryRows sets the ignoreMaxMemoryRows value.
@@ -205,6 +205,11 @@ func (vc *vcursorImpl) SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows bool) {
 // RecordWarning stores the given warning in the current session
 func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 	vc.safeSession.RecordWarning(warning)
+}
+
+// IsShardRoutingEnabled implements the VCursor interface.
+func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
+	return enableShardRouting
 }
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
@@ -587,12 +592,51 @@ func (vc *vcursorImpl) setRollbackOnPartialExecIfRequired(atleastOneSuccess bool
 	}
 }
 
+// fixupPartiallyMovedShards checks if any of the shards in the route has a ShardRoutingRule (true when a keyspace
+// is in the middle of being moved to another keyspace using MoveTables moving a subset of shards at a time
+func (vc *vcursorImpl) fixupPartiallyMovedShards(rss []*srvtopo.ResolvedShard) ([]*srvtopo.ResolvedShard, error) {
+	if vc.vschema.ShardRoutingRules == nil {
+		return rss, nil
+	}
+	for ind, rs := range rss {
+		targetKeyspace, err := vc.FindRoutedShard(rs.Target.Keyspace, rs.Target.Shard)
+		if err != nil {
+			return nil, err
+		}
+		if targetKeyspace == rs.Target.Keyspace {
+			continue
+		}
+		rss[ind] = rs.WithKeyspace(targetKeyspace)
+	}
+	return rss, nil
+}
+
 func (vc *vcursorImpl) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	return vc.resolver.ResolveDestinations(ctx, keyspace, vc.tabletType, ids, destinations)
+	rss, values, err := vc.resolver.ResolveDestinations(ctx, keyspace, vc.tabletType, ids, destinations)
+	if err != nil {
+		return nil, nil, err
+	}
+	if enableShardRouting {
+		rss, err = vc.fixupPartiallyMovedShards(rss)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return rss, values, err
 }
 
 func (vc *vcursorImpl) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
-	return vc.resolver.ResolveDestinationsMultiCol(ctx, keyspace, vc.tabletType, ids, destinations)
+	rss, values, err := vc.resolver.ResolveDestinationsMultiCol(ctx, keyspace, vc.tabletType, ids, destinations)
+	if err != nil {
+		return nil, nil, err
+	}
+	if enableShardRouting {
+		rss, err = vc.fixupPartiallyMovedShards(rss)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return rss, values, err
 }
 
 func (vc *vcursorImpl) Session() engine.SessionActions {
@@ -707,6 +751,27 @@ func (vc *vcursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 	return nil
 }
 
+// SetQueryTimeout implements the SessionActions interface
+func (vc *vcursorImpl) SetQueryTimeout(maxExecutionTime int64) {
+	vc.safeSession.QueryTimeout = maxExecutionTime
+}
+
+// GetQueryTimeout implements the SessionActions interface
+// The priority of adding query timeouts -
+// 1. Query timeout comment directive.
+// 2. If the comment directive is unspecified, then we use the session setting.
+// 3. If the comment directive and session settings is unspecified, then we use the global default specified by a flag.
+func (vc *vcursorImpl) GetQueryTimeout(queryTimeoutFromComments int) int {
+	if queryTimeoutFromComments != 0 {
+		return queryTimeoutFromComments
+	}
+	sessionQueryTimeout := int(vc.safeSession.GetQueryTimeout())
+	if sessionQueryTimeout != 0 {
+		return sessionQueryTimeout
+	}
+	return queryTimeout
+}
+
 // SetClientFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetClientFoundRows(_ context.Context, clientFoundRows bool) error {
 	vc.safeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
@@ -816,9 +881,13 @@ func (vc *vcursorImpl) SetCommitOrder(co vtgatepb.CommitOrder) {
 	vc.safeSession.SetCommitOrder(co)
 }
 
+func (vc *vcursorImpl) InTransaction() bool {
+	return vc.safeSession.InTransaction()
+}
+
 // GetDBDDLPluginName implements the VCursor interface
 func (vc *vcursorImpl) GetDBDDLPluginName() string {
-	return *dbDDLPlugin
+	return dbDDLPlugin
 }
 
 // KeyspaceAvailable implements the VCursor interface
@@ -860,10 +929,7 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 
 // ForeignKeyMode implements the VCursor interface
 func (vc *vcursorImpl) ForeignKeyMode() string {
-	if foreignKeyMode == nil {
-		return ""
-	}
-	return strings.ToLower(*foreignKeyMode)
+	return strings.ToLower(foreignKeyMode)
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
@@ -978,7 +1044,7 @@ func (vc *vcursorImpl) SetExec(ctx context.Context, name string, value string) e
 }
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
-	return sqlparser.IsMySQL80AndAbove() && *setVarEnabled
+	return sqlparser.IsMySQL80AndAbove() && setVarEnabled
 }
 
 func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
@@ -1011,4 +1077,7 @@ func (vc *vcursorImpl) VtExplainLogging() {
 
 func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
+}
+func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
+	return vc.vschema.FindRoutedShard(keyspace, shard)
 }

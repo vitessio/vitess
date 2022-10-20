@@ -49,6 +49,11 @@ func (client *localVtctldClient) ApplySchema(ctx context.Context, in *vtctldatap
 	return client.s.ApplySchema(ctx, in)
 }
 
+// ApplyShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ApplyShardRoutingRules(ctx context.Context, in *vtctldatapb.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyShardRoutingRulesResponse, error) {
+	return client.s.ApplyShardRoutingRules(ctx, in)
+}
+
 // ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	return client.s.ApplyVSchema(ctx, in)
@@ -281,6 +286,11 @@ func (client *localVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.G
 	return client.s.GetShard(ctx, in)
 }
 
+// GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetShardRoutingRules(ctx context.Context, in *vtctldatapb.GetShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardRoutingRulesResponse, error) {
+	return client.s.GetShardRoutingRules(ctx, in)
+}
+
 // GetSrvKeyspaceNames is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetSrvKeyspaceNames(ctx context.Context, in *vtctldatapb.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvKeyspaceNamesResponse, error) {
 	return client.s.GetSrvKeyspaceNames(ctx, in)
@@ -309,6 +319,11 @@ func (client *localVtctldClient) GetTablet(ctx context.Context, in *vtctldatapb.
 // GetTablets is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletsResponse, error) {
 	return client.s.GetTablets(ctx, in)
+}
+
+// GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
+	return client.s.GetTopologyPath(ctx, in)
 }
 
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
@@ -560,4 +575,9 @@ func (client *localVtctldClient) ValidateVSchema(ctx context.Context, in *vtctld
 // ValidateVersionKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
 	return client.s.ValidateVersionKeyspace(ctx, in)
+}
+
+// ValidateVersionShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateVersionShard(ctx context.Context, in *vtctldatapb.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionShardResponse, error) {
+	return client.s.ValidateVersionShard(ctx, in)
 }

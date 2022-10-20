@@ -131,10 +131,7 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1, err
 		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
 
 		return m.Run(), nil
 	}()
@@ -170,10 +167,7 @@ func TestTransactionModes(t *testing.T) {
 	require.NoError(t, clusterInstance.RestartVtgate())
 
 	// Make a new mysql connection to vtGate
-	vtParams = mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams = clusterInstance.GetVTParams(keyspaceName)
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()

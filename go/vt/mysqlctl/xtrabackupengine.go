@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -31,10 +30,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -47,19 +49,19 @@ type XtrabackupEngine struct {
 
 var (
 	// path where backup engine program is located
-	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
+	xtrabackupEnginePath string
 	// flags to pass through to backup phase
-	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. These should be space separated and will be added to the end of the command")
+	xtrabackupBackupFlags string
 	// flags to pass through to prepare phase of restore
-	xtrabackupPrepareFlags = flag.String("xtrabackup_prepare_flags", "", "flags to pass to prepare command. These should be space separated and will be added to the end of the command")
+	xtrabackupPrepareFlags string
 	// flags to pass through to extract phase of restore
-	xbstreamRestoreFlags = flag.String("xbstream_restore_flags", "", "flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
+	xbstreamRestoreFlags string
 	// streaming mode
-	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
-	xtrabackupUser       = flag.String("xtrabackup_user", "", "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
+	xtrabackupStreamMode = "tar"
+	xtrabackupUser       string
 	// striping mode
-	xtrabackupStripes         = flag.Uint("xtrabackup_stripes", 0, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
-	xtrabackupStripeBlockSize = flag.Uint("xtrabackup_stripe_block_size", 102400, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	xtrabackupStripes         uint
+	xtrabackupStripeBlockSize = uint(102400)
 )
 
 const (
@@ -102,17 +104,34 @@ type xtraBackupManifest struct {
 	SkipCompress bool
 }
 
+func init() {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
+		servenv.OnParseFor(cmd, registerXtraBackupEngineFlags)
+	}
+}
+
+func registerXtraBackupEngineFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&xtrabackupEnginePath, "xtrabackup_root_path", xtrabackupEnginePath, "directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
+	fs.StringVar(&xtrabackupBackupFlags, "xtrabackup_backup_flags", xtrabackupBackupFlags, "flags to pass to backup command. These should be space separated and will be added to the end of the command")
+	fs.StringVar(&xtrabackupPrepareFlags, "xtrabackup_prepare_flags", xtrabackupPrepareFlags, "flags to pass to prepare command. These should be space separated and will be added to the end of the command")
+	fs.StringVar(&xbstreamRestoreFlags, "xbstream_restore_flags", xbstreamRestoreFlags, "flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
+	fs.StringVar(&xtrabackupStreamMode, "xtrabackup_stream_mode", xtrabackupStreamMode, "which mode to use if streaming, valid values are tar and xbstream")
+	fs.StringVar(&xtrabackupUser, "xtrabackup_user", xtrabackupUser, "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
+	fs.UintVar(&xtrabackupStripes, "xtrabackup_stripes", xtrabackupStripes, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
+	fs.UintVar(&xtrabackupStripeBlockSize, "xtrabackup_stripe_block_size", xtrabackupStripeBlockSize, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+}
+
 func (be *XtrabackupEngine) backupFileName() string {
 	fileName := "backup"
-	if *xtrabackupStreamMode != "" {
+	if xtrabackupStreamMode != "" {
 		fileName += "."
-		fileName += *xtrabackupStreamMode
+		fileName += xtrabackupStreamMode
 	}
-	if *backupStorageCompress {
-		if *ExternalDecompressorCmd != "" {
-			fileName += *ExternalCompressorExt
+	if backupStorageCompress {
+		if ExternalDecompressorCmd != "" {
+			fileName += ExternalCompressorExt
 		} else {
-			if ext, err := getExtensionFromEngine(*CompressionEngineName); err != nil {
+			if ext, err := getExtensionFromEngine(CompressionEngineName); err != nil {
 				// there is a check for this, but just in case that fails, we set a extension to the file
 				fileName += ".unknown"
 			} else {
@@ -137,12 +156,12 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 // and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
 
-	if *xtrabackupUser == "" {
+	if xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
 
 	// an extension is required when using an external compressor
-	if *backupStorageCompress && *ExternalCompressorCmd != "" && *ExternalCompressorExt == "" {
+	if backupStorageCompress && ExternalCompressorCmd != "" && ExternalCompressorExt == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT,
 			"flag --external-compressor-extension not provided when using an external compressor")
 	}
@@ -165,7 +184,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 
 	backupFileName := be.backupFileName()
 	params.Logger.Infof("backup file name: %s", backupFileName)
-	numStripes := int(*xtrabackupStripes)
+	numStripes := int(xtrabackupStripes)
 
 	// Perform backups in a separate function, so deferred calls to Close() are
 	// all done before we continue to write the MANIFEST. This ensures that we
@@ -198,13 +217,13 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 
 		// XtraBackup-specific fields
 		FileName:        backupFileName,
-		StreamMode:      *xtrabackupStreamMode,
-		SkipCompress:    !*backupStorageCompress,
-		Params:          *xtrabackupBackupFlags,
+		StreamMode:      xtrabackupStreamMode,
+		SkipCompress:    !backupStorageCompress,
+		Params:          xtrabackupBackupFlags,
 		NumStripes:      int32(numStripes),
-		StripeBlockSize: int32(*xtrabackupStripeBlockSize),
+		StripeBlockSize: int32(xtrabackupStripeBlockSize),
 		// builtin specific field
-		CompressionEngine: *CompressionEngineName,
+		CompressionEngine: CompressionEngineName,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -221,19 +240,19 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 
 func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupFileName string, numStripes int, flavor string) (replicationPosition mysql.Position, finalErr error) {
 
-	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
+	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
 		"--backup",
 		"--socket=" + params.Cnf.SocketFile,
 		"--slave-info",
-		"--user=" + *xtrabackupUser,
+		"--user=" + xtrabackupUser,
 		"--target-dir=" + params.Cnf.TmpDir,
 	}
-	if *xtrabackupStreamMode != "" {
-		flagsToExec = append(flagsToExec, "--stream="+*xtrabackupStreamMode)
+	if xtrabackupStreamMode != "" {
+		flagsToExec = append(flagsToExec, "--stream="+xtrabackupStreamMode)
 	}
-	if *xtrabackupBackupFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(*xtrabackupBackupFlags)...)
+	if xtrabackupBackupFlags != "" {
+		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupBackupFlags)...)
 	}
 
 	// Create a cancellable Context for calls to bh.AddFile().
@@ -298,13 +317,13 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		writer := io.Writer(buffer)
 
 		// Create the gzip compression pipe, if necessary.
-		if *backupStorageCompress {
+		if backupStorageCompress {
 			var compressor io.WriteCloser
 
-			if *ExternalCompressorCmd != "" {
-				compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
+			if ExternalCompressorCmd != "" {
+				compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
 			} else {
-				compressor, err = newBuiltinCompressor(*CompressionEngineName, writer, params.Logger)
+				compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
 			}
 			if err != nil {
 				return replicationPosition, vterrors.Wrap(err, "can't create compressor")
@@ -354,7 +373,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	}()
 
 	// Copy from the stream output to destination file (optional gzip)
-	blockSize := int64(*xtrabackupStripeBlockSize)
+	blockSize := int64(xtrabackupStripeBlockSize)
 	if blockSize < 1024 {
 		// Enforce minimum block size.
 		blockSize = 1024
@@ -454,13 +473,13 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// copy / extract files
 	logger.Infof("Restore: Preparing the extracted files")
 	// prepare the backup
-	restoreProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
+	restoreProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + cnf.Path,
 		"--prepare",
 		"--target-dir=" + tempDir,
 	}
-	if *xtrabackupPrepareFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(*xtrabackupPrepareFlags)...)
+	if xtrabackupPrepareFlags != "" {
+		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupPrepareFlags)...)
 	}
 	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
 	prepareOut, err := prepareCmd.StdoutPipe()
@@ -530,7 +549,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	compressed := !bm.SkipCompress
 	streamMode := bm.StreamMode
 	if streamMode == "" {
-		streamMode = *xtrabackupStreamMode
+		streamMode = xtrabackupStreamMode
 	}
 	baseFileName := bm.FileName
 	if baseFileName == "" {
@@ -563,9 +582,9 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 				// then we assign the default value of compressionEngine.
 				deCompressionEngine = PgzipCompressor
 			}
-			if *ExternalDecompressorCmd != "" {
+			if ExternalDecompressorCmd != "" {
 				if deCompressionEngine == ExternalCompressor {
-					deCompressionEngine = *ExternalDecompressorCmd
+					deCompressionEngine = ExternalDecompressorCmd
 					decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, logger)
 				} else {
 					decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, logger)
@@ -629,10 +648,10 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 
 	case xbstream:
 		// now extract the files by running xbstream
-		xbstreamProgram := path.Join(*xtrabackupEnginePath, xbstream)
+		xbstreamProgram := path.Join(xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
-		if *xbstreamRestoreFlags != "" {
-			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)
+		if xbstreamRestoreFlags != "" {
+			flagsToExec = append(flagsToExec, strings.Fields(xbstreamRestoreFlags)...)
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)

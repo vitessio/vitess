@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -47,7 +48,11 @@ import (
 const (
 	defaultTick          = 1 * time.Second
 	defaultTimeout       = 30 * time.Second
-	workflowStartTimeout = 5 * time.Second
+	workflowStateTimeout = 90 * time.Second
+	workflowStateCopying = "Copying" // nolint
+	workflowStateRunning = "Running" // nolint
+	workflowStateStopped = "Stopped" // nolint
+	workflowStateError   = "Error"   // nolint
 )
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
@@ -234,10 +239,10 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	return newCount == count+1
 }
 
-func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) {
+func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string) {
 	done := false
-	timer := time.NewTimer(workflowStartTimeout)
-	log.Infof("Waiting for workflow %s to start", ksWorkflow)
+	timer := time.NewTimer(workflowStateTimeout)
+	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
 	for {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
 		require.NoError(t, err)
@@ -249,8 +254,8 @@ func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) 
 				if streamId.String() == "PrimaryReplicationStatuses" {
 					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
 						state = attributeValue.Get("State").String()
-						if state != "Running" {
-							done = false // we need to wait for all streams to start
+						if state != wantState {
+							done = false // we need to wait for all streams to have the desired state
 						}
 						return true
 					})
@@ -260,13 +265,13 @@ func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) 
 			return true
 		})
 		if done {
-			log.Infof("Workflow %s has started", ksWorkflow)
+			log.Infof("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState)
 			return
 		}
 		select {
 		case <-timer.C:
-			require.FailNowf(t, "workflow %q did not fully start before the timeout of %s",
-				ksWorkflow, workflowStartTimeout)
+			require.FailNowf(t, "workflow %q did not fully reach the expected state of %q before the timeout of %s; last seen output: %s",
+				ksWorkflow, wantState, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -462,4 +467,96 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
 	require.NoError(t, err)
 	return string(val), nil
+}
+
+func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
+	for {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+		require.NoError(t, err)
+		result := gjson.Get(output, "ShardStatuses")
+		result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
+			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+				if streamId.String() == "PrimaryReplicationStatuses" {
+					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+						state := attributeValue.Get("State").String()
+						pos := attributeValue.Get("Pos").String()
+						// If we've actually copied anything then we'll have a position in the stream
+						if (state == workflowStateRunning || state == workflowStateCopying) && pos != "" {
+							require.FailNowf(t, "Unexpected data copied in workflow",
+								"The MoveTables workflow %q copied data in less than %s when it should have been waiting. Show output: %s",
+								ksWorkflow, defaultTimeout, output)
+						}
+						return true // end attribute loop
+					})
+				}
+				return true // end stream loop
+			})
+			return true // end tablet loop
+		})
+		select {
+		case <-timer.C:
+			return
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+// getShardRoutingRules returns the shard routing rules stored in the
+// topo. It returns the rules sorted by shard,to_keyspace and with all
+// newlines and whitespace removed so that we have predictable,
+// compact, and easy to compare results for tests.
+func getShardRoutingRules(t *testing.T) string {
+	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
+	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
+	require.Nilf(t, err, output)
+	require.NotNil(t, output)
+
+	// Sort the rules by shard,to_keyspace
+	jsonOutput := gjson.Parse(output)
+	rules := jsonOutput.Get("rules").Array()
+	sort.Slice(rules, func(i, j int) bool {
+		shardI := rules[i].Get("shard").String()
+		shardJ := rules[j].Get("shard").String()
+		if shardI == shardJ {
+			return rules[i].Get("to_keyspace").String() < rules[j].Get("to_keyspace").String()
+		}
+		return shardI < shardJ
+	})
+	sb := strings.Builder{}
+	for i := 0; i < len(rules); i++ {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(rules[i].String())
+	}
+	output = fmt.Sprintf(`{"rules":[%s]}`, sb.String())
+
+	// Remove newlines and whitespace
+	re := regexp.MustCompile(`[\n\s]+`)
+	output = re.ReplaceAllString(output, "")
+	output = strings.TrimSpace(output)
+	return output
+}
+
+func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
+	// Update information_schem with the latest data
+	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
+	require.NoError(t, err)
+
+	// Verify that there's no delete marked rows and we reset the auto-inc value
+	res, err := tablet.QueryTablet("select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'",
+		"", false)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Equal(t, 1, len(res.Rows))
+	dataFree, err := res.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), dataFree, "data_free should be 0")
+	autoIncrement, err := res.Rows[0][1].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), autoIncrement, "auto_increment should be 1")
 }

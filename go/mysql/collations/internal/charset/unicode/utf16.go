@@ -185,3 +185,11 @@ func (Charset_ucs2) DecodeRune(p []byte) (rune, int) {
 func (Charset_ucs2) SupportsSupplementaryChars() bool {
 	return false
 }
+
+func (Charset_ucs2) Length(src []byte) int {
+	cnt := len(src)
+	if cnt%2 != 0 {
+		return cnt/2 + 1
+	}
+	return cnt / 2
+}

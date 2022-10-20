@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // test main part of the testcase
@@ -38,6 +39,7 @@ var (
 	primary          *cluster.Vttablet
 	replica1         *cluster.Vttablet
 	replica2         *cluster.Vttablet
+	testTablets      []*cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
 	newInitDBFile    string
 	cell             = cluster.DefaultCell
@@ -142,8 +144,9 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		primary = shard.Vttablets[0]
 		replica1 = shard.Vttablets[1]
 		replica2 = shard.Vttablets[2]
+		testTablets = []*cluster.Vttablet{primary, replica1, replica2}
 
-		for _, tablet := range []*cluster.Vttablet{primary, replica1} {
+		for _, tablet := range testTablets {
 			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard.Name); err != nil {
 				return 1, err
 			}
@@ -154,8 +157,8 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			return 1, err
 		}
 
-		// create database for primary and replica
-		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
+		// create database for primary and replicas
+		for _, tablet := range testTablets {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
 			}
@@ -168,6 +171,7 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
+		primary.Type = topodatapb.TabletType_PRIMARY.String()
 		return m.Run(), nil
 	}()
 
@@ -177,7 +181,6 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 	} else {
 		os.Exit(exitCode)
 	}
-
 }
 
 // create query for test table creation
@@ -193,7 +196,7 @@ func TestBackupTransformImpl(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	verifyInitialReplication(t)
 
-	// restart the replica with transform hook parameter
+	// restart the replica1 tablet with transform hook parameter
 	replica1.VttabletProcess.TearDown()
 	replica1.VttabletProcess.ExtraArgs = []string{
 		"--db-credentials-file", dbCredentialFile,
@@ -205,6 +208,10 @@ func TestBackupTransformImpl(t *testing.T) {
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err := replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
+
+	if err := cluster.WaitForTabletSetup(&localCluster.VtctlclientProcess, 2, []string{"replica", "primary"}); err != nil {
+		require.Nil(t, err)
+	}
 
 	// take backup, it should not give any error
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -228,23 +235,27 @@ func TestBackupTransformImpl(t *testing.T) {
 	// as it is read from the MANIFEST.
 	// clear replica2
 
+	// Stop the tablet
+	replica2.VttabletProcess.TearDown()
+	// Remove the data
 	if replica2.MysqlctlProcess.TabletUID > 0 {
-		replica2.MysqlctlProcess.Stop()
-		os.RemoveAll(replica2.VttabletProcess.Directory)
-		// start replica2 from backup
+		err = replica2.MysqlctlProcess.Stop()
+		require.NoError(t, err)
+		replica2.MysqlctlProcess.CleanupFiles(replica2.TabletUID)
 		err = replica2.MysqlctlProcess.Start()
 		require.Nil(t, err)
 	} else {
-		replica2.MysqlctldProcess.Stop()
-		os.RemoveAll(replica2.VttabletProcess.Directory)
-		// start replica2 from backup
+		err = replica2.MysqlctldProcess.Stop()
+		require.NoError(t, err)
+		replica2.MysqlctldProcess.CleanupFiles(replica2.TabletUID)
+		require.NoError(t, err)
 		err = replica2.MysqlctldProcess.Start()
 		require.Nil(t, err)
 	}
 
+	// Start from the backup
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
-	replica2.VttabletProcess.CreateDB(keyspaceName)
 	replica2.VttabletProcess.ExtraArgs = []string{
 		"--db-credentials-file", dbCredentialFile,
 		"--restore_from_backup",
@@ -253,7 +264,7 @@ func TestBackupTransformImpl(t *testing.T) {
 	replica2.VttabletProcess.ServingStatus = ""
 	err = replica2.VttabletProcess.Setup()
 	require.Nil(t, err)
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 30*time.Second)
 	require.Nil(t, err)
 	defer replica2.VttabletProcess.TearDown()
 	// We restart replication here because semi-sync will not be set correctly on tablet startup since
@@ -354,11 +365,31 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 	assert.Equal(t, expectedStatus, status)
 }
 
-// verifyInitialReplication creates schema in primary, insert some data to primary and verify the same data in replica
+// verifyInitialReplication generates a record on the primary and verifies that the record
+// exists on all tablets in the shard. We also check the PRIMARY as with lossless semi-sync
+// it's possible that a GTID is applied on a replica but not (yet) on the source:
+// http://my-replication-life.blogspot.com/2013/09/loss-less-semi-synchronous-replication.html
 func verifyInitialReplication(t *testing.T) {
+	// confirm that semi-sync is enabled for the replica tablets
+	healthyReplicaCount := 0
+	for _, tablet := range testTablets {
+		if tablet.Type == "replica" {
+			verifySemiSyncStatus(t, tablet, "ON")
+			healthyReplicaCount++
+		}
+	}
+
+	if healthyReplicaCount < 2 {
+		log.Errorf("Not enough healthy replicas to guarantee safe backups when semi-sync is enabled! Should have at least two, currently have %d",
+			healthyReplicaCount)
+	}
+
 	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	require.Nil(t, err)
-	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
+
+	for _, tablet := range testTablets {
+		cluster.VerifyRowsInTablet(t, tablet, keyspaceName, 1)
+	}
 }

@@ -37,12 +37,12 @@ type testCaseSysVar struct {
 }
 
 type myTestCase struct {
-	in, expected                                                       string
-	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
-	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
-	udv                                                                int
-	autocommit, clientFoundRows, skipQueryPlanCache, socket            bool
-	sqlSelectLimit, transactionMode, workload, version, versionComment bool
+	in, expected                                                          string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID     bool
+	ddlStrategy, sessionUUID, sessionEnableSystemSettings                 bool
+	udv                                                                   int
+	autocommit, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment    bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -54,6 +54,10 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT @@version",
 		expected: "SELECT :__vtversion as `@@version`",
 		version:  true,
+	}, {
+		in:           "SELECT @@query_timeout",
+		expected:     "SELECT :__vtquery_timeout as `@@query_timeout`",
+		queryTimeout: true,
 	}, {
 		in:             "SELECT @@version_comment",
 		expected:       "SELECT :__vtversion_comment as `@@version_comment`",
@@ -96,6 +100,10 @@ func TestRewrites(in *testing.T) {
 		in:       "select (select database() from dual) from dual",
 		expected: "select :__vtdbname as `(select database() from dual)` from dual",
 		db:       true,
+	}, {
+		// don't unnest solo columns
+		in:       "select 1 as foobar, (select foobar)",
+		expected: "select 1 as foobar, (select foobar from dual) from dual",
 	}, {
 		in:       "select id from user where database()",
 		expected: "select id from user where database()",
@@ -298,6 +306,7 @@ func TestRewrites(in *testing.T) {
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
 		socket:                      true,
+		queryTimeout:                true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -316,6 +325,7 @@ func TestRewrites(in *testing.T) {
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
 		socket:                      true,
+		queryTimeout:                true,
 	}}
 
 	for _, tc := range tests {
@@ -351,6 +361,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
 			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
+			assert.Equal(tc.queryTimeout, result.NeedsSysVar(sysvars.QueryTimeout.Name), "should need :__vtquery_timeout")
 			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
 			assert.Equal(tc.sessionUUID, result.NeedsSysVar(sysvars.SessionUUID.Name), "should need sessionUUID")
 			assert.Equal(tc.sessionEnableSystemSettings, result.NeedsSysVar(sysvars.SessionEnableSystemSettings.Name), "should need sessionEnableSystemSettings")

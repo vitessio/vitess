@@ -11,3 +11,4 @@ export { ReactComponent as Open } from './open.svg';
 export { ReactComponent as Question } from './question.svg';
 export { ReactComponent as RunQuery } from './runQuery.svg';
 export { ReactComponent as Search } from './search.svg';
+export { ReactComponent as Topology } from './topology.svg';

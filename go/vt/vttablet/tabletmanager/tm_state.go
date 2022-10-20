@@ -411,7 +411,7 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 		return
 	}
 	// Fast path: publish immediately.
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
@@ -444,7 +444,7 @@ func (ts *tmState) retryPublish() {
 	for {
 		// Retry immediately the first time because the previous failure might have been
 		// due to an expired context.
-		ctx, cancel := context.WithTimeout(ts.ctx, *topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(ts.ctx, topo.RemoteOperationTimeout)
 		_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 			if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
 				log.Error(err)

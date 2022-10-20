@@ -26,9 +26,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
@@ -65,6 +67,8 @@ func main() {
 	fs := pflag.NewFlagSet("query_analyzer", pflag.ExitOnError)
 	log.RegisterFlags(fs)
 	logutil.RegisterFlags(fs)
+	acl.RegisterFlags(fs)
+	servenv.RegisterMySQLServerFlags(fs)
 	_flag.Parse(fs)
 	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)

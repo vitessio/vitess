@@ -6,11 +6,10 @@ Usage of vtgr:
       --db_config string                           Full path to db config file that will be used by VTGR.
       --db_flavor string                           MySQL flavor override. (default "MySQL56")
       --db_port int                                Local mysql port, set this to enable local fast check.
-      --emit_stats                                 If set, emit stats to push-based monitoring and stats backends
       --enable_heartbeat_check                     Enable heartbeat checking, set together with --group_heartbeat_threshold.
       --gr_port int                                Port to bootstrap a MySQL group. (default 33061)
       --group_heartbeat_threshold int              VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with --enable_heartbeat_check.
-      --grpc_auth_static_client_creds string       when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
+      --grpc_auth_static_client_creds string       When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                    Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                        Enable gRPC tracing.
       --grpc_initial_conn_window_size int          gRPC initial connection window size
@@ -27,8 +26,6 @@ Usage of vtgr:
       --log_err_stacks                             log stack traces for errors
       --log_rotate_max_size uint                   size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                log to standard error instead of files
-      --mysql_server_flush_delay duration          Delay after which buffered response will be flushed to the client. (default 100ms)
-      --mysql_server_version string                MySQL server version to advertise.
       --ping_tablet_timeout duration               time to wait when we ping a tablet (default 2s)
       --pprof strings                              enable profiling
       --purge_logs_interval duration               how often try to remove old logs (default 1h0m0s)
@@ -37,11 +34,6 @@ Usage of vtgr:
       --scan_interval duration                     Scan interval to diagnose and repair. (default 3s)
       --scan_repair_timeout duration               Time to wait for a Diagnose and repair operation. (default 3s)
       --security_policy string                     the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --stats_backend string                       The name of the registered push-based monitoring/stats backend to use
-      --stats_combine_dimensions string            List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats_common_tags string                   Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
-      --stats_drop_variables string                Variables to be dropped from the list of exported variables.
-      --stats_emit_period duration                 Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                   logs at or above this threshold go to stderr (default 1)
       --tablet_manager_grpc_ca string              the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string            the cert to use to connect
@@ -68,7 +60,7 @@ Usage of vtgr:
       --topo_zk_tls_ca string                      the server ca to use to validate servers when connecting to the zk topo server
       --topo_zk_tls_cert string                    the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
       --topo_zk_tls_key string                     the key to use to connect to the zk topo server, enables TLS
-  -v, --v Level                                    log level for V logs
-      --version                                    print binary version
+      --v Level                                    log level for V logs
+  -v, --version                                    print binary version
       --vmodule moduleSpec                         comma-separated list of pattern=N settings for file-filtered logging
       --vtgr_config string                         Config file for vtgr.
