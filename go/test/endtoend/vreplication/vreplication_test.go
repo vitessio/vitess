@@ -147,8 +147,8 @@ func TestVreplicationDDLHandling(t *testing.T) {
 	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", sourceKs), 1, false)
 	require.NoError(t, err)
 
-	addColDDL := fmt.Sprintf("alter table %s add column ddltest varchar(64)", table)
-	dropColDDL := fmt.Sprintf("alter table %s drop column ddltest", table)
+	addColDDL := fmt.Sprintf("alter table %s add column %s varchar(64)", table, newColumn)
+	dropColDDL := fmt.Sprintf("alter table %s drop column %s", table, newColumn)
 	checkColQuerySource := fmt.Sprintf("select count(column_name) from information_schema.columns where table_schema='vt_%s' and table_name='%s' and column_name='%s'",
 		sourceKs, table, newColumn)
 	checkColQueryTarget := fmt.Sprintf("select count(column_name) from information_schema.columns where table_schema='vt_%s' and table_name='%s' and column_name='%s'",
@@ -160,7 +160,7 @@ func TestVreplicationDDLHandling(t *testing.T) {
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on source
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
-	require.NoError(t, err, "error executing %s: %v", addColDDL, err)
+	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm workflow is still running fine
 	waitForWorkflowState(t, vc, ksWorkflow, "Running")
 	// Confirm new col does not exist on target
@@ -170,7 +170,7 @@ func TestVreplicationDDLHandling(t *testing.T) {
 	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
 	// Drop the column on soruce to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
-	require.NoError(t, err, "error executing %s: %v", dropColDDL, err)
+	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 
 	// Test STOP behavior (new col now exists nowhere)
 	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
@@ -178,7 +178,7 @@ func TestVreplicationDDLHandling(t *testing.T) {
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on the source
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
-	require.NoError(t, err, "error executing %s: %v", addColDDL, err)
+	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm that the worfklow stopped because of the DDL
 	waitForWorkflowState(t, vc, ksWorkflow, "Stopped", fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
 	// Confirm that the target does not have new col
@@ -193,7 +193,7 @@ func TestVreplicationDDLHandling(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(1)]]")
 	// Drop col on source
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
-	require.NoError(t, err, "error executing %s: %v", dropColDDL, err)
+	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 	// Confirm workflow is still running fine
 	waitForWorkflowState(t, vc, ksWorkflow, "Running")
 	// Confirm new col was dropped on target

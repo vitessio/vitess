@@ -239,9 +239,11 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	return newCount == count+1
 }
 
-// waitForWorkflowState waits for the given workflow to reach the provided state.
-// You can pass optional key value pairs of the form "key==value" to wait for
-// worfklow sub-state such as "Message==for vdiff". Invalid checks are ignored.
+// waitForWorkflowState waits for all of the given workflow's
+// streams to reach the provided state. You can pass optional
+// key value pairs of the form "key==value" to also wait for
+// additional stream sub-state such as "Message==for vdiff".
+// Invalid checks are ignored.
 func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
