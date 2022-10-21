@@ -8,18 +8,20 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
-{{if .InstallXtraBackup}}
-  # This is used if we need to pin the xtrabackup version used in tests.
-  # If this is NOT set then the latest version available will be used.
-  #XTRABACKUP_VERSION: "2.4.24-1"
-{{end}}
 
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    runs-on: ubuntu-20.04
 
     steps:
+    - name: Skip CI
+      run: |
+        if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
@@ -32,7 +34,7 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -55,13 +57,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: 1.18.5
+        go-version: 1.18.7
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -74,8 +76,16 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
+        # Setup Percona Server for MySQL 8.0
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo apt-get install -y lsb-release gnupg2 curl
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo percona-release setup ps80
+        sudo apt-get update
+
+        # Install everything else we need, and configure
+        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
@@ -87,17 +97,7 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
-        sudo apt-get update
-        if [[ -n $XTRABACKUP_VERSION ]]; then
-          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
-          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
-          sudo apt install -y "./$debfile"
-        else
-          sudo apt-get install -y percona-xtrabackup-24
-        fi
+        sudo apt-get install percona-xtrabackup-80 lz4
 
         {{end}}
 
@@ -124,7 +124,7 @@ jobs:
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.
@@ -138,8 +138,9 @@ jobs:
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql57.cnf
+        cat <<-EOF>>./config/mycnf/mysql80.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
+        innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
         innodb_buffer_pool_size=64M
         innodb_doublewrite=OFF
@@ -155,7 +156,7 @@ jobs:
         {{end}}
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()

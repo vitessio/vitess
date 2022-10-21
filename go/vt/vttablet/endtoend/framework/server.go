@@ -17,6 +17,7 @@ limitations under the License.
 package framework
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -28,8 +29,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -61,7 +60,7 @@ var (
 func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName string, config *tabletenv.TabletConfig) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
-	*vtgateconn.VtgateProtocol = protocol
+	vtgateconn.SetVTGateProtocol(protocol)
 	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
 		return &txResolver{
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
@@ -117,6 +116,8 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.SignalSchemaChangeReloadIntervalSeconds = tabletenv.Seconds(2.1)
 	config.SignalWhenSchemaChange = true
 	config.Healthcheck.IntervalSeconds = 0.1
+	config.Oltp.TxTimeoutSeconds = 5
+	config.Olap.TxTimeoutSeconds = 5
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(connParams, connAppDebugParams, dbName, config)

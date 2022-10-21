@@ -193,6 +193,7 @@ services:
       - set_keyspace_durability_policy_test_keyspace
       - vtctld
     environment:
+      - WEB_PORT=8080
       - TOPOLOGY_FLAGS=--topo_implementation consul --topo_global_server_address consul1:8500
         --topo_global_root vitess/global
       - EXTERNAL_DB=0
@@ -200,7 +201,7 @@ services:
       - DB_PASS=
     image: vitess/lite:${VITESS_TAG:-latest}
     ports:
-      - 13000:3000
+      - 13000:8080
     volumes:
       - .:/script
   vttablet101:

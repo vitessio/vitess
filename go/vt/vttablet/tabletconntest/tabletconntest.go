@@ -20,7 +20,6 @@ package tabletconntest
 
 import (
 	"context"
-	"flag"
 	"io"
 	"os"
 	"strings"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -775,7 +775,14 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 
 	// create a connection
 	if clientCreds != nil {
-		flag.Set("grpc_auth_static_client_creds", clientCreds.Name())
+		fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+		grpcclient.RegisterFlags(fs)
+
+		err := fs.Parse([]string{
+			"--grpc_auth_static_client_creds",
+			clientCreds.Name(),
+		})
+		require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", clientCreds.Name())
 	}
 
 	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))

@@ -10,6 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
       - name: Check if workflow needs to be skipped
         id: skip-workflow
         run: |
@@ -22,7 +29,7 @@ jobs:
 
       - name: Checkout code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Run FOSSA scan and upload build data
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -87,9 +94,9 @@ jobs:
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.18.5
+          go-version: 1.18.7
 
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -135,17 +142,17 @@ jobs:
       - name: check_make_parser
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
         run: |
-          tools/check_make_parser.sh
+          tools/check_make_parser.sh || exit 1
 
       - name: check_make_sizegen
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.sizegen == 'true'
         run: |
-          tools/check_make_sizegen.sh
+          tools/check_make_sizegen.sh || exit 1
 
       - name: check_make_visitor
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.visitor == 'true'
         run: |
-          misc/git/hooks/asthelpers
+          misc/git/hooks/asthelpers || exit 1
 
       - name: run ensure_bootstrap_version
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -168,7 +175,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/...
+        run: $(go env GOPATH)/bin/golangci-lint run go/... || exit 1
 
       - name: Run go mod tidy
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -187,4 +194,4 @@ jobs:
       - name: check_make_proto
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
         run: |
-          tools/check_make_proto.sh
+          tools/check_make_proto.sh || exit 1

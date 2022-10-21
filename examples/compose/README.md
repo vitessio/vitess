@@ -150,7 +150,7 @@ vitess/examples/compose$ ./lvtctl.sh Help
 - vtgate web ui:
   http://localhost:15099/debug/status
 
-- vtorc web ui:
+- vtorc ui:
   http://localhost:13000
   
 - Stream querylog

@@ -1,0 +1,103 @@
+[
+  {
+    "comment": "revert migration",
+    "query": "revert vitess_migration 'abc'",
+    "plan": {
+      "QueryType": "REVERT",
+      "Original": "revert vitess_migration 'abc'",
+      "Instructions": {
+        "OperatorType": "RevertMigration",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "revert vitess_migration 'abc'"
+      }
+    }
+  },
+  {
+    "comment": "retry migration",
+    "query": "alter vitess_migration 'abc' retry",
+    "plan": {
+      "QueryType": "UNKNOWN",
+      "Original": "alter vitess_migration 'abc' retry",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "alter vitess_migration 'abc' retry"
+      }
+    }
+  },
+  {
+    "comment": "complete migration",
+    "query": "alter vitess_migration 'abc' complete",
+    "plan": {
+      "QueryType": "UNKNOWN",
+      "Original": "alter vitess_migration 'abc' complete",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "alter vitess_migration 'abc' complete"
+      }
+    }
+  },
+  {
+    "comment": "complete migration",
+    "query": "alter vitess_migration 'abc' cleanup",
+    "plan": {
+      "QueryType": "UNKNOWN",
+      "Original": "alter vitess_migration 'abc' cleanup",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "alter vitess_migration 'abc' cleanup"
+      }
+    }
+  },
+  {
+    "comment": "cancel migration",
+    "query": "alter vitess_migration 'abc' cancel",
+    "plan": {
+      "QueryType": "UNKNOWN",
+      "Original": "alter vitess_migration 'abc' cancel",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "alter vitess_migration 'abc' cancel"
+      }
+    }
+  },
+  {
+    "comment": "cancel all migrations",
+    "query": "alter vitess_migration cancel all",
+    "plan": {
+      "QueryType": "UNKNOWN",
+      "Original": "alter vitess_migration cancel all",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "alter vitess_migration cancel all"
+      }
+    }
+  }
+]

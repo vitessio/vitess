@@ -20,7 +20,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -37,14 +36,12 @@ import (
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/zk2topo"
-	"vitess.io/vitess/go/vt/vtctl"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var doc = `
@@ -110,10 +107,11 @@ const (
 	timeFmtMicro = "2006-01-02 15:04:05.000000"
 )
 
-type cmdFunc func(ctx context.Context, subFlags *flag.FlagSet, args []string) error
+type cmdFunc func(ctx context.Context, subFlags *pflag.FlagSet, args []string) error
 
 var cmdMap map[string]cmdFunc
 var zconn *zk2topo.ZkConn
+var server string
 
 func init() {
 	cmdMap = map[string]cmdFunc{
@@ -133,35 +131,41 @@ func init() {
 	}
 }
 
-var (
-	server = flag.String("server", "", "server(s) to connect to")
-)
-
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
-
-	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
-	log.RegisterFlags(fs)
-	logutil.RegisterFlags(fs)
-	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
-		Epilogue: func(w io.Writer) { fmt.Fprint(w, doc) },
-	})
-	_flag.Parse(fs)
-	args := _flag.Args()
-	if len(args) == 0 {
-		flag.Usage()
-		exit.Return(1)
+	pflag.StringVar(&server, "server", server, "server(s) to connect to")
+	// handling case of --help & -h
+	var help bool
+	pflag.BoolVarP(&help, "help", "h", false, "display usage and exit")
+	log.RegisterFlags(pflag.CommandLine)
+	logutil.RegisterFlags(pflag.CommandLine)
+	acl.RegisterFlags(pflag.CommandLine)
+	pflag.CommandLine.Usage = func() {
+		fmt.Fprint(os.Stderr, doc)
+		pflag.Usage()
 	}
 
+	pflag.Parse()
+
+	if help || pflag.Arg(0) == "help" {
+		pflag.Usage()
+		os.Exit(0)
+	}
+
+	// if no zk command is provided after --server then we need to print doc & usage both
+	args := pflag.Args()
+	if len(args) == 0 {
+		pflag.CommandLine.Usage()
+		exit.Return(1)
+	}
 	cmdName := args[0]
 	args = args[1:]
 	cmd, ok := cmdMap[cmdName]
 	if !ok {
 		log.Exitf("Unknown command %v", cmdName)
 	}
-	subFlags := flag.NewFlagSet(cmdName, flag.ExitOnError)
-	_flag.SetUsage(subFlags, _flag.UsageOptions{})
+	subFlags := pflag.NewFlagSet(cmdName, pflag.ContinueOnError)
 
 	// Create a context for the command, cancel it if we get a signal.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -173,7 +177,7 @@ func main() {
 	}()
 
 	// Connect to the server.
-	zconn = zk2topo.Connect(*server)
+	zconn = zk2topo.Connect(server)
 
 	// Run the command.
 	if err := cmd(ctx, subFlags, args); err != nil {
@@ -193,12 +197,13 @@ func isZkFile(path string) bool {
 	return strings.HasPrefix(path, "/zk")
 }
 
-func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	var (
-		exitIfExists = subFlags.Bool("e", false, "exit if the path already exists")
-	)
+func cmdWait(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	var exitIfExists bool
+	subFlags.BoolVarP(&exitIfExists, "exit", "e", false, "exit if the path already exists")
 
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("wait: can only wait for one path")
@@ -221,7 +226,7 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 			return fmt.Errorf("wait: error %v: %v", zkPath, err)
 		}
 	} else {
-		if *exitIfExists {
+		if exitIfExists {
 			return fmt.Errorf("already exists: %v", zkPath)
 		}
 	}
@@ -231,8 +236,10 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 }
 
 // Watch for changes to the node.
-func cmdWatch(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+func cmdWatch(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 
 	eventChan := make(chan zk.Event, 16)
 	for _, arg := range subFlags.Args() {
@@ -280,14 +287,21 @@ func cmdWatch(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 	}
 }
 
-func cmdLs(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
+func cmdLs(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		longListing      = subFlags.Bool("l", false, "long listing")
-		directoryListing = subFlags.Bool("d", false, "list directory instead of contents")
-		force            = subFlags.Bool("f", false, "no warning on nonexistent node")
-		recursiveListing = subFlags.Bool("R", false, "recursive listing")
+		longListing      bool
+		directoryListing bool
+		force            bool
+		recursiveListing bool
 	)
-	subFlags.Parse(args)
+	subFlags.BoolVarP(&longListing, "longlisting", "l", false, "long listing")
+	subFlags.BoolVarP(&directoryListing, "directorylisting", "d", false, "list directory instead of contents")
+	subFlags.BoolVarP(&force, "force", "f", false, "no warning on nonexistent node")
+	subFlags.BoolVarP(&recursiveListing, "recursivelisting", "R", false, "recursive listing")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("ls: no path specified")
 	}
@@ -302,16 +316,16 @@ func cmdLs(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	}
 
 	hasError := false
-	needsHeader := len(resolved) > 1 && !*directoryListing
+	needsHeader := len(resolved) > 1 && !directoryListing
 	for _, arg := range resolved {
 		zkPath := fixZkPath(arg)
 		var children []string
 		var err error
 		isDir := true
-		if *directoryListing {
+		if directoryListing {
 			children = []string{""}
 			isDir = false
-		} else if *recursiveListing {
+		} else if recursiveListing {
 			children, err = zk2topo.ChildrenRecursive(ctx, zconn, zkPath)
 		} else {
 			children, _, err = zconn.Children(ctx, zkPath)
@@ -323,23 +337,23 @@ func cmdLs(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		}
 		if err != nil {
 			hasError = true
-			if !*force || err != zk.ErrNoNode {
+			if !force || err != zk.ErrNoNode {
 				log.Warningf("ls: cannot access %v: %v", zkPath, err)
 			}
 		}
 
 		// Show the full path when it helps.
 		showFullPath := false
-		if *recursiveListing {
+		if recursiveListing {
 			showFullPath = true
-		} else if *longListing && (*directoryListing || !isDir) {
+		} else if longListing && (directoryListing || !isDir) {
 			showFullPath = true
 		}
 		if needsHeader {
 			fmt.Printf("%v:\n", zkPath)
 		}
 		if len(children) > 0 {
-			if *longListing && isDir {
+			if longListing && isDir {
 				fmt.Printf("total: %v\n", len(children))
 			}
 			sort.Strings(children)
@@ -349,7 +363,7 @@ func cmdLs(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 				localPath := path.Join(zkPath, children[i])
 				_, stat, err := zconn.Exists(ctx, localPath)
 				if err != nil {
-					if !*force || err != zk.ErrNoNode {
+					if !force || err != zk.ErrNoNode {
 						log.Warningf("ls: cannot access: %v: %v", localPath, err)
 					}
 				} else {
@@ -366,7 +380,7 @@ func cmdLs(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 			for i, child := range children {
 				localPath := path.Join(zkPath, child)
 				if stat := stats[i]; stat != nil {
-					fmtPath(stat, localPath, showFullPath, *longListing)
+					fmtPath(stat, localPath, showFullPath, longListing)
 				}
 			}
 		}
@@ -411,13 +425,18 @@ func fmtPath(stat *zk.Stat, zkPath string, showFullPath bool, longListing bool) 
 	}
 }
 
-func cmdTouch(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
+func cmdTouch(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		createParents = subFlags.Bool("p", false, "create parents")
-		touchOnly     = subFlags.Bool("c", false, "touch only - don't create")
+		createParents bool
+		touchOnly     bool
 	)
 
-	subFlags.Parse(args)
+	subFlags.BoolVarP(&createParents, "createparent", "p", false, "create parents")
+	subFlags.BoolVarP(&touchOnly, "touchonly", "c", false, "touch only - don't create")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("touch: need to specify exactly one path")
 	}
@@ -442,9 +461,9 @@ func cmdTouch(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 	switch {
 	case !create:
 		_, err = zconn.Set(ctx, zkPath, data, version)
-	case *touchOnly:
+	case touchOnly:
 		return fmt.Errorf("touch: no such path %v", zkPath)
-	case *createParents:
+	case createParents:
 		_, err = zk2topo.CreateRecursive(ctx, zconn, zkPath, data, 0, zk.WorldACL(zk.PermAll), 10)
 	default:
 		_, err = zconn.Create(ctx, zkPath, data, 0, zk.WorldACL(zk.PermAll))
@@ -456,21 +475,27 @@ func cmdTouch(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 	return nil
 }
 
-func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
+func cmdRm(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		force             = subFlags.Bool("f", false, "no warning on nonexistent node")
-		recursiveDelete   = subFlags.Bool("r", false, "recursive delete")
-		forceAndRecursive = subFlags.Bool("rf", false, "shorthand for -r -f")
+		force             bool
+		recursiveDelete   bool
+		forceAndRecursive bool
 	)
-	subFlags.Parse(args)
-	*force = *force || *forceAndRecursive
-	*recursiveDelete = *recursiveDelete || *forceAndRecursive
+	subFlags.BoolVarP(&force, "force", "f", false, "no warning on nonexistent node")
+	subFlags.BoolVarP(&recursiveDelete, "recursivedelete", "r", false, "recursive delete")
+	subFlags.BoolVarP(&forceAndRecursive, "forceandrecursive", "rf", false, "shorthand for -r -f")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	force = force || forceAndRecursive
+	recursiveDelete = recursiveDelete || forceAndRecursive
 
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("rm: no path specified")
 	}
 
-	if *recursiveDelete {
+	if recursiveDelete {
 		for _, arg := range subFlags.Args() {
 			zkPath := fixZkPath(arg)
 			if strings.Count(zkPath, "/") < 2 {
@@ -492,12 +517,12 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	for _, arg := range resolved {
 		zkPath := fixZkPath(arg)
 		var err error
-		if *recursiveDelete {
+		if recursiveDelete {
 			err = zk2topo.DeleteRecursive(ctx, zconn, zkPath, -1)
 		} else {
 			err = zconn.Delete(ctx, zkPath, -1)
 		}
-		if err != nil && (!*force || err != zk.ErrNoNode) {
+		if err != nil && (!force || err != zk.ErrNoNode) {
 			hasError = true
 			log.Warningf("rm: cannot delete %v: %v", zkPath, err)
 		}
@@ -510,8 +535,10 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
-func cmdAddAuth(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+func cmdAddAuth(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("addAuth: expected args <scheme> <auth>")
 	}
@@ -519,13 +546,19 @@ func cmdAddAuth(ctx context.Context, subFlags *flag.FlagSet, args []string) erro
 	return zconn.AddAuth(ctx, scheme, []byte(auth))
 }
 
-func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
+func cmdCat(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		longListing = subFlags.Bool("l", false, "long listing")
-		force       = subFlags.Bool("f", false, "no warning on nonexistent node")
-		decodeProto = subFlags.Bool("p", false, "decode proto files and display them as text")
+		longListing bool
+		force       bool
+		decodeProto bool
 	)
-	subFlags.Parse(args)
+	subFlags.BoolVarP(&longListing, "longListing", "l", false, "long listing")
+	subFlags.BoolVarP(&force, "force", "f", false, "no warning on nonexistent node")
+	subFlags.BoolVarP(&decodeProto, "decodeProto", "p", false, "decode proto files and display them as text")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("cat: no path specified")
 	}
@@ -544,18 +577,18 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		data, _, err := zconn.Get(ctx, zkPath)
 		if err != nil {
 			hasError = true
-			if !*force || err != zk.ErrNoNode {
+			if !force || err != zk.ErrNoNode {
 				log.Warningf("cat: cannot access %v: %v", zkPath, err)
 			}
 			continue
 		}
 
-		if *longListing {
+		if longListing {
 			fmt.Printf("%v:\n", zkPath)
 		}
 		decoded := ""
-		if *decodeProto {
-			decoded, err = vtctl.DecodeContent(zkPath, data, false)
+		if decodeProto {
+			decoded, err = topo.DecodeContent(zkPath, data, false)
 			if err != nil {
 				log.Warningf("cat: cannot proto decode %v: %v", zkPath, err)
 				decoded = string(data)
@@ -564,7 +597,7 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 			decoded = string(data)
 		}
 		fmt.Print(decoded)
-		if len(decoded) > 0 && decoded[len(decoded)-1] != '\n' && (term.IsTerminal(int(os.Stdout.Fd())) || *longListing) {
+		if len(decoded) > 0 && decoded[len(decoded)-1] != '\n' && (term.IsTerminal(int(os.Stdout.Fd())) || longListing) {
 			fmt.Print("\n")
 		}
 	}
@@ -574,11 +607,13 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
-func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	var (
-		force = subFlags.Bool("f", false, "no warning on nonexistent node")
-	)
-	subFlags.Parse(args)
+func cmdEdit(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	var force bool
+	subFlags.BoolVarP(&force, "force", "f", false, "no warning on nonexistent node")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("edit: no path specified")
 	}
@@ -586,7 +621,7 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	zkPath := fixZkPath(arg)
 	data, stat, err := zconn.Get(ctx, zkPath)
 	if err != nil {
-		if !*force || err != zk.ErrNoNode {
+		if !force || err != zk.ErrNoNode {
 			log.Warningf("edit: cannot access %v: %v", zkPath, err)
 		}
 		return fmt.Errorf("edit: cannot access %v: %v", zkPath, err)
@@ -631,11 +666,13 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
-func cmdStat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	var (
-		force = subFlags.Bool("f", false, "no warning on nonexistent node")
-	)
-	subFlags.Parse(args)
+func cmdStat(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	var force bool
+	subFlags.BoolVarP(&force, "force", "f", false, "no warning on nonexistent node")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("stat: no path specified")
@@ -659,7 +696,7 @@ func cmdStat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		}
 		if err != nil {
 			hasError = true
-			if !*force || err != zk.ErrNoNode {
+			if !force || err != zk.ErrNoNode {
 				log.Warningf("stat: cannot access %v: %v", zkPath, err)
 			}
 			continue
@@ -712,8 +749,10 @@ func fmtACL(acl zk.ACL) string {
 	return s
 }
 
-func cmdChmod(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+func cmdChmod(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("chmod: no permission specified")
 	}
@@ -770,8 +809,10 @@ func cmdChmod(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 	return nil
 }
 
-func cmdCp(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+func cmdCp(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	switch {
 	case subFlags.NArg() < 2:
 		return fmt.Errorf("cp: need to specify source and destination paths")
@@ -869,8 +910,10 @@ type zkItem struct {
 
 // Store a zk tree in a zip archive. This won't be immediately useful to
 // zip tools since even "directories" can contain data.
-func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+func cmdZip(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("zip: need to specify source and destination paths")
 	}
@@ -937,8 +980,10 @@ func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
-func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+func cmdUnzip(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("zip: need to specify source and destination paths")
 	}

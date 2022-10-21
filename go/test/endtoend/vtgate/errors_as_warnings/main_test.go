@@ -93,16 +93,16 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(KeyspaceName)
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
 func TestScatterErrsAsWarns(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("test kills primary on source shard, but query will be on target shard so it will be skipped")
+	}
 	oltp, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer oltp.Close()

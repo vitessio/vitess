@@ -58,6 +58,11 @@ type VSchema interface {
 
 	// GetSrvVschema returns the latest cached vschema.SrvVSchema
 	GetSrvVschema() *vschemapb.SrvVSchema
+	// FindRoutedShard looks up shard routing rules for a shard
+	FindRoutedShard(keyspace, shard string) (string, error)
+
+	// IsShardRoutingEnabled returns true if partial shard routing is enabled
+	IsShardRoutingEnabled() bool
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

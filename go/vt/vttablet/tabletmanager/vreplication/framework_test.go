@@ -72,10 +72,10 @@ type LogExpectation struct {
 var heartbeatRe *regexp.Regexp
 
 // setFlag() sets a flag for a test in a non-racy way:
-//	* it registers the flag using a different flagset scope
-//	* clears other flags by passing a dummy os.Args() while parsing this flagset
-//	* sets the specific flag, if it has not already been defined
-//	* resets the os.Args() so that the remaining flagsets can be parsed correctly
+//   - it registers the flag using a different flagset scope
+//   - clears other flags by passing a dummy os.Args() while parsing this flagset
+//   - sets the specific flag, if it has not already been defined
+//   - resets the os.Args() so that the remaining flagsets can be parsed correctly
 func setFlag(flagName, flagValue string) {
 	flagSetName := "vreplication-unit-test"
 	var tmp []string
@@ -106,12 +106,11 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vreplication.framework_test", "test")
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
-	setFlag("binlog_player_protocol", "test")
-
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
 }
 
 func TestMain(m *testing.M) {
+	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
 		var err error
@@ -158,6 +157,11 @@ func TestMain(m *testing.M) {
 		}
 
 		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), alterCopyState); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}

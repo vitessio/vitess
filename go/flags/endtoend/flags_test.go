@@ -32,6 +32,15 @@ import (
 )
 
 var (
+	//go:embed mysqlctl.txt
+	mysqlctlTxt string
+
+	//go:embed mysqlctld.txt
+	mysqlctldTxt string
+
+	//go:embed vtaclcheck.txt
+	vtaclcheckTxt string
+
 	//go:embed vtexplain.txt
 	vtexplainTxt string
 
@@ -44,15 +53,54 @@ var (
 	//go:embed vttablet.txt
 	vttabletTxt string
 
+	//go:embed vttlstest.txt
+	vttlstestTxt string
+
 	//go:embed vtctld.txt
 	vtctldTxt string
 
+	//go:embed vtorc.txt
+	vtorcTxt string
+
+	//go:embed vtctlclient.txt
+	vtctlclientTxt string
+
+	//go:embed vtctldclient.txt
+	vtctldclientTxt string
+
+	//go:embed vttestserver.txt
+	vttestserverTxt string
+
+	//go:embed zkctld.txt
+	zkctldTxt string
+
+	//go:embed vtbackup.txt
+	vtbackupTxt string
+
+	//go:embed zkctl.txt
+	zkctlTxt string
+
+	//go:embed zk.txt
+	zkTxt string
+
 	helpOutput = map[string]string{
-		"vtexplain": vtexplainTxt,
-		"vtgate":    vtgateTxt,
-		"vtgr":      vtgrTxt,
-		"vttablet":  vttabletTxt,
-		"vtctld":    vtctldTxt,
+		"mysqlctl":     mysqlctlTxt,
+		"mysqlctld":    mysqlctldTxt,
+		"vtaclcheck":   vtaclcheckTxt,
+		"vtexplain":    vtexplainTxt,
+		"vtgate":       vtgateTxt,
+		"vtgr":         vtgrTxt,
+		"vttablet":     vttabletTxt,
+		"vttlstest":    vttlstestTxt,
+		"vtctld":       vtctldTxt,
+		"vtctlclient":  vtctlclientTxt,
+		"vtctldclient": vtctldclientTxt,
+		"vtorc":        vtorcTxt,
+		"vttestserver": vttestserverTxt,
+		"zkctld":       zkctldTxt,
+		"vtbackup":     vtbackupTxt,
+		"zk":           zkTxt,
+		"zkctl":        zkctlTxt,
 	}
 )
 
@@ -63,6 +111,7 @@ func TestHelpOutput(t *testing.T) {
 			cmd := exec.Command(binary, args...)
 			output := bytes.Buffer{}
 			cmd.Stderr = &output
+			cmd.Stdout = &output
 			err := cmd.Run()
 			require.NoError(t, err)
 			utils.MustMatch(t, helptext, output.String())

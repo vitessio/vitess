@@ -120,11 +120,11 @@ func TestCreateKs(t *testing.T) {
 		case 0:
 			err := ele.SendKeys("test_keyspace3")
 			require.Nil(t, err)
-			assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-force=false", "test_keyspace3"})
+			assertDialogCommand(t, dialog, []string{"CreateKeyspace", "--force=false", "test_keyspace3"})
 		}
 	}
 
-	assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-force=false", "test_keyspace3"})
+	assertDialogCommand(t, dialog, []string{"CreateKeyspace", "--force=false", "test_keyspace3"})
 
 	create, err := dialog.FindElement(selenium.ByID, "vt-action")
 	require.Nil(t, err)
@@ -195,14 +195,14 @@ func TestDashboardValidate(t *testing.T) {
 	dialog, err := dashboardContent.FindElement(selenium.ByTagName, "vt-dialog")
 	require.Nil(t, err)
 
-	assertDialogCommand(t, dialog, []string{"Validate", "-ping-tablets=false"})
+	assertDialogCommand(t, dialog, []string{"Validate", "--ping-tablets=false"})
 
 	checkBoxes, err := dialog.FindElements(selenium.ByClassName, "md-checkbox-inner-container")
 	require.Nil(t, err)
 
 	click(t, checkBoxes[0])
 
-	assertDialogCommand(t, dialog, []string{"Validate", "-ping-tablets"})
+	assertDialogCommand(t, dialog, []string{"Validate", "--ping-tablets"})
 
 	validate, err := dialog.FindElement(selenium.ByID, "vt-action")
 	require.Nil(t, err)

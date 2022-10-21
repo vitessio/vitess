@@ -17,20 +17,30 @@ limitations under the License.
 package binlogplayer
 
 import (
-	"flag"
-
 	"context"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 /*
 This file contains the API and registration mechanism for binlog player client.
 */
 
-var binlogPlayerProtocol = flag.String("binlog_player_protocol", "grpc", "the protocol to download binlogs from a vttablet")
+var binlogPlayerProtocol = "grpc"
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&binlogPlayerProtocol, "binlog_player_protocol", binlogPlayerProtocol, "the protocol to download binlogs from a vttablet")
+}
 
 // BinlogTransactionStream is the interface of the object returned by
 // StreamTables and StreamKeyRange

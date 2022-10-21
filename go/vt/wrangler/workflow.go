@@ -144,32 +144,50 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 	if !vrw.Exists() {
 		stateInfo = append(stateInfo, WorkflowStateNotCreated)
 	} else {
-		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
-			s = "All Reads Switched"
-		} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
-			s = "Reads Not Switched"
-		} else {
-			stateInfo = append(stateInfo, "Reads partially switched")
-			if len(ws.ReplicaCellsNotSwitched) == 0 {
-				s += "All Replica Reads Switched"
-			} else if len(ws.ReplicaCellsSwitched) == 0 {
-				s += "Replica not switched"
+		if !ws.IsPartialMigration { // shard level traffic switching is all or nothing
+			if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
+				s = "All Reads Switched"
+			} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
+				s = "Reads Not Switched"
 			} else {
-				s += "Replica switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+				stateInfo = append(stateInfo, "Reads partially switched")
+				if len(ws.ReplicaCellsNotSwitched) == 0 {
+					s += "All Replica Reads Switched"
+				} else if len(ws.ReplicaCellsSwitched) == 0 {
+					s += "Replica not switched"
+				} else {
+					s += "Replica switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+				}
+				stateInfo = append(stateInfo, s)
+				s = ""
+				if len(ws.RdonlyCellsNotSwitched) == 0 {
+					s += "All Rdonly Reads Switched"
+				} else if len(ws.RdonlyCellsSwitched) == 0 {
+					s += "Rdonly not switched"
+				} else {
+					s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
+				}
 			}
 			stateInfo = append(stateInfo, s)
-			s = ""
-			if len(ws.RdonlyCellsNotSwitched) == 0 {
-				s += "All Rdonly Reads Switched"
-			} else if len(ws.RdonlyCellsSwitched) == 0 {
-				s += "Rdonly not switched"
-			} else {
-				s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
-			}
 		}
-		stateInfo = append(stateInfo, s)
 		if ws.WritesSwitched {
 			stateInfo = append(stateInfo, "Writes Switched")
+		} else if ws.IsPartialMigration {
+			// For partial migrations, the traffic switching is all or nothing
+			// at the shard level, so reads are effectively switched on the
+			// shard when writes are switched.
+			if len(ws.ShardsAlreadySwitched) > 0 && len(ws.ShardsNotYetSwitched) > 0 {
+				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
+				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
+			} else {
+				if len(ws.ShardsAlreadySwitched) == 0 {
+					stateInfo = append(stateInfo, "Reads Not Switched")
+					stateInfo = append(stateInfo, "Writes Not Switched")
+				} else {
+					stateInfo = append(stateInfo, "All Reads Switched")
+					stateInfo = append(stateInfo, "All Writes Switched")
+				}
+			}
 		} else {
 			stateInfo = append(stateInfo, "Writes Not Switched")
 		}
@@ -410,7 +428,8 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	log.Infof("In VReplicationWorkflow.initMoveTables() for %+v", vrw)
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
-		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys, vrw.params.SourceTimeZone)
+		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
+		vrw.params.SourceTimeZone, vrw.params.SourceShards)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
@@ -547,7 +566,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 // GetCopyProgress returns the progress of all tables being copied in the workflow
 func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	ctx := context.Background()
-	getTablesQuery := "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
+	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
 	const MaxRows = 1000
@@ -694,6 +713,44 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 			wr.Logger().Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 		}
 	}
+}
+
+// optimizeCopyStateTable rebuilds the copy_state table to ensure the on-disk
+// structures are minimal and optimized and resets the auto-inc value for
+// subsequent inserts.
+// This helps to ensure that the size, storage, and performance related factors
+// for the table remain optimal over time and that we don't ever exhaust the
+// available auto-inc values for the table.
+// Note: it's not critical that this executes successfully any given time, it's
+// only important that we try to do this periodically so that things stay in an
+// optimal state over long periods of time. For this reason, the work is done
+// asynchronously in the background on the given tablet and any failures are
+// logged as warnings. Because it's done in the background we use the AllPrivs
+// account to be sure that we don't execute the writes if READ_ONLY is set on
+// the MySQL instance.
+func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
+	go func() {
+		ctx := context.Background()
+		sqlOptimizeTable := "optimize table _vt.copy_state"
+		if _, err := wr.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query:   []byte(sqlOptimizeTable),
+			MaxRows: uint64(100), // always produces 1+rows with notes and status
+		}); err != nil {
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERNoSuchTable { // the table may not exist
+				return
+			}
+			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
+		}
+		// This will automatically set the value to 1 or the current max value in the table, whichever is greater
+		sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
+		if _, err := wr.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query:   []byte(sqlResetAutoInc),
+			MaxRows: uint64(0),
+		}); err != nil {
+			log.Warningf("Failed to reset the auto_increment value for the copy_state table on %q: %v",
+				tablet.Alias.String(), err)
+		}
+	}()
 }
 
 // endregion

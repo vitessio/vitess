@@ -34,7 +34,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	current := &topo.WatchData{}
 
 	// get current
-	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer initialCancel()
 
 	contents, ver, err := s.Get(initialCtx, filePath)

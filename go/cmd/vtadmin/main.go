@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"io"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -35,6 +34,8 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -56,10 +57,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			tmp := os.Args
-			os.Args = os.Args[0:1]
-			flag.Parse()
-			os.Args = tmp
+			_flag.TrickGlog()
 
 			if opts.EnableTracing || httpOpts.EnableTracing {
 				startTracing(cmd)
@@ -170,7 +168,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
 	// gRPC server flags
-	rootCmd.Flags().BoolVar(&opts.AllowReflection, "grpc-allow-reflection", false, "whether to register the gRPC server for reflection; this is required to use tools like `grpc_cli`")
+	rootCmd.Flags().BoolVar(&opts.AllowReflection, "grpc-allow-reflection", false, "whether to register the gRPC server for reflection; this is required to use tools like grpc_cli")
 	rootCmd.Flags().BoolVar(&opts.EnableChannelz, "grpc-enable-channelz", false, "whether to enable the channelz service on the gRPC server")
 
 	// HTTP server flags

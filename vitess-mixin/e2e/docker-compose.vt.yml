@@ -140,11 +140,11 @@ services:
     command:
     - sh
     - -c
-    - '/script/run-forever.sh /vt/bin/vtgate -topo_implementation consul -topo_global_server_address
-      consul1:8500 -topo_global_root vitess/global -logtostderr=true -port 8080 -grpc_port
-      15999 -mysql_server_port 15306 -mysql_auth_server_impl none -cell test -cells_to_watch
-      test -tablet_types_to_wait PRIMARY,REPLICA,RDONLY -service_map ''grpc-vtgateservice''
-      -normalize_queries=true '
+    - '/script/run-forever.sh /vt/bin/vtgate --topo_implementation consul --topo_global_server_address
+      consul1:8500 --topo_global_root vitess/global --logtostderr=true --port 8080 --grpc_port
+      15999 --mysql_server_port 15306 --mysql_auth_server_impl none --cell test --cells_to_watch
+      test --tablet_types_to_wait PRIMARY,REPLICA,RDONLY --service_map ''grpc-vtgateservice''
+      --normalize_queries=true '
     depends_on:
     - vtctld
     image: vitess/lite:${VITESS_TAG:-latest}

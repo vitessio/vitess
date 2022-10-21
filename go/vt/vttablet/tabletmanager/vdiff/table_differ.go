@@ -48,6 +48,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
+// how long to wait for background operations to complete
+var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
+
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
 	colIndex  int                  // index of the column in the filter's select
@@ -107,7 +110,13 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		return err
 	}
 	defer func() {
-		if err := td.restartTargetVReplicationStreams(ctx); err != nil {
+		// We use a new context as we want to reset the state even
+		// when the parent context has timed out or been canceled.
+		log.Infof("Restarting the %q VReplication workflow on target tablets in keyspace %q",
+			td.wd.ct.workflow, targetKeyspace)
+		restartCtx, restartCancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout)
+		defer restartCancel()
+		if err := td.restartTargetVReplicationStreams(restartCtx); err != nil {
 			log.Errorf("error restarting target streams: %v", err)
 		}
 	}()
@@ -321,9 +330,19 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(ct.vde.dbName), encodeString(ct.workflow))
-	log.Infof("restarting target replication with %s", query)
-	_, err := ct.tmc.VReplicationExec(ctx, ct.vde.thisTablet, query)
+	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
+		encodeString(ct.vde.dbName), encodeString(ct.workflow))
+	log.Infof("Restarting the %q VReplication workflow using %q", ct.workflow, query)
+	var err error
+	// Let's retry a few times if we get a retryable error.
+	for i := 1; i <= 3; i++ {
+		_, err := ct.tmc.VReplicationExec(ctx, ct.vde.thisTablet, query)
+		if err == nil || !mysql.IsEphemeralError(err) {
+			break
+		}
+		log.Warningf("Encountered the following error while restarting the %q VReplication workflow, will retry (attempt #%d): %v",
+			ct.workflow, i, err)
+	}
 	return err
 }
 

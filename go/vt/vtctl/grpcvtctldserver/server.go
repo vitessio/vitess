@@ -119,7 +119,7 @@ func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCell
 	span.Annotate("cell_root", req.CellInfo.Root)
 	span.Annotate("cell_address", req.CellInfo.ServerAddress)
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	if err = s.ts.CreateCellInfo(ctx, req.Name, req.CellInfo); err != nil {
@@ -139,7 +139,7 @@ func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCe
 	span.Annotate("cells_alias", req.Name)
 	span.Annotate("cells", strings.Join(req.Cells, ","))
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	if err = s.ts.CreateCellsAlias(ctx, req.Name, &topodatapb.CellsAlias{Cells: req.Cells}); err != nil {
@@ -173,6 +173,32 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	if err = s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
 		err = vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
 		return nil, err
+	}
+
+	return resp, nil
+}
+
+// ApplyShardRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldatapb.ApplyShardRoutingRulesRequest) (*vtctldatapb.ApplyShardRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyShardRoutingRules")
+	defer span.Finish()
+
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
+
+	if err := s.ts.SaveShardRoutingRules(ctx, req.ShardRoutingRules); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.ApplyShardRoutingRulesResponse{}
+
+	if req.SkipRebuild {
+		log.Warningf("Skipping rebuild of SrvVSchema as requested, you will need to run RebuildVSchemaGraph for changes to take effect")
+		return resp, nil
+	}
+
+	if err := s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
+		return nil, vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
 	}
 
 	return resp, nil
@@ -453,7 +479,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 			}
 		case io.EOF:
 			// Do not do anything for primary tablets and when active reparenting is disabled
-			if *mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
+			if mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
 				return nil
 			}
 
@@ -483,7 +509,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	span.Annotate("dry_run", req.DryRun)
 	span.Annotate("tablet_type", topoproto.TabletTypeLString(req.DbType))
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
@@ -746,7 +772,7 @@ func (s *VtctldServer) DeleteCellInfo(ctx context.Context, req *vtctldatapb.Dele
 	span.Annotate("cell", req.Name)
 	span.Annotate("force", req.Force)
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	if err = s.ts.DeleteCellInfo(ctx, req.Name, req.Force); err != nil {
@@ -765,7 +791,7 @@ func (s *VtctldServer) DeleteCellsAlias(ctx context.Context, req *vtctldatapb.De
 
 	span.Annotate("cells_alias", req.Name)
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	if err = s.ts.DeleteCellsAlias(ctx, req.Name); err != nil {
@@ -898,7 +924,7 @@ func (s *VtctldServer) DeleteSrvVSchema(ctx context.Context, req *vtctldatapb.De
 
 	span.Annotate("cell", req.Cell)
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	if err = s.ts.DeleteSrvVSchema(ctx, req.Cell); err != nil {
@@ -1354,6 +1380,21 @@ func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.Get
 	}, nil
 }
 
+// GetShardRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetShardRoutingRules(ctx context.Context, req *vtctldatapb.GetShardRoutingRulesRequest) (*vtctldatapb.GetShardRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShardRoutingRules")
+	defer span.Finish()
+
+	srr, err := s.ts.GetShardRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetShardRoutingRulesResponse{
+		ShardRoutingRules: srr,
+	}, nil
+}
+
 // GetSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest) (resp *vtctldatapb.GetSchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSchema")
@@ -1438,7 +1479,7 @@ func (s *VtctldServer) GetSrvKeyspaceNames(ctx context.Context, req *vtctldatapb
 
 	cells := req.Cells
 	if len(cells) == 0 {
-		ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 
 		cells, err = s.ts.GetCellInfoNames(ctx)
@@ -1452,7 +1493,7 @@ func (s *VtctldServer) GetSrvKeyspaceNames(ctx context.Context, req *vtctldatapb
 	// Contact each cell sequentially, each cell is bounded by *topo.RemoteOperationTimeout.
 	// Total runtime is O(len(cells) * topo.RemoteOperationTimeout).
 	for _, cell := range cells {
-		ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		names, err2 := s.ts.GetSrvKeyspaceNames(ctx, cell)
 		if err2 != nil {
 			cancel()
@@ -1622,7 +1663,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	//
 	// Per-cell goroutines may also cancel this context if they fail and the
 	// request specified Strict=true to allow us to fail faster.
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	var tabletMap map[string]*topo.TabletInfo
@@ -1769,6 +1810,39 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
+	}, nil
+}
+
+// GetTopologyPath is part of the vtctlservicepb.VtctldServer interface.
+// It returns the cell located at the provided path in the topology server.
+func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.GetTopologyPathRequest) (*vtctldatapb.GetTopologyPathResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTopology")
+	defer span.Finish()
+
+	// handle toplevel display: global, then one line per cell.
+	if req.Path == "/" {
+		cells, err := s.ts.GetKnownCells(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp := vtctldatapb.GetTopologyPathResponse{
+			Cell: &vtctldatapb.TopologyCell{
+				Path: req.Path,
+				// the toplevel display has no name, just children
+				Children: append([]string{topo.GlobalCell}, cells...),
+			},
+		}
+		return &resp, nil
+	}
+
+	// otherwise, delegate to getTopologyCell to parse the path and return the cell there
+	cell, err := s.getTopologyCell(ctx, req.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetTopologyPathResponse{
+		Cell: cell,
 	}, nil
 }
 
@@ -2240,7 +2314,7 @@ func (s *VtctldServer) RefreshState(ctx context.Context, req *vtctldatapb.Refres
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
@@ -2273,7 +2347,7 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
@@ -2607,7 +2681,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 			}
 		case io.EOF:
 			// Do not do anything when active reparenting is disabled.
-			if *mysqlctl.DisableActiveReparents {
+			if mysqlctl.DisableActiveReparents {
 				return nil
 			}
 
@@ -2945,7 +3019,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 				span.Annotate("tablet_alias", alias)
 
-				ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()
 
 				var status *replicationdatapb.Status
@@ -2987,7 +3061,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 				span.Annotate("tablet_alias", alias)
 
-				ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()
 
 				status, err := s.tmc.ReplicationStatus(ctx, tablet)
@@ -3060,7 +3134,7 @@ func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTa
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		dur = *topo.RemoteOperationTimeout
+		dur = topo.RemoteOperationTimeout
 	}
 
 	span.Annotate("sleep_duration", dur.String())
@@ -3368,7 +3442,7 @@ func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.Upda
 	span.Annotate("cell_server_address", req.CellInfo.ServerAddress)
 	span.Annotate("cell_root", req.CellInfo.Root)
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	var updatedCi *topodatapb.CellInfo
@@ -3416,7 +3490,7 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 	span.Annotate("cells_alias", req.Name)
 	span.Annotate("cells_alias_cells", strings.Join(req.CellsAlias.Cells, ","))
 
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	var updatedCa *topodatapb.CellsAlias
@@ -3449,7 +3523,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 	span.Annotate("ping_tablets", req.PingTablets)
 
 	resp = &vtctldatapb.ValidateResponse{}
-	getKeyspacesCtx, getKeyspacesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	getKeyspacesCtx, getKeyspacesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getKeyspacesCancel()
 
 	keyspaces, err := s.ts.GetKeyspaces(getKeyspacesCtx)
@@ -3472,7 +3546,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 
 			cellSet := sets.NewString()
 			for _, keyspace := range keyspaces {
-				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				shards, err := s.ts.GetShardNames(getShardNamesCtx, keyspace)
 				getShardNamesCancel() // don't defer in a loop
 
@@ -3484,7 +3558,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 				}
 
 				for _, shard := range shards {
-					findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+					findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 					aliases, err := s.ts.FindAllTabletAliasesInShard(findAllTabletAliasesCtx, keyspace, shard)
 					findAllTabletAliasesCancel() // don't defer in a loop
 
@@ -3502,7 +3576,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 			}
 
 			for _, cell := range cellSet.List() {
-				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				aliases, err := s.ts.GetTabletAliasesByCell(getTabletsByCellCtx, cell)
 				getTabletsByCellCancel() // don't defer in a loop
 
@@ -3524,7 +3598,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 						key := topoproto.TabletAliasString(alias)
 						span.Annotate("tablet_alias", key)
 
-						ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+						ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 						defer cancel()
 
 						if err := topo.Validate(ctx, s.ts, alias); err != nil {
@@ -3584,7 +3658,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	span.Annotate("ping_tablets", req.PingTablets)
 
 	resp = &vtctldatapb.ValidateKeyspaceResponse{}
-	getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getShardNamesCancel()
 
 	shards, err := s.ts.GetShardNames(getShardNamesCtx, req.Keyspace)
@@ -3778,7 +3852,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 	span.Annotate("ping_tablets", req.PingTablets)
 
 	resp = &vtctldatapb.ValidateShardResponse{}
-	getShardCtx, getShardCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	getShardCtx, getShardCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getShardCancel()
 
 	si, err := s.ts.GetShard(getShardCtx, req.Keyspace, req.Shard)
@@ -3788,7 +3862,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 		return resp, err
 	}
 
-	findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer findAllTabletAliasesCancel()
 
 	aliases, err := s.ts.FindAllTabletAliasesInShard(findAllTabletAliasesCtx, req.Keyspace, req.Shard)
@@ -3798,7 +3872,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 		return resp, err
 	}
 
-	getTabletMapCtx, getTabletMapCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	getTabletMapCtx, getTabletMapCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getTabletMapCancel()
 	tabletMap, _ := s.ts.GetTabletMap(getTabletMapCtx, aliases)
 
@@ -3837,7 +3911,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 		go func(alias *topodatapb.TabletAlias) {
 			defer wg.Done()
 
-			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 
 			if err := topo.Validate(ctx, s.ts, alias); err != nil {
@@ -3863,7 +3937,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 				return
 			}
 
-			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 
 			replicaList, err := s.tmc.GetReplicas(ctx, primaryTabletInfo.Tablet)
@@ -3921,7 +3995,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 				go func(alias string, ti *topo.TabletInfo) {
 					defer wg.Done()
 
-					ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+					ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 					defer cancel()
 
 					if err := s.tmc.Ping(ctx, ti.Tablet); err != nil {
@@ -4052,6 +4126,61 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 	return resp, err
 }
 
+// ValidateVersionShard validates all versions are the same in all
+// tablets in a shard
+func (s *VtctldServer) ValidateVersionShard(ctx context.Context, req *vtctldatapb.ValidateVersionShardRequest) (resp *vtctldatapb.ValidateVersionShardResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateVersionShard")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	shard, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		err = fmt.Errorf("GetShard(%s) failed: %v", req.Shard, err)
+		return nil, err
+	}
+
+	if !shard.HasPrimary() {
+		err = fmt.Errorf("no primary in shard %v/%v", req.Keyspace, req.Shard)
+		return nil, err
+	}
+
+	log.Infof("Gathering version for primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	primaryVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: shard.PrimaryAlias,
+	})
+	if err != nil {
+		err = fmt.Errorf("GetVersion(%s) failed: %v", topoproto.TabletAliasString(shard.PrimaryAlias), err)
+		return nil, err
+	}
+
+	aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		err = fmt.Errorf("FindAllTabletAliasesInShard(%s, %s) failed: %v", req.Keyspace, req.Shard, err)
+		return nil, err
+	}
+
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for _, alias := range aliases {
+		if topoproto.TabletAliasEqual(alias, shard.PrimaryAlias) {
+			continue
+		}
+
+		wg.Add(1)
+		go s.diffVersion(ctx, primaryVersion.Version, shard.PrimaryAlias, alias, &wg, &er)
+	}
+
+	wg.Wait()
+
+	response := vtctldatapb.ValidateVersionShardResponse{}
+	if er.HasErrors() {
+		response.Results = append(response.Results, er.ErrorStrings()...)
+	}
+
+	return &response, nil
+}
+
 // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
 func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest) (resp *vtctldatapb.ValidateVSchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateVSchema")
@@ -4142,6 +4271,54 @@ func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
 }
 
+// getTopologyCell is a helper method that returns a topology cell given its path.
+func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*vtctldatapb.TopologyCell, error) {
+	// extract cell and relative path
+	parts := strings.Split(cellPath, "/")
+	if parts[0] != "" || len(parts) < 2 {
+		err := vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid path: %s", cellPath)
+		return nil, err
+	}
+	cell := parts[1]
+	relativePath := cellPath[len(cell)+1:]
+	topoCell := vtctldatapb.TopologyCell{Name: parts[len(parts)-1], Path: cellPath}
+
+	conn, err := s.ts.ConnForCell(ctx, cell)
+	if err != nil {
+		err := vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "error fetching connection to cell %s: %v", cell, err)
+		return nil, err
+	}
+
+	data, _, dataErr := conn.Get(ctx, relativePath)
+
+	if dataErr == nil {
+		result, err := topo.DecodeContent(relativePath, data, false)
+		if err != nil {
+			err := vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
+			return nil, err
+		}
+		topoCell.Data = result
+		// since there is data at this cell, it cannot be a directory cell
+		// so we can early return the topocell
+		return &topoCell, nil
+	}
+
+	children, childrenErr := conn.ListDir(ctx, relativePath, false /*full*/)
+
+	if childrenErr != nil && dataErr != nil {
+		err := vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
+		return nil, err
+	}
+
+	topoCell.Children = make([]string, len(children))
+
+	for i, c := range children {
+		topoCell.Children[i] = c.Name
+	}
+
+	return &topoCell, nil
+}
+
 // Helper function to get version of a tablet from its debug vars
 var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
@@ -4170,3 +4347,20 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 }
 
 var getVersionFromTablet = getVersionFromTabletDebugVars
+
+// helper method to asynchronously get and diff a version
+func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+	defer wg.Done()
+	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
+	replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		er.RecordError(fmt.Errorf("unable to get version for tablet %v: %v", alias, err))
+		return
+	}
+
+	if primaryVersion != replicaVersion.Version {
+		er.RecordError(fmt.Errorf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(primaryAlias), primaryVersion, topoproto.TabletAliasString(alias), replicaVersion))
+	}
+}
