@@ -38,10 +38,12 @@ func init() {
 		help:   "Reparent a tablet to the current primary in the shard. This only works if the current replication position matches the last known reparent action.",
 	})
 	addCommand("Shards", command{
-		name:   "InitShardPrimary",
-		method: commandInitShardPrimary,
-		params: "[--force] [--wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		help:   "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
+		name:         "InitShardPrimary",
+		method:       commandInitShardPrimary,
+		params:       "[--force] [--wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		help:         "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
+		deprecated:   true,
+		deprecatedBy: "PlannedReparentShard",
 	})
 	addCommand("Shards", command{
 		name:   "PlannedReparentShard",
