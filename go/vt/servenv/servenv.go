@@ -385,6 +385,19 @@ func init() {
 		OnParseFor(cmd, grpccommon.RegisterFlags)
 	}
 
+	// These are the binaries that export stats
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctld",
+		"vtgate",
+		"vtgr",
+		"vttablet",
+		"vtorc",
+	} {
+		OnParseFor(cmd, stats.RegisterFlags)
+	}
+
 	// Flags in package log are installed for all binaries.
 	OnParse(log.RegisterFlags)
 	// Flags in package logutil are installed for all binaries.
