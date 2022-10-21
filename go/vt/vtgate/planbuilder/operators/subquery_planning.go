@@ -26,21 +26,16 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, error) {
-	outerOp, err := CreatePhysicalOperator(ctx, op.Outer)
-	if err != nil {
-		return nil, err
-	}
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, bool, error) {
 	var unmerged []*SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
+	outer := op.Outer
 	for _, inner := range op.Inner {
-		innerOp, err := CreatePhysicalOperator(ctx, inner.Inner)
-		if err != nil {
-			return nil, err
-		}
+		innerOp := inner.Inner
 
-		preds := unresolvedPredicates(inner.Inner, ctx.SemTable)
+		var preds []sqlparser.Expr
+		preds, innerOp = unresolvedAndSource(ctx, innerOp)
 		merger := func(a, b *Route) (*Route, error) {
 			return mergeSubQueryOp(ctx, a, b, inner)
 		}
@@ -49,13 +44,13 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator,
 			Inner:             inner.Inner,
 			ExtractedSubquery: inner.ExtractedSubquery,
 		}
-		merged, err := tryMergeSubQueryOp(ctx, outerOp, innerOp, newInner, preds, merger)
+		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, merger)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		if merged != nil {
-			outerOp = merged
+			outer = merged
 			continue
 		}
 
@@ -70,31 +65,35 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator,
 		}
 
 		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
-			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outerOp, preds, inner.ExtractedSubquery)
+			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
-			outerOp = correlatedTree
+			outer = correlatedTree
 			continue
 		}
 
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 	}
 
-	/*
-		build a tree of the unmerged subqueries
-		rt: route, sqt: subqueryTree
-
-
-		            sqt
-		         sqt   rt
-		        rt rt
-	*/
 	for _, tree := range unmerged {
-		tree.Outer = outerOp
-		outerOp = tree
+		tree.Outer = outer
+		outer = tree
 	}
-	return outerOp, nil
+	return outer, true, nil
+}
+
+func unresolvedAndSource(ctx *plancontext.PlanningContext, op Operator) ([]sqlparser.Expr, Operator) {
+	preds := unresolvedPredicates(op, ctx.SemTable)
+	if filter, ok := op.(*Filter); ok {
+		if sqlparser.EqualsExprs(preds, filter.Predicates) {
+			// if we are seeing a single filter with only these predicates,
+			// we can throw away the filter and just use the source
+			return preds, filter.Source
+		}
+	}
+
+	return preds, op
 }
 
 func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner) (*Route, error) {
@@ -207,6 +206,13 @@ func tryMergeSubQueryOp(
 	merger mergeFunc,
 ) (Operator, error) {
 	switch outerOp := outer.(type) {
+	case *Filter:
+		op, err := tryMergeSubQueryOp(ctx, outerOp.Source, subq, subQueryInner, joinPredicates, merger)
+		if err != nil || op == nil {
+			return nil, err
+		}
+		outerOp.Source = op
+		return outerOp, nil
 	case *Route:
 		return tryMergeSubqueryWithRoute(ctx, subq, outerOp, joinPredicates, merger, subQueryInner)
 	case *ApplyJoin:

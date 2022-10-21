@@ -987,6 +987,8 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
+	consolidator := sqlparser.Consolidator(stmt)
+	vcursor.SetConsolidator(consolidator)
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {

@@ -44,119 +44,99 @@ type (
 	opCacheMap map[tableSetPair]Operator
 )
 
-func mapToPhys(ctx *plancontext.PlanningContext, ops []Operator) (sources []Operator, err error) {
-	for _, in := range ops {
-		physOp, err := CreatePhysicalOperator(ctx, in)
-		if err != nil {
-			return nil, err
+// TransformToPhysical takes an operator tree and rewrites any parts that have not yet been planned as physical operators.
+// This is where a lot of the optimisations of the query plans are done.
+// Here we try to merge query parts into the same route primitives. At the end of this process,
+// all the operators in the tree are guaranteed to be PhysicalOperators
+func TransformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
+	op, _, err := rewriteBottomUp(ctx, in, func(context *plancontext.PlanningContext, operator Operator) (newOp Operator, changed bool, err error) {
+		switch op := operator.(type) {
+		case *QueryGraph:
+			return optimizeQueryGraph(ctx, op)
+		case *Join:
+			return optimizeJoin(ctx, op)
+		case *Derived:
+			return optimizeDerived(ctx, op)
+		case *SubQuery:
+			return optimizeSubQuery(ctx, op)
+		case *Filter:
+			return optimizeFilter(op)
+		default:
+			return operator, false, nil
 		}
-		sources = append(sources, physOp)
-	}
-	return
-}
+	})
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (Operator, error) {
-	switch op := opTree.(type) {
-	case *QueryGraph:
-		return optimizeQueryGraph(ctx, op)
-	case *Join:
-		return optimizeJoin(ctx, op)
-	case *Derived:
-		return optimizeDerived(ctx, op)
-	case *SubQuery:
-		return optimizeSubQuery(ctx, op)
-	case *Filter:
-		return optimizeFilter(ctx, op)
-	case PhysicalOperator:
-		inputs, err := mapToPhys(ctx, op.Inputs())
-		if err != nil {
-			return nil, err
-		}
-		return op.Clone(inputs), nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
-	}
-}
-
-func optimizeFilter(ctx *plancontext.PlanningContext, op *Filter) (Operator, error) {
-	src, err := CreatePhysicalOperator(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	filter := &Filter{
-		Predicates: op.Predicates,
+	err = VisitTopDown(op, func(op Operator) error {
+		if _, isPhys := op.(PhysicalOperator); !isPhys {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	if route, ok := src.(*Route); ok {
+	return op, nil
+}
+
+func optimizeFilter(op *Filter) (Operator, bool, error) {
+	if route, ok := op.Source.(*Route); ok {
 		// let's push the filter into the route
-		filter.Source = route.Source
-		route.Source = filter
-		return route, nil
+		op.Source = route.Source
+		route.Source = op
+		return route, true, nil
 	}
 
-	filter.Source = src
-
-	return filter, nil
+	return op, false, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, error) {
-	opInner, err := CreatePhysicalOperator(ctx, op.Source)
-	if err != nil {
-		return nil, err
-	}
-
-	innerRoute, ok := opInner.(*Route)
+func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, bool, error) {
+	innerRoute, ok := op.Source.(*Route)
 	if !ok {
-		return buildDerivedOp(op, opInner), nil
-	}
-
-	derived := &Derived{
-		Source:        innerRoute.Source,
-		Query:         op.Query,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
+		return op, false, nil
 	}
 
 	if innerRoute.RouteOpCode == engine.EqualUnique {
 		// no need to check anything if we are sure that we will only hit a single shard
-	} else if !derived.IsMergeable(ctx) {
-		return buildDerivedOp(op, opInner), nil
+	} else if !op.IsMergeable(ctx) {
+		return op, false, nil
 	}
 
-	innerRoute.Source = derived
-	return innerRoute, nil
+	op.Source = innerRoute.Source
+	innerRoute.Source = op
+
+	return innerRoute, true, nil
 }
 
-func buildDerivedOp(op *Derived, opInner Operator) *Derived {
-	return &Derived{
-		Source:        opInner,
-		Query:         op.Query,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
-	}
-}
-
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, error) {
-	lhs, err := CreatePhysicalOperator(ctx, op.LHS)
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, bool, error) {
+	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	rhs, err := CreatePhysicalOperator(ctx, op.RHS)
-	if err != nil {
-		return nil, err
-	}
-
-	return mergeOrJoin(ctx, lhs, rhs, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+	return join, true, nil
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (Operator, error) {
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result Operator, changed bool, err error) {
+	changed = true
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
-		return leftToRightSolve(ctx, op)
+		result, err = leftToRightSolve(ctx, op)
 	default:
-		return greedySolve(ctx, op)
+		result, err = greedySolve(ctx, op)
 	}
+
+	unresolved := op.UnsolvedPredicates(ctx.SemTable)
+	if len(unresolved) > 0 {
+		// if we have any predicates that none of the joins or tables took care of,
+		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
+		result = &Filter{Source: result, Predicates: unresolved}
+	}
+
+	return
 }
 
 func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantics.TableInfo, table *QueryTable, dmlType string) (*vindexes.Table, engine.Opcode, key.Destination, error) {

@@ -19,11 +19,14 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -3787,4 +3790,9 @@ func TestSelectView(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
+}
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
 }
