@@ -284,7 +284,7 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -299,6 +299,10 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	}
 	// field AutoIncSpec *vitess.io/vitess/go/vt/sqlparser.AutoIncSpec
 	size += cached.AutoIncSpec.CachedSize(true)
+	// field Statement vitess.io/vitess/go/vt/sqlparser.SelectStatement
+	if cc, ok := cached.Statement.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *AndExpr) CachedSize(alloc bool) int64 {
