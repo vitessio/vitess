@@ -390,31 +390,24 @@ func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]Fi
 	return fes, fi.Size(), nil
 }
 
+func hasDynamicRedoLog(cnf *Mycnf) bool {
+	dynamicRedoLogPath := path.Join(cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
+	info, err := os.Stat(dynamicRedoLogPath)
+	return !os.IsNotExist(err) && info.IsDir()
+}
+
 func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	var err error
 	var result []FileEntry
 	var size, totalSize int64
-	var flavor MySQLFlavor
-	var version ServerVersion
-	var features capabilitySet
-
-	// get the flavor and version to deal with any behavioral differences
-	versionStr, err := GetVersionString()
-	if err != nil {
-		return nil, 0, err
-	}
-	flavor, version, err = ParseVersionString(versionStr)
-	if err != nil {
-		return nil, 0, err
-	}
-	features = newCapabilitySet(flavor, version)
 
 	// first add innodb files
 	result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
 	if err != nil {
 		return nil, 0, err
 	}
-	if features.hasDynamicRedoLogCapacity() {
+
+	if hasDynamicRedoLog(cnf) {
 		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
 	} else {
 		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
