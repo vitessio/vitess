@@ -44,10 +44,12 @@ func init() {
 		help:   "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
 	})
 	addCommand("Shards", command{
-		name:   "PlannedReparentShard",
-		method: commandPlannedReparentShard,
-		params: "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--avoid_tablet=<tablet alias>] [--wait_replicas_timeout=<duration>]",
-		help:   "Reparents the shard to the new primary, or away from old primary. Both old and new primary need to be up and running.",
+		name:         "PlannedReparentShard",
+		method:       commandPlannedReparentShard,
+		params:       "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--avoid_tablet=<tablet alias>] [--wait_replicas_timeout=<duration>]",
+		help:         "Reparents the shard to the new primary, or away from old primary. Both old and new primary need to be up and running.",
+		deprecated:   true,
+		deprecatedBy: "PlannedReparentShard",
 	})
 	addCommand("Shards", command{
 		name:   "EmergencyReparentShard",
