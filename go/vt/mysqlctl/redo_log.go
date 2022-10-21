@@ -43,9 +43,7 @@ func (mysqld *Mysqld) EnableRedoLog(ctx context.Context) error {
 
 func (mysqld *Mysqld) IsRedoLogEnabled(ctx context.Context) (bool, error) {
 	if !mysqld.CanDisableRedoLog() {
-		// redo_log is most likely enabled, but return false anyway. Possible
-		// that mysqld is using non-InnoDB engine.
-		return false, fmt.Errorf("mysqld >= 8.0.21 required to inspect redo_log status")
+		return true, nil
 	}
 	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'")
 	if err != nil {
