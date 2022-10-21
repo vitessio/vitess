@@ -120,6 +120,7 @@ func (cp *ConnectionPool) connect(ctx context.Context) (pools.Resource, error) {
 	}
 	return &PooledDBConnection{
 		DBConnection: c,
+		timeCreated:  time.Now(),
 		pool:         cp,
 	}, nil
 }

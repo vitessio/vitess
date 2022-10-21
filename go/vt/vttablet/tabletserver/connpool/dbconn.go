@@ -53,7 +53,7 @@ type DBConn struct {
 	dbaPool      *dbconnpool.ConnectionPool
 	stats        *tabletenv.Stats
 	current      sync2.AtomicString
-	createdTime  time.Time
+	timeCreated  time.Time
 	setting      string
 	resetSetting string
 
@@ -78,7 +78,7 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 		info:        appParams,
 		pool:        cp,
 		dbaPool:     cp.dbaPool,
-		createdTime: time.Now(),
+		timeCreated: time.Now(),
 		stats:       cp.env.Stats(),
 	}, nil
 }
@@ -94,7 +94,7 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 		info:        params,
 		dbaPool:     dbaPool,
 		pool:        nil,
-		createdTime: time.Now(),
+		timeCreated: time.Now(),
 		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
 	}
 	if setting == nil {
@@ -386,7 +386,7 @@ func (dbc *DBConn) IsClosed() bool {
 
 // Expired returns whether a connection has passed its lifetime
 func (dbc *DBConn) Expired(lifetimeTimeout time.Duration) bool {
-	return lifetimeTimeout > 0 && time.Until(dbc.createdTime.Add(lifetimeTimeout)) < 0
+	return lifetimeTimeout > 0 && time.Until(dbc.timeCreated.Add(lifetimeTimeout)) < 0
 }
 
 // Recycle returns the DBConn to the pool.
