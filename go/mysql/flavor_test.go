@@ -152,12 +152,12 @@ func TestGetFlavor(t *testing.T) {
 		},
 		{
 			version:    "8.0.21",
-			capability: DisableRedoLogCapacityFlavorCapability,
+			capability: DisableRedoLogFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.20",
-			capability: DisableRedoLogCapacityFlavorCapability,
+			capability: DisableRedoLogFlavorCapability,
 			isCapable:  false,
 		},
 	}
