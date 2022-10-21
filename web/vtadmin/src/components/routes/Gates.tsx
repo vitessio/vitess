@@ -41,6 +41,7 @@ export const Gates = () => {
             hostname: g.hostname,
             keyspaces: g.keyspaces,
             pool: g.pool,
+            fqdn: g.FQDN,
         }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['cluster', 'pool', 'hostname', 'cell']);
@@ -53,7 +54,17 @@ export const Gates = () => {
                     <div>{gate.pool}</div>
                     <div className="text-sm text-secondary">{gate.cluster}</div>
                 </DataCell>
-                <DataCell className="whitespace-nowrap">{gate.hostname}</DataCell>
+                <DataCell className="whitespace-nowrap">
+                    {gate.fqdn ? (
+                        <div className="font-bold">
+                            <a href={`//${gate.fqdn}`} rel="noopener noreferrer" target="_blank">
+                                {gate.hostname}
+                            </a>
+                        </div>
+                    ) : (
+                        gate.hostname
+                    )}
+                </DataCell>
                 <DataCell className="whitespace-nowrap">{gate.cell}</DataCell>
                 <DataCell>{(gate.keyspaces || []).join(', ')}</DataCell>
             </tr>

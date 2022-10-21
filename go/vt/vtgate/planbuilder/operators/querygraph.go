@@ -160,7 +160,7 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 	}
 }
 
-// UnsolvedPredicates implements the Operator interface
+// UnsolvedPredicates implements the unresolved interface
 func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
 	tables := TableID(qg)

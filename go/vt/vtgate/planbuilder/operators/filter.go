@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
@@ -44,4 +45,17 @@ func (f *Filter) Clone(inputs []Operator) Operator {
 // Inputs implements the Operator interface
 func (f *Filter) Inputs() []Operator {
 	return []Operator{f.Source}
+}
+
+// UnsolvedPredicates implements the unresolved interface
+func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
+	var result []sqlparser.Expr
+	id := TableID(f)
+	for _, p := range f.Predicates {
+		deps := st.RecursiveDeps(p)
+		if !deps.IsSolvedBy(id) {
+			result = append(result, p)
+		}
+	}
+	return result
 }

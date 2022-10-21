@@ -51,6 +51,11 @@ type (
 	unresolved interface {
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
 		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
+		// This is used for sub-queries. An example query could be:
+		// SELECT * FROM tbl WHERE EXISTS (SELECT 1 FROM otherTbl WHERE tbl.col = otherTbl.col)
+		// The subquery would have one unsolved predicate: `tbl.col = otherTbl.col`
+		// It's a predicate that belongs to the inner query, but it needs data from the outer query
+		// These predicates dictate which data we have to send from the outer side to the inner
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 
@@ -66,6 +71,11 @@ type (
 		// CheckValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
 		CheckValid() error
+	}
+
+	compactable interface {
+		// implement this interface for operators that have easy to see optimisations
+		compact(ctx *plancontext.PlanningContext) (Operator, bool, error)
 	}
 
 	// helper type that implements Inputs() returning nil
@@ -209,7 +219,7 @@ func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 	if err != nil {
 		return nil, err
 	}
-	return Compact(ctx, op)
+	return op, nil
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
