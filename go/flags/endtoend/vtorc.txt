@@ -8,6 +8,7 @@ Usage of vtorc:
       --clusters_to_watch strings                    Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config string                                config file name
       --consul_auth_static_file string               JSON File to read the topos/tokens from.
+      --emit_stats                                   If set, emit stats to push-based monitoring and stats backends
       --grpc_auth_static_client_creds string         When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                      Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                          Enable gRPC tracing.
@@ -43,6 +44,11 @@ Usage of vtorc:
       --shutdown_wait_time duration                  Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
       --snapshot-topology-interval duration          Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours
       --sqlite-data-file string                      SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
+      --stats_backend string                         The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string              List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings                    Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string                  Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration                   Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                     logs at or above this threshold go to stderr (default 1)
       --tablet_manager_grpc_ca string                the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string              the cert to use to connect

@@ -63,6 +63,7 @@ Usage of vtbackup:
       --db_ssl_mode SslMode                             SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db_tls_min_version string                       Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --detach                                          detached mode - run backups detached from the terminal
+      --emit_stats                                      If set, emit stats to push-based monitoring and stats backends
       --file_backup_storage_root string                 Root directory for the file backup storage.
       --gcs_backup_storage_bucket string                Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                  Root prefix for all backup-related object names.
@@ -131,6 +132,11 @@ Usage of vtbackup:
       --security_policy string                          the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --sql-max-length-errors int                       truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                           truncate queries in debug UIs to the given length (default 512) (default 512)
+      --stats_backend string                            The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string                 List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings                       Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string                     Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration                      Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                        logs at or above this threshold go to stderr (default 1)
       --tablet_manager_grpc_ca string                   the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string                 the cert to use to connect
