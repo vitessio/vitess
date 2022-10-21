@@ -3190,11 +3190,14 @@ alter_statement:
   {
     $$ = &AlterVschema{
         Action: CreateViewDDLAction,
-        ViewSpec: &CreateView{
-        	ViewName: $7.ToViewName(),
-        	IsReplace:$5,
-        	Select: $9,
-        },
+        ViewSpec: &ViewSpec{CreateView: &CreateView{ViewName: $7.ToViewName(), IsReplace:$5, Select: $9}},
+    }
+  }
+| ALTER comment_opt VSCHEMA DROP VIEW exists_opt view_name_list
+  {
+    $$ = &AlterVschema{
+        Action: DropViewDDLAction,
+        ViewSpec: &ViewSpec{DropView: &DropView{FromTables: $7, IfExists: $6}},
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY

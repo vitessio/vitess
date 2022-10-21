@@ -984,11 +984,6 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfCreateView(node, node.ViewSpec, func(newNode, parent SQLNode) {
-		parent.(*AlterVschema).ViewSpec = newNode.(*CreateView)
-	}) {
-		return false
-	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

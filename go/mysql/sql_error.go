@@ -188,6 +188,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.UnknownTable:                 {num: ERUnknownTable, state: SSUnknownTable},
 	vterrors.WrongGroupField:              {num: ERWrongGroupField, state: SSClientError},
 	vterrors.WrongNumberOfColumnsInSelect: {num: ERWrongNumberOfColumnsInSelect, state: SSWrongNumberOfColumns},
+	vterrors.WrongObject:                  {num: ERWrongObject, state: SSUnknownSQLState},
 	vterrors.WrongTypeForVar:              {num: ERWrongTypeForVar, state: SSClientError},
 	vterrors.WrongValueForVar:             {num: ERWrongValueForVar, state: SSClientError},
 	vterrors.WrongValue:                   {num: ERWrongValue, state: SSUnknownSQLState},

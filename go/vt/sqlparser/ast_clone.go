@@ -675,7 +675,7 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	out.VindexSpec = CloneRefOfVindexSpec(n.VindexSpec)
 	out.VindexCols = CloneSliceOfIdentifierCI(n.VindexCols)
 	out.AutoIncSpec = CloneRefOfAutoIncSpec(n.AutoIncSpec)
-	out.ViewSpec = CloneRefOfCreateView(n.ViewSpec)
+	out.ViewSpec = CloneRefOfViewSpec(n.ViewSpec)
 	return &out
 }
 
@@ -3914,6 +3914,17 @@ func CloneSliceOfIdentifierCI(n []IdentifierCI) []IdentifierCI {
 		res[i] = CloneIdentifierCI(x)
 	}
 	return res
+}
+
+// CloneRefOfViewSpec creates a deep clone of the input.
+func CloneRefOfViewSpec(n *ViewSpec) *ViewSpec {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.CreateView = CloneRefOfCreateView(n.CreateView)
+	out.DropView = CloneRefOfDropView(n.DropView)
+	return &out
 }
 
 // CloneSliceOfRefOfWhen creates a deep clone of the input.

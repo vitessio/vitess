@@ -299,7 +299,7 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	}
 	// field AutoIncSpec *vitess.io/vitess/go/vt/sqlparser.AutoIncSpec
 	size += cached.AutoIncSpec.CachedSize(true)
-	// field ViewSpec *vitess.io/vitess/go/vt/sqlparser.CreateView
+	// field ViewSpec *vitess.io/vitess/go/vt/sqlparser.ViewSpec
 	size += cached.ViewSpec.CachedSize(true)
 	return size
 }
@@ -3974,6 +3974,20 @@ func (cached *Variance) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Arg.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *ViewSpec) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field CreateView *vitess.io/vitess/go/vt/sqlparser.CreateView
+	size += cached.CreateView.CachedSize(true)
+	// field DropView *vitess.io/vitess/go/vt/sqlparser.DropView
+	size += cached.DropView.CachedSize(true)
 	return size
 }
 func (cached *VindexParam) CachedSize(alloc bool) int64 {

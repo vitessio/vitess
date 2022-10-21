@@ -688,7 +688,7 @@ func TestViewVschemaTableDDL(t *testing.T) {
 	stmt := "alter vschema create view t_view as select * from simple"
 	_, err := executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaView(t, ks, "t_view", "select * from `simple`", executor)
+	_ = waitForVschemaView(t, ks, "t_view", "select * from `simple`", executor, false)
 
 	stmt = "alter vschema create view t_view as select foo, bar from simple"
 	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
@@ -697,19 +697,54 @@ func TestViewVschemaTableDDL(t *testing.T) {
 	stmt = "alter vschema create or replace view t_view as select foo, bar from simple"
 	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaView(t, ks, "t_view", "select foo, bar from `simple`", executor)
+	_ = waitForVschemaView(t, ks, "t_view", "select foo, bar from `simple`", executor, false)
+
+	stmt = "alter vschema create or replace view t_view as select foo, bar from simple"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.NoError(t, err)
+	_ = waitForVschemaView(t, ks, "t_view", "select foo, bar from `simple`", executor, false)
+
+	stmt = "alter vschema drop view t1_view"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.EqualError(t, err, "vschema: Unknown table 't1_view' in keyspace TestUnsharded")
+
+	stmt = "alter vschema drop view if exists t1_view"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.NoError(t, err)
+
+	stmt = "alter vschema drop view if exists t_view"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.NoError(t, err)
+	_ = waitForVschemaView(t, ks, "t_view", "select foo, bar from `simple`", executor, true)
+
+	stmt = "alter vschema drop view if exists t_view"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.NoError(t, err)
+	_ = waitForVschemaView(t, ks, "t_view", "select foo, bar from `simple`", executor, true)
+
+	stmt = "alter vschema drop view t_view"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.EqualError(t, err, "vschema: Unknown table 't_view' in keyspace TestUnsharded")
 }
 
-func waitForVschemaView(t *testing.T, ks string, view string, stmt string, executor *Executor) *vschemapb.SrvVSchema {
+func waitForVschemaView(t *testing.T, ks string, view string, stmt string, executor *Executor, drop bool) *vschemapb.SrvVSchema {
 	t.Helper()
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
 		vschema := executor.vm.GetCurrentSrvVschema()
+		var found bool
 		for k, v := range vschema.Keyspaces[ks].Views {
 			if k == view && v == stmt {
-				return vschema
+				found = true
+				break
 			}
+		}
+		if found && !drop {
+			return vschema
+		}
+		if !found && drop {
+			return vschema
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

@@ -262,7 +262,9 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	case CreateViewDDLAction:
-		buf.astPrintf(node, "alter vschema %v", node.ViewSpec)
+		buf.astPrintf(node, "alter vschema %v", node.ViewSpec.CreateView)
+	case DropViewDDLAction:
+		buf.astPrintf(node, "alter vschema %v", node.ViewSpec.DropView)
 	default:
 		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}

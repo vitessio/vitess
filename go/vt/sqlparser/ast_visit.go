@@ -740,9 +740,6 @@ func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 	if err := VisitRefOfAutoIncSpec(in.AutoIncSpec, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfCreateView(in.ViewSpec, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfAndExpr(in *AndExpr, f Visit) error {

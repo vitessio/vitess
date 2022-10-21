@@ -65,6 +65,7 @@ const (
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 	CreateViewStr       = "create view"
+	DropViewStr         = "drop view"
 
 	// Partition and subpartition type strings
 	HashTypeStr  = "hash"
@@ -451,6 +452,7 @@ const (
 	AddAutoIncDDLAction
 	RevertDDLAction
 	CreateViewDDLAction
+	DropViewDDLAction
 )
 
 // Constants for scope of variables
