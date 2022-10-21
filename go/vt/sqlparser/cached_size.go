@@ -299,10 +299,8 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	}
 	// field AutoIncSpec *vitess.io/vitess/go/vt/sqlparser.AutoIncSpec
 	size += cached.AutoIncSpec.CachedSize(true)
-	// field Statement vitess.io/vitess/go/vt/sqlparser.SelectStatement
-	if cc, ok := cached.Statement.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
+	// field ViewSpec *vitess.io/vitess/go/vt/sqlparser.CreateView
+	size += cached.ViewSpec.CachedSize(true)
 	return size
 }
 func (cached *AndExpr) CachedSize(alloc bool) int64 {

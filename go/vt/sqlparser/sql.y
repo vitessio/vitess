@@ -3186,12 +3186,15 @@ alter_statement:
         },
     }
   }
-| ALTER comment_opt VSCHEMA CREATE VIEW table_name AS select_statement
+| ALTER comment_opt VSCHEMA CREATE replace_opt VIEW table_name AS select_statement
   {
     $$ = &AlterVschema{
         Action: CreateViewDDLAction,
-        Table: $6,
-        Statement: $8,
+        ViewSpec: &CreateView{
+        	ViewName: $7.ToViewName(),
+        	IsReplace:$5,
+        	Select: $9,
+        },
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY

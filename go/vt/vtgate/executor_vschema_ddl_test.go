@@ -688,17 +688,26 @@ func TestViewVschemaTableDDL(t *testing.T) {
 	stmt := "alter vschema create view t_view as select * from simple"
 	_, err := executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaView(t, ks, "t_view", executor)
+	_ = waitForVschemaView(t, ks, "t_view", "select * from `simple`", executor)
+
+	stmt = "alter vschema create view t_view as select foo, bar from simple"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.EqualError(t, err, "vschema: View 't_view' already exists in keyspace TestUnsharded")
+
+	stmt = "alter vschema create or replace view t_view as select foo, bar from simple"
+	_, err = executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
+	require.NoError(t, err)
+	_ = waitForVschemaView(t, ks, "t_view", "select foo, bar from `simple`", executor)
 }
 
-func waitForVschemaView(t *testing.T, ks string, view string, executor *Executor) *vschemapb.SrvVSchema {
+func waitForVschemaView(t *testing.T, ks string, view string, stmt string, executor *Executor) *vschemapb.SrvVSchema {
 	t.Helper()
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
 		vschema := executor.vm.GetCurrentSrvVschema()
-		for t := range vschema.Keyspaces[ks].Views {
-			if t == view {
+		for k, v := range vschema.Keyspaces[ks].Views {
+			if k == view && v == stmt {
 				return vschema
 			}
 		}

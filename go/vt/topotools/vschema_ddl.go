@@ -239,17 +239,20 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlpar
 
 		return ks, nil
 	case sqlparser.CreateViewDDLAction:
-		name := alterVschema.Table.Name.String()
+		viewSpec := alterVschema.ViewSpec
+		name := viewSpec.ViewName.Name.String()
 		if _, ok := ks.Tables[name]; ok {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.TableExists, "vschema: Table '%s' already exists in keyspace %s", name, ksName)
 		}
 		if ks.Views == nil {
 			ks.Views = make(map[string]string)
 		}
-		if _, ok := ks.Views[name]; ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.TableExists, "vschema: View '%s' already exists in keyspace %s", name, ksName)
+		if !viewSpec.IsReplace {
+			if _, ok := ks.Views[name]; ok {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.TableExists, "vschema: View '%s' already exists in keyspace %s", name, ksName)
+			}
 		}
-		ks.Views[name] = sqlparser.String(alterVschema.Statement)
+		ks.Views[name] = sqlparser.String(viewSpec.Select)
 		return ks, nil
 	}
 

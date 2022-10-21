@@ -1636,6 +1636,10 @@ var (
 		input:                "alter vschema create view x as select * from tbl",
 		ignoreNormalizerTest: true,
 	}, {
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create or replace view x as select * from tbl",
+		ignoreNormalizerTest: true,
+	}, {
 		input:  "create index a on b (col1)",
 		output: "alter table b add index a (col1)",
 	}, {

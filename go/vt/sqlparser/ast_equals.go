@@ -1690,7 +1690,7 @@ func EqualsRefOfAlterVschema(a, b *AlterVschema) bool {
 		EqualsRefOfVindexSpec(a.VindexSpec, b.VindexSpec) &&
 		EqualsSliceOfIdentifierCI(a.VindexCols, b.VindexCols) &&
 		EqualsRefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec) &&
-		EqualsSelectStatement(a.Statement, b.Statement)
+		EqualsRefOfCreateView(a.ViewSpec, b.ViewSpec)
 }
 
 // EqualsRefOfAndExpr does deep equals between the two objects.
