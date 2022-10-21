@@ -39,107 +39,30 @@ func predicatePushDown(ctx *plancontext.PlanningContext, op Operator) (Operator,
 		case *Filter:
 			op.Predicates = append(op.Predicates, expr)
 		case *QueryGraph:
-			updated, err := pushPredicateOnQG(ctx, expr, op)
+			err := op.addPredicate(ctx, expr)
 			if err != nil {
 				return nil, false, err
 			}
-			result = updated
 		case *Join:
-			deps := ctx.SemTable.RecursiveDeps(expr)
-
-			switch {
-			// can push to the left
-			case deps.IsSolvedBy(TableID(op.LHS)):
-				op.LHS = addFilter(op.LHS, expr)
-
-			// can push to the right only for inner joins
-			case deps.IsSolvedBy(TableID(op.RHS)):
-				op.tryConvertToInnerJoin(ctx, expr)
-
-				if !op.LeftJoin {
-					op.RHS = addFilter(op.RHS, expr)
-					continue
-				}
-
-				notPushed = append(notPushed, expr)
-			case deps.IsSolvedBy(TableID(op)):
-				op.tryConvertToInnerJoin(ctx, expr)
-
-				if !op.LeftJoin {
-					op.Predicate = sqlparser.AndExpressions(op.Predicate, expr)
-					continue
-				}
-
-				notPushed = append(notPushed, expr)
+			np := op.pushPredicateOnJoin(ctx, expr)
+			if np != nil {
+				notPushed = append(notPushed, np)
 			}
 		case *Derived:
-			if _, isUNion := op.Source.(*Union); isUNion {
-				op.Source = addFilter(op.Source, expr)
-				result = op
-				continue
-			}
-			tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
-			if err != nil {
-				if err == semantics.ErrMultipleTables {
-					return nil, false, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
-				}
-				return nil, false, err
-			}
-
-			newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+			err := op.addPredicate(ctx, expr)
 			if err != nil {
 				return nil, false, err
 			}
-			op.Source = addFilter(op.Source, newExpr)
 		case *Vindex:
 			err := op.addPredicate(ctx, expr)
 			if err != nil {
 				return nil, false, err
 			}
-
 		case *Union:
-			offsets := make(map[string]int)
-			for i, selectExpr := range op.SelectStmts[0].SelectExprs {
-				ae, ok := selectExpr.(*sqlparser.AliasedExpr)
-				if !ok {
-					return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on UNION where the first SELECT contains star or next")
-				}
-				if !ae.As.IsEmpty() {
-					offsets[ae.As.String()] = i
-					continue
-				}
-				col, ok := ae.Expr.(*sqlparser.ColName)
-				if ok {
-					offsets[col.Name.Lowered()] = i
-				}
+			err := op.addPredicate(expr)
+			if err != nil {
+				return nil, false, err
 			}
-
-			for i := range op.Sources {
-				predicate := sqlparser.CloneExpr(expr)
-				var err error
-				predicate = sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
-					col, ok := cursor.Node().(*sqlparser.ColName)
-					if !ok {
-						return err == nil
-					}
-
-					idx, ok := offsets[col.Name.Lowered()]
-					if !ok {
-						err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
-						return false
-					}
-
-					ae, ok := op.SelectStmts[i].SelectExprs[idx].(*sqlparser.AliasedExpr)
-					if !ok {
-						err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
-						return false
-					}
-					cursor.Replace(ae.Expr)
-					return false
-				}, nil).(sqlparser.Expr)
-				op.Sources[i] = addFilter(op.Sources[i], predicate)
-			}
-
 		default:
 			notPushed = append(notPushed, expr)
 		}
@@ -160,20 +83,52 @@ func predicatePushDown(ctx *plancontext.PlanningContext, op Operator) (Operator,
 	return result, true, nil
 }
 
+func (j *Join) pushPredicateOnJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
+	deps := ctx.SemTable.RecursiveDeps(expr)
+
+	switch {
+	// can push to the left
+	case deps.IsSolvedBy(TableID(j.LHS)):
+		j.LHS = addFilter(j.LHS, expr)
+		return nil
+
+	// can push to the right only for inner joins
+	case deps.IsSolvedBy(TableID(j.RHS)):
+		j.tryConvertToInnerJoin(ctx, expr)
+
+		if !j.LeftJoin {
+			j.RHS = addFilter(j.RHS, expr)
+			return nil
+		}
+
+		return expr
+	case deps.IsSolvedBy(TableID(j)):
+		j.tryConvertToInnerJoin(ctx, expr)
+
+		if !j.LeftJoin {
+			j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
+			return nil
+		}
+
+		return expr
+	}
+	panic("should have been able to push the predicate")
+}
+
 func addFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
 		Source: op, Predicates: expr,
 	}
 }
 
-func pushPredicateOnQG(ctx *plancontext.PlanningContext, expr sqlparser.Expr, qg *QueryGraph) (Operator, error) {
+func (qg *QueryGraph) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(ctx, e)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return qg, nil
+	return nil
 }
 
 func (v *Vindex) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
@@ -216,5 +171,76 @@ func (v *Vindex) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}
+	return nil
+}
+
+func (d *Derived) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	if _, isUNion := d.Source.(*Union); isUNion {
+		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
+		d.Source = addFilter(d.Source, expr)
+		return nil
+	}
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
+	if err != nil {
+		if err == semantics.ErrMultipleTables {
+			return semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		}
+		return err
+	}
+
+	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if err != nil {
+		return err
+	}
+	d.Source = addFilter(d.Source, newExpr)
+	return nil
+}
+
+func (u *Union) addPredicate(expr sqlparser.Expr) error {
+	offsets := make(map[string]int)
+	for i, selectExpr := range u.SelectStmts[0].SelectExprs {
+		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on UNION where the first SELECT contains star or next")
+		}
+		if !ae.As.IsEmpty() {
+			offsets[ae.As.String()] = i
+			continue
+		}
+		col, ok := ae.Expr.(*sqlparser.ColName)
+		if ok {
+			offsets[col.Name.Lowered()] = i
+		}
+	}
+
+	for i := range u.Sources {
+		predicate := sqlparser.CloneExpr(expr)
+		var err error
+		predicate = sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
+			col, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok {
+				return err == nil
+			}
+
+			idx, ok := offsets[col.Name.Lowered()]
+			if !ok {
+				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
+				return false
+			}
+
+			ae, ok := u.SelectStmts[i].SelectExprs[idx].(*sqlparser.AliasedExpr)
+			if !ok {
+				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
+				return false
+			}
+			cursor.Replace(ae.Expr)
+			return false
+		}, nil).(sqlparser.Expr)
+		if err != nil {
+			return err
+		}
+		u.Sources[i] = addFilter(u.Sources[i], predicate)
+	}
+
 	return nil
 }
