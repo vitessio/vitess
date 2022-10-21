@@ -18,39 +18,36 @@ package mysqlctl
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 )
 
-func (mysqld *Mysqld) CanDisableRedoLog() bool {
-	return mysqld.capabilities.hasDisableRedoLogging()
-}
-
 func (mysqld *Mysqld) DisableRedoLog(ctx context.Context) error {
-	if !mysqld.CanDisableRedoLog() {
-		return fmt.Errorf("mysqld >= 8.0.21 required to disable redo_log")
+	enabled, err := mysqld.IsRedoLogEnabled(ctx)
+	if enabled || err != nil {
+		return err
 	}
 	return mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE DISABLE INNODB REDO_LOG")
 }
 
 func (mysqld *Mysqld) EnableRedoLog(ctx context.Context) error {
-	if !mysqld.CanDisableRedoLog() {
-		return fmt.Errorf("mysqld >= 8.0.21 required to enable redo_log")
+	enabled, err := mysqld.IsRedoLogEnabled(ctx)
+	if enabled || err != nil {
+		return err
 	}
 	return mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE ENABLE INNODB REDO_LOG")
 }
 
 func (mysqld *Mysqld) IsRedoLogEnabled(ctx context.Context) (bool, error) {
-	if !mysqld.CanDisableRedoLog() {
-		return true, nil
-	}
 	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'")
+	// If we got an error, don't make assumptions about whether redo log is enabled.
+	// It's possible we're dealing with a MySQL >= 8.0.21 server, but failed to connect.
 	if err != nil {
 		return false, err
 	}
-	if len(qr.Rows) != 1 {
-		return false, errors.New("no innodb_redo_log_enabled status value found")
+	// If the innodb_redo_log_enabled variable isn't present, assume that redo log is enabled.
+	if len(qr.Rows) == 0 {
+		return true, fmt.Errorf("mysqld >= 8.0.21 required to disable redo_log")
 	}
 	value := strings.ToLower(qr.Rows[0][0].ToString())
 	return (value == "on" || value == "1"), nil
