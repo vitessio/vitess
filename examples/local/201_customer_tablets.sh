@@ -28,4 +28,16 @@ done
 # set the correct durability policy for the keyspace
 vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync customer
 
-vtctldclient InitShardPrimary --force customer/0 zone1-200
+# Wait for all the tablets to be up and registered in the topology server
+for _ in $(seq 0 200); do
+	vtctldclient GetTablets --keyspace customer --shard 0 | wc -l | grep -q "3" && break
+	sleep 1
+done;
+vtctldclient GetTablets --keyspace customer --shard 0 | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in customer/0" && exit 1)
+
+# Wait for a primary tablet to be elected in the shard
+for _ in $(seq 0 200); do
+	vtctldclient GetTablets --keyspace customer --shard 0 | grep -q "primary" && break
+	sleep 1
+done;
+vtctldclient GetTablets --keyspace customer --shard 0 | grep "primary" || (echo "Timed out waiting for primary to be elected in customer/0" && exit 1)

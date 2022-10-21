@@ -24,12 +24,12 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/discovery"
@@ -105,47 +105,50 @@ func instancePollSecondsDuration() time.Duration {
 	return time.Duration(config.Config.InstancePollSeconds) * time.Second
 }
 
-// acceptSignals registers for OS signals
-func acceptSignals() {
+// acceptSighupSignal registers for SIGHUP signal from the OS to reload the configuration files.
+func acceptSighupSignal() {
 	c := make(chan os.Signal, 1)
 
 	signal.Notify(c, syscall.SIGHUP)
-	signal.Notify(c, syscall.SIGTERM)
 	go func() {
-		for sig := range c {
-			switch sig {
-			case syscall.SIGHUP:
-				log.Infof("Received SIGHUP. Reloading configuration")
-				_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
-				config.Reload()
-				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
-			case syscall.SIGTERM:
-				log.Infof("Received SIGTERM. Starting shutdown")
-				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
-				discoveryMetrics.StopAutoExpiration()
-				// probably should poke other go routines to stop cleanly here ...
-				_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
-				timeout := time.After(*shutdownWaitTime)
-				func() {
-					for {
-						count := atomic.LoadInt32(&shardsLockCounter)
-						if count == 0 {
-							return
-						}
-						select {
-						case <-timeout:
-							log.Infof("wait for lock release timed out. Some locks might not have been released.")
-							return
-						default:
-							time.Sleep(100 * time.Millisecond)
-						}
-					}
-				}()
-				log.Infof("Shutting down vtorc")
-				os.Exit(0)
-			}
+		for range c {
+			log.Infof("Received SIGHUP. Reloading configuration")
+			_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
+			config.Reload()
+			discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
 		}
 	}()
+}
+
+// closeVTOrc runs all the operations required to cleanly shutdown VTOrc
+func closeVTOrc() {
+	log.Infof("Starting VTOrc shutdown")
+	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
+	discoveryMetrics.StopAutoExpiration()
+	// Poke other go routines to stop cleanly here ...
+	_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+	// wait for the locks to be released
+	waitForLocksRelease()
+	log.Infof("VTOrc closed")
+}
+
+// waitForLocksRelease is used to wait for release of locks
+func waitForLocksRelease() {
+	timeout := time.After(shutdownWaitTime)
+	for {
+		count := atomic.LoadInt32(&shardsLockCounter)
+		if count == 0 {
+			break
+		}
+		select {
+		case <-timeout:
+			log.Infof("wait for lock release timed out. Some locks might not have been released.")
+		default:
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		break
+	}
 }
 
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
@@ -154,7 +157,7 @@ func handleDiscoveryRequests() {
 	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
 
 	// create a pool of discovery workers
-	for i := uint(0); i < config.Config.DiscoveryMaxConcurrency; i++ {
+	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
 			for {
 				instanceKey := discoveryQueue.Consume()
@@ -180,10 +183,6 @@ func handleDiscoveryRequests() {
 func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
 		log.Infof("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
-		return
-	}
-	if inst.RegexpMatchPatterns(instanceKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
-		log.Infof("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", instanceKey)
 		return
 	}
 
@@ -228,7 +227,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	discoveriesCounter.Inc(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, config.Config.BufferInstanceWrites, latency)
+	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")
@@ -331,19 +330,6 @@ func onHealthTick() {
 	}
 }
 
-func injectSeeds(seedOnce *sync.Once) {
-	seedOnce.Do(func() {
-		for _, seed := range config.Config.DiscoverySeeds {
-			instanceKey, err := inst.ParseRawInstanceKey(seed)
-			if err == nil {
-				_ = inst.InjectSeed(instanceKey)
-			} else {
-				log.Errorf("Error parsing seed %s: %+v", seed, err)
-			}
-		}
-	})
-}
-
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
@@ -372,16 +358,12 @@ func ContinuousDiscovery() {
 		return time.Since(continuousDiscoveryStartTime) >= checkAndRecoverWaitPeriod
 	}
 
-	var seedOnce sync.Once
-
 	go func() {
 		_ = ometrics.InitMetrics()
 	}()
-	go acceptSignals()
-
-	if *config.RuntimeCLIFlags.GrabElection {
-		_ = process.GrabElection()
-	}
+	go acceptSighupSignal()
+	// On termination of the server, we should close VTOrc cleanly
+	servenv.OnTermSync(closeVTOrc)
 
 	log.Infof("continuous discovery: starting")
 	for {
@@ -397,7 +379,6 @@ func ContinuousDiscovery() {
 				// as instance poll
 				if IsLeaderOrActive() {
 					go inst.ExpireDowntime()
-					go injectSeeds(&seedOnce)
 				}
 			}()
 		case <-caretakingTick:
@@ -416,11 +397,9 @@ func ContinuousDiscovery() {
 					go inst.ExpireHostnameUnresolve()
 					go inst.ExpireClusterDomainName()
 					go inst.ExpireAudit()
-					go inst.ExpirePoolInstances()
 					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
-					go process.ExpireAccessTokens()
 					go process.ExpireAvailableNodes()
 					go ExpireFailureDetectionHistory()
 					go ExpireTopologyRecoveryHistory()

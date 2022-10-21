@@ -33,8 +33,8 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
-	keyspaceName    = "ks_union"
-	cell            = "test_union"
+	keyspaceName    = "ks_aggr"
+	cell            = "test_aggr"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -77,10 +77,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
 
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)

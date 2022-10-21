@@ -17,21 +17,21 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"encoding/json"
-	"flag"
 	"os"
 	"os/user"
 	"path"
 	"sync"
 	"time"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains utility methods and definitions to lock
@@ -46,7 +46,7 @@ var (
 	// RemoteOperationTimeout is used for operations where we have to
 	// call out to another process.
 	// Used for RPC calls (including topo server calls)
-	RemoteOperationTimeout = flag.Duration("remote_operation_timeout", 30*time.Second, "time to wait for a remote operation")
+	RemoteOperationTimeout = 30 * time.Second
 )
 
 // Lock describes a long-running lock on a keyspace or a shard.
@@ -60,6 +60,16 @@ type Lock struct {
 
 	// Status is the current status of the Lock.
 	Status string
+}
+
+func init() {
+	for _, cmd := range FlagBinaries {
+		servenv.OnParseFor(cmd, registerTopoLockFlags)
+	}
+}
+
+func registerTopoLockFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&RemoteOperationTimeout, "remote_operation_timeout", RemoteOperationTimeout, "time to wait for a remote operation")
 }
 
 // newLock creates a new Lock.
@@ -234,7 +244,7 @@ func CheckKeyspaceLockedAndRenew(ctx context.Context, keyspace string) error {
 func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyspaceForAction")
@@ -375,7 +385,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")

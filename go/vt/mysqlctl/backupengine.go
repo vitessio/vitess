@@ -19,7 +19,6 @@ package mysqlctl
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -27,17 +26,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
 	// BackupEngineImplementation is the implementation to use for BackupEngine
-	backupEngineImplementation = flag.String("backup_engine_implementation", builtinBackupEngineName, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+	backupEngineImplementation = builtinBackupEngineName
 )
 
 // BackupEngine is the interface to take a backup with a given engine.
@@ -109,6 +111,16 @@ type BackupRestoreEngine interface {
 // BackupEngine and RestoreEngine.
 var BackupRestoreEngineMap = make(map[string]BackupRestoreEngine)
 
+func init() {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtexplain", "vtbackup"} {
+		servenv.OnParseFor(cmd, registerBackupEngineFlags)
+	}
+}
+
+func registerBackupEngineFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&backupEngineImplementation, "backup_engine_implementation", backupEngineImplementation, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+}
+
 // GetBackupEngine returns the BackupEngine implementation that should be used
 // to create new backups.
 //
@@ -117,7 +129,7 @@ var BackupRestoreEngineMap = make(map[string]BackupRestoreEngine)
 //
 // This must only be called after flags have been parsed.
 func GetBackupEngine() (BackupEngine, error) {
-	name := *backupEngineImplementation
+	name := backupEngineImplementation
 	be, ok := BackupRestoreEngineMap[name]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "unknown BackupEngine implementation %q", name)

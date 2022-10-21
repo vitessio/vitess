@@ -108,7 +108,7 @@ func InitWithoutServenv(prefix string) {
 
 	backend := &openTSDBBackend{
 		prefix:     prefix,
-		commonTags: stats.ParseCommonTags(*stats.CommonTags),
+		commonTags: stats.ParseCommonTags(stats.CommonTags),
 	}
 
 	stats.RegisterPushBackend("opentsdb", backend)

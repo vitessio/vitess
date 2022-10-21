@@ -19,10 +19,11 @@ package inst
 import (
 	"errors"
 
+	"github.com/openark/golib/sqlutils"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/external/golib/sqlutils"
 )
 
 // ErrKeyspaceNotFound is a fixed error message used when a keyspace is not found in the database.

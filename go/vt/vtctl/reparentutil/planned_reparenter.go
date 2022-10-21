@@ -184,6 +184,21 @@ func (pr *PlannedReparenter) preflightChecks(
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not in the shard", primaryElectAliasStr)
 	}
 
+	// PRS is only meant to be called when all the tablets are healthy.
+	// So we assume that all the tablets are reachable and check if the primary elect will be able
+	// to make progress if it is promoted. This is needed because sometimes users may ask to promote
+	// a tablet which can never make progress. For example, let's say the user has a durability policy
+	// where they require 2 semi-sync acks but from cross-cell replicas.
+	// Let's say they have 3 replicas A in zone 1 and B and C in zone 2. In this case, A is the only
+	// eligible primary elect. Both B and C won't be able to make forward progress if they are promoted.
+	var tabletsReachable []*topodatapb.Tablet
+	for _, info := range tabletMap {
+		tabletsReachable = append(tabletsReachable, info.Tablet)
+	}
+	if !canEstablishForTablet(opts.durability, newPrimaryTabletInfo.Tablet, tabletsReachable) {
+		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v won't be able to make forward progress on promotion", primaryElectAliasStr)
+	}
+
 	ev.NewPrimary = proto.Clone(newPrimaryTabletInfo.Tablet).(*topodatapb.Tablet)
 
 	return false, nil
@@ -211,7 +226,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	// First, we find the position of the current primary. Note that this is
 	// just a snapshot of the position, since we let it keep accepting writes
 	// until we're sure we want to proceed with the promotion.
-	snapshotCtx, snapshotCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	snapshotCtx, snapshotCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer snapshotCancel()
 
 	snapshotPos, err := pr.tmc.PrimaryPosition(snapshotCtx, currentPrimary.Tablet)
@@ -245,7 +260,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	pr.logger.Infof("demoting current primary: %v", currentPrimary.AliasString())
 	event.DispatchUpdate(ev, "demoting old primary")
 
-	demoteCtx, demoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	demoteCtx, demoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer demoteCancel()
 
 	primaryStatus, err := pr.tmc.DemotePrimary(demoteCtx, currentPrimary.Tablet)
@@ -275,7 +290,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		// that not enough time is left on the it to finish the rollback.
 		// We create a new background context to avoid a partial rollback, which
 		// could leave the cluster in a worse state than when we started.
-		undoCtx, undoCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		undoCtx, undoCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer undoCancel()
 
 		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, SemiSyncAckers(opts.durability, currentPrimary.Tablet) > 0); undoErr != nil {
@@ -340,7 +355,7 @@ func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context
 	// It's possible that a previous attempt to reparent failed to SetReadWrite,
 	// so call it here to make sure the underlying MySQL is read-write on the
 	// candidate primary.
-	setReadWriteCtx, setReadWriteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	setReadWriteCtx, setReadWriteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer setReadWriteCancel()
 
 	if err := pr.tmc.SetReadWrite(setReadWriteCtx, primaryElect); err != nil {
@@ -348,7 +363,7 @@ func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context
 	}
 
 	// The primary is already the one we want according to its tablet record.
-	refreshCtx, refreshCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 
 	// Get the replication position so we can try to fix the replicas (back in
@@ -400,7 +415,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 		rec       concurrency.AllErrorRecorder
 	)
 
-	stopAllCtx, stopAllCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	stopAllCtx, stopAllCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer stopAllCancel()
 
 	for alias, tabletInfo := range tabletMap {
@@ -486,7 +501,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	}
 
 	// Promote the candidate primary to type:PRIMARY.
-	promoteCtx, promoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	promoteCtx, promoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer promoteCancel()
 
 	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(opts.durability, primaryElect) > 0)

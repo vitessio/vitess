@@ -9,7 +9,7 @@ The following is the full list, alphabetically ordered.
 * David Weitzman ([dweitzman](https://github.com/dweitzman)) dweitzman@pinterest.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
-* Florent Poinsard ([frouioui](https://github.com/frouioui)) frouioui@planetscale.com
+* Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
 * Mali Akmanalp ([makmanalp](https://github.com/makmanalp) makmanalp@hubspot.com
@@ -29,7 +29,7 @@ The following is the full list, alphabetically ordered.
 sougou, deepthi, demmer, rafael, dweitzman, tirsen, enisoc
 
 ### Builds
-dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100
+dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100, frouioui
 
 ### Resharding
 sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps, deepthi, mattlord

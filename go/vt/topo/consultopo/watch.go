@@ -33,9 +33,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vtbackup", "vtcombo", "vtctl", "vtctld", "vtgate", "vtgr", "vttablet", "vttestserver", "zk"} {
-		servenv.OnParseFor(cmd, registerWatchFlags)
-	}
+	servenv.RegisterFlagsForTopoBinaries(registerWatchFlags)
 }
 
 func registerWatchFlags(fs *pflag.FlagSet) {
@@ -48,7 +46,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	nodePath := path.Join(s.root, filePath)
 	options := &api.QueryOptions{}
 
-	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer initialCancel()
 
 	pair, _, err := s.kv.Get(nodePath, options.WithContext(initialCtx))

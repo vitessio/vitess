@@ -3,9 +3,9 @@ package util
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
+	"github.com/stretchr/testify/require"
 
-	test "vitess.io/vitess/go/vt/vtorc/external/golib/tests"
+	"vitess.io/vitess/go/vt/log"
 )
 
 func init() {
@@ -14,8 +14,8 @@ func init() {
 func TestNewToken(t *testing.T) {
 	token1 := NewToken()
 
-	test.S(t).ExpectNotEquals(token1.Hash, "")
-	test.S(t).ExpectEquals(len(token1.Hash), 64)
+	require.NotEqual(t, token1.Hash, "")
+	require.Equal(t, len(token1.Hash), 64)
 }
 
 func TestNewTokenRandom(t *testing.T) {
@@ -24,5 +24,5 @@ func TestNewTokenRandom(t *testing.T) {
 	token2 := NewToken()
 
 	// The following test can fail once in a quadrazillion eons
-	test.S(t).ExpectNotEquals(token1.Hash, token2.Hash)
+	require.NotEqual(t, token1.Hash, token2.Hash)
 }

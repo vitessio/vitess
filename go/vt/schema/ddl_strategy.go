@@ -173,12 +173,6 @@ func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
 }
 
-// IsSkipTopoFlag returns 'true' if strategy options include `-skip-topo`. This flag is deprecated,
-// and this function is temporary in v14 so that we can print a deprecation message.
-func (setting *DDLStrategySetting) IsSkipTopoFlag() bool {
-	return setting.hasFlag(skipTopoFlag)
-}
-
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)

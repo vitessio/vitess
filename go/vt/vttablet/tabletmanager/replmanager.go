@@ -68,7 +68,7 @@ func newReplManager(ctx context.Context, tm *TabletManager, interval time.Durati
 // SetTabletType starts/stops the replication manager ticks based on the tablet type provided.
 // It stops the ticks if the tablet type is not a replica type, starts the ticks otherwise.
 func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
-	if *mysqlctl.DisableActiveReparents || disableReplicationManager {
+	if mysqlctl.DisableActiveReparents || disableReplicationManager {
 		return
 	}
 	if !topo.IsReplicaType(tabletType) {
@@ -148,7 +148,7 @@ func (rm *replManager) checkActionLocked() {
 // reset the replication manager state and deleting the marker-file.
 // it does not start or stop the ticks. Use setReplicationStopped instead to change that.
 func (rm *replManager) reset() {
-	if *mysqlctl.DisableActiveReparents || disableReplicationManager {
+	if mysqlctl.DisableActiveReparents || disableReplicationManager {
 		return
 	}
 
@@ -165,7 +165,7 @@ func (rm *replManager) reset() {
 // setReplicationStopped performs a best effort attempt of
 // remembering a decision to stop replication.
 func (rm *replManager) setReplicationStopped(stopped bool) {
-	if *mysqlctl.DisableActiveReparents || disableReplicationManager {
+	if mysqlctl.DisableActiveReparents || disableReplicationManager {
 		return
 	}
 

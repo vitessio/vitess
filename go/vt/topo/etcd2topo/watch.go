@@ -37,7 +37,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	nodePath := path.Join(s.root, filePath)
 
 	// Get the initial version of the file
-	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer initialCancel()
 	initial, err := s.cli.Get(initialCtx, nodePath)
 	if err != nil {

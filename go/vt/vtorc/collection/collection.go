@@ -118,7 +118,7 @@ func CreateOrReturnCollection(name string) *Collection {
 		collection: nil,
 		done:       make(chan struct{}),
 		// WARNING: use a different configuration name
-		expirePeriod: time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second,
+		expirePeriod: time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second,
 	}
 	go qmc.StartAutoExpiration()
 
