@@ -107,14 +107,10 @@ func createJoin(LHS, RHS Operator) Operator {
 	return &Join{LHS: LHS, RHS: RHS}
 }
 
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
+func createInnerJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	op := createJoin(lhs, rhs)
 	if tableExpr.Condition.On != nil {
-		var err error
-		op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
-		if err != nil {
-			return nil, err
-		}
+		op = addFilter(op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
 	}
-	return op, nil
+	return op
 }

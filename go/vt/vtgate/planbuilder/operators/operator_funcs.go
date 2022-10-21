@@ -85,10 +85,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 
 			// finally, if we can't turn the outer join into an inner,
 			// we need to filter after the join has been evaluated
-			return &Filter{
-				Source:     op,
-				Predicates: []sqlparser.Expr{expr},
-			}, nil
+			return addFilter(op, expr), nil
 		case deps.IsSolvedBy(TableID(op)):
 			bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(op))
 			if err != nil {
@@ -114,10 +111,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return &Filter{
-			Source:     op,
-			Predicates: []sqlparser.Expr{expr},
-		}, nil
+		return addFilter(op, expr), nil
 	case *Filter:
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil

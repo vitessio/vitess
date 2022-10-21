@@ -21,8 +21,17 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// Compact will optimise the operator tree into a smaller but equivalent version
-func Compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
+// compact will optimise the operator tree into a smaller but equivalent version
+func compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
+	changed := true
+	var err error
+	for changed {
+		op, changed, err = rewriteBottomUp(ctx, op, predicatePushDown)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	newOp, _, err := rewriteBottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op Operator) (Operator, bool, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
@@ -72,7 +81,7 @@ func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 	return u, anythingChanged, nil
 }
 
-func (j *Join) compactJoin(ctx *plancontext.PlanningContext) (Operator, bool, error) {
+func (j *Join) compact(ctx *plancontext.PlanningContext) (Operator, bool, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return j, false, nil
@@ -89,9 +98,11 @@ func (j *Join) compactJoin(ctx *plancontext.PlanningContext) (Operator, bool, er
 		innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
 		NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
-	err := newOp.collectPredicate(ctx, j.Predicate)
-	if err != nil {
-		return nil, false, err
+	if j.Predicate != nil {
+		err := newOp.collectPredicate(ctx, j.Predicate)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 	return newOp, true, nil
 }

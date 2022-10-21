@@ -67,8 +67,8 @@ type (
 		Cost() int
 	}
 
-	checked interface {
-		// CheckValid allows operators that need a final check before being used, to make sure that
+	checkable interface {
+		// checkValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
 		CheckValid() error
 	}
@@ -112,7 +112,7 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 
 	switch tableExpr.Join {
 	case sqlparser.NormalJoinType:
-		return createInnerJoin(ctx, tableExpr, lhs, rhs)
+		return createInnerJoin(tableExpr, lhs, rhs), nil
 	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
 		return createOuterJoin(tableExpr, lhs, rhs)
 	default:
@@ -200,6 +200,15 @@ func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 	if err != nil {
 		return nil, err
 	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if err = checkValid(op); err != nil {
+		return nil, err
+	}
+
 	return op, nil
 }
 
@@ -239,10 +248,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(expr))
-			if err != nil {
-				return nil, err
-			}
+			op = addFilter(op, sqlparser.RemoveKeyspaceFromColName(expr))
 			addColumnEquality(ctx, expr)
 		}
 	}

@@ -2339,5 +2339,27 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (without star projection)",
+    "query": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select id from (select id from information_schema.key_column_usage as kcu where 1 != 1 union select id from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
+        "Query": "select id from (select id from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and id = 'primary' union select id from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and id = 'primary') as kcu",
+        "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
+        "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
+        "Table": "information_schema.key_column_usage"
+      }
+    }
   }
 ]

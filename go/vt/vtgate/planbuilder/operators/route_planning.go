@@ -131,7 +131,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 	if len(unresolved) > 0 {
 		// if we have any predicates that none of the joins or tables took care of,
 		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
-		result = &Filter{Source: result, Predicates: unresolved}
+		result = addFilter(result, unresolved...)
 	}
 
 	return
@@ -258,10 +258,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Opera
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source = &Filter{
-				Source:     plan.Source,
-				Predicates: []sqlparser.Expr{qg.NoDeps},
-			}
+			plan.Source = addFilter(plan.Source, qg.NoDeps)
 		}
 		plans[i] = plan
 	}

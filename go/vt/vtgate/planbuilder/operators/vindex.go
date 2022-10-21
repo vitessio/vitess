@@ -82,7 +82,7 @@ outer:
 	return idxs, nil
 }
 
-// CheckValid implements the Operator interface
+// checkValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
