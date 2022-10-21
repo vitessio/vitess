@@ -58,6 +58,10 @@ The connection pool with prefilled connections have been removed. The pool now d
 Following flags are deprecated: `queryserver-config-pool-prefill-parallelism`, `queryserver-config-stream-pool-prefill-parallelism`, `queryserver-config-transaction-prefill-parallelism`
 and will be removed in future version.
 
+#### InitShardPrimary Deprecation
+
+The vtcltd command InitShardPrimary has been deprecated. Please use PlannedReparentShard instead.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions
