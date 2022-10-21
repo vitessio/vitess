@@ -119,9 +119,19 @@ var executorVSchema = `
         		"table": "TestUnsharded.wo_lu_idx",
         		"from": "wo_lu_col",
         		"to": "keyspace_id",
-				"write_only": "true"
+        		"write_only": "true"
       		},
-      		"owner": "t2_wo_lookup"
+      		"owner": "t2_lookup"
+    	},
+		"t2_nv_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.nv_lu_idx",
+        		"from": "nv_lu_col",
+        		"to": "keyspace_id",
+        		"no_verify": "true"
+      		},
+      		"owner": "t2_lookup"
     	},
 		"t2_lu_vdx": {
       		"type": "lookup_hash_unique",
@@ -130,7 +140,7 @@ var executorVSchema = `
         		"from": "lu_col",
         		"to": "keyspace_id"
       		},
-      		"owner": "t2_wo_lookup"
+		"owner": "t2_lookup"
     	},
 		"regional_vdx": {
 			"type": "region_experimental",
@@ -294,7 +304,7 @@ var executorVSchema = `
 				}
 			]
 		},
-		"t2_wo_lookup": {
+		"t2_lookup": {
       		"column_vindexes": [
 				{
 				  	"column": "id",
@@ -303,6 +313,10 @@ var executorVSchema = `
 				{
 				  	"column": "wo_lu_col",
 				  	"name": "t2_wo_lu_vdx"
+				},
+				{
+					"column": "nv_lu_col",
+					"name": "t2_nv_lu_vdx"
 				},
 				{
 				  	"column": "lu_col",
@@ -350,6 +364,7 @@ var unshardedVSchema = `
 			}
 		},
 		"wo_lu_idx": {},
+		"nv_lu_idx": {},
 		"lu_idx": {},
 		"simple": {}
 	}
