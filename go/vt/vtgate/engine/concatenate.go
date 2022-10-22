@@ -143,12 +143,23 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 }
 
 func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(ctx)
-	defer cancel()
+	if vcursor.Session().InTransaction() {
+		// as we are in a transaction, we need to execute all queries inside a single transaction
+		// therefore it needs a sequential execution.
+		return c.sequentialExec(ctx, vcursor, bindVars, wantfields)
+	}
+	// not in transaction, so execute in parallel.
+	return c.parallelExec(ctx, vcursor, bindVars, wantfields)
+}
+
+func (c *Concatenate) parallelExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
-	var wg sync.WaitGroup
 	var outerErr error
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
 		vars := copyBindVars(bindVars)
@@ -164,14 +175,35 @@ func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars
 		}()
 	}
 	wg.Wait()
-	if outerErr != nil {
-		return nil, outerErr
+	return results, outerErr
+}
+
+func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, len(c.Sources))
+	for i, source := range c.Sources {
+		currIndex, currSource := i, source
+		vars := copyBindVars(bindVars)
+		result, err := vcursor.ExecutePrimitive(ctx, currSource, vars, wantfields)
+		if err != nil {
+			return nil, err
+		}
+		results[currIndex] = result
 	}
 	return results, nil
 }
 
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if vcursor.Session().InTransaction() {
+		// as we are in a transaction, we need to execute all queries inside a single transaction
+		// therefore it needs a sequential execution.
+		return c.sequentialStreamExec(ctx, vcursor, bindVars, wantfields, callback)
+	}
+	// not in transaction, so execute in parallel.
+	return c.parallelStreamExec(ctx, vcursor, bindVars, wantfields, callback)
+}
+
+func (c *Concatenate) parallelStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var outerErr error
 
@@ -235,6 +267,44 @@ func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	}
 	wg.Wait()
 	return outerErr
+}
+
+func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	// all the below fields ensure that the fields are sent only once.
+	var seenFields []*querypb.Field
+	var fieldsMu sync.Mutex
+	var fieldsSent bool
+
+	for idx, source := range c.Sources {
+		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			// if we have fields to compare, make sure all the fields are all the same
+			if idx == 0 {
+				fieldsMu.Lock()
+				defer fieldsMu.Unlock()
+				if !fieldsSent {
+					fieldsSent = true
+					seenFields = resultChunk.Fields
+					return callback(resultChunk)
+				}
+			}
+			if resultChunk.Fields != nil {
+				err := c.compareFields(seenFields, resultChunk.Fields)
+				if err != nil {
+					return err
+				}
+			}
+			// check if context has expired.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return callback(resultChunk)
+
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetFields fetches the field info.

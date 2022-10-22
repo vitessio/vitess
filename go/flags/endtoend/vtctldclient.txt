@@ -48,7 +48,6 @@ Available Commands:
   GetTopologyPath             Gets the file located at the specified path in the topology server.
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
-  InitShardPrimary            Sets the initial primary for the shard.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
   PingTablet                  Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
   PlannedReparentShard        Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.

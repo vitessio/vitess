@@ -1,5 +1,5 @@
 Usage of vtgate:
-      --allowed_tablet_types []topodatapb.TabletType                     Specifies the tablet types this vtgate is allowed to route queries to.
+      --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
       --buffer_drain_concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer_implementation string                                     Allowed values: healthcheck (legacy implementation), keyspace_events (default) (default "keyspace_events")
@@ -161,7 +161,7 @@ Usage of vtgate:
       --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
-      --tablet_types_to_wait string                                      wait till connected for specified tablet types during Gateway initialization
+      --tablet_types_to_wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
       --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")

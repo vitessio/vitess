@@ -70,7 +70,22 @@ Consider using VTOrc instead of Orchestrator as VTOrc goes GA in this release.
 
 The connection pool with prefilled connections have been removed. The pool now does lazy connection creation.
 
+#### InitShardPrimary Deprecation
+
+The vtcltd command InitShardPrimary has been deprecated. Please use PlannedReparentShard instead.
+
 ### <a id="command-line-syntax-deprecations"/>Command-line syntax deprecations
+
+#### vttablet startup flag deletions
+The following VTTablet flags were deprecated in 7.0. They have now been deleted
+- --queryserver-config-message-conn-pool-size
+- --queryserver-config-message-conn-pool-prefill-parallelism
+- --client-found-rows-pool-size --queryserver-config-transaction-cap will be used instead
+- --transaction_shutdown_grace_period Use --shutdown_grace_period instead
+- --queryserver-config-max-dml-rows
+- --queryserver-config-allowunsafe-dmls
+- --pool-name-prefix
+- --enable-autocommit Autocommit is always allowed
 
 #### vttablet startup flag deprecations
 - `--enable-query-plan-field-caching` has been deprecated. It will be removed in v16.

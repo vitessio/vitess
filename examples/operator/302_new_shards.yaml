@@ -5,7 +5,7 @@ metadata:
 spec:
   images:
     vtctld: vitess/lite:v15.0.0-rc1
-    vtadmin: vitess/vtadmin:latest
+    vtadmin: vitess/vtadmin:v15.0.0-rc1
     vtgate: vitess/lite:v15.0.0-rc1
     vttablet: vitess/lite:v15.0.0-rc1
     vtbackup: vitess/lite:v15.0.0-rc1
@@ -68,15 +68,14 @@ spec:
     durabilityPolicy: none
     turndownPolicy: Immediate
     vitessOrchestrator:
-      configSecret:
-        name: example-cluster-config
-        key: orc_config.json
       resources:
         limits:
           memory: 128Mi
         requests:
           cpu: 100m
           memory: 128Mi
+      extraFlags:
+        recovery-period-block-duration: 5s
     partitionings:
     - equal:
         parts: 1

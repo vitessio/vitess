@@ -19,11 +19,14 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -3739,4 +3742,9 @@ func TestSelectHexAndBit(t *testing.T) {
 		"select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
 }
