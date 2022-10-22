@@ -83,6 +83,9 @@ var (
 	//go:embed zk.txt
 	zkTxt string
 
+	//go:embed vtctl.txt
+	vtctlTxt string
+
 	helpOutput = map[string]string{
 		"mysqlctl":     mysqlctlTxt,
 		"mysqlctld":    mysqlctldTxt,
@@ -101,6 +104,7 @@ var (
 		"vtbackup":     vtbackupTxt,
 		"zk":           zkTxt,
 		"zkctl":        zkctlTxt,
+		"vtctl":        vtctlTxt,
 	}
 )
 
