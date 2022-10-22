@@ -42,7 +42,7 @@ func (mysqld *Mysqld) ProcessCanDisableRedoLog(ctx context.Context) (bool, error
 		return false, err
 	}
 	if len(qr.Rows) == 0 {
-		return false, fmt.Errorf("mysqld >= 8.0.21 required to disable redo_log")
+		return false, fmt.Errorf("mysqld >= 8.0.21 required to disable the redo log")
 	}
 	return true, nil
 }
