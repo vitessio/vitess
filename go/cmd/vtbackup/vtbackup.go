@@ -442,7 +442,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// Re-enable redo logging.
 	if disabledRedoLog {
 		if err := mysqld.EnableRedoLog(ctx); err != nil {
-			return fmt.Errorf("failed to enable redo log: %v", err)
+			return fmt.Errorf("failed to re-enable redo log: %v", err)
 		}
 	}
 
