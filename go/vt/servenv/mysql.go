@@ -50,8 +50,6 @@ func init() {
 		"mysqlctld",
 		"vtbackup",
 		"vtcombo",
-		"vtctl",
-		"vtctldclient",
 		"vtexplain",
 		"vtgate",
 		"vtgateclienttest",
