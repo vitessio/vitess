@@ -406,6 +406,8 @@ func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorC
 		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
 	case DynamicRedoLogCapacityFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
+	case DisableRedoLogFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 21)
 	default:
 		return false, nil
 	}

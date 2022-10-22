@@ -52,6 +52,7 @@ const (
 	MySQLJSONFlavorCapability
 	MySQLUpgradeInServerFlavorCapability
 	DynamicRedoLogCapacityFlavorCapability // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
+	DisableRedoLogFlavorCapability         // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
 )
 
 const (

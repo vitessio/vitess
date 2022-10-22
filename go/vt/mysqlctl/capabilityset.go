@@ -51,6 +51,18 @@ func (c *capabilitySet) hasMaria104InstallDb() bool {
 	return c.isMariaDB() && c.version.atLeast(ServerVersion{Major: 10, Minor: 4, Patch: 0})
 }
 
+// hasDisableRedoLog tells you if the version of MySQL in use can disable redo logging.
+//
+// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
+// DISABLE INNODB REDO_LOG statement. This functionality is intended for
+// loading data into a new MySQL instance. Disabling redo logging speeds up
+// data loading by avoiding redo log writes and doublewrite buffering.
+//
+//	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-disable-redo-logging
+func (c *capabilitySet) hasDisableRedoLog() bool {
+	return c.isMySQLLike() && c.version.atLeast(ServerVersion{Major: 8, Minor: 0, Patch: 21})
+}
+
 // IsMySQLLike tests if the server is either MySQL
 // or Percona Server. At least currently, Vitess doesn't
 // make use of any specific Percona Server features.
