@@ -21,32 +21,25 @@ import (
 	"fmt"
 )
 
-func (mysqld *Mysqld) BinaryHasDisableRedoLogging() bool {
-	return mysqld.capabilities.hasDisableRedoLogging()
+func (mysqld *Mysqld) BinaryHasDisableRedoLog() bool {
+	return mysqld.capabilities.hasDisableRedoLog()
 }
 
 func (mysqld *Mysqld) DisableRedoLog(ctx context.Context) error {
-	ok, err := mysqld.ProcessCanDisableRedoLogging(ctx)
-	if !ok || err != nil {
-		return err
-	}
 	return mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE DISABLE INNODB REDO_LOG")
 }
 
 func (mysqld *Mysqld) EnableRedoLog(ctx context.Context) error {
-	ok, err := mysqld.ProcessCanDisableRedoLogging(ctx)
-	if !ok || err != nil {
-		return err
-	}
 	return mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE ENABLE INNODB REDO_LOG")
 }
 
-func (mysqld *Mysqld) ProcessCanDisableRedoLogging(ctx context.Context) (bool, error) {
+func (mysqld *Mysqld) ProcessCanDisableRedoLog(ctx context.Context) (bool, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'")
 	if err != nil {
 		// It's possible that the MySQL process can disable redo logging, but
-		// we were unable to connect. Assume that we can disable it.
-		return true, err
+		// we were unable to connect in order to verify. Let's assume not and
+		// let the caller decide if they want to retry.
+		return false, err
 	}
 	if len(qr.Rows) == 0 {
 		return false, fmt.Errorf("mysqld >= 8.0.21 required to disable redo_log")
