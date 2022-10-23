@@ -56,7 +56,6 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		*sqlparser.RevertMigration,
 		*sqlparser.ShowMigrationLogs,
 		*sqlparser.ShowThrottledApps,
-		*sqlparser.AlterThrottler,
 		*sqlparser.ShowThrottlerStatus:
 		permissions = []Permission{} // TODO(shlomi) what are the correct permissions here? Table is unknown
 	case *sqlparser.Flush:

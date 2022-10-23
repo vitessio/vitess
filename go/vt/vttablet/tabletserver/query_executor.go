@@ -184,8 +184,6 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
 		return qre.execShowThrottledApps()
-	case p.PlanAlterThrottler:
-		return qre.execAlterThrottler()
 	case p.PlanShowThrottlerStatus:
 		return qre.execShowThrottlerStatus()
 	case p.PlanSet:
@@ -956,30 +954,6 @@ func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
 				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
 				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
 			})
-	}
-	return result, nil
-}
-
-func (qre *QueryExecutor) execAlterThrottler() (*sqltypes.Result, error) {
-	// if err := qre.tsv.lagThrottler.CheckIsReady(); err != nil {
-	// 	return nil, err
-	// }
-	// alterThrottler, ok := qre.plan.FullStmt.(*sqlparser.AlterThrottler)
-	alterThrottler, ok := qre.plan.FullStmt.(*sqlparser.AlterThrottler)
-	if !ok {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_THROTTLER plan")
-	}
-	ctx := context.Background()
-	var affected bool
-	switch alterThrottler.Type {
-	case sqlparser.AlterThrottlerEnableType:
-		affected = qre.tsv.lagThrottler.Enable(ctx)
-	case sqlparser.AlterThrottlerDisableType:
-		affected = qre.tsv.lagThrottler.Disable(ctx)
-	}
-	result := &sqltypes.Result{}
-	if affected {
-		result.RowsAffected = 1
 	}
 	return result, nil
 }
