@@ -204,3 +204,35 @@ func TestBuiltinRepeat(t *testing.T) {
 
 	}
 }
+
+func TestBuiltinConv(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+	cases := []string{
+		"10",
+		"10 + '10' + 10",
+		"-10",
+		"'10'",
+	}
+	bases := []string{
+		"-1",
+		"1",
+		"2",
+		"4",
+		"8",
+		"10",
+		"16",
+		"32",
+	}
+
+	for _, num := range cases {
+		for _, fromBase := range bases {
+			for _, toBase := range bases {
+				query := fmt.Sprintf("CONV(%s, %s, %s)", num, fromBase, toBase)
+				compareRemoteExpr(t, conn, query)
+			}
+		}
+
+	}
+
+}

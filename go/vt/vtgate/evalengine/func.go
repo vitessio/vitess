@@ -49,6 +49,7 @@ var builtinFunctions = map[string]builtin{
 	"bit_length":       builtinBitLength{},
 	"ascii":            builtinASCII{},
 	"repeat":           builtinRepeat{},
+	"conv":             builtinConv{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{

@@ -18,6 +18,9 @@ package evalengine
 
 import (
 	"bytes"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -258,6 +261,40 @@ func (builtinRepeat) call(env *ExpressionEnv, args []EvalResult, result *EvalRes
 func (builtinRepeat) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 2 {
 		throwArgError("REPEAT")
+	}
+	_, f1 := args[0].typeof(env)
+	// typecheck the right-hand argument but ignore its flags
+	args[1].typeof(env)
+
+	return sqltypes.VarChar, f1
+}
+
+type builtinConv struct {
+}
+
+func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	fromBase := args[1]
+	toBase := args[2]
+
+	if inarg.isNull() || fromBase.isNull() || toBase.isNull() || fromBase.int64() < 2 || fromBase.int64() > 36 || toBase.int64() < 2 || toBase.int64() > 36 {
+		result.setNull()
+		return
+	}
+
+	inarg.makeSignedIntegral()
+
+	num, _ := strconv.ParseInt(fmt.Sprint(inarg.int64()), int(fromBase.int64()), 64)
+
+	convNum := strconv.FormatUint(uint64(num), int(toBase.int64()))
+	convNum = strings.ToUpper(convNum)
+	result.setRaw(sqltypes.VarChar, []byte(convNum), inarg.collation())
+	result.makeTextual(env.DefaultCollation)
+}
+
+func (builtinConv) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 3 {
+		throwArgError("CONV")
 	}
 	_, f1 := args[0].typeof(env)
 	// typecheck the right-hand argument but ignore its flags
