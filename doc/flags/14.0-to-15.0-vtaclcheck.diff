@@ -1,7 +1,7 @@
 diff --git a/flags/14.0/vtaclcheck.txt b/flags/15.0/vtaclcheck.txt
 index e7c9720..6e2c57d 100644
 --- a/flags/14.0/vtaclcheck.txt
-+++ b/flags/15
++++ b/flags/15.0/vtaclcheck.txt
 .0/vtaclcheck.txt
 @@ -1,67 +1,19 @@
  Usage of vtaclcheck:
