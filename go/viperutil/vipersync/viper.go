@@ -95,7 +95,7 @@ func BindValue[T any](v *Viper, value *viperutil.Value[T], fs *pflag.FlagSet) {
 	value.Bind(v.live, fs)
 }
 
-func AdaptGetter[T any](v *Viper, key string, getter func(v *viper.Viper) T) func(key string) T {
+func AdaptGetter[T any](v *Viper, key string, getter func(v *viper.Viper) func(key string) T) func(key string) T {
 	if v.watchingConfig {
 		panic("cannot adapt getter to synchronized viper which is already watching a config")
 	}
@@ -116,10 +116,10 @@ func AdaptGetter[T any](v *Viper, key string, getter func(v *viper.Viper) T) fun
 			// There's an update in progress, wait for channel close before
 			// reading.
 			<-update
-			return getter(v.live)
+			return getter(v.live)(key)
 		default:
 			// No ongoing update, read.
-			return getter(v.live)
+			return getter(v.live)(key)
 		}
 	}
 }
