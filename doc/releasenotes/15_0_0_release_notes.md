@@ -36,6 +36,8 @@
   - [Configuration Refactor and New Flags](#configuration-refactor-and-new-flags)
   - [Example Upgrade](#example-upgrade)
   - [Default Configuration Files](#default-configuration-files)
+- **[Flags Restructure](#flags-restructure)**
+  - [Flags Diff](#flags-diff)
 
 ## Known Issues
 
@@ -400,3 +402,9 @@ The release includes 551 commits (excluding merges)
 
 Thanks to all our contributors: @Abirdcfly, @DeathBorn, @GuptaManan100, @K-Kumar-01, @L3o-pold, @Phanatic, @Weijun-H, @ajm188, @arthurschreiber, @arvind-murty, @brirams, @dbussink, @deepthi, @dependabot[bot], @doeg, @frouioui, @harshit-gangal, @mattlord, @maxenglander, @mgale, @notfelineit, @ofiriluz, @olyazavr, @quinox, @rafer, @renatolabs, @rohit-nayak-ps, @rsajwani, @rvrangel, @saunderst, @shlomi-noach, @systay, @vitess-bot[bot], @vmg, @yoheimuta
 
+### Flags Restructure
+#### Flags Diff
+In addition to these major streams of work in release-15.0, we have made tremendous progress on [VEP-4, aka The Flag Situation](https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md), reorganizing our code so that Vitess binaries and their flags are
+clearly aligned in help text. An immediate win for usability, this positions us well to move on to a [viper](https://github.com/spf13/viper) implementation which will facilitate additional improvements including standardization of flag syntax and runtime configuration reloads.
+We are also aligning with industry standards regarding the use of flags, ensuring a seamless experience for users migrating from or integrating with other platforms.
+[Here](https://github.com/vitessio/vitess/tree/main/doc/flags-diff.diff) are the set of changes done across Vitess binaries in order to align them with the help text.
