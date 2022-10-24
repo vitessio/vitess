@@ -27,7 +27,7 @@ jobs:
       - name: Print helper
         if: failure() && steps.required_label.outcome == 'failure'
         run: |
-          echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary "('./doc/releasenotes/15_0_0_summary.md')". Once documented, the "release notes (needs details)" label can be removed.
+          echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary "('./doc/releasenotes/16_0_0_summary.md')". Once documented, the "release notes (needs details)" label can be removed.
           exit 1
 
       - name: Check type and component labels
