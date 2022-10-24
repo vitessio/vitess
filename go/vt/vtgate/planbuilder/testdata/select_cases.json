@@ -5416,5 +5416,47 @@
         "Table": "dual"
       }
     }
+  },
+  {
+    "comment": "Join across multiple tables, with conditions on different vindexes, but mergeable through join predicates",
+    "query": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` join music_extra on `user`.id = music_extra.user_id join music on music_extra.user_id = music.user_id where 1 != 1",
+        "Query": "select `user`.id from `user` join music_extra on `user`.id = music_extra.user_id join music on music_extra.user_id = music.user_id where `user`.id = 123 and music.id = 456",
+        "Table": "`user`, music_extra, music",
+        "Values": [
+          "INT64(123)"
+        ],
+        "Vindex": "user_index"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user`, music_extra, music where 1 != 1",
+        "Query": "select `user`.id from `user`, music_extra, music where music.id = 456 and `user`.id = 123 and `user`.id = music_extra.user_id and music_extra.user_id = music.user_id",
+        "Table": "`user`, music, music_extra",
+        "Values": [
+          "INT64(123)"
+        ],
+        "Vindex": "user_index"
+      }
+    }
   }
 ]
