@@ -407,4 +407,21 @@ Thanks to all our contributors: @Abirdcfly, @DeathBorn, @GuptaManan100, @K-Kumar
 In addition to these major streams of work in release-15.0, we have made tremendous progress on [VEP-4, aka The Flag Situation](https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md), reorganizing our code so that Vitess binaries and their flags are
 clearly aligned in help text. An immediate win for usability, this positions us well to move on to a [viper](https://github.com/spf13/viper) implementation which will facilitate additional improvements including standardization of flag syntax and runtime configuration reloads.
 We are also aligning with industry standards regarding the use of flags, ensuring a seamless experience for users migrating from or integrating with other platforms.
-[Here](https://github.com/vitessio/vitess/tree/main/doc/flags-diff.diff) are the set of changes done across Vitess binaries in order to align them with the help text.
+Below are the changes for each binary.
+- [mysqlctl](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-mysqlctl.diff)
+- [mysqlctld](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-mysqlctld.diff)
+- [vtaclcheck](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtaclcheck.diff)
+- [vtadmin](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtadmin.diff)
+- [vtctlclient](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtctlclient.diff)
+- [vtctld](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtctld.diff)
+- [vtctldclient](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtctldclient.diff)
+- [vtexplain](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtexplain.diff)
+- [vtgate](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtgate.diff)
+- [vtgtr](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtgtr.diff)
+- [vtorc](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtorc.diff)
+- [vttablet](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vttablet.diff)
+- [vttestserver](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vttestserver.diff)
+- [vttlstest](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vttlstest.diff)
+- [zk](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-zk.diff)
+- [zkctl](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-zkctl.diff)
+- [zkctld](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-zkctld.diff)
