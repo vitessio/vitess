@@ -2,6 +2,7 @@ package vipersync
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/pflag"
@@ -15,21 +16,44 @@ import (
 type Viper struct {
 	disk *viper.Viper
 	live *viper.Viper
-	keys map[string]*syncedKey
+	keys map[string]lockable
 
 	subscribers    []chan<- struct{}
 	watchingConfig bool
 }
 
-type syncedKey struct {
-	updates chan chan struct{}
+// lockable represents a structure that contains a lockable field.
+//
+// we need this interface in order to store our map of synced keys in the synced
+// viper. unfortunately, we cannot do
+//
+//	for _, key := range sv.keys {
+//		key.m.Lock()
+//		defer key.m.Unlock()
+//	}
+//
+// because generics don't (yet?) allow a collection of _different_ generic types
+// (e.g. you can't have []T{1, "hello", false}, because they are not all the same T),
+// so we abstract over the interface. it's not exported because no one outside
+// this package should be accessing a synced key's mutex.
+type lockable interface {
+	locker() sync.Locker
+}
+
+type syncedKey[T any] struct {
+	m   sync.RWMutex
+	get func(key string) T
+}
+
+func (sk *syncedKey[T]) locker() sync.Locker {
+	return &sk.m
 }
 
 func NewViper(v *viper.Viper) *Viper {
 	sv := &Viper{
 		disk: v,
 		live: viper.New(),
-		keys: map[string]*syncedKey{},
+		keys: map[string]lockable{},
 	}
 
 	// Fun fact! MergeConfigMap actually only ever returns nil. Maybe in an
@@ -37,31 +61,16 @@ func NewViper(v *viper.Viper) *Viper {
 	// decidedly does not. See https://github.com/spf13/viper/blob/v1.8.1/viper.go#L1492-L1499.
 	_ = sv.live.MergeConfigMap(sv.disk.AllSettings())
 	sv.disk.OnConfigChange(func(in fsnotify.Event) {
-		chs := make([]chan struct{}, 0, len(sv.keys))
 		// Inform each key that an update is coming.
 		for _, key := range sv.keys {
-			select {
-			case <-key.updates:
-				// The previous update channel never got used by a reader.
-				// This means that no calls to a Get* func for that key happened
-				// between the last config change and now.
-			default:
-			}
-
-			// Create a new channel for signalling the current config change.
-			ch := make(chan struct{})
-			key.updates <- ch
-			chs = append(chs, ch)
+			key.locker().Lock()
+			// This won't fire until after the config has been updated on sv.live.
+			defer key.locker().Unlock()
 		}
 
-		// Now, every key is blocked for reading; we can atomically swap the
+		// Now, every key is blocked from reading; we can atomically swap the
 		// config on disk for the config in memory.
 		_ = sv.live.MergeConfigMap(sv.disk.AllSettings())
-
-		// Unblock each key until the next update.
-		for _, ch := range chs {
-			close(ch)
-		}
 
 		for _, ch := range sv.subscribers {
 			select {
@@ -104,22 +113,16 @@ func AdaptGetter[T any](v *Viper, key string, getter func(v *viper.Viper) func(k
 		panic(fmt.Sprintf("already adapted a getter for key %s", key))
 	}
 
-	sk := &syncedKey{
-		updates: make(chan chan struct{}, 1),
+	sk := &syncedKey[T]{
+		get: getter(v.live),
 	}
 
 	v.keys[key] = sk
 
 	return func(key string) T {
-		select {
-		case update := <-sk.updates:
-			// There's an update in progress, wait for channel close before
-			// reading.
-			<-update
-			return getter(v.live)(key)
-		default:
-			// No ongoing update, read.
-			return getter(v.live)(key)
-		}
+		sk.m.RLock()
+		defer sk.m.RUnlock()
+
+		return sk.get(key)
 	}
 }
