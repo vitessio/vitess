@@ -1,18 +1,44 @@
 ## Summary
 
-- [Breaking Changes](#breaking-changes)
-- [Deprecations](#deprecations)
-- [Command-line Syntax Deprecations](#command-line-syntax-deprecations)
-- [New Command Line Flags and Behavior](#new-command-line-flags-and-behavior)
-- [Online DDL changes](#online-ddl-changes)
-- [Tablet Throttler](#tablet-throttler)
-- [VDiff2](#vdiff2)
-- [Mysql Compatibility](#mysql-compatibility)
-- [Durability Policy](#durability-policy)
-- [New EXPLAIN Format](#new-explain-format)
-- [VTOrc](#vtorc)
-
-## Known Issues
+- **[Breaking Changes](#a-idbreaking-changesbreaking-changes)**
+  - [Flags](#flags)
+  - [VTTablet Flag Deletions](#vttablet-startup-flag-deletions)
+  - [Vindex Interface](#vindex-interface)
+- **[Deprecations](#a-iddeprecationsdeprecations)**
+  - [LogStats Table and Keyspace Deprecated](#logstats-table-and-keyspace-deprecated)
+  - [Orchestrator Integration Deprecation](#orchestrator-integration-deprecation)
+  - [Connection Pool Prefill](#connection-pool-prefill)
+  - [InitShardPrimary Deprecation](#initshardprimary-deprecation)
+- **[Command-Line Syntax Deprecations](#a-idcommand-line-syntax-deprecationscommand-line-syntax-deprecations)**
+  - [VTTablet Startup Flag Deletions](#vttablet-startup-flag-deletions)
+  - [VTTablet Startup Flag Deprecations](#vttablet-startup-flag-deprecations)
+  - [VTBackup Flag Deprecations](#vtbackup-flag-deprecations)
+- **[VTGate](#a-idvtgatevtgate)**
+  - [vtgate --mysql-server-pool-conn-read-buffers](#vtgate---mysql-server-pool-conn-read-buffers)
+- **[VDiff2](#a-idvdiff2vdiff-v2)**
+  - [Resume Workflow](#resume-workflow)
+  - [vtctl GetSchema --table-schema-only](#vtctl-getschema---table-schema-only)
+  - [Support for Additional Compressors and Decompressors During Backup & Restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
+  - [Independent OLAP and OLTP Transactional Timeouts](#independent-olap-and-oltp-transactional-timeouts)
+  - [Support for Specifying Group Information in Calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
+- **[Online DDL Changes](#a-idonline-ddl-changesonline-ddl-changes)**
+  - [Concurrent Vitess Migrations](#concurrent-vitess-migrations)
+  - [VTCtl Command Changes](#vtctl-command-changes)
+  - [New Syntax](#new-syntax)
+- **[Tablet Throttler](#a-idtablet-throttlertablet-throttler)**
+  - [API Changes](#api-changes)
+- **[Mysql Compatibility](#a-idmysql-compatibilitymysql-compatibility)**
+  - [System Settings](#system-settings)
+  - [Lookup Vindexes](#lookup-vindexes)
+- **[Durability Policy](#a-iddurability-policydurability-policy)**
+  - [Cross Cell](#cross-cell)
+- **[New EXPLAIN Format](#a-idnew-explain-formatnew-explain-format)**
+  - [FORMAT=vtexplain](#formatvtexplain)
+- **[VTOrc](#a-idvtorcvtorc)**
+  - [Old UI Removal and Replacement](#old-ui-removal-and-replacement)
+  - [Configuration Refactor and New Flags](#configuration-refactor-and-new-flags)
+  - [Example Upgrade](#example-upgrade)
+  - [Default Configuration Files](#default-configuration-files)
 
 ## Major Changes
 
@@ -28,7 +54,7 @@
 - `vtctl` commands that take shard names and ranges as positional arguments (e.g. `vtctl Reshard ks.workflow -80 -40,40-80`) need to have their positional arguments separated from their flag arguments by a double-dash separator to avoid the new parsing library from mistaking them as flags (e.g. `vtctl Reshard ks.workflow -- -80 -40,40-80`).
 - The `--cell` flag in the `vtgate` binary no longer has a default value. It is a required argument that has to be specified for the binary to run. Please explicitly specify the flag, if dependent on the flag's default value.
 
-#### vttablet flag deletions
+#### vttablet Flag Deletions
 The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - `--queryserver-config-message-conn-pool-size`
 - `--queryserver-config-message-conn-pool-prefill-parallelism`
@@ -96,7 +122,7 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 #### vtbackup flag deprecations
 - `--backup_storage_hook` has been deprecated, consider using one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
-### <a id="new-command-line-flags-and-behavior"/>New command line flags and behavior
+### <a id="vtgate"/>VTGate
 
 #### vtgate --mysql-server-pool-conn-read-buffers
 
@@ -104,6 +130,8 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 connections, similar to the way pooling happens for write buffers. Defaults to off.
 
 ### <a id="vdiff2"/>VDiff v2
+
+#### Resume Workflow
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
@@ -142,8 +170,6 @@ We also made a number of other enhancements like progress reporting and features
 Now that VDiff v2 is feature complete in 15.0, we hope to make it GA in 16.0.
 
 Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vreplication/vdiff2/) for additional information.
-
-### <a id="new-command-line-flags-and-behavior"/>New command line flags and behavior
 
 #### vtctl GetSchema --table-schema-only
 
@@ -243,7 +269,7 @@ ALTER VITESS_MIGRATION COMPLETE ALL
 
 This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open-ended (`--postpone-completion`).
 
-### <a id="tablet-throttler"/>Tablet throttler
+### <a id="tablet-throttler"/>Tablet Throttler
 
 #### API changes
 
