@@ -128,9 +128,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
 
-		// Enable parallel insert workers while we let this feature bake in
-		// 16.0.0-SNAPSHOT. Revert before 16.0.0 release.
-		"--vreplication-parallel-insert-workers=4",
+		parallelInsertWorkers,
 	}
 
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
@@ -171,7 +169,7 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
 	extraVTTabletArgs = []string{
-		"--vreplication-parallel-insert-workers=4",
+		parallelInsertWorkers,
 	}
 	testBasicVreplicationWorkflow(t)
 }

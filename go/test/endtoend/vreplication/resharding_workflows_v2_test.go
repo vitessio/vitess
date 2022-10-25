@@ -243,10 +243,8 @@ func getCurrentState(t *testing.T) string {
 
 func TestBasicV2Workflows(t *testing.T) {
 	defaultRdonly = 1
-	// Enable parallel insert workers while we let this feature bake in
-	// 16.0.0-SNAPSHOT. Revert before 16.0.0 release.
 	extraVTTabletArgs = []string{
-		"--vreplication-parallel-insert-workers=4",
+		parallelInsertWorkers,
 	}
 	defer func() {
 		defaultRdonly = 0

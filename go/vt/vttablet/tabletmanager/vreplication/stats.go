@@ -388,14 +388,6 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
-
-	stats.NewGaugeFunc("VReplicationBulkInsertConcurrency", "Number of concurrent bulk inserts", st.bulkInsertConcurrency)
-}
-
-func (st *vrStats) bulkInsertConcurrency() int64 {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	return int64(vreplicationParallelInsertWorkers)
 }
 
 func (st *vrStats) numControllers() int64 {

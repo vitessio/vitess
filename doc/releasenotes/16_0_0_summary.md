@@ -14,13 +14,15 @@ It can be overridden by setting the `query_timeout` session variable.
 Setting it as command line directive with `QUERY_TIMEOUT_MS` will override other values.
 
 #### VTTablet: VReplication parallel insert workers --vreplication-parallel-insert-workers
-`--vreplication-parallel-insert-workers=[integer]` enables parallel bulk inserts during the copy phase of VReplication. When it is not set (default), VReplication will perform copy-phase inserts one-at-a-time. When set, inserts may happen in-parallel and out-or-order.
+`--vreplication-parallel-insert-workers=[integer]` enables parallel bulk inserts during the copy phase
+of VReplication (disabled by default). When set to a value greater than 1 the bulk inserts — each
+executed as a single transaction from the vstream packet contents — may happen in-parallel and
+out-of-order, but the commit of those transactions are still serialized in order.
 
 Other aspects of the VReplication copy-phase logic are preserved:
+  1. All statements executed when processing a vstream packet occur within a single MySQL transaction.
+  2. Writes to `_vt.copy_state` always follow their corresponding inserts from within the vstream packet.
+  3. The final `commit` for the vstream packet always follows the corresponding write to `_vt.copy_state`.
+  4. The vstream packets are committed in the order seen in the stream. So for any PK1 and PK2, the write to `_vt.copy_state` and  `commit` steps (steps 2 and 3 above) for PK1 will both precede the `_vt.copy_state` write and commit steps of PK2.
 
-  1. Inserts and updates occur within a MySQL transaction.
-  2. Updates to `_vt.copy_state` always follow their corresponding insert.
-  3. `commit` always follows the corresponding update to `_vt.copy_state`.
-  4. For any PK1 and PK2, the update and `commit` steps for PK1 will both precede the update and commit steps of PK2
-
-Other phases (catchup, fast-forward, "running") are not changed by this PR.
+ Other phases, catchup, fast-forward, and replicating/"running", are unchanged.
