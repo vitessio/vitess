@@ -1,46 +1,46 @@
 ## Summary
 
-- **[Breaking Changes](breaking-changes)**
-  - [Flags](flags)
-  - [VTTablet Flag Deletions](vttablet-flag-deletions)
-  - [Vindex Interface](vindex-interface)
-- **[Deprecations](deprecations)**
-  - [LogStats Table and Keyspace Deprecated](logstats-table-and-keyspace-deprecated)
-  - [Orchestrator Integration Deprecation](orchestrator-integration-deprecation)
-  - [Connection Pool Prefill](connection-pool-prefill)
-  - [InitShardPrimary Deprecation](initshardprimary-deprecation)
-- **[Command-Line Syntax Deprecations](command-line-syntax-deprecations)**
-  - [VTTablet Startup Flag Deletions](vttablet-startup-flag-deletions)
-  - [VTTablet Startup Flag Deprecations](vttablet-startup-flag-deprecations)
-  - [VTBackup Flag Deprecations](vtbackup-flag-deprecations)
-- **[VTGate](vtgate)**
-  - [vtgate --mysql-server-pool-conn-read-buffers](vtgate--mysql-server-pool-conn-read-buffers)
-- **[VDiff2](vdiff2)**
-  - [Resume Workflow](resume-workflow)
-  - [vtctl GetSchema --table-schema-only](vtctl-getschema--table-schema-only)
-  - [Support for Additional Compressors and Decompressors During Backup & Restore](support-for-additional-compressors-and-decompressors-during-backup--restore)
-  - [Independent OLAP and OLTP Transactional Timeouts](independant-olap-and-oltp-transactional-timeouts)
-  - [Support for Specifying Group Information in Calls to VTGate](support-for-specifying-group-information-in-calls-to-vtgate)
-- **[Online DDL Changes](online-ddl-changes)**
-  - [Concurrent Vitess Migrations](concurrent-vitess-migrations)
-  - [VTCtl Command Changes](vtctl-command-changes)
-  - [New Syntax](new-syntax)
-- **[Tablet Throttler](tablet-throttler)**
-  - [API Changes](api-changes)
-- **[Mysql Compatibility](mysql-compatibility)**
-  - [System Settings](system-settings)
-  - [Lookup Vindexes](lookup-vindexes)
-- **[Durability Policy](durability-policy)**
-  - [Cross Cell](cross-cell)
-- **[New EXPLAIN Format](new-explain-format)**
-  - [FORMAT=vtexplain](formatvtexplain)
-- **[VTOrc](vtorc)**
-  - [Old UI Removal and Replacement](old-ui-removal-and-replacement)
-  - [Configuration Refactor and New Flags](configuratoin-refactor-and-new-flags)
-  - [Example Upgrade](example-upgrade)
-  - [Default Configuration Files](default-configuration-files)
-- **[Flags Restructure](flags-restructure)**
-  - [Flags Diff](flags-diff)
+- **[Breaking Changes](#breaking-changes)**
+  - [Flags](#flags)
+  - [VTTablet Flag Deletions](#vttablet-flag-deletions)
+  - [Vindex Interface](#vindex-interface)
+- **[Deprecations](#deprecations)**
+  - [LogStats Table and Keyspace Deprecated](#logstats-table-and-keyspace-deprecated)
+  - [Orchestrator Integration Deprecation](#orchestrator-integration-deprecation)
+  - [Connection Pool Prefill](#connection-pool-prefill)
+  - [InitShardPrimary Deprecation](#initshardprimary-deprecation)
+- **[Command-Line Syntax Deprecations](#command-line-syntax-deprecations)**
+  - [VTTablet Startup Flag Deletions](#vttablet-startup-flag-deletions)
+  - [VTTablet Startup Flag Deprecations](#vttablet-startup-flag-deprecations)
+  - [VTBackup Flag Deprecations](#vtbackup-flag-deprecations)
+- **[VTGate](#vtgate)**
+  - [vtgate --mysql-server-pool-conn-read-buffers](#vtgate--mysql-server-pool-conn-read-buffers)
+- **[VDiff2](#vdiff2)**
+  - [Resume Workflow](#resume-workflow)
+  - [vtctl GetSchema --table-schema-only](#vtctl-getschema--table-schema-only)
+  - [Support for Additional Compressors and Decompressors During Backup & Restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
+  - [Independent OLAP and OLTP Transactional Timeouts](#independant-olap-and-oltp-transactional-timeouts)
+  - [Support for Specifying Group Information in Calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
+- **[Online DDL Changes](#online-ddl-changes)**
+  - [Concurrent Vitess Migrations](#concurrent-vitess-migrations)
+  - [VTCtl Command Changes](#vtctl-command-changes)
+  - [New Syntax](#new-syntax)
+- **[Tablet Throttler](#tablet-throttler)**
+  - [API Changes](#api-changes)
+- **[Mysql Compatibility](#mysql-compatibility)**
+  - [System Settings](#system-settings)
+  - [Lookup Vindexes](#lookup-vindexes)
+- **[Durability Policy](#durability-policy)**
+  - [Cross Cell](#cross-cell)
+- **[New EXPLAIN Format](#new-explain-format)**
+  - [FORMAT=vtexplain](#formatvtexplain)
+- **[VTOrc](#vtorc)**
+  - [Old UI Removal and Replacement](#old-ui-removal-and-replacement)
+  - [Configuration Refactor and New Flags](#configuratoin-refactor-and-new-flags)
+  - [Example Upgrade](#example-upgrade)
+  - [Default Configuration Files](#default-configuration-files)
+- **[Flags Restructure](#flags-restructure)**
+  - [Flags Diff](#flags-diff)
 
 ## Major Changes
 
