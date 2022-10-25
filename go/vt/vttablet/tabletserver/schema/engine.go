@@ -330,7 +330,7 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, created, a
 // reload reloads the schema. It can also be used to initialize it. If any of
 // the created, altered or dropped lists are present, performs a partial
 // (faster) reload. Otherwise, performs a full schema reload.
-func (se *Engine) reload(ctx context.Context, created, altered, dropped []string) error {
+func (se *Engine) reload(ctx context.Context, userCreated, userAltered, userDropped []string) error {
 	defer func() {
 		se.env.LogError()
 	}()
@@ -355,8 +355,31 @@ func (se *Engine) reload(ctx context.Context, created, altered, dropped []string
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
 	changedTables := make(map[string]*Table)
 
+	var created, altered, dropped []string
+
 	// partial reload
-	if created != nil || altered != nil || dropped != nil {
+	if userCreated != nil || userAltered != nil || userDropped != nil {
+		/* only create tables that don't actually exist */
+		for _, tableName := range userCreated {
+			if _, ok := se.tables[tableName]; !ok {
+				created = append(created, tableName)
+			}
+		}
+
+		/* only alter tables that actually exist */
+		for _, tableName := range userAltered {
+			if _, ok := se.tables[tableName]; ok {
+				altered = append(altered, tableName)
+			}
+		}
+
+		/* only drop tables that actually exist */
+		for _, tableName := range userDropped {
+			if _, ok := se.tables[tableName]; ok {
+				dropped = append(dropped, tableName)
+			}
+		}
+
 		for _, tableName := range append(created, altered...) {
 			log.V(2).Infof("Reading schema for table: %s", tableName)
 			table, err := LoadTable(conn, se.cp.DBName(), tableName, "")
