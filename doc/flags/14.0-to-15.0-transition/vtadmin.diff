@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..7ea8436
 --- /dev/null
 +++ b/flags/15.0/vtadmin.txt
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,47   @@
 +Usage:
 +  vtadmin [flags]
 +
