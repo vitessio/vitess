@@ -19,9 +19,10 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
-	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -74,7 +75,7 @@ func parseInterval(s string) (interval, error) {
 //
 // https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
 func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
-	set := Mysql56GTIDSet{}
+	set := make(Mysql56GTIDSet)
 
 	// gtid_set: uuid_set [, uuid_set] ...
 	for _, uuidSet := range strings.Split(s, ",") {
@@ -84,21 +85,22 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 		}
 
 		// uuid_set: uuid:interval[:interval]...
-		parts := strings.Split(uuidSet, ":")
-		if len(parts) < 2 {
+		head, tail, ok := strings.Cut(uuidSet, ":")
+		if !ok {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 GTID set (%q): expected uuid:interval", s)
 		}
 
 		// Parse Server ID.
-		sid, err := ParseSID(parts[0])
+		sid, err := ParseSID(head)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 		}
 
-		// Parse Intervals.
-		intervals := make([]interval, 0, len(parts)-1)
-		for _, part := range parts[1:] {
-			iv, err := parseInterval(part)
+		var intervals []interval
+		for tail != "" {
+			head, tail, _ = strings.Cut(tail, ":")
+
+			iv, err := parseInterval(head)
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 			}
@@ -116,7 +118,9 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 		}
 
 		// Internally we expect intervals to be stored in order.
-		sort.Sort(intervalList(intervals))
+		slices.SortFunc(intervals, func(a, b interval) bool {
+			return a.start < b.start
+		})
 		set[sid] = intervals
 	}
 
@@ -132,25 +136,19 @@ func (set Mysql56GTIDSet) SIDs() []SID {
 	for sid := range set {
 		sids = append(sids, sid)
 	}
-	sort.Sort(sidList(sids))
+	sortSIDs(sids)
 	return sids
 }
 
-type sidList []SID
-
-// Len implements sort.Interface.
-func (s sidList) Len() int { return len(s) }
-
-// Less implements sort.Interface.
-func (s sidList) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
-
-// Swap implements sort.Interface.
-func (s sidList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func sortSIDs(sids []SID) {
+	slices.SortFunc(sids, func(a, b SID) bool {
+		return bytes.Compare(a[:], b[:]) < 0
+	})
+}
 
 // String implements GTIDSet.
 func (set Mysql56GTIDSet) String() string {
-	buf := &bytes.Buffer{}
-
+	var buf strings.Builder
 	for i, sid := range set.SIDs() {
 		if i != 0 {
 			buf.WriteByte(',')
@@ -167,7 +165,6 @@ func (set Mysql56GTIDSet) String() string {
 			}
 		}
 	}
-
 	return buf.String()
 }
 
@@ -175,8 +172,7 @@ func (set Mysql56GTIDSet) String() string {
 // For gtidset having multiple SIDs or multiple intervals
 // it just returns the last SID with last interval
 func (set Mysql56GTIDSet) Last() string {
-	buf := &bytes.Buffer{}
-
+	var buf strings.Builder
 	if len(set.SIDs()) > 0 {
 		sid := set.SIDs()[len(set.SIDs())-1]
 		buf.WriteString(sid.String())
@@ -187,7 +183,6 @@ func (set Mysql56GTIDSet) Last() string {
 			buf.WriteString(strconv.FormatInt(lastInterval.end, 10))
 		}
 	}
-
 	return buf.String()
 }
 
