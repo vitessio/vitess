@@ -67,6 +67,7 @@ type ConfigFileNotFoundHandling int
 const (
 	IgnoreConfigFileNotFound ConfigFileNotFoundHandling = iota
 	WarnOnConfigFileNotFound
+	ErrorOnConfigFileNotFound
 	ExitOnConfigFileNotFound
 )
 
@@ -111,6 +112,8 @@ func ReadInConfig(v *viper.Viper, opts ConfigOptions, handling ConfigFileNotFoun
 				return nil
 			case WarnOnConfigFileNotFound:
 				log.Warningf(nferr.Error())
+			case ErrorOnConfigFileNotFound:
+				return err
 			case ExitOnConfigFileNotFound:
 				log.Exitf(nferr.Error())
 			}
