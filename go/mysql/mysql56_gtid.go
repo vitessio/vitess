@@ -73,14 +73,14 @@ func ParseSID(s string) (sid SID, err error) {
 	}
 
 	// Drop the dashes so we can just check the error of Decode once.
-	b := make([]byte, 0, 32)
-	b = append(b, s[:8]...)
-	b = append(b, s[9:13]...)
-	b = append(b, s[14:18]...)
-	b = append(b, s[19:23]...)
-	b = append(b, s[24:]...)
+	var b [32]byte
+	copy(b[0:], s[:8])
+	copy(b[8:], s[9:13])
+	copy(b[12:], s[14:18])
+	copy(b[16:], s[19:23])
+	copy(b[20:], s[24:])
 
-	if _, err := hex.Decode(sid[:], b); err != nil {
+	if _, err := hex.Decode(sid[:], b[:]); err != nil {
 		return sid, vterrors.Wrapf(err, "invalid MySQL 5.6 SID %q", s)
 	}
 	return sid, nil
