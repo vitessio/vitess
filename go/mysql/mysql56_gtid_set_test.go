@@ -94,13 +94,13 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 	}
 
 	for input, want := range table {
-		got, err := parseMysql56GTIDSet(input)
+		got, err := ParseMysql56GTIDSet(input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			continue
 		}
 		if !got.Equal(want) {
-			t.Errorf("parseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
+			t.Errorf("ParseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
 		}
 	}
 }
@@ -119,9 +119,9 @@ func TestParseMysql56GTIDSetInvalid(t *testing.T) {
 	}
 
 	for _, input := range table {
-		_, err := parseMysql56GTIDSet(input)
+		_, err := ParseMysql56GTIDSet(input)
 		if err == nil {
-			t.Errorf("parseMysql56GTIDSet(%#v) expected error, got none", err)
+			t.Errorf("ParseMysql56GTIDSet(%#v) expected error, got none", err)
 		}
 	}
 }
