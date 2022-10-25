@@ -36,20 +36,10 @@ func (iv interval) contains(other interval) bool {
 	return iv.start <= other.start && other.end <= iv.end
 }
 
-type intervalList []interval
-
-// Len implements sort.Interface.
-func (s intervalList) Len() int { return len(s) }
-
-// Less implements sort.Interface.
-func (s intervalList) Less(i, j int) bool { return s[i].start < s[j].start }
-
-// Swap implements sort.Interface.
-func (s intervalList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
 func parseInterval(s string) (interval, error) {
-	parts := strings.Split(s, "-")
-	start, err := strconv.ParseInt(parts[0], 10, 64)
+	part0, part1, twoParts := strings.Cut(s, "-")
+
+	start, err := strconv.ParseUint(part0, 10, 63)
 	if err != nil {
 		return interval{}, vterrors.Wrapf(err, "invalid interval (%q)", s)
 	}
@@ -57,28 +47,34 @@ func parseInterval(s string) (interval, error) {
 		return interval{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid interval (%q): start must be > 0", s)
 	}
 
-	switch len(parts) {
-	case 1:
-		return interval{start: start, end: start}, nil
-	case 2:
-		end, err := strconv.ParseInt(parts[1], 10, 64)
+	if twoParts {
+		end, err := strconv.ParseUint(part1, 10, 63)
 		if err != nil {
 			return interval{}, vterrors.Wrapf(err, "invalid interval (%q)", s)
 		}
-		return interval{start: start, end: end}, nil
-	default:
-		return interval{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid interval (%q): expected start-end or single number", s)
+		return interval{start: int64(start), end: int64(end)}, nil
+	} else {
+		return interval{start: int64(start), end: int64(start)}, nil
 	}
 }
 
 // ParseMysql56GTIDSet is registered as a GTIDSet parser.
 //
 // https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
-func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
+func ParseMysql56GTIDSet(input string) (Mysql56GTIDSet, error) {
 	set := make(Mysql56GTIDSet)
 
 	// gtid_set: uuid_set [, uuid_set] ...
-	for _, uuidSet := range strings.Split(s, ",") {
+	for len(input) > 0 {
+		var uuidSet string
+		if idx := strings.IndexByte(input, ','); idx >= 0 {
+			uuidSet = input[:idx]
+			input = input[idx+1:]
+		} else {
+			uuidSet = input
+			input = ""
+		}
+
 		uuidSet = strings.TrimSpace(uuidSet)
 		if uuidSet == "" {
 			continue
@@ -87,22 +83,28 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 		// uuid_set: uuid:interval[:interval]...
 		head, tail, ok := strings.Cut(uuidSet, ":")
 		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 GTID set (%q): expected uuid:interval", s)
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 GTID set (%q): expected uuid:interval", input)
 		}
 
 		// Parse Server ID.
 		sid, err := ParseSID(head)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
+			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", input)
 		}
 
-		var intervals []interval
-		for tail != "" {
-			head, tail, _ = strings.Cut(tail, ":")
+		intervals := make([]interval, 0, strings.Count(tail, ":")+1)
+		for len(tail) > 0 {
+			if idx := strings.IndexByte(tail, ':'); idx >= 0 {
+				head = tail[:idx]
+				tail = tail[idx+1:]
+			} else {
+				head = tail
+				tail = ""
+			}
 
 			iv, err := parseInterval(head)
 			if err != nil {
-				return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
+				return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", input)
 			}
 			if iv.end < iv.start {
 				// According to MySQL 5.6 code:
