@@ -1,16 +1,43 @@
-# Release of Vitess v15.0.0-rc1
+# Release of Vitess v15.0.0
 ## Summary
 
-- [Vindex Interface](#vindex-interface)
-- [LogStats Table and Keyspace deprecated](#logstats-table-and-keyspace-deprecated)
-- [Command-line syntax deprecations](#command-line-syntax-deprecations)
-- [New command line flags and behavior](#new-command-line-flags-and-behavior)
-- [Online DDL changes](#online-ddl-changes)
-- [Tablet throttler](#tablet-throttler)
-- [VDiff2](#vdiff2)
-- [Mysql Compatibility](#mysql-compatibility)
-- [Durability Policy](#durability-policy)
-- [New EXPLAIN format](#new-explain-format)
+- **[Breaking Changes](#breaking-changes)**
+  - [Vindex Interface](#vindex-interface)
+  - [LogStats Table and Keyspace Deprecated](#logstats-table-and-keyspace-deprecated)
+  - [Orchestrator Integration Deprecation](#orchestrator-integration-deprecation)
+  - [Connection Pool Prefill](#connection-pool-prefill)
+- **[Command-Line Syntax Deprecations](#command-line-syntax-deprecations)**
+  - [VTTablet Startup Flag Deletions](#vttablet-startup-flag-deletions)
+  - [VTTablet Startup Flag Deprecations](#vttablet-startup-flag-deprecations)
+  - [VTBackup Flag Deprecations](#vtbackup-flag-deprecations)
+- **[VTGate](#vtgate)**
+  - [vtgate --mysql-server-pool-conn-read-buffers](#vtgate---mysql-server-pool-conn-read-buffers)
+- **[VDiff2](#vdiff2)**
+  - [Resume Workflow](#resume-workflow) 
+  - [vtctl GetSchema --table-schema-only](#vtctl-getschema---table-schema-only)
+  - [Support for Additional Compressors and Decompressors During Backup & Restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
+  - [Independent OLAP and OLTP Transactional Timeouts](#independent-olap-and-oltp-transactional-timeouts)
+  - [Support for Specifying Group Information in Calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
+- **[Online DDL Changes](#online-ddl-changes)**
+  - [Concurrent Vitess Migrations](#concurrent-vitess-migrations)
+  - [VTCtl Command Changes](#vtctl-command-changes)
+  - [New Syntax](#new-syntax)
+- **[Tablet Throttler](#tablet-throttler)**
+  - [API Changes](#api-changes)
+- **[Mysql Compatibility](#mysql-compatibility)**
+  - [System Settings](#system-settings)
+  - [Lookup Vindexes](#lookup-vindexes)
+- **[Durability Policy](#durability-policy)**
+  - [Cross Cell](#cross-cell)
+- **[New EXPLAIN Format](#new-explain-format)**
+  - [FORMAT=vtexplain](#formatvtexplain)
+- **[VTOrc](#vtorc)**
+  - [Old UI Removal and Replacement](#old-ui-removal-and-replacement)
+  - [Configuration Refactor and New Flags](#configuration-refactor-and-new-flags)
+  - [Example Upgrade](#example-upgrade)
+  - [Default Configuration Files](#default-configuration-files)
+- **[Flags Restructure](#flags-restructure)**
+  - [Flags Diff](#flags-diff)
 
 ## Known Issues
 
@@ -41,7 +68,7 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 This only affects users who have added their own custom vindex implementation. 
 They are required to change their implementation with these new interface method expectations.
 
-#### LogStats Table and Keyspace deprecated
+#### LogStats Table and Keyspace Deprecated
 
 Information about which tables are used was being reported through the `Keyspace` and `Table` fields on LogStats.
 For multi-table queries, this output can be confusing, so we have added `TablesUsed`, that is a string array, listing all tables and which keyspace they are on.
@@ -58,9 +85,9 @@ The connection pool with prefilled connections have been removed. The pool now d
 Following flags are deprecated: `queryserver-config-pool-prefill-parallelism`, `queryserver-config-stream-pool-prefill-parallelism`, `queryserver-config-transaction-prefill-parallelism`
 and will be removed in future version.
 
-### Command-line syntax deprecations
+### Command-Line Syntax Deprecations
 
-#### vttablet startup flag deletions
+#### VTTablet Startup Flag Deletions
 The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --queryserver-config-message-conn-pool-size
 - --queryserver-config-message-conn-pool-prefill-parallelism
@@ -71,15 +98,15 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --pool-name-prefix
 - --enable-autocommit Autocommit is always allowed
 
-#### vttablet startup flag deprecations
+#### VTTablet Startup Flag Deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 - --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 - --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
 
-#### vtbackup flag deprecations
+#### VTBackup Flag Deprecations
 - --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.
 
-### New command line flags and behavior
+### VTGate
 
 #### vtgate --mysql-server-pool-conn-read-buffers
 
@@ -87,6 +114,8 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 connections, similar to the way pooling happens for write buffers. Defaults to off.
 
 ### VDiff2
+
+#### Resume Workflow
 
 We introduced the ability to resume a VDiff2 workflow:
 ```
@@ -120,13 +149,11 @@ $ vtctlclient --server=localhost:15999 VDiff --v2 --format=json customer.commerc
 
 Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vreplication/vdiff2/) for additional information.
 
-### New command line flags and behavior
-
 #### vtctl GetSchema --table-schema-only
 
 The new flag `--table-schema-only` skips column introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in the `schema` field.
 
-#### Support for additional compressors and decompressors during backup & restore
+#### Support for Additional Compressors and Decompressors During Backup & Restore
 Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(`pgzip`).
 There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
 use-case. Here are the flags that control this feature
@@ -168,7 +195,7 @@ The reason you cannot change all the values together is because the restore proc
 should be used to process the previous backup. Please make sure you have thought out all possible scenarios for restore before transitioning from one
 compression engine to another.
 
-#### Independent OLAP and OLTP transactional timeouts
+#### Independent OLAP and OLTP Transactional Timeouts
 
 `--queryserver-config-olap-transaction-timeout` specifies the timeout applied
 to a transaction created within an OLAP workload. The default value is `30`
@@ -186,15 +213,15 @@ other.
 The main use case is to run queries spanning a long period of time which
 require transactional guarantees such as consistency or atomicity.
 
-#### Support for specifying group information in calls to VTGate
+#### Support for Specifying Group Information in Calls to VTGate
 
 `--grpc-use-effective-groups` allows non-SSL callers to specify groups information for a caller.
 Until now, you could only specify the caller-id for the security context used to authorize queries.
 As of now, you can specify the principal of the caller, and any groups they belong to.
 
-### Online DDL changes
+### Online DDL Changes
 
-#### Concurrent vitess migrations
+#### Concurrent Vitess Migrations
 
 All Online DDL migrations using the `vitess` strategy are now eligible to run concurrently, given `--allow-concurrent` DDL strategy flag. Until now, only `CREATE`, `DROP` and `REVERT` migrations were eligible, and now `ALTER` migrations are supported, as well. The terms for `ALTER` migrations concurrency:
 
@@ -205,13 +232,13 @@ All Online DDL migrations using the `vitess` strategy are now eligible to run co
 
 The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migrations will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
 
-#### vtctl command changes. 
+#### VTCtl Command Changes 
 All `online DDL show` commands can now be run with a few additional parameters
 - `--order` , order migrations in the output by either ascending or descending order of their `id` fields.
 - `--skip`  , skip specified number of migrations in the output.
 - `--limit` , limit results to a specified number of migrations in the output.
 
-#### New syntax
+#### New Syntax
 
 The following is now supported:
 
@@ -221,9 +248,9 @@ ALTER VITESS_MIGRATION COMPLETE ALL
 
 This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open-ended (`--postpone-completion`).
 
-### Tablet throttler
+### Tablet Throttler
 
-#### API changes
+#### API Changes
 
 API endpoint `/debug/vars` now exposes throttler metrics, such as number of hits and errors per app per check type. Example:
 
@@ -269,7 +296,7 @@ This is different from the existing `autocommit` parameter where the query is se
 A new durability policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
 send semi-sync ACKs. This ensures that any committed write exists in at least 2 tablets belonging to different cells.
 
-### New EXPLAIN format
+### New EXPLAIN Format
 
 #### FORMAT=vtexplain
 
@@ -375,3 +402,26 @@ The release includes 551 commits (excluding merges)
 
 Thanks to all our contributors: @Abirdcfly, @DeathBorn, @GuptaManan100, @K-Kumar-01, @L3o-pold, @Phanatic, @Weijun-H, @ajm188, @arthurschreiber, @arvind-murty, @brirams, @dbussink, @deepthi, @dependabot[bot], @doeg, @frouioui, @harshit-gangal, @mattlord, @maxenglander, @mgale, @notfelineit, @ofiriluz, @olyazavr, @quinox, @rafer, @renatolabs, @rohit-nayak-ps, @rsajwani, @rvrangel, @saunderst, @shlomi-noach, @systay, @vitess-bot[bot], @vmg, @yoheimuta
 
+### Flags Restructure
+#### Flags Diff
+In addition to these major streams of work in release-15.0, we have made tremendous progress on [VEP-4, aka The Flag Situation](https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md), reorganizing our code so that Vitess binaries and their flags are
+clearly aligned in help text. An immediate win for usability, this positions us well to move on to a [viper](https://github.com/spf13/viper) implementation which will facilitate additional improvements including standardization of flag syntax and runtime configuration reloads.
+We are also aligning with industry standards regarding the use of flags, ensuring a seamless experience for users migrating from or integrating with other platforms.
+Below are the changes for each binary.
+- [mysqlctl](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-mysqlctl.diff)
+- [mysqlctld](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-mysqlctld.diff)
+- [vtaclcheck](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtaclcheck.diff)
+- [vtadmin](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtadmin.diff)
+- [vtctlclient](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtctlclient.diff)
+- [vtctld](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtctld.diff)
+- [vtctldclient](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtctldclient.diff)
+- [vtexplain](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtexplain.diff)
+- [vtgate](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtgate.diff)
+- [vtgtr](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtgtr.diff)
+- [vtorc](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vtorc.diff)
+- [vttablet](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vttablet.diff)
+- [vttestserver](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vttestserver.diff)
+- [vttlstest](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-vttlstest.diff)
+- [zk](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-zk.diff)
+- [zkctl](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-zkctl.diff)
+- [zkctld](https://github.com/vitessio/vitess/tree/main/doc/flags/14.0-to-15.0-zkctld.diff)
