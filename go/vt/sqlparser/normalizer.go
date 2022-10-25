@@ -140,15 +140,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Check if there's a bindvar for that value already.
-	var key string
-	if bval.Type == sqltypes.VarBinary || bval.Type == sqltypes.VarChar {
-		// Prefixing strings with "'" ensures that a string
-		// and number that have the same representation don't
-		// collide.
-		key = "'" + node.Val
-	} else {
-		key = node.Val
-	}
+	key := keyFor(bval, node)
 	bvname, ok := nz.vals[key]
 	if !ok {
 		// If there's no such bindvar, make a new one.
@@ -159,6 +151,36 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 
 	// Modify the AST node to a bindvar.
 	cursor.Replace(NewArgument(bvname))
+}
+
+func keyFor(bval *querypb.BindVariable, lit *Literal) string {
+	if bval.Type != sqltypes.VarBinary && bval.Type != sqltypes.VarChar {
+		return lit.Val
+	}
+
+	// Prefixing strings with "'" ensures that a string
+	// and number that have the same representation don't
+	// collide.
+	return "'" + lit.Val
+
+}
+func (nz *normalizer) getKeynameForValue(bval *querypb.BindVariable, lit *Literal) string {
+	var key string
+	if bval.Type == sqltypes.VarBinary || bval.Type == sqltypes.VarChar {
+		// Prefixing strings with "'" ensures that a string
+		// and number that have the same representation don't
+		// collide.
+		key = "'" + lit.Val
+	} else {
+		key = lit.Val
+	}
+	bvname, ok := nz.vals[key]
+	if !ok {
+		bvname = nz.reserved.nextUnusedVar()
+		nz.vals[key] = bvname
+		nz.bindVars[bvname] = bval
+	}
+	return bvname
 }
 
 // convertLiteral converts an Literal without the dedup.
@@ -185,13 +207,54 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 // and iterate on converting each individual value into separate
 // bind vars.
 func (nz *normalizer) convertComparison(node *ComparisonExpr) {
-	if node.Operator != InOp && node.Operator != NotInOp {
+	switch node.Operator {
+	case InOp, NotInOp:
+		nz.rewriteInComparisons(node)
+	default:
+		nz.rewriteOtherComparisons(node)
+	}
+}
+
+func (nz *normalizer) rewriteOtherComparisons(node *ComparisonExpr) {
+	col, ok := node.Left.(*ColName)
+	if !ok {
 		return
 	}
+	lit, ok := node.Right.(*Literal)
+	if !ok {
+		return
+	}
+	err := validateLiteral(lit)
+	if err != nil {
+		nz.err = err
+		return
+	}
+
+	bval := SQLToBindvar(lit)
+	if bval == nil {
+		return
+	}
+	key := keyFor(bval, lit)
+	bvname, ok := nz.vals[key]
+	if !ok || len(lit.Val) > 256 {
+		// If there's no such bindvar, or we have a big value, make a new one.
+		// Big values are most likely not for vindexes.
+		// We save a lot of CPU because we avoid building
+		bvname = nz.reserved.ReserveColName(col)
+		nz.vals[key] = bvname
+		nz.bindVars[bvname] = bval
+	}
+
+	node.Right = Argument(bvname)
+	return
+}
+
+func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 	tupleVals, ok := node.Right.(ValTuple)
 	if !ok {
 		return
 	}
+
 	// The RHS is a tuple of values.
 	// Make a list bindvar.
 	bvals := &querypb.BindVariable{
@@ -211,6 +274,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	nz.bindVars[bvname] = bvals
 	// Modify RHS to be a list bindvar.
 	node.Right = ListArg(bvname)
+	return
 }
 
 func SQLToBindvar(node SQLNode) *querypb.BindVariable {
