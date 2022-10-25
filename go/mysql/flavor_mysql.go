@@ -53,7 +53,7 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
-	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 // purgedGTIDSet is part of the Flavor interface.
@@ -66,7 +66,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
 	}
-	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 // serverUUID is part of the Flavor interface.
@@ -208,11 +208,11 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	}
 
 	var err error
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
-	relayLogGTIDSet, err := parseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
+	relayLogGTIDSet, err := ParseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
 	}
@@ -247,7 +247,7 @@ func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error)
 	status := parsePrimaryStatus(resultMap)
 
 	var err error
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
