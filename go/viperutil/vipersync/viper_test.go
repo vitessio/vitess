@@ -76,8 +76,6 @@ func TestWatchConfig(t *testing.T) {
 
 	// Now, set up our synchronized viper and do a bunch of concurrent reads/writes.
 	v = viper.New()
-	v.SetConfigFile(tmp.Name())
-	require.NoError(t, v.ReadInConfig())
 
 	sv := vipersync.NewViper(v)
 	A := viperutil.NewValue("a",
@@ -93,7 +91,7 @@ func TestWatchConfig(t *testing.T) {
 	vipersync.BindValue(sv, A, nil)
 	vipersync.BindValue(sv, B, nil)
 
-	sv.WatchConfig()
+	require.NoError(t, sv.Watch(tmp.Name()))
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())

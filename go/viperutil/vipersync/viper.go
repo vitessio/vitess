@@ -1,6 +1,7 @@
 package vipersync
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -83,13 +84,23 @@ func NewViper(v *viper.Viper) *Viper {
 	return sv
 }
 
-func (v *Viper) WatchConfig() {
+func (v *Viper) Watch(cfg string) error {
 	if v.watchingConfig {
-		panic("WatchConfig called twice on synchronized viper")
+		// TODO: declare an exported error and include the filename in wrapped
+		// error.
+		return errors.New("duplicate watch")
+	}
+
+	if err := viperutil.ReadInConfig(v.disk, viperutil.ConfigOptions{
+		File: cfg,
+	}, viperutil.ErrorOnConfigFileNotFound); err != nil {
+		return err // TODO: wrap error
 	}
 
 	v.watchingConfig = true
+	_ = v.live.MergeConfigMap(v.disk.AllSettings())
 	v.disk.WatchConfig()
+	return nil
 }
 
 func (v *Viper) Notify(ch chan<- struct{}) {
