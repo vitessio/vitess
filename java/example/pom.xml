@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>15.0.0</version>
+    <version>15.0.1-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-example</artifactId>
 
