@@ -94,8 +94,19 @@ func NewValue[T any](key string, getFunc func(string) T, opts ...Option[T]) *Val
 // flag names do not match the value's canonical key, they are registered as
 // additional aliases for the value's key. This function panics if a flag name
 // is specified that is not defined on the flag set.
+//
+// Bind is not safe to call concurrently with other calls to Bind, Fetch, Get,
+// or Value. It is recommended to call Bind at least once before calling those
+// other 3 methods; otherwise the default or zero value for T will be returned.
 func (val *Value[T]) Bind(v *viper.Viper, fs *pflag.FlagSet) {
-	val.tryBind(v, fs)
+	select {
+	case _, ok := <-val.bound:
+		if ok {
+			defer func() { val.bound <- struct{}{} }()
+		}
+	}
+
+	val.bind(v, fs)
 }
 
 func (val *Value[T]) tryBind(v *viper.Viper, fs *pflag.FlagSet) {
