@@ -75,6 +75,7 @@ Usage of vtgate:
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
+      --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_memory_rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
