@@ -635,3 +635,25 @@ func TestSubtract(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkMySQL56GTIDParsing(b *testing.B) {
+	var Inputs = []string{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20:1-5",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:8-7",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:8-7:10-20",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50",
+		"8aabbf4f-5074-11ed-b225-aa23ce7e3ba2:1-20443,a6f1bf40-5073-11ed-9c0f-12a3889dc912:1-343402",
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		for _, input := range Inputs {
+			_, _ = ParseMysql56GTIDSet(input)
+		}
+	}
+}
