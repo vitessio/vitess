@@ -61,8 +61,9 @@ func parseInterval(s string) (interval, error) {
 // ParseMysql56GTIDSet is registered as a GTIDSet parser.
 //
 // https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
-func ParseMysql56GTIDSet(input string) (Mysql56GTIDSet, error) {
+func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 	set := make(Mysql56GTIDSet)
+	input := s
 
 	// gtid_set: uuid_set [, uuid_set] ...
 	for len(input) > 0 {
@@ -83,13 +84,13 @@ func ParseMysql56GTIDSet(input string) (Mysql56GTIDSet, error) {
 		// uuid_set: uuid:interval[:interval]...
 		head, tail, ok := strings.Cut(uuidSet, ":")
 		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 GTID set (%q): expected uuid:interval", input)
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 GTID set (%q): expected uuid:interval", s)
 		}
 
 		// Parse Server ID.
 		sid, err := ParseSID(head)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", input)
+			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 		}
 
 		intervals := make([]interval, 0, strings.Count(tail, ":")+1)
@@ -104,7 +105,7 @@ func ParseMysql56GTIDSet(input string) (Mysql56GTIDSet, error) {
 
 			iv, err := parseInterval(head)
 			if err != nil {
-				return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", input)
+				return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 			}
 			if iv.end < iv.start {
 				// According to MySQL 5.6 code:
