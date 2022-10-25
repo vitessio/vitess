@@ -46,7 +46,14 @@ func (f *Filter) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 	if len(f.Predicates) == 0 {
 		return f.Source, true, nil
 	}
-	return f, false, nil
+
+	other, isFilter := f.Source.(*Filter)
+	if !isFilter {
+		return f, false, nil
+	}
+	f.Source = other.Source
+	f.Predicates = append(f.Predicates, other.Predicates...)
+	return f, true, nil
 }
 
 func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
