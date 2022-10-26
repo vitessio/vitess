@@ -50,34 +50,12 @@ func (sk *syncedKey[T]) locker() sync.Locker {
 	return &sk.m
 }
 
-func NewViper(v *viper.Viper) *Viper {
-	sv := &Viper{
-		disk: v,
+func New() *Viper {
+	return &Viper{
+		disk: viper.New(),
 		live: viper.New(),
 		keys: map[string]lockable{},
 	}
-
-	sv.disk.OnConfigChange(func(in fsnotify.Event) {
-		// Inform each key that an update is coming.
-		for _, key := range sv.keys {
-			key.locker().Lock()
-			// This won't fire until after the config has been updated on sv.live.
-			defer key.locker().Unlock()
-		}
-
-		// Now, every key is blocked from reading; we can atomically swap the
-		// config on disk for the config in memory.
-		sv.loadFromDisk()
-
-		for _, ch := range sv.subscribers {
-			select {
-			case ch <- struct{}{}:
-			default:
-			}
-		}
-	})
-
-	return sv
 }
 
 func (v *Viper) Watch(cfg string) error {
@@ -95,6 +73,26 @@ func (v *Viper) Watch(cfg string) error {
 
 	v.watchingConfig = true
 	v.loadFromDisk()
+
+	v.disk.OnConfigChange(func(in fsnotify.Event) {
+		// Inform each key that an update is coming.
+		for _, key := range v.keys {
+			key.locker().Lock()
+			// This won't fire until after the config has been updated on v.live.
+			defer key.locker().Unlock()
+		}
+
+		// Now, every key is blocked from reading; we can atomically swap the
+		// config on disk for the config in memory.
+		v.loadFromDisk()
+
+		for _, ch := range v.subscribers {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
+	})
 	v.disk.WatchConfig()
 
 	return nil

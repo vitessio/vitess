@@ -77,7 +77,7 @@ func TestWatchConfig(t *testing.T) {
 	// Now, set up our synchronized viper and do a bunch of concurrent reads/writes.
 	v = viper.New()
 
-	sv := vipersync.NewViper(v)
+	sv := vipersync.New()
 	A := viperutil.NewValue("a",
 		vipersync.AdaptGetter(sv, "a", func(v *viper.Viper) func(key string) int {
 			return v.GetInt
