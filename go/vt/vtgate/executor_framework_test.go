@@ -577,6 +577,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 
 func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
 	t.Helper()
+	t.Helper()
 	idx := 0
 	for _, query := range sbc.Queries {
 		if strings.HasPrefix(query.Sql, "savepoint") || strings.HasPrefix(query.Sql, "rollback to") {
