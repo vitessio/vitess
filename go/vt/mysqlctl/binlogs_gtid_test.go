@@ -254,6 +254,7 @@ func TestFindPITRPath(t *testing.T) {
 			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-58",
 			expectFullManifest: fullManifest("1-50"),
 			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-52", "1-35"),
 				incrementalManifest("1-60", "1-50"),
 			},
 		},
@@ -293,6 +294,7 @@ func TestFindPITRPath(t *testing.T) {
 			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-88",
 			expectFullManifest: fullManifest("1-80"),
 			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-82", "1-70"),
 				incrementalManifest("1-92", "1-79"),
 			},
 		},
@@ -312,19 +314,21 @@ func TestFindPITRPath(t *testing.T) {
 			expectError: "no path found",
 		},
 		{
-			name:               "fail 1-94",
+			name:               "1-94",
 			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-94",
 			expectFullManifest: fullManifest("1-80"),
 			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-82", "1-70"),
 				incrementalManifest("1-92", "1-79"),
 				incrementalManifest("1-95", "1-89"),
 			},
 		},
 		{
-			name:               "fail 1-95",
+			name:               "1-95",
 			restoreGTID:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-95",
 			expectFullManifest: fullManifest("1-80"),
 			expectIncrementalManifests: []*BackupManifest{
+				incrementalManifest("1-82", "1-70"),
 				incrementalManifest("1-92", "1-79"),
 				incrementalManifest("1-95", "1-89"),
 			},
@@ -345,7 +349,7 @@ func TestFindPITRPath(t *testing.T) {
 			expectError: "no path found",
 		},
 		{
-			name:        "1-45 single step",
+			name:        "1-45 first solution even when shorter exists",
 			restoreGTID: "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-45",
 			incrementalBackups: append(
 				incrementalBackups,
@@ -353,7 +357,9 @@ func TestFindPITRPath(t *testing.T) {
 			),
 			expectFullManifest: fullManifest("1-5"),
 			expectIncrementalManifests: []*BackupManifest{
-				incrementalManifest("1-99", "1-5"),
+				incrementalManifest("1-34", "1-5"),
+				incrementalManifest("1-38", "1-34"),
+				incrementalManifest("1-52", "1-35"),
 			},
 		},
 		{
@@ -423,7 +429,9 @@ func TestFindPITRPath(t *testing.T) {
 			if tc.expectIncrementalManifests == nil {
 				tc.expectIncrementalManifests = []*BackupManifest{}
 			}
-			assert.Equal(t, tc.expectIncrementalManifests, path[1:])
+			expected := BackupManifestPath(tc.expectIncrementalManifests)
+			got := BackupManifestPath(path[1:])
+			assert.Equal(t, expected, got, "expected: %s, got: %s", expected.String(), got.String())
 		})
 	}
 }

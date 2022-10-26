@@ -18,7 +18,9 @@ package mysqlctl
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -26,6 +28,24 @@ import (
 )
 
 type BackupManifestPath []*BackupManifest
+
+func (p *BackupManifestPath) String() string {
+	var sb strings.Builder
+	sb.WriteString("BackupManifestPath: [")
+	for i, m := range *p {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		if m.Incremental {
+			sb.WriteString("incremental:")
+		} else {
+			sb.WriteString("full:")
+		}
+		sb.WriteString(fmt.Sprintf("%v...%v", m.FromPosition, m.Position))
+	}
+	sb.WriteString("]")
+	return sb.String()
+}
 
 // ChooseBinlogsForIncrementalBackup chooses which binary logs need to be backed up in an incremental backup,
 // given a list of known binary logs, a function that returns the "Previous GTIDs" per binary log, and a
@@ -161,6 +181,14 @@ func FindPITRPath(restoreToGTIDSet mysql.GTIDSet, manifests [](*BackupManifest))
 	// recursive function that searches for all possible paths:
 	var findPaths func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest)
 	findPaths = func(baseGTIDSet mysql.GTIDSet, pathManifests []*BackupManifest, remainingManifests []*BackupManifest) {
+		// The algorithm was first designed to find all possible paths. But then we recognized that it will be
+		// doing excessive work. At this time we choose to end the search once we find the first valid path, even if
+		// it's not the most optimal. The next "if" statement is the addition to the algorithm, where we suffice with
+		// a single result.
+		if len(validRestorePaths) > 0 {
+			return
+		}
+		// remove the above if you wish to explore all paths.
 		if baseGTIDSet.Contains(restoreToGTIDSet) {
 			// successful end of path. Update list of successful paths
 			validRestorePaths = append(validRestorePaths, pathManifests)
