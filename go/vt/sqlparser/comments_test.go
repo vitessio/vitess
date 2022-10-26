@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestSplitComments(t *testing.T) {
@@ -465,6 +467,32 @@ func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
 			stmt, _ := Parse(test.query)
 			got := IgnoreMaxMaxMemoryRowsDirective(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+		})
+	}
+}
+
+func TestConsolidator(t *testing.T) {
+	testCases := []struct {
+		query    string
+		expected querypb.ExecuteOptions_Consolidator
+	}{
+		{"insert /*vt+ CONSOLIDATOR=enabled */ into user(id) values (1), (2)", querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED},
+		{"update /*vt+ CONSOLIDATOR=enabled */ users set name=1", querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED},
+		{"delete /*vt+ CONSOLIDATOR=enabled */ from users", querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED},
+		{"show /*vt+ CONSOLIDATOR=enabled */ create table users", querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED},
+		{"select * from users", querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED},
+		{"select /*vt+ CONSOLIDATOR=invalid_value */ * from users", querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED},
+		{"select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ * from users", querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED},
+		{"select /*vt+ CONSOLIDATOR=disabled */ * from users", querypb.ExecuteOptions_CONSOLIDATOR_DISABLED},
+		{"select /*vt+ CONSOLIDATOR=enabled */ * from users", querypb.ExecuteOptions_CONSOLIDATOR_ENABLED},
+		{"select /*vt+ CONSOLIDATOR=enabled_replicas */ * from users", querypb.ExecuteOptions_CONSOLIDATOR_ENABLED_REPLICAS},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.query, func(t *testing.T) {
+			stmt, _ := Parse(test.query)
+			got := Consolidator(stmt)
+			assert.Equalf(t, test.expected, got, fmt.Sprintf("Consolidator(stmt) returned %v but expected %v", got, test.expected))
 		})
 	}
 }

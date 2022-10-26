@@ -67,6 +67,7 @@ Usage of vttestserver:
       --log_err_stacks                                                   log stack traces for errors
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
+      --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_table_shard_size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly (default 10000)
       --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly. (default 1000)
       --mysql_bind_host string                                           which host to bind vtgate mysql listener to (default "localhost")

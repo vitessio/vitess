@@ -17,6 +17,7 @@ limitations under the License.
 package vtbackup
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -24,15 +25,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/mysqlctl"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
 var (
@@ -75,6 +74,7 @@ func TestTabletInitialBackup(t *testing.T) {
 
 	tearDown(t, true)
 }
+
 func TestTabletBackupOnly(t *testing.T) {
 	// Test Backup Flow
 	//    TestTabletBackupOnly will:
@@ -170,13 +170,29 @@ func firstBackupTest(t *testing.T, tabletType string) {
 }
 
 func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
+	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
+	require.Nil(t, err)
+	defer os.Remove(mysqlSocket.Name())
+
 	// Take the back using vtbackup executable
-	extraArgs := []string{"--allow_first_backup", "--db-credentials-file", dbCredentialFile}
+	extraArgs := []string{
+		"--allow_first_backup",
+		"--db-credentials-file", dbCredentialFile,
+		"--mysql_socket", mysqlSocket.Name(),
+	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if !initialBackup {
+		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+	}
+
 	log.Infof("starting backup tablet %s", time.Now())
-	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
 }
 
@@ -260,7 +276,6 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
-
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
@@ -280,7 +295,6 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 		err = tablet.MysqlctlProcess.Start()
 		require.Nil(t, err)
 	}
-
 }
 
 func tearDown(t *testing.T, initMysql bool) {
@@ -309,5 +323,52 @@ func tearDown(t *testing.T, initMysql bool) {
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
 		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
 		require.Nil(t, err)
+	}
+}
+
+func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket string) {
+	params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
+
+	for {
+		select {
+		case <-time.After(100 * time.Millisecond):
+			// Connect to vtbackup mysqld.
+			conn, err := mysql.Connect(ctx, &params)
+			if err != nil {
+				// Keep trying, vtbackup mysqld may not be ready yet.
+				continue
+			}
+
+			// Check if server supports disable/enable redo log.
+			qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
+			require.Nil(t, err)
+			// If not, there's nothing to test.
+			if len(qr.Rows) == 0 {
+				return
+			}
+
+			// MY-013600
+			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
+			require.Nil(t, err)
+			if len(qr.Rows) != 1 {
+				// Keep trying, possible we haven't disabled yet.
+				continue
+			}
+
+			// MY-013601
+			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
+			require.Nil(t, err)
+			if len(qr.Rows) != 1 {
+				// Keep trying, possible we haven't disabled yet.
+				continue
+			}
+
+			// Success
+			return
+		case <-ctx.Done():
+			require.Fail(t, "Failed to verify disable/enable redo log.")
+		}
 	}
 }

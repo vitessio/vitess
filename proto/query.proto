@@ -325,6 +325,15 @@ message ExecuteOptions {
   // if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
   // The current session can still use other sessions cached plans.
   bool has_created_temp_tables = 12;
+
+  enum Consolidator {
+    CONSOLIDATOR_UNSPECIFIED = 0;
+    CONSOLIDATOR_DISABLED = 1;
+    CONSOLIDATOR_ENABLED = 2;
+    CONSOLIDATOR_ENABLED_REPLICAS = 3;
+  }
+
+  Consolidator consolidator = 13;
 }
 
 // Field describes a single column returned by a query

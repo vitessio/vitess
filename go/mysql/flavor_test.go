@@ -150,6 +150,16 @@ func TestGetFlavor(t *testing.T) {
 			capability: DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  false,
 		},
+		{
+			version:    "8.0.21",
+			capability: DisableRedoLogFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.20",
+			capability: DisableRedoLogFlavorCapability,
+			isCapable:  false,
+		},
 	}
 	for _, tc := range testcases {
 		name := fmt.Sprintf("%s %v", tc.version, tc.capability)

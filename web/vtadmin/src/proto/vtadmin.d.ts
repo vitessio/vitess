@@ -25009,6 +25009,9 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables */
         has_created_temp_tables?: (boolean|null);
+
+        /** ExecuteOptions consolidator */
+        consolidator?: (query.ExecuteOptions.Consolidator|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -25043,6 +25046,9 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables. */
         public has_created_temp_tables: boolean;
+
+        /** ExecuteOptions consolidator. */
+        public consolidator: query.ExecuteOptions.Consolidator;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -25152,6 +25158,14 @@ export namespace query {
             Gen4Left2Right = 4,
             Gen4WithFallback = 5,
             Gen4CompareV3 = 6
+        }
+
+        /** Consolidator enum. */
+        enum Consolidator {
+            CONSOLIDATOR_UNSPECIFIED = 0,
+            CONSOLIDATOR_DISABLED = 1,
+            CONSOLIDATOR_ENABLED = 2,
+            CONSOLIDATOR_ENABLED_REPLICAS = 3
         }
     }
 

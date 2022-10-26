@@ -657,7 +657,8 @@ func getSingleRowResult() *sqltypes.Result {
 		Rows:        SingleRowResult.Rows,
 	}
 
-	for _, field := range SingleRowResult.Fields {
+	fields := SingleRowResult.Fields
+	for _, field := range fields {
 		singleRowResult.Fields = append(singleRowResult.Fields, &querypb.Field{
 			Name: field.Name,
 			Type: field.Type,

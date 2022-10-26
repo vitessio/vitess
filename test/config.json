@@ -810,6 +810,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_transaction_restart": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/restart"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_transaction_rollback": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/rollback"],
@@ -930,6 +939,15 @@
 		"errs_as_warns": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"consolidator": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/consolidator"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",

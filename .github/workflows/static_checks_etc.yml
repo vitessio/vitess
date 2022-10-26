@@ -10,6 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
       - name: Check if workflow needs to be skipped
         id: skip-workflow
         run: |
@@ -22,7 +29,7 @@ jobs:
 
       - name: Checkout code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Run FOSSA scan and upload build data
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -87,7 +94,7 @@ jobs:
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: 1.18.7
 

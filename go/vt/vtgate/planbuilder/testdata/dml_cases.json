@@ -264,6 +264,52 @@
     }
   },
   {
+    "comment": "delete from sequence",
+    "query": "DELETE FROM seq",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "DELETE FROM seq",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from seq",
+        "Table": "seq"
+      },
+      "TablesUsed": [
+        "main.seq"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table in unsharded keyspace",
+    "query": "DELETE FROM unsharded_ref",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "DELETE FROM unsharded_ref",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from unsharded_ref",
+        "Table": "unsharded_ref"
+      },
+      "TablesUsed": [
+        "main.unsharded_ref"
+      ]
+    }
+  },
+  {
     "comment": "update by primary keyspace id",
     "query": "update user set val = 1 where id = 1",
     "v3-plan": {
