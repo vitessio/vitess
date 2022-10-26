@@ -57,10 +57,6 @@ func NewViper(v *viper.Viper) *Viper {
 		keys: map[string]lockable{},
 	}
 
-	// Fun fact! MergeConfigMap actually only ever returns nil. Maybe in an
-	// older version of viper it used to actually handle errors, but now it
-	// decidedly does not. See https://github.com/spf13/viper/blob/v1.8.1/viper.go#L1492-L1499.
-	_ = sv.live.MergeConfigMap(sv.disk.AllSettings())
 	sv.disk.OnConfigChange(func(in fsnotify.Event) {
 		// Inform each key that an update is coming.
 		for _, key := range sv.keys {
@@ -71,7 +67,7 @@ func NewViper(v *viper.Viper) *Viper {
 
 		// Now, every key is blocked from reading; we can atomically swap the
 		// config on disk for the config in memory.
-		_ = sv.live.MergeConfigMap(sv.disk.AllSettings())
+		sv.loadFromDisk()
 
 		for _, ch := range sv.subscribers {
 			select {
@@ -98,9 +94,17 @@ func (v *Viper) Watch(cfg string) error {
 	}
 
 	v.watchingConfig = true
-	_ = v.live.MergeConfigMap(v.disk.AllSettings())
+	v.loadFromDisk()
 	v.disk.WatchConfig()
+
 	return nil
+}
+
+func (v *Viper) loadFromDisk() {
+	// Fun fact! MergeConfigMap actually only ever returns nil. Maybe in an
+	// older version of viper it used to actually handle errors, but now it
+	// decidedly does not. See https://github.com/spf13/viper/blob/v1.8.1/viper.go#L1492-L1499.
+	_ = v.live.MergeConfigMap(v.disk.AllSettings())
 }
 
 func (v *Viper) Notify(ch chan<- struct{}) {
