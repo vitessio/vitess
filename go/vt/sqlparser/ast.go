@@ -1488,10 +1488,14 @@ type DBDDL struct {
 // Format formats the node.
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateStr:
+	case CreateStr, AlterStr:
 		exists := ""
 		if node.IfNotExists {
 			exists = " if not exists"
+		}
+		dbname := ""
+		if len(node.DBName) > 0 {
+			dbname = fmt.Sprintf(" %s", node.DBName)
 		}
 		charsetCollateStr := ""
 		for _, obj := range node.CharsetCollate {
@@ -1503,7 +1507,7 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 			charsetCollateStr += fmt.Sprintf("%s %s %s", charsetDef, typeStr, obj.Value)
 		}
 
-		buf.WriteString(fmt.Sprintf("%s database%s %s%s", node.Action, exists, node.DBName, charsetCollateStr))
+		buf.WriteString(fmt.Sprintf("%s database%s%s%s", node.Action, exists, dbname, charsetCollateStr))
 	case DropStr:
 		exists := ""
 		if node.IfExists {

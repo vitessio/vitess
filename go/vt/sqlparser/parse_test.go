@@ -2099,6 +2099,18 @@ var (
 			input:  "create database if not exists test_db",
 			output: "create database if not exists test_db",
 		}, {
+			input: "alter database test_db character set utf8mb3",
+		}, {
+			input: "alter database test_db collate utf8mb3_bin",
+		}, {
+			input: "alter database test_db character set utf8mb3 collate utf8mb3_bin",
+		}, {
+			input: "alter database character set utf8mb3",
+		}, {
+			input: "alter database collate utf8mb3_bin",
+		}, {
+			input: "alter database character set utf8mb3 collate utf8mb3_bin",
+		}, {
 			input: "drop database test_db",
 		}, {
 			input:  "drop schema test_db",
