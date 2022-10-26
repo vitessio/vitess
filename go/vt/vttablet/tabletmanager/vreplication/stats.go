@@ -355,6 +355,39 @@ func (st *vrStats) register() {
 			return result
 		})
 
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationTableCopyRowCounts",
+		"vreplication rows copied in copy phase per table per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "table"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for table, count := range ct.blpStats.TableCopyRowCounts.Counts() {
+					if table == "" {
+						continue
+					}
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = count
+				}
+			}
+			return result
+		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationTableCopyTimings",
+		"vreplication copy phase timings per table per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "table"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for table, t := range ct.blpStats.TableCopyTimings.Histograms() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = t.Total()
+				}
+			}
+			return result
+		})
 }
 
 func (st *vrStats) numControllers() int64 {
@@ -402,6 +435,7 @@ func (st *vrStats) status() *EngineStatus {
 			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
 			NoopQueryCounts:       ct.blpStats.NoopQueryCount.Counts(),
+			TableCopyTimings:      ct.blpStats.TableCopyTimings.Counts(),
 		}
 		i++
 	}
@@ -434,6 +468,7 @@ type ControllerStatus struct {
 	CopyRowCount          int64
 	CopyLoopCount         int64
 	NoopQueryCounts       map[string]int64
+	TableCopyTimings      map[string]int64
 }
 
 var vreplicationTemplate = `

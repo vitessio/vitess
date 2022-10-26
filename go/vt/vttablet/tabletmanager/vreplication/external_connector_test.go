@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
 func TestExternalConnectorCopy(t *testing.T) {
@@ -70,12 +71,12 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"/update _vt.vreplication set state='Running'",
 	}, "")
 	execStatements(t, []string{"insert into tab1 values(3, 'c')"})
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"begin",
 		"insert into tab1(id,val) values (3,'c')",
 		"/update _vt.vreplication set pos=",
 		"commit",
-	})
+	))
 	// Cancel immediately so we don't deal with spurious updates.
 	cancel1()
 
@@ -173,7 +174,7 @@ func expectDBClientAndVreplicationQueries(t *testing.T, queries []string, pos st
 	t.Helper()
 	vrepQueries := getExpectedVreplicationQueries(t, pos)
 	expectedQueries := append(vrepQueries, queries...)
-	expectDBClientQueries(t, expectedQueries)
+	expectDBClientQueries(t, qh.Expect(expectedQueries[0], expectedQueries[1:]...))
 }
 
 func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
