@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -496,6 +497,19 @@ func TestExecutorShowColumns(t *testing.T) {
 
 }
 
+func sortString(w string) string {
+	s := strings.Split(w, "")
+	sort.Strings(s)
+	return strings.Join(s, "")
+}
+
+func assertMatchesNoOrder(t *testing.T, expected, got string) {
+	t.Helper()
+	if sortString(expected) != sortString(got) {
+		t.Errorf("for query: expected \n%s \nbut actual \n%s", expected, got)
+	}
+}
+
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
@@ -503,14 +517,14 @@ func TestExecutorShow(t *testing.T) {
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
-		require.EqualValues(t, 5, len(qr.Rows), fmt.Sprintf("unexpected results running query: %s", query))
+		assertMatchesNoOrder(t, `[[VARCHAR("TestUnsharded")] [VARCHAR("TestMultiCol")] [VARCHAR("TestXBadVSchema")] [VARCHAR("TestXBadSharding")] [VARCHAR("TestExecutor")]]`, fmt.Sprintf("%v", qr.Rows))
 	}
 
 	for _, query := range []string{"show databases", "show DATABASES", "show schemas", "show SCHEMAS"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		// Showing default tables (5+4[default])
-		require.EqualValues(t, 9, len(qr.Rows), fmt.Sprintf("unexpected results running query: %s", query))
+		assertMatchesNoOrder(t, `[[VARCHAR("TestUnsharded")] [VARCHAR("TestMultiCol")] [VARCHAR("TestXBadVSchema")] [VARCHAR("TestXBadSharding")] [VARCHAR("TestExecutor")]] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]`, fmt.Sprintf("%v", qr.Rows))
 	}
 
 	_, err := executor.Execute(ctx, "TestExecute", session, "show variables", nil)
@@ -1717,16 +1731,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	query1 := "select * from music_user_map where id = 1"
 	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 0)
-	wantSQL := "select * from music_user_map where id = :vtg1 /* comment */"
-	if logStats1.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
-	}
+	wantSQL := "select * from music_user_map where id = :id /* comment */"
+	assert.Equal(t, wantSQL, logStats1.SQL)
 
 	_, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 1)
-	if logStats2.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats2.SQL)
 
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
@@ -1760,60 +1770,40 @@ func TestGetPlanNormalized(t *testing.T) {
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
-	normalized := "select * from music_user_map where id = :vtg1"
+	normalized := "select * from music_user_map where id = :id"
 
 	plan1, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false)
 	plan2, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
 
-	if plan1 != plan2 {
-		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
-	}
+	assert.Equal(t, plan1, plan2)
 	want := []string{
 		"@unknown:" + normalized,
 	}
 	assertCacheContains(t, r, want)
 
 	wantSQL := normalized + " /* comment 1 */"
-	if logStats1.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats1.SQL)
 	wantSQL = normalized + " /* comment 2 */"
-	if logStats2.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats2.SQL)
 
 	plan3, logStats3 := getPlanCached(t, r, emptyvc, query2, makeComments(" /* comment 3 */"), map[string]*querypb.BindVariable{}, false)
-	if plan1 != plan3 {
-		t.Errorf("getPlan(query2): plans must be equal: %p %p", plan1, plan3)
-	}
+	assert.Equal(t, plan1, plan3)
 	wantSQL = normalized + " /* comment 3 */"
-	if logStats3.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats3.SQL)
 
 	plan4, logStats4 := getPlanCached(t, r, emptyvc, normalized, makeComments(" /* comment 4 */"), map[string]*querypb.BindVariable{}, false)
-	if plan1 != plan4 {
-		t.Errorf("getPlan(normalized): plans must be equal: %p %p", plan1, plan4)
-	}
+	assert.Equal(t, plan1, plan4)
 	wantSQL = normalized + " /* comment 4 */"
-	if logStats4.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats4.SQL)
 
 	var logStats5 *logstats.LogStats
 	plan3, logStats5 = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false)
-	if plan1 == plan3 {
-		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
-	}
+	assert.Equal(t, plan1, plan3)
 	wantSQL = normalized + " /* comment 5 */"
-	if logStats5.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats5.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats5.SQL)
 
 	plan4, _ = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
-	if plan3 != plan4 {
-		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
-	}
+	assert.Equal(t, plan1, plan4)
 	want = []string{
 		KsTestUnsharded + "@unknown:" + normalized,
 		"@unknown:" + normalized,
@@ -1821,10 +1811,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	assertCacheContains(t, r, want)
 
 	_, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
-	wantErr := "syntax error at position 7 near 'syntax'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
-	}
+	assert.EqualError(t, err, "syntax error at position 7 near 'syntax'")
 	assertCacheContains(t, r, want)
 }
 
