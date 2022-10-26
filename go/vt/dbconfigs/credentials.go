@@ -24,7 +24,6 @@ package dbconfigs
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"os"
 	"os/signal"
 	"strings"
@@ -112,15 +111,15 @@ func init() {
 			fs.StringVar(&dbCredentialsFile, "db-credentials-file", dbCredentialsFile, "db credentials file; send SIGHUP to reload this file")
 
 			// 'vault' implementation flags
-			flag.StringVar(&vaultAddr, "db-credentials-vault-addr", vaultAddr, "URL to Vault server")
-			flag.DurationVar(&vaultTimeout, "db-credentials-vault-timeout", vaultTimeout, "Timeout for vault API operations")
-			flag.StringVar(&vaultCACert, "db-credentials-vault-tls-ca", vaultCACert, "Path to CA PEM for validating Vault server certificate")
-			flag.StringVar(&vaultPath, "db-credentials-vault-path", vaultPath, "Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds")
-			flag.DurationVar(&vaultCacheTTL, "db-credentials-vault-ttl", vaultCacheTTL, "How long to cache DB credentials from the Vault server")
-			flag.StringVar(&vaultTokenFile, "db-credentials-vault-tokenfile", vaultTokenFile, "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
-			flag.StringVar(&vaultRoleID, "db-credentials-vault-roleid", vaultRoleID, "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
-			flag.StringVar(&vaultRoleSecretIDFile, "db-credentials-vault-role-secretidfile", vaultRoleSecretIDFile, "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
-			flag.StringVar(&vaultRoleMountPoint, "db-credentials-vault-role-mountpoint", vaultRoleMountPoint, "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+			fs.StringVar(&vaultAddr, "db-credentials-vault-addr", vaultAddr, "URL to Vault server")
+			fs.DurationVar(&vaultTimeout, "db-credentials-vault-timeout", vaultTimeout, "Timeout for vault API operations")
+			fs.StringVar(&vaultCACert, "db-credentials-vault-tls-ca", vaultCACert, "Path to CA PEM for validating Vault server certificate")
+			fs.StringVar(&vaultPath, "db-credentials-vault-path", vaultPath, "Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds")
+			fs.DurationVar(&vaultCacheTTL, "db-credentials-vault-ttl", vaultCacheTTL, "How long to cache DB credentials from the Vault server")
+			fs.StringVar(&vaultTokenFile, "db-credentials-vault-tokenfile", vaultTokenFile, "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
+			fs.StringVar(&vaultRoleID, "db-credentials-vault-roleid", vaultRoleID, "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
+			fs.StringVar(&vaultRoleSecretIDFile, "db-credentials-vault-role-secretidfile", vaultRoleSecretIDFile, "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
+			fs.StringVar(&vaultRoleMountPoint, "db-credentials-vault-role-mountpoint", vaultRoleMountPoint, "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
 		})
 	}
 }
