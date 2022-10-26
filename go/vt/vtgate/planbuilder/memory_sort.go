@@ -67,12 +67,6 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 			}
 		case *sqlparser.ColName:
 			colNumber = findColNumber(ms, expr)
-		case *sqlparser.CastExpr:
-			colName, ok := expr.Expr.(*sqlparser.ColName)
-			if !ok {
-				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
-			}
-			colNumber = findColNumber(ms, colName)
 		case *sqlparser.ConvertExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {

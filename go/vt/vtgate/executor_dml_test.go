@@ -131,7 +131,7 @@ func TestUpdateEqual(t *testing.T) {
 
 func TestUpdateFromSubQuery(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
-	executor.pv = querypb.ExecuteOptions_Gen4
+
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1993,7 +1993,7 @@ func TestReservedConnDML(t *testing.T) {
 
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
+		&querypb.BoundQuery{Sql: "insert into `simple` values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
@@ -2008,7 +2008,7 @@ func TestReservedConnDML(t *testing.T) {
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
+		&querypb.BoundQuery{Sql: "insert into `simple` values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
@@ -2050,7 +2050,7 @@ func TestStreamingDML(t *testing.T) {
 		openTx:      true,
 		changedRows: 1,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "insert into `simple`() values ()",
+			Sql:           "insert into `simple` values ()",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {

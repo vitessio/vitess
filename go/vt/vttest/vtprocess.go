@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/env"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -192,16 +190,16 @@ var QueryServerArgs = []string{
 // VtcomboProcess returns a VtProcess handle for a local `vtcombo` service,
 // configured with the given Config.
 // The process must be manually started by calling WaitStart()
-func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (*VtProcess, error) {
+func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProcess {
 	vt := &VtProcess{
 		Name:         "vtcombo",
-		Directory:    environment.Directory(),
-		LogDirectory: environment.LogDirectory(),
-		Binary:       environment.BinaryPath("vtcombo"),
-		Port:         environment.PortForProtocol("vtcombo", ""),
-		PortGrpc:     environment.PortForProtocol("vtcombo", "grpc"),
-		HealthCheck:  environment.ProcessHealthCheck("vtcombo"),
-		Env:          environment.EnvVars(),
+		Directory:    env.Directory(),
+		LogDirectory: env.LogDirectory(),
+		Binary:       env.BinaryPath("vtcombo"),
+		Port:         env.PortForProtocol("vtcombo", ""),
+		PortGrpc:     env.PortForProtocol("vtcombo", "grpc"),
+		HealthCheck:  env.ProcessHealthCheck("vtcombo"),
+		Env:          env.EnvVars(),
 	}
 
 	user, pass := mysql.Auth()
@@ -209,10 +207,6 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	charset := args.Charset
 	if charset == "" {
 		charset = DefaultCharset
-	}
-	verStr, err := env.CheckPlannerVersionFlag(&args.PlannerVersion, &args.PlannerVersionDeprecated)
-	if err != nil {
-		return nil, err
 	}
 
 	protoTopo, _ := prototext.Marshal(args.Topology)
@@ -229,14 +223,14 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
-		"--planner-version", verStr,
+		"--planner_version", args.PlannerVersion,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
 	}...)
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
-	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
+	vt.ExtraArgs = append(vt.ExtraArgs, env.VtcomboArguments()...)
 
 	if args.SchemaDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema_dir", args.SchemaDir}...)
@@ -277,7 +271,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		}...)
 	}
 
-	vtcomboMysqlPort := environment.PortForProtocol("vtcombo_mysql_port", "")
+	vtcomboMysqlPort := env.PortForProtocol("vtcombo_mysql_port", "")
 	vtcomboMysqlBindAddress := "localhost"
 	if args.MySQLBindHost != "" {
 		vtcomboMysqlBindAddress = args.MySQLBindHost
@@ -298,5 +292,5 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		}...)
 	}
 
-	return vt, nil
+	return vt
 }

@@ -784,7 +784,7 @@ func TestDialogServer(t *testing.T) {
 	}
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
-	if strings.Contains(output, "No such file or directory") || strings.Contains(output, "Authentication plugin 'dialog' cannot be loaded") {
+	if strings.Contains(output, "No such file or directory") {
 		t.Logf("skipping dialog plugin tests, as the dialog plugin cannot be loaded: %v", err)
 		return
 	}

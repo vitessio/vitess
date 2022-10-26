@@ -535,7 +535,6 @@ const (
 	ERTableNameNotAllowedHere      = 1250
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
-	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406
 	ErrWrongValueForType           = 1411
 	ERWarnDataTruncated            = 1265

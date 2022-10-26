@@ -28,7 +28,7 @@ package vreplication
 //   2. Column and table names with special characters in them, namely a dash
 //   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 // The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
-// The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
+// The db_order_test table is used to ensure vreplication and vdiff1 work well with complex non-integer PKs, even across DB versions.
 var (
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4;

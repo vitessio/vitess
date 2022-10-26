@@ -28,8 +28,6 @@ import (
 	"testing"
 	"time"
 
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -794,19 +792,4 @@ func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status, vt
 		sqlThread = sqlState == mysql.ReplicationStateRunning
 	}
 	return ioThread, sqlThread
-}
-
-// TmcFullStatus retuns the result of the TabletManagerClient RPC FullStatus
-func TmcFullStatus(ctx context.Context, tablet *cluster.Vttablet) (*replicationdatapb.FullStatus, error) {
-	// create tablet manager client
-	tmClient := tmc.NewClient()
-
-	vttablet := getTablet(tablet.GrpcPort)
-	return tmClient.FullStatus(ctx, vttablet)
-}
-
-func getTablet(tabletGrpcPort int) *topodatapb.Tablet {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	return &topodatapb.Tablet{Hostname: Hostname, PortMap: portMap}
 }

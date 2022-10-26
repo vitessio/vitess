@@ -88,10 +88,6 @@ type TabletManagerClient interface {
 	UndoDemotePrimary(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
-	// ResetReplicationParameters resets the replica replication parameters
-	ResetReplicationParameters(ctx context.Context, in *tabletmanagerdata.ResetReplicationParametersRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
-	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
-	FullStatus(ctx context.Context, in *tabletmanagerdata.FullStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.FullStatusResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// ReplicaWasRestarted tells the remote tablet its primary has changed
@@ -458,24 +454,6 @@ func (c *tabletManagerClient) ReplicaWasPromoted(ctx context.Context, in *tablet
 	return out, nil
 }
 
-func (c *tabletManagerClient) ResetReplicationParameters(ctx context.Context, in *tabletmanagerdata.ResetReplicationParametersRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationParametersResponse, error) {
-	out := new(tabletmanagerdata.ResetReplicationParametersResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ResetReplicationParameters", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *tabletManagerClient) FullStatus(ctx context.Context, in *tabletmanagerdata.FullStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.FullStatusResponse, error) {
-	out := new(tabletmanagerdata.FullStatusResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/FullStatus", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *tabletManagerClient) SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
 	out := new(tabletmanagerdata.SetReplicationSourceResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetReplicationSource", in, out, opts...)
@@ -654,10 +632,6 @@ type TabletManagerServer interface {
 	UndoDemotePrimary(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
-	// ResetReplicationParameters resets the replica replication parameters
-	ResetReplicationParameters(context.Context, *tabletmanagerdata.ResetReplicationParametersRequest) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
-	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
-	FullStatus(context.Context, *tabletmanagerdata.FullStatusRequest) (*tabletmanagerdata.FullStatusResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// ReplicaWasRestarted tells the remote tablet its primary has changed
@@ -792,12 +766,6 @@ func (UnimplementedTabletManagerServer) UndoDemotePrimary(context.Context, *tabl
 }
 func (UnimplementedTabletManagerServer) ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicaWasPromoted not implemented")
-}
-func (UnimplementedTabletManagerServer) ResetReplicationParameters(context.Context, *tabletmanagerdata.ResetReplicationParametersRequest) (*tabletmanagerdata.ResetReplicationParametersResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ResetReplicationParameters not implemented")
-}
-func (UnimplementedTabletManagerServer) FullStatus(context.Context, *tabletmanagerdata.FullStatusRequest) (*tabletmanagerdata.FullStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FullStatus not implemented")
 }
 func (UnimplementedTabletManagerServer) SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetReplicationSource not implemented")
@@ -1517,42 +1485,6 @@ func _TabletManager_ReplicaWasPromoted_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_ResetReplicationParameters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.ResetReplicationParametersRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).ResetReplicationParameters(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/ResetReplicationParameters",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).ResetReplicationParameters(ctx, req.(*tabletmanagerdata.ResetReplicationParametersRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TabletManager_FullStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.FullStatusRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).FullStatus(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/FullStatus",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).FullStatus(ctx, req.(*tabletmanagerdata.FullStatusRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _TabletManager_SetReplicationSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.SetReplicationSourceRequest)
 	if err := dec(in); err != nil {
@@ -1843,14 +1775,6 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReplicaWasPromoted",
 			Handler:    _TabletManager_ReplicaWasPromoted_Handler,
-		},
-		{
-			MethodName: "ResetReplicationParameters",
-			Handler:    _TabletManager_ResetReplicationParameters_Handler,
-		},
-		{
-			MethodName: "FullStatus",
-			Handler:    _TabletManager_FullStatus_Handler,
 		},
 		{
 			MethodName: "SetReplicationSource",

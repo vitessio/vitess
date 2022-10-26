@@ -15,9 +15,8 @@
  */
 import BugsnagJS from '@bugsnag/js';
 import { ErrorHandler } from './errorTypes';
-import { env } from '../util/env';
 
-const { REACT_APP_BUGSNAG_API_KEY } = env();
+const { REACT_APP_BUGSNAG_API_KEY } = process.env;
 
 /**
  * If using Bugsnag, Bugsnag.start() will automatically capture and report
@@ -25,7 +24,7 @@ const { REACT_APP_BUGSNAG_API_KEY } = env();
  * initialize it for capturing handled errors.
  */
 export const initialize = () => {
-    if (typeof REACT_APP_BUGSNAG_API_KEY === 'string' && REACT_APP_BUGSNAG_API_KEY.length) {
+    if (typeof REACT_APP_BUGSNAG_API_KEY === 'string') {
         BugsnagJS.start(REACT_APP_BUGSNAG_API_KEY);
     }
 };

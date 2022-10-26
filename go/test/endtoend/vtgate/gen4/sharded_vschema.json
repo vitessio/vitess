@@ -89,30 +89,6 @@
           "name": "multicol_vdx"
         }
       ]
-    },
-    "team": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ]
-    },
-    "team_fact": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ]
-    },
-    "team_member": {
-      "column_vindexes": [
-        {
-          "column": "team",
-          "name": "xxhash"
-        }
-      ]
     }
   }
 }

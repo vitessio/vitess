@@ -46,9 +46,7 @@ var (
 	_          = flag.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
 	_          = flag.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
 	_          = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
-	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed workflow event in the replication phase")
-
-	maxTimeToRetryError = flag.Duration("vreplication_max_time_to_retry_on_error", 15*time.Minute, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
+	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
 )
 
 // controller is created by Engine. Members are initialized upfront.
@@ -71,8 +69,6 @@ type controller struct {
 
 	// The following fields are updated after start. So, they need synchronization.
 	sourceTablet sync2.AtomicString
-
-	lastWorkflowError *lastError
 }
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
@@ -81,15 +77,13 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
-
 	ct := &controller{
-		vre:               vre,
-		dbClientFactory:   dbClientFactory,
-		mysqld:            mysqld,
-		blpStats:          blpStats,
-		done:              make(chan struct{}),
-		source:            &binlogdatapb.BinlogSource{},
-		lastWorkflowError: newLastError("VReplication Controller", *maxTimeToRetryError),
+		vre:             vre,
+		dbClientFactory: dbClientFactory,
+		mysqld:          mysqld,
+		blpStats:        blpStats,
+		done:            make(chan struct{}),
+		source:          &binlogdatapb.BinlogSource{},
 	}
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
@@ -101,10 +95,9 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	ct.id = uint32(id)
 	ct.workflow = params["workflow"]
 
-	state := params["state"]
-	blpStats.State.Set(state)
-	// Nothing to do if replication is stopped or is known to have an unrecoverable error.
-	if state == binlogplayer.BlpStopped || state == binlogplayer.BlpError {
+	blpStats.State.Set(params["state"])
+	// Nothing to do if replication is stopped.
+	if params["state"] == binlogplayer.BlpStopped {
 		ct.cancel = func() {}
 		close(ct.done)
 		return ct, nil
@@ -168,9 +161,8 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-
-		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
+		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		timer := time.NewTimer(*retryDelay)
 		select {
 		case <-ctx.Done():
@@ -278,16 +270,18 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		err = vr.Replicate(ctx)
-
-		ct.lastWorkflowError.record(err)
-		// If this is a mysql error that we know needs manual intervention OR
-		// we cannot identify this as non-recoverable, but it has persisted beyond the retry limit (maxTimeToRetryError)
-		if isUnrecoverableError(err) || !ct.lastWorkflowError.shouldRetry() {
-			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
-			if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
-				return err // yes, err and not errSetState.
+		if isUnrecoverableError(err) {
+			settings, _, errSetting := vr.readSettings(ctx)
+			if errSetting != nil {
+				return err // yes, err and not errSetting.
 			}
-			return nil // this will cause vreplicate to quit the workflow
+			if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+				// Specific to OnlineDDL, if we encounter an "unrecoverable error", we change the migration state into Error and then we quit the workflow
+				if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
+					return err // yes, err and not errSetState.
+				}
+				return nil // this will cause vreplicate to quit the workflow
+			}
 		}
 		return err
 	}

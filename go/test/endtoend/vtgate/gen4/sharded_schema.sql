@@ -45,22 +45,3 @@ create table multicol_tbl
     msg  varchar(50),
     primary key (cola, colb, colc)
 ) Engine = InnoDB;
-
-create table team(
-     id     int,
-     name   varchar(64),
-     primary key (id)
-) Engine = InnoDB;
-
-create table team_fact(
-    id   int,
-    team int,
-    fact char,
-    primary key (id)
-) Engine = InnoDB;
-
-create table team_member(
-    team int,
-    user int,
-    primary key (team, user)
-) Engine = InnoDB;

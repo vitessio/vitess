@@ -1220,13 +1220,13 @@ INPUT
 select (ST_aswkb(cast(st_union(multipoint(                                        point(8,6), point(1,-17679),                                        point(-9,-9)),                             linestring(point(91,12), point(-77,49),                                        point(53,-81)))as char(18)))) in  ('1','2');
 END
 OUTPUT
-select ST_aswkb(cast(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))) as char(18))) in ('1', '2') from dual
+select ST_aswkb(convert(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))), char(18))) in ('1', '2') from dual
 END
 INPUT
 select st_astext(st_union(cast(point(1,1)as char(15)),point(1,1))) as res;
 END
 OUTPUT
-select st_astext(st_union(cast(point(1, 1) as char(15)), point(1, 1))) as res from dual
+select st_astext(st_union(convert(point(1, 1), char(15)), point(1, 1))) as res from dual
 END
 INPUT
 select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                    st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -1382,7 +1382,7 @@ INPUT
 select st_union((cast(linestring(point(6,-68), point(-22,-4)) as binary(13))),                 st_intersection(point(6,8),multipoint(point(3,1),point(-4,-6),point(1,6),point(-3,-5),point(5,4))));
 END
 OUTPUT
-select st_union(cast(linestring(point(6, -68), point(-22, -4)) as binary(13)), st_intersection(point(6, 8), multipoint(point(3, 1), point(-4, -6), point(1, 6), point(-3, -5), point(5, 4)))) from dual
+select st_union(convert(linestring(point(6, -68), point(-22, -4)), binary(13)), st_intersection(point(6, 8), multipoint(point(3, 1), point(-4, -6), point(1, 6), point(-3, -5), point(5, 4)))) from dual
 END
 INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 0,10 10,20 0,0 0))'), ST_GEOMFROMTEXT('POLYGON((10 5,20 7,10 10,30 10,20 0,20 5,10 5))')));

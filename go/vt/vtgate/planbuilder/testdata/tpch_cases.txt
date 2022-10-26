@@ -70,7 +70,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:3,L:5,L:4,L:6,L:1,R:1",
+                            "JoinColumnIndexes": "L:3,L:5,L:4,L:6,L:1,R:0",
                             "JoinVars": {
                               "o_custkey": 0
                             },
@@ -98,8 +98,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select 1, count(*) from customer where 1 != 1 group by 1",
-                                "Query": "select 1, count(*) from customer where c_mktsegment = 'BUILDING' and c_custkey = :o_custkey group by 1",
+                                "FieldQuery": "select count(*) from customer where 1 != 1",
+                                "Query": "select count(*) from customer where c_mktsegment = 'BUILDING' and c_custkey = :o_custkey",
                                 "Table": "customer",
                                 "Values": [
                                   ":o_custkey"
@@ -131,7 +131,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum_count_star(1) AS order_count",
+    "Aggregates": "sum(1) AS order_count",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -318,7 +318,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:3,L:4,L:1,R:1",
+                        "JoinColumnIndexes": "L:3,L:4,L:1,R:0",
                         "JoinVars": {
                           "n_regionkey": 0
                         },
@@ -346,8 +346,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select 1, count(*) from region where 1 != 1 group by 1",
-                            "Query": "select 1, count(*) from region where r_name = 'ASIA' and r_regionkey = :n_regionkey group by 1",
+                            "FieldQuery": "select count(*) from region where 1 != 1",
+                            "Query": "select count(*) from region where r_name = 'ASIA' and r_regionkey = :n_regionkey",
                             "Table": "region",
                             "Values": [
                               ":n_regionkey"
@@ -664,7 +664,7 @@ Gen4 error: aggregation on columns from different sources not supported yet
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:1",
+                            "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:0",
                             "JoinVars": {
                               "o_orderkey": 0
                             },
@@ -688,8 +688,8 @@ Gen4 error: aggregation on columns from different sources not supported yet
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1 group by 1",
-                                "Query": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey group by 1",
+                                "FieldQuery": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1",
+                                "Query": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey",
                                 "Table": "lineitem",
                                 "Values": [
                                   ":o_orderkey"
@@ -998,7 +998,7 @@ Gen4 error: unsupported: group by on: *planbuilder.joinGen4
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:4,R:1",
+            "JoinColumnIndexes": "L:4,R:0",
             "JoinVars": {
               "l_partkey": 0,
               "l_quantity": 1,
@@ -1025,8 +1025,8 @@ Gen4 error: unsupported: group by on: *planbuilder.joinGen4
                   "Name": "main",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1, count(*) from part where 1 != 1 group by 1",
-                "Query": "select 1, count(*) from part where p_partkey = :l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and :l_quantity \u003e= 1 and :l_quantity \u003c= 1 + 10 and p_size between 1 and 5 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and :l_quantity \u003e= 10 and :l_quantity \u003c= 10 + 10 and p_size between 1 and 10 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and :l_quantity \u003e= 20 and :l_quantity \u003c= 20 + 10 and p_size between 1 and 15 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' group by 1",
+                "FieldQuery": "select count(*) from part where 1 != 1",
+                "Query": "select count(*) from part where p_partkey = :l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and :l_quantity \u003e= 1 and :l_quantity \u003c= 1 + 10 and p_size between 1 and 5 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and :l_quantity \u003e= 10 and :l_quantity \u003c= 10 + 10 and p_size between 1 and 10 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and :l_quantity \u003e= 20 and :l_quantity \u003c= 20 + 10 and p_size between 1 and 15 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON'",
                 "Table": "part"
               }
             ]
@@ -1061,7 +1061,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS numwait",
+            "Aggregates": "sum(1) AS numwait",
             "GroupBy": "(0|2)",
             "Inputs": [
               {
@@ -1089,7 +1089,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:1",
+                            "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:0",
                             "JoinVars": {
                               "l1_l_orderkey": 0
                             },
@@ -1113,8 +1113,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select 1, count(*) as numwait from orders where 1 != 1 group by 1",
-                                "Query": "select 1, count(*) as numwait from orders where o_orderstatus = 'F' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) and o_orderkey = :l1_l_orderkey group by 1",
+                                "FieldQuery": "select count(*) as numwait from orders where 1 != 1",
+                                "Query": "select count(*) as numwait from orders where o_orderstatus = 'F' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) and o_orderkey = :l1_l_orderkey",
                                 "Table": "orders",
                                 "Values": [
                                   ":l1_l_orderkey"
@@ -1126,7 +1126,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:3,L:4,L:1,R:1",
+                            "JoinColumnIndexes": "L:3,L:4,L:1,R:0",
                             "JoinVars": {
                               "s_nationkey": 0
                             },
@@ -1154,8 +1154,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select 1, count(*) as numwait from nation where 1 != 1 group by 1",
-                                "Query": "select 1, count(*) as numwait from nation where n_name = 'SAUDI ARABIA' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) and n_nationkey = :s_nationkey group by 1",
+                                "FieldQuery": "select count(*) as numwait from nation where 1 != 1",
+                                "Query": "select count(*) as numwait from nation where n_name = 'SAUDI ARABIA' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate limit 1) and n_nationkey = :s_nationkey",
                                 "Table": "nation",
                                 "Values": [
                                   ":s_nationkey"

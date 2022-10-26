@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package servenv
-
-// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY ./tools/do_releases.sh
+// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES
 // DO NOT EDIT
 
-const versionName = "14.0.1"
+package servenv
+
+const versionName = "14.0.0-SNAPSHOT"

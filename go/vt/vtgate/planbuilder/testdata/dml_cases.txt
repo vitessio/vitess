@@ -4472,26 +4472,3 @@ Gen4 plan same as above
     "Table": "user"
   }
 }
-
-# all defaults empty column, empty values
-"insert into authoritative () values ()"
-{
-  "QueryType": "INSERT",
-  "Original": "insert into authoritative () values ()",
-  "Instructions": {
-    "OperatorType": "Insert",
-    "Variant": "Sharded",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "TargetTabletType": "PRIMARY",
-    "MultiShardAutocommit": false,
-    "Query": "insert into authoritative(user_id) values (:_user_id_0)",
-    "TableName": "authoritative",
-    "VindexValues": {
-      "user_index": "NULL"
-    }
-  }
-}
-Gen4 plan same as above

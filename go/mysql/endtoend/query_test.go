@@ -33,10 +33,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-const (
-	charsetName = "utf8mb4"
-)
-
 func columnSize(cs collations.ID, size uint32) uint32 {
 	// utf8_general_ci results in smaller max column sizes because MySQL 5.7 is silly
 	if collations.Local().LookupByID(cs).Charset().Name() == "utf8mb3" {
@@ -82,7 +78,6 @@ func TestQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert failed: %v", err)
 	}
-	collID := getDefaultCollationID()
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -106,8 +101,8 @@ func TestQueries(t *testing.T) {
 				OrgTable:     "a",
 				Database:     "vttest",
 				OrgName:      "name",
-				ColumnLength: columnSize(collID, 512),
-				Charset:      uint32(collID),
+				ColumnLength: columnSize(conn.CharacterSet, 512),
+				Charset:      uint32(conn.CharacterSet),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -193,7 +188,6 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	}
 
 	// Check the fields.
-	collID := getDefaultCollationID()
 	expectedFields := []*querypb.Field{
 		{
 			Name:         "id",
@@ -216,8 +210,8 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			OrgTable:     "a",
 			Database:     "vttest",
 			OrgName:      "name",
-			ColumnLength: columnSize(collID, 512),
-			Charset:      uint32(collID),
+			ColumnLength: columnSize(conn.CharacterSet, 512),
+			Charset:      uint32(conn.CharacterSet),
 		},
 	}
 	fields, err := conn.Fields()
@@ -312,8 +306,7 @@ func TestSysInfo(t *testing.T) {
 	_, err = conn.ExecuteFetch("drop table if exists `a`", 1000, true)
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch(fmt.Sprintf("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=%s",
-		charsetName), 1000, true)
+	_, err = conn.ExecuteFetch("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", 1000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table `a`", 1000, true)
 
@@ -345,10 +338,4 @@ func TestSysInfo(t *testing.T) {
 
 	assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type)
 	assert.EqualValues(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
-}
-
-func getDefaultCollationID() collations.ID {
-	collationHandler := collations.Local()
-	collation := collationHandler.DefaultCollationForCharset(charsetName)
-	return collation.ID()
 }

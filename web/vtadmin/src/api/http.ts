@@ -19,7 +19,7 @@ import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
 import { TabletDebugVars } from '../util/tabletDebugVars';
-import { env, isReadOnlyMode } from '../util/env';
+import { isReadOnlyMode } from '../util/env';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -41,7 +41,8 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
             throw new Error(`Cannot execute write request in read-only mode: ${options.method} ${endpoint}`);
         }
 
-        const url = `${env().REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+        const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
+        const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = { ...vtfetchOpts(), ...options };
 
         let response = null;
@@ -86,7 +87,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
 };
 
 export const vtfetchOpts = (): RequestInit => {
-    const credentials = env().REACT_APP_FETCH_CREDENTIALS;
+    const credentials = process.env.REACT_APP_FETCH_CREDENTIALS;
     if (credentials && credentials !== 'omit' && credentials !== 'same-origin' && credentials !== 'include') {
         throw Error(
             `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
@@ -383,7 +384,7 @@ export interface TabletDebugVarsResponse {
 }
 
 export const fetchExperimentalTabletDebugVars = async (params: FetchTabletParams): Promise<TabletDebugVarsResponse> => {
-    if (!env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
+    if (!process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
         return Promise.resolve({ params });
     }
 

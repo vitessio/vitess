@@ -75,7 +75,7 @@ func init() {
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
 	*transactionMode = "MULTI"
-	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil, querypb.ExecuteOptions_Gen4)
+	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"
@@ -605,7 +605,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc3.Queries = nil
 
 	// single shard so no savepoint will be created and neither any old savepoint will be executed
-	_, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",

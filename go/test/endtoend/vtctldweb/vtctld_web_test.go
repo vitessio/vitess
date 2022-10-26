@@ -19,7 +19,6 @@ package vtctldweb
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -148,7 +147,6 @@ func TestCreateKs(t *testing.T) {
 	dismiss, err := dialog.FindElement(selenium.ByID, "vt-dismiss")
 	require.Nil(t, err)
 	click(t, dismiss)
-	time.Sleep(5 * time.Microsecond)
 
 	ksNames := getDashboardKeyspaces(t)
 	assert.ElementsMatch(t, []string{"test_keyspace", "test_keyspace2", "test_keyspace3"}, ksNames)

@@ -11,7 +11,6 @@ import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
 import Toggle from '../toggle/Toggle';
 import { Tooltip } from '../tooltip/Tooltip';
-import { env } from '../../util/env';
 import style from './Settings.module.scss';
 
 /* eslint-disable jsx-a11y/anchor-is-valid */
@@ -27,7 +26,7 @@ export const Settings = () => {
                 <h1 className="mt-8">Settings</h1>
 
                 <h2 className="mt-12 mb-8">Environment variables</h2>
-                <pre>{JSON.stringify(env(), null, 2)}</pre>
+                <pre>{JSON.stringify(process.env, null, 2)}</pre>
 
                 {process.env.NODE_ENV !== 'production' && (
                     <>

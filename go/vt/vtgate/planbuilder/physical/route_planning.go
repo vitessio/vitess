@@ -1092,11 +1092,6 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 
 	node.LHS = lhsPlan
 	node.RHS = rhsPlan
-	// If the predicate field is previously non-empty
-	// keep that predicate too
-	if node.Predicate != nil {
-		exprs = append(exprs, node.Predicate)
-	}
 	node.Predicate = sqlparser.AndExpressions(exprs...)
 	return node, nil
 }

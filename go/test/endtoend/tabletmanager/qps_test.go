@@ -60,7 +60,9 @@ func TestQPS(t *testing.T) {
 	//       after that we'll see 0.0 QPS rates again. If this becomes actually
 	//       flaky, we need to read continuously in a separate thread.
 
-	for n := 0; n < 15; n++ {
+	n := 0
+	for n < 15 {
+		n++
 		// Run queries via vtGate so that they are counted.
 		utils.Exec(t, vtGateConn, "select * from t1")
 	}

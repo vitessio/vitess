@@ -30,17 +30,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
 )
-
-var collationEnv *collations.Environment
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func TestOrderedAggregateExecute(t *testing.T) {
 	assert := assert.New(t)
@@ -1008,7 +998,7 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collationEnv.LookupID("utf8mb4_0900_ai_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_0900_ai_ci")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateSum,
@@ -1051,7 +1041,7 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collationEnv.LookupID("utf8mb4_0900_as_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_0900_as_ci")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateSum,
@@ -1096,7 +1086,7 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collationEnv.LookupID("utf8mb4_ja_0900_as_cs_ks")
+	collationID, _ := collations.Local().LookupID("utf8mb4_ja_0900_as_cs_ks")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateSum,

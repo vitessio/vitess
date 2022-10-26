@@ -1501,7 +1501,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		mysql.ERCantAggregate3Collations, mysql.ERCantAggregateNCollations, mysql.ERVariableIsNotStruct, mysql.ERUnknownCollation, mysql.ERWrongNameForIndex,
 		mysql.ERWrongNameForCatalog, mysql.ERBadFTColumn, mysql.ERTruncatedWrongValue, mysql.ERTooMuchAutoTimestampCols, mysql.ERInvalidOnUpdate, mysql.ERUnknownTimeZone,
 		mysql.ERInvalidCharacterString, mysql.ERIllegalReference, mysql.ERDerivedMustHaveAlias, mysql.ERTableNameNotAllowedHere, mysql.ERDataTooLong, mysql.ERDataOutOfRange,
-		mysql.ERTruncatedWrongValueForField, mysql.ERIllegalValueForType:
+		mysql.ERTruncatedWrongValueForField:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
 	case mysql.ERSpecifiedAccessDenied:
 		errCode = vtrpcpb.Code_PERMISSION_DENIED

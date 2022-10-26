@@ -101,12 +101,6 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 			orderByCol = oa.resultColumns[num].column
 		case *sqlparser.ColName:
 			orderByCol = expr.Metadata.(*column)
-		case *sqlparser.CastExpr:
-			col, ok := expr.Expr.(*sqlparser.ColName)
-			if !ok {
-				return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
-			}
-			orderByCol = col.Metadata.(*column)
 		case *sqlparser.ConvertExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {

@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 	exitcode, err := func() (int, error) {
 		var topology vttestpb.VTTestTopology
 
-		data := vttest.JSONTopoData(&topology)
+		data := vttest.JsonTopoData(&topology)
 		err := data.Set(jsonTopo)
 		if err != nil {
 			return 1, err
@@ -253,7 +253,7 @@ func assertTabletsPresent(t *testing.T) {
 		}
 		parts := strings.Split(line, " ")
 		if parts[1] == "routed" {
-			numRouted++
+			numRouted += 1
 			continue
 		}
 

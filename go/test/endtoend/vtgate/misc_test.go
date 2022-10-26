@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestSelectNull(t *testing.T) {
@@ -66,15 +67,11 @@ func TestShowColumns(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	expected57 := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
-	expected80 := `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")] [VARCHAR("idx") BLOB("varchar(50)") VARCHAR("YES") BINARY("") NULL VARCHAR("")]]`
-	utils.AssertMatchesOneOf(t, conn, "show columns from `t5_null_vindex` in `ks`", expected57, expected80)
-	utils.AssertMatchesOneOf(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected57, expected80)
-	utils.AssertMatchesOneOf(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected57, expected80)
-
-	expected57 = `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`
-	expected80 = `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")]]`
-	utils.AssertMatchesOneOf(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", expected57, expected80)
+	expected := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
+	utils.AssertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
+	utils.AssertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
+	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
+	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
 }
 
 func TestShowTables(t *testing.T) {
@@ -84,6 +81,8 @@ func TestShowTables(t *testing.T) {
 
 	query := "show tables;"
 	qr := utils.Exec(t, conn, query)
+
+	assert.Equal(t, "information_schema", qr.Fields[0].Database)
 	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
 }
 
@@ -263,9 +262,9 @@ func TestShowTablesWithWhereClause(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.AssertMatchesOneOf(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`, `[[VARBINARY("t6")]]`)
+	utils.AssertMatches(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`)
 	utils.Exec(t, conn, "begin")
-	utils.AssertMatchesOneOf(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`, `[[VARBINARY("t3")]]`)
+	utils.AssertMatches(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`)
 }
 
 func TestOffsetAndLimitWithOLAP(t *testing.T) {
@@ -478,12 +477,9 @@ func TestFunctionInDefault(t *testing.T) {
 	// set the sql mode ALLOW_INVALID_DATES
 	utils.Exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
 
-	// commenting this out since we are planning to switch to 8.0 for unit tests, currently vtgate reports
-	// version as 5.7 regardless of underlying database version. TODO: Ideally we should detect and run this test for 5.7
-
-	// _, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
+	_, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
 	// this query fails because mysql57 does not support functions in default clause
-	// require.Error(t, err)
+	require.Error(t, err)
 
 	// verify that currenet_timestamp and it's aliases work as default values
 	utils.Exec(t, conn, `create table function_default (
@@ -508,12 +504,9 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 )`)
 	utils.Exec(t, conn, "drop table function_default")
 
-	// commenting this out since we are planning to switch to 8.0 for unit tests, currently vtgate reports
-	// version as 5.7 regardless of underlying database version. TODO: Ideally we should detect and run this test for 5.7
-
-	// _, err = conn.ExecuteFetch(`create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`, 1000, true)
+	_, err = conn.ExecuteFetch(`create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`, 1000, true)
 	// this query fails because utc_timestamp is not supported in default clause
-	// require.Error(t, err)
+	require.Error(t, err)
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	utils.Exec(t, conn, "drop table function_default")
@@ -822,26 +815,4 @@ func TestDescribeVindex(t *testing.T) {
 	defer conn.Close()
 
 	utils.AssertContainsError(t, conn, "describe hash", "'vt_ks.hash' doesn't exist")
-}
-
-// TestJoinWithMergedRouteWithPredicate checks the issue found in https://github.com/vitessio/vitess/issues/10713
-func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	utils.Exec(t, conn, "delete from t1")
-	defer utils.Exec(t, conn, "delete from t1")
-	utils.Exec(t, conn, "delete from t2")
-	defer utils.Exec(t, conn, "delete from t2")
-	utils.Exec(t, conn, "delete from t3")
-	defer utils.Exec(t, conn, "delete from t3")
-
-	utils.Exec(t, conn, "insert into t1 (id1,id2) values (1, 13)")
-	utils.Exec(t, conn, "insert into t2 (id3,id4) values (5, 10), (15, 20)")
-	utils.Exec(t, conn, "insert into t3 (id5,id6,id7) values (13, 5, 8)")
-
-	utils.AssertMatches(t, conn, "select t3.id7, t2.id3, t3.id6 from t1 join t3 on t1.id2 = t3.id5 join t2 on t3.id6 = t2.id3 where t1.id2 = 13", `[[INT64(8) INT64(5) INT64(5)]]`)
 }

@@ -20,22 +20,10 @@ jobs:
     {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
 
     steps:
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
-
     - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v2
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: frouioui/paths-filter@main
       id: changes
       with:
@@ -54,17 +42,17 @@ jobs:
             - '.github/workflows/**'
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.4
+        go-version: 1.18.3
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
@@ -72,7 +60,7 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
@@ -104,14 +92,14 @@ jobs:
     {{if .MakeTools}}
 
     - name: Installing zookeeper and consul
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
           make tools
 
     {{end}}
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -123,7 +111,7 @@ jobs:
         launchable record build --name "$GITHUB_RUN_ID" --source .
 
     - name: Run cluster endtoend test
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -158,7 +146,7 @@ jobs:
         eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
+      if: steps.changes.outputs.end_to_end == 'true' && always()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true

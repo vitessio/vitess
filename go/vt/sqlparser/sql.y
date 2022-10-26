@@ -5168,11 +5168,11 @@ function_call_keyword
   }
 | CAST openb expression AS convert_type array_opt closeb
   {
-    $$ = &CastExpr{Expr: $3, Type: $5, Array: $6}
+    $$ = &ConvertExpr{Expr: $3, Type: $5, Array: $6}
   }
-| CONVERT openb expression ',' convert_type closeb
+| CONVERT openb expression ',' convert_type array_opt closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
+    $$ = &ConvertExpr{Expr: $3, Type: $5, Array: $6}
   }
 | CONVERT openb expression USING charset closeb
   {
@@ -6765,7 +6765,7 @@ insert_data:
   }
 | openb closeb VALUES tuple_list
   {
-    $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
+    $$ = &Insert{Rows: $4}
   }
 | openb ins_column_list closeb select_statement
   {

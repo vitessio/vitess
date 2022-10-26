@@ -81,8 +81,6 @@ type RPCTM interface {
 
 	ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
-	FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error)
-
 	StopReplication(ctx context.Context) error
 
 	StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
@@ -122,8 +120,6 @@ type RPCTM interface {
 	UndoDemotePrimary(ctx context.Context, semiSync bool) error
 
 	ReplicaWasPromoted(ctx context.Context) error
-
-	ResetReplicationParameters(ctx context.Context) error
 
 	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 

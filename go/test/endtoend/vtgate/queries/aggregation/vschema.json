@@ -107,22 +107,6 @@
           "name": "unicode_loose_xxhash"
         }
       ]
-    },
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "shardKey",
-          "name": "hash"
-        }
-      ]
-    },
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "shardKey",
-          "name": "hash"
-        }
-      ]
     }
   }
 }

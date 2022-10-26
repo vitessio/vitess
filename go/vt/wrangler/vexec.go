@@ -47,7 +47,6 @@ import (
 const (
 	vexecTableQualifier   = "_vt"
 	vreplicationTableName = "vreplication"
-	sqlVReplicationDelete = "delete from _vt.vreplication"
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -213,11 +212,6 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
-				// If we deleted a workflow then let's make a best effort attempt to clean
-				// up any related data.
-				if vx.query == sqlVReplicationDelete {
-					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
-				}
 				mu.Lock()
 				results[primary] = qr
 				mu.Unlock()

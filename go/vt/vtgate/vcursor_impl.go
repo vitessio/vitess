@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -50,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
@@ -111,7 +113,6 @@ type vcursorImpl struct {
 	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
-	pv       plancontext.PlannerVersion
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -129,7 +130,6 @@ func newVCursorImpl(
 	resolver *srvtopo.Resolver,
 	serv srvtopo.Server,
 	warnShardedOnly bool,
-	pv plancontext.PlannerVersion,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
@@ -175,7 +175,6 @@ func newVCursorImpl(
 		vm:              vm,
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
-		pv:              pv,
 	}, nil
 }
 
@@ -414,7 +413,13 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	return vc.pv
+	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
+	if done {
+		return version
+	}
+
+	log.Warning("unknown planner version configured. using the default")
+	return planbuilder.V3
 }
 
 // GetSemTable implements the ContextVSchema interface

@@ -704,7 +704,7 @@ INPUT
 select ceiling(cast(-2 as unsigned)), ceiling(18446744073709551614), ceiling(-2);
 END
 OUTPUT
-select ceiling(cast(-2 as unsigned)), ceiling(18446744073709551614), ceiling(-2) from dual
+select ceiling(convert(-2, unsigned)), ceiling(18446744073709551614), ceiling(-2) from dual
 END
 INPUT
 select substr(null,null,null),mid(null,null,null);
@@ -974,7 +974,7 @@ INPUT
 select cast(s1 as decimal(7,2)) from t1;
 END
 OUTPUT
-select cast(s1 as decimal(7, 2)) from t1
+select convert(s1, decimal(7, 2)) from t1
 END
 INPUT
 select 3 from (select 1) as qn, (select 2) as QN;
@@ -998,7 +998,7 @@ INPUT
 select cast("1:2:3" as TIME);
 END
 OUTPUT
-select cast('1:2:3' as TIME) from dual
+select convert('1:2:3', TIME) from dual
 END
 INPUT
 select soundex(_utf8 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB);
@@ -1094,7 +1094,7 @@ INPUT
 select cast(@v1 as decimal(22, 2));
 END
 OUTPUT
-select cast(@v1 as decimal(22, 2)) from dual
+select convert(@v1, decimal(22, 2)) from dual
 END
 INPUT
 select count(a) from t1 where a >= 10;
@@ -1352,7 +1352,7 @@ INPUT
 select (ST_aswkb(cast(st_union(multipoint( point(8,6), point(1,-17679), point(-9,-9)), linestring(point(91,12), point(-77,49), point(53,-81)))as char(18)))) in ('1','2');
 END
 OUTPUT
-select ST_aswkb(cast(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))) as char(18))) in ('1', '2') from dual
+select ST_aswkb(convert(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))), char(18))) in ('1', '2') from dual
 END
 INPUT
 select 12%0 as 'NULL';
@@ -1406,7 +1406,7 @@ INPUT
 select cast("2001-1-1" as DATE), cast("2001-1-1" as DATETIME);
 END
 OUTPUT
-select cast('2001-1-1' as DATE), cast('2001-1-1' as DATETIME) from dual
+select convert('2001-1-1', DATE), convert('2001-1-1', DATETIME) from dual
 END
 INPUT
 select case when s1 = 0xfffd then 1 else 0 end from t1;
@@ -1442,7 +1442,7 @@ INPUT
 select f1 from t1 where date(f1) between cast("2006-1-1" as date) and cast("2006.1.1" as date);
 END
 OUTPUT
-select f1 from t1 where date(f1) between cast('2006-1-1' as date) and cast('2006.1.1' as date)
+select f1 from t1 where date(f1) between convert('2006-1-1', date) and convert('2006.1.1', date)
 END
 INPUT
 select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'),Point('-0', '0'), Point('0', '0'))))) as result;
@@ -1580,7 +1580,7 @@ INPUT
 select cast(NULL as decimal(6)) as t1;
 END
 OUTPUT
-select cast(null as decimal(6)) as t1 from dual
+select convert(null, decimal(6)) as t1 from dual
 END
 INPUT
 select count(*) from t1 where t like 'a%';
@@ -2006,7 +2006,7 @@ INPUT
 select timediff(cast('1 12:00:00' as time), '12:00:00');
 END
 OUTPUT
-select timediff(cast('1 12:00:00' as time), '12:00:00') from dual
+select timediff(convert('1 12:00:00', time), '12:00:00') from dual
 END
 INPUT
 select hex(a), hex(@a:=convert(a using utf8mb4)), hex(convert(@a using utf16)) from t1;
@@ -2078,7 +2078,7 @@ INPUT
 select hex(cast(9007199254740992 as decimal(30,0)));
 END
 OUTPUT
-select hex(cast(9007199254740992 as decimal(30, 0))) from dual
+select hex(convert(9007199254740992, decimal(30, 0))) from dual
 END
 INPUT
 select id, sum(qty) as sqty, count(qty) as cqty from t1 group by id having sqty>2 and cqty>1;
@@ -2324,7 +2324,7 @@ INPUT
 select cast(rtrim(' 20.06 ') as decimal(19,2));
 END
 OUTPUT
-select cast(rtrim(' 20.06 ') as decimal(19, 2)) from dual
+select convert(rtrim(' 20.06 '), decimal(19, 2)) from dual
 END
 INPUT
 select rpad(c1,3,'�'), rpad('�',3,c1) from t1;
@@ -2462,7 +2462,7 @@ INPUT
 select cast("2001-1-1" as datetime) = "2001-01-01 00:00:00";
 END
 OUTPUT
-select cast('2001-1-1' as datetime) = '2001-01-01 00:00:00' from dual
+select convert('2001-1-1', datetime) = '2001-01-01 00:00:00' from dual
 END
 INPUT
 select a1,a2,b, max(c) from t1 where (c < 'k321') group by a1,a2,b;
@@ -2516,7 +2516,7 @@ INPUT
 select cast(cast('1.2' as decimal(3,2)) as signed);
 END
 OUTPUT
-select cast(cast('1.2' as decimal(3, 2)) as signed) from dual
+select convert(convert('1.2', decimal(3, 2)), signed) from dual
 END
 INPUT
 select from t1 where a = 7 or not(a < 15 and a > 5);
@@ -2690,7 +2690,7 @@ INPUT
 select CAST(0xffffffffffffffff as unsigned);
 END
 OUTPUT
-select cast(0xffffffffffffffff as unsigned) from dual
+select convert(0xffffffffffffffff, unsigned) from dual
 END
 INPUT
 select "a" as col1, "ct" as col2;
@@ -2732,7 +2732,7 @@ INPUT
 select cast('-10a' as signed integer);
 END
 OUTPUT
-select cast('-10a' as signed) from dual
+select convert('-10a', signed) from dual
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_vietnamese_ci;
@@ -2948,19 +2948,19 @@ INPUT
 select cast('-1' as unsigned);
 END
 OUTPUT
-select cast('-1' as unsigned) from dual
+select convert('-1', unsigned) from dual
 END
 INPUT
 select hex(cast(0x20000000000000 as unsigned) + 1);
 END
 OUTPUT
-select hex(cast(0x20000000000000 as unsigned) + 1) from dual
+select hex(convert(0x20000000000000, unsigned) + 1) from dual
 END
 INPUT
 select cast(-1e18 as decimal(22,2));
 END
 OUTPUT
-select cast(-1e18 as decimal(22, 2)) from dual
+select convert(-1e18, decimal(22, 2)) from dual
 END
 INPUT
 select str_to_date('10:00 PM', '%h:%i %p') + INTERVAL 10 MINUTE;
@@ -2978,7 +2978,7 @@ INPUT
 select cast(1000 as CHAR(3));
 END
 OUTPUT
-select cast(1000 as CHAR(3)) from dual
+select convert(1000, CHAR(3)) from dual
 END
 INPUT
 select Fld1, max(Fld2) from t1 group by Fld1 having avg(Fld2) is not null;
@@ -3038,7 +3038,7 @@ INPUT
 select st_union((cast(linestring(point(6,-68), point(-22,-4)) as binary(13))), st_intersection(point(6,8),multipoint(point(3,1),point(-4,-6),point(1,6),point(-3,-5),point(5,4))));
 END
 OUTPUT
-select st_union(cast(linestring(point(6, -68), point(-22, -4)) as binary(13)), st_intersection(point(6, 8), multipoint(point(3, 1), point(-4, -6), point(1, 6), point(-3, -5), point(5, 4)))) from dual
+select st_union(convert(linestring(point(6, -68), point(-22, -4)), binary(13)), st_intersection(point(6, 8), multipoint(point(3, 1), point(-4, -6), point(1, 6), point(-3, -5), point(5, 4)))) from dual
 END
 INPUT
 select st_disjoint(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -3158,7 +3158,7 @@ INPUT
 select cast(variance(ff) as decimal(10,3)) from t2;
 END
 OUTPUT
-select cast(variance(ff) as decimal(10, 3)) from t2
+select convert(variance(ff), decimal(10, 3)) from t2
 END
 INPUT
 select insert('hello', 18446744073709551615, 18446744073709551615, 'hi');
@@ -3212,7 +3212,7 @@ INPUT
 select a, ifnull(b,cast(-7 as signed)) as b, ifnull(c,cast(7 as unsigned)) as c, ifnull(d,cast('2000-01-01' as date)) as d, ifnull(e,cast('b' as char)) as e, ifnull(f,cast('2000-01-01' as datetime)) as f, ifnull(g,cast('5:4:3' as time)) as g, ifnull(h,cast('yet another binary data' as binary)) as h, addtime(cast('1:0:0' as time),cast('1:0:0' as time)) as dd from t1;
 END
 OUTPUT
-select a, ifnull(b, cast(-7 as signed)) as b, ifnull(c, cast(7 as unsigned)) as c, ifnull(d, cast('2000-01-01' as date)) as d, ifnull(e, cast('b' as char)) as e, ifnull(f, cast('2000-01-01' as datetime)) as f, ifnull(g, cast('5:4:3' as time)) as g, ifnull(h, cast('yet another binary data' as binary)) as h, addtime(cast('1:0:0' as time), cast('1:0:0' as time)) as dd from t1
+select a, ifnull(b, convert(-7, signed)) as b, ifnull(c, convert(7, unsigned)) as c, ifnull(d, convert('2000-01-01', date)) as d, ifnull(e, convert('b', char)) as e, ifnull(f, convert('2000-01-01', datetime)) as f, ifnull(g, convert('5:4:3', time)) as g, ifnull(h, convert('yet another binary data', binary)) as h, addtime(convert('1:0:0', time), convert('1:0:0', time)) as dd from t1
 END
 INPUT
 select substring('hello', 1, 18446744073709551616);
@@ -3278,7 +3278,7 @@ INPUT
 select f3 from t1 where timestamp(f3) between cast("2006-1-1 12:1:1" as datetime) and cast("2006-1-1 12:1:2" as datetime);
 END
 OUTPUT
-select f3 from t1 where timestamp(f3) between cast('2006-1-1 12:1:1' as datetime) and cast('2006-1-1 12:1:2' as datetime)
+select f3 from t1 where timestamp(f3) between convert('2006-1-1 12:1:1', datetime) and convert('2006-1-1 12:1:2', datetime)
 END
 INPUT
 select f1() from t1;
@@ -3302,7 +3302,7 @@ INPUT
 select timediff(cast('2004-12-30 12:00:00' as time), '12:00:00');
 END
 OUTPUT
-select timediff(cast('2004-12-30 12:00:00' as time), '12:00:00') from dual
+select timediff(convert('2004-12-30 12:00:00', time), '12:00:00') from dual
 END
 INPUT
 select i from t1 where a=repeat(_utf8 0xD0B1,200);
@@ -3386,7 +3386,7 @@ INPUT
 select 1 as f1 from information_schema.tables where "COLUMN_PRIVILEGES"= (select cast(table_name as char) from information_schema.tables where table_schema != 'performance_schema' order by table_name limit 1) limit 1;
 END
 OUTPUT
-select 1 as f1 from information_schema.`tables` where 'COLUMN_PRIVILEGES' = (select cast(table_name as char) from information_schema.`tables` where table_schema != 'performance_schema' order by table_name asc limit 1) limit 1
+select 1 as f1 from information_schema.`tables` where 'COLUMN_PRIVILEGES' = (select convert(table_name, char) from information_schema.`tables` where table_schema != 'performance_schema' order by table_name asc limit 1) limit 1
 END
 INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1:1" HOUR_MINUTE);
@@ -3458,7 +3458,7 @@ INPUT
 select cast(sum(distinct ff) as decimal(5,2)) from t2;
 END
 OUTPUT
-select cast(sum(distinct ff) as decimal(5, 2)) from t2
+select convert(sum(distinct ff), decimal(5, 2)) from t2
 END
 INPUT
 select substring_index('the king of the the hill',' ',-1);
@@ -3836,7 +3836,7 @@ INPUT
 select abs(cast(-2 as unsigned)), abs(18446744073709551614), abs(-2);
 END
 OUTPUT
-select abs(cast(-2 as unsigned)), abs(18446744073709551614), abs(-2) from dual
+select abs(convert(-2, unsigned)), abs(18446744073709551614), abs(-2) from dual
 END
 INPUT
 select hex(substr(_utf32 0x000000e4000000e500000068,3));
@@ -4052,7 +4052,7 @@ INPUT
 select mod(5, cast(-2 as unsigned)), mod(5, 18446744073709551614), mod(5, -2);
 END
 OUTPUT
-select mod(5, cast(-2 as unsigned)), mod(5, 18446744073709551614), mod(5, -2) from dual
+select mod(5, convert(-2, unsigned)), mod(5, 18446744073709551614), mod(5, -2) from dual
 END
 INPUT
 select _koi8r'a' = _koi8r'A';
@@ -4280,7 +4280,7 @@ INPUT
 select cast(rtrim(ltrim(' 20.06 ')) as decimal(19,2));
 END
 OUTPUT
-select cast(rtrim(ltrim(' 20.06 ')) as decimal(19, 2)) from dual
+select convert(rtrim(ltrim(' 20.06 ')), decimal(19, 2)) from dual
 END
 INPUT
 select from t1 where MATCH a,b AGAINST ('"xt indexes"' IN BOOLEAN MODE);
@@ -4448,7 +4448,7 @@ INPUT
 select hex(cast(9007199254740993 as decimal(30,0)));
 END
 OUTPUT
-select hex(cast(9007199254740993 as decimal(30, 0))) from dual
+select hex(convert(9007199254740993, decimal(30, 0))) from dual
 END
 INPUT
 select min(a3) from t1 where a2 = 4;
@@ -4514,7 +4514,7 @@ INPUT
 select CAST(1-2 AS UNSIGNED);
 END
 OUTPUT
-select cast(1 - 2 as UNSIGNED) from dual
+select convert(1 - 2, UNSIGNED) from dual
 END
 INPUT
 select (with recursive dt as (select t1.a as a union all select a+1 from dt where a<10) select concat(count(*), ' - ', avg(dt.a)) from dt ) as subq from t1;
@@ -4634,7 +4634,7 @@ INPUT
 select cast(pow(2,63)-1024 as signed) as pp;
 END
 OUTPUT
-select cast(pow(2, 63) - 1024 as signed) as pp from dual
+select convert(pow(2, 63) - 1024, signed) as pp from dual
 END
 INPUT
 select yearweek("2000-01-01",1) as '2000', yearweek("2001-01-01",1) as '2001', yearweek("2002-01-01",1) as '2002',yearweek("2003-01-01",1) as '2003', yearweek("2004-01-01",1) as '2004', yearweek("2005-01-01",1) as '2005', yearweek("2006-01-01",1) as '2006';
@@ -4862,7 +4862,7 @@ INPUT
 select cast(-5 as unsigned) | 1, cast(-5 as unsigned) & -1;
 END
 OUTPUT
-select cast(-5 as unsigned) | 1, cast(-5 as unsigned) & -1 from dual
+select convert(-5, unsigned) | 1, convert(-5, unsigned) & -1 from dual
 END
 INPUT
 select 5 div 2.0;
@@ -5102,7 +5102,7 @@ INPUT
 select format(cast(-2 as unsigned), 2), format(18446744073709551614, 2), format(-2, 2);
 END
 OUTPUT
-select format(cast(-2 as unsigned), 2), format(18446744073709551614, 2), format(-2, 2) from dual
+select format(convert(-2, unsigned), 2), format(18446744073709551614, 2), format(-2, 2) from dual
 END
 INPUT
 select max(7) from t1m;
@@ -5402,7 +5402,7 @@ INPUT
 select cast(sum(distinct ff) as signed) from t2;
 END
 OUTPUT
-select cast(sum(distinct ff) as signed) from t2
+select convert(sum(distinct ff), signed) from t2
 END
 INPUT
 select substring_index(null,null,3);
@@ -5600,7 +5600,7 @@ INPUT
 select CAST(0xb3 as signed);
 END
 OUTPUT
-select cast(0xb3 as signed) from dual
+select convert(0xb3, signed) from dual
 END
 INPUT
 select 'a' union select concat('a', -'3');
@@ -5966,7 +5966,7 @@ INPUT
 select cast(1-pow(2,63) as signed) as qq;
 END
 OUTPUT
-select cast(1 - pow(2, 63) as signed) as qq from dual
+select convert(1 - pow(2, 63), signed) as qq from dual
 END
 INPUT
 select 1 + /*!00000 2 node_modules/ + 3 /*!99999 noise*/ + 4;
@@ -6068,13 +6068,13 @@ INPUT
 select cast(_koi8r'��' AS nchar) as c1, cast(_koi8r'� ' AS nchar) as c2, cast(_koi8r'���' AS nchar(2)) as c3, cast(_koi8r'� ' AS nchar(2)) as c4, cast(_koi8r'�' AS nchar(2)) as c5;
 END
 OUTPUT
-select cast(_koi8r '��' as nchar) as c1, cast(_koi8r '� ' as nchar) as c2, cast(_koi8r '���' as nchar(2)) as c3, cast(_koi8r '� ' as nchar(2)) as c4, cast(_koi8r '�' as nchar(2)) as c5 from dual
+select convert(_koi8r '��', nchar) as c1, convert(_koi8r '� ', nchar) as c2, convert(_koi8r '���', nchar(2)) as c3, convert(_koi8r '� ', nchar(2)) as c4, convert(_koi8r '�', nchar(2)) as c5 from dual
 END
 INPUT
 select date_add(cast('2004-12-30 12:00:00' as date), interval 0 hour);
 END
 OUTPUT
-select date_add(cast('2004-12-30 12:00:00' as date), interval 0 hour) from dual
+select date_add(convert('2004-12-30 12:00:00', date), interval 0 hour) from dual
 END
 INPUT
 select c as c_all from t1 order by c;
@@ -6518,7 +6518,7 @@ INPUT
 select cast(18446744073709551615 as signed);
 END
 OUTPUT
-select cast(18446744073709551615 as signed) from dual
+select convert(18446744073709551615, signed) from dual
 END
 INPUT
 select monthname(str_to_date(null, '%m')), monthname(str_to_date(null, '%m')), monthname(str_to_date(1, '%m')), monthname(str_to_date(0, '%m'));
@@ -6908,7 +6908,7 @@ INPUT
 select c1 as 'no index' from t1 where c1 like cast(concat(0xA4A2, '%') as char character set ujis);
 END
 OUTPUT
-select c1 as `no index` from t1 where c1 like cast(concat(0xA4A2, '%') as char character set ujis)
+select c1 as `no index` from t1 where c1 like convert(concat(0xA4A2, '%'), char character set ujis)
 END
 INPUT
 select d,a,b from t1 order by a;
@@ -7154,7 +7154,7 @@ INPUT
 select f1 from t1 where cast("2006-1-1" as date) between f1 and f3;
 END
 OUTPUT
-select f1 from t1 where cast('2006-1-1' as date) between f1 and f3
+select f1 from t1 where convert('2006-1-1', date) between f1 and f3
 END
 INPUT
 select maketime(-25,11,12);
@@ -7172,7 +7172,7 @@ INPUT
 select c1 as 'using index' from t1 where c1 like cast(concat(0xA4A2, '%') as char character set ujis);
 END
 OUTPUT
-select c1 as `using index` from t1 where c1 like cast(concat(0xA4A2, '%') as char character set ujis)
+select c1 as `using index` from t1 where c1 like convert(concat(0xA4A2, '%'), char character set ujis)
 END
 INPUT
 select "at" as col1, "AT" as col2, "c" as col3;
@@ -7454,7 +7454,7 @@ INPUT
 select cast("A" as binary) = "a", cast(BINARY "a" as CHAR) = "A";
 END
 OUTPUT
-select cast('A' as binary) = 'a', cast(convert('a', BINARY) as CHAR) = 'A' from dual
+select convert('A', binary) = 'a', convert(convert('a', BINARY), CHAR) = 'A' from dual
 END
 INPUT
 select from `information_schema`.`TRIGGERS` where `EVENT_OBJECT_SCHEMA` = NULL;
@@ -7466,7 +7466,7 @@ INPUT
 select cast(min(ff) as decimal(5,2)) from t2;
 END
 OUTPUT
-select cast(min(ff) as decimal(5, 2)) from t2
+select convert(min(ff), decimal(5, 2)) from t2
 END
 INPUT
 select from information_schema.views where TABLE_SCHEMA != 'sys' and TABLE_NAME rlike "v[0-4]{1}$" order by table_name;
@@ -7604,7 +7604,7 @@ INPUT
 select cast(NULL as signed), cast(1/0 as signed);
 END
 OUTPUT
-select cast(null as signed), cast(1 / 0 as signed) from dual
+select convert(null, signed), convert(1 / 0, signed) from dual
 END
 INPUT
 select concat(_latin1'a',_latin2'a',_latin5'a',_latin7'a');
@@ -7808,7 +7808,7 @@ INPUT
 select cast('9223372036854775807' as signed);
 END
 OUTPUT
-select cast('9223372036854775807' as signed) from dual
+select convert('9223372036854775807', signed) from dual
 END
 INPUT
 select get_lock("test_lock2", 20);
@@ -7880,7 +7880,7 @@ INPUT
 select cast('18446744073709551616' as signed);
 END
 OUTPUT
-select cast('18446744073709551616' as signed) from dual
+select convert('18446744073709551616', signed) from dual
 END
 INPUT
 select get_format(DATE, 'TEST') as a;
@@ -7916,7 +7916,7 @@ INPUT
 select cast("2001-1-1" as date) = "2001-01-01";
 END
 OUTPUT
-select cast('2001-1-1' as date) = '2001-01-01' from dual
+select convert('2001-1-1', date) = '2001-01-01' from dual
 END
 INPUT
 select sum(qty) as sqty from t1 group by id having count(distinct id) > 0;
@@ -8318,7 +8318,7 @@ INPUT
 select sqrt(cast(-2 as unsigned)), sqrt(18446744073709551614), sqrt(-2);
 END
 OUTPUT
-select sqrt(cast(-2 as unsigned)), sqrt(18446744073709551614), sqrt(-2) from dual
+select sqrt(convert(-2, unsigned)), sqrt(18446744073709551614), sqrt(-2) from dual
 END
 INPUT
 select count(*) from t1 INNER JOIN (SELECT A.E1, A.E2, A.E3 FROM t1 AS A WHERE A.E3 = (SELECT MAX(B.E3) FROM t1 AS B WHERE A.E2 = B.E2)) AS themax ON t1.E1 = themax.E2 AND t1.E1 = t1.E2;
@@ -8828,7 +8828,7 @@ INPUT
 select isnull(date(NULL)), isnull(cast(NULL as DATE));
 END
 OUTPUT
-select isnull(date(null)), isnull(cast(null as DATE)) from dual
+select isnull(date(null)), isnull(convert(null, DATE)) from dual
 END
 INPUT
 select from t1 ignore index (primary) where tt like 'Aa%';
@@ -8912,7 +8912,7 @@ INPUT
 select cast('1a' as signed);
 END
 OUTPUT
-select cast('1a' as signed) from dual
+select convert('1a', signed) from dual
 END
 INPUT
 select from t1 where a in ('4828532208463511553');
@@ -8936,7 +8936,7 @@ INPUT
 select mod(cast(-2 as unsigned), 3), mod(18446744073709551614, 3), mod(-2, 3);
 END
 OUTPUT
-select mod(cast(-2 as unsigned), 3), mod(18446744073709551614, 3), mod(-2, 3) from dual
+select mod(convert(-2, unsigned), 3), mod(18446744073709551614, 3), mod(-2, 3) from dual
 END
 INPUT
 select a, a regexp '[a]' from t1 order by binary a;
@@ -9140,7 +9140,7 @@ INPUT
 select hex(weight_string(cast(0xE0A1 as char) as char(1)));
 END
 OUTPUT
-select hex(weight_string(cast(0xE0A1 as char) as char(1))) from dual
+select hex(weight_string(convert(0xE0A1, char) as char(1))) from dual
 END
 INPUT
 select group_concat(bar order by concat(bar,bar) desc) from t1;
@@ -9152,7 +9152,7 @@ INPUT
 select CAST('10x' as unsigned integer);
 END
 OUTPUT
-select cast('10x' as unsigned) from dual
+select convert('10x', unsigned) from dual
 END
 INPUT
 select subtime("1997-12-31 23:59:59.999999", "1998-01-01 01:01:01.999999");
@@ -9362,7 +9362,7 @@ INPUT
 select CAST(0x8fffffffffffffff as signed);
 END
 OUTPUT
-select cast(0x8fffffffffffffff as signed) from dual
+select convert(0x8fffffffffffffff, signed) from dual
 END
 INPUT
 select a1,a2,b,min(c) from t1 where ((a1 > 'a') or (a1 < '9')) and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122') or (c < 'h112') or (c = 'c111')) group by a1,a2,b;
@@ -9398,13 +9398,13 @@ INPUT
 select st_astext(st_union(cast(point(1,1)as char(15)),point(1,1))) as res;
 END
 OUTPUT
-select st_astext(st_union(cast(point(1, 1) as char(15)), point(1, 1))) as res from dual
+select st_astext(st_union(convert(point(1, 1), char(15)), point(1, 1))) as res from dual
 END
 INPUT
 select cast('' as signed);
 END
 OUTPUT
-select cast('' as signed) from dual
+select convert('', signed) from dual
 END
 INPUT
 select hex(substr(_ucs2 0x00e400e50068,-1));
@@ -9836,7 +9836,7 @@ INPUT
 select truncate(cast(-2 as unsigned), 1), truncate(18446744073709551614, 1), truncate(-2, 1);
 END
 OUTPUT
-select truncate(cast(-2 as unsigned), 1), truncate(18446744073709551614, 1), truncate(-2, 1) from dual
+select truncate(convert(-2, unsigned), 1), truncate(18446744073709551614, 1), truncate(-2, 1) from dual
 END
 INPUT
 select insert('hello', -4294967296, 1, 'hi');
@@ -9866,7 +9866,7 @@ INPUT
 select truncate(4, cast(-2 as unsigned)), truncate(4, 18446744073709551614), truncate(4, -2);
 END
 OUTPUT
-select truncate(4, cast(-2 as unsigned)), truncate(4, 18446744073709551614), truncate(4, -2) from dual
+select truncate(4, convert(-2, unsigned)), truncate(4, 18446744073709551614), truncate(4, -2) from dual
 END
 INPUT
 select timestampdiff(year,'2004-02-29','2005-02-28');
@@ -10286,7 +10286,7 @@ INPUT
 select cast(repeat('1',20) as unsigned);
 END
 OUTPUT
-select cast(repeat('1', 20) as unsigned) from dual
+select convert(repeat('1', 20), unsigned) from dual
 END
 INPUT
 select hex(conv(convert('123' using utf16), 10, 16));
@@ -10388,7 +10388,7 @@ INPUT
 select f1 from t1 where cast("2006-1-1" as date) between f1 and cast('zzz' as date);
 END
 OUTPUT
-select f1 from t1 where cast('2006-1-1' as date) between f1 and cast('zzz' as date)
+select f1 from t1 where convert('2006-1-1', date) between f1 and convert('zzz', date)
 END
 INPUT
 select from t1 where a=1;
@@ -11000,7 +11000,7 @@ INPUT
 select a,b,cast(a as char character set cp1251),cast(b as binary) from t1;
 END
 OUTPUT
-select a, b, cast(a as char character set cp1251), cast(b as binary) from t1
+select a, b, convert(a, char character set cp1251), convert(b, binary) from t1
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_unicode_ci;
@@ -11030,7 +11030,7 @@ INPUT
 select word, word=cast(0xdf AS CHAR) as t from t1 having t > 0;
 END
 OUTPUT
-select word, word = cast(0xdf as CHAR) as t from t1 having t > 0
+select word, word = convert(0xdf, CHAR) as t from t1 having t > 0
 END
 INPUT
 select max(t2.a1) from t1 left outer join t2 on t1.a2=t2.a1 and 1=0 where t2.a1='AAA';
@@ -11072,7 +11072,7 @@ INPUT
 select cast(9223372036854775808 as unsigned)+1;
 END
 OUTPUT
-select cast(9223372036854775808 as unsigned) + 1 from dual
+select convert(9223372036854775808, unsigned) + 1 from dual
 END
 INPUT
 select if(u=1,st,st) s from t1 order by s;
@@ -11330,7 +11330,7 @@ INPUT
 select cast("1:2:3" as TIME) = "1:02:03";
 END
 OUTPUT
-select cast('1:2:3' as TIME) = '1:02:03' from dual
+select convert('1:2:3', TIME) = '1:02:03' from dual
 END
 INPUT
 select left('hello', -18446744073709551616);
@@ -11912,7 +11912,7 @@ INPUT
 select CAST(0xfffffffffffffffe as signed);
 END
 OUTPUT
-select cast(0xfffffffffffffffe as signed) from dual
+select convert(0xfffffffffffffffe, signed) from dual
 END
 INPUT
 select release_lock('ee_16407_2');
@@ -12200,7 +12200,7 @@ INPUT
 select cast(-5 as unsigned) -1, cast(-5 as unsigned) + 1;
 END
 OUTPUT
-select cast(-5 as unsigned) - 1, cast(-5 as unsigned) + 1 from dual
+select convert(-5, unsigned) - 1, convert(-5, unsigned) + 1 from dual
 END
 INPUT
 select hex(a) from t1;
@@ -12374,7 +12374,7 @@ INPUT
 select cast(19999999999999999999 as signed);
 END
 OUTPUT
-select cast(19999999999999999999 as signed) from dual
+select convert(19999999999999999999, signed) from dual
 END
 INPUT
 select group_concat(c order by (select mid(group_concat(c order by a),1,5) from t2 where t2.a=t1.a) desc) as grp from t1;
@@ -12422,7 +12422,7 @@ INPUT
 select CAST('10 ' as unsigned integer);
 END
 OUTPUT
-select cast('10 ' as unsigned) from dual
+select convert('10 ', unsigned) from dual
 END
 INPUT
 select a,c,(select group_concat(c order by a) from t2 where a=t1.a) as grp from t1 order by grp;
@@ -12434,7 +12434,7 @@ INPUT
 select cast('a10' as unsigned integer);
 END
 OUTPUT
-select cast('a10' as unsigned) from dual
+select convert('a10', unsigned) from dual
 END
 INPUT
 select a as like_llll from t1 where a like 'llll%';
@@ -12584,7 +12584,7 @@ INPUT
 select cast(_latin1'test' as char character set latin2);
 END
 OUTPUT
-select cast(_latin1 'test' as char character set latin2) from dual
+select convert(_latin1 'test', char character set latin2) from dual
 END
 INPUT
 select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 1 2, 2 1, 0 0))'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))'));
@@ -12914,7 +12914,7 @@ INPUT
 select collation(cast('a' as char(2))), collation(cast('a' as char(2) binary));
 END
 OUTPUT
-select collation(cast('a' as char(2))), collation(cast('a' as char(2) binary)) from dual
+select collation(convert('a', char(2))), collation(convert('a', char(2) binary)) from dual
 END
 INPUT
 select from v1d join v2a on v1d.a = v2a.c;
@@ -13418,7 +13418,7 @@ INPUT
 select CAST(CAST(1-2 AS UNSIGNED) AS SIGNED INTEGER);
 END
 OUTPUT
-select cast(cast(1 - 2 as UNSIGNED) as SIGNED) from dual
+select convert(convert(1 - 2, UNSIGNED), SIGNED) from dual
 END
 INPUT
 select a1,a2,b,max(c),min(c) from t3 where (a2 = 'a') and (b = 'b') group by a1;
@@ -13508,7 +13508,7 @@ INPUT
 select c1 as 'no index' from t1 where c1 like cast(concat('%',0xA4A2, '%') as char character set ujis);
 END
 OUTPUT
-select c1 as `no index` from t1 where c1 like cast(concat('%', 0xA4A2, '%') as char character set ujis)
+select c1 as `no index` from t1 where c1 like convert(concat('%', 0xA4A2, '%'), char character set ujis)
 END
 INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "10000:99:99.999999" HOUR_MICROSECOND);
@@ -13796,7 +13796,7 @@ INPUT
 select cast(NULL as DATE);
 END
 OUTPUT
-select cast(null as DATE) from dual
+select convert(null, DATE) from dual
 END
 INPUT
 select substring('hello', 1, -18446744073709551615);
@@ -14516,7 +14516,7 @@ INPUT
 select cast(ltrim(' 20.06 ') as decimal(19,2));
 END
 OUTPUT
-select cast(ltrim(' 20.06 ') as decimal(19, 2)) from dual
+select convert(ltrim(' 20.06 '), decimal(19, 2)) from dual
 END
 INPUT
 select strcmp('�','ae'),strcmp('ae','�'),strcmp('aeq','�q'),strcmp('�q','aeq');
@@ -14534,7 +14534,7 @@ INPUT
 select cast(-2 as unsigned), 18446744073709551614, -2;
 END
 OUTPUT
-select cast(-2 as unsigned), 18446744073709551614, -2 from dual
+select convert(-2, unsigned), 18446744073709551614, -2 from dual
 END
 INPUT
 select timestampdiff(month,'2004-02-28','2005-02-28');
@@ -15590,7 +15590,7 @@ INPUT
 select cast('abc' as signed);
 END
 OUTPUT
-select cast('abc' as signed) from dual
+select convert('abc', signed) from dual
 END
 INPUT
 select hex(_utf8mb4 0x616263FF);
@@ -15608,7 +15608,7 @@ INPUT
 select cast(NULL as unsigned), cast(1/0 as unsigned);
 END
 OUTPUT
-select cast(null as unsigned), cast(1 / 0 as unsigned) from dual
+select convert(null, unsigned), convert(1 / 0, unsigned) from dual
 END
 INPUT
 select Host,Db,User,Table_name,Column_name,Column_priv from mysql.columns_priv order by Column_name;
@@ -15644,7 +15644,7 @@ INPUT
 select cast(10000002383263201056 as unsigned) mod 50 as result;
 END
 OUTPUT
-select cast(10000002383263201056 as unsigned) % 50 as result from dual
+select convert(10000002383263201056, unsigned) % 50 as result from dual
 END
 INPUT
 select floor(conv(@my_uuidate,16,10)/@my_uuid_one_day) into @my_uuid_date;
@@ -15920,13 +15920,13 @@ INPUT
 select rpad('abc', cast(5 as unsigned integer), 'x');
 END
 OUTPUT
-select rpad('abc', cast(5 as unsigned), 'x') from dual
+select rpad('abc', convert(5, unsigned), 'x') from dual
 END
 INPUT
 select ~5, cast(~5 as signed);
 END
 OUTPUT
-select ~5, cast(~5 as signed) from dual
+select ~5, convert(~5, signed) from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL NULL SECOND);
@@ -16004,7 +16004,7 @@ INPUT
 select floor(cast(-2 as unsigned)), floor(18446744073709551614), floor(-2);
 END
 OUTPUT
-select floor(cast(-2 as unsigned)), floor(18446744073709551614), floor(-2) from dual
+select floor(convert(-2, unsigned)), floor(18446744073709551614), floor(-2) from dual
 END
 INPUT
 select a.f1 as a, b.f3 as b, a.f1 > b.f3 as gt, a.f1 < b.f3 as lt, a.f1<=>b.f3 as eq from t1 a, t1 b;
@@ -16136,7 +16136,7 @@ INPUT
 select hex(weight_string(cast(0xE0A1 as char)));
 END
 OUTPUT
-select hex(weight_string(cast(0xE0A1 as char))) from dual
+select hex(weight_string(convert(0xE0A1, char))) from dual
 END
 INPUT
 select col1 as count_col1,col2 from t1 as tmp1 group by col1,col2 having col2 = 'hello';
@@ -16202,7 +16202,7 @@ INPUT
 select hex(cast('a' as binary(2)));
 END
 OUTPUT
-select hex(cast('a' as binary(2))) from dual
+select hex(convert('a', binary(2))) from dual
 END
 INPUT
 select group_concat(distinct a order by a) from t1;
@@ -16394,7 +16394,7 @@ INPUT
 select cast(min(df) as signed) from t1;
 END
 OUTPUT
-select cast(min(df) as signed) from t1
+select convert(min(df), signed) from t1
 END
 INPUT
 select _koi8r'a' LIKE _latin1'A';
@@ -16712,7 +16712,7 @@ INPUT
 select hex(cast(_ascii 0x7f as char(1) character set latin1));
 END
 OUTPUT
-select hex(cast(_ascii 0x7f as char(1) character set latin1)) from dual
+select hex(convert(_ascii 0x7f, char(1) character set latin1)) from dual
 END
 INPUT
 select hex(weight_string(_utf16 0xD800DC00));
@@ -17132,7 +17132,7 @@ INPUT
 select hex(cast(0x20000000000000 as decimal(30,0)) + 1);
 END
 OUTPUT
-select hex(cast(0x20000000000000 as decimal(30, 0)) + 1) from dual
+select hex(convert(0x20000000000000, decimal(30, 0)) + 1) from dual
 END
 INPUT
 select count(*) from t1 left join t2 on (t1.id = t2.owner);
@@ -17150,7 +17150,7 @@ INPUT
 select cast(repeat('1',20) as signed);
 END
 OUTPUT
-select cast(repeat('1', 20) as signed) from dual
+select convert(repeat('1', 20), signed) from dual
 END
 INPUT
 select a,b from t1 order by upper(a),b;
@@ -17288,7 +17288,7 @@ INPUT
 select cast(min(ifl) as decimal(5,2)) from t3;
 END
 OUTPUT
-select cast(min(ifl) as decimal(5, 2)) from t3
+select convert(min(ifl), decimal(5, 2)) from t3
 END
 INPUT
 select count(*) as total, left(c,10) as reg from t1 group by reg order by reg desc limit 0,12;
@@ -17564,7 +17564,7 @@ INPUT
 select cast('9223372036854775809' as signed);
 END
 OUTPUT
-select cast('9223372036854775809' as signed) from dual
+select convert('9223372036854775809', signed) from dual
 END
 INPUT
 select min(a1) from t1 where a1 >= 'KKK';
@@ -17618,7 +17618,7 @@ INPUT
 select cast('18446744073709551615' as signed);
 END
 OUTPUT
-select cast('18446744073709551615' as signed) from dual
+select convert('18446744073709551615', signed) from dual
 END
 INPUT
 select left(concat(a,version()),1) from t1;
@@ -17834,7 +17834,7 @@ INPUT
 select cast(18446744073709551615 as unsigned);
 END
 OUTPUT
-select cast(18446744073709551615 as unsigned) from dual
+select convert(18446744073709551615, unsigned) from dual
 END
 INPUT
 select var_samp(e) as 'null', var_pop(e) as 'null' from bug22555;
@@ -18290,7 +18290,7 @@ INPUT
 select f2 from t1 where time(f2) between cast("12:1:2" as time) and cast("12:2:2" as time);
 END
 OUTPUT
-select f2 from t1 where time(f2) between cast('12:1:2' as time) and cast('12:2:2' as time)
+select f2 from t1 where time(f2) between convert('12:1:2', time) and convert('12:2:2', time)
 END
 INPUT
 select a1,a2,b, max(c) from t2 where (c < 'a0') group by a1,a2,b;
@@ -18326,7 +18326,7 @@ INPUT
 select pow(cast(-2 as unsigned), 5), pow(18446744073709551614, 5), pow(-2, 5);
 END
 OUTPUT
-select pow(cast(-2 as unsigned), 5), pow(18446744073709551614, 5), pow(-2, 5) from dual
+select pow(convert(-2, unsigned), 5), pow(18446744073709551614, 5), pow(-2, 5) from dual
 END
 INPUT
 select date_add(last_day("1997-12-1"), INTERVAL 1 DAY);
@@ -18530,7 +18530,7 @@ INPUT
 select date,format,cast(str_to_date(date, format) as datetime) as datetime from t1;
 END
 OUTPUT
-select `date`, `format`, cast(str_to_date(`date`, `format`) as datetime) as `datetime` from t1
+select `date`, `format`, convert(str_to_date(`date`, `format`), datetime) as `datetime` from t1
 END
 INPUT
 select rpad('hello', -18446744073709551615, '1');
@@ -18578,7 +18578,7 @@ INPUT
 select round(cast(-2 as unsigned), 1), round(18446744073709551614, 1), round(-2, 1);
 END
 OUTPUT
-select round(cast(-2 as unsigned), 1), round(18446744073709551614, 1), round(-2, 1) from dual
+select round(convert(-2, unsigned), 1), round(18446744073709551614, 1), round(-2, 1) from dual
 END
 INPUT
 select from t3 where a > 10 and a < 20;
@@ -19058,7 +19058,7 @@ INPUT
 select f1 from t1 where f1 between cast("2006-1-1" as date) and cast("2006.1.1" as date);
 END
 OUTPUT
-select f1 from t1 where f1 between cast('2006-1-1' as date) and cast('2006.1.1' as date)
+select f1 from t1 where f1 between convert('2006-1-1', date) and convert('2006.1.1', date)
 END
 INPUT
 select lpad('STRING', 20, CONCAT('p','a','d') );
@@ -19316,7 +19316,7 @@ INPUT
 select f1 from t1 where f1 between CAST("2006-1-1" as date) and CAST(20060101 as date);
 END
 OUTPUT
-select f1 from t1 where f1 between cast('2006-1-1' as date) and cast(20060101 as date)
+select f1 from t1 where f1 between convert('2006-1-1', date) and convert(20060101, date)
 END
 INPUT
 select character_maximum_length, character_octet_length from information_schema.columns where table_name='t1';
@@ -19514,7 +19514,7 @@ INPUT
 select lpad('abc', cast(5 as unsigned integer), 'x');
 END
 OUTPUT
-select lpad('abc', cast(5 as unsigned), 'x') from dual
+select lpad('abc', convert(5, unsigned), 'x') from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL " -10000 99:99" DAY_MINUTE);
@@ -19574,7 +19574,7 @@ INPUT
 select cast(-19999999999999999999 as signed);
 END
 OUTPUT
-select cast(-19999999999999999999 as signed) from dual
+select convert(-19999999999999999999, signed) from dual
 END
 INPUT
 select t2.fld3,companynr from t2 where companynr = 57+1 order by fld3;
@@ -19688,7 +19688,7 @@ INPUT
 select cast(NULL as signed);
 END
 OUTPUT
-select cast(null as signed) from dual
+select convert(null, signed) from dual
 END
 INPUT
 select collation(a) from t1;
@@ -19928,7 +19928,7 @@ INPUT
 select f2 from t1 where f2 between cast("12:1:2" as time) and cast("12:2:2" as time);
 END
 OUTPUT
-select f2 from t1 where f2 between cast('12:1:2' as time) and cast('12:2:2' as time)
+select f2 from t1 where f2 between convert('12:1:2', time) and convert('12:2:2', time)
 END
 INPUT
 select extract(DAY_HOUR FROM "1999-01-02 10:11:12");
@@ -20018,7 +20018,7 @@ INPUT
 select cast(NULL as BINARY);
 END
 OUTPUT
-select cast(null as BINARY) from dual
+select convert(null, BINARY) from dual
 END
 INPUT
 select from v_bug25347;
@@ -20360,7 +20360,7 @@ INPUT
 select cast(5 as unsigned) -6.0;
 END
 OUTPUT
-select cast(5 as unsigned) - 6.0 from dual
+select convert(5, unsigned) - 6.0 from dual
 END
 INPUT
 select from t1 where a like "�%";
@@ -20624,7 +20624,7 @@ INPUT
 select hex(weight_string(cast('aa' as binary(3))));
 END
 OUTPUT
-select hex(weight_string(cast('aa' as binary(3)))) from dual
+select hex(weight_string(convert('aa', binary(3)))) from dual
 END
 INPUT
 select group_concat(distinct f1) from t1;
@@ -20804,7 +20804,7 @@ INPUT
 select cast(concat('184467440','73709551615') as unsigned);
 END
 OUTPUT
-select cast(concat('184467440', '73709551615') as unsigned) from dual
+select convert(concat('184467440', '73709551615'), unsigned) from dual
 END
 INPUT
 select +9999999999999999999,-9999999999999999999;
@@ -21242,7 +21242,7 @@ INPUT
 select 10.0+cast('a' as decimal);
 END
 OUTPUT
-select 10.0 + cast('a' as decimal) from dual
+select 10.0 + convert('a', decimal) from dual
 END
 INPUT
 select from t1 where f1='test' and (f2= sha("test") or f2= sha("TEST"));
@@ -21638,7 +21638,7 @@ INPUT
 select cast(_latin1'ab' AS char) as c1, cast(_latin1'a ' AS char) as c2, cast(_latin1'abc' AS char(2)) as c3, cast(_latin1'a ' AS char(2)) as c4, hex(cast(_latin1'a' AS char(2))) as c5;
 END
 OUTPUT
-select cast(_latin1 'ab' as char) as c1, cast(_latin1 'a ' as char) as c2, cast(_latin1 'abc' as char(2)) as c3, cast(_latin1 'a ' as char(2)) as c4, hex(cast(_latin1 'a' as char(2))) as c5 from dual
+select convert(_latin1 'ab', char) as c1, convert(_latin1 'a ', char) as c2, convert(_latin1 'abc', char(2)) as c3, convert(_latin1 'a ', char(2)) as c4, hex(convert(_latin1 'a', char(2))) as c5 from dual
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_danish_ci;
@@ -21788,7 +21788,7 @@ INPUT
 select cast(_koi8r'����' as char character set cp1251);
 END
 OUTPUT
-select cast(_koi8r '����' as char character set cp1251) from dual
+select convert(_koi8r '����', char character set cp1251) from dual
 END
 INPUT
 select timestampdiff(month,'2005-09-11','2003-09-11');
@@ -21806,7 +21806,7 @@ INPUT
 select cast(pow(2,63) as signed) as pp;
 END
 OUTPUT
-select cast(pow(2, 63) as signed) as pp from dual
+select convert(pow(2, 63), signed) as pp from dual
 END
 INPUT
 select concat(2,3);
@@ -21884,7 +21884,7 @@ INPUT
 select hex(cast('a' as char(2) binary));
 END
 OUTPUT
-select hex(cast('a' as char(2) binary)) from dual
+select hex(convert('a', char(2) binary)) from dual
 END
 INPUT
 select i, count(*), round(std(o1/o2), 16) from bug22555 group by i order by i;
@@ -22052,13 +22052,13 @@ INPUT
 select round(4, cast(-2 as unsigned)), round(4, 18446744073709551614), round(4, -2);
 END
 OUTPUT
-select round(4, cast(-2 as unsigned)), round(4, 18446744073709551614), round(4, -2) from dual
+select round(4, convert(-2, unsigned)), round(4, 18446744073709551614), round(4, -2) from dual
 END
 INPUT
 select cast(sum(distinct df) as signed) from t1;
 END
 OUTPUT
-select cast(sum(distinct df) as signed) from t1
+select convert(sum(distinct df), signed) from t1
 END
 INPUT
 select @@optimizer_prune_level;
@@ -22382,7 +22382,7 @@ INPUT
 select cast(concat('184467440','73709551615') as signed);
 END
 OUTPUT
-select cast(concat('184467440', '73709551615') as signed) from dual
+select convert(concat('184467440', '73709551615'), signed) from dual
 END
 INPUT
 select from t3 left join (t2 outr2 join t2 outr join t1) on (outr.pk = t3.pk) and (t1.col_int_key = t3.pk) and isnull(t1.col_date_key) and (outr2.pk <> t3.pk);
@@ -22562,7 +22562,7 @@ INPUT
 select hex(-29223372036854775809) as hex_signed, hex(cast(-29223372036854775809 as unsigned)) as hex_unsigned;
 END
 OUTPUT
-select hex(-29223372036854775809) as hex_signed, hex(cast(-29223372036854775809 as unsigned)) as hex_unsigned from dual
+select hex(-29223372036854775809) as hex_signed, hex(convert(-29223372036854775809, unsigned)) as hex_unsigned from dual
 END
 INPUT
 select format(pi(), (1+1));
@@ -22580,7 +22580,7 @@ INPUT
 select cast('18446744073709551615' as unsigned);
 END
 OUTPUT
-select cast('18446744073709551615' as unsigned) from dual
+select convert('18446744073709551615', unsigned) from dual
 END
 INPUT
 select from t1 where s1 > 'd' and s1 = 'CH';
@@ -22772,7 +22772,7 @@ INPUT
 select hex(29223372036854775809) as hex_signed, hex(cast(29223372036854775809 as unsigned)) as hex_unsigned;
 END
 OUTPUT
-select hex(29223372036854775809) as hex_signed, hex(cast(29223372036854775809 as unsigned)) as hex_unsigned from dual
+select hex(29223372036854775809) as hex_signed, hex(convert(29223372036854775809, unsigned)) as hex_unsigned from dual
 END
 INPUT
 select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id=85998;
@@ -22784,7 +22784,7 @@ INPUT
 select hex(cast(9007199254740994 as decimal(30,0)));
 END
 OUTPUT
-select hex(cast(9007199254740994 as decimal(30, 0))) from dual
+select hex(convert(9007199254740994, decimal(30, 0))) from dual
 END
 INPUT
 select 98 + count(distinct a1,a2,b) from t1 where (a1 > 'a') and (a2 > 'a');
@@ -22922,7 +22922,7 @@ INPUT
 select cast('1.2' as decimal(3,2));
 END
 OUTPUT
-select cast('1.2' as decimal(3, 2)) from dual
+select convert('1.2', decimal(3, 2)) from dual
 END
 INPUT
 select concat(a,if(b>10,_ucs2 0x0061,_ucs2 0x0062)) from t1;
@@ -22970,7 +22970,7 @@ INPUT
 select cast('18446744073709551616' as unsigned);
 END
 OUTPUT
-select cast('18446744073709551616' as unsigned) from dual
+select convert('18446744073709551616', unsigned) from dual
 END
 INPUT
 select 5;
@@ -23042,13 +23042,13 @@ INPUT
 select hex(cast(0x20000000000000 as decimal(30,0)) + 2);
 END
 OUTPUT
-select hex(cast(0x20000000000000 as decimal(30, 0)) + 2) from dual
+select hex(convert(0x20000000000000, decimal(30, 0)) + 2) from dual
 END
 INPUT
 select f1 from t1 where cast("2006-1-1" as date) between date(f1) and date(f3);
 END
 OUTPUT
-select f1 from t1 where cast('2006-1-1' as date) between date(f1) and date(f3)
+select f1 from t1 where convert('2006-1-1', date) between date(f1) and date(f3)
 END
 INPUT
 select substring('hello', -4294967295, 1);
@@ -23066,7 +23066,7 @@ INPUT
 select f3 from t1 where f3 between cast("2006-1-1 12:1:1" as datetime) and cast("2006-1-1 12:1:2" as datetime);
 END
 OUTPUT
-select f3 from t1 where f3 between cast('2006-1-1 12:1:1' as datetime) and cast('2006-1-1 12:1:2' as datetime)
+select f3 from t1 where f3 between convert('2006-1-1 12:1:1', datetime) and convert('2006-1-1 12:1:2', datetime)
 END
 INPUT
 select from t1 left join t2 on venue_id = entity_id where match(name) against('aberdeen') and dt = '2003-05-23 19:30:00';

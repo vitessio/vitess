@@ -421,12 +421,11 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		}
 
 		aggrParams[idx] = &engine.AggregateParams{
-			Opcode:     opcode,
-			Col:        offset,
-			Alias:      aggr.Alias,
-			Expr:       aggr.Original.Expr,
-			Original:   aggr.Original,
-			OrigOpcode: aggr.OpCode,
+			Opcode:   opcode,
+			Col:      offset,
+			Alias:    aggr.Alias,
+			Expr:     aggr.Original.Expr,
+			Original: aggr.Original,
 		}
 	}
 	return aggrParams, nil
@@ -746,13 +745,10 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 		return offset, -1, nil
 	}
 	if !sqlparser.IsColName(expr) {
-		switch unary := expr.(type) {
-		case *sqlparser.CastExpr:
+		unary, ok := expr.(*sqlparser.ConvertExpr)
+		if ok && sqlparser.IsColName(unary.Expr) {
 			expr = unary.Expr
-		case *sqlparser.ConvertExpr:
-			expr = unary.Expr
-		}
-		if !sqlparser.IsColName(expr) {
+		} else {
 			return 0, 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 		}
 	}

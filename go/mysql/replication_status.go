@@ -25,9 +25,6 @@ import (
 
 // ReplicationStatus holds replication information from SHOW SLAVE STATUS.
 type ReplicationStatus struct {
-	// Position is the current position of the replica. For GTID replication implementations
-	// it is the executed GTID set. For file replication implementation, it is same as
-	// FilePosition
 	Position Position
 	// RelayLogPosition is the Position that the replica would be at if it
 	// were to finish executing everything that's currently in its relay log.
@@ -35,18 +32,10 @@ type ReplicationStatus struct {
 	// in which case RelayLogPosition.IsZero() will be true.
 	// If ReplicationLagUnknown is true then we should not rely on the seconds
 	// behind value and we can instead try to calculate the lag ourselves when
-	// appropriate. For MySQL GTID replication implementation it is the union of
-	// executed GTID set and retrieved GTID set. For file replication implementation,
-	// it is same as RelayLogSourceBinlogEquivalentPosition
-	RelayLogPosition Position
-	// FilePosition stores the position of the source tablets binary log
-	// upto which the SQL thread of the replica has run.
-	FilePosition Position
-	// RelayLogSourceBinlogEquivalentPosition stores the position of the source tablets binary log
-	// upto which the IO thread has read and added to the relay log
-	RelayLogSourceBinlogEquivalentPosition Position
-	// RelayLogFilePosition stores the position in the relay log file
-	RelayLogFilePosition  Position
+	// appropriate.
+	RelayLogPosition      Position
+	FilePosition          Position
+	FileRelayLogPosition  Position
 	SourceServerID        uint
 	IOState               ReplicationState
 	LastIOError           string
@@ -56,14 +45,8 @@ type ReplicationStatus struct {
 	ReplicationLagUnknown bool
 	SourceHost            string
 	SourcePort            int
-	SourceUser            string
 	ConnectRetry          int
 	SourceUUID            SID
-	SQLDelay              uint
-	AutoPosition          bool
-	UsingGTID             bool
-	HasReplicationFilters bool
-	SSLAllowed            bool
 }
 
 // Running returns true if both the IO and SQL threads are running.
@@ -93,28 +76,20 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 	replstatuspb := &replicationdatapb.Status{
-		Position:                               EncodePosition(s.Position),
-		RelayLogPosition:                       EncodePosition(s.RelayLogPosition),
-		FilePosition:                           EncodePosition(s.FilePosition),
-		RelayLogSourceBinlogEquivalentPosition: EncodePosition(s.RelayLogSourceBinlogEquivalentPosition),
-		SourceServerId:                         uint32(s.SourceServerID),
-		ReplicationLagSeconds:                  uint32(s.ReplicationLagSeconds),
-		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
-		SqlDelay:                               uint32(s.SQLDelay),
-		RelayLogFilePosition:                   EncodePosition(s.RelayLogFilePosition),
-		SourceHost:                             s.SourceHost,
-		SourceUser:                             s.SourceUser,
-		SourcePort:                             int32(s.SourcePort),
-		ConnectRetry:                           int32(s.ConnectRetry),
-		SourceUuid:                             s.SourceUUID.String(),
-		IoState:                                int32(s.IOState),
-		LastIoError:                            s.LastIOError,
-		SqlState:                               int32(s.SQLState),
-		LastSqlError:                           s.LastSQLError,
-		SslAllowed:                             s.SSLAllowed,
-		HasReplicationFilters:                  s.HasReplicationFilters,
-		AutoPosition:                           s.AutoPosition,
-		UsingGtid:                              s.UsingGTID,
+		Position:              EncodePosition(s.Position),
+		RelayLogPosition:      EncodePosition(s.RelayLogPosition),
+		FilePosition:          EncodePosition(s.FilePosition),
+		FileRelayLogPosition:  EncodePosition(s.FileRelayLogPosition),
+		SourceServerId:        uint32(s.SourceServerID),
+		ReplicationLagSeconds: uint32(s.ReplicationLagSeconds),
+		SourceHost:            s.SourceHost,
+		SourcePort:            int32(s.SourcePort),
+		ConnectRetry:          int32(s.ConnectRetry),
+		SourceUuid:            s.SourceUUID.String(),
+		IoState:               int32(s.IOState),
+		LastIoError:           s.LastIOError,
+		SqlState:              int32(s.SQLState),
+		LastSqlError:          s.LastSQLError,
 	}
 
 	// We need to be able to send gRPC response messages from v14 and newer tablets to
@@ -147,13 +122,9 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode FilePosition"))
 	}
-	fileRelayPos, err := DecodePosition(s.RelayLogSourceBinlogEquivalentPosition)
+	fileRelayPos, err := DecodePosition(s.FileRelayLogPosition)
 	if err != nil {
-		panic(vterrors.Wrapf(err, "cannot decode RelayLogSourceBinlogEquivalentPosition"))
-	}
-	relayFilePos, err := DecodePosition(s.RelayLogFilePosition)
-	if err != nil {
-		panic(vterrors.Wrapf(err, "cannot decode RelayLogFilePosition"))
+		panic(vterrors.Wrapf(err, "cannot decode FileRelayLogPosition"))
 	}
 	var sid SID
 	if s.SourceUuid != "" {
@@ -163,28 +134,20 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		}
 	}
 	replstatus := ReplicationStatus{
-		Position:                               pos,
-		RelayLogPosition:                       relayPos,
-		FilePosition:                           filePos,
-		RelayLogSourceBinlogEquivalentPosition: fileRelayPos,
-		RelayLogFilePosition:                   relayFilePos,
-		SourceServerID:                         uint(s.SourceServerId),
-		ReplicationLagSeconds:                  uint(s.ReplicationLagSeconds),
-		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
-		SQLDelay:                               uint(s.SqlDelay),
-		SourceHost:                             s.SourceHost,
-		SourceUser:                             s.SourceUser,
-		SourcePort:                             int(s.SourcePort),
-		ConnectRetry:                           int(s.ConnectRetry),
-		SourceUUID:                             sid,
-		IOState:                                ReplicationState(s.IoState),
-		LastIOError:                            s.LastIoError,
-		SQLState:                               ReplicationState(s.SqlState),
-		LastSQLError:                           s.LastSqlError,
-		SSLAllowed:                             s.SslAllowed,
-		HasReplicationFilters:                  s.HasReplicationFilters,
-		AutoPosition:                           s.AutoPosition,
-		UsingGTID:                              s.UsingGtid,
+		Position:              pos,
+		RelayLogPosition:      relayPos,
+		FilePosition:          filePos,
+		FileRelayLogPosition:  fileRelayPos,
+		SourceServerID:        uint(s.SourceServerId),
+		ReplicationLagSeconds: uint(s.ReplicationLagSeconds),
+		SourceHost:            s.SourceHost,
+		SourcePort:            int(s.SourcePort),
+		ConnectRetry:          int(s.ConnectRetry),
+		SourceUUID:            sid,
+		IOState:               ReplicationState(s.IoState),
+		LastIOError:           s.LastIoError,
+		SQLState:              ReplicationState(s.SqlState),
+		LastSQLError:          s.LastSqlError,
 	}
 
 	// We need to be able to process gRPC response messages from v13 and older tablets.

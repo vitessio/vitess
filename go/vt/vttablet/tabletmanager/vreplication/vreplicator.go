@@ -210,8 +210,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// If any of the operations below changed state to Stopped or Error, we should return.
-		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
+		// If any of the operations below changed state to Stopped, we should return.
+		if settings.State == binlogplayer.BlpStopped {
 			return nil
 		}
 		switch {

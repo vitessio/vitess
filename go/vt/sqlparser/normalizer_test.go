@@ -232,7 +232,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Do not normalize cast/convert types
 		in:      `select CAST("test" AS CHAR(60))`,
-		outstmt: `select cast(:bv1 as CHAR(60)) from dual`,
+		outstmt: `select convert(:bv1, CHAR(60)) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
 		},

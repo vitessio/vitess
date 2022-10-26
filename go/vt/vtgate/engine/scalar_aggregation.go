@@ -167,20 +167,6 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 		return err
 	}
 
-	if current == nil {
-		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
-		// different aggregation functions
-		current, err = sa.createEmptyRow()
-		if err != nil {
-			return err
-		}
-	} else {
-		current, err = convertFinal(current, sa.Aggregates)
-		if err != nil {
-			return err
-		}
-	}
-
 	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}})
 }
 
@@ -188,11 +174,7 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 func (sa *ScalarAggregate) createEmptyRow() ([]sqltypes.Value, error) {
 	out := make([]sqltypes.Value, len(sa.Aggregates))
 	for i, aggr := range sa.Aggregates {
-		op := aggr.Opcode
-		if aggr.OrigOpcode != AggregateUnassigned {
-			op = aggr.OrigOpcode
-		}
-		value, err := createEmptyValueFor(op)
+		value, err := createEmptyValueFor(aggr.Opcode)
 		if err != nil {
 			return nil, err
 		}

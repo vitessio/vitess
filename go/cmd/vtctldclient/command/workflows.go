@@ -29,11 +29,9 @@ import (
 var (
 	// GetWorkflows makes a GetWorkflows gRPC call to a vtctld.
 	GetWorkflows = &cobra.Command{
-		Use:                   "GetWorkflows <keyspace>",
-		Short:                 "Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandGetWorkflows,
+		Use:  "GetWorkflows <keyspace>",
+		Args: cobra.ExactArgs(1),
+		RunE: commandGetWorkflows,
 	}
 )
 
@@ -66,6 +64,6 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	GetWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
+	GetWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows")
 	Root.AddCommand(GetWorkflows)
 }

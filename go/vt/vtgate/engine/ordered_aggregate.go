@@ -108,10 +108,6 @@ type AggregateParams struct {
 	Alias    string `json:",omitempty"`
 	Expr     sqlparser.Expr
 	Original *sqlparser.AliasedExpr
-
-	// This is based on the function passed in the select expression and
-	// not what we use to aggregate at the engine primitive level.
-	OrigOpcode AggregateOpcode
 }
 
 func (ap *AggregateParams) isDistinct() bool {
@@ -131,14 +127,10 @@ func (ap *AggregateParams) String() string {
 		collation := collations.Local().LookupByID(ap.CollationID)
 		keyCol += " COLLATE " + collation.Name()
 	}
-	dispOrigOp := ""
-	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {
-		dispOrigOp = "_" + ap.OrigOpcode.String()
-	}
 	if ap.Alias != "" {
-		return fmt.Sprintf("%s%s(%s) AS %s", ap.Opcode.String(), dispOrigOp, keyCol, ap.Alias)
+		return fmt.Sprintf("%s(%s) AS %s", ap.Opcode.String(), keyCol, ap.Alias)
 	}
-	return fmt.Sprintf("%s%s(%s)", ap.Opcode.String(), dispOrigOp, keyCol)
+	return fmt.Sprintf("%s(%s)", ap.Opcode.String(), keyCol)
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -146,8 +138,7 @@ type AggregateOpcode int
 
 // These constants list the possible aggregate opcodes.
 const (
-	AggregateUnassigned = AggregateOpcode(iota)
-	AggregateCount
+	AggregateCount = AggregateOpcode(iota)
 	AggregateSum
 	AggregateMin
 	AggregateMax

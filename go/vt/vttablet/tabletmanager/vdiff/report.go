@@ -50,14 +50,14 @@ type DiffReport struct {
 
 // DiffMismatch is a sample of row diffs between source and target.
 type DiffMismatch struct {
-	Source *RowDiff `json:"Source,omitempty"`
-	Target *RowDiff `json:"Target,omitempty"`
+	Source *RowDiff `json:"source_diff,omitempty"`
+	Target *RowDiff `json:"target_diff,omitempty"`
 }
 
 // RowDiff is a row that didn't match as part of the comparison.
 type RowDiff struct {
 	Row   map[string]string `json:"Row,omitempty"`
-	Query string            `json:"Query,omitempty"`
+	Query string            `json:"-"`
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {

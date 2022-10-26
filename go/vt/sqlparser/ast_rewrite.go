@@ -74,8 +74,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCallProc(parent, node, replacer)
 	case *CaseExpr:
 		return a.rewriteRefOfCaseExpr(parent, node, replacer)
-	case *CastExpr:
-		return a.rewriteRefOfCastExpr(parent, node, replacer)
 	case *ChangeColumn:
 		return a.rewriteRefOfChangeColumn(parent, node, replacer)
 	case *CheckConstraintDefinition:
@@ -1188,38 +1186,6 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	}
 	if !a.rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
 		parent.(*CaseExpr).Else = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*CastExpr).Expr = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
-		parent.(*CastExpr).Type = newNode.(*ConvertType)
 	}) {
 		return false
 	}
@@ -7700,8 +7666,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteBoolVal(parent, node, replacer)
 	case *CaseExpr:
 		return a.rewriteRefOfCaseExpr(parent, node, replacer)
-	case *CastExpr:
-		return a.rewriteRefOfCastExpr(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:
@@ -7870,8 +7834,6 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteBoolVal(parent, node, replacer)
 	case *CaseExpr:
 		return a.rewriteRefOfCaseExpr(parent, node, replacer)
-	case *CastExpr:
-		return a.rewriteRefOfCastExpr(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:

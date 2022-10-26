@@ -36,10 +36,7 @@ func Local() *Environment {
 			panic("collations.Local() called too early")
 		}
 		if *servenv.MySQLServerVersion == "" {
-			// The default server version used by vtgate is 5.7.9
-			// NOTE: this should be changed along with the effective default
-			//       for the vtgate mysql_server_version flag.
-			defaultEnv = fetchCacheEnvironment(collverMySQL57)
+			defaultEnv = fetchCacheEnvironment(collverMySQL80)
 		} else {
 			defaultEnv = NewEnvironment(*servenv.MySQLServerVersion)
 		}

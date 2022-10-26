@@ -9,5 +9,3 @@ releases
 /vthook/
 /bin/
 /vtdataroot/
-/web/vtadmin/node_modules
-/web/vtadmin/build

@@ -12,36 +12,26 @@ on:
       - '.github/workflows/vtadmin_web_build.yml'
       - 'web/vtadmin/**'
 
+defaults:
+  run:
+    working-directory: ./web/vtadmin
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check if workflow needs to be skipped
-        id: skip-workflow
-        run: |
-          skip='false'
-          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-          fi
-          echo Skip ${skip}
-          echo "::set-output name=skip-workflow::${skip}"
-
       - uses: actions/checkout@v2
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
 
       - uses: actions/setup-node@v2
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json
           node-version: '16.13.0'
 
       - name: Install dependencies
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        run: cd ./web/vtadmin && npm ci
+        run: npm ci
 
       - name: Build front-end
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        run: cd ./web/vtadmin && npm run build
+        run: npm run build
 
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
     concurrency: 

@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -46,21 +45,13 @@ type testCase struct {
 }
 
 var (
-	T            = true
-	F            = false
-	collationEnv *collations.Environment
+	T = true
+	F = false
 )
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func defaultCollation() collations.TypedCollation {
 	return collations.TypedCollation{
-		Collation:    collationEnv.LookupByName("utf8mb4_bin").ID(),
+		Collation:    collations.Local().LookupByName("utf8mb4_bin").ID(),
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireASCII,
 	}
@@ -1062,7 +1053,7 @@ func TestNullComparisons(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
-	collation := collationEnv.LookupByName("utf8mb4_general_ci").ID()
+	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
@@ -1164,7 +1155,7 @@ func TestNullsafeCompare(t *testing.T) {
 }
 
 func getCollationID(collation string) collations.ID {
-	id, _ := collationEnv.LookupID(collation)
+	id, _ := collations.Local().LookupID(collation)
 	return id
 }
 

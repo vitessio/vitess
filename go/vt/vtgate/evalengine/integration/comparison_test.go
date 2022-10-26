@@ -28,18 +28,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
-
-var collationEnv *collations.Environment
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func perm(a []string, f func([]string)) {
 	perm1(a, f, 0)
@@ -136,7 +126,7 @@ func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
 			} else {
-				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString()).ID()
+				remoteCollation = collations.Local().LookupByName(remote.Rows[0][1].ToString()).ID()
 			}
 		}
 	}

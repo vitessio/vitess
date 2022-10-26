@@ -75,15 +75,6 @@ type flavor interface {
 	// primaryGTIDSet returns the current GTIDSet of a server.
 	primaryGTIDSet(c *Conn) (GTIDSet, error)
 
-	// purgedGTIDSet returns the purged GTIDSet of a server.
-	purgedGTIDSet(c *Conn) (GTIDSet, error)
-
-	// gtidMode returns the gtid mode of a server.
-	gtidMode(c *Conn) (string, error)
-
-	// serverUUID returns the UUID of a server.
-	serverUUID(c *Conn) (string, error)
-
 	// startReplicationCommand returns the command to start the replication.
 	startReplicationCommand() string
 
@@ -120,10 +111,6 @@ type flavor interface {
 	// resetReplicationCommands returns the commands to completely reset
 	// replication on the host.
 	resetReplicationCommands(c *Conn) []string
-
-	// resetReplicationParametersCommands returns the commands to reset
-	// replication parameters on the host.
-	resetReplicationParametersCommands(c *Conn) []string
 
 	// setReplicationPositionCommands returns the commands to set the
 	// replication position at which the replica will resume.
@@ -279,27 +266,6 @@ func (c *Conn) PrimaryPosition() (Position, error) {
 	}, nil
 }
 
-// GetGTIDPurged returns the tablet's GTIDs which are purged.
-func (c *Conn) GetGTIDPurged() (Position, error) {
-	gtidSet, err := c.flavor.purgedGTIDSet(c)
-	if err != nil {
-		return Position{}, err
-	}
-	return Position{
-		GTIDSet: gtidSet,
-	}, nil
-}
-
-// GetGTIDMode returns the tablet's GTID mode. Only available in MySQL flavour
-func (c *Conn) GetGTIDMode() (string, error) {
-	return c.flavor.gtidMode(c)
-}
-
-// GetServerUUID returns the server's UUID.
-func (c *Conn) GetServerUUID() (string, error) {
-	return c.flavor.serverUUID(c)
-}
-
 // PrimaryFilePosition returns the current primary's file based replication position.
 func (c *Conn) PrimaryFilePosition() (Position, error) {
 	filePosFlavor := filePosFlavor{}
@@ -373,12 +339,6 @@ func (c *Conn) ResetReplicationCommands() []string {
 	return c.flavor.resetReplicationCommands(c)
 }
 
-// ResetReplicationParametersCommands returns the commands to reset
-// replication parameters on the host.
-func (c *Conn) ResetReplicationParametersCommands() []string {
-	return c.flavor.resetReplicationParametersCommands(c)
-}
-
 // SetReplicationPositionCommands returns the commands to set the
 // replication position at which the replica will resume
 // when it is later reparented with SetReplicationSourceCommand.
@@ -442,12 +402,7 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	// The field names in the map are identical to what we receive from the database
 	// Hence the names still contain Master
 	status := ReplicationStatus{
-		SourceHost:            fields["Master_Host"],
-		SourceUser:            fields["Master_User"],
-		SSLAllowed:            fields["Master_SSL_Allowed"] == "Yes",
-		AutoPosition:          fields["Auto_Position"] == "1",
-		UsingGTID:             fields["Using_Gtid"] != "No" && fields["Using_Gtid"] != "",
-		HasReplicationFilters: (fields["Replicate_Do_DB"] != "") || (fields["Replicate_Ignore_DB"] != "") || (fields["Replicate_Do_Table"] != "") || (fields["Replicate_Ignore_Table"] != "") || (fields["Replicate_Wild_Do_Table"] != "") || (fields["Replicate_Wild_Ignore_Table"] != ""),
+		SourceHost: fields["Master_Host"],
 		// These fields are returned from the underlying DB and cannot be renamed
 		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),
 		LastIOError:  fields["Last_IO_Error"],
@@ -469,8 +424,6 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	}
 	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
 	status.SourceServerID = uint(parseUint)
-	parseUint, _ = strconv.ParseUint(fields["SQL_Delay"], 10, 0)
-	status.SQLDelay = uint(parseUint)
 
 	executedPosStr := fields["Exec_Master_Log_Pos"]
 	file := fields["Relay_Master_Log_File"]
@@ -489,21 +442,9 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	if file != "" && readPosStr != "" {
 		fileRelayPos, err := strconv.Atoi(readPosStr)
 		if err == nil {
-			status.RelayLogSourceBinlogEquivalentPosition.GTIDSet = filePosGTID{
+			status.FileRelayLogPosition.GTIDSet = filePosGTID{
 				file: file,
 				pos:  fileRelayPos,
-			}
-		}
-	}
-
-	relayPosStr := fields["Relay_Log_Pos"]
-	file = fields["Relay_Log_File"]
-	if file != "" && relayPosStr != "" {
-		relayFilePos, err := strconv.Atoi(relayPosStr)
-		if err == nil {
-			status.RelayLogFilePosition.GTIDSet = filePosGTID{
-				file: file,
-				pos:  relayFilePos,
 			}
 		}
 	}

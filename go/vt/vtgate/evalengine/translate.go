@@ -75,7 +75,7 @@ func translateComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right E
 	case sqlparser.LessEqualOp:
 		return &ComparisonExpr{binaryExpr, compareLE{}}, nil
 	case sqlparser.GreaterThanOp:
-		return &ComparisonExpr{binaryExpr, CompareGT{}}, nil
+		return &ComparisonExpr{binaryExpr, compareGT{}}, nil
 	case sqlparser.GreaterEqualOp:
 		return &ComparisonExpr{binaryExpr, compareGE{}}, nil
 	case sqlparser.NullSafeEqualOp:
@@ -440,28 +440,28 @@ func translateConvertCharset(charset string, binary bool, lookup TranslationLook
 	return collationID, nil
 }
 
-func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType, lookup TranslationLookup) (Expr, error) {
+func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (Expr, error) {
 	var (
 		convert ConvertExpr
 		err     error
 	)
 
-	convert.Inner, err = translateExpr(expr, lookup)
+	convert.Inner, err = translateExpr(expr.Expr, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Length, convert.HasLength, err = translateIntegral(convertType.Length, lookup)
+	convert.Length, convert.HasLength, err = translateIntegral(expr.Type.Length, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Scale, convert.HasScale, err = translateIntegral(convertType.Scale, lookup)
+	convert.Scale, convert.HasScale, err = translateIntegral(expr.Type.Scale, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Type = strings.ToUpper(convertType.Type)
+	convert.Type = strings.ToUpper(expr.Type.Type)
 	switch convert.Type {
 	case "DECIMAL":
 		if convert.Length < convert.Scale {
@@ -473,17 +473,17 @@ func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertTyp
 		if convert.Length > decimal.MyMaxPrecision {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"Too-big precision %d specified for '%s'. Maximum is %d.",
-				convert.Length, sqlparser.String(expr), decimal.MyMaxPrecision)
+				convert.Length, sqlparser.String(expr.Expr), decimal.MyMaxPrecision)
 		}
 		if convert.Scale > decimal.MyMaxScale {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"Too big scale %d specified for column '%s'. Maximum is %d.",
-				convert.Scale, sqlparser.String(expr), decimal.MyMaxScale)
+				convert.Scale, sqlparser.String(expr.Expr), decimal.MyMaxScale)
 		}
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID
 	case "CHAR":
-		convert.Collation, err = translateConvertCharset(convertType.Charset.Name, convertType.Charset.Binary, lookup)
+		convert.Collation, err = translateConvertCharset(expr.Type.Charset.Name, expr.Type.Charset.Binary, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -610,10 +610,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateWeightStringFuncExpr(node, lookup)
 	case *sqlparser.UnaryExpr:
 		return translateUnaryExpr(node, lookup)
-	case *sqlparser.CastExpr:
-		return translateConvertExpr(node.Expr, node.Type, lookup)
 	case *sqlparser.ConvertExpr:
-		return translateConvertExpr(node.Expr, node.Type, lookup)
+		return translateConvertExpr(node, lookup)
 	case *sqlparser.ConvertUsingExpr:
 		return translateConvertUsingExpr(node, lookup)
 	case *sqlparser.CaseExpr:

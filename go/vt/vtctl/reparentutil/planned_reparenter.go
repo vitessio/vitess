@@ -514,7 +514,6 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	pr.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
 	opts.durability, err = GetDurabilityPolicy(keyspaceDurability)
 	if err != nil {
 		return err

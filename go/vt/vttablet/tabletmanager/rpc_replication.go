@@ -52,106 +52,6 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return mysql.ReplicationStatusToProto(status), nil
 }
 
-// FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
-func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
-	// Server ID - "select @@global.server_id"
-	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Server UUID - "select @@global.server_uuid"
-	serverUUID, err := tm.MysqlDaemon.GetServerUUID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Replication status - "SHOW REPLICA STATUS"
-	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus()
-	var replicationStatusProto *replicationdatapb.Status
-	if err != nil && err != mysql.ErrNotReplica {
-		return nil, err
-	}
-	if err == nil {
-		replicationStatusProto = mysql.ReplicationStatusToProto(replicationStatus)
-	}
-
-	// Primary status - "SHOW MASTER STATUS"
-	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
-	var primaryStatusProto *replicationdatapb.PrimaryStatus
-	if err != nil && err != mysql.ErrNoPrimaryStatus {
-		return nil, err
-	}
-	if err == nil {
-		primaryStatusProto = mysql.PrimaryStatusToProto(primaryStatus)
-	}
-
-	// Purged GTID set
-	purgedGTIDs, err := tm.MysqlDaemon.GetGTIDPurged(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Version string "majorVersion.minorVersion.patchRelease"
-	version := tm.MysqlDaemon.GetVersionString()
-
-	// Version comment "select @@global.version_comment"
-	versionComment := tm.MysqlDaemon.GetVersionComment(ctx)
-
-	// Read only - "SHOW VARIABLES LIKE 'read_only'"
-	readOnly, err := tm.MysqlDaemon.IsReadOnly()
-	if err != nil {
-		return nil, err
-	}
-
-	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image"
-	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// GTID Mode - "select @@global.gtid_mode" - Only applicable for MySQL variants
-	gtidMode, err := tm.MysqlDaemon.GetGTIDMode(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
-	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled()
-
-	// Semi sync status - "show status like 'Rpl_semi_sync_%_status'"
-	primarySemiSyncStatus, replicaSemiSyncStatus := tm.MysqlDaemon.SemiSyncStatus()
-
-	//  Semi sync clients count - "show status like 'semi_sync_primary_clients'"
-	semiSyncClients := tm.MysqlDaemon.SemiSyncClients()
-
-	// Semi sync settings - "show status like 'rpl_semi_sync_%'
-	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings()
-
-	return &replicationdatapb.FullStatus{
-		ServerId:                    serverID,
-		ServerUuid:                  serverUUID,
-		ReplicationStatus:           replicationStatusProto,
-		PrimaryStatus:               primaryStatusProto,
-		GtidPurged:                  mysql.EncodePosition(purgedGTIDs),
-		Version:                     version,
-		VersionComment:              versionComment,
-		ReadOnly:                    readOnly,
-		GtidMode:                    gtidMode,
-		BinlogFormat:                binlogFormat,
-		BinlogRowImage:              binlogRowImage,
-		LogBinEnabled:               logBin,
-		LogReplicaUpdates:           logReplicaUpdates,
-		SemiSyncPrimaryEnabled:      primarySemiSync,
-		SemiSyncReplicaEnabled:      replicaSemiSync,
-		SemiSyncPrimaryStatus:       primarySemiSyncStatus,
-		SemiSyncReplicaStatus:       replicaSemiSyncStatus,
-		SemiSyncPrimaryClients:      semiSyncClients,
-		SemiSyncPrimaryTimeout:      semiSyncTimeout,
-		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
-	}, nil
-}
-
 // PrimaryStatus returns the replication status for a primary tablet.
 func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
@@ -629,27 +529,6 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 	return tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionNone, SemiSyncActionNone)
 }
 
-// ResetReplicationParameters resets the replica replication parameters
-func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
-	log.Infof("ResetReplicationParameters")
-	if err := tm.lock(ctx); err != nil {
-		return err
-	}
-	defer tm.unlock()
-
-	tm.replManager.setReplicationStopped(true)
-	err := tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
-	if err != nil {
-		return err
-	}
-
-	err = tm.MysqlDaemon.ResetReplicationParameters(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // SetReplicationSource sets replication primary, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
@@ -897,7 +776,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition
 	rs.FilePosition = rsAfter.FilePosition
-	rs.RelayLogSourceBinlogEquivalentPosition = rsAfter.RelayLogSourceBinlogEquivalentPosition
+	rs.FileRelayLogPosition = rsAfter.FileRelayLogPosition
 
 	return StopReplicationAndGetStatusResponse{
 		HybridStatus: mysql.ReplicationStatusToProto(rs),

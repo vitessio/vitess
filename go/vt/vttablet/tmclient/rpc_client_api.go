@@ -115,9 +115,6 @@ type TabletManagerClient interface {
 	// ReplicationStatus returns the tablet's mysql replication status.
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
 
-	// FullStatus returns the tablet's mysql replication status.
-	FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error)
-
 	// StopReplication stops the mysql replication
 	StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error
 
@@ -182,9 +179,6 @@ type TabletManagerClient interface {
 
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// ResetReplicationParameters resets the replica replication parameters
-	ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// SetReplicationSource tells a tablet to start replicating from the
 	// passed in tablet alias, and wait for the row in the

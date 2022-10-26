@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"strconv"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -164,7 +162,7 @@ func pushAggrOnRoute(
 			pos = newOffset(groupingCols[idx])
 		}
 
-		if expr.WeightStrExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
+		if ctx.SemTable.NeedsWeightString(expr.Inner) {
 			wsExpr := weightStringFor(expr.WeightStrExpr)
 			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
@@ -274,22 +272,6 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	lhsGrouping, rhsGrouping, groupingOffsets, err := splitGroupingsToLeftAndRight(ctx, join, grouping, lhsCols)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	// If the rhs has no grouping column then a count(*) will return 0 from the query and will get mapped to the record from left hand side.
-	// This is an incorrect behaviour as the join condition has not matched, so we add a literal 1 to the select query and also group by on it.
-	// So that only if join condition matches the records will be mapped and returned.
-	if len(rhsGrouping) == 0 && len(rhsAggrs) != 0 {
-		l := sqlparser.NewIntLiteral("1")
-		aExpr := &sqlparser.AliasedExpr{
-			Expr: l,
-		}
-		offset, _, err := pushProjection(ctx, aExpr, join.Right, true, true, false)
-		if err != nil {
-			return nil, nil, err
-		}
-		l = sqlparser.NewIntLiteral(strconv.Itoa(offset + 1))
-		rhsGrouping = append(rhsGrouping, abstract.GroupBy{Inner: l})
 	}
 
 	// Next we push the aggregations to both sides

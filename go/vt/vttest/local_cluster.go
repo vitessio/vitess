@@ -89,9 +89,6 @@ type Config struct {
 	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
 	PlannerVersion string
 
-	// PlannerVersionDeprecated is deprecated and should not be used
-	PlannerVersionDeprecated string
-
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 
@@ -226,7 +223,7 @@ func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
 	}
 }
 
-func JSONTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+func JsonTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
 	return &TopoData{
 		vtTestTopology: tpb,
 		unmarshal:      protojson.Unmarshal,
@@ -339,7 +336,7 @@ func (db *LocalCluster) Setup() error {
 
 	if !db.OnlyMySQL {
 		log.Infof("Starting vtcombo...")
-		db.vt, _ = VtcomboProcess(db.Env, &db.Config, db.mysql)
+		db.vt = VtcomboProcess(db.Env, &db.Config, db.mysql)
 		if err := db.vt.WaitStart(); err != nil {
 			return err
 		}

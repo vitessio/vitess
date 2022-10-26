@@ -66,14 +66,14 @@ type Config struct {
 	TopoReadPoolConfig     *RPCPoolConfig
 	WorkflowReadPoolConfig *RPCPoolConfig
 
-	// EmergencyFailoverPoolConfig specifies the config for a pool dedicated
-	// solely to EmergencyFailoverShard operations. It has the semantics and
+	// EmergencyReparentPoolConfig specifies the config for a pool dedicated
+	// solely to EmergencyReparentShard operations. It has the semantics and
 	// defaults of an RW RPCPool.
-	EmergencyFailoverPoolConfig *RPCPoolConfig
-	// FailoverPoolConfig specifies the config for a pool shared by
-	// PlannedFailoverShard operations. It has the semantics and defaults of an
+	EmergencyReparentPoolConfig *RPCPoolConfig
+	// ReparentPoolConfig specifies the config for a pool shared by
+	// PlannedReparentShard operations. It has the semantics and defaults of an
 	// RW RPCPool.
-	FailoverPoolConfig *RPCPoolConfig
+	ReparentPoolConfig *RPCPoolConfig
 
 	SchemaCacheConfig *cache.Config
 
@@ -209,8 +209,8 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoReadPoolConfig     *RPCPoolConfig `json:"topo_read_pool_config"`
 		WorkflowReadPoolConfig *RPCPoolConfig `json:"workflow_read_pool_config"`
 
-		EmergencyFailoverPoolConfig *RPCPoolConfig `json:"emergency_failover_pool_config"`
-		FailoverPoolConfig          *RPCPoolConfig `json:"failover_pool_config"`
+		EmergencyReparentPoolConfig *RPCPoolConfig `json:"emergency_reparent_pool_config"`
+		ReparentPoolConfig          *RPCPoolConfig `json:"reparent_pool_config"`
 
 		SchemaCacheConfig *cache.Config `json:"schema_cache_config"`
 	}{
@@ -225,8 +225,8 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoRWPoolConfig:            defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
 		TopoReadPoolConfig:          defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
 		WorkflowReadPoolConfig:      defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
-		EmergencyFailoverPoolConfig: defaultRWPoolConfig.merge(cfg.EmergencyFailoverPoolConfig),
-		FailoverPoolConfig:          defaultRWPoolConfig.merge(cfg.FailoverPoolConfig),
+		EmergencyReparentPoolConfig: defaultRWPoolConfig.merge(cfg.EmergencyReparentPoolConfig),
+		ReparentPoolConfig:          defaultRWPoolConfig.merge(cfg.ReparentPoolConfig),
 		SchemaCacheConfig:           mergeCacheConfigs(defaultCacheConfig, cfg.SchemaCacheConfig),
 	}
 
@@ -249,8 +249,8 @@ func (cfg Config) Merge(override Config) Config {
 		TopoReadPoolConfig:          cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
 		TopoRWPoolConfig:            cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
 		WorkflowReadPoolConfig:      cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
-		EmergencyFailoverPoolConfig: cfg.EmergencyFailoverPoolConfig.merge(override.EmergencyFailoverPoolConfig),
-		FailoverPoolConfig:          cfg.FailoverPoolConfig.merge(override.FailoverPoolConfig),
+		EmergencyReparentPoolConfig: cfg.EmergencyReparentPoolConfig.merge(override.EmergencyReparentPoolConfig),
+		ReparentPoolConfig:          cfg.ReparentPoolConfig.merge(override.ReparentPoolConfig),
 		SchemaCacheConfig:           mergeCacheConfigs(cfg.SchemaCacheConfig, override.SchemaCacheConfig),
 	}
 

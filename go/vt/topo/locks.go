@@ -208,26 +208,6 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	return nil
 }
 
-// CheckKeyspaceLockedAndRenew can be called on a context to make sure we have the lock
-// for a given keyspace. The function also attempts to renew the lock.
-func CheckKeyspaceLockedAndRenew(ctx context.Context, keyspace string) error {
-	// extract the locksInfo pointer
-	i, ok := ctx.Value(locksKey).(*locksInfo)
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no locksInfo)", keyspace)
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	// find the individual entry
-	entry, ok := i.info[keyspace]
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no lockInfo in map)", keyspace)
-	}
-	// try renewing lease:
-	return entry.lockDescriptor.Check(ctx)
-}
-
 // lockKeyspace will lock the keyspace in the topology server.
 // unlockKeyspace should be called if this returns no error.
 func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {

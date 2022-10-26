@@ -69,38 +69,3 @@ func TestMultiply(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }
-
-func TestEmptyInput(t *testing.T) {
-	expr := &sqlparser.BinaryExpr{
-		Operator: sqlparser.MultOp,
-		Left:     &sqlparser.Offset{V: 0},
-		Right:    &sqlparser.Offset{V: 1},
-	}
-	evalExpr, err := evalengine.Translate(expr, nil)
-	require.NoError(t, err)
-	fp := &fakePrimitive{
-		results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint64|uint64"))},
-	}
-	proj := &Projection{
-		Cols:       []string{"count(*)"},
-		Exprs:      []evalengine.Expr{evalExpr},
-		Input:      fp,
-		noTxNeeded: noTxNeeded{},
-	}
-	qr, err := proj.TryExecute(&noopVCursor{}, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err)
-	assert.Equal(t, "[]", fmt.Sprintf("%v", qr.Rows))
-
-	//fp = &fakePrimitive{
-	//	results: []*sqltypes.Result{sqltypes.MakeTestResult(
-	//		sqltypes.MakeTestFields("a|b", "uint64|uint64"),
-	//		"3|2",
-	//		"1|0",
-	//		"1|2",
-	//	)},
-	//}
-	//proj.Input = fp
-	//qr, err = wrapStreamExecute(proj, newNoopVCursor(context.Background()), nil, true)
-	//require.NoError(t, err)
-	//assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
-}

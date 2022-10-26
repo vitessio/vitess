@@ -1837,7 +1837,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count(0) AS count",
+    "Aggregates": "sum(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1859,7 +1859,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count(0) AS count(id), random(1) AS num",
+    "Aggregates": "sum(0) AS count(id), random(1) AS num",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1890,7 +1890,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
+        "Aggregates": "sum(0) AS count",
         "ResultColumns": 3,
         "Inputs": [
           {
@@ -1915,7 +1915,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count(0) AS count(id), random(1) AS num",
+    "Aggregates": "sum(0) AS count(id), random(1) AS num",
     "ResultColumns": 2,
     "Inputs": [
       {
@@ -1942,7 +1942,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum_count(0) AS count",
+    "Aggregates": "sum(0) AS count",
     "GroupBy": "1",
     "Inputs": [
       {
@@ -1967,7 +1967,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum_count(0) AS count(id)",
+    "Aggregates": "sum(0) AS count(id)",
     "GroupBy": "(1|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2000,7 +2000,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(0) AS count",
+        "Aggregates": "sum(0) AS count",
         "GroupBy": "1",
         "Inputs": [
           {
@@ -2033,7 +2033,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(0) AS count(id)",
+        "Aggregates": "sum(0) AS count(id)",
         "GroupBy": "(1|2)",
         "Inputs": [
           {
@@ -2123,7 +2123,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum_count_star(1) AS count(*), random(2) AS c1",
+    "Aggregates": "sum(1) AS count(*), random(2) AS c1",
     "GroupBy": "0",
     "ResultColumns": 2,
     "Inputs": [
@@ -2339,7 +2339,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",

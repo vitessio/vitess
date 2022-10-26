@@ -2350,20 +2350,12 @@ type (
 		To   Expr
 	}
 
-	// CastExpr represents a call to CAST(expr AS type)
-	// This is separate from CONVERT(expr, type) since there are
-	// places such as in CREATE TABLE statements where they
-	// are treated differently.
-	CastExpr struct {
+	// ConvertExpr represents a call to CONVERT(expr, type)
+	// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
+	ConvertExpr struct {
 		Expr  Expr
 		Type  *ConvertType
 		Array bool
-	}
-
-	// ConvertExpr represents a call to CONVERT(expr, type)
-	ConvertExpr struct {
-		Expr Expr
-		Type *ConvertType
 	}
 
 	// ConvertUsingExpr represents a call to CONVERT(expr USING charset).
@@ -2794,7 +2786,6 @@ func (*WeightStringFuncExpr) iExpr()               {}
 func (*CurTimeFuncExpr) iExpr()                    {}
 func (*CaseExpr) iExpr()                           {}
 func (*ValuesFuncExpr) iExpr()                     {}
-func (*CastExpr) iExpr()                           {}
 func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
 func (*ConvertUsingExpr) iExpr()                   {}

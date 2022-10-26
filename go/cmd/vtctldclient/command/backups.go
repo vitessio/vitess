@@ -54,11 +54,9 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 	}
 	// GetBackups makes a GetBackups gRPC call to a vtctld.
 	GetBackups = &cobra.Command{
-		Use:                   "GetBackups [--limit <limit>] [--json] <keyspace/shard>",
-		Short:                 "Lists backups for the given shard.",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandGetBackups,
+		Use:  "GetBackups <keyspace/shard>",
+		Args: cobra.ExactArgs(1),
+		RunE: commandGetBackups,
 	}
 	// RemoveBackup makes a RemoveBackup gRPC call to a vtctld.
 	RemoveBackup = &cobra.Command{
@@ -261,8 +259,8 @@ func init() {
 	BackupShard.Flags().Uint64Var(&backupShardOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
 	Root.AddCommand(BackupShard)
 
-	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups.")
-	GetBackups.Flags().BoolVarP(&getBackupsOptions.OutputJSON, "json", "j", false, "Output backup info in JSON format rather than a list of backups.")
+	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups")
+	GetBackups.Flags().BoolVarP(&getBackupsOptions.OutputJSON, "json", "j", false, "Output backup info in JSON format rather than a list of backups")
 	Root.AddCommand(GetBackups)
 
 	Root.AddCommand(RemoveBackup)

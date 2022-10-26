@@ -13,7 +13,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(2) AS count",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 4,
         "Inputs": [
@@ -41,7 +41,7 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "random(1) AS b, sum_count_star(2) AS count(*)",
+    "Aggregates": "random(1) AS b, sum(2) AS count(*)",
     "GroupBy": "(0|3)",
     "ResultColumns": 3,
     "Inputs": [
@@ -74,7 +74,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(2) AS count",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -107,7 +107,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+        "Aggregates": "random(1) AS b, sum(2) AS k",
         "GroupBy": "(0|3)",
         "Inputs": [
           {
@@ -141,7 +141,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(2) AS count",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 5,
         "Inputs": [
@@ -175,7 +175,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+        "Aggregates": "random(1) AS b, sum(2) AS k",
         "GroupBy": "(0|3)",
         "Inputs": [
           {
@@ -213,7 +213,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count(2) AS count",
+            "Aggregates": "sum(2) AS count",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -252,7 +252,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+            "Aggregates": "random(1) AS b, sum(2) AS k",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
@@ -289,7 +289,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(2) AS count",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 4,
         "Inputs": [
@@ -323,7 +323,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+        "Aggregates": "random(1) AS b, sum(2) AS k",
         "GroupBy": "(0|3)",
         "Inputs": [
           {
@@ -359,7 +359,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count",
+        "Aggregates": "sum(1) AS count",
         "GroupBy": "2",
         "ResultColumns": 3,
         "Inputs": [
@@ -392,7 +392,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS k",
+        "Aggregates": "sum(1) AS k",
         "GroupBy": "0 COLLATE latin1_swedish_ci",
         "Inputs": [
           {

@@ -253,16 +253,6 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 	return fmd.MysqlPort.Get(), nil
 }
 
-// GetServerID is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetServerID(ctx context.Context) (uint32, error) {
-	return 1, nil
-}
-
-// GetServerUUID is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
-	return "000000", nil
-}
-
 // CurrentPrimaryPositionLocked is thread-safe
 func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos mysql.Position) {
 	fmd.mu.Lock()
@@ -278,10 +268,10 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
 	return mysql.ReplicationStatus{
-		Position:                               fmd.CurrentPrimaryPosition,
-		FilePosition:                           fmd.CurrentSourceFilePosition,
-		RelayLogSourceBinlogEquivalentPosition: fmd.CurrentSourceFilePosition,
-		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
+		Position:              fmd.CurrentPrimaryPosition,
+		FilePosition:          fmd.CurrentSourceFilePosition,
+		FileRelayLogPosition:  fmd.CurrentSourceFilePosition,
+		ReplicationLagSeconds: fmd.ReplicationLagSeconds,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
 		IOState:    mysql.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating && fmd.IOThreadRunning)),
@@ -302,36 +292,10 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (mysql.PrimarySta
 	}, nil
 }
 
-// GetGTIDPurged is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetGTIDPurged(ctx context.Context) (mysql.Position, error) {
-	return mysql.Position{}, nil
-}
-
 // ResetReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ResetReplication(ctx context.Context) error {
 	return fmd.ExecuteSuperQueryList(ctx, []string{
 		"FAKE RESET ALL REPLICATION",
-	})
-}
-
-// ResetReplicationParameters is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) ResetReplicationParameters(ctx context.Context) error {
-	return fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE RESET REPLICA ALL",
-	})
-}
-
-// GetBinlogInformation is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error) {
-	return "ROW", true, true, "FULL", fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE select @@global",
-	})
-}
-
-// GetGTIDMode is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetGTIDMode(ctx context.Context) (gtidMode string, err error) {
-	return "ON", fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE select @@global",
 	})
 }
 
@@ -628,25 +592,6 @@ func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (primary, replica bool) {
 	return fmd.SemiSyncPrimaryEnabled, fmd.SemiSyncReplicaEnabled
 }
 
-// SemiSyncStatus is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncStatus() (bool, bool) {
-	// The fake assumes the status worked.
-	if fmd.SemiSyncPrimaryEnabled {
-		return true, false
-	}
-	return false, fmd.SemiSyncReplicaEnabled
-}
-
-// SemiSyncClients is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncClients() uint32 {
-	return 0
-}
-
-// SemiSyncSettings is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
-	return 10000000, 1
-}
-
 // SemiSyncReplicationStatus is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	// The fake assumes the status worked.
@@ -655,10 +600,5 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 
 // GetVersionString is part of the MysqlDeamon interface.
 func (fmd *FakeMysqlDaemon) GetVersionString() string {
-	return ""
-}
-
-// GetVersionComment is part of the MysqlDeamon interface.
-func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
 	return ""
 }

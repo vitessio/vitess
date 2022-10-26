@@ -29,7 +29,6 @@ import (
 func TestEmptyRows(outer *testing.T) {
 	testCases := []struct {
 		opcode      AggregateOpcode
-		origOpcode  AggregateOpcode
 		expectedVal string
 		expectedTyp string
 	}{{
@@ -48,11 +47,6 @@ func TestEmptyRows(outer *testing.T) {
 		opcode:      AggregateSum,
 		expectedVal: "null",
 		expectedTyp: "int64",
-	}, {
-		opcode:      AggregateSum,
-		expectedVal: "0",
-		expectedTyp: "int64",
-		origOpcode:  AggregateCount,
 	}, {
 		opcode:      AggregateMax,
 		expectedVal: "null",
@@ -79,10 +73,9 @@ func TestEmptyRows(outer *testing.T) {
 			oa := &ScalarAggregate{
 				PreProcess: true,
 				Aggregates: []*AggregateParams{{
-					Opcode:     test.opcode,
-					Col:        0,
-					Alias:      test.opcode.String(),
-					OrigOpcode: test.origOpcode,
+					Opcode: test.opcode,
+					Col:    0,
+					Alias:  test.opcode.String(),
 				}},
 				Input: fp,
 			}

@@ -1428,8 +1428,7 @@ func (node Columns) formatFast(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.WriteByte('(')
-	prefix := ""
+	prefix := "("
 	for _, n := range node {
 		buf.WriteString(prefix)
 		n.formatFast(buf)
@@ -2222,24 +2221,15 @@ func (node WindowDefinitions) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *CastExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("cast(")
-	buf.printExpr(node, node.Expr, true)
-	buf.WriteString(" as ")
-	node.Type.formatFast(buf)
-	if node.Array {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[ARRAY])
-	}
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node.
 func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("convert(")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(", ")
 	node.Type.formatFast(buf)
+	if node.Array {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ARRAY])
+	}
 	buf.WriteByte(')')
 }
 

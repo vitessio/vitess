@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -48,13 +47,6 @@ var defaultSelectResult = sqltypes.MakeTestResult(
 	),
 	"1",
 )
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func TestSelectUnsharded(t *testing.T) {
 	sel := NewRoute(

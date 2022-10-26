@@ -394,11 +394,6 @@ func TestReplicationStatus(t *testing.T) {
 	ioThread, sqlThread := utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.True(t, ioThread)
 	require.False(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
 
 	// Stop replication on tablets[1] and verify that both the threads are reported as not running
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE;`)
@@ -407,11 +402,6 @@ func TestReplicationStatus(t *testing.T) {
 	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.False(t, ioThread)
 	require.False(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
 
 	// Start replication on tablets[1] and verify that both the threads are reported as running
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
@@ -420,11 +410,6 @@ func TestReplicationStatus(t *testing.T) {
 	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.True(t, ioThread)
 	require.True(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
 
 	// Stop IO_THREAD on tablets[1] and verify that the IO thread is read to be stopped and SQL thread is running
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE IO_THREAD;`)
@@ -433,9 +418,4 @@ func TestReplicationStatus(t *testing.T) {
 	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.False(t, ioThread)
 	require.True(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
 }

@@ -52,9 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -87,29 +85,19 @@ func Test{{ .Method }}(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	{{ if not .SerializeCases }}
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
-	{{ end }}
 
 	{{ with $test := . -}}
 	{{ range .Cases }}
 	t.Run("{{ .Name }}", func(t *testing.T) {
-		t.Parallel()
-		{{ if $test.SerializeCases }}
-		api := vtadmin.NewAPI(testClusters(t), opts)
-		t.Cleanup(func() {
-			if err := api.Close(); err != nil {
-				t.Logf("api did not close cleanly: %s", err.Error())
-			}
-		})
-		{{ end }}
-
+		{{- if not $test.SerializeCases -}}t.Parallel(){{- end }}
 		{{ getActor .Actor }}
+
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -155,10 +143,7 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "{{ .Tablet.Alias.Cell }}",
 							Uid: {{ .Tablet.Alias.Uid }},
 						},
-						Keyspace: "{{ .Tablet.Keyspace }}",
-						Type: topodatapb.TabletType_{{ .Tablet.Type }},
 					},
-					State: vtadminpb.Tablet_{{ .State }},
 				},
 				{{- end }}
 			},

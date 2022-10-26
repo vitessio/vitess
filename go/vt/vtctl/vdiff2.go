@@ -50,7 +50,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with; default is any available cell")
-	tabletTypes := subFlags.String("tablet_types", "in_order:RDONLY,REPLICA,PRIMARY", "Tablet types for source (PRIMARY is always used on target)")
+	tabletTypes := subFlags.String("tablet_types", "in_order:replica,primary", "Tablet types for source and target")
 
 	debugQuery := subFlags.Bool("debug_query", false, "Adds a mysql query to the report that can be used for further debugging")
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
@@ -67,7 +67,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	var action vdiff.VDiffAction
 	var actionArg string
 
-	usage := fmt.Errorf("usage: VDiff -- --v2 <keyspace>.<workflow> %s [%s|<UUID>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
+	usage := fmt.Errorf("usage: vdiff -- --v2 <keyspace>.<workflow> %s [%s|<uuid>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
 	switch subFlags.NArg() {
 	case 1: // for backward compatibility with vdiff1
 		action = vdiff.CreateAction
@@ -83,15 +83,16 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return usage
 	}
 	if action == "" {
-		return fmt.Errorf("invalid action %s; %s", subFlags.Arg(1), usage)
+		return fmt.Errorf("invalid action %s", subFlags.Arg(1))
 	}
 	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
+	log.Infof("VDiff2 action is %s, args %s", action, strings.Join(args, " "))
 
 	if *maxRows <= 0 {
-		return fmt.Errorf("invalid --limit value (%d), maximum number of rows to compare needs to be greater than 0", *maxRows)
+		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
 	}
 
 	options := &tabletmanagerdatapb.VDiffOptions{
@@ -119,13 +120,9 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	var vdiffUUID uuid.UUID
 	switch action {
 	case vdiff.CreateAction:
-		if actionArg != "" {
-			vdiffUUID, err = uuid.Parse(actionArg)
-		} else {
-			vdiffUUID, err = uuid.NewUUID()
-		}
+		vdiffUUID, err = uuid.NewUUID()
 		if err != nil {
-			return fmt.Errorf("%v, please provide a valid UUID", err)
+			return err
 		}
 	case vdiff.ShowAction:
 		switch actionArg {
@@ -133,16 +130,11 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
 			if err != nil {
-				return fmt.Errorf("can only show a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+				return fmt.Errorf("can only show specific migration, provide valid uuid; view all with: vdiff -- --v2 show all")
 			}
 		}
-	case vdiff.ResumeAction:
-		vdiffUUID, err = uuid.Parse(actionArg)
-		if err != nil {
-			return fmt.Errorf("can only resume a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
-		}
 	default:
-		return fmt.Errorf("invalid action %s; %s", action, usage)
+		return fmt.Errorf("invalid command %s", action)
 	}
 	type ErrorResponse struct {
 		Error string
@@ -154,18 +146,18 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	}
 
 	switch action {
-	case vdiff.CreateAction, vdiff.ResumeAction:
-		displayVDiff2ScheduledResponse(wr, *format, vdiffUUID.String(), action)
+	case vdiff.CreateAction:
+		displayVDiff2CreateResponse(wr, *format, vdiffUUID.String())
 	case vdiff.ShowAction:
 		if output == nil {
-			// should not happen
-			return fmt.Errorf("invalid (empty) response from show command")
+			return fmt.Errorf("invalid response from show command")
 		}
+		log.Infof("show action: %+v", output)
 		if err := displayVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
 			return err
 		}
 	default:
-		return fmt.Errorf("invalid action %s; %s", action, usage)
+		return fmt.Errorf("action %s not valid", action)
 	}
 	return nil
 }
@@ -175,36 +167,29 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 // summary aggregates/selects the current state of the vdiff from all shards
 
 type vdiffTableSummary struct {
-	TableName       string
-	State           vdiff.VDiffState
-	RowsCompared    int64
-	MatchingRows    int64
-	MismatchedRows  int64
-	ExtraRowsSource int64
-	ExtraRowsTarget int64
-	LastUpdated     string `json:"LastUpdated,omitempty"`
+	TableName, State string
+	RowsCompared     int64
+	MatchingRows     int64
+	MismatchedRows   int64
+	ExtraRowsSource  int64
+	ExtraRowsTarget  int64
+	LastUpdated      string `json:"LastUpdated,omitempty"`
 }
 type vdiffSummary struct {
-	Workflow, Keyspace string
-	State              vdiff.VDiffState
-	UUID               string
-	RowsCompared       int64
-	HasMismatch        bool
-	Shards             string
-	StartedAt          string                                 `json:"StartedAt,omitempty"`
-	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
-	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
-	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
+	Workflow, Keyspace, State string
+	UUID                      string
+	HasMismatch               bool
+	Shards                    string
+	LastUpdated               string                                 `json:"LastUpdated,omitempty"`
+	TableSummaryMap           map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
+	Reports                   map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
 }
 
 const (
 	summaryTextTemplate = `
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
-State:        {{.State}}
-RowsCompared: {{.RowsCompared}}
-HasMismatch:  {{.HasMismatch}}
-StartedAt:    {{.StartedAt}}
-CompletedAt:  {{.CompletedAt}}
+State: {{.State}}
+HasMismatch: {{.HasMismatch}}
 {{ range $table := .TableSummaryMap}} 
 Table {{$table.TableName}}:
 	State:            {{$table.State}}
@@ -378,16 +363,13 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 }
 func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
-		Workflow:     workflow,
-		Keyspace:     keyspace,
-		UUID:         uuid,
-		State:        vdiff.UnknownState,
-		RowsCompared: 0,
-		StartedAt:    "",
-		CompletedAt:  "",
-		HasMismatch:  false,
-		Shards:       "",
-		Reports:      make(map[string]map[string]vdiff.DiffReport),
+		Workflow:    workflow,
+		Keyspace:    keyspace,
+		UUID:        uuid,
+		State:       "",
+		HasMismatch: false,
+		Shards:      "",
+		Reports:     make(map[string]map[string]vdiff.DiffReport),
 	}
 
 	var tableSummaryMap map[string]vdiffTableSummary
@@ -403,90 +385,56 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				reports = make(map[string]map[string]vdiff.DiffReport, 0)
 			}
 			for _, row := range qr.Named().Rows {
-				// Update the global VDiff summary based on the per shard level summary.
-				// Since these values will be the same for all subsequent rows we only use the first row.
 				if first {
 					first = false
-					// Our timestamps are strings in `2022-06-26 20:43:25` format so we sort them lexicographically.
-					// We should use the earliest started_at across all shards.
-					if sa := row.AsString("started_at", ""); summary.StartedAt == "" || sa < summary.StartedAt {
-						summary.StartedAt = sa
+					summary.State, _ = row.ToString("vdiff_state")
+					summary.State = strings.ToLower(summary.State)
+				}
+				// If we had a mismatch on any table then the vdiff as a unit does too
+				if mm, _ := row.ToBool("has_mismatch"); mm {
+					summary.HasMismatch = true
+				}
+				table := row.AsString("table_name", "")
+				if _, ok := tableSummaryMap[table]; !ok {
+					tableSummaryMap[table] = vdiffTableSummary{
+						TableName: table,
 					}
-					// And we should use the latest completed_at across all shards.
-					if ca := row.AsString("completed_at", ""); summary.CompletedAt == "" || ca > summary.CompletedAt {
-						summary.CompletedAt = ca
+
+				}
+				ts := tableSummaryMap[table]
+				state := strings.ToLower(row.AsString("table_state", ""))
+
+				switch state {
+				case "completed":
+					if ts.State == "" {
+						ts.State = state
+					}
+				case "error":
+					ts.State = state
+				default:
+					if ts.State != "error" {
+						ts.State = state
 					}
 				}
-
-				{ // Global VDiff summary updates that take into account the per table details per shard
-					summary.RowsCompared += row.AsInt64("rows_compared", 0)
-
-					// If we had a mismatch on any table on any shard then the global VDiff summary does too
-					if mm, _ := row.ToBool("has_mismatch"); mm {
-						summary.HasMismatch = true
+				diffReport := row.AsString("report", "")
+				dr := vdiff.DiffReport{}
+				if diffReport != "" {
+					err := json.Unmarshal([]byte(diffReport), &dr)
+					if err != nil {
+						return nil, err
 					}
+					ts.RowsCompared += dr.ProcessedRows
+					ts.MismatchedRows += dr.MismatchedRows
+					ts.MatchingRows += dr.MatchingRows
+					ts.ExtraRowsTarget += dr.ExtraRowsTarget
+					ts.ExtraRowsSource += dr.ExtraRowsSource
+				}
+				if _, ok := reports[table]; !ok {
+					reports[table] = make(map[string]vdiff.DiffReport)
 				}
 
-				{ // Table summary information that must be accounted for across all shards
-					table := row.AsString("table_name", "")
-					// Create the global VDiff table summary object if it doesn't exist
-					if _, ok := tableSummaryMap[table]; !ok {
-						tableSummaryMap[table] = vdiffTableSummary{
-							TableName: table,
-							State:     vdiff.UnknownState,
-						}
-
-					}
-					ts := tableSummaryMap[table]
-					// This is the shard level VDiff table state
-					sts := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
-
-					// The error state must be sticky, and we should not override any other
-					// known state with completed.
-					switch sts {
-					case vdiff.CompletedState:
-						if ts.State == vdiff.UnknownState {
-							ts.State = sts
-						}
-					case vdiff.ErrorState:
-						ts.State = sts
-					default:
-						if ts.State != vdiff.ErrorState {
-							ts.State = sts
-
-						}
-					}
-
-					diffReport := row.AsString("report", "")
-					dr := vdiff.DiffReport{}
-					if diffReport != "" {
-						err := json.Unmarshal([]byte(diffReport), &dr)
-						if err != nil {
-							return nil, err
-						}
-						ts.RowsCompared += dr.ProcessedRows
-						ts.MismatchedRows += dr.MismatchedRows
-						ts.MatchingRows += dr.MatchingRows
-						ts.ExtraRowsTarget += dr.ExtraRowsTarget
-						ts.ExtraRowsSource += dr.ExtraRowsSource
-					}
-					if _, ok := reports[table]; !ok {
-						reports[table] = make(map[string]vdiff.DiffReport)
-					}
-
-					reports[table][shard] = dr
-					tableSummaryMap[table] = ts
-
-					// The global VDiff summary needs to align with the table states across all
-					// shards. It should progress from pending->started->completed with error at any point
-					// being sticky. This largely mirrors the global table summary, with the exception
-					// being the started state, which should also be sticky; i.e. we shouldn't go from
-					// started->pending->started in the global VDiff summary state.
-					if summary.State != ts.State &&
-						(summary.State != vdiff.StartedState && ts.State != vdiff.PendingState) {
-						summary.State = ts.State
-					}
-				}
+				reports[table][shard] = dr
+				tableSummaryMap[table] = ts
 			}
 		}
 	}
@@ -498,29 +446,20 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		summary.Reports = nil
 		summary.TableSummaryMap = nil
 	}
-	// If we haven't completed the global VDiff then be sure to reflect that with no CompletedAt value
-	if summary.State != vdiff.CompletedState {
-		summary.CompletedAt = ""
-	}
 	return summary, nil
 }
 
 //endregion
 
-func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format string, uuid string, typ vdiff.VDiffAction) {
+func displayVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid string) {
 	if format == "json" {
-		type ScheduledResponse struct {
+		type CreateResponse struct {
 			UUID string
 		}
-		resp := &ScheduledResponse{UUID: uuid}
+		resp := &CreateResponse{UUID: uuid}
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")
 		wr.Logger().Printf(string(jsonText) + "\n")
 	} else {
-		addtlMsg := ""
-		if typ == vdiff.ResumeAction {
-			addtlMsg = "to resume "
-		}
-		msg := fmt.Sprintf("VDiff %s scheduled %son target shards, use show to view progress\n", uuid, addtlMsg)
-		wr.Logger().Printf(msg)
+		wr.Logger().Printf("VDiff %s scheduled on target shards, use show to view progress\n", uuid)
 	}
 }

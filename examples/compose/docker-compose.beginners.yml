@@ -67,7 +67,7 @@ services:
         -cell $CELL \
         -workflow_manager_init \
         -workflow_manager_use_election \
-        -service_map 'grpc-vtctl,grpc-vtctld' \
+        -service_map 'grpc-vtctl' \
         -backup_storage_implementation file \
         -file_backup_storage_root /vt/vtdataroot/backups \
         -logtostderr=true \
@@ -135,20 +135,6 @@ services:
     depends_on:
       vttablet101:
         condition: service_healthy
-
-  set_keyspace_durability_policy:
-    command:
-      - sh
-      - -c
-      - /script/set_keyspace_durability_policy.sh
-    depends_on:
-      - vttablet100
-    environment:
-      - KEYSPACES=$KEYSPACE
-      - GRPC_PORT=15999
-    image: vitess/lite:${VITESS_TAG:-latest}
-    volumes:
-      - .:/script
 
   vttablet100:
     image: vitess/lite:${VITESS_TAG:-latest}
@@ -283,7 +269,6 @@ services:
     command: ["sh", "-c", "/script/vtorc-up.sh"]
     depends_on:
       - vtctld
-      - set_keyspace_durability_policy
     ports:
       - "13000:3000"
     volumes:

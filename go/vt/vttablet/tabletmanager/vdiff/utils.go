@@ -73,7 +73,7 @@ func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID
 	query := "insert into _vt.vdiff_log(vdiff_id, message) values (%d, %s)"
 	query = fmt.Sprintf(query, vdiffID, encodeString(message))
 	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-		log.Error("Error inserting into _vt.vdiff_log: %v", err)
+		log.Error("Error inserting into _vt.vdiff_log: %w", err)
 	}
 }
 

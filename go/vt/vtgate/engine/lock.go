@@ -186,7 +186,7 @@ func (l *Lock) description() PrimitiveDescription {
 	}
 	var lf []string
 	for _, f := range l.LockFunctions {
-		lf = append(lf, sqlparser.String(f.Typ))
+		lf = append(lf, fmt.Sprintf("%s", sqlparser.String(f.Typ)))
 	}
 	other["lock_func"] = lf
 	return PrimitiveDescription{

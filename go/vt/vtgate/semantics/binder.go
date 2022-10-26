@@ -91,9 +91,6 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			node.Using = nil
 		}
 	case *sqlparser.ColName:
-		if node.IsVariable() {
-			break
-		}
 		currentScope := b.scoper.currentScope()
 		deps, err := b.resolveColumn(node, currentScope, false)
 		if err != nil {

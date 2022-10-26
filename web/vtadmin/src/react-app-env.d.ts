@@ -43,6 +43,4 @@ declare namespace NodeJS {
     }
 }
 
-interface Window {
-    env: NodeJS.ProcessEnv;
-}
+interface Window {}

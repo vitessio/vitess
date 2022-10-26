@@ -54,18 +54,3 @@ create table t7_xxhash_idx
     keyspace_id varbinary(50),
     primary key (phone, keyspace_id)
 ) Engine = InnoDB;
-
-CREATE TABLE t1 (
-    t1_id bigint unsigned NOT NULL,
-    `name` varchar(20) NOT NULL,
-    `value` varchar(50),
-    shardKey bigint,
-    UNIQUE KEY `t1id_name` (t1_id, `name`),
-    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
-) ENGINE InnoDB;
-
-CREATE TABLE t2 (
-    id bigint NOT NULL,
-    shardKey bigint,
-    PRIMARY KEY (id)
-) ENGINE InnoDB;

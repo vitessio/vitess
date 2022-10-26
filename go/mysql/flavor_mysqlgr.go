@@ -93,11 +93,6 @@ func (mysqlGRFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{}
 }
 
-// resetReplicationParametersCommands is part of the Flavor interface.
-func (mysqlGRFlavor) resetReplicationParametersCommands(c *Conn) []string {
-	return []string{}
-}
-
 // setReplicationPositionCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{}

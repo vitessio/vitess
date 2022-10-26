@@ -2441,6 +2441,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"/update _vt.vreplication set message='vstream ended'",
 	})
 	streamerEngine.Open()
+
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",
 	})

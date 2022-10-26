@@ -17,15 +17,13 @@ limitations under the License.
 package mysql
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"context"
 )
 
 type filePosFlavor struct {
@@ -62,36 +60,6 @@ func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 		file: resultMap["File"],
 		pos:  pos,
 	}, nil
-}
-
-// purgedGTIDSet is part of the Flavor interface.
-func (flv *filePosFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
-	return nil, nil
-}
-
-// gtidMode is part of the Flavor interface.
-func (flv *filePosFlavor) gtidMode(c *Conn) (string, error) {
-	qr, err := c.ExecuteFetch("select @@global.gtid_mode", 1, false)
-	if err != nil {
-		return "", err
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
-	}
-	return qr.Rows[0][0].ToString(), nil
-}
-
-// serverUUID is part of the Flavor interface.
-func (flv *filePosFlavor) serverUUID(c *Conn) (string, error) {
-	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
-	qr, err := c.ExecuteFetch("SELECT @@global.server_uuid", 1, false)
-	if err != nil {
-		return "", err
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
-	}
-	return qr.Rows[0][0].ToString(), nil
 }
 
 func (flv *filePosFlavor) startReplicationCommand() string {
@@ -215,13 +183,6 @@ func (flv *filePosFlavor) resetReplicationCommands(c *Conn) []string {
 	}
 }
 
-// resetReplicationParametersCommands is part of the Flavor interface.
-func (flv *filePosFlavor) resetReplicationParametersCommands(c *Conn) []string {
-	return []string{
-		"unsupported",
-	}
-}
-
 // setReplicationPositionCommands is part of the Flavor interface.
 func (flv *filePosFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{
@@ -258,7 +219,7 @@ func parseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStat
 	status := parseReplicationStatus(resultMap)
 
 	status.Position = status.FilePosition
-	status.RelayLogPosition = status.RelayLogSourceBinlogEquivalentPosition
+	status.RelayLogPosition = status.FileRelayLogPosition
 
 	return status, nil
 }

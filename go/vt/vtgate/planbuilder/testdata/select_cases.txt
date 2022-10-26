@@ -83,7 +83,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count(0) AS count",
+    "Aggregates": "sum(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -106,7 +106,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count_star(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -178,7 +178,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count(0) AS count",
+    "Aggregates": "sum(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -201,7 +201,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count_star(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -227,7 +227,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count(0) AS count",
+    "Aggregates": "sum(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -250,7 +250,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum_count_star(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1758,7 +1758,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
+        "Aggregates": "sum(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1802,7 +1802,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1894,7 +1894,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count",
+        "Aggregates": "sum(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1940,7 +1940,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3280,8 +3280,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
-    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual",
+    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual where 1 != 1",
+    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual",
     "Table": "dual"
   }
 }
@@ -3468,129 +3468,6 @@ Gen4 plan same as above
         "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
         "Query": "select :__sq_has_values1 from dual",
         "Table": "dual"
-      }
-    ]
-  }
-}
-
-# Getting variable value from an authoritative table should work just fine
-# V3 still fails. Fixed in v15
-"select @@foo from authoritative"
-"symbol @@foo not found in table or subquery"
-{
-  "QueryType": "SELECT",
-  "Original": "select @@foo from authoritative",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Scatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select @@foo from authoritative where 1 != 1",
-    "Query": "select @@foo from authoritative",
-    "Table": "authoritative"
-  }
-}
-
-# Predicate in apply join which is merged
-"select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'"
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "L:0,R:0",
-    "JoinVars": {
-      "user_extra_user_id": 1
-    },
-    "TableName": "`user`_user_extra_user_metadata",
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "JoinVars": {
-          "user_col": 0
-        },
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` where `user`.textcol1 = 'alice@gmail.com'",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
-            "Query": "select user_extra.user_id from user_extra where user_extra.col = :user_col",
-            "Table": "user_extra"
-          }
-        ]
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user_metadata.user_id from user_metadata where 1 != 1",
-        "Query": "select user_metadata.user_id from user_metadata where user_metadata.user_id = :user_extra_user_id",
-        "Table": "user_metadata",
-        "Values": [
-          ":user_extra_user_id"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "L:0,R:0",
-    "JoinVars": {
-      "user_col": 0
-    },
-    "TableName": "`user`_user_extra, user_metadata",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.textcol1 = 'alice@gmail.com'",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user_metadata.user_id from user_extra, user_metadata where 1 != 1",
-        "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col and user_extra.user_id = user_metadata.user_id",
-        "Table": "user_extra, user_metadata"
       }
     ]
   }

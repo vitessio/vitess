@@ -67,10 +67,6 @@ func parseMariadbGTIDSet(s string) (GTIDSet, error) {
 	gtidStrings := strings.Split(s, ",")
 	gtidSet := make(MariadbGTIDSet, len(gtidStrings))
 	for _, gtidString := range gtidStrings {
-		gtidString = strings.TrimSpace(gtidString)
-		if gtidString == "" {
-			continue
-		}
 		gtid, err := parseMariadbGTID(gtidString)
 		if err != nil {
 			return nil, err

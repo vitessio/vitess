@@ -946,7 +946,8 @@ var (
 		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
 		output: "insert into `user`(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
 	}, {
-		input: "insert into customer() values ()",
+		input:  "insert into customer () values ()",
+		output: "insert into customer values ()",
 	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
@@ -3647,7 +3648,8 @@ func TestConvert(t *testing.T) {
 		input  string
 		output string
 	}{{
-		input: "select cast('abc' as date) from t",
+		input:  "select cast('abc' as date) from t",
+		output: "select convert('abc', date) from t",
 	}, {
 		input: "select convert('abc', binary(4)) from t",
 	}, {
@@ -3700,7 +3702,10 @@ func TestConvert(t *testing.T) {
 	}, {
 		input: "select convert('abc', json) from t",
 	}, {
-		input: "select cast(json_keys(c) as char(64) array) from t",
+		input: "select convert(json_keys(c), char(64) array) from t",
+	}, {
+		input:  "select cast(json_keys(c) as char(64) array) from t",
+		output: "select convert(json_keys(c), char(64) array) from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -5037,7 +5042,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((cast(info -> '$.field' as unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((convert(info -> '$.field', unsigned array)))\n)",
 		},
 	}
 	for _, test := range createTableQueries {

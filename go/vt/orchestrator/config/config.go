@@ -388,8 +388,8 @@ func newConfiguration() *Configuration {
 		WebMessage:                                  "",
 		MaxConcurrentReplicaOperations:              5,
 		InstanceDBExecContextTimeoutSeconds:         30,
-		LockShardTimeoutSeconds:                     30,
-		WaitReplicasTimeoutSeconds:                  30,
+		LockShardTimeoutSeconds:                     1,
+		WaitReplicasTimeoutSeconds:                  1,
 	}
 }
 

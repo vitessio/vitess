@@ -704,7 +704,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 
 	// We should refresh the tablet information again to update our information.
 	RefreshTablets(true /* forceRefresh */)
-	if ev != nil && ev.NewPrimary != nil {
+	if ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
 			Port:     int(ev.NewPrimary.MysqlPort),
@@ -1681,7 +1681,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
 	// PrimaryHasPrimary analysis which runs ERS
 	RefreshTablets(true /* forceRefresh */)
-	if ev != nil && ev.NewPrimary != nil {
+	if ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
 			Port:     int(ev.NewPrimary.MysqlPort),
@@ -1775,7 +1775,7 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
 	// PrimaryHasPrimary analysis which runs ERS
 	RefreshTablets(true /* forceRefresh */)
-	if ev != nil && ev.NewPrimary != nil {
+	if ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
 			Port:     int(ev.NewPrimary.MysqlPort),

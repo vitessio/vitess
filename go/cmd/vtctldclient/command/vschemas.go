@@ -144,13 +144,13 @@ func commandGetVSchema(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema to apply, in JSON form.")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema-file", "", "Path to a file containing the vschema to apply, in JSON form.")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQL, "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`.")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQLFile, "sql-file", "", "Path to a file containing a VSchema DDL SQL.")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema-file", "", "VSchema File")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQL, "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQLFile, "sql-file", "", "A file containing VSchema DDL SQL")
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.DryRun, "dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
-	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvSchema objects.")
-	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "Limits the rebuild to the specified cells, after application. Ignored if --skip-rebuild is set.")
+	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
 	Root.AddCommand(ApplyVSchema)
 
 	Root.AddCommand(GetVSchema)

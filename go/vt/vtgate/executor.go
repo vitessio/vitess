@@ -30,8 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/acl"
@@ -91,7 +89,6 @@ type Executor struct {
 	resolver    *Resolver
 	scatterConn *ScatterConn
 	txConn      *TxConn
-	pv          plancontext.PlannerVersion
 
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
@@ -116,18 +113,7 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(
-	ctx context.Context,
-	serv srvtopo.Server,
-	cell string,
-	resolver *Resolver,
-	normalize, warnOnShardedOnly bool,
-	streamSize int,
-	cacheCfg *cache.Config,
-	schemaTracker SchemaInfo,
-	noScatter bool,
-	pv plancontext.PlannerVersion,
-) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config, schemaTracker SchemaInfo, noScatter bool) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -140,7 +126,6 @@ func NewExecutor(
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
-		pv:              pv,
 	}
 
 	vschemaacl.Init()
@@ -1236,7 +1221,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
 	plan, err := e.getPlan(
 		vcursor,
 		query,

@@ -299,12 +299,12 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "revert %vvitess_migration '%#s'", node.Comments, node.UUID)
+	buf.astPrintf(node, "revert %vvitess_migration '%s'", node.Comments, node.UUID)
 }
 
 // Format formats the node.
 func (node *ShowMigrationLogs) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show vitess_migration '%#s' logs", node.UUID)
+	buf.astPrintf(node, "show vitess_migration '%s' logs", node.UUID)
 }
 
 // Format formats the node.
@@ -1043,7 +1043,7 @@ func (node *ParsedComments) Format(buf *TrackedBuffer) {
 		return
 	}
 	for _, c := range node.comments {
-		buf.astPrintf(node, "%#s ", c)
+		buf.astPrintf(node, "%s ", c)
 	}
 }
 
@@ -1082,8 +1082,7 @@ func (node Columns) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.WriteByte('(')
-	prefix := ""
+	prefix := "("
 	for _, n := range node {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
@@ -1677,17 +1676,12 @@ func (node WindowDefinitions) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *CastExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "cast(%v as %v", node.Expr, node.Type)
+func (node *ConvertExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "convert(%v, %v", node.Expr, node.Type)
 	if node.Array {
 		buf.astPrintf(node, " %s", keywordStrings[ARRAY])
 	}
 	buf.astPrintf(node, ")")
-}
-
-// Format formats the node.
-func (node *ConvertExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert(%v, %v)", node.Expr, node.Type)
 }
 
 // Format formats the node.

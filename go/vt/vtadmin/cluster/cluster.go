@@ -80,8 +80,8 @@ type Cluster struct {
 	topoReadPool     *pools.RPCPool
 	workflowReadPool *pools.RPCPool
 
-	emergencyFailoverPool *pools.RPCPool // ERS-only
-	failoverPool          *pools.RPCPool // PRS-only
+	emergencyReparentPool *pools.RPCPool // ERS-only
+	reparentPool          *pools.RPCPool // PRS-only
 
 	// schemaCache caches schema(s) for different GetSchema(s) requests.
 	//
@@ -161,8 +161,8 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
-	cluster.emergencyFailoverPool = cfg.EmergencyFailoverPoolConfig.NewRWPool()
-	cluster.failoverPool = cfg.FailoverPoolConfig.NewRWPool()
+	cluster.emergencyReparentPool = cfg.EmergencyReparentPoolConfig.NewRWPool()
+	cluster.reparentPool = cfg.ReparentPoolConfig.NewRWPool()
 
 	if cluster.cfg.SchemaCacheConfig == nil {
 		cluster.cfg.SchemaCacheConfig = &cache.Config{}
@@ -512,10 +512,10 @@ func (c *Cluster) EmergencyFailoverShard(ctx context.Context, req *vtctldatapb.E
 		span.Annotate("wait_replicas_timeout", d.String())
 	}
 
-	if err := c.emergencyFailoverPool.Acquire(ctx); err != nil {
-		return nil, fmt.Errorf("EmergencyFailoverShard(%s/%s) failed to acquire emergencyFailoverPool: %w", req.Keyspace, req.Shard, err)
+	if err := c.emergencyReparentPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("EmergencyFailoverShard(%s/%s) failed to acquire emergencyReparentPool: %w", req.Keyspace, req.Shard, err)
 	}
-	defer c.emergencyFailoverPool.Release()
+	defer c.emergencyReparentPool.Release()
 
 	resp, err := c.Vtctld.EmergencyReparentShard(ctx, req)
 	if err != nil {
@@ -1930,10 +1930,10 @@ func (c *Cluster) PlannedFailoverShard(ctx context.Context, req *vtctldatapb.Pla
 		span.Annotate("wait_replicas_timeout", d.String())
 	}
 
-	if err := c.failoverPool.Acquire(ctx); err != nil {
-		return nil, fmt.Errorf("PlannedFailoverShard(%s/%s): failed to acquire failoverPool: %w", req.Keyspace, req.Shard, err)
+	if err := c.reparentPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("PlannedFailoverShard(%s/%s): failed to acquire reparentPool: %w", req.Keyspace, req.Shard, err)
 	}
-	defer c.failoverPool.Release()
+	defer c.reparentPool.Release()
 
 	resp, err := c.Vtctld.PlannedReparentShard(ctx, req)
 	if err != nil {
@@ -2333,8 +2333,8 @@ func (c *Cluster) Debug() map[string]any {
 			"topo_read_pool":          json.RawMessage(c.topoReadPool.StatsJSON()),
 			"topo_rw_pool":            json.RawMessage(c.topoRWPool.StatsJSON()),
 			"workflow_read_pool":      json.RawMessage(c.workflowReadPool.StatsJSON()),
-			"emergency_failover_pool": json.RawMessage(c.emergencyFailoverPool.StatsJSON()),
-			"failover_pool":           json.RawMessage(c.failoverPool.StatsJSON()),
+			"emergency_reparent_pool": json.RawMessage(c.emergencyReparentPool.StatsJSON()),
+			"reparent_pool":           json.RawMessage(c.reparentPool.StatsJSON()),
 		},
 		"caches": map[string]any{
 			"schemas": c.schemaCache.Debug(),
