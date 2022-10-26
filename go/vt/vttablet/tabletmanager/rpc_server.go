@@ -85,7 +85,6 @@ func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, 
 	}
 }
 
-//
 // RegisterTabletManager is used to delay registration of RPC servers until we have all the objects.
 type RegisterTabletManager func(*TabletManager)
 

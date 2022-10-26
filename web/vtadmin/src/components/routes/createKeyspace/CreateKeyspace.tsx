@@ -32,13 +32,11 @@ import { FormError } from '../../forms/FormError';
 interface FormData {
     clusterID: string;
     keyspaceName: string;
-    shardingColumnName: string;
 }
 
 const DEFAULT_FORM_DATA: FormData = {
     clusterID: '',
     keyspaceName: '',
-    shardingColumnName: '',
 };
 
 export const CreateKeyspace = () => {
@@ -56,7 +54,6 @@ export const CreateKeyspace = () => {
             clusterID: formData.clusterID,
             options: {
                 name: formData.keyspaceName,
-                sharding_column_name: formData.shardingColumnName,
             },
         },
         {
@@ -119,21 +116,6 @@ export const CreateKeyspace = () => {
                             value={formData.keyspaceName || ''}
                         />
                     </Label>
-
-                    <details>
-                        <summary className="font-semibold cursor-pointer">Advanced options</summary>
-                        <div className="my-8">
-                            <Label className="block" label="Sharding Column Name">
-                                <TextInput
-                                    onChange={(e) => setFormData({ ...formData, shardingColumnName: e.target.value })}
-                                    value={formData.shardingColumnName || ''}
-                                />
-                            </Label>
-                            <span className="text-sm">
-                                Optional. The name of the column to use for sharding operations.
-                            </span>
-                        </div>
-                    </details>
 
                     {mutation.isError && !mutation.isLoading && (
                         <FormError error={mutation.error} title="Couldn't create keyspace. Please try again." />

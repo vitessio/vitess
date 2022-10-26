@@ -54,7 +54,7 @@ func (iv InsertValues) EncodeSQL(buf *strings.Builder) {
 // TupleEqualityList is for generating equality constraints
 // for tables that have composite primary keys.
 type TupleEqualityList struct {
-	Columns []ColIdent
+	Columns []IdentifierCI
 	Rows    [][]sqltypes.Value
 }
 

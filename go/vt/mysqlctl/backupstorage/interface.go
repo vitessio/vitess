@@ -19,24 +19,36 @@ limitations under the License.
 package backupstorage
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"io"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
 	// BackupStorageImplementation is the implementation to use
 	// for BackupStorage. Exported for test purposes.
-	BackupStorageImplementation = flag.String("backup_storage_implementation", "", "which implementation to use for the backup storage feature")
+	BackupStorageImplementation string
 	// FileSizeUnknown is a special value indicating that the file size is not known.
 	// This is typically used while creating a file programmatically, where it is
 	// impossible to compute the final size on disk ahead of time.
 	FileSizeUnknown = int64(-1)
 )
+
+func registerBackupFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&BackupStorageImplementation, "backup_storage_implementation", "", "Which backup storage implementation to use for creating and restoring backups.")
+}
+
+func init() {
+	servenv.OnParseFor("vtbackup", registerBackupFlags)
+	servenv.OnParseFor("vtctl", registerBackupFlags)
+	servenv.OnParseFor("vtctld", registerBackupFlags)
+	servenv.OnParseFor("vttablet", registerBackupFlags)
+}
 
 // BackupHandle describes an individual backup.
 type BackupHandle interface {
@@ -116,7 +128,7 @@ var BackupStorageMap = make(map[string]BackupStorage)
 // Should be called after flags have been initialized.
 // When all operations are done, call BackupStorage.Close() to free resources.
 func GetBackupStorage() (BackupStorage, error) {
-	bs, ok := BackupStorageMap[*BackupStorageImplementation]
+	bs, ok := BackupStorageMap[BackupStorageImplementation]
 	if !ok {
 		return nil, fmt.Errorf("no registered implementation of BackupStorage")
 	}

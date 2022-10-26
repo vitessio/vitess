@@ -93,6 +93,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	PingTabletResults           map[string]error
 	PlannedReparentShardResults map[string]struct {
 		Response *vtctldatapb.PlannedReparentShardResponse
 		Error    error
@@ -114,6 +115,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.ReparentTabletResponse
 		Error    error
 	}
+	RunHealthCheckResults            map[string]error
 	SetWritableResults               map[string]error
 	ShardReplicationPositionsResults map[string]struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
@@ -123,6 +125,18 @@ type VtctldClient struct {
 	StopReplicationResults            map[string]error
 	TabletExternallyReparentedResults map[string]struct {
 		Response *vtctldatapb.TabletExternallyReparentedResponse
+		Error    error
+	}
+	ValidateKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateKeyspaceResponse
+		Error    error
+	}
+	ValidateSchemaKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateSchemaKeyspaceResponse
+		Error    error
+	}
+	ValidateVersionKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateVersionKeyspaceResponse
 		Error    error
 	}
 }
@@ -141,12 +155,10 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 	}
 
 	ks := &topodatapb.Keyspace{
-		ShardingColumnName: req.ShardingColumnName,
-		ShardingColumnType: req.ShardingColumnType,
-		ServedFroms:        req.ServedFroms,
-		KeyspaceType:       req.Type,
-		BaseKeyspace:       req.BaseKeyspace,
-		SnapshotTime:       req.SnapshotTime,
+		ServedFroms:  req.ServedFroms,
+		KeyspaceType: req.Type,
+		BaseKeyspace: req.BaseKeyspace,
+		SnapshotTime: req.SnapshotTime,
 	}
 
 	return &vtctldatapb.CreateKeyspaceResponse{
@@ -413,6 +425,24 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
 }
 
+// PingTablet is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
+	if fake.PingTabletResults == nil {
+		return nil, fmt.Errorf("%w: PingTabletResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.PingTabletResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.PingTabletResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
 // PlannedReparentShard is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.PlannedReparentShardResponse, error) {
 	if fake.PlannedReparentShardResults == nil {
@@ -500,6 +530,24 @@ func (fake *VtctldClient) ReparentTablet(ctx context.Context, req *vtctldatapb.R
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
+// RunHealthCheck is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldatapb.RunHealthCheckResponse, error) {
+	if fake.RunHealthCheckResults == nil {
+		return nil, fmt.Errorf("%w: RunHealthCheckResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.RunHealthCheckResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.RunHealthCheckResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
 // SetWritable is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest, opts ...grpc.CallOption) (*vtctldatapb.SetWritableResponse, error) {
 	if fake.SetWritableResults == nil {
@@ -576,6 +624,48 @@ func (fake *VtctldClient) TabletExternallyReparented(ctx context.Context, req *v
 
 	key := topoproto.TabletAliasString(req.Tablet)
 	if result, ok := fake.TabletExternallyReparentedResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateKeyspace(ctx context.Context, req *vtctldatapb.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	if fake.ValidateKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateKeyspaceResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateSchemaKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	if fake.ValidateSchemaKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateSchemaKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateSchemaKeyspaceResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateVersionKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateVersionKeyspace(ctx context.Context, req *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	if fake.ValidateVersionKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateVersionKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateVersionKeyspaceResults[key]; ok {
 		return result.Response, result.Error
 	}
 

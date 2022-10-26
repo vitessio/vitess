@@ -19,17 +19,20 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -81,10 +84,9 @@ var (
 // vtctlservicepb.VtctldServer, tests will need to indirect that call through an
 // extra layer rather than passing the function identifier directly, e.g.:
 //
-//		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
-//			...
-//		}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
-//
+//	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
+//		...
+//	}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
 func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc tmclient.TabletManagerClient, newVtctldServerFn func(ts *topo.Server) vtctlservicepb.VtctldServer) vtctlservicepb.VtctldServer {
 	tmclientFactoryLock.Lock()
 	defer tmclientFactoryLock.Unlock()
@@ -118,12 +120,54 @@ func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc t
 
 	// Be (mostly, we can't help concurrent goroutines not using this function)
 	// atomic with our mutation of the global TabletManagerProtocol pointer.
-	oldProto := *tmclient.TabletManagerProtocol
-	defer func() { *tmclient.TabletManagerProtocol = oldProto }()
-
-	*tmclient.TabletManagerProtocol = protocol
+	reset := setTMClientProtocol(protocol)
+	defer reset()
 
 	return newVtctldServerFn(ts)
+}
+
+const (
+	fsName                   = "go.vt.vtctl.grpcvtctldserver.testutil"
+	tmclientProtocolFlagName = "tablet_manager_protocol"
+)
+
+var fs *pflag.FlagSet
+
+// N.B. we cannot use tmclienttest.SetProtocol because it trips the race
+// detector because of how many grpcvtctldserver tests run in parallel.
+func setTMClientProtocol(protocol string) (reset func()) {
+	switch oldVal, err := fs.GetString(tmclientProtocolFlagName); err {
+	case nil:
+		reset = func() { setTMClientProtocol(oldVal) }
+	default:
+		log.Errorf("failed to get string value for flag %q: %v", tmclientProtocolFlagName, err)
+		reset = func() {}
+	}
+
+	if err := fs.Set(tmclientProtocolFlagName, protocol); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, tmclientProtocolFlagName, protocol, err)
+		reset = func() {}
+	}
+
+	return reset
+}
+
+func init() {
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{fsName}
+	defer func() { os.Args = tmp }()
+
+	// do this once at import-time before any tests run.
+	servenv.OnParseFor(fsName, func(_fs *pflag.FlagSet) {
+		fs = _fs
+		if fs.Lookup(tmclientProtocolFlagName) != nil {
+			return
+		}
+
+		tmclient.RegisterFlags(fs)
+	})
+	servenv.ParseFlags(fsName)
 }
 
 // TabletManagerClient implements the tmclient.TabletManagerClient interface
@@ -170,6 +214,8 @@ type TabletManagerClient struct {
 		Response *hk.HookResult
 		Error    error
 	}
+	// FullStatus result
+	FullStatusResult *replicationdatapb.FullStatus
 	// keyed by tablet alias.
 	GetPermissionsDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -275,7 +321,6 @@ type TabletManagerClient struct {
 	StopReplicationAndGetStatusDelays map[string]time.Duration
 	// keyed by tablet alias.
 	StopReplicationAndGetStatusResults map[string]struct {
-		Status     *replicationdatapb.Status
 		StopStatus *replicationdatapb.StopReplicationStatus
 		Error      error
 	}
@@ -330,8 +375,8 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
-	if tablet.Type == topodatapb.TabletType_PRIMARY && !allowPrimary {
+func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
+	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
 		return nil, fmt.Errorf("cannot backup primary with allowPrimary=false")
 	}
 
@@ -443,7 +488,7 @@ func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topo
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	if fake.ExecuteFetchAsAppResults == nil {
 		return nil, fmt.Errorf("%w: no ExecuteFetchAsApp results on fake TabletManagerClient", assert.AnError)
 	}
@@ -467,7 +512,7 @@ func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if fake.ExecuteFetchAsDbaResults == nil {
 		return nil, fmt.Errorf("%w: no ExecuteFetchAsDba results on fake TabletManagerClient", assert.AnError)
 	}
@@ -512,6 +557,19 @@ func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topoda
 	}
 
 	return nil, fmt.Errorf("%w: no ExecuteHook result set for tablet %s", assert.AnError, key)
+}
+
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	if fake.FullStatusResult != nil {
+		return fake.FullStatusResult, nil
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	return nil, fmt.Errorf("no output set for FullStatus")
 }
 
 // GetPermission is part of the tmclient.TabletManagerClient interface.
@@ -559,7 +617,7 @@ func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topoda
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fake.GetSchemaResults == nil {
 		return nil, assert.AnError
 	}
@@ -1123,13 +1181,13 @@ func (fake *TabletManagerClient) StopReplication(ctx context.Context, tablet *to
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient
 // interface.
-func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
+func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
 	if fake.StopReplicationAndGetStatusResults == nil {
-		return nil, nil, assert.AnError
+		return nil, assert.AnError
 	}
 
 	if tablet.Alias == nil {
-		return nil, nil, assert.AnError
+		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -1138,7 +1196,7 @@ func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context
 		if delay, ok := fake.StopReplicationAndGetStatusDelays[key]; ok {
 			select {
 			case <-ctx.Done():
-				return nil, nil, ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(delay):
 				// proceed to results
 			}
@@ -1146,10 +1204,10 @@ func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context
 	}
 
 	if result, ok := fake.StopReplicationAndGetStatusResults[key]; ok {
-		return result.Status, result.StopStatus, result.Error
+		return result.StopStatus, result.Error
 	}
 
-	return nil, nil, assert.AnError
+	return nil, assert.AnError
 }
 
 // WaitForPosition is part of the tmclient.TabletManagerClient interface.

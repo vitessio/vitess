@@ -21,14 +21,15 @@ package vtexplain
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/discovery"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -38,11 +39,18 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (
-	batchInterval = flag.Duration("batch-interval", 10*time.Millisecond, "Interval between logical time slots.")
+	batchInterval = 10 * time.Millisecond
 )
+
+func init() {
+	servenv.OnParseFor("vtexplain", func(fs *pflag.FlagSet) {
+		fs.DurationVar(&batchInterval, "batch-interval", 10*time.Millisecond, "Interval between logical time slots.")
+	})
+}
 
 const (
 	vtexplainCell = "explainCell"
@@ -289,7 +297,7 @@ func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
 			// Reset the global time simulator unless there's an open transaction
 			// in the session from the previous statement.
 			if vte.vtgateSession == nil || !vte.vtgateSession.GetInTransaction() {
-				vte.batchTime = sync2.NewBatcher(*batchInterval)
+				vte.batchTime = sync2.NewBatcher(batchInterval)
 			}
 			log.V(100).Infof("explain %s", sql)
 			e, err := vte.explain(sql)
@@ -390,7 +398,7 @@ func (vte *VTExplain) specialHandlingOfSavepoints(q *MysqlQuery) error {
 		vte.spMap[sp.Name.String()] = spName
 		vte.spCount++
 	}
-	sp.Name = sqlparser.NewColIdent(spName)
+	sp.Name = sqlparser.NewIdentifierCI(spName)
 	q.SQL = sqlparser.String(sp)
 
 	return nil

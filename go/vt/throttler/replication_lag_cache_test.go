@@ -19,6 +19,8 @@ package throttler
 import (
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 )
 
 // TestReplicationLagCache tests that the ring buffer in "replicationLagHistory"
@@ -27,7 +29,7 @@ import (
 // max_replication_lag_module_test.go.
 func TestReplicationLagCache(t *testing.T) {
 	c := newReplicationLagCache(2)
-	r1Key := tabletStats(r1, 1).Key
+	r1Key := discovery.TabletToMapKey(tabletStats(r1, 1).Tablet)
 
 	// If there is no entry yet, a zero struct is returned.
 	zeroEntry := c.atOrAfter(r1Key, sinceZero(0*time.Second))
@@ -73,7 +75,7 @@ func TestReplicationLagCache(t *testing.T) {
 
 func TestReplicationLagCache_SortByLag(t *testing.T) {
 	c := newReplicationLagCache(2)
-	r1Key := tabletStats(r1, 1).Key
+	r1Key := discovery.TabletToMapKey(tabletStats(r1, 1).Tablet)
 
 	c.add(lagRecord(sinceZero(1*time.Second), r1, 30))
 	c.sortByLag(1 /* ignoreNSlowestReplicas */, 30 /* minimumReplicationLag */)

@@ -124,15 +124,11 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner_version", "Gen4Fallback")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version", "Gen4Fallback")
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
 		return m.Run()
 	}()
 	os.Exit(exitCode)

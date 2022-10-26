@@ -15,7 +15,31 @@
 MAKEFLAGS = -s
 GIT_STATUS := $(shell git status --porcelain)
 
-export GOBIN=$(PWD)/bin
+ifndef GOARCH
+export GOARCH=$(go env GOARCH)
+endif
+
+# This is where Go installs binaries when you run `go install`. By default this
+# is $GOPATH/bin. It is better to try to avoid setting this globally, because
+# Go will complain if you try to cross-install while this is set.
+#
+# GOBIN=
+
+ifndef GOOS
+export GOOS=$(go env GOOS)
+endif
+
+# GOPATH is the root of the Golang installation. `bin` is nested under here. In
+# development environments, this is usually $HOME/go. In production and Docker
+# environments, this is usually /go.
+ifndef GOPATH
+export GOPATH=$(go env GOROOT)
+endif
+
+# This governs where Vitess binaries are installed during `make install` and
+# `make cross-install`. Typically for production builds we set this to /vt.
+# PREFIX=
+
 export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
@@ -37,19 +61,13 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+# This should be the root of the vitess Git directory.
 ifndef VTROOT
 export VTROOT=${PWD}
 endif
 
-# We now have CGO code in the build which throws warnings with newer gcc builds.
-# See: https://github.com/mattn/go-sqlite3/issues/803
-# Work around by dropping optimization level from default -O2.
-# Safe, since this code isn't performance critical.
-export CGO_CFLAGS := -O1
-
-# regenerate rice-box.go when any of the .cnf files change
-embed_config:
-	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go && go build .
+# This is where Go will install binaries in response to `go build`.
+export VTROOTBIN=${VTROOT}/bin
 
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
@@ -57,8 +75,9 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
-	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+	go build -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-o ${VTROOTBIN} ./go/...
 
 # build the vitess binaries statically
 build:
@@ -66,12 +85,18 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	# build all the binaries by default with CGO disabled
-	CGO_ENABLED=0 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
-	# embed local resources in the vttablet executable
-	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+	# build all the binaries by default with CGO disabled.
+	# Binaries will be placed in ${VTROOTBIN}.
+	CGO_ENABLED=0 go build \
+		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -o ${VTROOTBIN} ./go/...
+
 	# build vtorc with CGO, because it depends on sqlite
-	CGO_ENABLED=1 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
+	CGO_ENABLED=1 go build \
+		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -o ${VTROOTBIN} ./go/cmd/vtorc/...
 
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
@@ -81,17 +106,20 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	# In order to cross-compile, go install requires GOBIN to be unset
-	export GOBIN=""
-	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
-	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
-	# unset GOOS and embed local resources in the vttablet executable
-	if [ -d /go/bin ]; then
-		# Probably in the bootstrap container
-		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=/go/bin/${GOOS}_${GOARCH}/vttablet)
-	else
-		(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+
+	# For the specified GOOS + GOARCH, build all the binaries by default
+	# with CGO disabled. Binaries will be placed in
+	# ${VTROOTBIN}/${GOOS}_${GOARG}.
+	mkdir -p ${VTROOTBIN}/${GOOS}_${GOARCH}
+	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build         \
+		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -o ${VTROOTBIN}/${GOOS}_${GOARCH} ./go/...
+
+	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
+		echo "Missing vttablet at: ${VTROOTBIN}/${GOOS}_${GOARCH}." && exit; \
 	fi
+
 	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
@@ -99,7 +127,11 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
+	go build -trimpath \
+		$(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-gcflags -'N -l' \
+		-o ${VTROOTBIN} ./go/...
 
 # install copies the files needed to run Vitess into the given directory tree.
 # This target is optimized for docker images. It only installs the files needed for running vitess in docker
@@ -107,21 +139,21 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOTBIN}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Will only work inside the docker bootstrap for now
 cross-install: cross-build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	# Still no vtorc for cross-compile
-	cp "/go/bin/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
@@ -151,14 +183,18 @@ visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
+	go run ./go/tools/asthelpergen/main \
+		--in ./go/vt/sqlparser \
+		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
+		--except "*ColName"
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
-		-in ./go/... \
-	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
-	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
-	  	-gen vitess.io/vitess/go/sqltypes.Result
+		--in ./go/... \
+		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
+		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
+		--gen vitess.io/vitess/go/sqltypes.Result
 
 astfmtgen:
 	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
@@ -224,9 +260,9 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
-	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
+	GOBIN=$(VTROOTBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
+	GOBIN=$(VTROOTBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
+	GOBIN=$(VTROOTBIN) go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -240,13 +276,13 @@ endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	$(VTROOT)/bin/protoc \
-		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
-		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
-		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
+		--go_out=. --plugin protoc-gen-go="${VTROOTBIN}/protoc-gen-go" \
+		--go-grpc_out=. --plugin protoc-gen-go-grpc="${VTROOTBIN}/protoc-gen-go-grpc" \
+		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${VTROOTBIN}/protoc-gen-go-vtproto" \
 		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
-		-I${PWD}/dist/vt-protoc-3.19.4/include:proto $(PROTO_SRCS)
+		-I${PWD}/dist/vt-protoc-21.3/include:proto $(PROTO_SRCS)
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
 
@@ -256,7 +292,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=9
+BOOTSTRAP_VERSION=11.1
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -367,10 +403,10 @@ install_k8s-code-generator: tools/tools.go go.mod
 	go install k8s.io/code-generator/cmd/lister-gen
 	go install k8s.io/code-generator/cmd/informer-gen
 
-DEEPCOPY_GEN=$(GOBIN)/deepcopy-gen
-CLIENT_GEN=$(GOBIN)/client-gen
-LISTER_GEN=$(GOBIN)/lister-gen
-INFORMER_GEN=$(GOBIN)/informer-gen
+DEEPCOPY_GEN=$(VTROOTBIN)/deepcopy-gen
+CLIENT_GEN=$(VTROOTBIN)/client-gen
+LISTER_GEN=$(VTROOTBIN)/lister-gen
+INFORMER_GEN=$(VTROOTBIN)/informer-gen
 
 GEN_BASE_DIR ?= vitess.io/vitess/go/vt/topo/k8stopo
 
@@ -425,7 +461,7 @@ web_bootstrap:
 
 # Do a production build of the vtctld UI.
 # This target needs to be manually run every time any file within web/vtctld2/app
-# is modified to regenerate rice-box.go
+# is modified to regenerate assets.
 web_build: web_bootstrap
 	./tools/web_build.sh
 
@@ -455,4 +491,7 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"
+	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
+
+install_kubectl_kind:
+	./tools/get_kubectl_kind.sh

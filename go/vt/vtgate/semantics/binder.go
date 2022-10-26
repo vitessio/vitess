@@ -113,26 +113,33 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		if deps.typ != nil {
 			b.typer.setTypeFor(node, *deps.typ)
 		}
-	case *sqlparser.FuncExpr:
-		// need special handling so that any lingering `*` expressions are bound to all local tables
-		if len(node.Exprs) != 1 {
-			break
-		}
-		if _, isStar := node.Exprs[0].(*sqlparser.StarExpr); !isStar {
-			break
-		}
-		scope := b.scoper.currentScope()
-		var ts TableSet
-		for _, table := range scope.tables {
-			expr := table.getExpr()
-			if expr != nil {
-				ts.MergeInPlace(b.tc.tableSetFor(expr))
-			}
-		}
-		b.recursive[node] = ts
-		b.direct[node] = ts
+	case *sqlparser.CountStar:
+		b.bindCountStar(node)
 	}
 	return nil
+}
+
+func (b *binder) bindCountStar(node *sqlparser.CountStar) {
+	scope := b.scoper.currentScope()
+	var ts TableSet
+	for _, tbl := range scope.tables {
+		switch tbl := tbl.(type) {
+		case *vTableInfo:
+			for _, col := range tbl.cols {
+				if sqlparser.EqualsExpr(node, col) {
+					ts.MergeInPlace(b.recursive[col])
+				}
+			}
+		default:
+			expr := tbl.getExpr()
+			if expr != nil {
+				setFor := b.tc.tableSetFor(expr)
+				ts.MergeInPlace(setFor)
+			}
+		}
+	}
+	b.recursive[node] = ts
+	b.direct[node] = ts
 }
 
 func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
@@ -154,7 +161,7 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 		node.Qualifier = name
 	} else {
 		node.Qualifier = sqlparser.TableName{
-			Name: sqlparser.NewTableIdent(alias.String()),
+			Name: sqlparser.NewIdentifierCS(alias.String()),
 		}
 	}
 	deps, err = b.resolveColumn(node, currentScope, false)

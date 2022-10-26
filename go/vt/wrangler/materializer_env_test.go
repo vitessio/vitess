@@ -28,14 +28,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type testMaterializerEnv struct {
@@ -194,10 +195,10 @@ func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
 	return tmc.getSchemaCounts[key]
 }
 
-func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
-	for _, table := range tables {
+	for _, table := range request.Tables {
 		// TODO: Add generalized regexps if needed for test purposes.
 		if table == "/.*/" {
 			// Special case of all tables in keyspace.
@@ -250,9 +251,9 @@ func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, table
 	return qrs[0].result, nil
 }
 
-func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	// Reuse VReplicationExec
-	return tmc.VReplicationExec(ctx, tablet, string(query))
+	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
 }
 
 func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
@@ -277,7 +278,11 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 	stmts := strings.Split(change.SQL, ";")
 
 	for _, stmt := range stmts {
-		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(stmt), 0, false, true)
+		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:        []byte(stmt),
+			MaxRows:      0,
+			ReloadSchema: true,
+		})
 		if err != nil {
 			return nil, err
 		}

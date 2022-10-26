@@ -125,7 +125,7 @@ func loadMessageInfo(ta *Table, comment string) error {
 
 	// make sure required columns exist in the table schema
 	for _, col := range requiredCols {
-		num := ta.FindColumn(sqlparser.NewColIdent(col))
+		num := ta.FindColumn(sqlparser.NewIdentifierCI(col))
 		if num == -1 {
 			return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
 		}
@@ -137,7 +137,7 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if len(specifiedCols) > 0 {
 		// make sure that all the specified columns exist in the table schema
 		for _, col := range specifiedCols {
-			num := ta.FindColumn(sqlparser.NewColIdent(col))
+			num := ta.FindColumn(sqlparser.NewIdentifierCI(col))
 			if num == -1 {
 				return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
 			}

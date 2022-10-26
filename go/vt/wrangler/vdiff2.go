@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -36,18 +37,18 @@ type VDiffOutput struct {
 	Err       error
 }
 
-func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, command vdiff2.VDiffAction, subCommand, uuid string,
+func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, action vdiff2.VDiffAction, actionArg, uuid string,
 	options *tabletmanagerdata.VDiffOptions) (*VDiffOutput, error) {
 
-	log.Infof("VDiff2 called with %s, %s, %s, %s, %s, %+v", keyspace, workflowName, command, subCommand, uuid, options)
+	log.Infof("VDiff2 called with %s, %s, %s, %s, %s, %+v", keyspace, workflowName, action, actionArg, uuid, options)
 
 	req := &tabletmanagerdata.VDiffRequest{
-		Keyspace:   keyspace,
-		Workflow:   workflowName,
-		Command:    string(command),
-		SubCommand: subCommand,
-		Options:    options,
-		VdiffUuid:  uuid,
+		Keyspace:  keyspace,
+		Workflow:  workflowName,
+		Action:    string(action),
+		ActionArg: actionArg,
+		Options:   options,
+		VdiffUuid: uuid,
 	}
 	output := &VDiffOutput{
 		Request:   req,
@@ -59,6 +60,10 @@ func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, c
 	if err != nil {
 		return nil, err
 	}
+	if action == vdiff2.CreateAction && ts.frozen {
+		return nil, fmt.Errorf("invalid VDiff run: writes have been already been switched for workflow %s.%s",
+			keyspace, workflowName)
+	}
 
 	output.Err = ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		resp, err := wr.tmc.VDiff(ctx, target.GetPrimary().Tablet, req)
@@ -68,10 +73,9 @@ func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, c
 		return err
 	})
 	if output.Err != nil {
-		log.Errorf("Error in command %s: %w", command, output.Err)
-		return nil, err
+		log.Errorf("Error executing action %s: %v", action, output.Err)
+		return nil, output.Err
 	}
-	log.Infof("Output for %s is %+v", command, output)
 
 	return output, nil
 }

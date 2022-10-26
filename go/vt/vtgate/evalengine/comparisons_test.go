@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -45,13 +46,21 @@ type testCase struct {
 }
 
 var (
-	T = true
-	F = false
+	T            = true
+	F            = false
+	collationEnv *collations.Environment
 )
+
+func init() {
+	// We require MySQL 8.0 collations for the comparisons in the tests
+	mySQLVersion := "8.0.0"
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
+	collationEnv = collations.NewEnvironment(mySQLVersion)
+}
 
 func defaultCollation() collations.TypedCollation {
 	return collations.TypedCollation{
-		Collation:    collations.Local().LookupByName("utf8mb4_bin").ID(),
+		Collation:    collationEnv.LookupByName("utf8mb4_bin").ID(),
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireASCII,
 	}
@@ -436,6 +445,36 @@ func TestCompareNumerics(t *testing.T) {
 			v1:   NewColumn(0, defaultCollation()), v2: NewColumn(1, defaultCollation()),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("1.000101"), sqltypes.NewFloat64(1.00101)},
+		},
+		{
+			name: "different int types are equal for 8 bit",
+			v1:   NewColumn(0, defaultCollation()), v2: NewLiteralInt(0),
+			out: &T, op: sqlparser.EqualOp,
+			row: []sqltypes.Value{sqltypes.NewInt8(0)},
+		},
+		{
+			name: "different int types are equal for 32 bit",
+			v1:   NewColumn(0, defaultCollation()), v2: NewLiteralInt(0),
+			out: &T, op: sqlparser.EqualOp,
+			row: []sqltypes.Value{sqltypes.NewInt32(0)},
+		},
+		{
+			name: "different int types are equal for float32 bit",
+			v1:   NewColumn(0, defaultCollation()), v2: NewLiteralFloat(1.0),
+			out: &T, op: sqlparser.EqualOp,
+			row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.0"))},
+		},
+		{
+			name: "different unsigned int types are equal for 8 bit",
+			v1:   NewColumn(0, defaultCollation()), v2: NewLiteralInt(0),
+			out: &T, op: sqlparser.EqualOp,
+			row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint8, []byte("0"))},
+		},
+		{
+			name: "different unsigned int types are equal for 32 bit",
+			v1:   NewColumn(0, defaultCollation()), v2: NewLiteralInt(0),
+			out: &T, op: sqlparser.EqualOp,
+			row: []sqltypes.Value{sqltypes.NewUint32(0)},
 		},
 	}
 
@@ -1053,7 +1092,7 @@ func TestNullComparisons(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
-	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
+	collation := collationEnv.LookupByName("utf8mb4_general_ci").ID()
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
@@ -1155,7 +1194,7 @@ func TestNullsafeCompare(t *testing.T) {
 }
 
 func getCollationID(collation string) collations.ID {
-	id, _ := collations.Local().LookupID(collation)
+	id, _ := collationEnv.LookupID(collation)
 	return id
 }
 

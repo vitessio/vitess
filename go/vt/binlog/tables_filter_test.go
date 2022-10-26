@@ -54,7 +54,7 @@ func TestTablesFilterPass(t *testing.T) {
 		Position: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
+	f := tablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -84,7 +84,7 @@ func TestTablesFilterSkip(t *testing.T) {
 		Position: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
+	f := tablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -114,7 +114,7 @@ func TestTablesFilterDDL(t *testing.T) {
 		Position: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
+	f := tablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -150,7 +150,7 @@ func TestTablesFilterMalformed(t *testing.T) {
 		Position: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
+	f := tablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})

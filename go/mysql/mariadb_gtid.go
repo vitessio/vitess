@@ -67,6 +67,10 @@ func parseMariadbGTIDSet(s string) (GTIDSet, error) {
 	gtidStrings := strings.Split(s, ",")
 	gtidSet := make(MariadbGTIDSet, len(gtidStrings))
 	for _, gtidString := range gtidStrings {
+		gtidString = strings.TrimSpace(gtidString)
+		if gtidString == "" {
+			continue
+		}
 		gtid, err := parseMariadbGTID(gtidString)
 		if err != nil {
 			return nil, err
@@ -233,7 +237,7 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	return newSet
 }
 
-//Last returns the last gtid
+// Last returns the last gtid
 func (gtidSet MariadbGTIDSet) Last() string {
 	// Sort domains so the string format is deterministic.
 	domains := make([]uint32, 0, len(gtidSet))

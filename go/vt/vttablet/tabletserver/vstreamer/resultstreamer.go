@@ -37,7 +37,7 @@ type resultStreamer struct {
 
 	cp        dbconfigs.Connector
 	query     string
-	tableName sqlparser.TableIdent
+	tableName sqlparser.IdentifierCS
 	send      func(*binlogdatapb.VStreamResultsResponse) error
 	vse       *Engine
 	pktsize   PacketSizer
@@ -72,7 +72,10 @@ func (rs *resultStreamer) Stream() error {
 		return err
 	}
 	defer conn.Close()
-	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.tableName.String(), rs.query)
+	gtid, rotatedLog, err := conn.streamWithSnapshot(rs.ctx, rs.tableName.String(), rs.query)
+	if rotatedLog {
+		rs.vse.vstreamerFlushedBinlogs.Add(1)
+	}
 	if err != nil {
 		return err
 	}

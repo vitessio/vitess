@@ -52,6 +52,8 @@ type VReplStream struct {
 	pos                  string
 	timeUpdated          int64
 	timeHeartbeat        int64
+	timeThrottled        int64
+	componentThrottled   string
 	transactionTimestamp int64
 	state                string
 	message              string
@@ -60,13 +62,12 @@ type VReplStream struct {
 }
 
 // livenessTimeIndicator returns a time indicator for last known healthy state.
-// vreplication uses two indicators: time_updates and time_heartbeat. Either one making progress is good news. The greater of the two indicates the
-// latest progress. Note that both indicate timestamp of events in the binary log stream, rather than time "now".
-// A vreplication stream health is determined by "is there any progress in either of the two counters in the past X minutes"
+// vreplication uses three indicators:
+// - transaction_timestamp
+// - time_heartbeat
+// - time_throttled.
+// Updating any of them, also updates time_updated, indicating liveness.
 func (v *VReplStream) livenessTimeIndicator() int64 {
-	if v.timeHeartbeat > v.timeUpdated {
-		return v.timeHeartbeat
-	}
 	return v.timeUpdated
 }
 
@@ -554,7 +555,8 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
-	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY")
+	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
+		int64(binlogdatapb.VReplicationWorkflowType_OnlineDDL), int64(binlogdatapb.VReplicationWorkflowSubType_None))
 
 	return ig.String(), nil
 }

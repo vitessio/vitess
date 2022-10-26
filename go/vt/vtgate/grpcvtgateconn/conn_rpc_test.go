@@ -17,16 +17,17 @@ limitations under the License.
 package grpcvtgateconn
 
 import (
-	"flag"
+	"context"
 	"io"
 	"net"
 	"os"
 	"testing"
 
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"context"
-
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -104,7 +105,14 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	// Create a Go RPC client connecting to the server
 	ctx := context.Background()
-	flag.Set("grpc_auth_static_client_creds", f.Name())
+	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+	grpcclient.RegisterFlags(fs)
+
+	err = fs.Parse([]string{
+		"--grpc_auth_static_client_creds",
+		f.Name(),
+	})
+	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
 	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -137,7 +145,14 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	// Create a Go RPC client connecting to the server
 	ctx = context.Background()
-	flag.Set("grpc_auth_static_client_creds", f.Name())
+	fs = pflag.NewFlagSet("", pflag.ContinueOnError)
+	grpcclient.RegisterFlags(fs)
+
+	err = fs.Parse([]string{
+		"--grpc_auth_static_client_creds",
+		f.Name(),
+	})
+	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
 	client, err = dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)

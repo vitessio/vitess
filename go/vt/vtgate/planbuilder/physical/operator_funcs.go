@@ -130,7 +130,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abs
 			}
 			return nil, err
 		}
-		newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
+		newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +157,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 		var toTheLeft []bool
 		var lhs, rhs []*sqlparser.ColName
 		for _, col := range columns {
-			col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
+			col.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
 			if ctx.SemTable.RecursiveDeps(col).IsSolvedBy(op.LHS.TableID()) {
 				lhs = append(lhs, col)
 				toTheLeft = append(toTheLeft, true)
@@ -220,7 +220,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 		if len(columns) == 0 {
 			return op, nil, nil
 		}
-		for _, col := range columns { ///select 1 from (select * from user join user_extra) t join unsharded on t.id = unsharded.apa
+		for _, col := range columns {
 			i, err := op.findOutputColumn(col)
 			if err != nil {
 				return nil, nil, err
@@ -350,7 +350,7 @@ func BreakExpressionInLHSandRHS(
 				return false
 			}
 			if deps.IsSolvedBy(lhs) {
-				node.Qualifier.Qualifier = sqlparser.NewTableIdent("")
+				node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
 				columns = append(columns, node)
 				bvName := node.CompliantName()
 				bvNames = append(bvNames, bvName)

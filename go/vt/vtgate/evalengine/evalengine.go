@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
@@ -106,6 +107,14 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 	return num.float64(), nil
 }
 
+func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
+	lit, err := translateLiteral(literal, nil)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	return lit.Val.Value(), nil
+}
+
 // ToNative converts Value to a native go type.
 // Decimal is returned as []byte.
 func ToNative(v sqltypes.Value) (any, error) {
@@ -129,6 +138,11 @@ func ToNative(v sqltypes.Value) (any, error) {
 }
 
 func compareNumeric(v1, v2 *EvalResult) (int, error) {
+	// upcast all <64 bit numeric types to 64 bit, e.g. int8 -> int64, uint8 -> uint64, float32 -> float64
+	// so we don't have to consider integer types which aren't 64 bit
+	v1.upcastNumeric()
+	v2.upcastNumeric()
+
 	// Equalize the types the same way MySQL does
 	// https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 	switch v1.typeof() {
@@ -215,26 +229,17 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 	case sqltypes.Decimal:
 		return v1.decimal().Cmp(v2.decimal()), nil
 	}
-
-	// v1>v2
 	return 1, nil
 }
 
 func parseDate(expr *EvalResult) (t time.Time, err error) {
 	switch expr.typeof() {
 	case sqltypes.Date:
-		t, err = time.Parse("2006-01-02", expr.string())
+		t, err = sqlparser.ParseDate(expr.string())
 	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = time.Parse("2006-01-02 15:04:05", expr.string())
+		t, err = sqlparser.ParseDateTime(expr.string())
 	case sqltypes.Time:
-		t, err = time.Parse("15:04:05", expr.string())
-		if err == nil {
-			now := time.Now()
-			// setting the date to today's date, because we use AddDate on t
-			// which is "0000-01-01 xx:xx:xx", we do minus one on the month
-			// and day to take into account the 01 in both month and day of t
-			t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
-		}
+		t, err = sqlparser.ParseTime(expr.string())
 	}
 	return
 }
@@ -242,26 +247,21 @@ func parseDate(expr *EvalResult) (t time.Time, err error) {
 // matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
 // that does not return an error.
 func matchExprWithAnyDateFormat(expr *EvalResult) (t time.Time, err error) {
-	layouts := []string{"2006-01-02", "2006-01-02 15:04:05", "15:04:05"}
-	for _, layout := range layouts {
-		t, err = time.Parse(layout, expr.string())
-		if err == nil {
-			if layout == "15:04:05" {
-				now := time.Now()
-				// setting the date to today's date, because we use AddDate on t
-				// which is "0000-01-01 xx:xx:xx", we do minus one on the month
-				// and day to take into account the 01 in both month and day of t
-				t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
-			}
-			return
-		}
+	t, err = sqlparser.ParseDate(expr.string())
+	if err == nil {
+		return
 	}
+	t, err = sqlparser.ParseDateTime(expr.string())
+	if err == nil {
+		return
+	}
+	t, err = sqlparser.ParseTime(expr.string())
 	return
 }
 
 // Date comparison based on:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-// 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
 func compareDates(l, r *EvalResult) (int, error) {
 	lTime, err := parseDate(l)
 	if err != nil {
@@ -312,7 +312,7 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 }
 
 // More on string collations coercibility on MySQL documentation:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
 func compareStrings(l, r *EvalResult) int {
 	coll, err := mergeCollations(l, r)
 	if err != nil {

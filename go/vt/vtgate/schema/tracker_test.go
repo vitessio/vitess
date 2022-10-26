@@ -106,34 +106,34 @@ func TestTracking(t *testing.T) {
 		deltas: []delta{d0, d1},
 		exp: map[string][]vindexes.Column{
 			"t1": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32},
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"t2": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"prior": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32}},
 		},
 	}, {
 		tName:  "delete t1 and prior, updated t2 and new t3",
 		deltas: []delta{d0, d1, d2},
 		exp: map[string][]vindexes.Column{
 			"t2": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"t3": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
 		},
 	}, {
 		tName:  "new t4",
 		deltas: []delta{d0, d1, d2, d3},
 		exp: map[string][]vindexes.Column{
 			"t2": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"t3": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
 			"t4": {
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 		},
 	},
 	}
@@ -141,7 +141,7 @@ func TestTracking(t *testing.T) {
 		t.Run(fmt.Sprintf("%d - %s", i, tcase.tName), func(t *testing.T) {
 			sbc := sandboxconn.NewSandboxConn(tablet)
 			ch := make(chan *discovery.TabletHealth)
-			tracker := NewTracker(ch, nil)
+			tracker := NewTracker(ch, "")
 			tracker.consumeDelay = 1 * time.Millisecond
 			tracker.Start()
 			defer tracker.Stop()
@@ -210,7 +210,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, nil)
+	tracker := NewTracker(ch, "")
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()

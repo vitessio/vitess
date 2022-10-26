@@ -66,14 +66,14 @@ type Config struct {
 	TopoReadPoolConfig     *RPCPoolConfig
 	WorkflowReadPoolConfig *RPCPoolConfig
 
-	// EmergencyReparentPoolConfig specifies the config for a pool dedicated
-	// solely to EmergencyReparentShard operations. It has the semantics and
+	// EmergencyFailoverPoolConfig specifies the config for a pool dedicated
+	// solely to EmergencyFailoverShard operations. It has the semantics and
 	// defaults of an RW RPCPool.
-	EmergencyReparentPoolConfig *RPCPoolConfig
-	// ReparentPoolConfig specifies the config for a pool shared by
-	// PlannedReparentShard operations. It has the semantics and defaults of an
+	EmergencyFailoverPoolConfig *RPCPoolConfig
+	// FailoverPoolConfig specifies the config for a pool shared by
+	// PlannedFailoverShard operations. It has the semantics and defaults of an
 	// RW RPCPool.
-	ReparentPoolConfig *RPCPoolConfig
+	FailoverPoolConfig *RPCPoolConfig
 
 	SchemaCacheConfig *cache.Config
 
@@ -95,13 +95,13 @@ func (cfg *Config) Type() string { return "cluster.Config" }
 // Set is part of the flag.Value interface. Each flag is parsed according to the
 // following DSN:
 //
-// 		id= // ID or shortname of the cluster.
-//		name= // Name of the cluster.
-// 		discovery= // Name of the discovery implementation
-// 		discovery-.*= // Per-discovery-implementation flags. These are passed to
-//		              // a given discovery implementation's constructor.
-//		vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
-// 		          // to the vtsql package.
+//	id= // ID or shortname of the cluster.
+//	name= // Name of the cluster.
+//	discovery= // Name of the discovery implementation
+//	discovery-.*= // Per-discovery-implementation flags. These are passed to
+//	              // a given discovery implementation's constructor.
+//	vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
+//	          // to the vtsql package.
 func (cfg *Config) Set(value string) error {
 	if cfg.DiscoveryFlagsByImpl == nil {
 		cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
@@ -209,8 +209,8 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoReadPoolConfig     *RPCPoolConfig `json:"topo_read_pool_config"`
 		WorkflowReadPoolConfig *RPCPoolConfig `json:"workflow_read_pool_config"`
 
-		EmergencyReparentPoolConfig *RPCPoolConfig `json:"emergency_reparent_pool_config"`
-		ReparentPoolConfig          *RPCPoolConfig `json:"reparent_pool_config"`
+		EmergencyFailoverPoolConfig *RPCPoolConfig `json:"emergency_failover_pool_config"`
+		FailoverPoolConfig          *RPCPoolConfig `json:"failover_pool_config"`
 
 		SchemaCacheConfig *cache.Config `json:"schema_cache_config"`
 	}{
@@ -225,8 +225,8 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoRWPoolConfig:            defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
 		TopoReadPoolConfig:          defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
 		WorkflowReadPoolConfig:      defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
-		EmergencyReparentPoolConfig: defaultRWPoolConfig.merge(cfg.EmergencyReparentPoolConfig),
-		ReparentPoolConfig:          defaultRWPoolConfig.merge(cfg.ReparentPoolConfig),
+		EmergencyFailoverPoolConfig: defaultRWPoolConfig.merge(cfg.EmergencyFailoverPoolConfig),
+		FailoverPoolConfig:          defaultRWPoolConfig.merge(cfg.FailoverPoolConfig),
 		SchemaCacheConfig:           mergeCacheConfigs(defaultCacheConfig, cfg.SchemaCacheConfig),
 	}
 
@@ -249,8 +249,8 @@ func (cfg Config) Merge(override Config) Config {
 		TopoReadPoolConfig:          cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
 		TopoRWPoolConfig:            cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
 		WorkflowReadPoolConfig:      cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
-		EmergencyReparentPoolConfig: cfg.EmergencyReparentPoolConfig.merge(override.EmergencyReparentPoolConfig),
-		ReparentPoolConfig:          cfg.ReparentPoolConfig.merge(override.ReparentPoolConfig),
+		EmergencyFailoverPoolConfig: cfg.EmergencyFailoverPoolConfig.merge(override.EmergencyFailoverPoolConfig),
+		FailoverPoolConfig:          cfg.FailoverPoolConfig.merge(override.FailoverPoolConfig),
 		SchemaCacheConfig:           mergeCacheConfigs(cfg.SchemaCacheConfig, override.SchemaCacheConfig),
 	}
 

@@ -32,7 +32,7 @@ import (
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -44,7 +44,7 @@ func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 
 func TestReparentCrossCell(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -58,14 +58,12 @@ func TestReparentCrossCell(t *testing.T) {
 
 func TestReparentGraceful(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// Run this to make sure it succeeds.
-	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, false)
-	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
-	assert.Contains(t, strArray[0], "primary") // primary first
+	utils.WaitForReplicationToStart(t, clusterInstance, utils.KeyspaceName, utils.ShardName, len(tablets), true)
 
 	// Perform a graceful reparent operation
 	utils.Prs(t, clusterInstance, tablets[1])
@@ -83,7 +81,7 @@ func TestReparentGraceful(t *testing.T) {
 // TestPRSWithDrainedLaggingTablet tests that PRS succeeds even if we have a lagging drained tablet
 func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -110,7 +108,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 
 func TestReparentReplicaOffline(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -127,7 +125,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 
 func TestReparentAvoid(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
@@ -159,14 +157,14 @@ func TestReparentAvoid(t *testing.T) {
 
 func TestReparentFromOutside(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	reparentFromOutside(t, clusterInstance, false)
 }
 
 func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -255,7 +253,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 
 func TestReparentWithDownReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -298,7 +296,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 
 func TestChangeTypeSemiSync(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -362,7 +360,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 
 func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -377,45 +375,4 @@ func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
 	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
-}
-
-func TestReplicationStatus(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
-
-	// Stop the SQL_THREAD on tablets[1]
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
-	require.NoError(t, err)
-	// Check the replication status on tablets[1] and assert that the IO thread is read to be running and SQL thread is stopped
-	replicationStatus := cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread := utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.True(t, ioThread)
-	require.False(t, sqlThread)
-
-	// Stop replication on tablets[1] and verify that both the threads are reported as not running
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE;`)
-	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.False(t, ioThread)
-	require.False(t, sqlThread)
-
-	// Start replication on tablets[1] and verify that both the threads are reported as running
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
-	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.True(t, ioThread)
-	require.True(t, sqlThread)
-
-	// Stop IO_THREAD on tablets[1] and verify that the IO thread is read to be stopped and SQL thread is running
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE IO_THREAD;`)
-	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.False(t, ioThread)
-	require.True(t, sqlThread)
 }

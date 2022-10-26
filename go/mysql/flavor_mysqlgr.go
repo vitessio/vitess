@@ -93,6 +93,11 @@ func (mysqlGRFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{}
 }
 
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mysqlGRFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	return []string{}
+}
+
 // setReplicationPositionCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{}
@@ -256,6 +261,8 @@ func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorC
 		return ServerVersionAtLeast(serverVersion, 5, 7, 0)
 	case MySQLUpgradeInServerFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	case DynamicRedoLogCapacityFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
 	default:
 		return false, nil
 	}

@@ -3,7 +3,9 @@ Copyright 2021 The Vitess Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -158,10 +160,7 @@ func TestMain(m *testing.M) {
 func TestCFCPrefixQueryNoHash(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -191,7 +190,6 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	// fan out to all when there is no prefix
 	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like '%A' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
-	fmt.Printf("%v", qr.Rows)
 	for i, r := range qr.Rows {
 		assert.Equal(t, fmt.Sprintf("shard-%d", i), r[0].ToString())
 	}
@@ -200,10 +198,8 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 func TestCFCPrefixQueryWithHash(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams := clusterInstance.GetVTParams(sKsMD5)
+
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -245,10 +241,8 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 func TestCFCInsert(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+
+	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

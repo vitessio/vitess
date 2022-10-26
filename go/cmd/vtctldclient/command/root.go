@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
 
@@ -42,6 +43,8 @@ var (
 
 	// Root is the main entrypoint to the vtctldclient CLI.
 	Root = &cobra.Command{
+		Use:   "vtctldclient",
+		Short: "Executes a cluster management command on the remote vtctld server.",
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
@@ -78,6 +81,7 @@ var (
 		// all errors in cobra (just from being output, they still get
 		// propagated).
 		SilenceErrors: true,
+		Version:       servenv.AppVersion.String(),
 	}
 )
 
@@ -93,6 +97,6 @@ func ensureServerArg() error {
 }
 
 func init() {
-	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection")
+	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection (required)")
 	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout for the total command")
 }

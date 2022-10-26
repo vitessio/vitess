@@ -1,0 +1,8 @@
+Usage of zk:
+  -h, --help                           display usage and exit
+      --keep_logs duration             keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration    keep logs for this long (using mtime) (zero to keep forever)
+      --log_rotate_max_size uint       size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --purge_logs_interval duration   how often try to remove old logs (default 1h0m0s)
+      --security_policy string         the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --server string                  server(s) to connect to

@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -182,7 +183,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -196,6 +197,14 @@ func New(t testing.TB) *DB {
 	db.AddQuery("use `fakesqldb`", &sqltypes.Result{})
 	// Return the db.
 	return db
+}
+
+// Name returns the name of the DB.
+func (db *DB) Name() string {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	return db.name
 }
 
 // SetName sets the name of the DB. to differentiate them in tests if needed.
@@ -409,7 +418,8 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	}
 	// Nothing matched.
 	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
-	log.Errorf("Query not found: %s", query)
+	log.Errorf("Query not found: %s:%s", query, debug.Stack())
+
 	return err
 }
 
@@ -582,12 +592,12 @@ func (db *DB) GetQueryCalledNum(query string) int {
 	return num
 }
 
-//QueryLog returns the query log in a semicomma separated string
+// QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
 	return strings.Join(db.querylog, ";")
 }
 
-//ResetQueryLog resets the query log
+// ResetQueryLog resets the query log
 func (db *DB) ResetQueryLog() {
 	db.querylog = nil
 }

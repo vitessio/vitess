@@ -67,7 +67,7 @@ const (
 	updateRowID       = 2
 )
 
-//threadParams is set of params passed into read and write threads
+// threadParams is set of params passed into read and write threads
 type threadParams struct {
 	quit                       bool
 	rpcs                       int        // Number of queries successfully executed.
@@ -227,7 +227,8 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		SchemaSQL: sqlSchema,
 		VSchema:   bt.VSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s",
+	clusterInstance.VtTabletExtraArgs = []string{
+		"--health_check_interval", "1s",
 		"--queryserver-config-transaction-timeout", "20",
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {

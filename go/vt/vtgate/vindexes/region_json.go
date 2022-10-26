@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -107,7 +108,7 @@ func (rv *RegionJSON) NeedsVCursor() bool {
 }
 
 // Map satisfies MultiColumn.
-func (rv *RegionJSON) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (rv *RegionJSON) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
@@ -141,9 +142,9 @@ func (rv *RegionJSON) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]
 }
 
 // Verify satisfies MultiColumn
-func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (rv *RegionJSON) Verify(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
-	destinations, _ := rv.Map(vcursor, rowsColValues)
+	destinations, _ := rv.Map(ctx, vcursor, rowsColValues)
 	for i, dest := range destinations {
 		destksid, ok := dest.(key.DestinationKeyspaceID)
 		if !ok {

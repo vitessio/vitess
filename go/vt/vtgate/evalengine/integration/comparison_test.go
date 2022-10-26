@@ -28,8 +28,18 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
+
+var collationEnv *collations.Environment
+
+func init() {
+	// We require MySQL 8.0 collations for the comparisons in the tests
+	mySQLVersion := "8.0.0"
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
+	collationEnv = collations.NewEnvironment(mySQLVersion)
+}
 
 func perm(a []string, f func([]string)) {
 	perm1(a, f, 0)
@@ -126,7 +136,7 @@ func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
 			} else {
-				remoteCollation = collations.Local().LookupByName(remote.Rows[0][1].ToString()).ID()
+				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString()).ID()
 			}
 		}
 	}
@@ -351,7 +361,7 @@ func TestNumericTypes(t *testing.T) {
 	defer conn.Close()
 
 	for _, rhs := range numbers {
-		compareRemoteExpr(t, conn, fmt.Sprintf("%s", rhs))
+		compareRemoteExpr(t, conn, rhs)
 	}
 }
 
@@ -527,7 +537,7 @@ func TestLargeIntegers(t *testing.T) {
 	var largepi = Pi + Pi
 
 	for pos := 1; pos < len(largepi); pos++ {
-		query := fmt.Sprintf("%s", largepi[:pos])
+		query := largepi[:pos]
 		compareRemoteExpr(t, conn, query)
 
 		query = fmt.Sprintf("-%s", largepi[:pos])
@@ -631,16 +641,20 @@ func TestCaseExprWithPredicate(t *testing.T) {
 }
 
 // HACK: for CASE comparisons, the expression is supposed to decompose like this:
-//		CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
-//			=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
+//
+//	CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
+//		=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
+//
 // See: https://dev.mysql.com/doc/refman/5.7/en/flow-control-functions.html#operator_case
 // However, MySQL does not seem to be using the real `=` operator for some of these comparisons
 // namely, numerical comparisons are coerced into an unsigned form when they shouldn't.
 // Example:
-//		SELECT -1 = 18446744073709551615
-//			=> 0
-//		SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
-//			=> 1
+//
+//	SELECT -1 = 18446744073709551615
+//		=> 0
+//	SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
+//		=> 1
+//
 // This does not happen for other types, which all follow the behavior of the `=` operator,
 // so we're going to assume this is a bug for now.
 func comparisonSkip(a, b string) bool {
@@ -669,5 +683,28 @@ func TestCaseExprWithValue(t *testing.T) {
 			query := fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1)
 			compareRemoteExpr(t, conn, query)
 		}
+	}
+}
+
+func TestCeilandCeiling(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var ceilInputs = []string{
+		"0",
+		"1",
+		"-1",
+		"'1.5'",
+		"NULL",
+		"'ABC'",
+		"1.5e0",
+		"-1.5e0",
+		"9223372036854775810.4",
+		"-9223372036854775810.4",
+	}
+
+	for _, num := range ceilInputs {
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEILING(%s)", num))
 	}
 }

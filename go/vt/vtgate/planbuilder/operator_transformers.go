@@ -86,13 +86,6 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJoin) (logicalPlan, error) {
-	// TODO systay we should move the decision of which join to use to the greedy algorithm,
-	// and thus represented as a queryTree
-	// canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
-	// if err != nil {
-	//	return nil, err
-	// }
-
 	lhs, err := transformToLogicalPlan(ctx, n.LHS, false)
 	if err != nil {
 		return nil, err
@@ -106,23 +99,6 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 		opCode = engine.LeftJoin
 	}
 
-	// if canHashJoin {
-	//	coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	return &hashJoin{
-	//		Left:           lhs,
-	//		Right:          rhs,
-	//		Cols:           n.columns,
-	//		Opcode:         OpCode,
-	//		LHSKey:         lhsInfo.offset,
-	//		RHSKey:         rhsInfo.offset,
-	//		Predicate:      sqlparser.AndExpressions(n.predicates...),
-	//		ComparisonType: coercedType,
-	//		Collation:      lhsInfo.typ.Collation,
-	//	}, nil
-	// }
 	return &joinGen4{
 		Left:       lhs,
 		Right:      rhs,
@@ -134,9 +110,11 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
-	upd, isUpdate := op.Source.(*physical.Update)
-	if isUpdate {
-		return transformUpdatePlan(ctx, op, upd)
+	switch src := op.Source.(type) {
+	case *physical.Update:
+		return transformUpdatePlan(ctx, op, src)
+	case *physical.Delete:
+		return transformDeletePlan(ctx, op, src)
 	}
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
@@ -180,8 +158,10 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, u
 	ast := upd.AST
 	replaceSubQuery(ctx, ast)
 	edml := &engine.DML{
-		Query:            generateQuery(ast),
-		Table:            upd.VTable,
+		Query: generateQuery(ast),
+		Table: []*vindexes.Table{
+			upd.VTable,
+		},
 		OwnedVindexQuery: upd.OwnedVindexQuery,
 		RoutingParameters: &engine.RoutingParameters{
 			Opcode:            op.RouteOpCode,
@@ -205,6 +185,48 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, u
 
 	if op.RouteOpCode != engine.Unsharded && len(upd.ChangedVindexValues) > 0 {
 		primary := upd.VTable.ColumnVindexes[0]
+		e.DML.KsidVindex = primary.Vindex
+		e.DML.KsidLength = len(primary.Columns)
+	}
+
+	return &primitiveWrapper{prim: e}, nil
+}
+
+func transformDeletePlan(ctx *plancontext.PlanningContext, op *physical.Route, del *physical.Delete) (logicalPlan, error) {
+	var vindex vindexes.Vindex
+	var values []evalengine.Expr
+	if op.Selected != nil {
+		vindex = op.Selected.FoundVindex
+		values = op.Selected.Values
+	}
+	ast := del.AST
+	replaceSubQuery(ctx, ast)
+	edml := &engine.DML{
+		Query: generateQuery(ast),
+		Table: []*vindexes.Table{
+			del.VTable,
+		},
+		OwnedVindexQuery: del.OwnedVindexQuery,
+		RoutingParameters: &engine.RoutingParameters{
+			Opcode:            op.RouteOpCode,
+			Keyspace:          op.Keyspace,
+			Vindex:            vindex,
+			Values:            values,
+			TargetDestination: op.TargetDestination,
+		},
+	}
+
+	directives := del.AST.GetParsedComments().Directives()
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
+		edml.MultiShardAutocommit = true
+	}
+	edml.QueryTimeout = queryTimeout(directives)
+
+	e := &engine.Delete{}
+	e.DML = edml
+
+	if op.RouteOpCode != engine.Unsharded && del.OwnedVindexQuery != "" {
+		primary := del.VTable.ColumnVindexes[0]
 		e.DML.KsidVindex = primary.Vindex
 		e.DML.KsidLength = len(primary.Columns)
 	}
@@ -550,7 +572,7 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *physical.Derived
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
 	tblExpr := &sqlparser.AliasedTableExpr{
 		Expr:    derivedTable,
-		As:      sqlparser.NewTableIdent(op.Alias),
+		As:      sqlparser.NewIdentifierCS(op.Alias),
 		Columns: op.ColumnAliases,
 	}
 	selectExprs := sqlparser.SelectExprs{}

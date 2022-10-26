@@ -17,8 +17,10 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"testing"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -29,6 +31,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+func init() {
+	// We require MySQL 8.0 collations for the comparisons in the tests
+	mySQLVersion := "8.0.0"
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
+	collationEnv = collations.NewEnvironment(mySQLVersion)
+}
 
 func TestMemorySortExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
@@ -54,7 +63,7 @@ func TestMemorySortExecute(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -71,7 +80,7 @@ func TestMemorySortExecute(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -110,7 +119,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("order by weight string", func(t *testing.T) {
 
-		err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -133,7 +142,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
-		err := ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -173,7 +182,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -190,7 +199,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -230,7 +239,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 	var results []*sqltypes.Result
 	t.Run("order by collation", func(t *testing.T) {
 		results = nil
-		err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -251,7 +260,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 		ms.OrderBy[0].Desc = true
 		fp.rewind()
 		results = nil
-		err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -274,7 +283,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
-		err := ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -315,7 +324,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -332,7 +341,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -369,7 +378,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+	err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -390,7 +399,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
-	err = ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
+	err = ms.TryStreamExecute(context.Background(), &noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -416,7 +425,7 @@ func TestMemorySortGetFields(t *testing.T) {
 
 	ms := &MemorySort{Input: fp}
 
-	got, err := ms.GetFields(nil, nil)
+	got, err := ms.GetFields(context.Background(), nil, nil)
 	require.NoError(t, err)
 	utils.MustMatch(t, result, got)
 }
@@ -446,7 +455,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 		TruncateColumnCount: 2,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -486,7 +495,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+	err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -531,7 +540,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -548,7 +557,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -601,7 +610,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		}
 
 		testIgnoreMaxMemoryRows = test.ignoreMaxMemoryRows
-		err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		if testIgnoreMaxMemoryRows {
@@ -636,14 +645,14 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 		Input: fp,
 	}
 
-	_, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	_, err := ms.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute err: %v, want %v", err, want)
 	}
 
 	fp.rewind()
-	err = ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		return nil
 	})
 	if err == nil || err.Error() != want {

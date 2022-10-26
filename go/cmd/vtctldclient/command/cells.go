@@ -75,21 +75,27 @@ the same group (alias).`,
 	}
 	// GetCellInfoNames makes a GetCellInfoNames gRPC call to a vtctld.
 	GetCellInfoNames = &cobra.Command{
-		Use:  "GetCellInfoNames",
-		Args: cobra.NoArgs,
-		RunE: commandGetCellInfoNames,
+		Use:                   "GetCellInfoNames",
+		Short:                 "Lists the names of all cells in the cluster.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandGetCellInfoNames,
 	}
 	// GetCellInfo makes a GetCellInfo gRPC call to a vtctld.
 	GetCellInfo = &cobra.Command{
-		Use:  "GetCellInfo cell",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetCellInfo,
+		Use:                   "GetCellInfo <cell>",
+		Short:                 "Gets the CellInfo object for the given cell.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetCellInfo,
 	}
 	// GetCellsAliases makes a GetCellsAliases gRPC call to a vtctld.
 	GetCellsAliases = &cobra.Command{
-		Use:  "GetCellsAliases",
-		Args: cobra.NoArgs,
-		RunE: commandGetCellsAliases,
+		Use:                   "GetCellsAliases",
+		Short:                 "Gets all CellsAlias objects in the cluster.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandGetCellsAliases,
 	}
 	// UpdateCellInfo makes an UpdateCellInfo gRPC call to a vtctld.
 	UpdateCellInfo = &cobra.Command{
@@ -283,7 +289,7 @@ func commandUpdateCellsAlias(cmd *cobra.Command, args []string) error {
 
 func init() {
 	AddCellInfo.Flags().StringVarP(&addCellInfoOptions.ServerAddress, "server-address", "a", "", "The address the topology server will connect to for this cell.")
-	AddCellInfo.Flags().StringVarP(&addCellInfoOptions.Root, "root", "r", "", "The root path the topology server will use for this cell")
+	AddCellInfo.Flags().StringVarP(&addCellInfoOptions.Root, "root", "r", "", "The root path the topology server will use for this cell.")
 	AddCellInfo.MarkFlagRequired("root")
 	Root.AddCommand(AddCellInfo)
 
@@ -299,7 +305,7 @@ func init() {
 	Root.AddCommand(GetCellsAliases)
 
 	UpdateCellInfo.Flags().StringVarP(&updateCellInfoOptions.ServerAddress, "server-address", "a", "", "The address the topology server will connect to for this cell.")
-	UpdateCellInfo.Flags().StringVarP(&updateCellInfoOptions.Root, "root", "r", "", "The root path the topology server will use for this cell")
+	UpdateCellInfo.Flags().StringVarP(&updateCellInfoOptions.Root, "root", "r", "", "The root path the topology server will use for this cell.")
 	Root.AddCommand(UpdateCellInfo)
 
 	UpdateCellsAlias.Flags().StringSliceVarP(&updateCellsAliasOptions.Cells, "cells", "c", nil, "The list of cell names that are members of this alias.")

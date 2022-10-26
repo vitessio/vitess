@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.
+// newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns
 func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo) *engine.MergeSort {
 	prims := make([]engine.StreamExecutor, 0, len(participants))
 	for _, participant := range participants {
@@ -72,8 +72,8 @@ func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
 func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID int64, message string) {
 	query := "insert into _vt.vdiff_log(vdiff_id, message) values (%d, %s)"
 	query = fmt.Sprintf(query, vdiffID, encodeString(message))
-	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-		log.Error("Error inserting into _vt.vdiff_log: %w", err)
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		log.Error("Error inserting into _vt.vdiff_log: %v", err)
 	}
 }
 

@@ -47,6 +47,7 @@ import (
 const (
 	vexecTableQualifier   = "_vt"
 	vreplicationTableName = "vreplication"
+	sqlVReplicationDelete = "delete from _vt.vreplication"
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -150,6 +151,9 @@ func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query s
 
 // VExec executes queries on a table on all primaries in the target keyspace of the workflow
 func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	if wr.VExecFunc != nil {
+		return wr.VExecFunc(ctx, workflow, keyspace, query, dryRun)
+	}
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
 	for tablet, result := range results {
@@ -158,7 +162,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 	return retResults, err
 }
 
-// runVexec is th emain function that runs a dry or wet execution of 'query` on backend shards.
+// runVexec is the main function that runs a dry or wet execution of 'query' on backend shards.
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
@@ -212,6 +216,11 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
+				// If we deleted a workflow then let's make a best effort attempt to clean
+				// up any related data.
+				if vx.query == sqlVReplicationDelete {
+					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
+				}
 				mu.Lock()
 				results[primary] = qr
 				mu.Unlock()
@@ -315,7 +324,7 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	case "start":
 		query = fmt.Sprintf(updateSQL, encodeString("Running"))
 	case "delete":
-		query = "delete from _vt.vreplication"
+		query = sqlVReplicationDelete
 	default:
 		return "", fmt.Errorf("invalid action found: %s", action)
 	}
@@ -409,10 +418,16 @@ type ReplicationStatus struct {
 	TimeUpdated int64
 	// TimeHeartbeat represents the time_heartbeat column from the _vt.vreplication table.
 	TimeHeartbeat int64
+	// TimeThrottled represents the time_throttled column from the _vt.vreplication table.
+	TimeThrottled int64
+	// ComponentThrottled represents the component_throttled column from the _vt.vreplication table.
+	ComponentThrottled string
 	// Message represents the message column from the _vt.vreplication table.
 	Message string
 	// Tags contain the tags specified for this stream
-	Tags string
+	Tags            string
+	WorkflowType    string
+	WorkflowSubType string
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
 	// sourceTimeZone represents the time zone of each stream, only set if not UTC
@@ -423,8 +438,9 @@ type ReplicationStatus struct {
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, timeUpdated, transactionTimestamp, timeHeartbeat int64
-	var state, dbName, pos, stopPos, message, tags string
+	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
+	var state, dbName, pos, stopPos, message, tags, componentThrottled string
+	var workflowType, workflowSubType int64
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
 
@@ -476,6 +492,14 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
+	timeThrottled, err = row.ToInt64("time_throttled")
+	if err != nil {
+		return nil, "", err
+	}
+	componentThrottled, err = row.ToString("component_throttled")
+	if err != nil {
+		return nil, "", err
+	}
 	message, err = row.ToString("message")
 	if err != nil {
 		return nil, "", err
@@ -484,6 +508,9 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
+	workflowType, _ = row.ToInt64("workflow_type")
+	workflowSubType, _ = row.ToInt64("workflow_sub_type")
+
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
 		Tablet:               primary.AliasString(),
@@ -496,10 +523,14 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		TransactionTimestamp: transactionTimestamp,
 		TimeUpdated:          timeUpdated,
 		TimeHeartbeat:        timeHeartbeat,
+		TimeThrottled:        timeThrottled,
+		ComponentThrottled:   componentThrottled,
 		Message:              message,
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
 		targetTimeZone:       bls.TargetTimeZone,
+		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)],
+		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)],
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -515,14 +546,31 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
 	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, message, tags from _vt.vreplication"
+	query := `select 
+		id,
+		source,
+		pos,
+		stop_pos,
+		max_replication_lag,
+		state,
+		db_name,
+		time_updated,
+		transaction_timestamp,
+		time_heartbeat,
+		time_throttled,
+		component_throttled,
+		message,
+		tags,
+		workflow_type, 
+		workflow_sub_type
+	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err
 	}
 
 	// We set a topo timeout since we contact topo for the shard record.
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var sourceKeyspace string
 	sourceShards := sets.NewString()

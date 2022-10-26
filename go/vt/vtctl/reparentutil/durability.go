@@ -79,7 +79,6 @@ func GetDurabilityPolicy(name string) (Durabler, error) {
 	if !found {
 		return nil, fmt.Errorf("durability policy %v not found", name)
 	}
-	log.Infof("Getting a new durability policy for %v", name)
 	return newDurabilityCreationFunc(), nil
 }
 

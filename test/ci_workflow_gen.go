@@ -31,22 +31,20 @@ type mysqlVersion string
 const (
 	mysql57    mysqlVersion = "mysql57"
 	mysql80    mysqlVersion = "mysql80"
-	mariadb102 mysqlVersion = "mariadb102"
 	mariadb103 mysqlVersion = "mariadb103"
 
-	defaultMySQLVersion mysqlVersion = mysql57
+	defaultMySQLVersion = mysql80
 )
 
 type mysqlVersions []mysqlVersion
 
 var (
 	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-	mysql80OnlyVersions  = []mysqlVersion{mysql80}
 	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb102, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
 )
 
 const (
@@ -56,7 +54,7 @@ const (
 
 	// An empty string will cause the default non platform specific template
 	// to be used.
-	clusterTestTemplateFormatStr = "templates/cluster_endtoend_test%s.tpl"
+	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
 	unitTestSelfHostedDatabases   = ""
@@ -70,17 +68,17 @@ var (
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"vtctlbackup_sharded_clustertest_heavy",
+		"12",
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
-		"shardedrecovery_stress_verticalsplit_heavy",
 		"vtgate_general_heavy",
-		"19",
+		"vtbackup_transform",
+		"18",
 		"xb_backup",
 		"21",
 		"22",
-		"worker_vault_heavy",
-		"24",
+		"mysql_server_vault",
 		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
@@ -91,7 +89,7 @@ var (
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
-		"vreplication_migrate",
+		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
@@ -101,7 +99,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
 		"vtgate_gen4",
@@ -118,25 +115,21 @@ var (
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
+		"vtorc",
 		"xb_recovery",
-		"resharding",
-		"resharding_bytes",
 		"mysql80",
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
-		"vtorc",
-		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
+		"vtgate_partial_keyspace",
+		"vttablet_prscomplex",
 	}
 
-	clusterSelfHostedList = []string{
-		"12",
-		"18",
-	}
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
@@ -144,25 +137,28 @@ var (
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
-		"24",
+		"mysql_server_vault",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
 )
 
 type unitTest struct {
-	Name, Platform string
+	Name, Platform, FileName string
 }
 
 type clusterTest struct {
 	Name, Shard, Platform        string
+	FileName                     string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20, Docker             bool
+	Docker                       bool
 	LimitResourceUsage           bool
+	PartialKeyspace              bool
 }
 
 type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
+	FileName                                                    string
 	MakeTools, InstallXtraBackup, Docker                        bool
 }
 
@@ -171,14 +167,16 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
 		return allMySQLVersions
+	case clusterName == "schemadiff_vrepl":
+		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
-	case clusterName == "mysql80":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vtorc_8.0":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vreplication_across_db_versions":
-		return []mysqlVersion{mysql80}
+	case clusterName == "vtorc":
+		return allMySQLVersions
+	case clusterName == "xb_backup":
+		return allMySQLVersions
+	case clusterName == "xb_recovery":
+		return allMySQLVersions
 	default:
 		return defaultMySQLVersions
 	}
@@ -205,7 +203,7 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
-	generateClusterWorkflows(clusterList, clusterTestTemplateFormatStr)
+	generateClusterWorkflows(clusterList, clusterTestTemplate)
 	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
 	// tests that will use self-hosted runners
@@ -256,7 +254,8 @@ func generateSelfHostedUnitTestWorkflows() error {
 		if err != nil {
 			return err
 		}
-		filePath := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
+		test.FileName = fmt.Sprintf("unit_test_%s.yml", platform)
+		filePath := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 		err = writeFileFromTemplate(unitTestSelfHostedTemplate, filePath, test)
 		if err != nil {
 			log.Print(err)
@@ -269,11 +268,17 @@ func generateSelfHostedClusterWorkflows() error {
 	clusters := canonnizeList(clusterSelfHostedList)
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
-			directoryName := fmt.Sprintf("cluster_test_%s", cluster)
+			// check mysqlversion
+			mysqlVersionIndicator := ""
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			}
+
+			directoryName := fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator)
 			test := &selfHostedTest{
-				Name:              fmt.Sprintf("Cluster (%s)", cluster),
-				ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-				Platform:          "mysql57",
+				Name:              fmt.Sprintf("Cluster (%s)(%s)", cluster, mysqlVersion),
+				ImageName:         fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator),
+				Platform:          "mysql80",
 				directoryName:     directoryName,
 				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 				Shard:             cluster,
@@ -294,12 +299,8 @@ func generateSelfHostedClusterWorkflows() error {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
-				test.Platform = string(mysql80)
-			}
-			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
-				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 
 			err := setupTestDockerFile(test)
@@ -307,7 +308,8 @@ func generateSelfHostedClusterWorkflows() error {
 				return err
 			}
 
-			filePath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
+			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
+			filePath := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 			err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
 			if err != nil {
 				log.Print(err)
@@ -339,9 +341,8 @@ func generateClusterWorkflows(list []string, tpl string) {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
-				test.Ubuntu20 = true
-				test.Platform = string(mysql80)
+			if mysqlVersion == mysql57 {
+				test.Platform = string(mysql57)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true
@@ -351,14 +352,19 @@ func generateClusterWorkflows(list []string, tpl string) {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
 				test.Name = test.Name + " " + string(mysqlVersion)
 			}
-			path := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
-			template := tpl
-			if test.Platform != "" {
-				template = fmt.Sprintf(tpl, "_"+test.Platform)
-			} else if strings.Contains(template, "%s") {
-				template = fmt.Sprintf(tpl, "")
+			if strings.Contains(test.Shard, "partial_keyspace") {
+				test.PartialKeyspace = true
 			}
-			err := writeFileFromTemplate(template, path, test)
+
+			workflowPath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
+			templateFileName := tpl
+			if test.Platform != "" {
+				templateFileName = fmt.Sprintf(tpl, "_"+test.Platform)
+			} else if strings.Contains(templateFileName, "%s") {
+				templateFileName = fmt.Sprintf(tpl, "")
+			}
+			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
+			err := writeFileFromTemplate(templateFileName, workflowPath, test)
 			if err != nil {
 				log.Print(err)
 			}
@@ -372,7 +378,8 @@ func generateUnitTestWorkflows() {
 			Name:     fmt.Sprintf("Unit Test (%s)", platform),
 			Platform: string(platform),
 		}
-		path := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
+		test.FileName = fmt.Sprintf("unit_test_%s.yml", platform)
+		path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 		err := writeFileFromTemplate(unitTestTemplate, path, test)
 		if err != nil {
 			log.Print(err)
@@ -419,8 +426,12 @@ func writeFileFromTemplate(templateFile, path string, test any) error {
 	if err != nil {
 		return fmt.Errorf("Error creating file: %s\n", err)
 	}
-	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
-	f.WriteString(mergeBlankLines(buf))
+	if _, err := f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n"); err != nil {
+		return err
+	}
+	if _, err := f.WriteString(mergeBlankLines(buf)); err != nil {
+		return err
+	}
 	fmt.Printf("Generated %s\n", path)
 	return nil
 }

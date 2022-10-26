@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -188,7 +188,8 @@ func TestThreadsRunning(t *testing.T) {
 
 	sleepSeconds := 6
 	for i := 0; i < testThreshold; i++ {
-		go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds), "")
+		// each query must be distinct, so they don't get consolidated
+		go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds+i), "")
 	}
 	t.Run("exceeds threshold", func(t *testing.T) {
 		time.Sleep(3 * time.Second)

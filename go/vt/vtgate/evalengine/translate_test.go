@@ -92,6 +92,14 @@ func TestTranslateSimplification(t *testing.T) {
 		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`CASE WHEN NULL THEN INT64(2) WHEN INT64(12) = INT64(4) THEN VARCHAR("ohnoes") ELSE INT64(42)`), ok(`VARCHAR("42")`)},
 		{"convert('a', char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
 		{"convert('a', char(2) character set latin1 binary)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET latin1_bin)`), ok(`VARCHAR("a")`)},
+		{"cast('a' as char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
+		{"cast('a' as char(2) character set latin1 binary)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET latin1_bin)`), ok(`VARCHAR("a")`)},
+		{"date'2022-10-03'", ok(`DATE("2022-10-03")`), ok(`DATE("2022-10-03")`)},
+		{"time'12:34:45'", ok(`TIME("12:34:45")`), ok(`TIME("12:34:45")`)},
+		{"timestamp'2022-10-03 12:34:45'", ok(`DATETIME("2022-10-03 12:34:45")`), ok(`DATETIME("2022-10-03 12:34:45")`)},
+		{"date'2022'", err(`incorrect DATE value: '2022'`), err(`incorrect DATE value: '2022'`)},
+		{"time'2022-10-03'", err(`incorrect TIME value: '2022-10-03'`), err(`incorrect TIME value: '2022-10-03'`)},
+		{"timestamp'2022-10-03'", err(`incorrect DATETIME value: '2022-10-03'`), err(`incorrect DATETIME value: '2022-10-03'`)},
 	}
 
 	for _, tc := range testCases {

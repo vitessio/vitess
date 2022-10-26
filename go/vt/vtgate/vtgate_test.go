@@ -17,18 +17,16 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"strings"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -74,8 +72,8 @@ func init() {
 }
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
-	*transactionMode = "MULTI"
-	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil)
+	transactionMode = "MULTI"
+	Init(context.Background(), hcVTGateTest, newSandboxForCells([]string{"aa"}), "aa", nil, querypb.ExecuteOptions_Gen4)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"
@@ -605,7 +603,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc3.Queries = nil
 
 	// single shard so no savepoint will be created and neither any old savepoint will be executed
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
+	_, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",

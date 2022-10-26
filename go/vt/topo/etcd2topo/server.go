@@ -36,22 +36,23 @@ package etcd2topo
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"flag"
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+	"go.etcd.io/etcd/client/pkg/v3/tlsutil"
 	"google.golang.org/grpc"
 
-	"go.etcd.io/etcd/client/pkg/v3/tlsutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	clientCertPath = flag.String("topo_etcd_tls_cert", "", "path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS")
-	clientKeyPath  = flag.String("topo_etcd_tls_key", "", "path to the client key to use to connect to the etcd topo server, enables TLS")
-	serverCaPath   = flag.String("topo_etcd_tls_ca", "", "path to the ca to use to validate the server cert when connecting to the etcd topo server")
+	clientCertPath string
+	clientKeyPath  string
+	serverCaPath   string
 )
 
 // Factory is the consul topo.Factory implementation.
@@ -74,12 +75,28 @@ type Server struct {
 
 	// root is the root path for this client.
 	root string
+
+	running chan struct{}
+}
+
+func init() {
+	for _, cmd := range topo.FlagBinaries {
+		servenv.OnParseFor(cmd, registerEtcd2TopoFlags)
+	}
+	topo.RegisterFactory("etcd2", Factory{})
+}
+
+func registerEtcd2TopoFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&clientCertPath, "topo_etcd_tls_cert", clientCertPath, "path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS")
+	fs.StringVar(&clientKeyPath, "topo_etcd_tls_key", clientKeyPath, "path to the client key to use to connect to the etcd topo server, enables TLS")
+	fs.StringVar(&serverCaPath, "topo_etcd_tls_ca", serverCaPath, "path to the ca to use to validate the server cert when connecting to the etcd topo server")
 }
 
 // Close implements topo.Server.Close.
 // It will nil out the global and cells fields, so any attempt to
 // re-use this server will panic.
 func (s *Server) Close() {
+	close(s.running)
 	s.cli.Close()
 	s.cli = nil
 }
@@ -140,8 +157,9 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 	}
 
 	return &Server{
-		cli:  cli,
-		root: root,
+		cli:     cli,
+		root:    root,
+		running: make(chan struct{}),
 	}, nil
 }
 
@@ -149,9 +167,5 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 func NewServer(serverAddr, root string) (*Server, error) {
 	// TODO: Rename this to a name to signifies this function uses the process-wide TLS settings.
 
-	return NewServerWithOpts(serverAddr, root, *clientCertPath, *clientKeyPath, *serverCaPath)
-}
-
-func init() {
-	topo.RegisterFactory("etcd2", Factory{})
+	return NewServerWithOpts(serverAddr, root, clientCertPath, clientKeyPath, serverCaPath)
 }

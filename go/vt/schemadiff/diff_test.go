@@ -290,6 +290,7 @@ func TestDiffSchemas(t *testing.T) {
 		diffs       []string
 		cdiffs      []string
 		expectError string
+		tableRename int
 	}{
 		{
 			name: "identical tables",
@@ -453,6 +454,71 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
+			name: "identical tables: drop and create",
+			from: "create table t1(id int primary key); create table t2(id int unsigned primary key);",
+			to:   "create table t1(id int primary key); create table t3(id int unsigned primary key);",
+			diffs: []string{
+				"drop table t2",
+				"create table t3 (\n\tid int unsigned primary key\n)",
+			},
+			cdiffs: []string{
+				"DROP TABLE `t2`",
+				"CREATE TABLE `t3` (\n\t`id` int unsigned PRIMARY KEY\n)",
+			},
+		},
+		{
+			name: "identical tables: heuristic rename",
+			from: "create table t1(id int primary key); create table t2a(id int unsigned primary key);",
+			to:   "create table t1(id int primary key); create table t2b(id int unsigned primary key);",
+			diffs: []string{
+				"rename table t2a to t2b",
+			},
+			cdiffs: []string{
+				"RENAME TABLE `t2a` TO `t2b`",
+			},
+			tableRename: TableRenameHeuristicStatement,
+		},
+		{
+			name: "identical tables: drop and create",
+			from: "create table t1a(id int primary key); create table t2a(id int unsigned primary key); create table t3a(id smallint primary key); ",
+			to:   "create table t1b(id bigint primary key); create table t2b(id int unsigned primary key); create table t3b(id int primary key); ",
+			diffs: []string{
+				"drop table t1a",
+				"drop table t2a",
+				"drop table t3a",
+				"create table t1b (\n\tid bigint primary key\n)",
+				"create table t2b (\n\tid int unsigned primary key\n)",
+				"create table t3b (\n\tid int primary key\n)",
+			},
+			cdiffs: []string{
+				"DROP TABLE `t1a`",
+				"DROP TABLE `t2a`",
+				"DROP TABLE `t3a`",
+				"CREATE TABLE `t1b` (\n\t`id` bigint PRIMARY KEY\n)",
+				"CREATE TABLE `t2b` (\n\t`id` int unsigned PRIMARY KEY\n)",
+				"CREATE TABLE `t3b` (\n\t`id` int PRIMARY KEY\n)",
+			},
+		},
+		{
+			name: "identical tables: multiple heuristic rename",
+			from: "create table t1a(id int primary key); create table t2a(id int unsigned primary key); create table t3a(id smallint primary key); ",
+			to:   "create table t1b(id bigint primary key); create table t2b(id int unsigned primary key); create table t3b(id int primary key); ",
+			diffs: []string{
+				"drop table t3a",
+				"create table t1b (\n\tid bigint primary key\n)",
+				"rename table t1a to t3b",
+				"rename table t2a to t2b",
+			},
+			cdiffs: []string{
+				"DROP TABLE `t3a`",
+				"CREATE TABLE `t1b` (\n\t`id` bigint PRIMARY KEY\n)",
+				"RENAME TABLE `t1a` TO `t3b`",
+				"RENAME TABLE `t2a` TO `t2b`",
+			},
+			tableRename: TableRenameHeuristicStatement,
+		},
+		// Views
+		{
 			name: "identical views",
 			from: "create table t(id int); create view v1 as select * from t",
 			to:   "create table t(id int); create view v1 as select * from t",
@@ -494,7 +560,7 @@ func TestDiffSchemas(t *testing.T) {
 			name:        "create view: unresolved dependencies",
 			from:        "create table t(id int)",
 			to:          "create table t(id int); create view v1 as select id from t2",
-			expectError: ErrViewDependencyUnresolved.Error(),
+			expectError: (&ViewDependencyUnresolvedError{View: "v1"}).Error(),
 		},
 		{
 			name: "convert table to view",
@@ -536,23 +602,25 @@ func TestDiffSchemas(t *testing.T) {
 				"drop table t1",
 				"drop view v1",
 				"alter table t2 modify column id bigint primary key",
-				"create table t4 (\n\tid int primary key\n)",
 				"alter view v2 as select id from t2",
+				"create table t4 (\n\tid int primary key\n)",
 				"create view v0 as select * from v2, t2",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t1`",
 				"DROP VIEW `v1`",
 				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint PRIMARY KEY",
-				"CREATE TABLE `t4` (\n\t`id` int PRIMARY KEY\n)",
 				"ALTER VIEW `v2` AS SELECT `id` FROM `t2`",
+				"CREATE TABLE `t4` (\n\t`id` int PRIMARY KEY\n)",
 				"CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
 			},
 		},
 	}
-	hints := &DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
+			hints := &DiffHints{
+				TableRenameStrategy: ts.tableRename,
+			}
 			diffs, err := DiffSchemasSQL(ts.from, ts.to, hints)
 			if ts.expectError != "" {
 				require.Error(t, err)

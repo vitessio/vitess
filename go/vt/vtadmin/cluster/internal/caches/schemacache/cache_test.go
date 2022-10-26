@@ -100,6 +100,17 @@ func TestLoadOptions(t *testing.T) {
 				isFullPayload: false,
 			},
 			{
+				name: "schema only",
+				opts: LoadOptions{
+					BaseRequest: &vtctldatapb.GetSchemaRequest{
+						IncludeViews:    true,
+						TableSchemaOnly: true,
+					},
+					AggregateSizes: true,
+				},
+				isFullPayload: false,
+			},
+			{
 				name: "no size aggregation",
 				opts: LoadOptions{
 					BaseRequest: &vtctldatapb.GetSchemaRequest{

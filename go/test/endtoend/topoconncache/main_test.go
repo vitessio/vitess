@@ -57,7 +57,6 @@ var (
 		"--enable_replication_reporter",
 		"--serving_state_grace_period", "1s",
 		"--binlog_player_protocol", "grpc",
-		"--enable-autocommit",
 	}
 	vSchema = `
 		{
@@ -90,7 +89,9 @@ var (
 	shard2 cluster.Shard
 )
 
-/* This end-to-end test validates the cache fix in topo/server.go inside ConnForCell.
+/*
+	This end-to-end test validates the cache fix in topo/server.go inside ConnForCell.
+
 The issue was, if we delete and add back a cell with same name but at different path, the map of cells
 in server.go returned the connection object of the previous cell instead of newly-created one
 with the same name.

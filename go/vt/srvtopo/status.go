@@ -119,7 +119,6 @@ type SrvKeyspaceCacheStatus struct {
 	ExpirationTime time.Time
 	LastErrorTime  time.Time
 	LastError      error
-	LastErrorCtx   context.Context
 }
 
 // StatusAsHTML returns an HTML version of our status.
@@ -136,11 +135,6 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 			result += "&nbsp;" + shard.Name
 		}
 		result += "<br>"
-	}
-
-	if st.Value.ShardingColumnName != "" {
-		result += "<b>ShardingColumnName:</b>&nbsp;" + st.Value.ShardingColumnName + "<br>"
-		result += "<b>ShardingColumnType:</b>&nbsp;" + st.Value.ShardingColumnType.String() + "<br>"
 	}
 
 	if len(st.Value.ServedFrom) > 0 {

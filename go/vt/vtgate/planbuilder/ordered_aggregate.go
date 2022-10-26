@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"fmt"
 	"strconv"
+	"strings"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
 
@@ -26,8 +29,6 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -44,22 +45,23 @@ var _ logicalPlan = (*orderedAggregate)(nil)
 // will be sent to the scatter route as:
 // 'select col1, col2, count(*) from t group by col1, col2 order by col1, col2`
 // The orderAggregate primitive built for this will be:
-//    &engine.OrderedAggregate {
-//      // Aggregates has one column. It computes the count
-//      // using column 2 of the underlying route.
-//      Aggregates: []AggregateParams{{
-//        Opcode: AggregateCount,
-//        Col: 2,
-//      }},
 //
-//      // Keys has the two group by values for col1 and col2.
-//      // The column numbers are from the underlying route.
-//      // These values will be used to perform the grouping
-//      // of the ordered results as they come from the underlying
-//      // route.
-//      Keys: []int{0, 1},
-//      Input: (Scatter Route with the order by request),
-//    }
+//	&engine.OrderedAggregate {
+//	  // Aggregates has one column. It computes the count
+//	  // using column 2 of the underlying route.
+//	  Aggregates: []AggregateParams{{
+//	    Opcode: AggregateCount,
+//	    Col: 2,
+//	  }},
+//
+//	  // Keys has the two group by values for col1 and col2.
+//	  // The column numbers are from the underlying route.
+//	  // These values will be used to perform the grouping
+//	  // of the ordered results as they come from the underlying
+//	  // route.
+//	  Keys: []int{0, 1},
+//	  Input: (Scatter Route with the order by request),
+//	}
 type orderedAggregate struct {
 	resultsBuilder
 	extraDistinct *sqlparser.ColName
@@ -263,18 +265,21 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 }
 
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
-	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
-	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
-	if len(funcExpr.Exprs) != 1 {
-		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
+	aggrFunc, _ := expr.Expr.(sqlparser.AggrFunc)
+	origOpcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
+	opcode := origOpcode
+	if aggrFunc.GetArgs() != nil &&
+		len(aggrFunc.GetArgs()) != 1 {
+		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(expr))
 	}
-	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
+
+	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, expr, opcode)
 	if err != nil {
 		return nil, 0, err
 	}
 	if handleDistinct {
 		if oa.extraDistinct != nil {
-			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(funcExpr))
+			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr))
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
@@ -296,9 +301,10 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			opcode = engine.AggregateSumDistinct
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
-			Alias:  expr.ColumnName(),
+			Opcode:     opcode,
+			Col:        innerCol,
+			Alias:      expr.ColumnName(),
+			OrigOpcode: origOpcode,
 		})
 	} else {
 		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
@@ -307,8 +313,9 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		}
 		pb.plan = newBuilder
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
+			Opcode:     opcode,
+			Col:        innerCol,
+			OrigOpcode: origOpcode,
 		})
 	}
 
@@ -322,17 +329,23 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
-	if !funcExpr.Distinct {
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+	var innerAliased *sqlparser.AliasedExpr
+	aggr, ok := expr.Expr.(sqlparser.AggrFunc)
+
+	if !ok {
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(expr))
+	}
+
+	if !aggr.IsDistinct() {
 		return false, nil, nil
 	}
 	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
 		return false, nil, nil
 	}
-	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
-	if !ok {
-		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
-	}
+
+	innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg()}
+
 	rb, ok := oa.input.(*route)
 	if !ok {
 		// Unreachable
@@ -381,15 +394,15 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	return oa.input.Wireup(plan, jt)
 }
 
-func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
-	return oa.input.WireupGen4(semTable)
+func (oa *orderedAggregate) WireupGen4(ctx *plancontext.PlanningContext) error {
+	return oa.input.WireupGen4(ctx)
 }
 
 // OutputColumns implements the logicalPlan interface
 func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
 	outputCols := sqlparser.CloneSelectExprs(oa.input.OutputColumns())
 	for _, aggr := range oa.aggregates {
-		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewColIdent(aggr.Alias)}
+		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewIdentifierCI(aggr.Alias)}
 	}
 	if oa.truncateColumnCount > 0 {
 		return outputCols[:oa.truncateColumnCount]

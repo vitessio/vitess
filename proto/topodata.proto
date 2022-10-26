@@ -44,21 +44,6 @@ enum KeyspaceType {
   SNAPSHOT = 1;
 }
 
-// KeyspaceIdType describes the type of the sharding key for a
-// range-based sharded keyspace.
-enum KeyspaceIdType {
-  // UNSET is the default value, when range-based sharding is not used.
-  UNSET = 0;
-
-  // UINT64 is when uint64 value is used.
-  // This is represented as 'unsigned bigint' in mysql
-  UINT64 = 1;
-
-  // BYTES is when an array of bytes is used.
-  // This is represented as 'varbinary' in mysql
-  BYTES = 2;
-}
-
 // TabletAlias is a globally unique tablet identifier.
 message TabletAlias {
   // cell is the cell (or datacenter) the tablet is in
@@ -275,13 +260,11 @@ message Shard {
 
 // A Keyspace contains data about a keyspace.
 message Keyspace {
-  // name of the column used for sharding
-  // empty if the keyspace is not sharded
-  string sharding_column_name = 1;
+  // OBSOLETE string sharding_column_name = 1;
+  reserved 1;
 
-  // type of the column used for sharding
-  // UNSET if the keyspace is not sharded
-  KeyspaceIdType sharding_column_type = 2;
+  // OBSOLETE KeyspaceIdType sharding_column_type = 2;
+  reserved 2;
 
   // OBSOLETE int32 split_shard_count = 3;
   reserved 3;
@@ -402,9 +385,14 @@ message SrvKeyspace {
   }
 
   // copied from Keyspace
-  string sharding_column_name = 2;
-  KeyspaceIdType sharding_column_type = 3;
+  // OBSOLETE string sharding_column_name = 2;
+  reserved 2;
+
+  // OBSOLETE KeyspaceIdType sharding_column_type = 3;
+  reserved 3;
+
   repeated ServedFrom served_from = 4;
+
   // OBSOLETE int32 split_shard_count = 5;
   reserved 5;
 }

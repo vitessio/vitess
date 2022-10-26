@@ -17,8 +17,11 @@ limitations under the License.
 package utils
 
 import (
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -33,16 +36,18 @@ import (
 // Top declaration:
 //
 // var mustMatch = testutils.MustMatchFn(
-// 	[]any{  // types with unexported fields
-// 		type1{},
-// 		type2{},
-// 		...
-// 		typeN{},
-// 	},
-// 	[]string{  // ignored fields
-// 		".id",        // id numbers are unstable
-// 		".createAt",  // created dates might not be interesting to compare
-// 	},
+//
+//	[]any{  // types with unexported fields
+//		type1{},
+//		type2{},
+//		...
+//		typeN{},
+//	},
+//	[]string{  // ignored fields
+//		".id",        // id numbers are unstable
+//		".createAt",  // created dates might not be interesting to compare
+//	},
+//
 // )
 //
 // In Test*() function:
@@ -101,4 +106,19 @@ func MustMatchPB(t *testing.T, expected string, pb proto.Message) {
 	}
 
 	MustMatch(t, expectedPb, pb)
+}
+
+func MakeTestOutput(t *testing.T, dir, pattern string) string {
+	testOutputTempDir, err := os.MkdirTemp(dir, pattern)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		} else {
+			t.Logf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
+		}
+	})
+
+	return testOutputTempDir
 }

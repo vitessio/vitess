@@ -68,6 +68,7 @@ func startEtcd(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
 	}
+	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -270,7 +271,7 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	}
 
 	// Long TTL, unlock before lease runs out.
-	*leaseTTL = 1000
+	leaseTTL = 1000
 	lockDescriptor, err := conn.Lock(ctx, keyspacePath, "ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)
@@ -280,7 +281,7 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	}
 
 	// Short TTL, make sure it doesn't expire.
-	*leaseTTL = 1
+	leaseTTL = 1
 	lockDescriptor, err = conn.Lock(ctx, keyspacePath, "short ttl")
 	if err != nil {
 		t.Fatalf("Lock failed: %v", err)

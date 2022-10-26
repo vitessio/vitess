@@ -18,36 +18,51 @@ package main
 
 import (
 	"context"
-	"flag"
 	"math/rand"
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var (
-	cell              = flag.String("cell", "test_nj", "cell to use")
-	tabletTypesToWait = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	cell              = ""
+	tabletTypesToWait []topodatapb.TabletType
+	plannerName       string
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&cell, "cell", cell, "cell to use")
+	fs.Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
+	fs.StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+
+	acl.RegisterFlags(fs)
+}
 
 var resilientServer *srvtopo.ResilientServer
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
+	servenv.OnParse(registerFlags)
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
@@ -118,13 +133,8 @@ func main() {
 	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
-	if len(*tabletTypesToWait) != 0 {
-		for _, ttStr := range strings.Split(*tabletTypesToWait, ",") {
-			tt, err := topoproto.ParseTabletType(ttStr)
-			if err != nil {
-				log.Errorf("unknown tablet type: %v", ttStr)
-				continue
-			}
+	if len(tabletTypesToWait) != 0 {
+		for _, tt := range tabletTypesToWait {
 			if topoproto.IsServingType(tt) {
 				tabletTypes = append(tabletTypes, tt)
 			}
@@ -137,13 +147,15 @@ func main() {
 		log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
 	}
 
-	err := CheckCellFlags(context.Background(), resilientServer, *cell, *vtgate.CellsToWatch)
+	err := CheckCellFlags(context.Background(), resilientServer, cell, vtgate.CellsToWatch)
 	if err != nil {
 		log.Exitf("cells_to_watch validation failed: %v", err)
 	}
 
+	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
+
 	// pass nil for HealthCheck and it will be created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, *cell, tabletTypes)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.

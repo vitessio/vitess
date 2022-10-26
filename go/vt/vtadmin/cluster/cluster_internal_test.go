@@ -222,7 +222,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 						},
 					},
 				},
-				emergencyReparentPool: pools.NewRPCPool(1, time.Second, nil),
+				emergencyFailoverPool: pools.NewRPCPool(1, time.Second, nil),
 			},
 			req: &vtctldatapb.EmergencyReparentShardRequest{
 				Keyspace: "ks1",
@@ -269,7 +269,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 						},
 					},
 				},
-				emergencyReparentPool: pools.NewRPCPool(1, time.Second, nil),
+				emergencyFailoverPool: pools.NewRPCPool(1, time.Second, nil),
 			},
 			req: &vtctldatapb.EmergencyReparentShardRequest{
 				Keyspace: "ks2",
@@ -307,15 +307,15 @@ func TestEmergencyFailoverShard(t *testing.T) {
 						},
 					},
 				},
-				emergencyReparentPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
+				emergencyFailoverPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
 			},
 			setup: func(t testing.TB, c *Cluster) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
 				defer cancel()
 
-				err := c.emergencyReparentPool.Acquire(ctx)
+				err := c.emergencyFailoverPool.Acquire(ctx)
 				require.NoError(t, err, "could not block ers pool in setup")
-				t.Cleanup(c.emergencyReparentPool.Release)
+				t.Cleanup(c.emergencyFailoverPool.Release)
 			},
 			timeout: time.Millisecond * 50,
 			req: &vtctldatapb.EmergencyReparentShardRequest{
@@ -553,7 +553,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 						},
 					},
 				},
-				reparentPool: pools.NewRPCPool(1, time.Second, nil),
+				failoverPool: pools.NewRPCPool(1, time.Second, nil),
 			},
 			req: &vtctldatapb.PlannedReparentShardRequest{
 				Keyspace: "ks1",
@@ -600,7 +600,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 						},
 					},
 				},
-				reparentPool: pools.NewRPCPool(1, time.Second, nil),
+				failoverPool: pools.NewRPCPool(1, time.Second, nil),
 			},
 			req: &vtctldatapb.PlannedReparentShardRequest{
 				Keyspace: "ks2",
@@ -638,15 +638,15 @@ func TestPlannedFailoverShard(t *testing.T) {
 						},
 					},
 				},
-				reparentPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
+				failoverPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
 			},
 			setup: func(t testing.TB, c *Cluster) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
 				defer cancel()
 
-				err := c.reparentPool.Acquire(ctx)
+				err := c.failoverPool.Acquire(ctx)
 				require.NoError(t, err, "could not block prs pool in setup")
-				t.Cleanup(c.reparentPool.Release)
+				t.Cleanup(c.failoverPool.Release)
 			},
 			timeout: time.Millisecond * 50,
 			req: &vtctldatapb.PlannedReparentShardRequest{

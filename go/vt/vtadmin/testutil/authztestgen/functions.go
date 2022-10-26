@@ -17,10 +17,29 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 )
+
+func formatDocRow(m *DocMethod) string {
+	var buf strings.Builder
+	buf.WriteString("| `")
+	buf.WriteString(m.Name)
+	buf.WriteString("` | ")
+
+	for i, r := range m.Rules {
+		fmt.Fprintf(&buf, "`(%s, %s)`", r.Action, r.Resource)
+		if i != len(m.Rules)-1 {
+			buf.WriteString(", ")
+		}
+	}
+
+	buf.WriteString(" |")
+
+	return buf.String()
+}
 
 func getActor(actor *rbac.Actor) string {
 	var buf strings.Builder

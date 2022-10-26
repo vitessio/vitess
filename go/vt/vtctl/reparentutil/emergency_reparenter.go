@@ -167,6 +167,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
+	erp.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
 	opts.durability, err = GetDurabilityPolicy(keyspaceDurability)
 	if err != nil {
 		return err

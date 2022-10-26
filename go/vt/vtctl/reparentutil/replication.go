@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -35,9 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // FindValidEmergencyReparentCandidates will find candidates for an emergency
@@ -188,6 +187,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -247,7 +247,7 @@ func stopReplicationAndBuildStatusMaps(
 
 		logger.Infof("getting replication position from %v", alias)
 
-		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		if err != nil {
 			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
@@ -311,8 +311,9 @@ func stopReplicationAndBuildStatusMaps(
 	errgroup := concurrency.ErrorGroup{
 		NumGoroutines:        len(tabletMap) - ignoredTablets.Len(),
 		NumRequiredSuccesses: len(tabletMap) - ignoredTablets.Len() - 1,
-		NumAllowedErrors:     1,
-		NumErrorsToWaitFor:   numErrorsToWaitFor,
+		NumAllowedErrors:     len(tabletMap), // We set the number of allowed errors to a very high value, because we don't want to exit early
+		// even in case of multiple failures. We rely on the revoke function below to determine if we have more failures than we can tolerate
+		NumErrorsToWaitFor: numErrorsToWaitFor,
 	}
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)
@@ -335,7 +336,7 @@ func stopReplicationAndBuildStatusMaps(
 func WaitForRelayLogsToApply(ctx context.Context, tmc tmclient.TabletManagerClient, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
 	switch status.After.RelayLogPosition {
 	case "":
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.FileRelayLogPosition)
+		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinlogEquivalentPosition)
 	default:
 		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
 	}

@@ -7,12 +7,12 @@
     "unicode_loose_xxhash" : {
       "type": "unicode_loose_xxhash"
     },
-    "t3_id7_vdx": {
-      "type": "lookup_hash",
+    "t1_id2_idx": {
+      "type": "lookup_unique",
       "params": {
-        "table": "t3_id7_idx",
-        "from": "id7",
-        "to": "id6"
+        "table": "t1_id2_idx",
+        "from": "id2",
+        "to": "keyspace_id"
       },
       "owner": "t3"
     },
@@ -28,15 +28,15 @@
     }
   },
   "tables": {
-    "t3": {
+    "t1": {
       "column_vindexes": [
         {
-          "column": "id6",
+          "column": "id1",
           "name": "hash"
         },
         {
-          "column": "id7",
-          "name": "t3_id7_vdx"
+          "column": "id2",
+          "name": "t1_id2_idx"
         }
       ]
     },
@@ -45,46 +45,6 @@
         {
           "column": "id7",
           "name": "hash"
-        }
-      ]
-    },
-    "t9": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        }
-      ]
-    },
-    "aggr_test": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "val1",
-          "type": "VARCHAR"
-        }
-      ]
-    },
-    "aggr_test_dates": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "val1",
-          "type": "DATETIME"
-        },
-        {
-          "name": "val2",
-          "type": "DATETIME"
         }
       ]
     },

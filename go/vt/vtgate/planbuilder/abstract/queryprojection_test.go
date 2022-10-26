@@ -45,10 +45,6 @@ func TestQP(t *testing.T) {
 			sql: "select max(id) from user",
 		},
 		{
-			sql:    "select max(a, b) from user",
-			expErr: "aggregate functions take a single argument 'max(a, b)'",
-		},
-		{
 			sql: "select 1, count(1) from user order by 1",
 			expOrder: []OrderBy{
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewIntLiteral("1")}, WeightStrExpr: sqlparser.NewIntLiteral("1")},
@@ -68,7 +64,7 @@ func TestQP(t *testing.T) {
 				{
 					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
 					WeightStrExpr: &sqlparser.FuncExpr{
-						Name: sqlparser.NewColIdent("CONCAT"),
+						Name: sqlparser.NewIdentifierCI("CONCAT"),
 						Exprs: sqlparser.SelectExprs{
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("last_name")},
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(", ")},

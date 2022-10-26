@@ -77,6 +77,10 @@ const (
 	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableUserThrottleRatio        = "ALTER TABLE _vt.schema_migrations add column user_throttle_ratio float NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableSpecialPlan              = "ALTER TABLE _vt.schema_migrations add column special_plan text NOT NULL"
+	alterSchemaMigrationsLastThrottled                 = "ALTER TABLE _vt.schema_migrations add column last_throttled_timestamp timestamp NULL DEFAULT NULL"
+	alterSchemaMigrationsComponentThrottled            = "ALTER TABLE _vt.schema_migrations add column component_throttled tinytext NOT NULL"
+	alterSchemaMigrationsCancelledTimestamp            = "ALTER TABLE _vt.schema_migrations add column cancelled_timestamp timestamp NULL DEFAULT NULL"
+	alterSchemaMigrationsTablePostponeLaunch           = "ALTER TABLE _vt.schema_migrations add column postpone_launch tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -93,17 +97,19 @@ const (
 		migration_status,
 		tablet,
 		retain_artifacts_seconds,
+		postpone_launch,
 		postpone_completion,
 		allow_concurrent,
 		reverted_uuid,
 		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(), %a, %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
 			migration_uuid,
 			ddl_action,
+			postpone_launch,
 			postpone_completion,
 			ready_to_complete
 		FROM _vt.schema_migrations
@@ -117,6 +123,11 @@ const (
 	`
 	sqlUpdateMigrationStatus = `UPDATE _vt.schema_migrations
 			SET migration_status=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
+			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')
 		WHERE
 			migration_uuid=%a
 	`
@@ -196,6 +207,12 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateLaunchMigration = `UPDATE _vt.schema_migrations
+			SET postpone_launch=0
+		WHERE
+			migration_uuid=%a
+			AND postpone_launch != 0
+	`
 	sqlUpdateCompleteMigration = `UPDATE _vt.schema_migrations
 			SET postpone_completion=0
 		WHERE
@@ -255,15 +272,22 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateLastThrottled = `UPDATE _vt.schema_migrations
+			SET last_throttled_timestamp=FROM_UNIXTIME(%a), component_throttled=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlRetryMigrationWhere = `UPDATE _vt.schema_migrations
 		SET
 			migration_status='queued',
 			tablet=%a,
 			retries=retries + 1,
 			tablet_failure=0,
+			message='',
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
+			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
@@ -277,9 +301,11 @@ const (
 			tablet=%a,
 			retries=retries + 1,
 			tablet_failure=0,
+			message='',
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
+			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
@@ -399,6 +425,11 @@ const (
 			stowaway_table,
 			rows_copied,
 			vitess_liveness_indicator,
+			user_throttle_ratio,
+			last_throttled_timestamp,
+			cancelled_timestamp,
+			component_throttled,
+			postpone_launch,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -534,6 +565,9 @@ const (
 			pos,
 			time_updated,
 			transaction_timestamp,
+			time_heartbeat,
+			time_throttled,
+			component_throttled,
 			state,
 			message,
 			rows_copied
@@ -610,4 +644,8 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableVreplLivenessIndicator,
 	alterSchemaMigrationsTableUserThrottleRatio,
 	alterSchemaMigrationsTableSpecialPlan,
+	alterSchemaMigrationsLastThrottled,
+	alterSchemaMigrationsComponentThrottled,
+	alterSchemaMigrationsCancelledTimestamp,
+	alterSchemaMigrationsTablePostponeLaunch,
 }

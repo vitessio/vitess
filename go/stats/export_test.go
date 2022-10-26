@@ -25,8 +25,8 @@ import (
 func clear() {
 	defaultVarGroup.vars = make(map[string]expvar.Var)
 	defaultVarGroup.newVarHook = nil
-	*combineDimensions = ""
-	*dropVariables = ""
+	combineDimensions = ""
+	dropVariables = ""
 	combinedDimensions = nil
 	droppedVars = nil
 }
@@ -124,7 +124,7 @@ func TestPublishFunc(t *testing.T) {
 
 func TestDropVariable(t *testing.T) {
 	clear()
-	*dropVariables = "dropTest"
+	dropVariables = "dropTest"
 
 	// This should not panic.
 	_ = NewGaugesWithSingleLabel("dropTest", "help", "label")
@@ -142,16 +142,16 @@ func TestStringMapToString(t *testing.T) {
 }
 
 func TestParseCommonTags(t *testing.T) {
-	res := ParseCommonTags("")
+	res := ParseCommonTags([]string{""})
 	if len(res) != 0 {
 		t.Errorf("expected empty result, got %v", res)
 	}
-	res = ParseCommonTags("s,a:b ")
+	res = ParseCommonTags([]string{"s", "a:b"})
 	expected1 := map[string]string{"a": "b"}
 	if !reflect.DeepEqual(expected1, res) {
 		t.Errorf("expected %v, got %v", expected1, res)
 	}
-	res = ParseCommonTags("a:b,  c:d")
+	res = ParseCommonTags([]string{"a:b", "c:d"})
 	expected2 := map[string]string{"a": "b", "c": "d"}
 	if !reflect.DeepEqual(expected2, res) {
 		t.Errorf("expected %v, got %v", expected2, res)

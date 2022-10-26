@@ -93,10 +93,10 @@ export class Flag {
     }
     if (this.namedPositional !== undefined) {
       if (this.getValue() === true) {
-        return [`-${this.namedPositional}`];
+        return [`--${this.namedPositional}`];
       }
       // Named positional arguments are used for workflow creation, mainly.
-      return [`-${this.namedPositional}=${this.getStrValue()}`];
+      return [`--${this.namedPositional}=${this.getStrValue()}`];
     }
     // Positional arguments only need a value not a key.
     return [this.getStrValue()];
@@ -108,9 +108,9 @@ export class Flag {
     }
     // Non-positional arguments need a key value pair.
     if (this.getValue() === true) {
-      return [`-${this.id}`];
+      return [`--${this.id}`];
     }
-    return [`-${this.id}=${this.getStrValue()}`];
+    return [`--${this.id}=${this.getStrValue()}`];
   }
 }
 

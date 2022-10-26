@@ -25,9 +25,11 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -149,7 +151,7 @@ func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTab
 var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interface check
 
 // Begin is part of the QueryService interface.
-func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
@@ -258,7 +260,7 @@ func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -527,7 +529,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			tables = append(tables, getTables(from)...)
 		}
 
-		tableColumnMap := map[sqlparser.TableIdent]map[string]querypb.Type{}
+		tableColumnMap := map[sqlparser.IdentifierCS]map[string]querypb.Type{}
 		for _, table := range tables {
 			if table == nil {
 				continue
@@ -587,7 +589,8 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 
 		// the query against lookup table is in-query, handle it specifically
 		var inColName string
-		inVal := make([][]byte, 0, 10)
+		inVal := make([]sqltypes.Value, 0, 10)
+
 		rowCount := 1
 		if selStmt.Where != nil {
 			switch v := selStmt.Where.Expr.(type) {
@@ -595,12 +598,42 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 				if v.Operator == sqlparser.InOp {
 					switch c := v.Left.(type) {
 					case *sqlparser.ColName:
+						colName := strings.ToLower(c.Name.String())
+						colType := tableColumnMap[sqlparser.GetTableName(selStmt.From[0].(*sqlparser.AliasedTableExpr).Expr)][colName]
+
 						switch values := v.Right.(type) {
 						case sqlparser.ValTuple:
 							for _, val := range values {
 								switch v := val.(type) {
 								case *sqlparser.Literal:
-									inVal = append(inVal, v.Bytes())
+									value, err := evalengine.LiteralToValue(v)
+									if err != nil {
+										return err
+									}
+
+									// Cast the value in the tuple to the expected value of the column
+									castedValue, err := evalengine.Cast(value, colType)
+									if err != nil {
+										return err
+									}
+
+									// Check if we have a duplicate value
+									isNewValue := true
+									for _, v := range inVal {
+										result, err := evalengine.NullsafeCompare(v, value, collations.Default())
+										if err != nil {
+											return err
+										}
+
+										if result == 0 {
+											isNewValue = false
+											break
+										}
+									}
+
+									if isNewValue {
+										inVal = append(inVal, castedValue)
+									}
 								}
 							}
 							rowCount = len(inVal)
@@ -630,7 +663,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 				// a string type that encodes the column name + index.
 				colType := colTypes[i]
 				if len(inVal) > j && col == inColName {
-					values[i], _ = sqltypes.NewValue(querypb.Type_VARBINARY, inVal[j])
+					values[i], _ = sqltypes.NewValue(querypb.Type_VARBINARY, inVal[j].Raw())
 				} else if sqltypes.IsIntegral(colType) {
 					values[i] = sqltypes.NewInt32(int32(i + 1))
 				} else if sqltypes.IsFloat(colType) {
@@ -678,7 +711,7 @@ func getTables(node sqlparser.SQLNode) []*sqlparser.AliasedTableExpr {
 	return tables
 }
 
-func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.TableIdent]map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
+func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.IdentifierCS]map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
 	switch node := node.(type) {
 	case *sqlparser.ColName:
 		if node.Qualifier.Name.IsEmpty() {

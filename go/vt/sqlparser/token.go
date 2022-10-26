@@ -432,6 +432,12 @@ func (tkn *Tokenizer) scanBindVar() (int, string) {
 	token := VALUE_ARG
 
 	tkn.skip(1)
+	// If : is followed by a digit, then it is an offset value arg. Example - :1, :10
+	if isDigit(tkn.cur()) {
+		tkn.scanMantissa(10)
+		return OFFSET_ARG, tkn.buf[start+1 : tkn.Pos]
+	}
+	// If : is followed by another : it is a list arg. Example ::v1, ::list
 	if tkn.cur() == ':' {
 		token = LIST_ARG
 		tkn.skip(1)
@@ -439,6 +445,7 @@ func (tkn *Tokenizer) scanBindVar() (int, string) {
 	if !isLetter(tkn.cur()) {
 		return LEX_ERROR, tkn.buf[start:tkn.Pos]
 	}
+	// If : is followed by a letter, it is a bindvariable. Example :v1, :v2
 	for {
 		ch := tkn.cur()
 		if !isLetter(ch) && !isDigit(ch) && ch != '.' {
@@ -476,6 +483,12 @@ func (tkn *Tokenizer) scanNumber() (int, string) {
 			token = HEXNUM
 			tkn.skip(1)
 			tkn.scanMantissa(16)
+			goto exit
+		}
+		if tkn.cur() == 'b' || tkn.cur() == 'B' {
+			token = BITNUM
+			tkn.skip(1)
+			tkn.scanMantissa(2)
 			goto exit
 		}
 	}

@@ -20,24 +20,27 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
-	tmClient = tmc.NewClient()
+	tmClient                 = tmc.NewClient()
+	dbCredentialFile         string
+	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 )
 
 // Restart restarts vttablet and mysql.
@@ -88,19 +91,10 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	return pos, gtID
 }
 
-// GetReplicationStatus gets the replication status of given vttablet
-func GetReplicationStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
-	ctx := context.Background()
-	vtablet := getTablet(vttablet.GrpcPort, hostname)
-	pos, err := tmClient.ReplicationStatus(ctx, vtablet)
-	require.NoError(t, err)
-	return pos
-}
-
 // VerifyRowsInTabletForTable verifies the total number of rows in a table.
 // This is used to check that replication has caught up with the changes on primary.
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(1 * time.Minute)
 	for time.Now().Before(timeout) {
 		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
 		// but eventually it will catch up and if not caught up in required time, testcase will fail
@@ -183,10 +177,10 @@ func ResetTabletDirectory(tablet Vttablet) error {
 	return tablet.MysqlctlProcess.Start()
 }
 
-func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
+func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+	return &topodatapb.Tablet{Hostname: hostname, PortMap: portMap}
 }
 
 func filterResultForWarning(input string) string {
@@ -291,4 +285,109 @@ func filterDoubleDashArgs(args []string, version int) (filtered []string) {
 	}
 
 	return filtered
+}
+
+// WriteDbCredentialToTmp writes JSON formatted db credentials to the
+// specified tmp directory.
+func WriteDbCredentialToTmp(tmpDir string) string {
+	data := []byte(`{
+        "vt_dba": ["VtDbaPass"],
+        "vt_app": ["VtAppPass"],
+        "vt_allprivs": ["VtAllprivsPass"],
+        "vt_repl": ["VtReplPass"],
+        "vt_filtered": ["VtFilteredPass"]
+	}`)
+	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
+	os.WriteFile(dbCredentialFile, data, 0666)
+	return dbCredentialFile
+}
+
+// GetPasswordUpdateSQL returns the SQL for updating the users' passwords
+// to the static creds used throughout tests.
+func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
+	pwdChangeCmd := `
+					# Set real passwords for all users.
+					SET PASSWORD FOR 'root'@'localhost' = 'RootPass';
+					SET PASSWORD FOR 'vt_dba'@'localhost' = 'VtDbaPass';
+					SET PASSWORD FOR 'vt_app'@'localhost' = 'VtAppPass';
+					SET PASSWORD FOR 'vt_allprivs'@'localhost' = 'VtAllprivsPass';
+					SET PASSWORD FOR 'vt_repl'@'%' = 'VtReplPass';
+					SET PASSWORD FOR 'vt_filtered'@'localhost' = 'VtFilteredPass';
+					FLUSH PRIVILEGES;
+					`
+	return pwdChangeCmd
+}
+
+// CheckSrvKeyspace confirms that the cell and keyspace contain the expected
+// shard mappings.
+func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodatapb.TabletType][]string, ci LocalProcessCluster) {
+	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
+
+	currentPartition := map[topodatapb.TabletType][]string{}
+
+	for _, partition := range srvKeyspace.Partitions {
+		currentPartition[partition.ServedType] = []string{}
+		for _, shardRef := range partition.ShardReferences {
+			currentPartition[partition.ServedType] = append(currentPartition[partition.ServedType], shardRef.Name)
+		}
+	}
+
+	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
+}
+
+// GetSrvKeyspace returns the SrvKeyspace structure for the cell and keyspace.
+func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodatapb.SrvKeyspace {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
+	require.Nil(t, err)
+	var srvKeyspace topodatapb.SrvKeyspace
+
+	err = json2.Unmarshal([]byte(output), &srvKeyspace)
+	require.Nil(t, err)
+	return &srvKeyspace
+}
+
+// ExecuteOnTablet executes a query on the specified vttablet.
+// It should always be called with a primary tablet for a keyspace/shard.
+func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, expectFail bool) {
+	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
+	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	if expectFail {
+		require.Error(t, err)
+	} else {
+		require.Nil(t, err)
+	}
+	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
+}
+
+func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets int, expectedStatus []string) error {
+	// wait for both tablet to get into replica state in topo
+	waitUntil := time.Now().Add(10 * time.Second)
+	for time.Now().Before(waitUntil) {
+		result, err := vtctlClientProcess.ExecuteCommandWithOutput("ListAllTablets")
+		if err != nil {
+			return err
+		}
+
+		tabletsFromCMD := strings.Split(result, "\n")
+		tabletCountFromCMD := 0
+
+		for _, line := range tabletsFromCMD {
+			if len(line) > 0 {
+				for _, status := range expectedStatus {
+					if strings.Contains(line, status) {
+						tabletCountFromCMD = tabletCountFromCMD + 1
+						break
+					}
+				}
+			}
+		}
+
+		if tabletCountFromCMD >= expectedTablets {
+			return nil
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
 }
