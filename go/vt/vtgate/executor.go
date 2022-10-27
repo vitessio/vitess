@@ -394,6 +394,10 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return nil
 	})
 
+	qr.CommitDuration = logStats.CommitTime
+	qr.ExecuteDuration = logStats.ExecuteTime
+	qr.PlanDuration = logStats.PlanTime
+
 	return stmtType, qr, err
 }
 

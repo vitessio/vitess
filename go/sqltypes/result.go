@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -35,6 +36,9 @@ type Result struct {
 	SessionStateChanges string           `json:"session_state_changes"`
 	StatusFlags         uint16           `json:"status_flags"`
 	Info                string           `json:"info"`
+	PlanDuration        time.Duration    `json:"plan_duration"`
+	ExecuteDuration     time.Duration    `json:"execute_duration"`
+	CommitDuration      time.Duration    `json:"commit_duration"`
 }
 
 //goland:noinspection GoUnusedConst

@@ -17,11 +17,15 @@ limitations under the License.
 package sqltypes
 
 import (
+	"time"
+
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // This file contains the proto3 conversion functions for the structures
@@ -100,11 +104,14 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 		return nil
 	}
 	return &querypb.QueryResult{
-		Fields:       qr.Fields,
-		RowsAffected: qr.RowsAffected,
-		InsertId:     qr.InsertID,
-		Rows:         RowsToProto3(qr.Rows),
-		Info:         qr.Info,
+		Fields:          qr.Fields,
+		RowsAffected:    qr.RowsAffected,
+		InsertId:        qr.InsertID,
+		Rows:            RowsToProto3(qr.Rows),
+		Info:            qr.Info,
+		ExecuteDuration: protoutil.DurationToProto(qr.ExecuteDuration),
+		PlanDuration:    protoutil.DurationToProto(qr.PlanDuration),
+		CommitDuration:  protoutil.DurationToProto(qr.CommitDuration),
 	}
 }
 
@@ -115,12 +122,20 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 		return nil
 	}
 	return &Result{
-		Fields:       qr.Fields,
-		RowsAffected: qr.RowsAffected,
-		InsertID:     qr.InsertId,
-		Rows:         proto3ToRows(qr.Fields, qr.Rows),
-		Info:         qr.Info,
+		Fields:          qr.Fields,
+		RowsAffected:    qr.RowsAffected,
+		InsertID:        qr.InsertId,
+		Rows:            proto3ToRows(qr.Fields, qr.Rows),
+		Info:            qr.Info,
+		ExecuteDuration: parseProtoDuration(qr.ExecuteDuration),
+		PlanDuration:    parseProtoDuration(qr.PlanDuration),
+		CommitDuration:  parseProtoDuration(qr.CommitDuration),
 	}
+}
+
+func parseProtoDuration(d *vttime.Duration) time.Duration {
+	duration, _, _ := protoutil.DurationFromProto(d)
+	return duration
 }
 
 // CustomProto3ToResult converts a proto3 Result to an internal data structure. This function
