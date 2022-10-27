@@ -116,13 +116,15 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --pool-name-prefix
 - --enable-autocommit Autocommit is always allowed
 
+
 #### <a id="vttablet-startup-flag-deprecations"/>vttablet startup flag deprecations
-- --enable-query-plan-field-caching has been deprecated. It will be removed in v16.
-- --enable_semi_sync has been deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
-- --queryserver-config-pool-prefill-parallelism, --queryserver-config-stream-pool-prefill-parallelism and --queryserver-config-transaction-prefill-parallelism have all been deprecated. They will be removed in v16.
+- `--enable-query-plan-field-caching` has been deprecated. It will be removed in v16.
+- `--enable_semi_sync` has been deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+- `--queryserver-config-pool-prefill-parallelism`, `--queryserver-config-stream-pool-prefill-parallelism` and `--queryserver-config-transaction-prefill-parallelism` have all been deprecated. They will be removed in v16.
+- `--backup_storage_hook` has been deprecated, consider using one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
 #### <a id="vtbackup-flag-deprecations"/>vtbackup flag deprecations
-- --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.
+- `--backup_storage_hook` has been deprecated, consider using one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
 ### <a id="vtgate"/>VTGate
 

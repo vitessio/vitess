@@ -126,6 +126,8 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 #### <a id="vtbackup-flag-deprecations"/>vtbackup flag deprecations
 - `--backup_storage_hook` has been deprecated, consider using one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
+### <a id="vtgate"/>VTGate
+
 #### <a id="vtgate--mysql-server-pool-conn-read-buffers"/>vtgate --mysql-server-pool-conn-read-buffers
 
 `--mysql-server-pool-conn-read-buffers` enables pooling of buffers used to read from incoming
