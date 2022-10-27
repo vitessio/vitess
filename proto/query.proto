@@ -26,6 +26,7 @@ option java_package = "io.vitess.proto";
 
 import "topodata.proto";
 import "vtrpc.proto";
+import "vttime.proto";
 
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
@@ -398,6 +399,9 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
+  vttime.Duration execute_duration = 8;
+  vttime.Duration plan_duration = 9;
+  vttime.Duration commit_duration = 10;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
