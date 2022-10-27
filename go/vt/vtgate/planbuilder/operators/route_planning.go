@@ -79,7 +79,7 @@ func TransformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operato
 		return nil, err
 	}
 
-	return op, nil
+	return compact(ctx, op)
 }
 
 func optimizeFilter(op *Filter) (Operator, bool, error) {
@@ -131,7 +131,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 	if len(unresolved) > 0 {
 		// if we have any predicates that none of the joins or tables took care of,
 		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
-		result = addFilter(result, unresolved...)
+		result = newFilter(result, unresolved...)
 	}
 
 	return
@@ -258,7 +258,10 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Opera
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source = addFilter(plan.Source, qg.NoDeps)
+			plan.Source, err = PushPredicate(ctx, qg.NoDeps, plan.Source)
+			if err != nil {
+				return nil, err
+			}
 		}
 		plans[i] = plan
 	}

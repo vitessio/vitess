@@ -59,3 +59,9 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	}
 	return result
 }
+
+func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
+	return &Filter{
+		Source: op, Predicates: expr,
+	}
+}

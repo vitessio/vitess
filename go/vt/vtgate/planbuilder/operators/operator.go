@@ -112,7 +112,7 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 
 	switch tableExpr.Join {
 	case sqlparser.NormalJoinType:
-		return createInnerJoin(tableExpr, lhs, rhs), nil
+		return createInnerJoin(ctx, tableExpr, lhs, rhs)
 	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
 		return createOuterJoin(tableExpr, lhs, rhs)
 	default:
@@ -248,7 +248,10 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op = addFilter(op, sqlparser.RemoveKeyspaceFromColName(expr))
+			op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr), op)
+			if err != nil {
+				return nil, err
+			}
 			addColumnEquality(ctx, expr)
 		}
 	}

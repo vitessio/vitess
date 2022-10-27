@@ -31,19 +31,49 @@ import (
 func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
 	switch op := op.(type) {
 	case *Filter:
-
-		op.Predicates = append(op.Predicates, expr)
+		var err error
+		op.Source, err = PushPredicate(ctx, expr, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		return op, nil
+	case *QueryGraph:
+		err := op.addPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
 		return op, nil
 	case *Route:
 		return pushPredicateOnRoute(ctx, expr, op)
+	case *Join:
+		np, err := op.pushPredicateOnJoin(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		if np != nil {
+			return newFilter(op, np), nil
+		}
+		return op, nil
 	case *ApplyJoin:
 		return pushPredicateOnApplyJoin(ctx, expr, op)
 	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return addFilter(op, expr), nil
+		return newFilter(op, expr), nil
 	case *Derived:
 		return pushPredicateOnDerived(ctx, expr, op)
+	case *Vindex:
+		err := op.addPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		return op, nil
+	case *Union:
+		err := op.addPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		return op, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
 	}
@@ -113,7 +143,7 @@ func pushPredicateOnApplyJoin(ctx *plancontext.PlanningContext, expr sqlparser.E
 
 		// finally, if we can't turn the outer join into an inner,
 		// we need to filter after the join has been evaluated
-		return addFilter(op, expr), nil
+		return newFilter(op, expr), nil
 	case deps.IsSolvedBy(TableID(op)):
 		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(op))
 		if err != nil {

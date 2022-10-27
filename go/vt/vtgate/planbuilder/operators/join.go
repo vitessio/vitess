@@ -107,10 +107,46 @@ func createJoin(LHS, RHS Operator) Operator {
 	return &Join{LHS: LHS, RHS: RHS}
 }
 
-func createInnerJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
+func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
 	op := createJoin(lhs, rhs)
 	if tableExpr.Condition.On != nil {
-		op = addFilter(op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
+		var err error
+		op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), op)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return op
+	return op, nil
+}
+
+func (j *Join) pushPredicateOnJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, error) {
+	deps := ctx.SemTable.RecursiveDeps(expr)
+	var err error
+	switch {
+	// can push to the left
+	case deps.IsSolvedBy(TableID(j.LHS)):
+		j.LHS, err = PushPredicate(ctx, expr, j.LHS)
+		return nil, err
+
+	// can push to the right only for inner joins
+	case deps.IsSolvedBy(TableID(j.RHS)):
+		j.tryConvertToInnerJoin(ctx, expr)
+
+		if !j.LeftJoin {
+			j.RHS, err = PushPredicate(ctx, expr, j.RHS)
+			return nil, err
+		}
+
+		return expr, nil
+	case deps.IsSolvedBy(TableID(j)):
+		j.tryConvertToInnerJoin(ctx, expr)
+
+		if !j.LeftJoin {
+			j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
+			return nil, nil
+		}
+
+		return expr, nil
+	}
+	panic("should have been able to push the predicate")
 }

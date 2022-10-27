@@ -23,15 +23,6 @@ import (
 
 // compact will optimise the operator tree into a smaller but equivalent version
 func compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
-	changed := true
-	var err error
-	for changed {
-		op, changed, err = rewriteBottomUp(ctx, op, predicatePushDown)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	newOp, _, err := rewriteBottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op Operator) (Operator, bool, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
