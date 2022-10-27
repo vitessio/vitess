@@ -137,6 +137,10 @@ func (o *OurError) Error() string {
 	return o.Err.Error()
 }
 
+func (o *OurError) Cause() error {
+	return o.Err
+}
+
 var _ error = (*OurError)(nil)
 
 func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(args ...any) *OurError {
