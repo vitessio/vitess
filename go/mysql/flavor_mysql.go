@@ -390,6 +390,7 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	case InstantDDLFlavorCapability,
+		InstantExpandEnumCapability,
 		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
 		InstantChangeColumnDefaultFlavorCapability:
