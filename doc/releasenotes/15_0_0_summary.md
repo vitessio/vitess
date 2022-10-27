@@ -17,8 +17,9 @@
   - [vtgate --mysql-server-pool-conn-read-buffers](#vtgate--mysql-server-pool-conn-read-buffers)
 - **[VDiff2](#vdiff2)**
   - [Resume Workflow](#resume-workflow)
+- **[New command line flags and behavior](#new-command-line)**
   - [vtctl GetSchema --table-schema-only](#vtctl-getschema--table-schema-only)
-  - [Support for Additional Compressors and Decompressors During Backup & Restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
+  - [Support for Additional Compressors and Decompressors During Backup & Restore](#support-for-additional-compressors-and-decompressors-during-backup-&-restore)
   - [Independent OLAP and OLTP Transactional Timeouts](#independant-olap-and-oltp-transactional-timeouts)
   - [Support for Specifying Group Information in Calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
 - **[Online DDL Changes](#online-ddl-changes)**
@@ -172,6 +173,8 @@ We also made a number of other enhancements like progress reporting and features
 Now that VDiff v2 is feature complete in 15.0, we hope to make it GA in 16.0.
 
 Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vreplication/vdiff2/) for additional information.
+
+### <a id="new-command-line"/>New command line flags and behavior
 
 #### <a id="vtctl-getschema--table-schema-only"/>vtctl GetSchema --table-schema-only
 
