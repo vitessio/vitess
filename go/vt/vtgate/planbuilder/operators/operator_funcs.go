@@ -47,7 +47,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 		return op.addPredicate(ctx, expr)
 	case *ApplyJoin, *Join:
 		join := op.(joinOperator) // stupid golang doesn't understand this without an explicit cast
-		return addPredicate(join, ctx, expr)
+		return addPredicate(join, ctx, expr, false)
 	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
@@ -311,7 +311,7 @@ type joinOperator interface {
 	addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
 }
 
-func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlparser.Expr, joinPredicates bool) (Operator, error) {
 	deps := ctx.SemTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(TableID(join.getLHS())):
@@ -329,7 +329,7 @@ func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlp
 			join.makeInner()
 		}
 
-		if !join.isInner() {
+		if !joinPredicates && !join.isInner() {
 			// if we still are dealing with an outer join
 			// we need to filter after the join has been evaluated
 			return newFilter(join, expr), nil
@@ -346,11 +346,11 @@ func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlp
 	case deps.IsSolvedBy(TableID(join)):
 		// if we are dealing with an outer join, always start by checking if this predicate can turn
 		// the join into an inner join
-		if !join.isInner() && canConvertToInner(ctx, expr, TableID(join.getRHS())) {
+		if !joinPredicates && !join.isInner() && canConvertToInner(ctx, expr, TableID(join.getRHS())) {
 			join.makeInner()
 		}
 
-		if !join.isInner() {
+		if !joinPredicates && !join.isInner() {
 			// if we still are dealing with an outer join
 			// we need to filter after the join has been evaluated
 			return newFilter(join, expr), nil

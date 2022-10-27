@@ -919,30 +919,18 @@ func pushJoinPredicates(
 	switch op := op.(type) {
 	case *ApplyJoin:
 		return pushJoinPredicateOnJoin(ctx, exprs, op)
-	case *Route:
-		return pushJoinPredicateOnRoute(ctx, exprs, op)
-	case *Table:
-		return PushPredicate(ctx, sqlparser.AndExpressions(exprs...), op)
-	case *Derived:
-		return pushJoinPredicateOnDerived(ctx, exprs, op)
-	case *Filter:
-		op.Predicates = append(op.Predicates, exprs...)
+	case *Table, *Derived, *Filter, *Route:
+		for _, expr := range exprs {
+			var err error
+			op, err = PushPredicate(ctx, expr, op)
+			if err != nil {
+				return nil, err
+			}
+		}
 		return op, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown type %T pushJoinPredicates", op)
 	}
-}
-
-func pushJoinPredicateOnRoute(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, op *Route) (Operator, error) {
-	for _, expr := range exprs {
-		err := op.UpdateRoutingLogic(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-	}
-	newSrc, err := pushJoinPredicates(ctx, exprs, op.Source)
-	op.Source = newSrc
-	return op, err
 }
 
 func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *ApplyJoin) (Operator, error) {
@@ -1007,30 +995,5 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 		exprs = append(exprs, node.Predicate)
 	}
 	node.Predicate = sqlparser.AndExpressions(exprs...)
-	return node, nil
-}
-
-func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *Derived) (Operator, error) {
-	node = Clone(node).(*Derived)
-
-	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
-	for _, expr := range exprs {
-		tblInfo, err := ctx.SemTable.TableInfoForExpr(expr)
-		if err != nil {
-			return nil, err
-		}
-		rewritten, err := semantics.RewriteDerivedTableExpression(expr, tblInfo)
-		if err != nil {
-			return nil, err
-		}
-		newExpressions = append(newExpressions, rewritten)
-	}
-
-	newInner, err := pushJoinPredicates(ctx, newExpressions, node.Source)
-	if err != nil {
-		return nil, err
-	}
-
-	node.Source = newInner
 	return node, nil
 }
