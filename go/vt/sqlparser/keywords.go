@@ -599,7 +599,6 @@ var keywords = []keyword{
 	{"text", TEXT},
 	{"than", THAN},
 	{"then", THEN},
-	{"threshold", THRESHOLD},
 	{"throttle", THROTTLE},
 	{"time", TIME},
 	{"timestamp", TIMESTAMP},
