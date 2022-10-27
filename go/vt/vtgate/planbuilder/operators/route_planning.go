@@ -907,93 +907,17 @@ func hexEqual(a, b *sqlparser.Literal) bool {
 	return false
 }
 
-func pushJoinPredicates(
-	ctx *plancontext.PlanningContext,
-	exprs []sqlparser.Expr,
-	op Operator,
-) (Operator, error) {
+func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, op *ApplyJoin) (Operator, error) {
 	if len(exprs) == 0 {
 		return op, nil
 	}
 
-	switch op := op.(type) {
-	case *ApplyJoin:
-		return pushJoinPredicateOnJoin(ctx, exprs, op)
-	case *Table, *Derived, *Filter, *Route:
-		for _, expr := range exprs {
-			var err error
-			op, err = PushPredicate(ctx, expr, op)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return op, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown type %T pushJoinPredicates", op)
-	}
-}
-
-func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *ApplyJoin) (Operator, error) {
-	node = Clone(node).(*ApplyJoin)
-	var rhsPreds []sqlparser.Expr
-	var lhsPreds []sqlparser.Expr
-	var lhsVarsName []string
 	for _, expr := range exprs {
-		// We find the dependencies for the given expression and if they are solved entirely by one
-		// side of the join tree, then we push the predicate there and do not break it into parts.
-		// In case a predicate has no dependencies, then it is pushed to both sides so that we can filter
-		// rows as early as possible making join cheaper on the vtgate level.
-		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
-		singleSideDeps := false
-		lhsTables := TableID(node.LHS)
-		if depsForExpr.IsSolvedBy(lhsTables) {
-			lhsPreds = append(lhsPreds, expr)
-			singleSideDeps = true
-		}
-		if depsForExpr.IsSolvedBy(TableID(node.RHS)) {
-			rhsPreds = append(rhsPreds, expr)
-			singleSideDeps = true
-		}
-
-		if singleSideDeps {
-			continue
-		}
-
-		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, lhsTables)
+		_, err := addPredicate(op, ctx, expr, true)
 		if err != nil {
 			return nil, err
 		}
-		node.LHSColumns = append(node.LHSColumns, cols...)
-		lhsVarsName = append(lhsVarsName, bvName...)
-		rhsPreds = append(rhsPreds, predicate)
-	}
-	if node.LHSColumns != nil && lhsVarsName != nil {
-		newNode, offsets, err := PushOutputColumns(ctx, node.LHS, node.LHSColumns...)
-		if err != nil {
-			return nil, err
-		}
-		node.LHS = newNode
-		for i, idx := range offsets {
-			node.Vars[lhsVarsName[i]] = idx
-		}
-	}
-	lhsPlan, err := pushJoinPredicates(ctx, lhsPreds, node.LHS)
-	if err != nil {
-		return nil, err
 	}
 
-	rhsPlan, err := pushJoinPredicates(ctx, rhsPreds, node.RHS)
-	if err != nil {
-		return nil, err
-	}
-
-	node.LHS = lhsPlan
-	node.RHS = rhsPlan
-	// If the predicate field is previously non-empty
-	// keep that predicate too
-	if node.Predicate != nil {
-		exprs = append(exprs, node.Predicate)
-	}
-	node.Predicate = sqlparser.AndExpressions(exprs...)
-	return node, nil
+	return op, nil
 }

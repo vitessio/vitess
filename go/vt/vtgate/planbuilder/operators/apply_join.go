@@ -107,7 +107,7 @@ func (a *ApplyJoin) isInner() bool {
 }
 
 func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
-	bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a))
+	bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
 	if err != nil {
 		return err
 	}
@@ -115,16 +115,21 @@ func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 	if err != nil {
 		return err
 	}
+	a.LHSColumns = append(a.LHSColumns, cols...)
+
 	a.LHS = lhs
-	vars := map[string]int{}
+	if a.Vars == nil {
+		a.Vars = map[string]int{}
+	}
 	for i, idx := range idxs {
-		vars[bvName[i]] = idx
+		a.Vars[bvName[i]] = idx
 	}
 	rhs, err := PushPredicate(ctx, predicate, a.RHS)
 	if err != nil {
 		return err
 	}
 	a.RHS = rhs
-	a.Predicate = sqlparser.AndExpressions(a.Predicate, expr)
+
+	a.Predicate = sqlparser.AndExpressions(expr, a.Predicate)
 	return nil
 }
