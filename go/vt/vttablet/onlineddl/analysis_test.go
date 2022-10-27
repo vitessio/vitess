@@ -139,7 +139,7 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			instant: false,
 		},
 		{
-			// fail because on top of changing the default valuem, the datatype is changed, too
+			// fail because on top of changing the default value, the datatype is changed, too
 			version: "8.0.21",
 			create:  "create table t(id int, i1 int not null, primary key(id))",
 			alter:   "alter table t modify column i1 bigint not null default 3",
