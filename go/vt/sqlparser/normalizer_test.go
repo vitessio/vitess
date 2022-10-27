@@ -120,19 +120,17 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// val should be reused only in subqueries of DMLs
 		in:      "update a set v1=(select 5 from t), v2=5, v3=(select 5 from t), v4=5",
-		outstmt: "update a set v1 = (select :bv1 from t), v2 = :bv2, v3 = (select :bv1 from t), v4 = :bv3",
+		outstmt: "update a set v1 = (select :bv1 from t), v2 = :bv1, v3 = (select :bv1 from t), v4 = :bv1",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(5),
-			"bv2": sqltypes.Int64BindVariable(5),
-			"bv3": sqltypes.Int64BindVariable(5),
 		},
 	}, {
 		// list vars should work for DMLs also
 		in:      "update a set v1=5 where v2 in (1, 4, 5)",
-		outstmt: "update a set v1 = :bv1 where v2 in ::bv2",
+		outstmt: "update a set v1 = :v1 where v2 in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.Int64BindVariable(5),
-			"bv2": sqltypes.TestBindVariable([]any{1, 4, 5}),
+			"v1":  sqltypes.Int64BindVariable(5),
+			"bv1": sqltypes.TestBindVariable([]any{1, 4, 5}),
 		},
 	}, {
 		// Hex number values should work for selects
@@ -157,10 +155,10 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// Hex number values should work for DMLs
-		in:      "update a set v1 = 0x12",
-		outstmt: "update a set v1 = :bv1",
+		in:      "update a set foo = 0x12",
+		outstmt: "update a set foo = :foo",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexNumBindVariable([]byte("0x12")),
+			"foo": sqltypes.HexNumBindVariable([]byte("0x12")),
 		},
 	}, {
 		// Bin values work fine
@@ -172,9 +170,9 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
-		outstmt: "update a set v1 = :bv1",
+		outstmt: "update a set v1 = :v1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexNumBindVariable([]byte("0x3")),
+			"v1": sqltypes.HexNumBindVariable([]byte("0x3")),
 		},
 	}, {
 		// ORDER BY column_position
