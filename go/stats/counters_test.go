@@ -251,7 +251,7 @@ func TestCountersCombineDimension(t *testing.T) {
 	assert.Equal(t, `{"c1": 1}`, c0.String())
 
 	clear()
-	*combineDimensions = "a,c"
+	combineDimensions = "a,c"
 
 	c1 := NewCountersWithSingleLabel("counter_combine_dim1", "help", "label")
 	c1.Add("c1", 1)

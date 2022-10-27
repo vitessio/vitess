@@ -190,7 +190,7 @@ func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersi
 	}
 
 	d := cm.GetParsedComments().Directives()
-	val, ok := d[sqlparser.DirectiveQueryPlanner]
+	val, ok := d.GetString(sqlparser.DirectiveQueryPlanner, "")
 	if !ok {
 		return plancontext.PlannerVersion(0), false
 	}
@@ -221,7 +221,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Delete:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildDeletePlan, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Union:
 		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
 		if err != nil {

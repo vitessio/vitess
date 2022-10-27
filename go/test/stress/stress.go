@@ -222,9 +222,8 @@ func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
 //
 // This method returns a pointer to its Stresser to allow chained function call, like:
 //
-// 		s := stress.New(t, cfg).Start()
-//		s.Stop()
-//
+//	s := stress.New(t, cfg).Start()
+//	s.Stop()
 func (s *Stresser) Start() *Stresser {
 	if s.cfg.PrintLogs {
 		s.t.Log("Starting load testing ...")

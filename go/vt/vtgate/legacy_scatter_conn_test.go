@@ -258,9 +258,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 }
 
 func TestMaxMemoryRows(t *testing.T) {
-	save := *maxMemoryRows
-	*maxMemoryRows = 3
-	defer func() { *maxMemoryRows = save }()
+	save := maxMemoryRows
+	maxMemoryRows = 3
+	defer func() { maxMemoryRows = save }()
 
 	createSandbox("TestMaxMemoryRows")
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -575,7 +575,7 @@ func TestReservePrequeries(t *testing.T) {
 	destinations := []key.Destination{key.DestinationShard("0")}
 
 	executeOnShards(t, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 2+1, len(sbc0.StringQueries()))
+	assert.Equal(t, 1+1, len(sbc0.StringQueries()))
 }
 
 func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *ScatterConn {

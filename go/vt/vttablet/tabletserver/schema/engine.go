@@ -317,7 +317,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		se.env.LogError()
 	}()
 
-	conn, err := se.conns.Get(ctx)
+	conn, err := se.conns.Get(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -589,7 +589,7 @@ func (se *Engine) GetSchema() map[string]*Table {
 
 // GetConnection returns a connection from the pool
 func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
-	return se.conns.Get(ctx)
+	return se.conns.Get(ctx, nil)
 }
 
 func (se *Engine) handleDebugSchema(response http.ResponseWriter, request *http.Request) {

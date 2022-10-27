@@ -127,6 +127,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debu	g
-	eval, err := testSingle(t, `SELECT ('foo' collate utf8mb4_0900_as_cs) = 0xFF`)
+	eval, err := testSingle(t, `SELECT LCASE(-999999999999999999999999)`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupByID(eval.Collation()).Name())
 }

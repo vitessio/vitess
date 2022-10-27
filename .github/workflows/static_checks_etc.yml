@@ -10,6 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
       - name: Check if workflow needs to be skipped
         id: skip-workflow
         run: |
@@ -22,7 +29,7 @@ jobs:
 
       - name: Checkout code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Run FOSSA scan and upload build data
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -41,12 +48,14 @@ jobs:
               - '**/*.go'
               - '*.go'
               - 'go.[sumod]'
+              - '.github/workflows/static_checks_etc.yml'
             parser_changes:
               - 'go/vt/sqlparser/**'
               - 'go.[sumod]'
               - 'build.env'
               - 'bootstrap.sh'
               - 'tools/**'
+              - '.github/workflows/static_checks_etc.yml'
             proto_changes:
               - 'bootstrap.sh'
               - 'tools/**'
@@ -55,6 +64,7 @@ jobs:
               - 'Makefile'
               - 'go/vt/proto/**'
               - 'proto/*.proto'
+              - '.github/workflows/static_checks_etc.yml'
             sizegen:
               - 'go/**/*.go'
               - 'test.go'
@@ -63,6 +73,7 @@ jobs:
               - 'go.[sumod]'
               - 'tools/**'
               - 'bootstrap.sh'
+              - '.github/workflows/static_checks_etc.yml'
             visitor:
               - 'go/tools/asthelpergen/**'
               - 'go/vt/sqlparser/**'
@@ -72,18 +83,20 @@ jobs:
               - 'tools/**'
               - 'bootstrap.sh'
               - 'misc/git/hooks/asthelpers'
+              - '.github/workflows/static_checks_etc.yml'
             end_to_end:
               - 'docker/**'
               - 'test.go'
               - 'Makefile'
               - 'bootstrap.sh'
+              - '.github/workflows/static_checks_etc.yml'
 
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.18.4
+          go-version: 1.18.7
 
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -129,17 +142,17 @@ jobs:
       - name: check_make_parser
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
         run: |
-          tools/check_make_parser.sh
+          tools/check_make_parser.sh || exit 1
 
       - name: check_make_sizegen
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.sizegen == 'true'
         run: |
-          tools/check_make_sizegen.sh
+          tools/check_make_sizegen.sh || exit 1
 
       - name: check_make_visitor
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.visitor == 'true'
         run: |
-          misc/git/hooks/asthelpers
+          misc/git/hooks/asthelpers || exit 1
 
       - name: run ensure_bootstrap_version
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -162,7 +175,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/...
+        run: $(go env GOPATH)/bin/golangci-lint run go/... || exit 1
 
       - name: Run go mod tidy
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -181,4 +194,4 @@ jobs:
       - name: check_make_proto
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
         run: |
-          tools/check_make_proto.sh
+          tools/check_make_proto.sh || exit 1

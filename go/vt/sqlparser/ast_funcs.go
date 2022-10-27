@@ -161,6 +161,9 @@ const (
 	HexNum
 	HexVal
 	BitVal
+	DateVal
+	TimeVal
+	TimestampVal
 )
 
 // queryOptimizerPrefix is the prefix of an optimizer hint comment.
@@ -514,6 +517,21 @@ func NewHexLiteral(in string) *Literal {
 // NewBitLiteral builds a new BitVal containing a bit literal.
 func NewBitLiteral(in string) *Literal {
 	return &Literal{Type: BitVal, Val: in}
+}
+
+// NewDateLiteral builds a new Date.
+func NewDateLiteral(in string) *Literal {
+	return &Literal{Type: DateVal, Val: in}
+}
+
+// NewTimeLiteral builds a new Date.
+func NewTimeLiteral(in string) *Literal {
+	return &Literal{Type: TimeVal, Val: in}
+}
+
+// NewTimestampLiteral builds a new Date.
+func NewTimestampLiteral(in string) *Literal {
+	return &Literal{Type: TimestampVal, Val: in}
 }
 
 // NewArgument builds a new ValArg.
@@ -900,6 +918,11 @@ func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
+// GetLimit gets the limit
+func (node *Select) GetLimit() *Limit {
+	return node.Limit
+}
+
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
@@ -923,6 +946,11 @@ func (node *Select) MakeDistinct() {
 // GetColumnCount return SelectExprs count.
 func (node *Select) GetColumnCount() int {
 	return len(node.SelectExprs)
+}
+
+// GetColumns gets the columns
+func (node *Select) GetColumns() SelectExprs {
+	return node.SelectExprs
 }
 
 // SetComments implements the SelectStatement interface
@@ -1010,6 +1038,16 @@ func (node *Union) GetOrderBy() OrderBy {
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
+}
+
+// GetLimit gets the limit
+func (node *Union) GetLimit() *Limit {
+	return node.Limit
+}
+
+// GetColumns gets the columns
+func (node *Union) GetColumns() SelectExprs {
+	return node.Left.GetColumns()
 }
 
 // SetLock sets the lock clause
@@ -1611,6 +1649,8 @@ func (ty ExplainType) ToString() string {
 		return JSONStr
 	case VitessType:
 		return VitessStr
+	case VTExplainType:
+		return VTExplainStr
 	case TraditionalType:
 		return TraditionalStr
 	case AnalyzeType:

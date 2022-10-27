@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"sync/atomic"
 	"time"
@@ -67,7 +68,7 @@ func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, 
 	return
 }
 
-//MarshalJSON serializes the plan into a JSON representation.
+// MarshalJSON serializes the plan into a JSON representation.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	var instructions *PrimitiveDescription
 	if p.Instructions != nil {
@@ -98,5 +99,14 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		Errors:       atomic.LoadUint64(&p.Errors),
 		TablesUsed:   p.TablesUsed,
 	}
-	return json.Marshal(marshalPlan)
+
+	b := new(bytes.Buffer)
+	enc := json.NewEncoder(b)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(marshalPlan)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
 }

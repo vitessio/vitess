@@ -65,6 +65,15 @@ func (client *gRPCVtctldClient) ApplySchema(ctx context.Context, in *vtctldatapb
 	return client.c.ApplySchema(ctx, in, opts...)
 }
 
+// ApplyShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyShardRoutingRules(ctx context.Context, in *vtctldatapb.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyShardRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplyShardRoutingRules(ctx, in, opts...)
+}
+
 // ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	if client.c == nil {
@@ -254,6 +263,15 @@ func (client *gRPCVtctldClient) GetCellsAliases(ctx context.Context, in *vtctlda
 	return client.c.GetCellsAliases(ctx, in, opts...)
 }
 
+// GetFullStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetFullStatus(ctx context.Context, in *vtctldatapb.GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetFullStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetFullStatus(ctx, in, opts...)
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
 	if client.c == nil {
@@ -308,6 +326,15 @@ func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.Ge
 	return client.c.GetShard(ctx, in, opts...)
 }
 
+// GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetShardRoutingRules(ctx context.Context, in *vtctldatapb.GetShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetShardRoutingRules(ctx, in, opts...)
+}
+
 // GetSrvKeyspaceNames is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetSrvKeyspaceNames(ctx context.Context, in *vtctldatapb.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvKeyspaceNamesResponse, error) {
 	if client.c == nil {
@@ -360,6 +387,15 @@ func (client *gRPCVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.
 	}
 
 	return client.c.GetTablets(ctx, in, opts...)
+}
+
+// GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetTopologyPath(ctx, in, opts...)
 }
 
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
@@ -729,4 +765,13 @@ func (client *gRPCVtctldClient) ValidateVersionKeyspace(ctx context.Context, in 
 	}
 
 	return client.c.ValidateVersionKeyspace(ctx, in, opts...)
+}
+
+// ValidateVersionShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateVersionShard(ctx context.Context, in *vtctldatapb.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateVersionShard(ctx, in, opts...)
 }

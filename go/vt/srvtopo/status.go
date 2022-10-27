@@ -119,7 +119,6 @@ type SrvKeyspaceCacheStatus struct {
 	ExpirationTime time.Time
 	LastErrorTime  time.Time
 	LastError      error
-	LastErrorCtx   context.Context
 }
 
 // StatusAsHTML returns an HTML version of our status.

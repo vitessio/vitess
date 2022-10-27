@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/timer"
 	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,6 +41,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -99,18 +101,22 @@ type streamerPlan struct {
 // cp: the mysql conn params.
 // sh: the schema engine. The vstreamer uses it to convert the TableMap into field info.
 // startPos: a flavor compliant position to stream from. This can also contain the special
-//   value "current", which means start from the current position.
+//
+//	value "current", which means start from the current position.
+//
 // filter: the list of filtering rules. If a rule has a select expression for its filter,
-//   the select list can only reference direct columns. No other expressions are allowed.
-//   The select expression is allowed to contain the special 'keyspace_id()' function which
-//   will return the keyspace id of the row. Examples:
-//   "select * from t", same as an empty Filter,
-//   "select * from t where in_keyrange('-80')", same as "-80",
-//   "select * from t where in_keyrange(col1, 'hash', '-80')",
-//   "select col1, col2 from t where...",
-//   "select col1, keyspace_id() from t where...".
-//   Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
-//   Other constructs like joins, group by, etc. are not supported.
+//
+//	the select list can only reference direct columns. No other expressions are allowed.
+//	The select expression is allowed to contain the special 'keyspace_id()' function which
+//	will return the keyspace id of the row. Examples:
+//	"select * from t", same as an empty Filter,
+//	"select * from t where in_keyrange('-80')", same as "-80",
+//	"select * from t where in_keyrange(col1, 'hash', '-80')",
+//	"select col1, col2 from t where...",
+//	"select col1, keyspace_id() from t where...".
+//	Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
+//	Other constructs like joins, group by, etc. are not supported.
+//
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
@@ -139,6 +145,12 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	select {
 	case vs.vevents <- vschema:
 	case <-vs.ctx.Done():
+	default: // if there is a pending vschema in the channel, drain it and update it with the latest one
+		select {
+		case <-vs.vevents:
+			vs.vevents <- vschema
+		default:
+		}
 	}
 }
 
@@ -231,7 +243,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			return vs.send(vevents)
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 			newSize := len(vevent.GetDml())
-			if curSize+newSize > *defaultPacketSize {
+			if curSize+newSize > defaultPacketSize {
 				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
@@ -252,7 +264,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					newSize += len(rowChange.After.Values)
 				}
 			}
-			if curSize+newSize > *defaultPacketSize {
+			if curSize+newSize > defaultPacketSize {
 				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
@@ -274,13 +286,18 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 	injectHeartbeat := func(throttled bool) error {
 		now := time.Now().UnixNano()
-		err := bufferAndTransmit(&binlogdatapb.VEvent{
-			Type:        binlogdatapb.VEventType_HEARTBEAT,
-			Timestamp:   now / 1e9,
-			CurrentTime: now,
-			Throttled:   throttled,
-		})
-		return err
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+			err := bufferAndTransmit(&binlogdatapb.VEvent{
+				Type:        binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:   now / 1e9,
+				CurrentTime: now,
+				Throttled:   throttled,
+			})
+			return err
+		}
 	}
 
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
@@ -357,11 +374,16 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 			}
 		case vs.vschema = <-vs.vevents:
-			if err := vs.rebuildPlans(); err != nil {
-				return err
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				if err := vs.rebuildPlans(); err != nil {
+					return err
+				}
+				// Increment this counter for testing.
+				vschemaUpdateCount.Add(1)
 			}
-			// Increment this counter for testing.
-			vschemaUpdateCount.Add(1)
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:

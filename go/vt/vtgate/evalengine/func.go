@@ -30,16 +30,31 @@ import (
 )
 
 var builtinFunctions = map[string]builtin{
-	"coalesce":  builtinCoalesce{},
-	"greatest":  &builtinMultiComparison{name: "GREATEST", cmp: 1},
-	"least":     &builtinMultiComparison{name: "LEAST", cmp: -1},
-	"collation": builtinCollation{},
-	"bit_count": builtinBitCount{},
-	"hex":       builtinHex{},
+	"coalesce":         builtinCoalesce{},
+	"greatest":         &builtinMultiComparison{name: "GREATEST", cmp: 1},
+	"least":            &builtinMultiComparison{name: "LEAST", cmp: -1},
+	"collation":        builtinCollation{},
+	"bit_count":        builtinBitCount{},
+	"hex":              builtinHex{},
+	"ceil":             builtinCeil{},
+	"ceiling":          builtinCeiling{},
+	"lower":            builtinLower{},
+	"lcase":            builtinLcase{},
+	"upper":            builtinUpper{},
+	"ucase":            builtinUcase{},
+	"char_length":      builtinCharLength{},
+	"character_length": builtinCharacterLength{},
+	"length":           builtinLength{},
+	"octet_length":     builtinOctetLength{},
+	"bit_length":       builtinBitLength{},
+	"ascii":            builtinASCII{},
+	"repeat":           builtinRepeat{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
 	"isnull": builtinIsNullRewrite,
+	"ifnull": builtinIfNullRewrite,
+	"nullif": builtinNullIfRewrite,
 }
 
 type builtin interface {
@@ -378,7 +393,7 @@ func (builtinCollation) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, fl
 	return sqltypes.VarChar, 0
 }
 
-func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
+func builtinIsNullRewrite(args []Expr, _ TranslationLookup) (Expr, error) {
 	if len(args) != 1 {
 		return nil, argError("ISNULL")
 	}
@@ -387,6 +402,42 @@ func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
 		Op:        sqlparser.IsNullOp,
 		Check:     func(er *EvalResult) bool { return er.isNull() },
 	}, nil
+}
+
+func builtinIfNullRewrite(args []Expr, _ TranslationLookup) (Expr, error) {
+	if len(args) != 2 {
+		return nil, argError("IFNULL")
+	}
+	var result CaseExpr
+	result.cases = append(result.cases, WhenThen{
+		when: &IsExpr{
+			UnaryExpr: UnaryExpr{args[0]},
+			Op:        sqlparser.IsNullOp,
+			Check:     func(er *EvalResult) bool { return er.isNull() },
+		},
+		then: args[1],
+	})
+	result.Else = args[0]
+	return &result, nil
+}
+
+func builtinNullIfRewrite(args []Expr, _ TranslationLookup) (Expr, error) {
+	if len(args) != 2 {
+		return nil, argError("NULLIF")
+	}
+	var result CaseExpr
+	result.cases = append(result.cases, WhenThen{
+		when: &ComparisonExpr{
+			BinaryExpr: BinaryExpr{
+				Left:  args[0],
+				Right: args[1],
+			},
+			Op: compareEQ{},
+		},
+		then: NullExpr,
+	})
+	result.Else = args[0]
+	return &result, nil
 }
 
 type builtinBitCount struct{}
@@ -642,4 +693,64 @@ func (ta *typeAggregation) result() sqltypes.Type {
 		return sqltypes.Blob
 	}
 	return sqltypes.VarChar
+}
+
+type builtinCeil struct {
+}
+
+func (builtinCeil) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	argtype := inarg.typeof()
+	if inarg.isNull() {
+		result.setNull()
+		return
+	}
+
+	if sqltypes.IsIntegral(argtype) {
+		result.setInt64(inarg.int64())
+	} else if sqltypes.Decimal == argtype {
+		num := inarg.decimal()
+		num = num.Ceil()
+		intnum, isfit := num.Int64()
+		if isfit {
+			result.setInt64(intnum)
+		} else {
+			result.setDecimal(num, 0)
+		}
+	} else {
+		inarg.makeFloat()
+		result.setFloat(math.Ceil(inarg.float64()))
+	}
+}
+
+func (builtinCeil) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("CEIL")
+	}
+	t, f := args[0].typeof(env)
+	if sqltypes.IsIntegral(t) {
+		return sqltypes.Int64, f
+	} else if sqltypes.Decimal == t {
+		return sqltypes.Decimal, f
+	} else {
+		return sqltypes.Float64, f
+	}
+}
+
+type builtinCeiling struct {
+	builtinCeil
+}
+
+func (builtinCeiling) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("CEILING")
+	}
+	t, f := args[0].typeof(env)
+	if sqltypes.IsIntegral(t) {
+		return sqltypes.Int64, f
+	} else if sqltypes.Decimal == t {
+		return sqltypes.Decimal, f
+	} else {
+		return sqltypes.Float64, f
+	}
 }

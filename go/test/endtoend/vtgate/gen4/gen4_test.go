@@ -430,9 +430,9 @@ func TestOuterJoin(t *testing.T) {
 }
 
 func TestUsingJoin(t *testing.T) {
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t1"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t2"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t3"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t1"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t2"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t3"))
 
 	mcmp, closer := start(t)
 	defer closer()
@@ -479,8 +479,8 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	utils.Exec(t, mcmp.VtConn, `insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
-	utils.Exec(t, mcmp.VtConn, `insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
+	mcmp.Exec(`insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
+	mcmp.Exec(`insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
 
 	// Gen4 only supported query.
 	query := `select team.id
@@ -493,7 +493,5 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 				  and team_fact.team >= 22
 				)`
 
-	// Ideally we should get `[[INT32(22)] [INT32(33)]]`
-	// Change the expectation when we support better conversion handling in numeric comparison.
-	utils.AssertContainsError(t, mcmp.VtConn, query, `unsupported: cannot compare INT32 and INT64`)
+	mcmp.AssertMatches(query, "[[INT32(22)] [INT32(33)]]")
 }

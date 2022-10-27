@@ -56,12 +56,14 @@ type (
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		GetOrderBy() OrderBy
+		GetLimit() *Limit
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
 		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
+		GetColumns() SelectExprs
 		Commented
 	}
 
@@ -489,6 +491,7 @@ type (
 		UUID   string
 		Expire string
 		Ratio  *Literal
+		Shards string
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
@@ -633,6 +636,7 @@ type (
 	ExplainStmt struct {
 		Type      ExplainType
 		Statement Statement
+		Comments  *ParsedComments
 	}
 
 	// ExplainTab represents the Explain table
@@ -1273,6 +1277,11 @@ func (node *AlterTable) SetComments(comments Comments) {
 }
 
 // SetComments implements DDLStatement.
+func (node *ExplainStmt) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments implements DDLStatement.
 func (node *CreateTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
@@ -1341,6 +1350,11 @@ func (node *TruncateTable) GetParsedComments() *ParsedComments {
 
 // GetParsedComments implements DDLStatement.
 func (node *AlterTable) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
+// GetParsedComments implements DDLStatement.
+func (node *ExplainStmt) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
@@ -1924,7 +1938,7 @@ func (c Comments) Parsed() *ParsedComments {
 
 type ParsedComments struct {
 	comments    Comments
-	_directives CommentDirectives
+	_directives *CommentDirectives
 }
 
 // SelectExprs represents SELECT expressions.

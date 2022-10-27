@@ -406,8 +406,14 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case LaunchMigrationType:
+		alterType = "launch"
+	case LaunchAllMigrationType:
+		alterType = "launch all"
 	case CompleteMigrationType:
 		alterType = "complete"
+	case CompleteAllMigrationType:
+		alterType = "complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -431,6 +437,11 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 	if node.Ratio != nil {
 		buf.WriteString(" ratio ")
 		node.Ratio.formatFast(buf)
+	}
+	if node.Shards != "" {
+		buf.WriteString(" vitess_shards '")
+		buf.WriteString(node.Shards)
+		buf.WriteByte('\'')
 	}
 }
 
@@ -759,8 +770,12 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteByte(' ')
-		node.ColList.formatFast(buf)
+		if len(node.ColList) == 0 {
+			buf.WriteString(" ()")
+		} else {
+			buf.WriteByte(' ')
+			node.ColList.formatFast(buf)
+		}
 	case RangeType, ListType:
 		buf.WriteByte(' ')
 		buf.WriteString(node.Type.ToString())
@@ -812,8 +827,12 @@ func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteByte(' ')
-		node.ColList.formatFast(buf)
+		if len(node.ColList) == 0 {
+			buf.WriteString(" ()")
+		} else {
+			buf.WriteByte(' ')
+			node.ColList.formatFast(buf)
+		}
 	}
 
 	if node.SubPartitions != -1 {
@@ -1314,6 +1333,7 @@ func (node *ExplainStmt) formatFast(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.WriteString("explain ")
+	node.Comments.formatFast(buf)
 	buf.WriteString(format)
 	node.Statement.formatFast(buf)
 }
@@ -1673,6 +1693,18 @@ func (node *Literal) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte('\'')
 	case BitVal:
 		buf.WriteString("B'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
+	case DateVal:
+		buf.WriteString("date'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
+	case TimeVal:
+		buf.WriteString("time'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
+	case TimestampVal:
+		buf.WriteString("timestamp'")
 		buf.WriteString(node.Val)
 		buf.WriteByte('\'')
 	default:
@@ -3179,19 +3211,9 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
 func (node *Offset) formatFast(buf *TrackedBuffer) {
-	if node.Original == "" {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteByte(')')
-	} else {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteString(", '")
-		buf.WriteString(node.Original)
-		buf.WriteString("')")
-	}
+	buf.WriteByte(':')
+	buf.WriteString(fmt.Sprintf("%d", node.V))
 }
 
 // formatFast formats the node.

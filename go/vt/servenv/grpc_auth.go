@@ -19,6 +19,7 @@ package servenv
 import (
 	"context"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -26,6 +27,28 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 )
+
+var grpcAuthServerFlagHooks []func(*pflag.FlagSet)
+
+// RegisterGRPCServerAuthFlags registers flags required to enable server-side
+// authentication in vitess gRPC services.
+//
+// `go/cmd/*` entrypoints should call this function before
+// ParseFlags(WithArgs)? if they wish to expose Authenticator functionality.
+func RegisterGRPCServerAuthFlags() {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.StringVar(&gRPCAuth, "grpc_auth_mode", gRPCAuth, "Which auth plugin implementation to use (eg: static)")
+
+		for _, fn := range grpcAuthServerFlagHooks {
+			fn(fs)
+		}
+	})
+}
+
+// GRPCAuth returns the value of the `--grpc_auth_mode` flag.
+func GRPCAuth() string {
+	return gRPCAuth
+}
 
 // Authenticator provides an interface to implement auth in Vitess in
 // grpc server

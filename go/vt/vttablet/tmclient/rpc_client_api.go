@@ -17,15 +17,16 @@ limitations under the License.
 package tmclient
 
 import (
-	"flag"
+	"context"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/servenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -33,9 +34,31 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TabletManagerProtocol is the implementation to use for tablet
-// manager protocol. It is exported for tests only.
-var TabletManagerProtocol = flag.String("tablet_manager_protocol", "grpc", "the protocol to use to talk to vttablet")
+// tabletManagerProtocol is the implementation to use for tablet
+// manager protocol.
+var tabletManagerProtocol = "grpc"
+
+// RegisterFlags registers the tabletconn flags on a given flagset. It is
+// exported for tests that need to inject a particular TabletManagerProtocol.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&tabletManagerProtocol, "tablet_manager_protocol", tabletManagerProtocol, "Protocol to use to make tabletmanager RPCs to vttablets.")
+}
+
+func init() {
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctld",
+		"vtctldclient",
+		"vtgr",
+		"vtorc",
+		"vttablet",
+		"vttestserver",
+	} {
+		servenv.OnParseFor(cmd, RegisterFlags)
+	}
+}
 
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
@@ -90,20 +113,26 @@ type TabletManagerClient interface {
 
 	UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error)
+	// ExecuteQuery executes a query remotely on the tablet.
+	// req.DbName is ignored in favor of using the tablet's DbName field, and,
+	// if req.CallerId is nil, the effective callerid will be extracted from
+	// the context.
+	ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool.
+	// req.DbName is ignored in favor of using the tablet's DbName field.
 	// If usePool is set, a connection pool may be used to make the
 	// query faster. Close() should close the pool in that case.
-	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsAllPrivs executes a query remotely using the allprivs user.
-	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error)
+	// req.DbName is ignored in favor of using the tablet's DbName field.
+	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsApp executes a query remotely using the App pool
 	// If usePool is set, a connection pool may be used to make the
 	// query faster. Close() should close the pool in that case.
-	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
 	//
 	// Replication related methods
@@ -206,7 +235,7 @@ type TabletManagerClient interface {
 	//
 
 	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error)
+	Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error)
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error)
@@ -238,9 +267,9 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 // NewTabletManagerClient creates a new TabletManagerClient. Should be
 // called after flags are parsed.
 func NewTabletManagerClient() TabletManagerClient {
-	f, ok := tabletManagerClientFactories[*TabletManagerProtocol]
+	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
-		log.Exitf("No TabletManagerProtocol registered with name %s", *TabletManagerProtocol)
+		log.Exitf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
 	}
 
 	return f()

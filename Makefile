@@ -69,16 +69,6 @@ endif
 # This is where Go will install binaries in response to `go build`.
 export VTROOTBIN=${VTROOT}/bin
 
-# We now have CGO code in the build which throws warnings with newer gcc builds.
-# See: https://github.com/mattn/go-sqlite3/issues/803
-# Work around by dropping optimization level from default -O2.
-# Safe, since this code isn't performance critical.
-export CGO_CFLAGS := -O1
-
-# regenerate rice-box.go when any of the .cnf files change
-embed_config:
-	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go && go build .
-
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
 ifndef NOBANNER
@@ -88,8 +78,6 @@ endif
 	go build -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		-ldflags "$(shell tools/build_version_flags.sh)"  \
 		-o ${VTROOTBIN} ./go/...
-
-	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=${VTROOTBIN}/vttablet)
 
 # build the vitess binaries statically
 build:
@@ -103,9 +91,6 @@ endif
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
-
-	# embed local resources in the vttablet executable
-	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=${VTROOT}/bin/vttablet)
 
 	# build vtorc with CGO, because it depends on sqlite
 	CGO_ENABLED=1 go build \
@@ -133,19 +118,6 @@ endif
 
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
 		echo "Missing vttablet at: ${VTROOTBIN}/${GOOS}_${GOARCH}." && exit; \
-	fi
-
-	# Either ${GOPATH}/rice is already present, and we assume it is
-	# compiled to the architecture of this machine, or it's not present, in
-	# which case we need to download, compile and run it. We want to make
-	# sure we compile it in the current machine's architecture, otherwise
-	# we won't be able to run it.
-	@if [ -x "${GOPATH}/rice" ]; then \
-		echo "Applying ricebox to vttablet with already-present rice."; \
-		(cd ${VTROOT}/go/cmd/vttablet && ${GOPATH}/rice --verbose append --exec=${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet); \
-	else \
-		echo "Applying ricebox to vttablet with download-and-compile rice."; \
-		(cd ${VTROOT}/go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet); \
 	fi
 
 	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
@@ -211,14 +183,18 @@ visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
+	go run ./go/tools/asthelpergen/main \
+		--in ./go/vt/sqlparser \
+		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
+		--except "*ColName"
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
-		-in ./go/... \
-	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
-	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
-	  	-gen vitess.io/vitess/go/sqltypes.Result
+		--in ./go/... \
+		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
+		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
+		--gen vitess.io/vitess/go/sqltypes.Result
 
 astfmtgen:
 	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
@@ -316,7 +292,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=10
+BOOTSTRAP_VERSION=12
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -485,7 +461,7 @@ web_bootstrap:
 
 # Do a production build of the vtctld UI.
 # This target needs to be manually run every time any file within web/vtctld2/app
-# is modified to regenerate rice-box.go
+# is modified to regenerate assets.
 web_build: web_bootstrap
 	./tools/web_build.sh
 
@@ -515,7 +491,7 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"
+	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh

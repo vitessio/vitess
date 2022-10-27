@@ -27,6 +27,13 @@ import (
 )
 
 type (
+	Filter interface {
+		Expr
+		LeftExpr() Expr
+		RightExpr() Expr
+		filterExpr()
+	}
+
 	ComparisonExpr struct {
 		BinaryExpr
 		Op ComparisonOp
@@ -54,10 +61,13 @@ type (
 	compareNE         struct{}
 	compareLT         struct{}
 	compareLE         struct{}
-	CompareGT         struct{}
+	compareGT         struct{}
 	compareGE         struct{}
 	compareNullSafeEQ struct{}
 )
+
+func (*ComparisonExpr) filterExpr() {}
+func (*InExpr) filterExpr()         {}
 
 func (compareEQ) String() string { return "=" }
 func (compareEQ) compare(left, right *EvalResult) (boolean, error) {
@@ -83,8 +93,8 @@ func (compareLE) compare(left, right *EvalResult) (boolean, error) {
 	return makeboolean2(cmp <= 0, isNull), err
 }
 
-func (CompareGT) String() string { return ">" }
-func (CompareGT) compare(left, right *EvalResult) (boolean, error) {
+func (compareGT) String() string { return ">" }
+func (compareGT) compare(left, right *EvalResult) (boolean, error) {
 	cmp, isNull, err := evalCompareAll(left, right, false)
 	return makeboolean2(cmp > 0, isNull), err
 }
@@ -200,7 +210,7 @@ func evalCompareAll(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
 }
 
 // For more details on comparison expression evaluation and type conversion:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func evalCompare(lVal, rVal *EvalResult) (comp int, err error) {
 	switch {
 	case evalResultsAreStrings(lVal, rVal):

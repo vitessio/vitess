@@ -44,10 +44,7 @@ func TestParseNextValid(t *testing.T) {
 		}
 
 		tree, err := ParseNext(tokens)
-		if err != nil {
-			t.Fatalf("[%d] ParseNext(%q) err: %q, want nil", i, input, err)
-			continue
-		}
+		require.NoError(t, err)
 
 		if got := String(tree); got != want {
 			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
@@ -148,10 +145,7 @@ func TestParseNextEdgeCases(t *testing.T) {
 
 		for i, want := range test.want {
 			tree, err := ParseNext(tokens)
-			if err != nil {
-				t.Fatalf("[%d] ParseNext(%q) err = %q, want nil", i, test.input, err)
-				continue
-			}
+			require.NoError(t, err)
 
 			if got := String(tree); got != want {
 				t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, test.input, got, want)

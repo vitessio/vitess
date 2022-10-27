@@ -21,20 +21,29 @@ import (
 	"bytes"
 	"encoding/json"
 	"expvar"
-	"flag"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	openTsdbURI = flag.String("opentsdb_uri", "", "URI of opentsdb /api/put method")
-)
+var openTsdbURI string
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&openTsdbURI, "opentsdb_uri", openTsdbURI, "URI of opentsdb /api/put method")
+}
+
+func init() {
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
 
 // dataPoint represents a single OpenTSDB data point.
 type dataPoint struct {
@@ -55,7 +64,7 @@ func sendDataPoints(data []dataPoint) error {
 		return err
 	}
 
-	resp, err := http.Post(*openTsdbURI, "application/json", bytes.NewReader(json))
+	resp, err := http.Post(openTsdbURI, "application/json", bytes.NewReader(json))
 	if err != nil {
 		return err
 	}
@@ -93,13 +102,13 @@ func Init(prefix string) {
 
 // InitWithoutServenv initializes the opentsdb without servenv
 func InitWithoutServenv(prefix string) {
-	if *openTsdbURI == "" {
+	if openTsdbURI == "" {
 		return
 	}
 
 	backend := &openTSDBBackend{
 		prefix:     prefix,
-		commonTags: stats.ParseCommonTags(*stats.CommonTags),
+		commonTags: stats.ParseCommonTags(stats.CommonTags),
 	}
 
 	stats.RegisterPushBackend("opentsdb", backend)

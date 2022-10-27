@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,7 +30,8 @@ import (
 func TestRebuildVSchema(t *testing.T) {
 	ctx := context.Background()
 	emptySrvVSchema := &vschemapb.SrvVSchema{
-		RoutingRules: &vschemapb.RoutingRules{},
+		RoutingRules:      &vschemapb.RoutingRules{},
+		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 	}
 
 	// Set up topology.
@@ -49,7 +50,8 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// create a keyspace, rebuild, should see an empty entry
 	emptyKs1SrvVSchema := &vschemapb.SrvVSchema{
-		RoutingRules: &vschemapb.RoutingRules{},
+		RoutingRules:      &vschemapb.RoutingRules{},
+		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks1": {},
 		},
@@ -77,7 +79,8 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted1 := &vschemapb.SrvVSchema{
-		RoutingRules: &vschemapb.RoutingRules{},
+		RoutingRules:      &vschemapb.RoutingRules{},
+		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks1": keyspace1,
 		},
@@ -117,7 +120,8 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted2 := &vschemapb.SrvVSchema{
-		RoutingRules: &vschemapb.RoutingRules{},
+		RoutingRules:      &vschemapb.RoutingRules{},
+		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks1": keyspace1,
 			"ks2": keyspace2,
@@ -154,7 +158,8 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted3 := &vschemapb.SrvVSchema{
-		RoutingRules: rr,
+		RoutingRules:      rr,
+		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks1": keyspace1,
 			"ks2": keyspace2,

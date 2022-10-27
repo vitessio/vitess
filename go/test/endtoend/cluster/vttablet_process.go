@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -72,6 +74,7 @@ type VttabletProcess struct {
 	VreplicationTabletType      string
 	DbFlavor                    string
 	Charset                     string
+	ConsolidationsURL           string
 
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
@@ -202,6 +205,41 @@ func (vttablet *VttabletProcess) GetStatusDetails() string {
 
 	respByte, _ := io.ReadAll(resp.Body)
 	return string(respByte)
+}
+
+// GetConsolidations gets consolidations
+func (vttablet *VttabletProcess) GetConsolidations() (map[string]int, error) {
+	resp, err := http.Get(vttablet.ConsolidationsURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get consolidations: %v", err)
+	}
+	defer resp.Body.Close()
+
+	result := make(map[string]int)
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		splits := strings.SplitN(line, ":", 2)
+		if len(splits) != 2 {
+			return nil, fmt.Errorf("failed to split consolidations line: %v", err)
+		}
+		// Discard "Length: [N]" lines.
+		if splits[0] == "Length" {
+			continue
+		}
+		countS := splits[0]
+		countI64, err := strconv.ParseInt(countS, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse consolidations count: %v", err)
+		}
+		result[strings.TrimSpace(splits[1])] = int(countI64)
+	}
+	if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("failed to read consolidations: %v", err)
+	}
+
+	return result, nil
 }
 
 // WaitForStatus waits till desired status of tablet is reached
@@ -592,6 +630,7 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 	vttablet.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 	vttablet.QueryzURL = fmt.Sprintf("http://%s:%d/queryz", hostname, port)
 	vttablet.StatusDetailsURL = fmt.Sprintf("http://%s:%d/debug/status_details", hostname, port)
+	vttablet.ConsolidationsURL = fmt.Sprintf("http://%s:%d/debug/consolidations", hostname, port)
 
 	return vttablet
 }

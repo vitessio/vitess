@@ -17,13 +17,13 @@ limitations under the License.
 package sqlparser
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -51,8 +51,9 @@ var MySQLVersion = "50709" // default version if nothing else is stated
 //
 // N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
 // $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
-//    showCollationFilterOpt := $4
-//    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+//
+//	showCollationFilterOpt := $4
+//	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
 func yyParsePooled(yylex yyLexer) int {
 	parser := parserPool.Get().(*yyParserImpl)
 	defer func() {
@@ -107,8 +108,8 @@ func Parse2(sql string) (Statement, BindVars, error) {
 func checkParserVersionFlag() {
 	if flag.Parsed() {
 		versionFlagSync.Do(func() {
-			if *servenv.MySQLServerVersion != "" {
-				convVersion, err := convertMySQLVersionToCommentVersion(*servenv.MySQLServerVersion)
+			if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
+				convVersion, err := convertMySQLVersionToCommentVersion(mySQLVersion)
 				if err != nil {
 					log.Error(err)
 				} else {

@@ -377,6 +377,11 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Consolidator != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Consolidator))
+		i--
+		dAtA[i] = 0x68
+	}
 	if m.HasCreatedTempTables {
 		i--
 		if m.HasCreatedTempTables {
@@ -625,6 +630,13 @@ func (m *QueryResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.SessionStateChanges) > 0 {
+		i -= len(m.SessionStateChanges)
+		copy(dAtA[i:], m.SessionStateChanges)
+		i = encodeVarint(dAtA, i, uint64(len(m.SessionStateChanges)))
+		i--
+		dAtA[i] = 0x3a
 	}
 	if len(m.Info) > 0 {
 		i -= len(m.Info)
@@ -1273,6 +1285,13 @@ func (m *BeginResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.SessionStateChanges) > 0 {
+		i -= len(m.SessionStateChanges)
+		copy(dAtA[i:], m.SessionStateChanges)
+		i = encodeVarint(dAtA, i, uint64(len(m.SessionStateChanges)))
+		i--
+		dAtA[i] = 0x1a
 	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
@@ -2497,6 +2516,13 @@ func (m *BeginExecuteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.SessionStateChanges) > 0 {
+		i -= len(m.SessionStateChanges)
+		copy(dAtA[i:], m.SessionStateChanges)
+		i = encodeVarint(dAtA, i, uint64(len(m.SessionStateChanges)))
+		i--
+		dAtA[i] = 0x2a
+	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -2661,6 +2687,13 @@ func (m *BeginStreamExecuteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, e
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.SessionStateChanges) > 0 {
+		i -= len(m.SessionStateChanges)
+		copy(dAtA[i:], m.SessionStateChanges)
+		i = encodeVarint(dAtA, i, uint64(len(m.SessionStateChanges)))
+		i--
+		dAtA[i] = 0x2a
 	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
@@ -3399,6 +3432,13 @@ func (m *ReserveBeginExecuteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.SessionStateChanges) > 0 {
+		i -= len(m.SessionStateChanges)
+		copy(dAtA[i:], m.SessionStateChanges)
+		i = encodeVarint(dAtA, i, uint64(len(m.SessionStateChanges)))
+		i--
+		dAtA[i] = 0x32
+	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -3572,6 +3612,13 @@ func (m *ReserveBeginStreamExecuteResponse) MarshalToSizedBufferVT(dAtA []byte) 
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.SessionStateChanges) > 0 {
+		i -= len(m.SessionStateChanges)
+		copy(dAtA[i:], m.SessionStateChanges)
+		i = encodeVarint(dAtA, i, uint64(len(m.SessionStateChanges)))
+		i--
+		dAtA[i] = 0x32
 	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
@@ -4233,6 +4280,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.HasCreatedTempTables {
 		n += 2
 	}
+	if m.Consolidator != 0 {
+		n += 1 + sov(uint64(m.Consolidator))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -4338,6 +4388,10 @@ func (m *QueryResult) SizeVT() (n int) {
 		}
 	}
 	l = len(m.Info)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.SessionStateChanges)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -4590,6 +4644,10 @@ func (m *BeginResponse) SizeVT() (n int) {
 	}
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.SessionStateChanges)
+	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -5086,6 +5144,10 @@ func (m *BeginExecuteResponse) SizeVT() (n int) {
 		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
+	l = len(m.SessionStateChanges)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -5152,6 +5214,10 @@ func (m *BeginStreamExecuteResponse) SizeVT() (n int) {
 	}
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.SessionStateChanges)
+	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -5458,6 +5524,10 @@ func (m *ReserveBeginExecuteResponse) SizeVT() (n int) {
 		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
+	l = len(m.SessionStateChanges)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -5530,6 +5600,10 @@ func (m *ReserveBeginStreamExecuteResponse) SizeVT() (n int) {
 	}
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.SessionStateChanges)
+	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -6770,6 +6844,25 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.HasCreatedTempTables = bool(v != 0)
+		case 13:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Consolidator", wireType)
+			}
+			m.Consolidator = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Consolidator |= ExecuteOptions_Consolidator(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -7459,6 +7552,38 @@ func (m *QueryResult) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Info = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionStateChanges", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -9022,6 +9147,38 @@ func (m *BeginResponse) UnmarshalVT(dAtA []byte) error {
 			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionStateChanges", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -12061,6 +12218,38 @@ func (m *BeginExecuteResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionStateChanges", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -12520,6 +12709,38 @@ func (m *BeginStreamExecuteResponse) UnmarshalVT(dAtA []byte) error {
 			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionStateChanges", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -14523,6 +14744,38 @@ func (m *ReserveBeginExecuteResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionStateChanges", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -15014,6 +15267,38 @@ func (m *ReserveBeginStreamExecuteResponse) UnmarshalVT(dAtA []byte) error {
 			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionStateChanges", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

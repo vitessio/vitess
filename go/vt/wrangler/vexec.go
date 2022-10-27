@@ -220,6 +220,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
 					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
+					vx.wr.optimizeCopyStateTable(primary.Tablet)
 				}
 				mu.Lock()
 				results[primary] = qr
@@ -425,7 +426,9 @@ type ReplicationStatus struct {
 	// Message represents the message column from the _vt.vreplication table.
 	Message string
 	// Tags contain the tags specified for this stream
-	Tags string
+	Tags            string
+	WorkflowType    string
+	WorkflowSubType string
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
 	// sourceTimeZone represents the time zone of each stream, only set if not UTC
@@ -438,6 +441,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	var err error
 	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
 	var state, dbName, pos, stopPos, message, tags, componentThrottled string
+	var workflowType, workflowSubType int64
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
 
@@ -505,6 +509,9 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
+	workflowType, _ = row.ToInt64("workflow_type")
+	workflowSubType, _ = row.ToInt64("workflow_sub_type")
+
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
 		Tablet:               primary.AliasString(),
@@ -523,6 +530,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
 		targetTimeZone:       bls.TargetTimeZone,
+		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)],
+		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)],
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -552,7 +561,9 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		time_throttled,
 		component_throttled,
 		message,
-		tags
+		tags,
+		workflow_type, 
+		workflow_sub_type
 	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
@@ -560,7 +571,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 
 	// We set a topo timeout since we contact topo for the shard record.
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var sourceKeyspace string
 	sourceShards := sets.NewString()
@@ -719,7 +730,8 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 
 func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
 	var cs []copyState
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
+	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+		id, id)
 	qr, err := wr.VReplicationExec(ctx, tablet.Alias, query)
 	if err != nil {
 		return nil, err

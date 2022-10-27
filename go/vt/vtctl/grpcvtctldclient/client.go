@@ -46,7 +46,7 @@ type gRPCVtctldClient struct {
 }
 
 //go:generate -command grpcvtctldclient go run ../vtctldclient/codegen
-//go:generate grpcvtctldclient -out client_gen.go
+//go:generate grpcvtctldclient --out client_gen.go
 
 func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
 	opt, err := grpcclientcommon.SecureDialOption()

@@ -248,6 +248,7 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
+	VTExplainStr   = "vtexplain"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -381,7 +382,7 @@ const (
 	GTIDSubsetStr                   = "gtid_subset"
 	GTIDSubtractStr                 = "gtid_subtract"
 	WaitForExecutedGTIDSetStr       = "wait_for_executed_gtid_set"
-	WaitUntilSQLThreadAfterGTIDSStr = "wati_until_sql_thread_after_gtids"
+	WaitUntilSQLThreadAfterGTIDSStr = "wait_until_sql_thread_after_gtids"
 
 	// LockOptionType strings
 	NoneTypeStr      = "none"
@@ -720,6 +721,7 @@ const (
 	TreeType
 	JSONType
 	VitessType
+	VTExplainType
 	TraditionalType
 	AnalyzeType
 )
@@ -823,6 +825,8 @@ const (
 // AlterMigrationType constants
 const (
 	RetryMigrationType AlterMigrationType = iota
+	LaunchMigrationType
+	LaunchAllMigrationType
 	CompleteMigrationType
 	CompleteAllMigrationType
 	CancelMigrationType

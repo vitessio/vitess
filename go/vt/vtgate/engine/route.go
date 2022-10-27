@@ -173,16 +173,22 @@ func (route *Route) SetTruncateColumnCount(count int) {
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if route.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, route.QueryTimeout)
+	defer cancelFunc()
 	qr, err := route.executeInternal(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
+}
+
+// addQueryTimeout adds a query timeout to the context it receives and returns the modified context along with the cancel function.
+func addQueryTimeout(ctx context.Context, vcursor VCursor, queryTimeout int) (context.Context, context.CancelFunc) {
+	timeout := vcursor.Session().GetQueryTimeout(queryTimeout)
+	if timeout != 0 {
+		return context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
+	}
+	return ctx, func() {}
 }
 
 type cxtKey int
@@ -191,12 +197,28 @@ const (
 	IgnoreReserveTxn cxtKey = iota
 )
 
-func (route *Route) executeInternal(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) executeInternal(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
+	return route.executeShards(ctx, vcursor, bindVars, wantfields, rss, bvs)
+}
+
+func (route *Route) executeShards(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	rss []*srvtopo.ResolvedShard,
+	bvs []map[string]*querypb.BindVariable,
+) (*sqltypes.Result, error) {
 	// Select Next - sequence query does not need to be executed in a dedicated connection (reserved or transaction)
 	if route.Opcode == Next {
 		ctx = context.WithValue(ctx, IgnoreReserveTxn, true)
@@ -218,6 +240,7 @@ func (route *Route) executeInternal(ctx context.Context, vcursor VCursor, bindVa
 		// and the ones that don't. So, we are sending the query to any shard! This is safe because
 		// the query contains a predicate that make it not match any rows on that shard. (If they did,
 		// we should have gotten that shard back already from findRoute)
+		var err error
 		rss, bvs, err = route.anyShard(ctx, vcursor, bindVars)
 		if err != nil {
 			return nil, err
@@ -259,7 +282,13 @@ func filterOutNilErrors(errs []error) []error {
 }
 
 // TryStreamExecute performs a streaming exec.
-func (route *Route) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (route *Route) TryStreamExecute(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	callback func(*sqltypes.Result) error,
+) error {
 	if route.QueryTimeout != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)
@@ -270,6 +299,18 @@ func (route *Route) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 		return err
 	}
 
+	return route.streamExecuteShards(ctx, vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+func (route *Route) streamExecuteShards(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	callback func(*sqltypes.Result) error,
+	rss []*srvtopo.ResolvedShard,
+	bvs []map[string]*querypb.BindVariable,
+) error {
 	// No route.
 	if len(rss) == 0 {
 		if !route.NoRoutesSpecialHandling {
@@ -290,6 +331,7 @@ func (route *Route) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 		// and the ones that don't. So, we are sending the query to any shard! This is safe because
 		// the query contains a predicate that make it not match any rows on that shard. (If they did,
 		// we should have gotten that shard back already from findRoute)
+		var err error
 		rss, bvs, err = route.anyShard(ctx, vcursor, bindVars)
 		if err != nil {
 			return err
@@ -317,7 +359,15 @@ func (route *Route) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	return route.mergeSort(ctx, vcursor, bindVars, wantfields, callback, rss, bvs)
 }
 
-func (route *Route) mergeSort(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
+func (route *Route) mergeSort(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	callback func(*sqltypes.Result) error,
+	rss []*srvtopo.ResolvedShard,
+	bvs []map[string]*querypb.BindVariable,
+) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
@@ -390,7 +440,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		return true
 	})
 
-	return out, err
+	return out.Truncate(route.TruncateColumnCount), err
 }
 
 func (route *Route) description() PrimitiveDescription {
@@ -450,7 +500,61 @@ func (route *Route) description() PrimitiveDescription {
 	}
 }
 
-func execShard(ctx context.Context, vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
+func (route *Route) executeAfterLookup(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	ids []sqltypes.Value,
+	dest []key.Destination,
+) (*sqltypes.Result, error) {
+	protoIds := make([]*querypb.Value, 0, len(ids))
+	for _, id := range ids {
+		protoIds = append(protoIds, sqltypes.ValueToProto(id))
+	}
+	rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, protoIds, dest)
+	if err != nil {
+		return nil, err
+	}
+	bvs := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range bvs {
+		bvs[i] = bindVars
+	}
+	return route.executeShards(ctx, vcursor, bindVars, wantfields, rss, bvs)
+}
+
+func (route *Route) streamExecuteAfterLookup(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	callback func(*sqltypes.Result) error,
+	ids []sqltypes.Value,
+	dest []key.Destination,
+) error {
+	protoIds := make([]*querypb.Value, 0, len(ids))
+	for _, id := range ids {
+		protoIds = append(protoIds, sqltypes.ValueToProto(id))
+	}
+	rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, protoIds, dest)
+	if err != nil {
+		return err
+	}
+	bvs := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range bvs {
+		bvs[i] = bindVars
+	}
+	return route.streamExecuteShards(ctx, vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+func execShard(
+	ctx context.Context,
+	vcursor VCursor,
+	query string,
+	bindVars map[string]*querypb.BindVariable,
+	rs *srvtopo.ResolvedShard,
+	rollbackOnError, canAutocommit bool,
+) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(ctx, []*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
 		{

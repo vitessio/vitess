@@ -19,9 +19,10 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -138,6 +139,6 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *memorySort) WireupGen4(semTable *semantics.SemTable) error {
-	return ms.input.WireupGen4(semTable)
+func (ms *memorySort) WireupGen4(ctx *plancontext.PlanningContext) error {
+	return ms.input.WireupGen4(ctx)
 }

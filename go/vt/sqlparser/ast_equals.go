@@ -1638,6 +1638,7 @@ func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 	}
 	return a.UUID == b.UUID &&
 		a.Expire == b.Expire &&
+		a.Shards == b.Shards &&
 		a.Type == b.Type &&
 		EqualsRefOfLiteral(a.Ratio, b.Ratio)
 }
@@ -2301,7 +2302,8 @@ func EqualsRefOfExplainStmt(a, b *ExplainStmt) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		EqualsStatement(a.Statement, b.Statement)
+		EqualsStatement(a.Statement, b.Statement) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExplainTab does deep equals between the two objects.

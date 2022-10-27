@@ -118,7 +118,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.VitessTarget:
 		return buildShowTargetPlan(vschema)
 	case sqlparser.VschemaTables:
-		return buildVschemaTablesPlan(show, vschema)
+		return buildVschemaTablesPlan(vschema)
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
@@ -644,7 +644,7 @@ func buildEnginesPlan() (engine.Primitive, error) {
 		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
 }
 
-func buildVschemaTablesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
 	ks, err := vschema.DefaultKeyspace()
 	if err != nil {

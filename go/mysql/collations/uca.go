@@ -17,6 +17,7 @@ limitations under the License.
 package collations
 
 import (
+	"bytes"
 	"math/bits"
 	"sync"
 	"unsafe"
@@ -225,6 +226,16 @@ func (c *Collation_utf8mb4_uca_0900) Wildcard(pat []byte, matchOne rune, matchMa
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
 }
 
+func (c *Collation_utf8mb4_uca_0900) ToLower(dst, src []byte) []byte {
+	dst = append(dst, bytes.ToLower(src)...)
+	return dst
+}
+
+func (c *Collation_utf8mb4_uca_0900) ToUpper(dst, src []byte) []byte {
+	dst = append(dst, bytes.ToUpper(src)...)
+	return dst
+}
+
 type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) Init() {}
@@ -272,6 +283,16 @@ func (c *Collation_utf8mb4_0900_bin) Wildcard(pat []byte, matchOne rune, matchMa
 		return a == b
 	}
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_utf8mb4_0900_bin) ToLower(dst, src []byte) []byte {
+	dst = append(dst, bytes.ToLower(src)...)
+	return dst
+}
+
+func (c *Collation_utf8mb4_0900_bin) ToUpper(dst, src []byte) []byte {
+	dst = append(dst, bytes.ToUpper(src)...)
+	return dst
 }
 
 type Collation_uca_legacy struct {

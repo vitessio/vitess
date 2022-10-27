@@ -31,6 +31,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestNormalize(t *testing.T) {
@@ -41,10 +43,10 @@ func TestNormalize(t *testing.T) {
 		outbv   map[string]*querypb.BindVariable
 	}{{
 		// str val
-		in:      "select * from t where v1 = 'aa'",
-		outstmt: "select * from t where v1 = :bv1",
+		in:      "select * from t where foobar = 'aa'",
+		outstmt: "select * from t where foobar = :foobar",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.StringBindVariable("aa"),
+			"foobar": sqltypes.StringBindVariable("aa"),
 		},
 	}, {
 		// placeholder
@@ -65,47 +67,47 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// int val
-		in:      "select * from t where v1 = 1",
-		outstmt: "select * from t where v1 = :bv1",
+		in:      "select * from t where foobar = 1",
+		outstmt: "select * from t where foobar = :foobar",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.Int64BindVariable(1),
+			"foobar": sqltypes.Int64BindVariable(1),
 		},
 	}, {
 		// float val
-		in:      "select * from t where v1 = 1.2",
-		outstmt: "select * from t where v1 = :bv1",
+		in:      "select * from t where foobar = 1.2",
+		outstmt: "select * from t where foobar = :foobar",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.DecimalBindVariable(1.2),
+			"foobar": sqltypes.DecimalBindVariable(1.2),
 		},
 	}, {
 		// multiple vals
-		in:      "select * from t where v1 = 1.2 and v2 = 2",
-		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
+		in:      "select * from t where foo = 1.2 and bar = 2",
+		outstmt: "select * from t where foo = :foo and bar = :bar",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.DecimalBindVariable(1.2),
-			"bv2": sqltypes.Int64BindVariable(2),
+			"foo": sqltypes.DecimalBindVariable(1.2),
+			"bar": sqltypes.Int64BindVariable(2),
 		},
 	}, {
 		// bv collision
-		in:      "select * from t where v1 = :bv1 and v2 = 1",
-		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
+		in:      "select * from t where foo = :bar and bar = 12",
+		outstmt: "select * from t where foo = :bar and bar = :bar1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv2": sqltypes.Int64BindVariable(1),
+			"bar1": sqltypes.Int64BindVariable(12),
 		},
 	}, {
 		// val reuse
-		in:      "select * from t where v1 = 1 and v2 = 1",
-		outstmt: "select * from t where v1 = :bv1 and v2 = :bv1",
+		in:      "select * from t where foo = 1 and bar = 1",
+		outstmt: "select * from t where foo = :foo and bar = :foo",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.Int64BindVariable(1),
+			"foo": sqltypes.Int64BindVariable(1),
 		},
 	}, {
 		// ints and strings are different
-		in:      "select * from t where v1 = 1 and v2 = '1'",
-		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
+		in:      "select * from t where foo = 1 and bar = '1'",
+		outstmt: "select * from t where foo = :foo and bar = :bar",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.Int64BindVariable(1),
-			"bv2": sqltypes.StringBindVariable("1"),
+			"foo": sqltypes.Int64BindVariable(1),
+			"bar": sqltypes.StringBindVariable("1"),
 		},
 	}, {
 		// val should not be reused for non-select statements
@@ -134,17 +136,17 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// Hex number values should work for selects
-		in:      "select * from t where v1 = 0x1234",
-		outstmt: "select * from t where v1 = :bv1",
+		in:      "select * from t where foo = 0x1234",
+		outstmt: "select * from t where foo = :foo",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexNumBindVariable([]byte("0x1234")),
+			"foo": sqltypes.HexNumBindVariable([]byte("0x1234")),
 		},
 	}, {
 		// Hex encoded string values should work for selects
-		in:      "select * from t where v1 = x'7b7d'",
-		outstmt: "select * from t where v1 = :bv1",
+		in:      "select * from t where foo = x'7b7d'",
+		outstmt: "select * from t where foo = :foo",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
+			"foo": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
 		},
 	}, {
 		// Ensure that hex notation bind vars work with collation based conversions
@@ -161,11 +163,11 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.HexNumBindVariable([]byte("0x12")),
 		},
 	}, {
-		// Bin value does not convert
-		in:      "select * from t where v1 = b'11'",
-		outstmt: "select * from t where v1 = :bv1",
+		// Bin values work fine
+		in:      "select * from t where foo = b'11'",
+		outstmt: "select * from t where foo = :foo",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexNumBindVariable([]byte("0x3")),
+			"foo": sqltypes.HexNumBindVariable([]byte("0x3")),
 		},
 	}, {
 		// Bin value does not convert for DMLs
@@ -186,18 +188,18 @@ func TestNormalize(t *testing.T) {
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// Values up to len 256 will reuse.
-		in:      fmt.Sprintf("select * from t where v1 = '%256s' and v2 = '%256s'", "a", "a"),
-		outstmt: "select * from t where v1 = :bv1 and v2 = :bv1",
+		in:      fmt.Sprintf("select * from t where foo = '%256s' and bar = '%256s'", "a", "a"),
+		outstmt: "select * from t where foo = :foo and bar = :foo",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.StringBindVariable(fmt.Sprintf("%256s", "a")),
+			"foo": sqltypes.StringBindVariable(fmt.Sprintf("%256s", "a")),
 		},
 	}, {
 		// Values greater than len 256 will not reuse.
-		in:      fmt.Sprintf("select * from t where v1 = '%257s' and v2 = '%257s'", "b", "b"),
-		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
+		in:      fmt.Sprintf("select * from t where foo = '%257s' and bar = '%257s'", "b", "b"),
+		outstmt: "select * from t where foo = :foo and bar = :bar",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
-			"bv2": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
+			"foo": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
+			"bar": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
 		},
 	}, {
 		// bad int
@@ -261,6 +263,27 @@ func TestNormalize(t *testing.T) {
 			"bv3": sqltypes.HexNumBindVariable([]byte("0xa")),
 			"bv4": sqltypes.HexNumBindVariable([]byte("0x7f")),
 		},
+	}, {
+		// DateVal should also be normalized
+		in:      `select date'2022-08-06'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
+		},
+	}, {
+		// TimeVal should also be normalized
+		in:      `select time'17:05:12'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
+		},
+	}, {
+		// TimestampVal should also be normalized
+		in:      `select timestamp'2022-08-06 17:05:12'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
+		},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -271,6 +294,31 @@ func TestNormalize(t *testing.T) {
 			require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
 			assert.Equal(t, tc.outstmt, String(stmt))
 			assert.Equal(t, tc.outbv, bv)
+		})
+	}
+}
+
+func TestNormalizeInvalidDates(t *testing.T) {
+	testcases := []struct {
+		in  string
+		err error
+	}{{
+		in:  "select date'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATE value: '%s'", "foo"),
+	}, {
+		in:  "select time'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", "foo"),
+	}, {
+		in:  "select timestamp'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATETIME value: '%s'", "foo"),
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse(tc.in)
+			require.NoError(t, err)
+			known := GetBindvars(stmt)
+			bv := make(map[string]*querypb.BindVariable)
+			require.EqualError(t, Normalize(stmt, NewReservedVars("bv", known), bv), tc.err.Error())
 		})
 	}
 }

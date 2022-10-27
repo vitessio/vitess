@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -42,8 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to the client.")
 
 const (
 	// connBufferSize is how much we buffer for reading and
@@ -232,6 +229,8 @@ var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 // writersPool is used for pooling bufio.Writer objects.
 var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
+var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, connBufferSize) }}
+
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
@@ -254,9 +253,19 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		closed:      sync2.NewAtomicBool(false),
 		PrepareData: make(map[uint32]*PrepareData),
 	}
+
 	if listener.connReadBufferSize > 0 {
-		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		var buf *bufio.Reader
+		if listener.connBufferPooling {
+			buf = readersPool.Get().(*bufio.Reader)
+			buf.Reset(conn)
+		} else {
+			buf = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		}
+
+		c.bufferedReader = buf
 	}
+
 	return c
 }
 
@@ -289,6 +298,14 @@ func (c *Conn) endWriterBuffering() error {
 	return c.bufferedWriter.Flush()
 }
 
+func (c *Conn) returnReader() {
+	if c.bufferedReader == nil {
+		return
+	}
+	c.bufferedReader.Reset(nil)
+	readersPool.Put(c.bufferedReader)
+}
+
 // getWriter returns the current writer. It may be either
 // the original connection or a wrapper. The returned unget
 // function must be invoked after the writing is finished.
@@ -309,7 +326,7 @@ func (c *Conn) getWriter() (w io.Writer, unget func()) {
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
 	c.stopFlushTimer()
-	c.flushTimer = time.AfterFunc(*mysqlServerFlushDelay, func() {
+	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
 		c.bufMu.Lock()
 		defer c.bufMu.Unlock()
 
@@ -1371,14 +1388,9 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 // packet and not multiple, but otherwise 0xfe definitely indicates it is an EOF.
 //
 // Per https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html, a packet starting with 0xfe
-// but having length >= 9 (on top of 4 byte header) is not a true EOF but a LengthEncodedInteger
-// (typically preceding a LengthEncodedString). Thus, all EOF checks must validate the payload size
-// before exiting.
-//
-// More specifically, an EOF packet can have 3 different lengths (1, 5, 7) depending on the client
-// flags that are set. 7 comes from server versions of 5.7.5 or greater where ClientDeprecateEOF is
-// set (i.e. uses an OK packet starting with 0xfe instead of 0x00 to signal EOF). Regardless, 8 is
-// an upper bound otherwise it would be ambiguous w.r.t. LengthEncodedIntegers.
+// but having length >= 9 (on top of 4 byte header)  without DEPRECATE_EOF set is not a true EOF but
+// a LengthEncodedInteger (typically preceding a LengthEncodedString). Thus, all EOF checks without
+// DEPRECATE_EOF must validate the payload size before exiting.
 //
 // More docs here:
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_response_packets.html
@@ -1470,34 +1482,47 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
-			_, ok := data.readLenEncInt()
+			length, ok := data.readLenEncInt()
 			if !ok {
 				return fail("invalid OK packet session state change length: %v", data)
 			}
-			sscType, ok := data.readByte()
-			if !ok {
-				return fail("invalid OK packet session state change type: %v", sscType)
-			}
-			// If it's not a GTID, we don't care about it so we can return.
-			if sscType != SessionTrackGtids {
+			// In case we have a zero length string, there's no additional information so
+			// we can return the packet.
+			if length == 0 {
 				return packetOK, nil
 			}
 
-			// Move past the total length of the changed entity: 1 byte
-			_, ok = data.readByte()
-			if !ok {
-				return fail("invalid OK packet gtids length: %v", data)
+			// Alright, now we need to read each sub packet from the session state change.
+			for {
+				sscType, ok := data.readByte()
+				if !ok {
+					// We're done, there's no more session state parts in the packet.
+					break
+				}
+				sessionLen, ok := data.readLenEncInt()
+				if !ok {
+					return fail("invalid OK packet session state change length for type %v", sscType)
+				}
+
+				if sscType != SessionTrackGtids {
+					// Still need to increase the pointer here to indicate we're consuming
+					// but otherwise ignoring the rest of this packet
+					data.pos = data.pos + int(sessionLen)
+					continue
+				}
+
+				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
+				_, ok = data.readByte()
+				if !ok {
+					return fail("invalid OK packet gtids type: %v", data)
+				}
+
+				gtids, ok := data.readLenEncString()
+				if !ok {
+					return fail("invalid OK packet gtids: %v", data)
+				}
+				packetOK.sessionStateData = gtids
 			}
-			// read (and ignore for now) the GTIDS encoding specification code: 1 byte
-			_, ok = data.readByte()
-			if !ok {
-				return fail("invalid OK packet gtids type: %v", data)
-			}
-			gtids, ok := data.readLenEncString()
-			if !ok {
-				return fail("invalid OK packet gtids: %v", data)
-			}
-			packetOK.sessionStateData = gtids
 		}
 	}
 

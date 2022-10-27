@@ -44,3 +44,16 @@ func Validate(charset Charset, input []byte) bool {
 	}
 	return true
 }
+
+func Length(charset Charset, input []byte) int {
+	if charset, ok := charset.(interface{ Length([]byte) int }); ok {
+		return charset.Length(input)
+	}
+	var count int
+	for len(input) > 0 {
+		_, size := charset.DecodeRune(input)
+		input = input[size:]
+		count++
+	}
+	return count
+}

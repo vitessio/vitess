@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -206,7 +206,7 @@ func pushProjectionIntoJoin(
 			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
 		// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
-		bvName, cols, rewrittenExpr, err := physical.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
+		bvName, cols, rewrittenExpr, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
 		if err != nil {
 			return 0, false, err
 		}
@@ -328,7 +328,7 @@ func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *sema
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
 	if isDerivedTable {
-		expr.Expr, err = semantics.RewriteDerivedExpression(expr.Expr, ti)
+		expr.Expr, err = semantics.RewriteDerivedTableExpression(expr.Expr, ti)
 		if err != nil {
 			return err
 		}

@@ -33,27 +33,26 @@ time (using helpers/tee.go). This is to facilitate migrations between
 topo servers.
 
 There are two test sub-packages associated with this code:
-- test/ contains a test suite that is run against all of our implementations.
-  It just performs a bunch of common topo server activities (create, list,
-  delete various objects, ...). If a topo implementation passes all these
-  tests, it most likely will work as expected in a real deployment.
-- topotests/ contains tests that use a memorytopo to test the code in this
-  package.
+  - test/ contains a test suite that is run against all of our implementations.
+    It just performs a bunch of common topo server activities (create, list,
+    delete various objects, ...). If a topo implementation passes all these
+    tests, it most likely will work as expected in a real deployment.
+  - topotests/ contains tests that use a memorytopo to test the code in this
+    package.
 */
 package topo
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"sync"
 
-	"vitess.io/vitess/go/vt/proto/topodata"
-
-	"context"
-
-	"vitess.io/vitess/go/vt/vterrors"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -68,29 +67,28 @@ const (
 
 // Filenames for all object types.
 const (
-	CellInfoFile         = "CellInfo"
-	CellsAliasFile       = "CellsAlias"
-	KeyspaceFile         = "Keyspace"
-	ShardFile            = "Shard"
-	VSchemaFile          = "VSchema"
-	ShardReplicationFile = "ShardReplication"
-	TabletFile           = "Tablet"
-	SrvVSchemaFile       = "SrvVSchema"
-	SrvKeyspaceFile      = "SrvKeyspace"
-	RoutingRulesFile     = "RoutingRules"
-	ExternalClustersFile = "ExternalClusters"
+	CellInfoFile          = "CellInfo"
+	CellsAliasFile        = "CellsAlias"
+	KeyspaceFile          = "Keyspace"
+	ShardFile             = "Shard"
+	VSchemaFile           = "VSchema"
+	ShardReplicationFile  = "ShardReplication"
+	TabletFile            = "Tablet"
+	SrvVSchemaFile        = "SrvVSchema"
+	SrvKeyspaceFile       = "SrvKeyspace"
+	RoutingRulesFile      = "RoutingRules"
+	ExternalClustersFile  = "ExternalClusters"
+	ShardRoutingRulesFile = "ShardRoutingRules"
 )
 
 // Path for all object types.
 const (
-	CellsPath        = "cells"
-	CellsAliasesPath = "cells_aliases"
-	KeyspacesPath    = "keyspaces"
-	ShardsPath       = "shards"
-	TabletsPath      = "tablets"
-	MetadataPath     = "metadata"
-
-	ExternalClusterMySQL  = "mysql"
+	CellsPath             = "cells"
+	CellsAliasesPath      = "cells_aliases"
+	KeyspacesPath         = "keyspaces"
+	ShardsPath            = "shards"
+	TabletsPath           = "tablets"
+	MetadataPath          = "metadata"
 	ExternalClusterVitess = "vitess"
 )
 
@@ -113,14 +111,14 @@ type Factory interface {
 }
 
 // Server is the main topo.Server object. We support two ways of creating one:
-// 1. From an implementation, server address, and root path.
-//    This uses a plugin mechanism, and we have implementations for
-//    etcd, zookeeper and consul.
-// 2. Specific implementations may have higher level creation methods
-//    (in which case they may provide a more complex Factory).
-//    We support memorytopo (for tests and processes that only need an
-//    in-memory server), and tee (a helper implementation to transition
-//    between one server implementation and another).
+//  1. From an implementation, server address, and root path.
+//     This uses a plugin mechanism, and we have implementations for
+//     etcd, zookeeper and consul.
+//  2. Specific implementations may have higher level creation methods
+//     (in which case they may provide a more complex Factory).
+//     We support memorytopo (for tests and processes that only need an
+//     in-memory server), and tee (a helper implementation to transition
+//     between one server implementation and another).
 type Server struct {
 	// globalCell is the main connection to the global topo service.
 	// It is created once at construction time.
@@ -158,15 +156,15 @@ type cellsToAliasesMap struct {
 
 var (
 	// topoImplementation is the flag for which implementation to use.
-	topoImplementation = flag.String("topo_implementation", "", "the topology implementation to use")
+	topoImplementation string
 
 	// topoGlobalServerAddress is the address of the global topology
 	// server.
-	topoGlobalServerAddress = flag.String("topo_global_server_address", "", "the address of the global topology server")
+	topoGlobalServerAddress string
 
 	// topoGlobalRoot is the root path to use for the global topology
 	// server.
-	topoGlobalRoot = flag.String("topo_global_root", "", "the path of the global topology data in the global topology server")
+	topoGlobalRoot string
 
 	// factories has the factories for the Conn objects.
 	factories = make(map[string]Factory)
@@ -174,7 +172,22 @@ var (
 	cellsAliases = cellsToAliasesMap{
 		cellsToAliases: make(map[string]string),
 	}
+
+	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtexplain", "vtgate",
+		"vtgr", "vtorc", "vtbackup"}
 )
+
+func init() {
+	for _, cmd := range FlagBinaries {
+		servenv.OnParseFor(cmd, registerTopoFlags)
+	}
+}
+
+func registerTopoFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&topoImplementation, "topo_implementation", topoImplementation, "the topology implementation to use")
+	fs.StringVar(&topoGlobalServerAddress, "topo_global_server_address", topoGlobalServerAddress, "the address of the global topology server")
+	fs.StringVar(&topoGlobalRoot, "topo_global_root", topoGlobalRoot, "the path of the global topology data in the global topology server")
+}
 
 // RegisterFactory registers a Factory for an implementation for a Server.
 // If an implementation with that name already exists, it log.Fatals out.
@@ -227,15 +240,15 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // Open returns a Server using the command line parameter flags
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
-	if *topoGlobalServerAddress == "" && *topoImplementation != "k8s" {
+	if topoGlobalServerAddress == "" && topoImplementation != "k8s" {
 		log.Exitf("topo_global_server_address must be configured")
 	}
-	if *topoGlobalRoot == "" {
+	if topoGlobalRoot == "" {
 		log.Exit("topo_global_root must be non-empty")
 	}
-	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
+	ts, err := OpenServer(topoImplementation, topoGlobalServerAddress, topoGlobalRoot)
 	if err != nil {
-		log.Exitf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
+		log.Exitf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err)
 	}
 	return ts
 }
@@ -245,6 +258,9 @@ func Open() *Server {
 func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// Global cell is the easy case.
 	if cell == GlobalCell {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return ts.globalCell, nil
 	}
 

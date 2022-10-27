@@ -26,8 +26,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
@@ -61,7 +64,12 @@ func (a stats) Less(i, j int) bool { return a[i].Count > a[j].Count }
 
 func main() {
 	defer exit.Recover()
-	_flag.Parse(pflag.NewFlagSet("query_analyzer", pflag.ExitOnError))
+	fs := pflag.NewFlagSet("query_analyzer", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	acl.RegisterFlags(fs)
+	servenv.RegisterMySQLServerFlags(fs)
+	_flag.Parse(fs)
 	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)
 		if err := processFile(filename); err != nil {

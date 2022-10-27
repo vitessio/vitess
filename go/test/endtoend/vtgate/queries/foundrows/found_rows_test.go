@@ -44,7 +44,7 @@ func TestFoundRows(t *testing.T) {
 	// Wait for schema tracking to run and mark t2 as authoritative before we try out the queries.
 	// Some of the queries depend on schema tracking to run successfully to be able to replace the StarExpr
 	// in the select clause with the definitive column list.
-	err = utils.WaitForAuthoritative(t, clusterInstance, keyspaceName, "t2")
+	err = utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, keyspaceName, "t2")
 	require.NoError(t, err)
 	runTests := func(workload string) {
 		mcmp.AssertFoundRowsValue("select * from t2", workload, 5)

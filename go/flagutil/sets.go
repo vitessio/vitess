@@ -17,25 +17,21 @@ limitations under the License.
 package flagutil
 
 import (
-	"flag"
 	"strings"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-var (
-	_ flag.Value  = (*StringSetFlag)(nil)
-	_ pflag.Value = (*StringSetFlag)(nil)
-)
+var _ pflag.Value = (*StringSetFlag)(nil)
 
 // StringSetFlag can be used to collect multiple instances of a flag into a set
 // of values.
 //
 // For example, defining the following:
 //
-//		var x flagutil.StringSetFlag
-//		flag.Var(&x, "foo", "")
+//	var x flagutil.StringSetFlag
+//	flag.Var(&x, "foo", "")
 //
 // And then specifying "-foo x -foo y -foo x", will result in a set of {x, y}.
 //

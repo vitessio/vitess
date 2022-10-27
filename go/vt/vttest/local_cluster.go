@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,19 +33,18 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 // Config are the settings used to configure the self-contained Vitess cluster.
@@ -88,9 +86,6 @@ type Config struct {
 	// PlannerVersion is the planner version to use for the vtgate.
 	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
 	PlannerVersion string
-
-	// PlannerVersionDeprecated is deprecated and should not be used
-	PlannerVersionDeprecated string
 
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
@@ -206,27 +201,40 @@ func (cfg *Config) DbName() string {
 	return ""
 }
 
+// TopoData is a struct representing a test topology.
+//
+// It implements pflag.Value and can be used as a destination command-line via
+// pflag.Var or pflag.VarP.
 type TopoData struct {
 	vtTestTopology *vttestpb.VTTestTopology
 	unmarshal      func(b []byte, m proto.Message) error
 }
 
+// String is part of the pflag.Value interface.
 func (td *TopoData) String() string {
 	return prototext.Format(td.vtTestTopology)
 }
 
+// Set is part of the pflag.Value interface.
 func (td *TopoData) Set(value string) error {
 	return td.unmarshal([]byte(value), td.vtTestTopology)
 }
 
-func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+// Type is part of the pflag.Value interface.
+func (td *TopoData) Type() string { return "vttest.TopoData" }
+
+// TextTopoData returns a test TopoData that unmarshals using
+// prototext.Unmarshal.
+func TextTopoData(tpb *vttestpb.VTTestTopology) *TopoData {
 	return &TopoData{
 		vtTestTopology: tpb,
 		unmarshal:      prototext.Unmarshal,
 	}
 }
 
-func JSONTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+// JSONTopoData returns a test TopoData that unmarshals using
+// protojson.Unmarshal.
+func JSONTopoData(tpb *vttestpb.VTTestTopology) *TopoData {
 	return &TopoData{
 		vtTestTopology: tpb,
 		unmarshal:      protojson.Unmarshal,

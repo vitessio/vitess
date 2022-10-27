@@ -264,8 +264,8 @@ func TestCredentialsFileHUP(t *testing.T) {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	*dbCredentialsFile = tmpFile.Name()
-	*dbCredentialsServer = "file"
+	dbCredentialsFile = tmpFile.Name()
+	dbCredentialsServer = "file"
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", oldStr, oldStr)
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {

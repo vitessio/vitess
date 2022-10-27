@@ -89,7 +89,7 @@ func (r ReleaseReason) String() string {
 	return txResolutions[r]
 }
 
-//Name return the name of enum.
+// Name return the name of enum.
 func (r ReleaseReason) Name() string {
 	return txNames[r]
 }

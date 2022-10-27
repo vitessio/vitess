@@ -14,32 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vttestserver is a native Go implementation of `run_local_server.py`.
-// It allows users to spawn a self-contained Vitess server for local testing/CI
+// vttestserver allows users to spawn a self-contained Vitess server for local testing/CI.
 package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 type topoFlags struct {
-	cells     string
-	keyspaces string
-	shards    string
+	cells     []string
+	keyspaces []string
+	shards    []string
 	replicas  int
 	rdonly    int
 }
@@ -54,15 +56,15 @@ var (
 	topo      topoFlags
 )
 
-func init() {
-	flag.IntVar(&basePort, "port", 0,
+func registerFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&basePort, "port", 0,
 		"Port to use for vtcombo. If this is 0, a random port will be chosen.")
 
-	flag.StringVar(&protoTopo, "proto_topo", "",
+	fs.StringVar(&protoTopo, "proto_topo", "",
 		"Define the fake cluster topology as a compact text format encoded"+
 			" vttest proto. See vttest.proto for more information.")
 
-	flag.StringVar(&config.SchemaDir, "schema_dir", "",
+	fs.StringVar(&config.SchemaDir, "schema_dir", "",
 		"Directory for initial schema files. Within this dir,"+
 			" there should be a subdir for each keyspace. Within"+
 			" each keyspace dir, each file is executed as SQL"+
@@ -70,21 +72,21 @@ func init() {
 			" If the directory contains a vschema.json file, it"+
 			" will be used as the vschema for the V3 API.")
 
-	flag.StringVar(&config.DefaultSchemaDir, "default_schema_dir", "",
+	fs.StringVar(&config.DefaultSchemaDir, "default_schema_dir", "",
 		"Default directory for initial schema files. If no schema is found"+
 			" in schema_dir, default to this location.")
 
-	flag.StringVar(&config.DataDir, "data_dir", "",
+	fs.StringVar(&config.DataDir, "data_dir", "",
 		"Directory where the data files will be placed, defaults to a random "+
 			"directory under /vt/vtdataroot")
 
-	flag.BoolVar(&config.OnlyMySQL, "mysql_only", false,
+	fs.BoolVar(&config.OnlyMySQL, "mysql_only", false,
 		"If this flag is set only mysql is initialized."+
 			" The rest of the vitess components are not started."+
 			" Also, the output specifies the mysql unix socket"+
 			" instead of the vtgate port.")
 
-	flag.BoolVar(&config.PersistentMode, "persistent_mode", false,
+	fs.BoolVar(&config.PersistentMode, "persistent_mode", false,
 		"If this flag is set, the MySQL data directory is not cleaned up"+
 			" when LocalCluster.TearDown() is called. This is useful for running"+
 			" vttestserver as a database container in local developer environments. Note"+
@@ -94,83 +96,88 @@ func init() {
 			" migrations are run every time the cluster starts, since persistence"+
 			" for the topology server has not been implemented yet")
 
-	flag.BoolVar(&doSeed, "initialize_with_random_data", false,
+	fs.BoolVar(&doSeed, "initialize_with_random_data", false,
 		"If this flag is each table-shard will be initialized"+
 			" with random data. See also the 'rng_seed' and 'min_shard_size'"+
 			" and 'max_shard_size' flags.")
 
-	flag.IntVar(&seed.RngSeed, "rng_seed", 123,
+	fs.IntVar(&seed.RngSeed, "rng_seed", 123,
 		"The random number generator seed to use when initializing"+
 			" with random data (see also --initialize_with_random_data)."+
 			" Multiple runs with the same seed will result with the same"+
 			" initial data.")
 
-	flag.IntVar(&seed.MinSize, "min_table_shard_size", 1000,
+	fs.IntVar(&seed.MinSize, "min_table_shard_size", 1000,
 		"The minimum number of initial rows in a table shard. Ignored if"+
 			"--initialize_with_random_data is false. The actual number is chosen"+
 			" randomly.")
 
-	flag.IntVar(&seed.MaxSize, "max_table_shard_size", 10000,
+	fs.IntVar(&seed.MaxSize, "max_table_shard_size", 10000,
 		"The maximum number of initial rows in a table shard. Ignored if"+
 			"--initialize_with_random_data is false. The actual number is chosen"+
 			" randomly")
 
-	flag.Float64Var(&seed.NullProbability, "null_probability", 0.1,
+	fs.Float64Var(&seed.NullProbability, "null_probability", 0.1,
 		"The probability to initialize a field with 'NULL' "+
 			" if --initialize_with_random_data is true. Only applies to fields"+
 			" that can contain NULL values.")
 
-	flag.StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
+	fs.StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
 		"which host to bind vtgate mysql listener to")
 
-	flag.StringVar(&mycnf, "extra_my_cnf", "",
+	fs.StringVar(&mycnf, "extra_my_cnf", "",
 		"extra files to add to the config, separated by ':'")
 
-	flag.StringVar(&topo.cells, "cells", "test", "Comma separated list of cells")
-	flag.StringVar(&topo.keyspaces, "keyspaces", "test_keyspace",
+	fs.StringSliceVar(&topo.cells, "cells", []string{"test"}, "Comma separated list of cells")
+	fs.StringSliceVar(&topo.keyspaces, "keyspaces", []string{"test_keyspace"},
 		"Comma separated list of keyspaces")
-	flag.StringVar(&topo.shards, "num_shards", "2",
+	fs.StringSliceVar(&topo.shards, "num_shards", []string{"2"},
 		"Comma separated shard count (one per keyspace)")
-	flag.IntVar(&topo.replicas, "replica_count", 2,
+	fs.IntVar(&topo.replicas, "replica_count", 2,
 		"Replica tablets per shard (includes primary)")
-	flag.IntVar(&topo.rdonly, "rdonly_count", 1,
+	fs.IntVar(&topo.rdonly, "rdonly_count", 1,
 		"Rdonly tablets per shard")
 
-	flag.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
+	fs.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
 
-	flag.StringVar(&config.PlannerVersion, "planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails.")
-	flag.StringVar(&config.PlannerVersionDeprecated, "planner_version", "", "planner_version is deprecated. Please use planner-version instead")
+	fs.StringVar(&config.PlannerVersion, "planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
-	flag.StringVar(&config.SnapshotFile, "snapshot_file", "",
+	fs.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
 
-	flag.BoolVar(&config.EnableSystemSettings, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	fs.BoolVar(&config.EnableSystemSettings, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
-	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
-	flag.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	fs.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
+	fs.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 
-	flag.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
+	fs.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
-	flag.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
+	fs.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
 
-	flag.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+	fs.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
-	flag.StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
-	flag.BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
-	flag.BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+	fs.StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
+	fs.BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
+	fs.BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
 	// flags for using an actual topo implementation for vtcombo instead of in-memory topo. useful for test setup where an external topo server is shared across multiple vtcombo processes or other components
-	flag.StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
-	flag.StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
-	flag.StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
+	fs.StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
+	fs.StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
+	fs.StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
+
+	acl.RegisterFlags(fs)
+}
+
+func init() {
+	servenv.OnParseFor("vttestserver", registerFlags)
 }
 
 func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 	topo := &vttestpb.VTTestTopology{}
-	topo.Cells = strings.Split(t.cells, ",")
+	topo.Cells = t.cells
 
-	keyspaces := strings.Split(t.keyspaces, ",")
-	shardCounts := strings.Split(t.shards, ",")
+	keyspaces := t.keyspaces
+	shardCounts := t.shards
 	if len(keyspaces) != len(shardCounts) {
 		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
 	}
@@ -200,8 +207,22 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 	return topo, nil
 }
 
+// Annoying, but in unit tests, parseFlags gets called multiple times per process
+// (anytime startCluster is called), so we need to guard against the second test
+// to run failing with, for example:
+//
+//	flag redefined: log_rotate_max_size
+var flagsOnce sync.Once
+
 func parseFlags() (env vttest.Environment, err error) {
-	flag.Parse()
+	flagsOnce.Do(func() {
+		servenv.RegisterFlags()
+		servenv.RegisterGRPCServerFlags()
+		servenv.RegisterGRPCServerAuthFlags()
+		servenv.RegisterServiceMapFlag()
+	})
+
+	servenv.ParseFlags("vttestserver")
 
 	if basePort != 0 {
 		if config.DataDir == "" {

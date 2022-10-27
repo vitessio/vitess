@@ -531,10 +531,10 @@ func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, re
 	wg, _, cancel := StartManager(m)
 
 	// Create a testworkflow.
-	enableApprovalsFlag := fmt.Sprintf("-enable_approvals=%v", enableApprovals)
-	retryFlag := fmt.Sprintf("-retry=%v", retry)
-	sequentialFlag := fmt.Sprintf("-sequential=%v", sequential)
-	uuid, err := m.Create(ctx, testWorkflowFactoryName, []string{retryFlag, "-count=2", enableApprovalsFlag, sequentialFlag})
+	enableApprovalsFlag := fmt.Sprintf("--enable_approvals=%v", enableApprovals)
+	retryFlag := fmt.Sprintf("--retry=%v", retry)
+	sequentialFlag := fmt.Sprintf("--sequential=%v", sequential)
+	uuid, err := m.Create(ctx, testWorkflowFactoryName, []string{retryFlag, "--count=2", enableApprovalsFlag, sequentialFlag})
 	if err != nil {
 		return nil, "", nil, nil, fmt.Errorf("cannot create testworkflow: %v", err)
 	}

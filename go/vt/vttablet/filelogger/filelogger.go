@@ -18,7 +18,7 @@ limitations under the License.
 package filelogger
 
 import (
-	"flag"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
@@ -26,13 +26,20 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// logQueriesToFile is the vttablet startup flag that must be set for this plugin to be active.
-var logQueriesToFile = flag.String("log_queries_to_file", "", "Enable query logging to the specified file")
+var logQueriesToFile string
+
+func registerFlags(fs *pflag.FlagSet) {
+	// logQueriesToFile is the vttablet startup flag that must be set for this plugin to be active.
+	fs.StringVar(&logQueriesToFile, "log_queries_to_file", logQueriesToFile, "Enable query logging to the specified file")
+}
 
 func init() {
+	servenv.OnParseFor("vtcombo", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+
 	servenv.OnRun(func() {
-		if *logQueriesToFile != "" {
-			Init(*logQueriesToFile)
+		if logQueriesToFile != "" {
+			Init(logQueriesToFile)
 		}
 	})
 }

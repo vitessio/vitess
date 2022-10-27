@@ -100,7 +100,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 				log.Exitf("Unable to create new TabletGateway: %v", err)
 			}
 		}
-		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, CellsToWatch)
+		hc = createHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, topoServer, localCell, CellsToWatch)
 	}
 	gw := &TabletGateway{
 		hc:                hc,
