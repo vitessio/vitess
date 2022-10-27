@@ -56,7 +56,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 	defer cluster.PanicHandler(t)
 
-	vtBackup(t, true, false)
+	vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
 
 	// Initialize the tablets
@@ -126,7 +126,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// backup the replica
 	log.Infof("taking backup %s", time.Now())
-	vtBackup(t, false, true)
+	vtBackup(t, false, true, true)
 	log.Infof("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
@@ -169,7 +169,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	verifyBackupCount(t, shardKsName, 0)
 }
 
-func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
+func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
 	require.Nil(t, err)
 	defer os.Remove(mysqlSocket.Name())
@@ -183,11 +183,14 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
+	if disableRedoLog {
+		extraArgs = append(extraArgs, "--disable-redo-log")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if !initialBackup {
+	if !initialBackup && disableRedoLog {
 		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
 	}
 

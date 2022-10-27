@@ -63,6 +63,7 @@ Usage of vtbackup:
       --db_ssl_mode SslMode                             SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db_tls_min_version string                       Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --detach                                          detached mode - run backups detached from the terminal
+      --disable-redo-log                                Disable InnoDB redo log during replication-from-primary phase of backup.
       --emit_stats                                      If set, emit stats to push-based monitoring and stats backends
       --file_backup_storage_root string                 Root directory for the file backup storage.
       --gcs_backup_storage_bucket string                Google Cloud Storage bucket to use for backups.
