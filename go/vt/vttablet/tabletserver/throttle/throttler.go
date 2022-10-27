@@ -303,7 +303,6 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		return false
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
-	fmt.Printf("============ ZZZ WatchSrvKeyspaceCallback: %v\n", throttlerConfig)
 
 	if throttler.isEnabled > 0 {
 		// throttler is running and we should apply the config change through Operate() or else we get into race conditions
@@ -322,7 +321,6 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	if !throttlerConfigViaTopo {
 		return
 	}
-	fmt.Printf("============ ZZZ applyThrottlerConfig: %v\n", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery = replicationLagQuery
 	} else {
@@ -349,7 +347,6 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 		return false
 	}
 	atomic.StoreInt64(&throttler.isEnabled, 1)
-	fmt.Printf("============ ZZZ Enabling\n")
 
 	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
 	throttler.check.SelfChecks(ctx)
@@ -370,7 +367,6 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 	}
 	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
 	atomic.StoreInt64(&throttler.isEnabled, 0)
-	fmt.Printf("============ ZZZ Disabling\n")
 
 	throttler.aggregatedMetrics.Flush()
 	throttler.recentApps.Flush()
@@ -390,7 +386,6 @@ func (throttler *Throttler) Open() error {
 		// already open
 		return nil
 	}
-	fmt.Printf("============ ZZZ Opening\n")
 	ctx := context.Background()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
@@ -681,7 +676,6 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.metricsQuery
 	metricsThreshold := throttler.MetricsThreshold.Get()
-	fmt.Printf("============ ZZZ metricsThreshold := %v\n", metricsThreshold)
 	addInstanceKey := func(tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
 			if strings.Contains(key.StringCode(), ignore) {
@@ -709,12 +703,10 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		clusterSettings := clusterSettings
 		clusterSettings.MetricQuery = metricsQuery
 		clusterSettings.ThrottleThreshold.Set(metricsThreshold)
-		fmt.Printf("============ ZZZ clusterSettings.ThrottleThreshold.Set : %v\n", metricsThreshold)
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() {
 			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold.Get(), cache.DefaultExpiration)
-			fmt.Printf("============ ZZZ throttler.mysqlClusterThresholds.Set : %v\n", clusterSettings.ThrottleThreshold.Get())
 			clusterProbes := &mysql.ClusterProbes{
 				ClusterName:      clusterName,
 				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
@@ -967,7 +959,9 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remot
 
 // CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
-	go throttler.heartbeatWriter.RequestHeartbeats()
+	if throttler.IsEnabled() {
+		go throttler.heartbeatWriter.RequestHeartbeats()
+	}
 	switch checkType {
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
