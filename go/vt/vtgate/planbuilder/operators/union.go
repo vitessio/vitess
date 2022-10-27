@@ -50,6 +50,27 @@ func (u *Union) Inputs() []Operator {
 	return u.Sources
 }
 
+// addPredicate adds a predicate a UNION by pushing the predicate to all sources of the UNION.
+/* this is done by offset and expression rewriting. Say we have a query like so:
+select * (
+ 	select foo as col, bar from tbl1
+	union
+	select id, baz from tbl2
+) as X where X.col = 42
+
+We want to push down the `X.col = 42` as far down the operator tree as possible. We want
+to end up with an operator tree that looks something like this:
+
+select * (
+ 	select foo as col, bar from tbl1 where foo = 42
+	union
+	select id, baz from tbl2 where id = 42
+) as X
+
+Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respective WHERE clause.
+The first SELECT of the union dictates the column names, and the second is whatever expression
+can be found on the same offset. The names of the RHS are discarded.
+*/
 func (u *Union) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	offsets := make(map[string]int)
 	for i, selectExpr := range u.SelectStmts[0].SelectExprs {
