@@ -44,7 +44,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 		}
 		return op, nil
 	case *Route:
-		return pushPredicateOnRoute(ctx, expr, op)
+		return op.addPredicate(ctx, expr)
 	case *ApplyJoin, *Join:
 		join := op.(joinOperator) // stupid golang doesn't understand this without an explicit cast
 		return addPredicate(join, ctx, expr)
@@ -84,19 +84,6 @@ func pushPredicateOnDerived(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 		return nil, err
 	}
 	newSrc, err := PushPredicate(ctx, newExpr, op.Source)
-	if err != nil {
-		return nil, err
-	}
-	op.Source = newSrc
-	return op, err
-}
-
-func pushPredicateOnRoute(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op *Route) (Operator, error) {
-	err := op.UpdateRoutingLogic(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	newSrc, err := PushPredicate(ctx, expr, op.Source)
 	if err != nil {
 		return nil, err
 	}
