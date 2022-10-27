@@ -45,17 +45,9 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 		return op, nil
 	case *Route:
 		return pushPredicateOnRoute(ctx, expr, op)
-	case *Join:
-		np, err := op.pushPredicateOnJoin(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		if np != nil {
-			return newFilter(op, np), nil
-		}
-		return op, nil
-	case *ApplyJoin:
-		return pushPredicateOnApplyJoin(ctx, expr, op)
+	case *ApplyJoin, *Join:
+		join := op.(joinOperator) // stupid golang doesn't understand this without an explicit cast
+		return addPredicate(join, ctx, expr)
 	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
@@ -97,75 +89,6 @@ func pushPredicateOnDerived(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 	}
 	op.Source = newSrc
 	return op, err
-}
-
-func pushPredicateOnApplyJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op *ApplyJoin) (Operator, error) {
-	deps := ctx.SemTable.RecursiveDeps(expr)
-	switch {
-	case deps.IsSolvedBy(TableID(op.LHS)):
-		newSrc, err := PushPredicate(ctx, expr, op.LHS)
-		if err != nil {
-			return nil, err
-		}
-		op.LHS = newSrc
-		return op, err
-	case deps.IsSolvedBy(TableID(op.RHS)):
-		if !op.LeftJoin {
-			newSrc, err := PushPredicate(ctx, expr, op.RHS)
-			if err != nil {
-				return nil, err
-			}
-			op.RHS = newSrc
-			return op, err
-		}
-
-		// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
-		// where tbl is on the rhs of the left outer join
-		if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-			(sqlparser.IsColName(cmp.Left) && ctx.SemTable.RecursiveDeps(cmp.Left).IsSolvedBy(TableID(op.RHS)) ||
-				sqlparser.IsColName(cmp.Right) && ctx.SemTable.RecursiveDeps(cmp.Right).IsSolvedBy(TableID(op.RHS))) {
-			// When the predicate we are pushing is using information from an outer table, we can
-			// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
-			// the predicate will not return true if the table columns are null.
-			// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
-			// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
-			// side did not match, we might as well turn the join into an inner join.
-
-			// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
-			op.LeftJoin = false
-			newSrc, err := PushPredicate(ctx, expr, op.RHS)
-			if err != nil {
-				return nil, err
-			}
-			op.RHS = newSrc
-			return op, err
-		}
-
-		// finally, if we can't turn the outer join into an inner,
-		// we need to filter after the join has been evaluated
-		return newFilter(op, expr), nil
-	case deps.IsSolvedBy(TableID(op)):
-		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(op))
-		if err != nil {
-			return nil, err
-		}
-		out, idxs, err := PushOutputColumns(ctx, op.LHS, cols...)
-		if err != nil {
-			return nil, err
-		}
-		op.LHS = out
-		for i, idx := range idxs {
-			op.Vars[bvName[i]] = idx
-		}
-		newSrc, err := PushPredicate(ctx, predicate, op.RHS)
-		if err != nil {
-			return nil, err
-		}
-		op.RHS = newSrc
-		op.Predicate = sqlparser.AndExpressions(op.Predicate, expr)
-		return op, err
-	}
-	return nil, nil
 }
 
 func pushPredicateOnRoute(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op *Route) (Operator, error) {
@@ -404,4 +327,105 @@ func BreakExpressionInLHSandRHS(
 	}
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	return
+}
+
+type joinOperator interface {
+	Operator
+	getLHS() Operator
+	getRHS() Operator
+	setLHS(Operator)
+	setRHS(Operator)
+	makeInner()
+	isInner() bool
+	addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+}
+
+func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	deps := ctx.SemTable.RecursiveDeps(expr)
+	switch {
+	case deps.IsSolvedBy(TableID(join.getLHS())):
+		// predicates can always safely be pushed down to the lhs if that is all they depend on
+		lhs, err := PushPredicate(ctx, expr, join.getLHS())
+		if err != nil {
+			return nil, err
+		}
+		join.setLHS(lhs)
+		return join, err
+	case deps.IsSolvedBy(TableID(join.getRHS())):
+		// if we are dealing with an outer join, always start by checking if this predicate can turn
+		// the join into an inner join
+		if !join.isInner() && canConvertToInner(ctx, expr, TableID(join.getRHS())) {
+			join.makeInner()
+		}
+
+		if !join.isInner() {
+			// if we still are dealing with an outer join
+			// we need to filter after the join has been evaluated
+			return newFilter(join, expr), nil
+		}
+
+		// For inner joins, we can just push the filtering on the RHS
+		rhs, err := PushPredicate(ctx, expr, join.getRHS())
+		if err != nil {
+			return nil, err
+		}
+		join.setRHS(rhs)
+		return join, err
+
+	case deps.IsSolvedBy(TableID(join)):
+		// if we are dealing with an outer join, always start by checking if this predicate can turn
+		// the join into an inner join
+		if !join.isInner() && canConvertToInner(ctx, expr, TableID(join.getRHS())) {
+			join.makeInner()
+		}
+
+		if !join.isInner() {
+			// if we still are dealing with an outer join
+			// we need to filter after the join has been evaluated
+			return newFilter(join, expr), nil
+		}
+
+		err := join.addJoinPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+
+		return join, nil
+	}
+	return nil, nil
+}
+
+// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
+// where tbl is on the rhs of the left outer join
+// When a predicate uses information from an outer table, we can convert from an outer join to an inner join
+// if the predicate is "null-intolerant".
+//
+// Null-intolerant in this context means that the predicate will not be true if the table columns are null.
+//
+// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
+// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
+// side did not match, we might as well turn the join into an inner join.
+//
+// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
+func canConvertToInner(ctx *plancontext.PlanningContext, expr sqlparser.Expr, rhs semantics.TableSet) bool {
+	isColNameFromRHS := func(e sqlparser.Expr) bool {
+		return sqlparser.IsColName(e) && ctx.SemTable.RecursiveDeps(e).IsSolvedBy(rhs)
+	}
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if expr.Operator == sqlparser.NullSafeEqualOp {
+			return false
+		}
+
+		return isColNameFromRHS(expr.Left) || isColNameFromRHS(expr.Right)
+
+	case *sqlparser.IsExpr:
+		if expr.Right != sqlparser.IsNotNullOp {
+			return false
+		}
+
+		return isColNameFromRHS(expr.Left)
+	default:
+		return false
+	}
 }

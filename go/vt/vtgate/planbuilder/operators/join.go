@@ -19,6 +19,7 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
@@ -29,43 +30,6 @@ type Join struct {
 }
 
 var _ Operator = (*Join)(nil)
-
-// When a predicate uses information from an outer table, we can convert from an outer join to an inner join
-// if the predicate is "null-intolerant".
-//
-// Null-intolerant in this context means that the predicate will not be true if the table columns are null.
-//
-// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
-// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
-// side did not match, we might as well turn the join into an inner join.
-//
-// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
-func (j *Join) tryConvertToInnerJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
-	if !j.LeftJoin {
-		return
-	}
-
-	switch expr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if expr.Operator == sqlparser.NullSafeEqualOp {
-			return
-		}
-
-		if sqlparser.IsColName(expr.Left) && ctx.SemTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) ||
-			sqlparser.IsColName(expr.Right) && ctx.SemTable.RecursiveDeps(expr.Right).IsSolvedBy(TableID(j.RHS)) {
-			j.LeftJoin = false
-		}
-
-	case *sqlparser.IsExpr:
-		if expr.Right != sqlparser.IsNotNullOp {
-			return
-		}
-
-		if sqlparser.IsColName(expr.Left) && ctx.SemTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) {
-			j.LeftJoin = false
-		}
-	}
-}
 
 // Clone implements the Operator interface
 func (j *Join) Clone(inputs []Operator) Operator {
@@ -119,34 +83,37 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	return op, nil
 }
 
-func (j *Join) pushPredicateOnJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, error) {
-	deps := ctx.SemTable.RecursiveDeps(expr)
-	var err error
-	switch {
-	// can push to the left
-	case deps.IsSolvedBy(TableID(j.LHS)):
-		j.LHS, err = PushPredicate(ctx, expr, j.LHS)
-		return nil, err
+var _ joinOperator = (*Join)(nil)
 
-	// can push to the right only for inner joins
-	case deps.IsSolvedBy(TableID(j.RHS)):
-		j.tryConvertToInnerJoin(ctx, expr)
+func (j *Join) tableID() semantics.TableSet {
+	return TableID(j)
+}
 
-		if !j.LeftJoin {
-			j.RHS, err = PushPredicate(ctx, expr, j.RHS)
-			return nil, err
-		}
+func (j *Join) getLHS() Operator {
+	return j.LHS
+}
 
-		return expr, nil
-	case deps.IsSolvedBy(TableID(j)):
-		j.tryConvertToInnerJoin(ctx, expr)
+func (j *Join) getRHS() Operator {
+	return j.RHS
+}
 
-		if !j.LeftJoin {
-			j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
-			return nil, nil
-		}
+func (j *Join) setLHS(operator Operator) {
+	j.LHS = operator
+}
 
-		return expr, nil
-	}
-	panic("should have been able to push the predicate")
+func (j *Join) setRHS(operator Operator) {
+	j.RHS = operator
+}
+
+func (j *Join) makeInner() {
+	j.LeftJoin = false
+}
+
+func (j *Join) isInner() bool {
+	return !j.LeftJoin
+}
+
+func (j *Join) addJoinPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
+	return nil
 }
