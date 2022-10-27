@@ -146,10 +146,13 @@ func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Res
 		return nil
 	}
 	return &Result{
-		Fields:       qr.Fields,
-		RowsAffected: qr.RowsAffected,
-		InsertID:     qr.InsertId,
-		Rows:         proto3ToRows(fields, qr.Rows),
+		Fields:          qr.Fields,
+		RowsAffected:    qr.RowsAffected,
+		InsertID:        qr.InsertId,
+		Rows:            proto3ToRows(fields, qr.Rows),
+		ExecuteDuration: parseProtoDuration(qr.ExecuteDuration),
+		PlanDuration:    parseProtoDuration(qr.PlanDuration),
+		CommitDuration:  parseProtoDuration(qr.CommitDuration),
 	}
 }
 
