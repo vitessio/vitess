@@ -19,10 +19,7 @@ package planbuilder
 import (
 	"fmt"
 
-	"errors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -362,7 +359,7 @@ func gen4DeleteStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if deleteStmt.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
+		return nil, vterrors.VT12001("with expression in delete statement")
 	}
 
 	var err error
@@ -596,7 +593,7 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	}
 
 	// Delete is only supported for a single TableExpr which is supposed to be an aliased expression
-	multiShardErr := errors.New("unsupported: multi-shard or vindex write statement")
+	multiShardErr := vterrors.VT12001("multi-shard or vindex write statement")
 	if len(del.TableExprs) != 1 {
 		return multiShardErr
 	}
@@ -606,7 +603,7 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	}
 
 	if len(del.Targets) > 1 {
-		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
+		return vterrors.VT12001("multi-table delete statement in not supported in sharded database")
 	}
 
 	// Get the table information and the vindex table from it
@@ -627,9 +624,9 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 			// If this subquery and the table expression were all belonging to the same unsharded keyspace,
 			// we would have already created a plan for them before doing these checks.
 			if isSharded {
-				return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
+				return false, vterrors.VT12001("subqueries in sharded DML")
 			}
-			return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
+			return false, vterrors.VT12001("sharded subqueries in DML")
 		}
 		return true, nil
 	}, del)

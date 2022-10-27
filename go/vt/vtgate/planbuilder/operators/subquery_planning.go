@@ -392,7 +392,7 @@ func createCorrelatedSubqueryOp(
 ) (*CorrelatedSubQueryOp, error) {
 	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
 	if err != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
+		return nil, vterrors.VT12001("exists sub-queries are only supported with AND clause")
 	}
 
 	resultOuterOp := newOuter

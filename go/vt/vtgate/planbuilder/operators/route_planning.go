@@ -157,7 +157,7 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 		}
 		if dest != nil {
 			if typ != topodatapb.TabletType_PRIMARY {
-				return nil, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %v statement with a replica target", dmlType)
+				return nil, 0, nil, vterrors.VT09002(dmlType)
 			}
 			// we are dealing with an explicitly targeted UPDATE
 			opCode = engine.ByDestination
