@@ -53,7 +53,11 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 		// changed by physical operators.
 		return newFilter(op, expr), nil
 	case *Derived:
-		return pushPredicateOnDerived(ctx, expr, op)
+		err := op.addPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		return op, nil
 	case *Vindex:
 		err := op.addPredicate(ctx, expr)
 		if err != nil {
@@ -69,26 +73,6 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Ope
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
 	}
-}
-
-func pushPredicateOnDerived(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op *Derived) (Operator, error) {
-	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
-	if err != nil {
-		if err == semantics.ErrMultipleTables {
-			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
-		}
-		return nil, err
-	}
-	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	if err != nil {
-		return nil, err
-	}
-	newSrc, err := PushPredicate(ctx, newExpr, op.Source)
-	if err != nil {
-		return nil, err
-	}
-	op.Source = newSrc
-	return op, err
 }
 
 // PushOutputColumns will push the columns to the table they originate from,
