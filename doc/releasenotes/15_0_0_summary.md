@@ -116,7 +116,6 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 - --pool-name-prefix
 - --enable-autocommit Autocommit is always allowed
 
-
 #### <a id="vttablet-startup-flag-deprecations"/>vttablet startup flag deprecations
 - `--enable-query-plan-field-caching` has been deprecated. It will be removed in v16.
 - `--enable_semi_sync` has been deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
