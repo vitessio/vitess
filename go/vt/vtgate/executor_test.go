@@ -300,9 +300,16 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
-	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	result, err := executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
-	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
+	assert.NotZero(t, result.ExecuteDuration)
+	assert.NotZero(t, result.PlanDuration)
+	assert.Zero(t, result.CommitDuration)
+	result, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
+	assert.Zero(t, result.ExecuteDuration)
+	assert.NotZero(t, result.PlanDuration)
+	assert.NotZero(t, result.CommitDuration)
+
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
@@ -316,11 +323,20 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
-	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	result, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	assert.NotZero(t, result.ExecuteDuration)
+	assert.Zero(t, result.CommitDuration)
+	assert.NotZero(t, result.PlanDuration)
 	require.NoError(t, err)
-	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	result, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	assert.NotZero(t, result.ExecuteDuration)
+	assert.Zero(t, result.CommitDuration)
+	assert.NotZero(t, result.PlanDuration)
 	require.NoError(t, err)
-	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
+	result, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
+	assert.Zero(t, result.ExecuteDuration)
+	assert.NotZero(t, result.CommitDuration)
+	assert.NotZero(t, result.PlanDuration)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
