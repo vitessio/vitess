@@ -18,12 +18,15 @@ package sqltypes
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -38,6 +41,10 @@ func TestResult(t *testing.T) {
 		Name: "col3",
 		Type: Float64,
 	}}
+
+	duration := time.Duration(1 * time.Second)
+	protoDuration := protoutil.DurationToProto(duration)
+
 	sqlResult := &Result{
 		Fields:       fields,
 		InsertID:     1,
@@ -51,6 +58,9 @@ func TestResult(t *testing.T) {
 			NULL,
 			NULL,
 		}},
+		ExecuteDuration: duration,
+		PlanDuration:    duration,
+		CommitDuration:  0,
 	}
 	p3Result := &querypb.QueryResult{
 		Fields:       fields,
@@ -63,6 +73,9 @@ func TestResult(t *testing.T) {
 			Lengths: []int64{2, -1, -1},
 			Values:  []byte("bb"),
 		}},
+		ExecuteDuration: protoDuration,
+		PlanDuration:    protoDuration,
+		CommitDuration:  &vttime.Duration{},
 	}
 	p3converted := ResultToProto3(sqlResult)
 	if !proto.Equal(p3converted, p3Result) {
