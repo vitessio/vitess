@@ -1,46 +1,46 @@
 ## Summary
 
-- **[Breaking Changes](#a-idbreaking-changesbreaking-changes)**
-  - [Flags](#a-idflagsflags)
-  - [VTTablet Flag Deletions](#a-idvttablet-flag-deletionsvttablet-flag-deletions)
-  - [Vindex Interface](#a-idvindex-interfacevindex-interface)
-- **[Deprecations](#a-iddeprecationsdeprecations)**
-  - [LogStats Table and Keyspace Deprecated](#a-idlogstats-table-and-keyspace-deprecatedlogstats-table-and-keyspace-deprecated)
-  - [Orchestrator Integration Deprecation](#a-idorchestrator-integration-deprecationorchestrator-integration-deprecation)
-  - [Connection Pool Prefill](#a-idconnection-pool-prefillconnection-pool-prefill)
-  - [InitShardPrimary Deprecation](#a-idinitshardprimary-deprecationinitshardprimary-deprecation)
-- **[Command-Line Syntax Deprecations](#a-idcommand-line-syntax-deprecationscommand-line-syntax-deprecations)**
-  - [VTTablet Startup Flag Deletions](#a-idvttablet-startup-flag-deletionsvttablet-startup-flag-deletions)
-  - [VTTablet Startup Flag Deprecations](#a-idvttablet-startup-flag-deprecationsvttablet-startup-flag-deprecations)
-  - [VTBackup Flag Deprecations](#a-idvtbackup-flag-deprecationsvtbackup-flag-deprecations)
-- **[VTGate](#a-idvtgatevtgate)**
-  - [vtgate --mysql-server-pool-conn-read-buffers](#a-idvtgate--mysql-server-pool-conn-read-buffersvtgate---mysql-server-pool-conn-read-buffers)
-- **[VDiff2](#a-idvdiff2vdiff-v2)**
-  - [Resume Workflow](#a-idresume-workflowresume-workflow)
-  - [vtctl GetSchema --table-schema-only](#a-idvtctl-getschema--table-schema-onlyvtctl-getschema---table-schema-only)
-  - [Support for Additional Compressors and Decompressors During Backup & Restore](#a-idsupport-for-additional-compressors-and-decompressors-during-backup--restoresupport-for-additional-compressors-and-decompressors-during-backup--restore)
-  - [Independent OLAP and OLTP Transactional Timeouts](#a-idindependant-olap-and-oltp-transactional-timeoutsindependent-olap-and-oltp-transactional-timeouts)
-  - [Support for Specifying Group Information in Calls to VTGate](#a-idsupport-for-specifying-group-information-in-calls-to-vtgatesupport-for-specifying-group-information-in-calls-to-vtgate)
-- **[Online DDL Changes](#a-idonline-ddl-changesonline-ddl-changes)**
-  - [Concurrent Vitess Migrations](#a-idconcurrent-vitess-migrationsconcurrent-vitess-migrations)
-  - [VTCtl Command Changes](#a-idvtctl-command-changesvtctl-command-changes)
-  - [New Syntax](#a-idnew-syntaxnew-syntax)
-- **[Tablet Throttler](#a-idtablet-throttlertablet-throttler)**
-  - [API Changes](#a-idapi-changesapi-changes)
-- **[Mysql Compatibility](#a-idmysql-compatibilitymysql-compatibility)**
-  - [System Settings](#a-idsystem-settingssystem-settings)
-  - [Lookup Vindexes](#a-idlookup-vindexeslookup-vindexes)
-- **[Durability Policy](#a-iddurability-policydurability-policy)**
-  - [Cross Cell](#a-idcross-cellcross-cell)
-- **[New EXPLAIN Format](#a-idnew-explain-formatnew-explain-format)**
-  - [FORMAT=vtexplain](#a-idformatvtexplainformatvtexplain)
-- **[VTOrc](#a-idvtorcvtorc)**
-  - [Old UI Removal and Replacement](#a-idold-ui-removal-and-replacementold-ui-removal-and-replacement)
-  - [Configuration Refactor and New Flags](#a-idconfiguratoin-refactor-and-new-flagsconfiguration-refactor-and-new-flags)
-  - [Example Upgrade](#a-idexample-upgradeexample-upgrade)
-  - [Default Configuration Files](#a-iddefault-configuration-filesdefault-configuration-files)
-- **[Flags Restructure](#a-idflags-restructureflags-restructure)**
-  - [Flags Diff](#a-idflag-diffflags-diffd)
+- **[Breaking Changes](#breaking-changes)**
+  - [Flags](#flags)
+  - [VTTablet Flag Deletions](#vttablet-flag-deletions)
+  - [Vindex Interface](#vindex-interface)
+- **[Deprecations](#deprecations)**
+  - [LogStats Table and Keyspace Deprecated](#logstats-table-and-keyspace-deprecated)
+  - [Orchestrator Integration Deprecation](#orchestrator-integration-deprecation)
+  - [Connection Pool Prefill](#connection-pool-prefill)
+  - [InitShardPrimary Deprecation](#initshardprimary-deprecation)
+- **[Command-Line Syntax Deprecations](#command-line-syntax-deprecations)**
+  - [VTTablet Startup Flag Deletions](#vttablet-startup-flag-deletions)
+  - [VTTablet Startup Flag Deprecations](#vttablet-startup-flag-deprecations)
+  - [VTBackup Flag Deprecations](#vtbackup-flag-deprecations)
+- **[VTGate](#vtgate)**
+  - [vtgate --mysql-server-pool-conn-read-buffers](#vtgate--mysql-server-pool-conn-read-buffers)
+- **[VDiff2](#vdiff2)**
+  - [Resume Workflow](#resume-workflow)
+  - [vtctl GetSchema --table-schema-only](#vtctl-getschema--table-schema-only)
+  - [Support for Additional Compressors and Decompressors During Backup & Restore](#support-for-additional-compressors-and-decompressors-during-backup--restore)
+  - [Independent OLAP and OLTP Transactional Timeouts](#independant-olap-and-oltp-transactional-timeouts)
+  - [Support for Specifying Group Information in Calls to VTGate](#support-for-specifying-group-information-in-calls-to-vtgate)
+- **[Online DDL Changes](#online-ddl-changes)**
+  - [Concurrent Vitess Migrations](#concurrent-vitess-migrations)
+  - [VTCtl Command Changes](#vtctl-command-changes)
+  - [New Syntax](#new-syntax)
+- **[Tablet Throttler](#tablet-throttler)**
+  - [API Changes](#api-changes)
+- **[Mysql Compatibility](#mysql-compatibility)**
+  - [System Settings](#system-settings)
+  - [Lookup Vindexes](#lookup-vindexes)
+- **[Durability Policy](#durability-policy)**
+  - [Cross Cell](#cross-cell)
+- **[New EXPLAIN Format](#new-explain-format)**
+  - [FORMAT=vtexplain](#formatvtexplain)
+- **[VTOrc](#vtorc)**
+  - [Old UI Removal and Replacement](#old-ui-removal-and-replacement)
+  - [Configuration Refactor and New Flags](#configuratoin-refactor-and-new-flags)
+  - [Example Upgrade](#example-upgrade)
+  - [Default Configuration Files](#default-configuration-files)
+- **[Flags Restructure](#flags-restructure)**
+  - [Flags Diff](#flags-diff)
 
 ## Major Changes
 
@@ -178,7 +178,7 @@ Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vrep
 The new flag `--table-schema-only` skips column introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in the `schema` field.
 
 #### <a id="support-for-additional-compressors-and-decompressors-during-backup-&-restore"/>Support for additional compressors and decompressors during backup & restore
-Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(`pgzip`).
+Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(`pargzip`).
 There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
 use-case. Here are the flags that control this feature
 
@@ -198,7 +198,7 @@ use-case. Here are the flags that control this feature
 
 If you want to use any of the built-in compressors, simply set one of the above values other than `external` for `--compression-engine-name`. The value
 specified in `--compression-engine-name` is saved in the backup MANIFEST, which is later read by the restore process to decide which
-engine to use for decompression. Default value for engine is 'pgzip'.
+engine to use for decompression. Default value for engine is 'pargzip'.
 
 If you would like to use a custom command or external tool for compression/decompression then you need to provide the full command with
 arguments to the `--external-compressor` and `--external-decompressor` flags. `--external-compressor-extension` flag also needs to be provided
@@ -420,7 +420,7 @@ The default files that VTOrc searches for configurations in have also changed fr
 
 ### <a id="flags-restructure"/>Flags Restructure
 
-#### <a id="flag-diff"/>Flags Diff
+#### <a id="flags-diff"/>Flags Diff
 
 In addition to these major streams of work in release-15.0, we have made tremendous progress on [VEP-4, aka The Flag Situation](https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md), reorganizing our code so that Vitess binaries and their flags are
 clearly aligned in help text. An immediate win for usability, this positions us well to move on to a [viper](https://github.com/spf13/viper) implementation which will facilitate additional improvements including standardization of flag syntax and runtime configuration reloads.
