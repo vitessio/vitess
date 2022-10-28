@@ -18,6 +18,8 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // ApplyJoin is a nested loop join - for each row on the LHS,
@@ -72,4 +74,62 @@ func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 // Inputs implements the Operator interface
 func (a *ApplyJoin) Inputs() []Operator {
 	return []Operator{a.LHS, a.RHS}
+}
+
+var _ joinOperator = (*ApplyJoin)(nil)
+
+func (a *ApplyJoin) tableID() semantics.TableSet {
+	return TableID(a)
+}
+
+func (a *ApplyJoin) getLHS() Operator {
+	return a.LHS
+}
+
+func (a *ApplyJoin) getRHS() Operator {
+	return a.RHS
+}
+
+func (a *ApplyJoin) setLHS(operator Operator) {
+	a.LHS = operator
+}
+
+func (a *ApplyJoin) setRHS(operator Operator) {
+	a.RHS = operator
+}
+
+func (a *ApplyJoin) makeInner() {
+	a.LeftJoin = false
+}
+
+func (a *ApplyJoin) isInner() bool {
+	return !a.LeftJoin
+}
+
+func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
+	if err != nil {
+		return err
+	}
+	lhs, idxs, err := PushOutputColumns(ctx, a.LHS, cols...)
+	if err != nil {
+		return err
+	}
+	a.LHSColumns = append(a.LHSColumns, cols...)
+
+	a.LHS = lhs
+	if a.Vars == nil {
+		a.Vars = map[string]int{}
+	}
+	for i, idx := range idxs {
+		a.Vars[bvName[i]] = idx
+	}
+	rhs, err := PushPredicate(ctx, predicate, a.RHS)
+	if err != nil {
+		return err
+	}
+	a.RHS = rhs
+
+	a.Predicate = sqlparser.AndExpressions(expr, a.Predicate)
+	return nil
 }

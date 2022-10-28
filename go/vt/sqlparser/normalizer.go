@@ -72,6 +72,8 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 		nz.convertLiteral(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
+	case *UpdateExpr:
+		nz.convertUpdateExpr(node)
 	case *ColName, TableName:
 		// Common node types that never contain Literal or ListArgs but create a lot of object
 		// allocations.
@@ -198,28 +200,34 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 }
 
 func (nz *normalizer) rewriteOtherComparisons(node *ComparisonExpr) {
-	col, ok := node.Left.(*ColName)
-	if !ok {
-		return
+	newR := nz.parameterize(node.Left, node.Right)
+	if newR != nil {
+		node.Right = newR
 	}
-	lit, ok := node.Right.(*Literal)
+}
+
+func (nz *normalizer) parameterize(left, right Expr) Expr {
+	col, ok := left.(*ColName)
 	if !ok {
-		return
+		return nil
+	}
+	lit, ok := right.(*Literal)
+	if !ok {
+		return nil
 	}
 	err := validateLiteral(lit)
 	if err != nil {
 		nz.err = err
-		return
+		return nil
 	}
 
 	bval := SQLToBindvar(lit)
 	if bval == nil {
-		return
+		return nil
 	}
 	key := keyFor(bval, lit)
 	bvname := nz.decideBindVarName(key, lit, col, bval)
-
-	node.Right = Argument(bvname)
+	return Argument(bvname)
 }
 
 func (nz *normalizer) decideBindVarName(key string, lit *Literal, col *ColName, bval *querypb.BindVariable) string {
@@ -266,6 +274,13 @@ func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 	nz.bindVars[bvname] = bvals
 	// Modify RHS to be a list bindvar.
 	node.Right = ListArg(bvname)
+}
+
+func (nz *normalizer) convertUpdateExpr(node *UpdateExpr) {
+	newR := nz.parameterize(node.Name, node.Expr)
+	if newR != nil {
+		node.Expr = newR
+	}
 }
 
 func SQLToBindvar(node SQLNode) *querypb.BindVariable {

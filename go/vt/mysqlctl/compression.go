@@ -193,7 +193,7 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 // This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.
 func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
 	if engine == PargzipCompressor {
-		logger.Warningf("engine \"pargzip\" doesn't support decompression, using \"pgzip\" instead")
+		logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
 		engine = PgzipCompressor
 	}
 
