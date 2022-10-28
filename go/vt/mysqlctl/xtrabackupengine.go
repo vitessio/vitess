@@ -451,7 +451,6 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, bm xtraBackupManifest, logger logutil.Logger) error {
 	// first download the file into a tmp dir
 	// and extract all the files
-
 	tempDir := fmt.Sprintf("%v/%v", cnf.TmpDir, time.Now().UTC().Format("xtrabackup-2006-01-02.150405"))
 	// create tempDir
 	if err := os.MkdirAll(tempDir, os.ModePerm); err != nil {
@@ -464,6 +463,16 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 			l.Errorf("error deleting tempDir(%v): %v", dir, err)
 		}
 	}(tempDir, logger)
+
+	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
+	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
+	if bm.CompressionEngine == PargzipCompressor {
+		logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		bm.CompressionEngine = PgzipCompressor
+		defer func() {
+			bm.CompressionEngine = PargzipCompressor
+		}()
+	}
 
 	if err := be.extractFiles(ctx, logger, bh, bm, tempDir); err != nil {
 		logger.Errorf("error extracting backup files: %v", err)
