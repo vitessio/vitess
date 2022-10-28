@@ -1041,17 +1041,17 @@ func TestExecutorShow(t *testing.T) {
 	query = "show vschema tables"
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "Unknown database 'no_such_keyspace' in vschema"
+	want = "VT05003: Unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 
 	query = "show vitess_migrations"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "Unknown database 'no_such_keyspace' in vschema"
+	want = "VT05003: Unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 
 	query = "show vitess_migrations from ks like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "Unknown database 'ks' in vschema"
+	want = "VT05003: Unknown database 'ks' in vschema"
 	assert.EqualError(t, err, want, query)
 }
 
@@ -1109,7 +1109,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	require.EqualError(t, err, "unknown database 'UnexistentKeyspace'")
+	require.EqualError(t, err, "VT05003: Unknown database 'UnexistentKeyspace'")
 }
 
 func TestExecutorComment(t *testing.T) {

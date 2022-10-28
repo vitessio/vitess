@@ -135,7 +135,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want := "Unknown database 'invalid_keyspace' in vschema"
+	want := "VT05003: Unknown database 'invalid_keyspace' in vschema"
 	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
