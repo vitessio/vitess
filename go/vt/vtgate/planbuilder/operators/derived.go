@@ -17,9 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Derived struct {
@@ -99,4 +101,27 @@ func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 // Inputs implements the Operator interface
 func (d *Derived) Inputs() []Operator {
 	return []Operator{d.Source}
+}
+
+func (d *Derived) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	if _, isUNion := d.Source.(*Union); isUNion {
+		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
+		var err error
+		d.Source, err = PushPredicate(ctx, expr, d.Source)
+		return err
+	}
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
+	if err != nil {
+		if err == semantics.ErrMultipleTables {
+			return semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		}
+		return err
+	}
+
+	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if err != nil {
+		return err
+	}
+	d.Source, err = PushPredicate(ctx, newExpr, d.Source)
+	return err
 }

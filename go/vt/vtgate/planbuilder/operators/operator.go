@@ -67,8 +67,8 @@ type (
 		Cost() int
 	}
 
-	checked interface {
-		// CheckValid allows operators that need a final check before being used, to make sure that
+	checkable interface {
+		// checkValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
 		CheckValid() error
 	}
@@ -118,25 +118,6 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 	}
-}
-
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	if tableExpr.Join == sqlparser.RightJoinType {
-		lhs, rhs = rhs, lhs
-	}
-	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
-}
-
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	op := createJoin(lhs, rhs)
-	if tableExpr.Condition.On != nil {
-		var err error
-		op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return op, nil
 }
 
 func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (Operator, error) {
@@ -219,6 +200,15 @@ func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 	if err != nil {
 		return nil, err
 	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if err = checkValid(op); err != nil {
+		return nil, err
+	}
+
 	return op, nil
 }
 
@@ -258,7 +248,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(expr))
+			op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr), op)
 			if err != nil {
 				return nil, err
 			}
@@ -430,24 +420,6 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	return subq, nil
 }
 
-func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
-	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
-		return nil, nil
-	}
-	subq := &SubQuery{}
-	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
-		if err != nil {
-			return nil, err
-		}
-		subq.Inner = append(subq.Inner, &SubQueryInner{
-			ExtractedSubquery: sq,
-			Inner:             opInner,
-		})
-	}
-	return subq, nil
-}
-
 func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	switch expr := expr.(type) {
 	case *sqlparser.ComparisonExpr:
@@ -462,18 +434,4 @@ func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 			ctx.SemTable.AddColumnEquality(right, expr.Left)
 		}
 	}
-}
-
-func createJoin(LHS, RHS Operator) Operator {
-	lqg, lok := LHS.(*QueryGraph)
-	rqg, rok := RHS.(*QueryGraph)
-	if lok && rok {
-		op := &QueryGraph{
-			Tables:     append(lqg.Tables, rqg.Tables...),
-			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
-			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
-		}
-		return op
-	}
-	return &Join{LHS: LHS, RHS: RHS}
 }

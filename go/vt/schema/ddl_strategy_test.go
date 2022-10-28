@@ -132,9 +132,9 @@ func TestParseDDLStrategy(t *testing.T) {
 			isAllowConcurrent: true,
 		},
 		{
-			strategyVariable:   "vitess --fast-over-revertible",
+			strategyVariable:   "vitess --prefer-instant-ddl",
 			strategy:           DDLStrategyVitess,
-			options:            "--fast-over-revertible",
+			options:            "--prefer-instant-ddl",
 			runtimeOptions:     "",
 			fastOverRevertible: true,
 		},
@@ -156,7 +156,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
 		assert.Equal(t, ts.isPostponeLaunch, setting.IsPostponeLaunch())
 		assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
-		assert.Equal(t, ts.fastOverRevertible, setting.IsFastOverRevertibleFlag())
+		assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
 		assert.Equal(t, ts.fastRangeRotation, setting.IsFastRangeRotationFlag())
 
 		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
