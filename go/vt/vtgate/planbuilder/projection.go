@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -65,7 +64,7 @@ func (p *projection) Inputs() []logicalPlan {
 // Rewrite implements the logicalPlan interface
 func (p *projection) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+		return vterrors.VT13001("wrong number of inputs")
 	}
 	p.source = inputs[0]
 	return nil
@@ -108,7 +107,7 @@ func (p *projection) addColumn(idx *int, column sqlparser.Expr, columnName strin
 		offset = *idx
 	}
 	if p.columnNames[offset] != "" || p.columns[offset] != nil {
-		return -1, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "overwriting columns in projection is not permitted")
+		return -1, vterrors.VT13001("overwriting columns in projection is not permitted")
 	}
 	p.columns[offset] = column
 	p.columnNames[offset] = columnName

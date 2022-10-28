@@ -3869,7 +3869,7 @@
   {
     "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
     "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "plan": "unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "plan test for a natural character set string",
@@ -3993,7 +3993,7 @@
   {
     "comment": "correlated subquery in exists clause",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
@@ -4042,7 +4042,7 @@
   {
     "comment": "correlated subquery in exists clause with an order by",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
@@ -4092,7 +4092,7 @@
   {
     "comment": "correlated subquery having dependencies on two tables",
     "query": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
@@ -4157,7 +4157,7 @@
   {
     "comment": "correlated subquery using a column twice",
     "query": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
@@ -4202,7 +4202,7 @@
   {
     "comment": "correlated subquery part of an OR clause",
     "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": "VT12001: unsupported: exists sub-queries are only supported with AND clause"
   },
   {
@@ -7767,13 +7767,13 @@
   {
     "comment": "cant switch sides for outer joins",
     "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "plan": "unsupported: LEFT JOIN not supported for derived tables"
+    "plan": "VT12001: unsupported: LEFT JOIN not supported for derived tables"
   },
   {
     "comment": "limit on both sides means that we can't evaluate this at all",
     "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
     "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": "unsupported: JOIN not supported between derived tables"
+    "gen4-plan": "VT12001: unsupported: JOIN not supported between derived tables"
   },
   {
     "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",

@@ -21,13 +21,12 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func (rp *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, reservedVars *sqlparser.ReservedVars) error {
+func (r *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, reservedVars *sqlparser.ReservedVars) error {
 	for _, pred := range predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
 		if err != nil {
@@ -39,12 +38,12 @@ func (rp *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, r
 		}
 
 		if isTableSchema {
-			rp.SysTableTableSchema = append(rp.SysTableTableSchema, out)
+			r.SysTableTableSchema = append(r.SysTableTableSchema, out)
 		} else {
-			if rp.SysTableTableName == nil {
-				rp.SysTableTableName = map[string]evalengine.Expr{}
+			if r.SysTableTableName == nil {
+				r.SysTableTableName = map[string]evalengine.Expr{}
 			}
-			rp.SysTableTableName[bvName] = out
+			r.SysTableTableName[bvName] = out
 		}
 	}
 	return nil
@@ -122,7 +121,7 @@ func isTableNameCol(col *sqlparser.ColName) bool {
 type notImplementedSchemaInfoConverter struct{}
 
 func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not yet supported")
+	return 0, vterrors.VT12001("Comparing table schema name with a column name not yet supported")
 }
 
 func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {

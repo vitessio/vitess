@@ -45,6 +45,7 @@ var (
 	VT03020 = errorWithoutState("VT03020", vtrpcpb.Code_INVALID_ARGUMENT, "symbol %s not found in subquery", "The given symbol was not found in the subquery.")
 	VT03021 = errorWithoutState("VT03021", vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous symbol reference: %v", "The given symbol is ambiguous. You can use a table qualifier to make unambiguous.")
 	VT03022 = errorWithoutState("VT03022", vtrpcpb.Code_INVALID_ARGUMENT, "column %v not found in %v", "The given column cannot be found.")
+	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targetting a key range: %s", "INSERTs are not supported with key range targets.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "Can't drop database '%s'; database doesn't exists", "The given database does not exist, Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "Can't alter database '%s'; unknown database", "The given database does not exist, Vitess cannot alter it.")
@@ -63,6 +64,10 @@ var (
 	VT09005 = errorWithState("VT09005", vtrpcpb.Code_FAILED_PRECONDITION, NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)", "A database must be selected.")
 	VT09006 = errorWithoutState("VT09006", vtrpcpb.Code_FAILED_PRECONDITION, "%s VITESS_MIGRATION works only on primary tablet", "VITESS_MIGRATION works only on primary tablet.")
 	VT09007 = errorWithoutState("VT09007", vtrpcpb.Code_FAILED_PRECONDITION, "%s VITESS_THROTTLED_APPS works only on primary tablet", "VITESS_THROTTLED_APPS works only on primary tablet.")
+	VT09008 = errorWithoutState("VT09008", vtrpcpb.Code_FAILED_PRECONDITION, "explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`", "explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`")
+	VT09009 = errorWithoutState("VT09009", vtrpcpb.Code_FAILED_PRECONDITION, "stream is supported only for primary tablet type, current type: %v", "Stream is only supported for primary tablets, please use a stream on those tablets.")
+
+	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/", "foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
 
 	VT12001 = errorWithoutState("VT12001", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", "This statement is unsupported by Vitess. Please use an alternative.")
 
@@ -73,6 +78,7 @@ var (
 	VT14001 = errorWithoutState("VT14001", vtrpcpb.Code_UNAVAILABLE, "Connection error", "The connection failed.")
 	VT14002 = errorWithoutState("VT14002", vtrpcpb.Code_UNAVAILABLE, "No available connection", "No available connection.")
 	VT14003 = errorWithoutState("VT14003", vtrpcpb.Code_UNAVAILABLE, "No connection for tablet %v", "No connection for the given tablet.")
+	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "Cannot find keyspace for: %s", "The specified keyspace could not be found.")
 
 	VT17001 = errorWithoutState("VT17001", vtrpcpb.Code_CLUSTER_EVENT, "operation not allowed in state NOT_SERVING during query: %s", "The given operation can only be done in a non-NOT_SERVING state.")
 	VT17002 = errorWithoutState("VT17002", vtrpcpb.Code_CLUSTER_EVENT, "invalid tablet type: REPLICA, want: PRIMARY", "A PRIMARY tablet is required for this operation.")
@@ -100,6 +106,7 @@ var (
 		VT03020,
 		VT03021,
 		VT03022,
+		VT03023,
 		VT05001,
 		VT05002,
 		VT05003,
@@ -115,6 +122,7 @@ var (
 		VT09005,
 		VT09006,
 		VT09007,
+		VT10001,
 		VT12001,
 		VT13001,
 		VT13002,

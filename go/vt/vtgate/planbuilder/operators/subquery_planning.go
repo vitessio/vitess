@@ -22,8 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, bool, error) {
@@ -73,7 +71,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator,
 			continue
 		}
 
-		return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, false, vterrors.VT12001("cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
@@ -404,12 +402,14 @@ func createCorrelatedSubqueryOp(
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
-				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultOuterOp)) {
+				nodeDeps := ctx.SemTable.RecursiveDeps(node)
+				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
 					for colName, bindVar := range bindVars {
-						if node.Name.Equal(colName.Name) && ctx.SemTable.RecursiveDeps(node).Equals(ctx.SemTable.RecursiveDeps(colName)) {
+						colNameDeps := ctx.SemTable.RecursiveDeps(colName)
+						if node.Name.Equal(colName.Name) && nodeDeps.Equals(colNameDeps) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))
 							return false
 						}

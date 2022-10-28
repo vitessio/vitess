@@ -32,8 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -281,7 +279,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return newPlanResult(engine.NewRowsPrimitive(nil, nil)), nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+	return nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type: %T", stmt))
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {

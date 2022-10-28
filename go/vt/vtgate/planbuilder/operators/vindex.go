@@ -17,10 +17,10 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -47,7 +47,7 @@ type (
 	}
 )
 
-const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
+const vindexUnsupported = "where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // Introduces implements the Operator interface
 func (v *Vindex) Introduces() semantics.TableSet {
@@ -82,11 +82,54 @@ outer:
 	return idxs, nil
 }
 
-// CheckValid implements the Operator interface
+// checkValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
+		return vterrors.VT12001("where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 	}
 
+	return nil
+}
+
+func (v *Vindex) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
+		deps := ctx.SemTable.RecursiveDeps(e)
+		if deps.NumberOfTables() > 1 {
+			return vterrors.VT12001(vindexUnsupported + " (multiple tables involved)")
+		}
+		// check if we already have a predicate
+		if v.OpCode != engine.VindexNone {
+			return vterrors.VT12001(vindexUnsupported + " (multiple filters)")
+		}
+
+		// check LHS
+		comparison, ok := e.(*sqlparser.ComparisonExpr)
+		if !ok {
+			return vterrors.VT12001(vindexUnsupported + " (not a comparison)")
+		}
+		if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
+			return vterrors.VT12001(vindexUnsupported + " (not equality)")
+		}
+		colname, ok := comparison.Left.(*sqlparser.ColName)
+		if !ok {
+			return vterrors.VT12001(vindexUnsupported + " (lhs is not a column)")
+		}
+		if !colname.Name.EqualString("id") {
+			return vterrors.VT12001(vindexUnsupported + " (lhs is not id)")
+		}
+
+		// check RHS
+		var err error
+		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
+			v.Value = comparison.Right
+		} else {
+			return vterrors.VT12001(vindexUnsupported + " (rhs is not a value)")
+		}
+		if err != nil {
+			return vterrors.VT12001(vindexUnsupported+": %v", err)
+		}
+		v.OpCode = engine.VindexMap
+		v.Table.Predicates = append(v.Table.Predicates, e)
+	}
 	return nil
 }

@@ -142,7 +142,7 @@
     "comment": "sharded delete with limit clasue",
     "query": "delete from user_extra limit 10",
     "v3-plan": "VT12001: unsupported: multi shard delete with limit",
-    "gen4-plan": "multi shard delete with limit is not supported"
+    "gen4-plan": "VT12001: unsupported: multi shard delete with limit is not supported"
   },
   {
     "comment": "sharded subquery in unsharded subquery in unsharded delete",
@@ -158,7 +158,7 @@
     "comment": "scatter update with limit clause",
     "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
     "v3-plan": "VT12001: unsupported: multi shard update with limit",
-    "gen4-plan": "multi shard update with limit is not supported"
+    "gen4-plan": "VT12001: unsupported: multi shard update with limit is not supported"
   },
   {
     "comment": "multi delete multi table",
@@ -281,50 +281,42 @@
   {
     "comment": "select keyspace_id from user_index where id = 1 and id = 2",
     "query": "select keyspace_id from user_index where id = 1 and id = 2",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
   },
   {
     "comment": "select keyspace_id from user_index where func(id)",
     "query": "select keyspace_id from user_index where func(id)",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
   },
   {
     "comment": "select keyspace_id from user_index where id > 1",
     "query": "select keyspace_id from user_index where id > 1",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
   },
   {
     "comment": "select keyspace_id from user_index where 1 = id",
     "query": "select keyspace_id from user_index where 1 = id",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
   },
   {
     "comment": "select keyspace_id from user_index where keyspace_id = 1",
     "query": "select keyspace_id from user_index where keyspace_id = 1",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
   },
   {
     "comment": "select keyspace_id from user_index where id = id+1",
     "query": "select keyspace_id from user_index where id = id+1",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
   },
   {
     "comment": "vindex func without where condition",
     "query": "select keyspace_id from user_index",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
   },
   {
     "comment": "vindex func in subquery without where",
     "query": "select id from user where exists(select keyspace_id from user_index)",
-    "v3-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)",
-    "gen4-plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
   },
   {
     "comment": "select func(keyspace_id) from user_index where id = :id",
@@ -425,13 +417,13 @@
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
-    "gen4-plan": "unsupported: unable to split predicates to derived table: uu.user_id = uu.id"
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
+    "gen4-plan": "VT12001: unsupported: unable to split predicates to derived table: uu.user_id = uu.id"
   },
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# changed to project all the columns from the derived tables.",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
-    "plan": "unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "Gen4 does a rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.",
@@ -469,13 +461,7 @@
     "comment": "aggregation on union",
     "query": "select sum(col) from (select col from user union all select col from unsharded) t",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "using aggregation on top of a *planbuilder.concatenateGen4 plan is not yet supported"
-  },
-  {
-    "comment": "systable union query in derived table with constraint on outside (without star projection)",
-    "query": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
-    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": "can't push predicates on concatenate"
+    "gen4-plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.concatenateGen4 plan is not yet supported"
   },
   {
     "comment": "insert having subquery in row values",
@@ -496,5 +482,11 @@
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
     "plan": "VT12001: unsupported: lock function and other expression in same select query"
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (star projection)",
+    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+    "v3-plan": "VT03019: symbol constraint_name not found",
+    "gen4-plan": "VT12001: unsupported: can't push predicates on UNION where the first SELECT contains star or next"
   }
 ]

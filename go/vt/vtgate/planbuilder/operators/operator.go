@@ -17,7 +17,8 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -67,8 +68,8 @@ type (
 		Cost() int
 	}
 
-	checked interface {
-		// CheckValid allows operators that need a final check before being used, to make sure that
+	checkable interface {
+		// checkValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
 		CheckValid() error
 	}
@@ -96,7 +97,7 @@ func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlpar
 	case *sqlparser.ParenTableExpr:
 		return crossJoin(ctx, tableExpr.Exprs)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T table type", tableExpr)
+		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T table type", tableExpr))
 	}
 }
 
@@ -116,27 +117,8 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
 		return createOuterJoin(tableExpr, lhs, rhs)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
+		return nil, vterrors.VT13001(tableExpr.Join.ToString())
 	}
-}
-
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	if tableExpr.Join == sqlparser.RightJoinType {
-		lhs, rhs = rhs, lhs
-	}
-	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
-}
-
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	op := createJoin(lhs, rhs)
-	if tableExpr.Condition.On != nil {
-		var err error
-		op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return op, nil
 }
 
 func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (Operator, error) {
@@ -173,7 +155,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		}
 		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
+		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))
 	}
 }
 
@@ -214,11 +196,20 @@ func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 	case *sqlparser.Delete:
 		op, err = createOperatorFromDelete(ctx, node)
 	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
+		err = vterrors.VT12001(fmt.Sprintf("operator: %T", selStmt))
 	}
 	if err != nil {
 		return nil, err
 	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if err = checkValid(op); err != nil {
+		return nil, err
+	}
+
 	return op, nil
 }
 
@@ -230,7 +221,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 
 	_, isRHSUnion := node.Right.(*sqlparser.Union)
 	if isRHSUnion {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
+		return nil, vterrors.VT12001("nesting of unions at the right-hand side is not yet supported")
 	}
 	opRHS, err := CreateLogicalOperatorFromAST(ctx, node.Right)
 	if err != nil {
@@ -258,7 +249,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(expr))
+			op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr), op)
 			if err != nil {
 				return nil, err
 			}
@@ -317,7 +308,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 
 	if r.RouteOpCode == engine.Scatter && updStmt.Limit != nil {
 		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+		return nil, vterrors.VT12001("multi shard update with limit is not supported")
 	}
 
 	subq, err := createSubqueryFromStatement(ctx, updStmt)
@@ -334,11 +325,11 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
 	alTbl, ok := tableExpr.(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
+		return nil, nil, vterrors.VT13001("expected AliasedTableExpr")
 	}
 	tblName, ok := alTbl.Expr.(sqlparser.TableName)
 	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
+		return nil, nil, vterrors.VT13001("expected TableName")
 	}
 
 	tableID := ctx.SemTable.TableSetFor(alTbl)
@@ -348,7 +339,7 @@ func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparse
 	}
 
 	if tableInfo.IsInfSchema() {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
+		return nil, nil, vterrors.VT12001("can't update information schema tables")
 	}
 
 	var predicates []sqlparser.Expr
@@ -416,7 +407,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	if route.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
 		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
+		return nil, vterrors.VT12001("multi shard delete with limit is not supported")
 	}
 
 	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
@@ -427,24 +418,6 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return route, nil
 	}
 	subq.Outer = route
-	return subq, nil
-}
-
-func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
-	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
-		return nil, nil
-	}
-	subq := &SubQuery{}
-	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
-		if err != nil {
-			return nil, err
-		}
-		subq.Inner = append(subq.Inner, &SubQueryInner{
-			ExtractedSubquery: sq,
-			Inner:             opInner,
-		})
-	}
 	return subq, nil
 }
 
@@ -462,18 +435,4 @@ func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 			ctx.SemTable.AddColumnEquality(right, expr.Left)
 		}
 	}
-}
-
-func createJoin(LHS, RHS Operator) Operator {
-	lqg, lok := LHS.(*QueryGraph)
-	rqg, rok := RHS.(*QueryGraph)
-	if lok && rok {
-		op := &QueryGraph{
-			Tables:     append(lqg.Tables, rqg.Tables...),
-			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
-			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
-		}
-		return op
-	}
-	return &Join{LHS: LHS, RHS: RHS}
 }

@@ -4339,8 +4339,7 @@
   {
     "comment": "correlated subquery with different keyspace tables involved",
     "query": "select id from user where id in (select col from unsharded where col = user.id)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
-    "gen4-plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "correlated subquery with same keyspace",

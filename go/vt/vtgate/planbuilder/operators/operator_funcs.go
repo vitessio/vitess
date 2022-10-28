@@ -17,7 +17,8 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -30,117 +31,48 @@ import (
 // where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
 	switch op := op.(type) {
+	case *Filter:
+		var err error
+		op.Source, err = PushPredicate(ctx, expr, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		return op, nil
+	case *QueryGraph:
+		err := op.addPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		return op, nil
 	case *Route:
-		err := op.UpdateRoutingLogic(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		newSrc, err := PushPredicate(ctx, expr, op.Source)
-		if err != nil {
-			return nil, err
-		}
-		op.Source = newSrc
-		return op, err
-	case *ApplyJoin:
-		deps := ctx.SemTable.RecursiveDeps(expr)
-		switch {
-		case deps.IsSolvedBy(TableID(op.LHS)):
-			newSrc, err := PushPredicate(ctx, expr, op.LHS)
-			if err != nil {
-				return nil, err
-			}
-			op.LHS = newSrc
-			return op, err
-		case deps.IsSolvedBy(TableID(op.RHS)):
-			if !op.LeftJoin {
-				newSrc, err := PushPredicate(ctx, expr, op.RHS)
-				if err != nil {
-					return nil, err
-				}
-				op.RHS = newSrc
-				return op, err
-			}
-
-			// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
-			// where tbl is on the rhs of the left outer join
-			if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-				(sqlparser.IsColName(cmp.Left) && ctx.SemTable.RecursiveDeps(cmp.Left).IsSolvedBy(TableID(op.RHS)) ||
-					sqlparser.IsColName(cmp.Right) && ctx.SemTable.RecursiveDeps(cmp.Right).IsSolvedBy(TableID(op.RHS))) {
-				// When the predicate we are pushing is using information from an outer table, we can
-				// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
-				// the predicate will not return true if the table columns are null.
-				// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
-				// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
-				// side did not match, we might as well turn the join into an inner join.
-
-				// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
-				op.LeftJoin = false
-				newSrc, err := PushPredicate(ctx, expr, op.RHS)
-				if err != nil {
-					return nil, err
-				}
-				op.RHS = newSrc
-				return op, err
-			}
-
-			// finally, if we can't turn the outer join into an inner,
-			// we need to filter after the join has been evaluated
-			return &Filter{
-				Source:     op,
-				Predicates: []sqlparser.Expr{expr},
-			}, nil
-		case deps.IsSolvedBy(TableID(op)):
-			bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(op))
-			if err != nil {
-				return nil, err
-			}
-			out, idxs, err := PushOutputColumns(ctx, op.LHS, cols...)
-			if err != nil {
-				return nil, err
-			}
-			op.LHS = out
-			for i, idx := range idxs {
-				op.Vars[bvName[i]] = idx
-			}
-			newSrc, err := PushPredicate(ctx, predicate, op.RHS)
-			if err != nil {
-				return nil, err
-			}
-			op.RHS = newSrc
-			op.Predicate = sqlparser.AndExpressions(op.Predicate, expr)
-			return op, err
-		}
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
+		return op.addPredicate(ctx, expr)
+	case *ApplyJoin, *Join:
+		join := op.(joinOperator) // stupid golang doesn't understand this without an explicit cast
+		return addPredicate(join, ctx, expr, false)
 	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return &Filter{
-			Source:     op,
-			Predicates: []sqlparser.Expr{expr},
-		}, nil
-	case *Filter:
-		op.Predicates = append(op.Predicates, expr)
-		return op, nil
+		return newFilter(op, expr), nil
 	case *Derived:
-		tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
-		if err != nil {
-			if err == semantics.ErrMultipleTables {
-				return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
-			}
-			return nil, err
-		}
-		newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+		err := op.addPredicate(ctx, expr)
 		if err != nil {
 			return nil, err
 		}
-		newSrc, err := PushPredicate(ctx, newExpr, op.Source)
+		return op, nil
+	case *Vindex:
+		err := op.addPredicate(ctx, expr)
 		if err != nil {
 			return nil, err
 		}
-		op.Source = newSrc
-		return op, err
+		return op, nil
+	case *Union:
+		err := op.addPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		return op, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
+		return nil, vterrors.VT13001(fmt.Sprintf("we cannot push predicates into %T", op))
 	}
 }
 
@@ -243,7 +175,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op Operator, columns ..
 		return op, offsets, nil
 
 	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
+		return nil, nil, vterrors.VT13001(fmt.Sprintf("we cannot push output columns into %T", op))
 	}
 }
 
@@ -299,7 +231,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op O
 		op.Predicate = sqlparser.AndExpressions(keep...)
 
 		if !isRemoved {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr))
+			return nil, vterrors.VT12001(fmt.Sprintf("remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr)))
 		}
 		return op, nil
 	case *Filter:
@@ -328,7 +260,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op O
 		return op, nil
 
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not happen - tried to remove predicate from table op")
+		return nil, vterrors.VT13001("this should not happen - tried to remove predicate from table op")
 	}
 }
 
@@ -345,7 +277,7 @@ func BreakExpressionInLHSandRHS(
 		case *sqlparser.ColName:
 			deps := ctx.SemTable.RecursiveDeps(node)
 			if deps.NumberOfTables() == 0 {
-				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
+				err = vterrors.VT13001("unknown column. has the AST been copied?")
 				return false
 			}
 			if deps.IsSolvedBy(lhs) {
@@ -367,4 +299,105 @@ func BreakExpressionInLHSandRHS(
 	}
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	return
+}
+
+type joinOperator interface {
+	Operator
+	getLHS() Operator
+	getRHS() Operator
+	setLHS(Operator)
+	setRHS(Operator)
+	makeInner()
+	isInner() bool
+	addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+}
+
+func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlparser.Expr, joinPredicates bool) (Operator, error) {
+	deps := ctx.SemTable.RecursiveDeps(expr)
+	switch {
+	case deps.IsSolvedBy(TableID(join.getLHS())):
+		// predicates can always safely be pushed down to the lhs if that is all they depend on
+		lhs, err := PushPredicate(ctx, expr, join.getLHS())
+		if err != nil {
+			return nil, err
+		}
+		join.setLHS(lhs)
+		return join, err
+	case deps.IsSolvedBy(TableID(join.getRHS())):
+		// if we are dealing with an outer join, always start by checking if this predicate can turn
+		// the join into an inner join
+		if !join.isInner() && canConvertToInner(ctx, expr, TableID(join.getRHS())) {
+			join.makeInner()
+		}
+
+		if !joinPredicates && !join.isInner() {
+			// if we still are dealing with an outer join
+			// we need to filter after the join has been evaluated
+			return newFilter(join, expr), nil
+		}
+
+		// For inner joins, we can just push the filtering on the RHS
+		rhs, err := PushPredicate(ctx, expr, join.getRHS())
+		if err != nil {
+			return nil, err
+		}
+		join.setRHS(rhs)
+		return join, err
+
+	case deps.IsSolvedBy(TableID(join)):
+		// if we are dealing with an outer join, always start by checking if this predicate can turn
+		// the join into an inner join
+		if !joinPredicates && !join.isInner() && canConvertToInner(ctx, expr, TableID(join.getRHS())) {
+			join.makeInner()
+		}
+
+		if !joinPredicates && !join.isInner() {
+			// if we still are dealing with an outer join
+			// we need to filter after the join has been evaluated
+			return newFilter(join, expr), nil
+		}
+
+		err := join.addJoinPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+
+		return join, nil
+	}
+	return nil, nil
+}
+
+// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
+// where tbl is on the rhs of the left outer join
+// When a predicate uses information from an outer table, we can convert from an outer join to an inner join
+// if the predicate is "null-intolerant".
+//
+// Null-intolerant in this context means that the predicate will not be true if the table columns are null.
+//
+// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
+// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
+// side did not match, we might as well turn the join into an inner join.
+//
+// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
+func canConvertToInner(ctx *plancontext.PlanningContext, expr sqlparser.Expr, rhs semantics.TableSet) bool {
+	isColNameFromRHS := func(e sqlparser.Expr) bool {
+		return sqlparser.IsColName(e) && ctx.SemTable.RecursiveDeps(e).IsSolvedBy(rhs)
+	}
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if expr.Operator == sqlparser.NullSafeEqualOp {
+			return false
+		}
+
+		return isColNameFromRHS(expr.Left) || isColNameFromRHS(expr.Right)
+
+	case *sqlparser.IsExpr:
+		if expr.Right != sqlparser.IsNotNullOp {
+			return false
+		}
+
+		return isColNameFromRHS(expr.Left)
+	default:
+		return false
+	}
 }

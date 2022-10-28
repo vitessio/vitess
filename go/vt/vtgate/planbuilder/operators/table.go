@@ -17,7 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -58,5 +57,5 @@ func (to *Table) Introduces() semantics.TableSet {
 
 // PushPredicate implements the PhysicalOperator interface
 func (to *Table) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a Table. It is meant to be immutable")
+	return vterrors.VT13001("we should not push Predicates into a Table. It is meant to be immutable")
 }

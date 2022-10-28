@@ -9,7 +9,7 @@
     "comment": "TPC-H query 2",
     "query": "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey limit 10",
     "v3-plan": "VT03019: symbol p_partkey not found",
-    "gen4-plan": "unsupported: cross-shard correlated subquery"
+    "gen4-plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "TPC-H query 3",
@@ -690,7 +690,7 @@
     "comment": "TPC-H query 9",
     "query": "select nation, o_year, sum(amount) as sum_profit from ( select n_name as nation, extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from part, supplier, lineitem, partsupp, orders, nation where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey and p_partkey = l_partkey and o_orderkey = l_orderkey and s_nationkey = n_nationkey and p_name like '%green%' ) as profit group by nation, o_year order by nation, o_year desc",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "aggregation on columns from different sources not supported yet"
+    "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources not supported yet"
   },
   {
     "comment": "TPC-H query 10",
@@ -983,7 +983,7 @@
   {
     "comment": "TPC-H query 13",
     "query": "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc",
-    "plan": "using aggregation on top of a *planbuilder.orderedAggregate plan is not yet supported"
+    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan is not yet supported"
   },
   {
     "comment": "TPC-H query 14",
@@ -1119,13 +1119,13 @@
     "comment": "TPC-H query 16",
     "query": "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "using aggregation on top of a *planbuilder.pulloutSubquery plan is not yet supported"
+    "gen4-plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.pulloutSubquery plan is not yet supported"
   },
   {
     "comment": "TPC-H query 17",
     "query": "select sum(l_extendedprice) / 7.0 as avg_yearly from lineitem, part where p_partkey = l_partkey and p_brand = 'Brand#23' and p_container = 'MED BOX' and l_quantity < ( select 0.2 * avg(l_quantity) from lineitem where l_partkey = p_partkey )",
     "v3-plan": "VT03019: symbol p_partkey not found",
-    "gen4-plan": "unsupported: cross-shard correlated subquery"
+    "gen4-plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "TPC-H query 18",
@@ -1341,7 +1341,7 @@
     "comment": "TPC-H query 20",
     "query": "select s_name, s_address from supplier, nation where s_suppkey in ( select ps_suppkey from partsupp where ps_partkey in ( select p_partkey from part where p_name like 'forest%' ) and ps_availqty > ( select 0.5 * sum(l_quantity) from lineitem where l_partkey = ps_partkey and l_suppkey = ps_suppkey and l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year ) ) and s_nationkey = n_nationkey and n_name = 'CANADA' order by s_name",
     "v3-plan": "VT03019: symbol ps_partkey not found",
-    "gen4-plan": "unsupported: cross-shard correlated subquery"
+    "gen4-plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "TPC-H query 21",

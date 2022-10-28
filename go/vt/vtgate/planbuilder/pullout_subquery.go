@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -118,7 +117,7 @@ func (ps *pulloutSubquery) SupplyWeightString(colNumber int, alsoAddToGroupBy bo
 // Rewrite implements the logicalPlan interface
 func (ps *pulloutSubquery) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pulloutSubquery: wrong number of inputs")
+		return vterrors.VT13001("pulloutSubquery: wrong number of inputs")
 	}
 	ps.underlying = inputs[0]
 	ps.subquery = inputs[1]

@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -80,7 +79,7 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		return nil, vterrors.VT12001("filtering on results of aggregates")
 	}
 
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] unreachable %T.filtering", input)
+	return nil, vterrors.VT13001(fmt.Sprintf("unreachable %T.filtering", input))
 }
 
 func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, error) {

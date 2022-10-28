@@ -205,14 +205,6 @@ func newBuildSelectPlan(
 	if err != nil {
 		return nil, nil, err
 	}
-	logical, err = operators.Compact(ctx, logical)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = operators.CheckValid(logical)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	physOp, err := operators.TransformToPhysical(ctx, logical)
 	if err != nil {
@@ -323,10 +315,6 @@ func gen4UpdateStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-	err = operators.CheckValid(logical)
-	if err != nil {
-		return nil, err
-	}
 
 	physOp, err := operators.TransformToPhysical(ctx, logical)
 	if err != nil {
@@ -407,10 +395,6 @@ func gen4DeleteStmtPlanner(
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 	logical, err := operators.CreateLogicalOperatorFromAST(ctx, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
-	err = operators.CheckValid(logical)
 	if err != nil {
 		return nil, err
 	}

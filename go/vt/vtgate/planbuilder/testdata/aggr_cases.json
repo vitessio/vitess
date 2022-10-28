@@ -2343,7 +2343,7 @@
   {
     "comment": "correlated subquery in exists clause with an ordering",
     "query": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
@@ -3308,7 +3308,7 @@
   {
     "comment": "aggregation on top of semijoin",
     "query": "select count(*) from user where exists (select 0 from user_extra where user.apa = user_extra.bar)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user where exists (select 0 from user_extra where user.apa = user_extra.bar)",

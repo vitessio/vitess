@@ -187,3 +187,13 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 	result.NoDeps = qg.NoDeps
 	return result
 }
+
+func (qg *QueryGraph) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
+		err := qg.collectPredicate(ctx, e)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

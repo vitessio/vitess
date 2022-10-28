@@ -1,8 +1,9 @@
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/key"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -135,7 +136,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 	case *sqlparser.RenameTable:
 		destination, keyspace, err = buildRenameTable(vschema, ddl)
 	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected ddl statement type: %T", ddlStatement)
+		return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected ddl statement type: %T", ddlStatement))
 	}
 
 	if err != nil {
@@ -171,7 +172,7 @@ func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStateme
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
+			return vterrors.VT10001()
 		}
 	}
 	return nil
