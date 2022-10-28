@@ -109,7 +109,9 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 		queryStats = &querypb.QueryStats{
 			ExecuteDuration: protoutil.DurationToProto(qr.QueryStats.ExecuteDuration),
 			PlanDuration:    protoutil.DurationToProto(qr.QueryStats.PlanDuration),
-			CommitDuration:  protoutil.DurationToProto(qr.QueryStats.CommitDuration)}
+			CommitDuration:  protoutil.DurationToProto(qr.QueryStats.CommitDuration),
+			TotalDuration:   protoutil.DurationToProto(qr.QueryStats.TotalDuration),
+		}
 	}
 
 	return &querypb.QueryResult{
@@ -147,6 +149,7 @@ func parseProtoQueryStats(s *querypb.QueryStats) *QueryStats {
 		ExecuteDuration: parseProtoDuration(s.ExecuteDuration),
 		PlanDuration:    parseProtoDuration(s.PlanDuration),
 		CommitDuration:  parseProtoDuration(s.CommitDuration),
+		TotalDuration:   parseProtoDuration(s.TotalDuration),
 	}
 }
 

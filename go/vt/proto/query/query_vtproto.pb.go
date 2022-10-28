@@ -723,6 +723,16 @@ func (m *QueryStats) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TotalDuration != nil {
+		size, err := m.TotalDuration.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x22
+	}
 	if m.CommitDuration != nil {
 		size, err := m.CommitDuration.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -4497,6 +4507,10 @@ func (m *QueryStats) SizeVT() (n int) {
 		l = m.CommitDuration.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.TotalDuration != nil {
+		l = m.TotalDuration.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -7879,6 +7893,42 @@ func (m *QueryStats) UnmarshalVT(dAtA []byte) error {
 				m.CommitDuration = &vttime.Duration{}
 			}
 			if err := m.CommitDuration.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TotalDuration", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TotalDuration == nil {
+				m.TotalDuration = &vttime.Duration{}
+			}
+			if err := m.TotalDuration.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

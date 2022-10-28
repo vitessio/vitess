@@ -407,6 +407,7 @@ message QueryStats {
   vttime.Duration execute_duration = 1;
   vttime.Duration plan_duration = 2;
   vttime.Duration commit_duration = 3;
+  vttime.Duration total_duration = 4;
 }
 
 // QueryWarning is used to convey out of band query execution warnings

@@ -398,6 +398,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		CommitDuration:  logStats.CommitTime,
 		ExecuteDuration: logStats.ExecuteTime,
 		PlanDuration:    logStats.PlanTime,
+		TotalDuration:   logStats.TotalTime(),
 	}
 
 	qr.QueryStats = qs

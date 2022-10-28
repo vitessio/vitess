@@ -32,6 +32,7 @@ type QueryStats struct {
 	PlanDuration    time.Duration `json:"plan_duration"`
 	ExecuteDuration time.Duration `json:"execute_duration"`
 	CommitDuration  time.Duration `json:"commit_duration"`
+	TotalDuration   time.Duration `json:"total_duration"`
 }
 
 // Result represents a query result.

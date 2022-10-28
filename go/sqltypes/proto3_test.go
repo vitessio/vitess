@@ -62,6 +62,7 @@ func TestResult(t *testing.T) {
 			ExecuteDuration: duration,
 			PlanDuration:    duration,
 			CommitDuration:  0,
+			TotalDuration:   duration,
 		},
 	}
 	p3Result := &querypb.QueryResult{
@@ -79,6 +80,7 @@ func TestResult(t *testing.T) {
 			ExecuteDuration: protoDuration,
 			PlanDuration:    protoDuration,
 			CommitDuration:  &vttime.Duration{},
+			TotalDuration:   protoDuration,
 		},
 	}
 	p3converted := ResultToProto3(sqlResult)

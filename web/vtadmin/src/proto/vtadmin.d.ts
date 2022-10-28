@@ -25534,6 +25534,9 @@ export namespace query {
 
         /** QueryStats commit_duration */
         commit_duration?: (vttime.IDuration|null);
+
+        /** QueryStats total_duration */
+        total_duration?: (vttime.IDuration|null);
     }
 
     /** Represents a QueryStats. */
@@ -25553,6 +25556,9 @@ export namespace query {
 
         /** QueryStats commit_duration. */
         public commit_duration?: (vttime.IDuration|null);
+
+        /** QueryStats total_duration. */
+        public total_duration?: (vttime.IDuration|null);
 
         /**
          * Creates a new QueryStats instance using the specified properties.
