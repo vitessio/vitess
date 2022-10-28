@@ -68,6 +68,7 @@ func VtDataRoot() string {
 // If it is not set, look for mysqld in the path.
 func VtMysqlRoot() (string, error) {
 	// if the environment variable is set, use that
+	// return "/opt/homebrew/Cellar/mysql/8.0.31", nil
 	if root := os.Getenv("VT_MYSQL_ROOT"); root != "" {
 		return root, nil
 	}

@@ -44,12 +44,15 @@ var (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 
-	primary       *cluster.Vttablet
-	replica       *cluster.Vttablet
-	shard0Primary *cluster.Vttablet
-	shard0Replica *cluster.Vttablet
-	shard1Primary *cluster.Vttablet
-	shard1Replica *cluster.Vttablet
+	primary        *cluster.Vttablet
+	replica1       *cluster.Vttablet
+	replica2       *cluster.Vttablet
+	shard0Primary  *cluster.Vttablet
+	shard0Replica1 *cluster.Vttablet
+	shard0Replica2 *cluster.Vttablet
+	shard1Primary  *cluster.Vttablet
+	shard1Replica1 *cluster.Vttablet
+	shard1Replica2 *cluster.Vttablet
 
 	cell           = "zone1"
 	hostname       = "localhost"
@@ -131,15 +134,18 @@ func initializeCluster(t *testing.T) {
 
 	// Defining all the tablets
 	primary = clusterInstance.NewVttabletInstance("replica", 0, "")
-	replica = clusterInstance.NewVttabletInstance("replica", 0, "")
+	replica1 = clusterInstance.NewVttabletInstance("replica", 0, "")
+	replica2 = clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard0Primary = clusterInstance.NewVttabletInstance("replica", 0, "")
-	shard0Replica = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Replica1 = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Replica2 = clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard1Primary = clusterInstance.NewVttabletInstance("replica", 0, "")
-	shard1Replica = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Replica1 = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Replica2 = clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	shard.Vttablets = []*cluster.Vttablet{primary, replica}
-	shard0.Vttablets = []*cluster.Vttablet{shard0Primary, shard0Replica}
-	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica}
+	shard.Vttablets = []*cluster.Vttablet{primary, replica1, replica2}
+	shard0.Vttablets = []*cluster.Vttablet{shard0Primary, shard0Replica1, shard0Replica2}
+	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica1, shard1Replica2}
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--restore_from_backup")
@@ -174,14 +180,16 @@ func initializeCluster(t *testing.T) {
 		"FLUSH PRIVILEGES;",
 	}
 
-	for _, tablet := range []*cluster.Vttablet{primary, replica, shard0Primary, shard0Replica, shard1Primary, shard1Replica} {
-		for _, query := range queryCmds {
-			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			for _, query := range queryCmds {
+				_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+				require.NoError(t, err)
+			}
+
+			err = tablet.VttabletProcess.Setup()
 			require.NoError(t, err)
 		}
-
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
 	}
 
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
@@ -252,10 +260,10 @@ func TestTLSPITRRecovery(t *testing.T) {
 	insertRow(t, 1, "prd-1", false)
 	insertRow(t, 2, "prd-2", false)
 
-	cluster.VerifyRowsInTabletForTable(t, replica, keyspaceName, 2, "product")
+	cluster.VerifyRowsInTabletForTable(t, replica1, keyspaceName, 2, "product")
 
 	// backup the replica
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", replica.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.NoError(t, err)
 
 	// check that the backup shows up in the listing
@@ -268,20 +276,21 @@ func TestTLSPITRRecovery(t *testing.T) {
 	// and when we recover to certain time, this time gap will be able to identify the exact eligible row
 	var restoreTime1 string
 	for counter := 3; counter <= 6; counter++ {
+		fmt.Println("inserting row...")
 		if counter == 4 { // we want to recovery till this, so noting the time
 			tm := time.Now().Add(1 * time.Second).UTC()
 			restoreTime1 = tm.Format(time.RFC3339)
 		}
 		insertRow(t, counter, fmt.Sprintf("prd-%d", counter), true)
 	}
-
+	fmt.Println("createRestoreKeyspace...")
 	// creating restore keyspace with snapshot time as restoreTime1
 	//   Need to test this before resharding and we tear down the
 	//   original mysql replica, which we use as a binlog source
 	createRestoreKeyspace(t, restoreTime1, restoreKS1Name)
 
 	// Launching a recovery tablet which recovers data from the primary till the restoreTime1
-	tlsTestTabletRecovery(t, replica, "2m", restoreKS1Name, "0", "INT64(4)")
+	tlsTestTabletRecovery(t, replica1, "2m", restoreKS1Name, "0", "INT64(4)")
 
 	// starting resharding process
 	tlsPerformResharding(t)
@@ -291,14 +300,14 @@ func TestTLSPITRRecovery(t *testing.T) {
 	}
 
 	// wait till all the shards have required data
-	cluster.VerifyRowsInTabletForTable(t, shard0Replica, keyspaceName, 6, "product")
-	cluster.VerifyRowsInTabletForTable(t, shard1Replica, keyspaceName, 4, "product")
+	cluster.VerifyRowsInTabletForTable(t, shard0Replica1, keyspaceName, 6, "product")
+	cluster.VerifyRowsInTabletForTable(t, shard1Replica1, keyspaceName, 4, "product")
 
 	// take the backup (to simulate the regular backup)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", shard0Replica.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", shard0Replica1.Alias)
 	require.NoError(t, err)
 	// take the backup (to simulate the regular backup)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", shard1Replica.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", shard1Replica1.Alias)
 	require.NoError(t, err)
 
 	backups, err := clusterInstance.ListBackups(keyspaceName + "/-80")
@@ -338,7 +347,7 @@ func TestTLSPITRRecovery(t *testing.T) {
 	// |  9 | prd-9  | 1597219130 |
 	// | 10 | prd-10 | 1597219130 |
 	// +----+--------+------------+
-	tlsTestTabletRecovery(t, shard0Replica, "1ms", restoreKS2Name, "-80", "INT64(6)")
+	tlsTestTabletRecovery(t, shard0Replica1, "1ms", restoreKS2Name, "-80", "INT64(6)")
 
 	// test the recovery with valid binlog_lookup_timeout for shard0 and getting the data till the restoreTime2
 	// 	mysql> select * from product;
@@ -353,7 +362,7 @@ func TestTLSPITRRecovery(t *testing.T) {
 	// | 10 | prd-10 | 1597219130 |
 	// | 13 | prd-13 | 1597219141 |
 	// +----+--------+------------+
-	tlsTestTabletRecovery(t, shard0Replica, "2m", restoreKS2Name, "-80", "INT64(7)")
+	tlsTestTabletRecovery(t, shard0Replica1, "2m", restoreKS2Name, "-80", "INT64(7)")
 
 	// test the recovery with valid binlog_lookup_timeout for shard1 and getting the data till the restoreTime2
 	// 	mysql> select * from product;
@@ -367,7 +376,7 @@ func TestTLSPITRRecovery(t *testing.T) {
 	// | 11 | prd-11 | 1597219139 |
 	// | 12 | prd-12 | 1597219140 |
 	// +----+--------+------------+
-	tlsTestTabletRecovery(t, shard1Replica, "2m", restoreKS2Name, "80-", "INT64(6)")
+	tlsTestTabletRecovery(t, shard1Replica1, "2m", restoreKS2Name, "80-", "INT64(6)")
 
 	// test the recovery with timetorecover > (timestamp of last binlog event in binlog server)
 	createRestoreKeyspace(t, restoreTime3, restoreKS3Name)
@@ -385,7 +394,7 @@ func TestTLSPITRRecovery(t *testing.T) {
 	// | 13 | prd-13 | 1597219141 |
 	// | 15 | prd-15 | 1597219142 |
 	// +----+--------+------------+
-	tlsTestTabletRecovery(t, shard0Replica, "2m", restoreKS3Name, "-80", "INT64(8)")
+	tlsTestTabletRecovery(t, shard0Replica1, "2m", restoreKS3Name, "-80", "INT64(8)")
 
 	// 	mysql> select * from product;
 	// +----+--------+------------+
@@ -399,7 +408,7 @@ func TestTLSPITRRecovery(t *testing.T) {
 	// | 12 | prd-12 | 1597219140 |
 	// | 14 | prd-14 | 1597219142 |
 	// +----+--------+------------+
-	tlsTestTabletRecovery(t, shard1Replica, "2m", restoreKS3Name, "80-", "INT64(7)")
+	tlsTestTabletRecovery(t, shard1Replica1, "2m", restoreKS3Name, "80-", "INT64(7)")
 }
 
 func tlsPerformResharding(t *testing.T) {
@@ -432,9 +441,9 @@ func tlsPerformResharding(t *testing.T) {
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
-	removeTablets(t, []*cluster.Vttablet{primary, replica})
+	removeTablets(t, []*cluster.Vttablet{primary, replica1})
 
-	for _, tablet := range []*cluster.Vttablet{replica} {
+	for _, tablet := range []*cluster.Vttablet{replica1} {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.NoError(t, err)
 	}
