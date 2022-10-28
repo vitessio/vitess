@@ -145,12 +145,13 @@ var _ error = (*OurError)(nil)
 
 func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(args ...any) *OurError {
 	return func(args ...any) *OurError {
+		s := short
 		if len(args) != 0 {
-			short = fmt.Sprintf(short, args...)
+			s = fmt.Sprintf(s, args...)
 		}
 
 		return &OurError{
-			Err:         New(code, id+": "+short),
+			Err:         New(code, id+": "+s),
 			Description: long,
 			ID:          id,
 		}

@@ -1651,7 +1651,7 @@
   {
     "comment": "derived table with column aliases not supported by v3, but planner is overridden with hint",
     "query": "select /*vt+ PLANNER=v3 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
-    "plan": "unsupported: column aliases in derived table"
+    "plan": "VT12001: unsupported: column aliases in derived table"
   },
   {
     "comment": "Three-way join using the left2right. The normal gen4 planner would merge m1 and m2 first, but the left to right doesnt",

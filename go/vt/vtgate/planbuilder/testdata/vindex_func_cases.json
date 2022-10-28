@@ -721,8 +721,9 @@
     }
   },
   {
+    "comment": "select none from user_index where id = :id",
     "query": "select none from user_index where id = :id",
-    "v3-plan": "symbol `none` not found in table or subquery",
+    "v3-plan": "VT03019: symbol `none` not found",
     "gen4-plan": "symbol `none` not found"
   }
 ]

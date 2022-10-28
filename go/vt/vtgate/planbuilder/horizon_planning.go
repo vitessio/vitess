@@ -516,7 +516,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			distinctExpr = innerWS
 		} else {
 			if !sqlparser.EqualsExpr(distinctExpr, innerWS) {
-				err = vterrors.VT13001(fmt.Sprintf("only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original)))
+				err = vterrors.VT12001(fmt.Sprintf("only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original)))
 				return nil, nil, nil, err
 			}
 		}
