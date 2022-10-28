@@ -906,7 +906,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on TestExecutor.garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
+	wantErr = "VT05005: Table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show vschema vindexes on user"
@@ -937,7 +937,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
+	wantErr = "VT05005: Table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show warnings"
@@ -1109,7 +1109,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	require.EqualError(t, err, "VT05003: Unknown database 'UnexistentKeyspace'")
+	require.EqualError(t, err, "VT05003: Unknown database 'UnexistentKeyspace' in vschema")
 }
 
 func TestExecutorComment(t *testing.T) {

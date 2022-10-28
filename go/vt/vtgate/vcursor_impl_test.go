@@ -237,7 +237,7 @@ func TestSetTarget(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks3",
-		expectedError: "VT05003: Unknown database 'ks3'",
+		expectedError: "VT05003: Unknown database 'ks3' in vschema",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks2@replica",
