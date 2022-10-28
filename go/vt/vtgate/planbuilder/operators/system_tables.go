@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func (rp *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, reservedVars *sqlparser.ReservedVars) error {
+func (r *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, reservedVars *sqlparser.ReservedVars) error {
 	for _, pred := range predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
 		if err != nil {
@@ -39,12 +39,12 @@ func (rp *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, r
 		}
 
 		if isTableSchema {
-			rp.SysTableTableSchema = append(rp.SysTableTableSchema, out)
+			r.SysTableTableSchema = append(r.SysTableTableSchema, out)
 		} else {
-			if rp.SysTableTableName == nil {
-				rp.SysTableTableName = map[string]evalengine.Expr{}
+			if r.SysTableTableName == nil {
+				r.SysTableTableName = map[string]evalengine.Expr{}
 			}
-			rp.SysTableTableName[bvName] = out
+			r.SysTableTableName[bvName] = out
 		}
 	}
 	return nil
