@@ -27,6 +27,13 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// QueryStats represents the metrics for an executed query
+type QueryStats struct {
+	PlanDuration    time.Duration `json:"plan_duration"`
+	ExecuteDuration time.Duration `json:"execute_duration"`
+	CommitDuration  time.Duration `json:"commit_duration"`
+}
+
 // Result represents a query result.
 type Result struct {
 	Fields              []*querypb.Field `json:"fields"`
@@ -36,6 +43,7 @@ type Result struct {
 	SessionStateChanges string           `json:"session_state_changes"`
 	StatusFlags         uint16           `json:"status_flags"`
 	Info                string           `json:"info"`
+	QueryStats          *QueryStats      `json:"query_stats"`
 	PlanDuration        time.Duration    `json:"plan_duration"`
 	ExecuteDuration     time.Duration    `json:"execute_duration"`
 	CommitDuration      time.Duration    `json:"commit_duration"`

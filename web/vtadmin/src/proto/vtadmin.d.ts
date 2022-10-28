@@ -25417,6 +25417,9 @@ export namespace query {
 
         /** QueryResult session_state_changes */
         session_state_changes?: (string|null);
+
+        /** QueryResult stats */
+        stats?: (query.IQueryStats|null);
     }
 
     /** Represents a QueryResult. */
@@ -25445,6 +25448,9 @@ export namespace query {
 
         /** QueryResult session_state_changes. */
         public session_state_changes: string;
+
+        /** QueryResult stats. */
+        public stats?: (query.IQueryStats|null);
 
         /**
          * Creates a new QueryResult instance using the specified properties.
@@ -25512,6 +25518,108 @@ export namespace query {
 
         /**
          * Converts this QueryResult to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a QueryStats. */
+    interface IQueryStats {
+
+        /** QueryStats execute_duration */
+        execute_duration?: (vttime.IDuration|null);
+
+        /** QueryStats plan_duration */
+        plan_duration?: (vttime.IDuration|null);
+
+        /** QueryStats commit_duration */
+        commit_duration?: (vttime.IDuration|null);
+    }
+
+    /** Represents a QueryStats. */
+    class QueryStats implements IQueryStats {
+
+        /**
+         * Constructs a new QueryStats.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IQueryStats);
+
+        /** QueryStats execute_duration. */
+        public execute_duration?: (vttime.IDuration|null);
+
+        /** QueryStats plan_duration. */
+        public plan_duration?: (vttime.IDuration|null);
+
+        /** QueryStats commit_duration. */
+        public commit_duration?: (vttime.IDuration|null);
+
+        /**
+         * Creates a new QueryStats instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns QueryStats instance
+         */
+        public static create(properties?: query.IQueryStats): query.QueryStats;
+
+        /**
+         * Encodes the specified QueryStats message. Does not implicitly {@link query.QueryStats.verify|verify} messages.
+         * @param message QueryStats message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IQueryStats, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified QueryStats message, length delimited. Does not implicitly {@link query.QueryStats.verify|verify} messages.
+         * @param message QueryStats message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IQueryStats, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a QueryStats message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns QueryStats
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.QueryStats;
+
+        /**
+         * Decodes a QueryStats message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns QueryStats
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.QueryStats;
+
+        /**
+         * Verifies a QueryStats message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a QueryStats message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns QueryStats
+         */
+        public static fromObject(object: { [k: string]: any }): query.QueryStats;
+
+        /**
+         * Creates a plain object from a QueryStats message. Also converts values to other types if specified.
+         * @param message QueryStats
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.QueryStats, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this QueryStats to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

@@ -103,15 +103,22 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 	if qr == nil {
 		return nil
 	}
+
+	var queryStats *querypb.QueryStats
+	if qr.QueryStats != nil {
+		queryStats = &querypb.QueryStats{
+			ExecuteDuration: protoutil.DurationToProto(qr.QueryStats.ExecuteDuration),
+			PlanDuration:    protoutil.DurationToProto(qr.QueryStats.PlanDuration),
+			CommitDuration:  protoutil.DurationToProto(qr.QueryStats.CommitDuration)}
+	}
+
 	return &querypb.QueryResult{
-		Fields:          qr.Fields,
-		RowsAffected:    qr.RowsAffected,
-		InsertId:        qr.InsertID,
-		Rows:            RowsToProto3(qr.Rows),
-		Info:            qr.Info,
-		ExecuteDuration: protoutil.DurationToProto(qr.ExecuteDuration),
-		PlanDuration:    protoutil.DurationToProto(qr.PlanDuration),
-		CommitDuration:  protoutil.DurationToProto(qr.CommitDuration),
+		Fields:       qr.Fields,
+		RowsAffected: qr.RowsAffected,
+		InsertId:     qr.InsertID,
+		Rows:         RowsToProto3(qr.Rows),
+		Info:         qr.Info,
+		Stats:        queryStats,
 	}
 }
 
@@ -122,14 +129,24 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 		return nil
 	}
 	return &Result{
-		Fields:          qr.Fields,
-		RowsAffected:    qr.RowsAffected,
-		InsertID:        qr.InsertId,
-		Rows:            proto3ToRows(qr.Fields, qr.Rows),
-		Info:            qr.Info,
-		ExecuteDuration: parseProtoDuration(qr.ExecuteDuration),
-		PlanDuration:    parseProtoDuration(qr.PlanDuration),
-		CommitDuration:  parseProtoDuration(qr.CommitDuration),
+		Fields:       qr.Fields,
+		RowsAffected: qr.RowsAffected,
+		InsertID:     qr.InsertId,
+		Rows:         proto3ToRows(qr.Fields, qr.Rows),
+		Info:         qr.Info,
+		QueryStats:   parseProtoQueryStats(qr.Stats),
+	}
+}
+
+func parseProtoQueryStats(s *querypb.QueryStats) *QueryStats {
+	if s == nil {
+		return nil
+	}
+
+	return &QueryStats{
+		ExecuteDuration: parseProtoDuration(s.ExecuteDuration),
+		PlanDuration:    parseProtoDuration(s.PlanDuration),
+		CommitDuration:  parseProtoDuration(s.CommitDuration),
 	}
 }
 
@@ -146,13 +163,11 @@ func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Res
 		return nil
 	}
 	return &Result{
-		Fields:          qr.Fields,
-		RowsAffected:    qr.RowsAffected,
-		InsertID:        qr.InsertId,
-		Rows:            proto3ToRows(fields, qr.Rows),
-		ExecuteDuration: parseProtoDuration(qr.ExecuteDuration),
-		PlanDuration:    parseProtoDuration(qr.PlanDuration),
-		CommitDuration:  parseProtoDuration(qr.CommitDuration),
+		Fields:       qr.Fields,
+		RowsAffected: qr.RowsAffected,
+		InsertID:     qr.InsertId,
+		Rows:         proto3ToRows(fields, qr.Rows),
+		QueryStats:   parseProtoQueryStats(qr.Stats),
 	}
 }
 

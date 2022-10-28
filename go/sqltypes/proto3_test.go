@@ -58,9 +58,11 @@ func TestResult(t *testing.T) {
 			NULL,
 			NULL,
 		}},
-		ExecuteDuration: duration,
-		PlanDuration:    duration,
-		CommitDuration:  0,
+		QueryStats: &QueryStats{
+			ExecuteDuration: duration,
+			PlanDuration:    duration,
+			CommitDuration:  0,
+		},
 	}
 	p3Result := &querypb.QueryResult{
 		Fields:       fields,
@@ -73,9 +75,11 @@ func TestResult(t *testing.T) {
 			Lengths: []int64{2, -1, -1},
 			Values:  []byte("bb"),
 		}},
-		ExecuteDuration: protoDuration,
-		PlanDuration:    protoDuration,
-		CommitDuration:  &vttime.Duration{},
+		Stats: &querypb.QueryStats{
+			ExecuteDuration: protoDuration,
+			PlanDuration:    protoDuration,
+			CommitDuration:  &vttime.Duration{},
+		},
 	}
 	p3converted := ResultToProto3(sqlResult)
 	if !proto.Equal(p3converted, p3Result) {
