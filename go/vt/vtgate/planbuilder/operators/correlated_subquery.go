@@ -69,11 +69,17 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
 	copy(columns, c.LHSColumns)
+	vars := make(map[string]int, len(c.Vars))
+	for k, v := range c.Vars {
+		vars[k] = v
+	}
+
 	result := &CorrelatedSubQueryOp{
 		Outer:      inputs[0],
 		Inner:      inputs[1],
 		Extracted:  c.Extracted,
 		LHSColumns: columns,
+		Vars:       vars,
 	}
 	return result
 }
