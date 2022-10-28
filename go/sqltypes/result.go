@@ -45,9 +45,6 @@ type Result struct {
 	StatusFlags         uint16           `json:"status_flags"`
 	Info                string           `json:"info"`
 	QueryStats          *QueryStats      `json:"query_stats"`
-	PlanDuration        time.Duration    `json:"plan_duration"`
-	ExecuteDuration     time.Duration    `json:"execute_duration"`
-	CommitDuration      time.Duration    `json:"commit_duration"`
 }
 
 //goland:noinspection GoUnusedConst
