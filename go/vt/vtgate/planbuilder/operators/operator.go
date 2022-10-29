@@ -70,7 +70,7 @@ type (
 	checkable interface {
 		// checkValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
-		CheckValid() error
+		checkValid() error
 	}
 
 	compactable interface {
