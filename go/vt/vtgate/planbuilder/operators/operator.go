@@ -35,6 +35,8 @@ type (
 	Operator interface {
 		Clone(inputs []Operator) Operator
 		Inputs() []Operator
+
+		//AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan

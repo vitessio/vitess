@@ -50,7 +50,7 @@ func (u *Union) Inputs() []Operator {
 	return u.Sources
 }
 
-// addPredicate adds a predicate a UNION by pushing the predicate to all sources of the UNION.
+// AddPredicate adds a predicate a UNION by pushing the predicate to all sources of the UNION.
 /* this is done by offset and expression rewriting. Say we have a query like so:
 select * (
  	select foo as col, bar from tbl1
@@ -71,12 +71,12 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
 	offsets := make(map[string]int)
 	for i, selectExpr := range u.SelectStmts[0].SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on UNION where the first SELECT contains star or next")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on UNION where the first SELECT contains star or next")
 		}
 		if !ae.As.IsEmpty() {
 			offsets[ae.As.String()] = i
@@ -112,10 +112,10 @@ func (u *Union) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 			return false
 		}, nil).(sqlparser.Expr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		u.Sources[i], err = PushPredicate(ctx, predicate, u.Sources[i])
 	}
 
-	return nil
+	return u, nil
 }

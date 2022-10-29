@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -27,6 +28,12 @@ type Filter struct {
 }
 
 var _ PhysicalOperator = (*Filter)(nil)
+
+func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
+	return &Filter{
+		Source: op, Predicates: expr,
+	}
+}
 
 // IPhysical implements the PhysicalOperator interface
 func (f *Filter) IPhysical() {}
@@ -60,8 +67,11 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
-	return &Filter{
-		Source: op, Predicates: expr,
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	newSrc, err := PushPredicate(ctx, expr, f.Source)
+	if err != nil {
+		return nil, err
 	}
+	f.Source = newSrc
+	return f, nil
 }

@@ -31,45 +31,23 @@ import (
 func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
 	switch op := op.(type) {
 	case *Filter:
-		var err error
-		op.Source, err = PushPredicate(ctx, expr, op.Source)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
+		return op.AddPredicate(ctx, expr)
 	case *QueryGraph:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
+		return op.AddPredicate(ctx, expr)
 	case *Route:
-		return op.addPredicate(ctx, expr)
-	case *ApplyJoin, *Join:
-		join := op.(joinOperator) // stupid golang doesn't understand this without an explicit cast
-		return addPredicate(join, ctx, expr, false)
+		return op.AddPredicate(ctx, expr)
+	case *ApplyJoin:
+		return op.AddPredicate(ctx, expr)
+	case *Join:
+		return op.AddPredicate(ctx, expr)
 	case *Table:
-		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
-		// changed by physical operators.
-		return newFilter(op, expr), nil
+		return op.AddPredicate(ctx, expr)
 	case *Derived:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
+		return op.AddPredicate(ctx, expr)
 	case *Vindex:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
+		return op.AddPredicate(ctx, expr)
 	case *Union:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
+		return op.AddPredicate(ctx, expr)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
 	}

@@ -805,7 +805,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 	return plan, nil
 }
 
-func (r *Route) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
 	err := r.UpdateRoutingLogic(ctx, expr)
 	if err != nil {
 		return nil, err

@@ -103,25 +103,28 @@ func (d *Derived) Inputs() []Operator {
 	return []Operator{d.Source}
 }
 
-func (d *Derived) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
 	if _, isUNion := d.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
 		var err error
 		d.Source, err = PushPredicate(ctx, expr, d.Source)
-		return err
+		return d, err
 	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrMultipleTables {
-			return semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
 		}
-		return err
+		return nil, err
 	}
 
 	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	d.Source, err = PushPredicate(ctx, newExpr, d.Source)
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
 }

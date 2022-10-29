@@ -83,6 +83,10 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	return op, nil
 }
 
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	return addPredicate(j, ctx, expr, false)
+}
+
 var _ joinOperator = (*Join)(nil)
 
 func (j *Join) tableID() semantics.TableSet {
