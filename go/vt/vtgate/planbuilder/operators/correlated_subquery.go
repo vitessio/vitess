@@ -17,7 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
@@ -87,4 +90,10 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []Operator) Operator {
 // Inputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) Inputs() []Operator {
 	return []Operator{c.Outer, c.Inner}
+}
+func (s *SubQueryOp) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", s)
+}
+func (c *CorrelatedSubQueryOp) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", c)
 }
