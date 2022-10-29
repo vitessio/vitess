@@ -25,34 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// PushPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
-// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
-// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
-func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
-	switch op := op.(type) {
-	case *Filter:
-		return op.AddPredicate(ctx, expr)
-	case *QueryGraph:
-		return op.AddPredicate(ctx, expr)
-	case *Route:
-		return op.AddPredicate(ctx, expr)
-	case *ApplyJoin:
-		return op.AddPredicate(ctx, expr)
-	case *Join:
-		return op.AddPredicate(ctx, expr)
-	case *Table:
-		return op.AddPredicate(ctx, expr)
-	case *Derived:
-		return op.AddPredicate(ctx, expr)
-	case *Vindex:
-		return op.AddPredicate(ctx, expr)
-	case *Union:
-		return op.AddPredicate(ctx, expr)
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
-	}
-}
-
 // PushOutputColumns will push the columns to the table they originate from,
 // making sure that intermediate operators pass the data through
 func PushOutputColumns(ctx *plancontext.PlanningContext, op Operator, columns ...*sqlparser.ColName) (PhysicalOperator, []int, error) {
@@ -294,7 +266,7 @@ func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlp
 	switch {
 	case deps.IsSolvedBy(TableID(join.getLHS())):
 		// predicates can always safely be pushed down to the lhs if that is all they depend on
-		lhs, err := PushPredicate(ctx, expr, join.getLHS())
+		lhs, err := join.getLHS().AddPredicate(ctx, expr)
 		if err != nil {
 			return nil, err
 		}
@@ -314,7 +286,7 @@ func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlp
 		}
 
 		// For inner joins, we can just push the filtering on the RHS
-		rhs, err := PushPredicate(ctx, expr, join.getRHS())
+		rhs, err := join.getRHS().AddPredicate(ctx, expr)
 		if err != nil {
 			return nil, err
 		}

@@ -128,7 +128,7 @@ func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 	for i, idx := range idxs {
 		a.Vars[bvName[i]] = idx
 	}
-	rhs, err := PushPredicate(ctx, predicate, a.RHS)
+	rhs, err := a.RHS.AddPredicate(ctx, predicate)
 	if err != nil {
 		return err
 	}

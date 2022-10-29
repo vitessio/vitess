@@ -442,7 +442,7 @@ func createCorrelatedSubqueryOp(
 			return nil, rewriteError
 		}
 		var err error
-		innerOp, err = PushPredicate(ctx, pred, innerOp)
+		innerOp, err = innerOp.AddPredicate(ctx, pred)
 		if err != nil {
 			return nil, err
 		}

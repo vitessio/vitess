@@ -75,7 +75,8 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	op := createJoin(lhs, rhs)
 	if tableExpr.Condition.On != nil {
 		var err error
-		op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), op)
+		predicate := sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)
+		op, err = op.AddPredicate(ctx, predicate)
 		if err != nil {
 			return nil, err
 		}

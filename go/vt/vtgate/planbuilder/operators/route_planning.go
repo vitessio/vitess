@@ -258,7 +258,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Opera
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source, err = PushPredicate(ctx, qg.NoDeps, plan.Source)
+			plan.Source, err = plan.Source.AddPredicate(ctx, qg.NoDeps)
 			if err != nil {
 				return nil, err
 			}

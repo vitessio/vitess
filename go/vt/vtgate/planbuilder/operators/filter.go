@@ -68,7 +68,7 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 }
 
 func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
-	newSrc, err := PushPredicate(ctx, expr, f.Source)
+	newSrc, err := f.Source.AddPredicate(ctx, expr)
 	if err != nil {
 		return nil, err
 	}

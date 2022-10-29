@@ -36,6 +36,9 @@ type (
 		Clone(inputs []Operator) Operator
 		Inputs() []Operator
 
+		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
+		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
+		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 	}
 
@@ -250,7 +253,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr), op)
+			op, err = op.AddPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr))
 			if err != nil {
 				return nil, err
 			}

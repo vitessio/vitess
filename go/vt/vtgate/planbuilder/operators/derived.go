@@ -107,7 +107,7 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	if _, isUNion := d.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
 		var err error
-		d.Source, err = PushPredicate(ctx, expr, d.Source)
+		d.Source, err = d.Source.AddPredicate(ctx, expr)
 		return d, err
 	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
@@ -122,7 +122,7 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	if err != nil {
 		return nil, err
 	}
-	d.Source, err = PushPredicate(ctx, newExpr, d.Source)
+	d.Source, err = d.Source.AddPredicate(ctx, newExpr)
 	if err != nil {
 		return nil, err
 	}

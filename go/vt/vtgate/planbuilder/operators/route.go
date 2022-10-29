@@ -810,7 +810,7 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	if err != nil {
 		return nil, err
 	}
-	newSrc, err := PushPredicate(ctx, expr, r.Source)
+	newSrc, err := r.Source.AddPredicate(ctx, expr)
 	if err != nil {
 		return nil, err
 	}
