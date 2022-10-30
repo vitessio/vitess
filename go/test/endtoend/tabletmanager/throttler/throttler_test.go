@@ -73,11 +73,10 @@ var (
 )
 
 const (
-	throttlerInitWait            = 30 * time.Second
-	accumulateLagWait            = 2 * time.Second
-	throttlerRefreshIntervalWait = 20 * time.Second
-	replicationCatchUpWait       = 10 * time.Second
-	onDemandHeartbeatDuration    = 5 * time.Second
+	throttlerThreshold        = 1 * time.Second  // standard, tight threshold
+	replicationCatchUpWait    = 10 * time.Second // time to allow replication catchup
+	onDemandHeartbeatDuration = 5 * time.Second
+	applyConfigWait           = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
 )
 
 func TestMain(m *testing.M) {
@@ -100,7 +99,7 @@ func TestMain(m *testing.M) {
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
 			"--enable-lag-throttler",
-			"--throttle_threshold", "1s",
+			"--throttle_threshold", throttlerThreshold.String(),
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
@@ -148,23 +147,12 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 }
 
 func throttleCheck(tablet *cluster.Vttablet) (*http.Response, error) {
-	return httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
+	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
+	return resp, err
 }
 
 func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
 	return httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkSelfAPIPath))
-}
-
-func TestThrottlerBeforeMetricsCollected(t *testing.T) {
-	defer cluster.PanicHandler(t)
-
-	// Immediately after startup, we expect this response:
-	// {"StatusCode":404,"Value":0,"Threshold":0,"Message":"No such metric"}
-	{
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	}
 }
 
 func warmUpHeartbeat(t *testing.T) (respStatus int) {
@@ -179,34 +167,48 @@ func warmUpHeartbeat(t *testing.T) (respStatus int) {
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	time.Sleep(throttlerInitWait)
-	// By this time metrics will have been collected. We expect no lag, and something like:
-	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
-	//
-	respStatus := warmUpHeartbeat(t)
-	assert.NotEqual(t, http.StatusOK, respStatus)
-	time.Sleep(time.Second)
-	{
+	// We run with on-demand heartbeats. Immediately as the tablet manager opens, it sends a one-time
+	// request for heartbeats, which means the throttler is able to collect initial "good" data.
+	// After a few seconds, the heartbeat lease terminates. We wait for that.
+	// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
+	t.Run("expect push back once initial heartbeat lease terminates", func(t *testing.T) {
+		time.Sleep(onDemandHeartbeatDuration + applyConfigWait)
+		resp, err := throttleCheck(primaryTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	})
+	t.Run("requesting heartbeats", func(t *testing.T) {
+		respStatus := warmUpHeartbeat(t)
+		assert.NotEqual(t, http.StatusOK, respStatus)
+	})
+	t.Run("expect OK once heartbeats lease renewed", func(t *testing.T) {
+		time.Sleep(1 * time.Second)
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
-	{
+	})
+	t.Run("expect OK once heartbeats lease renewed, still", func(t *testing.T) {
+		time.Sleep(1 * time.Second)
+		resp, err := throttleCheck(primaryTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("validate throttled-apps", func(t *testing.T) {
 		resp, body, err := throttledApps(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, body, "always-throttled-app")
-	}
-	{
+	})
+	t.Run("validate check-self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
-	{
+	})
+	t.Run("validate check-self, again", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
+	})
 }
 
 func TestLag(t *testing.T) {
@@ -216,7 +218,7 @@ func TestLag(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 
-		time.Sleep(accumulateLagWait)
+		time.Sleep(2 * throttlerThreshold)
 		// Lag will have accumulated
 		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
 		{
@@ -270,7 +272,7 @@ func TestNoReplicas(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		assert.NoError(t, err)
 
-		time.Sleep(throttlerRefreshIntervalWait)
+		time.Sleep(applyConfigWait)
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		respStatus := warmUpHeartbeat(t)
@@ -283,7 +285,7 @@ func TestNoReplicas(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		assert.NoError(t, err)
 
-		time.Sleep(throttlerRefreshIntervalWait)
+		time.Sleep(applyConfigWait)
 		// Restore valid replica
 		respStatus := warmUpHeartbeat(t)
 		assert.NotEqual(t, http.StatusOK, respStatus)
