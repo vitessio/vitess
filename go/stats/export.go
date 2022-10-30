@@ -52,18 +52,13 @@ var (
 // CommonTags is a comma-separated list of common tags for stats backends
 var CommonTags []string
 
-func init() {
-	registerFlags()
-}
-
-func registerFlags() {
-	pflag.BoolVar(&emitStats, "emit_stats", emitStats, "If set, emit stats to push-based monitoring and stats backends")
-	pflag.DurationVar(&statsEmitPeriod, "stats_emit_period", statsEmitPeriod, "Interval between emitting stats to all registered backends")
-	pflag.StringVar(&statsBackend, "stats_backend", statsBackend, "The name of the registered push-based monitoring/stats backend to use")
-	pflag.StringVar(&combineDimensions, "stats_combine_dimensions", combineDimensions, `List of dimensions to be combined into a single "all" value in exported stats vars`)
-	pflag.StringVar(&dropVariables, "stats_drop_variables", dropVariables, `Variables to be dropped from the list of exported variables.`)
-	pflag.StringSliceVar(&CommonTags, "stats_common_tags", CommonTags, `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
-
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&emitStats, "emit_stats", emitStats, "If set, emit stats to push-based monitoring and stats backends")
+	fs.DurationVar(&statsEmitPeriod, "stats_emit_period", statsEmitPeriod, "Interval between emitting stats to all registered backends")
+	fs.StringVar(&statsBackend, "stats_backend", statsBackend, "The name of the registered push-based monitoring/stats backend to use")
+	fs.StringVar(&combineDimensions, "stats_combine_dimensions", combineDimensions, `List of dimensions to be combined into a single "all" value in exported stats vars`)
+	fs.StringVar(&dropVariables, "stats_drop_variables", dropVariables, `Variables to be dropped from the list of exported variables.`)
+	fs.StringSliceVar(&CommonTags, "stats_common_tags", CommonTags, `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
 }
 
 // StatsAllStr is the consolidated name if a dimension gets combined.

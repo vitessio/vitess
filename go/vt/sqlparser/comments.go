@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const (
@@ -44,6 +46,8 @@ const (
 	DirectiveQueryPlanner = "PLANNER"
 	// DirectiveVtexplainRunDMLQueries tells explain format = vtexplain that it is okay to also run the query.
 	DirectiveVtexplainRunDMLQueries = "EXECUTE_DML_QUERIES"
+	// DirectiveConsolidator enables the query consolidator.
+	DirectiveConsolidator = "CONSOLIDATOR"
 )
 
 func isNonSpace(r rune) bool {
@@ -368,4 +372,27 @@ func AllowScatterDirective(stmt Statement) bool {
 		comments = stmt.Comments
 	}
 	return comments != nil && comments.Directives().IsSet(DirectiveAllowScatter)
+}
+
+// Consolidator returns the consolidator option.
+func Consolidator(stmt Statement) querypb.ExecuteOptions_Consolidator {
+	var comments *ParsedComments
+	switch stmt := stmt.(type) {
+	case *Select:
+		comments = stmt.Comments
+	default:
+		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
+	}
+	if comments == nil {
+		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
+	}
+	directives := comments.Directives()
+	strv, isSet := directives.GetString(DirectiveConsolidator, "")
+	if !isSet {
+		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
+	}
+	if i32v, ok := querypb.ExecuteOptions_Consolidator_value["CONSOLIDATOR_"+strings.ToUpper(strv)]; ok {
+		return querypb.ExecuteOptions_Consolidator(i32v)
+	}
+	return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
 }

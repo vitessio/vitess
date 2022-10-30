@@ -125,6 +125,9 @@ type TabletServer struct {
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias *topodatapb.TabletAlias
+
+	// This field is only stored for testing
+	checkMysqlGaugeFunc *stats.GaugeFunc
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -206,6 +209,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
+	tsv.checkMysqlGaugeFunc = tsv.exporter.NewGaugeFunc("CheckMySQLRunning", "Check MySQL operation currently in progress", tsv.sm.isCheckMySQLRunning)
 	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.sm.IsServingString))
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
@@ -1278,7 +1282,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		return state, nil, err
 	}
 
-	result, err = tsv.execute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options)
+	result, err = tsv.execute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, nil, options)
 	return state, result, err
 }
 
@@ -1328,7 +1332,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 		return state, err
 	}
 
-	err = tsv.streamExecute(ctx, target, sql, bindVariables, state.ReservedID, state.ReservedID, nil, options, callback)
+	err = tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, nil, options, callback)
 	return state, err
 }
 
@@ -1671,7 +1675,7 @@ func (tsv *TabletServer) IsServing() bool {
 // to no more than once per second.
 // The function satisfies tabletenv.Env.
 func (tsv *TabletServer) CheckMySQL() {
-	tsv.sm.CheckMySQL()
+	tsv.sm.checkMySQL()
 }
 
 // TopoServer returns the topo server.

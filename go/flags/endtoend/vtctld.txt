@@ -12,7 +12,6 @@ Usage of vtctld:
       --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
-      --backup_storage_hook string                                       if set, we send the contents of the backup files through this hook.
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
@@ -29,6 +28,7 @@ Usage of vtctld:
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --durability_policy string                                         type of durability to enforce. Default is none. Other values are dictated by registered plugins (default "none")
+      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable_realtime_stats                                            Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.
       --enable_vtctld_ui                                                 If true, the vtctld web interface will be enabled. Default is true. (default true)
       --external-compressor string                                       command with arguments to use when compressing a backup.
@@ -73,6 +73,7 @@ Usage of vtctld:
       --log_err_stacks                                                   log stack traces for errors
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
+      --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --mysql_server_version string                                      MySQL server version to advertise.
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
@@ -105,6 +106,11 @@ Usage of vtctld:
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
+      --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
       --tablet_dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
       --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
@@ -151,8 +157,8 @@ Usage of vtctld:
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
-  -v, --v Level                                                          log level for V logs
-      --version                                                          print binary version
+      --v Level                                                          log level for V logs
+  -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vtctl_healthcheck_retry_delay duration                           delay before retrying a failed healthcheck (default 5s)
       --vtctl_healthcheck_timeout duration                               the health check timeout period (default 1m0s)

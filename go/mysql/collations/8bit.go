@@ -36,10 +36,10 @@ type simpletables struct {
 	// take up a lot of binary space.
 	// Uncomment these fields and pass `-full8bit` to `makemysqldata` to generate
 	// these tables.
-	// tolower   *[256]byte
-	// toupper   *[256]byte
-	// ctype     *[256]byte
-	sort *[256]byte
+	tolower *[256]byte
+	toupper *[256]byte
+	ctype   *[256]byte
+	sort    *[256]byte
 }
 
 type Collation_8bit_bin struct {
@@ -111,6 +111,24 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 
 func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
+	lowerTable := c.simpletables.tolower
+
+	for _, c := range src {
+		dst = append(dst, lowerTable[c])
+	}
+	return dst
+}
+
+func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
+	upperTable := c.simpletables.toupper
+
+	for _, c := range src {
+		dst = append(dst, upperTable[c])
+	}
+	return dst
 }
 
 type Collation_8bit_simple_ci struct {
@@ -224,6 +242,24 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 	return dst
 }
 
+func (c *Collation_8bit_simple_ci) ToLower(dst, src []byte) []byte {
+	lowerTable := c.simpletables.tolower
+
+	for _, c := range src {
+		dst = append(dst, lowerTable[c])
+	}
+	return dst
+}
+
+func (c *Collation_8bit_simple_ci) ToUpper(dst, src []byte) []byte {
+	upperTable := c.simpletables.toupper
+
+	for _, c := range src {
+		dst = append(dst, upperTable[c])
+	}
+	return dst
+}
+
 type Collation_binary struct{}
 
 func (c *Collation_binary) Init() {}
@@ -282,4 +318,14 @@ func (c *Collation_binary) WeightStringLen(numBytes int) int {
 
 func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_binary) ToLower(dst, raw []byte) []byte {
+	dst = append(dst, raw...)
+	return dst
+}
+
+func (c *Collation_binary) ToUpper(dst, raw []byte) []byte {
+	dst = append(dst, raw...)
+	return dst
 }

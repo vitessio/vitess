@@ -566,7 +566,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 // GetCopyProgress returns the progress of all tables being copied in the workflow
 func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	ctx := context.Background()
-	getTablesQuery := "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
+	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
 	const MaxRows = 1000
@@ -713,6 +713,44 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 			wr.Logger().Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 		}
 	}
+}
+
+// optimizeCopyStateTable rebuilds the copy_state table to ensure the on-disk
+// structures are minimal and optimized and resets the auto-inc value for
+// subsequent inserts.
+// This helps to ensure that the size, storage, and performance related factors
+// for the table remain optimal over time and that we don't ever exhaust the
+// available auto-inc values for the table.
+// Note: it's not critical that this executes successfully any given time, it's
+// only important that we try to do this periodically so that things stay in an
+// optimal state over long periods of time. For this reason, the work is done
+// asynchronously in the background on the given tablet and any failures are
+// logged as warnings. Because it's done in the background we use the AllPrivs
+// account to be sure that we don't execute the writes if READ_ONLY is set on
+// the MySQL instance.
+func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
+	go func() {
+		ctx := context.Background()
+		sqlOptimizeTable := "optimize table _vt.copy_state"
+		if _, err := wr.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query:   []byte(sqlOptimizeTable),
+			MaxRows: uint64(100), // always produces 1+rows with notes and status
+		}); err != nil {
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERNoSuchTable { // the table may not exist
+				return
+			}
+			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
+		}
+		// This will automatically set the value to 1 or the current max value in the table, whichever is greater
+		sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
+		if _, err := wr.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query:   []byte(sqlResetAutoInc),
+			MaxRows: uint64(0),
+		}); err != nil {
+			log.Warningf("Failed to reset the auto_increment value for the copy_state table on %q: %v",
+				tablet.Alias.String(), err)
+		}
+	}()
 }
 
 // endregion

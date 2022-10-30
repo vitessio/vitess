@@ -30,14 +30,25 @@ import (
 )
 
 var builtinFunctions = map[string]builtin{
-	"coalesce":  builtinCoalesce{},
-	"greatest":  &builtinMultiComparison{name: "GREATEST", cmp: 1},
-	"least":     &builtinMultiComparison{name: "LEAST", cmp: -1},
-	"collation": builtinCollation{},
-	"bit_count": builtinBitCount{},
-	"hex":       builtinHex{},
-	"ceil":      builtinCeil{},
-	"ceiling":   builtinCeiling{},
+	"coalesce":         builtinCoalesce{},
+	"greatest":         &builtinMultiComparison{name: "GREATEST", cmp: 1},
+	"least":            &builtinMultiComparison{name: "LEAST", cmp: -1},
+	"collation":        builtinCollation{},
+	"bit_count":        builtinBitCount{},
+	"hex":              builtinHex{},
+	"ceil":             builtinCeil{},
+	"ceiling":          builtinCeiling{},
+	"lower":            builtinLower{},
+	"lcase":            builtinLcase{},
+	"upper":            builtinUpper{},
+	"ucase":            builtinUcase{},
+	"char_length":      builtinCharLength{},
+	"character_length": builtinCharacterLength{},
+	"length":           builtinLength{},
+	"octet_length":     builtinOctetLength{},
+	"bit_length":       builtinBitLength{},
+	"ascii":            builtinASCII{},
+	"repeat":           builtinRepeat{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
@@ -726,31 +737,8 @@ func (builtinCeil) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag)
 	}
 }
 
-type builtinCeiling struct{}
-
-func (builtinCeiling) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	inarg := &args[0]
-	argtype := inarg.typeof()
-	if inarg.isNull() {
-		result.setNull()
-		return
-	}
-
-	if sqltypes.IsIntegral(argtype) {
-		result.setInt64(inarg.int64())
-	} else if sqltypes.Decimal == argtype {
-		num := inarg.decimal()
-		num = num.Ceil()
-		intnum, isfit := num.Int64()
-		if isfit {
-			result.setInt64(intnum)
-		} else {
-			result.setDecimal(num, 0)
-		}
-	} else {
-		inarg.makeFloat()
-		result.setFloat(math.Ceil(inarg.float64()))
-	}
+type builtinCeiling struct {
+	builtinCeil
 }
 
 func (builtinCeiling) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
