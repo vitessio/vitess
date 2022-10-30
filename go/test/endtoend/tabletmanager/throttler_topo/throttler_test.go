@@ -16,25 +16,31 @@ limitations under the License.
 package throttler
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	primaryTablet   *cluster.Vttablet
 	replicaTablet   *cluster.Vttablet
+	vtParams        mysql.ConnParams
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	cell            = "zone1"
@@ -70,6 +76,8 @@ var (
 	throttledAppsAPIPath = "throttler/throttled-apps"
 	checkAPIPath         = "throttler/check"
 	checkSelfAPIPath     = "throttler/check-self"
+	customQuery          = "show global status like 'threads_running'"
+	customThreshold      = 5
 )
 
 const (
@@ -128,13 +136,25 @@ func TestMain(m *testing.M) {
 			}
 		}
 
+		vtgateInstance := clusterInstance.NewVtgateInstance()
+		// Start vtgate
+		if err := vtgateInstance.Setup(); err != nil {
+			return 1
+		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
+		vtParams = mysql.ConnParams{
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
 // updateThrottlerConfig runs vtctlclient UpdateThrottlerConfig
-func updateThrottlerConfig(enable bool, disable bool, threshold float64) (result string, err error) {
+func updateThrottlerConfig(enable bool, disable bool, threshold float64, metricsQuery string) (result string, err error) {
 	args := []string{
 		"--",
 		"UpdateThrottlerConfig",
@@ -147,6 +167,12 @@ func updateThrottlerConfig(enable bool, disable bool, threshold float64) (result
 	}
 	if threshold > 0 {
 		args = append(args, "--threshold", fmt.Sprintf("%f", threshold))
+	}
+	if metricsQuery != "" {
+		args = append(args, "--custom_query", metricsQuery)
+		args = append(args, "--check_as_check_self")
+	} else {
+		args = append(args, "--check_as_check_shard")
 	}
 	args = append(args, keyspaceName)
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
@@ -183,6 +209,24 @@ func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	return resp.StatusCode
 }
 
+func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
+	t.Helper()
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.Error(t, err, "error should not be nil")
+		assert.Contains(t, err.Error(), expectError, "Unexpected error")
+	}
+	return qr
+}
+
 func TestInitialThrottler(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
@@ -192,7 +236,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("enabling throttler with low threshold", func(t *testing.T) {
-		output, err := updateThrottlerConfig(true, false, 0.01)
+		output, err := updateThrottlerConfig(true, false, 0.01, "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
@@ -203,7 +247,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
 	t.Run("disabling throttler", func(t *testing.T) {
-		output, err := updateThrottlerConfig(false, true, 0.01)
+		output, err := updateThrottlerConfig(false, true, 0.01, "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
@@ -213,7 +257,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("enabling throttler, again", func(t *testing.T) {
-		output, err := updateThrottlerConfig(true, false, 0)
+		output, err := updateThrottlerConfig(true, false, 0, "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
@@ -224,7 +268,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
-		output, err := updateThrottlerConfig(false, false, applyConfigWait.Seconds()+onDemandHeartbeatDuration.Seconds())
+		output, err := updateThrottlerConfig(false, false, applyConfigWait.Seconds()+onDemandHeartbeatDuration.Seconds(), "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
@@ -235,7 +279,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("setting low threshold", func(t *testing.T) {
-		output, err := updateThrottlerConfig(false, false, throttlerThreshold.Seconds())
+		output, err := updateThrottlerConfig(false, false, throttlerThreshold.Seconds(), "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
@@ -384,4 +428,63 @@ func TestNoReplicas(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
+}
+
+func TestCustomQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	t.Run("enabling throttler with low threshold", func(t *testing.T) {
+		output, err := updateThrottlerConfig(true, false, float64(customThreshold), customQuery)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, output)
+	})
+	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
+		time.Sleep(applyConfigWait)
+		resp, err := throttleCheck(primaryTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("test threads running", func(t *testing.T) {
+		sleepDuration := 10 * time.Second
+		var wg sync.WaitGroup
+		for i := 0; i < customThreshold; i++ {
+			// generate different Sleep() calls, all at minimum sleepDuration
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				vtgateExec(t, fmt.Sprintf("select sleep(%d)", int(sleepDuration.Seconds())+i), "")
+			}(i)
+		}
+		t.Run("exceeds threshold", func(t *testing.T) {
+			time.Sleep(sleepDuration / 2)
+			// by this time we will have testThreshold+1 threads_running, and we should hit the threshold
+			// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
+			{
+				resp, err := throttleCheck(primaryTablet)
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+			}
+			{
+				resp, err := throttleCheckSelf(primaryTablet)
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+			}
+		})
+		t.Run("wait for queries to terminate", func(t *testing.T) {
+			wg.Wait()
+			time.Sleep(1 * time.Second) // graceful time to let throttler read metrics
+		})
+		t.Run("restored below threshold", func(t *testing.T) {
+			{
+				resp, err := throttleCheck(primaryTablet)
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+			}
+			{
+				resp, err := throttleCheckSelf(primaryTablet)
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+			}
+		})
+	})
 }
