@@ -488,3 +488,29 @@ func TestCustomQuery(t *testing.T) {
 		})
 	})
 }
+
+func TestRestoreDefaultQuery(t *testing.T) {
+	// validte going back from custom-query to default-query (replication lag) still works
+	defer cluster.PanicHandler(t)
+
+	t.Run("enabling throttler with standard threshold", func(t *testing.T) {
+		output, err := updateThrottlerConfig(true, false, throttlerThreshold.Seconds(), "")
+		assert.NoError(t, err)
+		assert.NotEmpty(t, output)
+	})
+	t.Run("requesting heartbeats", func(t *testing.T) {
+		_ = warmUpHeartbeat(t)
+	})
+	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
+		time.Sleep(1 * time.Second)
+		resp, err := throttleCheck(primaryTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
+		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
+		resp, err := throttleCheck(primaryTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	})
+}
