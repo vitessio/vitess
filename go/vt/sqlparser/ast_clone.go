@@ -51,8 +51,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterMigration(in)
 	case *AlterTable:
 		return CloneRefOfAlterTable(in)
-	case *AlterThrottler:
-		return CloneRefOfAlterThrottler(in)
 	case *AlterView:
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:
@@ -651,17 +649,6 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
 	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
-	out.Comments = CloneRefOfParsedComments(n.Comments)
-	return &out
-}
-
-// CloneRefOfAlterThrottler creates a deep clone of the input.
-func CloneRefOfAlterThrottler(n *AlterThrottler) *AlterThrottler {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Threshold = CloneRefOfLiteral(n.Threshold)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
@@ -3771,8 +3758,6 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfAlterMigration(in)
 	case *AlterTable:
 		return CloneRefOfAlterTable(in)
-	case *AlterThrottler:
-		return CloneRefOfAlterThrottler(in)
 	case *AlterView:
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:

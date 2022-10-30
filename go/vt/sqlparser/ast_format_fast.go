@@ -467,22 +467,6 @@ func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *AlterThrottler) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("alter ")
-	node.Comments.formatFast(buf)
-	buf.WriteString("vitess_throttler")
-	switch node.Type {
-	case AlterThrottlerDisableType:
-		buf.WriteString(" disable")
-	case AlterThrottlerEnableType:
-		buf.WriteString(" enable")
-	case AlterThrottlerParamsType:
-		buf.WriteString(" threshold ")
-		node.Threshold.formatFast(buf)
-	}
-}
-
-// formatFast formats the node.
 func (node *ShowThrottlerStatus) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("show vitess_throttler status")
 }

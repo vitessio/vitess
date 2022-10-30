@@ -245,20 +245,6 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
-func (cached *AlterThrottler) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(24)
-	}
-	// field Threshold *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Threshold.CachedSize(true)
-	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
-	size += cached.Comments.CachedSize(true)
-	return size
-}
 func (cached *AlterView) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -110,12 +110,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterTable(a, b)
-	case *AlterThrottler:
-		b, ok := inB.(*AlterThrottler)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfAlterThrottler(a, b)
 	case *AlterView:
 		b, ok := inB.(*AlterView)
 		if !ok {
@@ -1668,19 +1662,6 @@ func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
 		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
 		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption) &&
-		EqualsRefOfParsedComments(a.Comments, b.Comments)
-}
-
-// EqualsRefOfAlterThrottler does deep equals between the two objects.
-func EqualsRefOfAlterThrottler(a, b *AlterThrottler) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Type == b.Type &&
-		EqualsRefOfLiteral(a.Threshold, b.Threshold) &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
@@ -6126,12 +6107,6 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfAlterTable(a, b)
-	case *AlterThrottler:
-		b, ok := inB.(*AlterThrottler)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfAlterThrottler(a, b)
 	case *AlterView:
 		b, ok := inB.(*AlterView)
 		if !ok {
