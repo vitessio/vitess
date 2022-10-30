@@ -273,6 +273,7 @@ func (throttler *Throttler) initConfig() {
 	}
 }
 
+// readThrottlerConfig proactively reads the throttler's config from SrvKeyspace in local topo
 func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatapb.SrvKeyspace_ThrottlerConfig, error) {
 	srvks, err := throttler.ts.GetSrvKeyspace(ctx, throttler.cell, throttler.keyspace)
 	if err != nil {
@@ -281,6 +282,7 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 	return throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig), nil
 }
 
+// normalizeThrottlerConfig noramlizes missing throttler config information, as needed.
 func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
 	if thottlerConfig == nil {
 		thottlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
@@ -294,6 +296,8 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 	return thottlerConfig
 }
 
+// WatchSrvKeyspaceCallback gets called whenever SrvKeyspace has been modified. This callback only examines the ThrottlerConfig part of
+// SrvKeyspace, and proceeds to inform the throttler of the new config
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
@@ -317,6 +321,8 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	return true
 }
 
+// applyThrottlerConfig receives a Throttlerconfig as read from SrvKeyspace, and applies the configuration. This may cause
+// the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) {
 	if !throttlerConfigViaTopo {
 		return
@@ -392,11 +398,17 @@ func (throttler *Throttler) Open() error {
 
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 
-	throttlerConfig, err := throttler.readThrottlerConfig(ctx)
-	if err != nil {
-		return err
+	if throttlerConfigViaTopo {
+		throttlerConfig, err := throttler.readThrottlerConfig(ctx)
+		if err != nil {
+			return err
+		}
+		throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
+	} else {
+		if throttler.env.Config().EnableLagThrottler {
+			go throttler.Enable(ctx)
+		}
 	}
-	throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
 	return nil
 }
 
