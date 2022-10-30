@@ -2055,16 +2055,6 @@ var (
 	}, {
 		input: "show vitess_throttled_apps",
 	}, {
-		input: "alter vitess_throttler disable",
-	}, {
-		input: "alter vitess_throttler enable",
-	}, {
-		input: "alter vitess_throttler threshold 2",
-	}, {
-		input: "alter vitess_throttler threshold 2.0",
-	}, {
-		input: "alter /*vt+ any=comment */ vitess_throttler threshold 2.1",
-	}, {
 		input: "show vitess_throttler status",
 	}, {
 		input: "show warnings",
