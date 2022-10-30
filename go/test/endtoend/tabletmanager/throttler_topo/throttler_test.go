@@ -250,6 +250,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NotEqual(t, http.StatusOK, respStatus)
 	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
+		time.Sleep(1 * time.Second)
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
