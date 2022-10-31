@@ -256,7 +256,7 @@ func TestConnectionFromListener(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "net.Listener failed")
 
-	l, err := NewFromListener(listener, authServer, th, 0, 0)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -285,7 +285,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -318,7 +318,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -351,7 +351,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -389,7 +389,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	os.Remove(unixSocket.Name())
 
-	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false)
+	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -415,7 +415,7 @@ func TestClientFoundRows(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -464,7 +464,7 @@ func TestConnCounts(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -521,7 +521,7 @@ func TestServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
 	defer l.Close()
@@ -620,7 +620,7 @@ func TestServerStats(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
 	defer l.Close()
@@ -693,7 +693,7 @@ func TestClearTextServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -766,7 +766,7 @@ func TestDialogServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	l.AllowClearTextWithoutTLS.Set(true)
 	defer l.Close()
@@ -809,7 +809,7 @@ func TestTLSServer(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -907,7 +907,7 @@ func TestTLSRequired(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -996,7 +996,106 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root := t.TempDir()
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	l.TLSConfig.Store(serverConfig)
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		// SSL flags.
+		SslMode:    vttls.VerifyIdentity,
+		SslCa:      path.Join(root, "ca-cert.pem"),
+		SslCert:    path.Join(root, "client-cert.pem"),
+		SslKey:     path.Join(root, "client-key.pem"),
+		ServerName: "server.example.com",
+	}
+
+	// Connection should fail, as server requires SSL for caching_sha2_password.
+	ctx := context.Background()
+
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("unexpected connection error: %v", err)
+	}
+	defer conn.Close()
+
+	// Run a 'select rows' command with results.
+	result, err := conn.ExecuteFetch("select rows", 10000, true)
+	if err != nil {
+		t.Fatalf("ExecuteFetch failed: %v", err)
+	}
+	utils.MustMatch(t, result, selectRowsResult)
+
+	// Send a ComQuit to avoid the error message on the server side.
+	conn.writeComQuit()
+}
+
+type alwaysFallbackAuth struct{}
+
+func (a *alwaysFallbackAuth) UserEntryWithCacheHash(conn *Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, CacheState, error) {
+	return &StaticUserData{}, AuthNeedMoreData, nil
+}
+
+// newAuthServerAlwaysFallback returns a new empty AuthServerStatic
+// which will always request more data to trigger fallback auth path
+// for caching sha2.
+func newAuthServerAlwaysFallback(file, jsonConfig string, reloadInterval time.Duration) *AuthServerStatic {
+	a := &AuthServerStatic{
+		file:           file,
+		jsonConfig:     jsonConfig,
+		reloadInterval: reloadInterval,
+		entries:        make(map[string][]*AuthServerStaticEntry),
+	}
+
+	authMethod := NewSha2CachingAuthMethod(&alwaysFallbackAuth{}, a, a)
+	a.methods = []AuthMethod{authMethod}
+
+	a.reload()
+	a.installSignalHandlers()
+	return a
+}
+
+func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := newAuthServerAlwaysFallback("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
+		{Password: "password1"},
+	}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -1070,7 +1169,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -1114,7 +1213,7 @@ func TestErrorCodes(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1292,7 +1391,7 @@ func TestListenerShutdown(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1360,12 +1459,12 @@ func TestParseConnAttrs(t *testing.T) {
 }
 
 func TestServerFlush(t *testing.T) {
-	defer func(saved time.Duration) { *mysqlServerFlushDelay = saved }(*mysqlServerFlushDelay)
-	*mysqlServerFlushDelay = 10 * time.Millisecond
+	defer func(saved time.Duration) { mysqlServerFlushDelay = saved }(mysqlServerFlushDelay)
+	mysqlServerFlushDelay = 10 * time.Millisecond
 
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1386,8 +1485,8 @@ func TestServerFlush(t *testing.T) {
 
 	flds, err := c.Fields()
 	require.NoError(t, err)
-	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
-		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), (*mysqlServerFlushDelay).String(), want.String())
+	if duration, want := time.Since(start), 20*time.Millisecond; duration < mysqlServerFlushDelay || duration > want {
+		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), (mysqlServerFlushDelay).String(), want.String())
 	}
 	want1 := []*querypb.Field{{
 		Name: "result",

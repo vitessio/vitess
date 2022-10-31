@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -58,9 +59,9 @@ import (
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
-	save := *warnMemoryRows
-	*warnMemoryRows = 3
-	defer func() { *warnMemoryRows = save }()
+	save := warnMemoryRows
+	warnMemoryRows = 3
+	defer func() { warnMemoryRows = save }()
 
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
@@ -81,9 +82,9 @@ func TestExecutorResultsExceeded(t *testing.T) {
 }
 
 func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
-	save := *maxMemoryRows
-	*maxMemoryRows = 3
-	defer func() { *maxMemoryRows = save }()
+	save := maxMemoryRows
+	maxMemoryRows = 3
+	defer func() { maxMemoryRows = save }()
 
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
@@ -327,9 +328,9 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 }
 
 func TestExecutorDeleteMetadata(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
 	executor, _, _, _ := createExecutorEnv()
@@ -496,6 +497,19 @@ func TestExecutorShowColumns(t *testing.T) {
 
 }
 
+func sortString(w string) string {
+	s := strings.Split(w, "")
+	sort.Strings(s)
+	return strings.Join(s, "")
+}
+
+func assertMatchesNoOrder(t *testing.T, expected, got string) {
+	t.Helper()
+	if sortString(expected) != sortString(got) {
+		t.Errorf("for query: expected \n%s \nbut actual \n%s", expected, got)
+	}
+}
+
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
@@ -503,14 +517,14 @@ func TestExecutorShow(t *testing.T) {
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
-		require.EqualValues(t, 5, len(qr.Rows), fmt.Sprintf("unexpected results running query: %s", query))
+		assertMatchesNoOrder(t, `[[VARCHAR("TestUnsharded")] [VARCHAR("TestMultiCol")] [VARCHAR("TestXBadVSchema")] [VARCHAR("TestXBadSharding")] [VARCHAR("TestExecutor")]]`, fmt.Sprintf("%v", qr.Rows))
 	}
 
 	for _, query := range []string{"show databases", "show DATABASES", "show schemas", "show SCHEMAS"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		// Showing default tables (5+4[default])
-		require.EqualValues(t, 9, len(qr.Rows), fmt.Sprintf("unexpected results running query: %s", query))
+		assertMatchesNoOrder(t, `[[VARCHAR("TestUnsharded")] [VARCHAR("TestMultiCol")] [VARCHAR("TestXBadVSchema")] [VARCHAR("TestXBadSharding")] [VARCHAR("TestExecutor")]] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]`, fmt.Sprintf("%v", qr.Rows))
 	}
 
 	_, err := executor.Execute(ctx, "TestExecute", session, "show variables", nil)
@@ -865,8 +879,9 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
 			buildVarCharRow("TestExecutor", "regional_vdx", "region_experimental", "region_bytes=1", ""),
 			buildVarCharRow("TestExecutor", "t1_lkp_vdx", "consistent_lookup_unique", "from=unq_col; table=t1_lkp_idx; to=keyspace_id", "t1"),
-			buildVarCharRow("TestExecutor", "t2_lu_vdx", "lookup_hash_unique", "from=lu_col; table=TestUnsharded.lu_idx; to=keyspace_id", "t2_wo_lookup"),
-			buildVarCharRow("TestExecutor", "t2_wo_lu_vdx", "lookup_unique", "from=wo_lu_col; table=TestUnsharded.wo_lu_idx; to=keyspace_id; write_only=true", "t2_wo_lookup"),
+			buildVarCharRow("TestExecutor", "t2_lu_vdx", "lookup_hash_unique", "from=lu_col; table=TestUnsharded.lu_idx; to=keyspace_id", "t2_lookup"),
+			buildVarCharRow("TestExecutor", "t2_nv_lu_vdx", "lookup_unique", "from=nv_lu_col; no_verify=true; table=TestUnsharded.nv_lu_idx; to=keyspace_id", "t2_lookup"),
+			buildVarCharRow("TestExecutor", "t2_wo_lu_vdx", "lookup_unique", "from=wo_lu_col; table=TestUnsharded.wo_lu_idx; to=keyspace_id; write_only=true", "t2_lookup"),
 			buildVarCharRow("TestMultiCol", "multicol_vdx", "multicol", "column_bytes=1,3,4; column_count=3; column_vindex=hash,binary,unicode_loose_xxhash", ""),
 		},
 	}
@@ -1003,6 +1018,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("music_user_map"),
 			buildVarCharRow("name_lastname_keyspace_id_map"),
 			buildVarCharRow("name_user_map"),
+			buildVarCharRow("nv_lu_idx"),
 			buildVarCharRow("simple"),
 			buildVarCharRow("user_msgs"),
 			buildVarCharRow("user_seq"),
@@ -1344,7 +1360,7 @@ func TestExecutorDDLFk(t *testing.T) {
 		for _, fkMode := range []string{"allow", "disallow"} {
 			t.Run(stmt+fkMode, func(t *testing.T) {
 				sbc.ExecCount.Set(0)
-				*foreignKeyMode = fkMode
+				foreignKeyMode = fkMode
 				_, err := executor.Execute(ctx, mName, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
 				if fkMode == "allow" {
 					require.NoError(t, err)
@@ -1359,9 +1375,9 @@ func TestExecutorDDLFk(t *testing.T) {
 }
 
 func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
@@ -1387,9 +1403,9 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := "TestExecutor"
@@ -1459,9 +1475,9 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := KsTestUnsharded
@@ -1527,7 +1543,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
 	if err != nil {
@@ -1540,7 +1556,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// test when only one user is enabled
-	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
+	vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
 	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
@@ -1552,7 +1568,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// restore the disallowed state
-	*vschemaacl.AuthorizedDDLUsers = ""
+	vschemaacl.AuthorizedDDLUsers = ""
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
@@ -1715,16 +1731,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	query1 := "select * from music_user_map where id = 1"
 	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 0)
-	wantSQL := "select * from music_user_map where id = :vtg1 /* comment */"
-	if logStats1.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
-	}
+	wantSQL := "select * from music_user_map where id = :id /* comment */"
+	assert.Equal(t, wantSQL, logStats1.SQL)
 
 	_, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 1)
-	if logStats2.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats2.SQL)
 
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
@@ -1758,60 +1770,40 @@ func TestGetPlanNormalized(t *testing.T) {
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
-	normalized := "select * from music_user_map where id = :vtg1"
+	normalized := "select * from music_user_map where id = :id"
 
 	plan1, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false)
 	plan2, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
 
-	if plan1 != plan2 {
-		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
-	}
+	assert.Equal(t, plan1, plan2)
 	want := []string{
 		"@unknown:" + normalized,
 	}
 	assertCacheContains(t, r, want)
 
 	wantSQL := normalized + " /* comment 1 */"
-	if logStats1.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats1.SQL)
 	wantSQL = normalized + " /* comment 2 */"
-	if logStats2.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats2.SQL)
 
 	plan3, logStats3 := getPlanCached(t, r, emptyvc, query2, makeComments(" /* comment 3 */"), map[string]*querypb.BindVariable{}, false)
-	if plan1 != plan3 {
-		t.Errorf("getPlan(query2): plans must be equal: %p %p", plan1, plan3)
-	}
+	assert.Equal(t, plan1, plan3)
 	wantSQL = normalized + " /* comment 3 */"
-	if logStats3.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats3.SQL)
 
 	plan4, logStats4 := getPlanCached(t, r, emptyvc, normalized, makeComments(" /* comment 4 */"), map[string]*querypb.BindVariable{}, false)
-	if plan1 != plan4 {
-		t.Errorf("getPlan(normalized): plans must be equal: %p %p", plan1, plan4)
-	}
+	assert.Equal(t, plan1, plan4)
 	wantSQL = normalized + " /* comment 4 */"
-	if logStats4.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats4.SQL)
 
 	var logStats5 *logstats.LogStats
 	plan3, logStats5 = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false)
-	if plan1 == plan3 {
-		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
-	}
+	assert.Equal(t, plan1, plan3)
 	wantSQL = normalized + " /* comment 5 */"
-	if logStats5.SQL != wantSQL {
-		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats5.SQL)
-	}
+	assert.Equal(t, wantSQL, logStats5.SQL)
 
 	plan4, _ = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
-	if plan3 != plan4 {
-		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
-	}
+	assert.Equal(t, plan1, plan4)
 	want = []string{
 		KsTestUnsharded + "@unknown:" + normalized,
 		"@unknown:" + normalized,
@@ -1819,10 +1811,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	assertCacheContains(t, r, want)
 
 	_, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
-	wantErr := "syntax error at position 7 near 'syntax'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
-	}
+	assert.EqualError(t, err, "syntax error at position 7 near 'syntax'")
 	assertCacheContains(t, r, want)
 }
 
@@ -1961,13 +1950,13 @@ func TestDebugVSchema(t *testing.T) {
 }
 
 func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
-	saveMax := *maxPayloadSize
-	saveWarn := *warnPayloadSize
-	*maxPayloadSize = 10
-	*warnPayloadSize = 5
+	saveMax := maxPayloadSize
+	saveWarn := warnPayloadSize
+	maxPayloadSize = 10
+	warnPayloadSize = 5
 	defer func() {
-		*maxPayloadSize = saveMax
-		*warnPayloadSize = saveWarn
+		maxPayloadSize = saveMax
+		warnPayloadSize = saveWarn
 	}()
 
 	executor, _, _, _ := createExecutorEnv()
@@ -1998,7 +1987,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
-	*maxPayloadSize = 1000
+	maxPayloadSize = 1000
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
 		assert.Equal(t, nil, err, "err should be nil")

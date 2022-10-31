@@ -25,18 +25,15 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/orchestrator/app"
-	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/grpccommon"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-
-	_flag "vitess.io/vitess/go/internal/flag"
-)
-
-var (
-	GitCommit  string
-	AppVersion string
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/logic"
+	"vitess.io/vitess/go/vt/vtorc/server"
 )
 
 // transformArgsForPflag turns a slice of raw args passed on the command line,
@@ -79,7 +76,7 @@ func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 			// In the latter case, we don't need to do any transformations, but
 			// in the former, we do.
 			name := strings.SplitN(arg[1:], "=", 2)[0] // discard any potential value (`-myflag` and `-myflag=10` both have the name of `myflag`)
-			if fs.Lookup(name) != nil {
+			if fs.Lookup(name) != nil || name == "help" {
 				// Case 1: We have a long opt with this name, so we need to
 				// prepend an additional hyphen.
 				result = append(result, "-"+arg)
@@ -101,43 +98,21 @@ func main() {
 	// TODO(ajm188): after v15, remove this pflag hack and use servenv.ParseFlags
 	// directly.
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
+	grpccommon.RegisterFlags(fs)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	logic.RegisterFlags(fs)
+	server.RegisterFlags(fs)
+	config.RegisterFlags(fs)
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	acl.RegisterFlags(fs)
+	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
 
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
-	servenv.ParseFlags("vtorc")
-
-	// N.B. This code has to be duplicated from go/internal/flag in order to
-	// correctly transform `-help` => `--help`. Otherwise passing `-help` would
-	// produce:
-	//	unknown shorthand flag: 'e' in -elp
-	var help bool
-	if fs.Lookup("help") == nil {
-		if fs.ShorthandLookup("h") == nil {
-			fs.BoolVarP(&help, "help", "h", false, "display usage and exit")
-		} else {
-			fs.BoolVar(&help, "help", false, "display usage and exit")
-		}
-	}
 
 	configFile := fs.String("config", "", "config file name")
-	sibling := fs.StringP("sibling", "s", "", "sibling instance, host_fqdn[:port]")
-	destination := fs.StringP("destination", "d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
-	discovery := fs.Bool("discovery", true, "auto discovery mode")
-	quiet := fs.Bool("quiet", false, "quiet")
-	verbose := fs.Bool("verbose", false, "verbose")
-	debug := fs.Bool("debug", false, "debug mode (very verbose)")
-	stack := fs.Bool("stack", false, "add stack trace upon error")
-	config.RuntimeCLIFlags.SkipUnresolve = fs.Bool("skip-unresolve", false, "Do not unresolve a host name")
-	config.RuntimeCLIFlags.SkipUnresolveCheck = fs.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
-	config.RuntimeCLIFlags.Noop = fs.Bool("noop", false, "Dry run; do not perform destructing operations")
-	config.RuntimeCLIFlags.BinlogFile = fs.String("binlog", "", "Binary log file name")
-	config.RuntimeCLIFlags.Statement = fs.String("statement", "", "Statement/hint")
-	config.RuntimeCLIFlags.GrabElection = fs.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
-	config.RuntimeCLIFlags.PromotionRule = fs.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
-	config.RuntimeCLIFlags.SkipContinuousRegistration = fs.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = fs.Bool("enable-database-update", false, "Enable database update, overrides SkipOrchestratorDatabaseUpdate")
-	config.RuntimeCLIFlags.IgnoreRaftSetup = fs.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
-	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 
 	os.Args = append(os.Args, transformArgsForPflag(fs, args[1:])...)
 	if !reflect.DeepEqual(args, os.Args) {
@@ -150,74 +125,32 @@ Please update your scripts before the next version, when this will begin to brea
 		log.Warningf(warning, args, os.Args)
 	}
 
-	_flag.Parse(fs)
-	// N.B. Also duplicated from go/internal/flag, for the same reason as above.
-	if help || fs.Arg(0) == "help" {
-		pflag.Usage()
-		os.Exit(0)
-	}
+	servenv.ParseFlags("vtorc")
+	config.UpdateConfigValuesFromFlags()
 
-	if *destination != "" && *sibling != "" {
-		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
-	}
-	switch *config.RuntimeCLIFlags.PromotionRule {
-	case "prefer", "neutral", "prefer_not", "must_not":
-		{
-			// OK
-		}
-	default:
-		{
-			log.Fatalf("--promotion-rule only supports prefer|neutral|prefer_not|must_not")
-		}
-	}
-	if *destination == "" {
-		*destination = *sibling
-	}
-
-	log.SetLevel(log.ERROR)
-	if *verbose {
-		log.SetLevel(log.INFO)
-	}
-	if *debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *stack {
-		log.SetPrintStackTrace(*stack)
-	}
-
-	startText := "starting orchestrator"
-	if AppVersion != "" {
-		startText += ", version: " + AppVersion
-	}
-	if GitCommit != "" {
-		startText += ", git commit: " + GitCommit
-	}
-	log.Info(startText)
-
+	log.Info("starting vtorc")
 	if len(*configFile) > 0 {
 		config.ForceRead(*configFile)
 	} else {
-		config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
-	}
-	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
-		config.Config.SkipOrchestratorDatabaseUpdate = false
-	}
-	if config.Config.Debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *quiet {
-		// Override!!
-		log.SetLevel(log.ERROR)
-	}
-	if config.Config.EnableSyslog {
-		log.EnableSyslogWriter("orchestrator")
-		log.SetSyslogLevel(log.INFO)
+		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
 	}
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()
 	}
-	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	app.HTTP(*discovery)
+	// Log final config values to debug if something goes wrong.
+	config.LogConfigValues()
+	server.StartVTOrcDiscovery()
+
+	server.RegisterVTOrcAPIEndpoints()
+	servenv.OnRun(func() {
+		addStatusParts()
+	})
+
+	// For backward compatability, we require that VTOrc functions even when the --port flag is not provided.
+	// In this case, it should function like before but without the servenv pages.
+	// Therefore, currently we don't check for the --port flag to be necessary, but release 16+ that check
+	// can be added to always have the serenv page running in VTOrc.
+	servenv.RunDefault()
 }

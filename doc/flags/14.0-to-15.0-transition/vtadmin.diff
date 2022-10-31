@@ -1,0 +1,53 @@
+diff --git a/flags/14.0/vtadmin.txt b/flags/15.0/vtadmin.txt
+new file mode 100644
+index 0000000..7ea8436
+--- /dev/null
++++ b/flags/15.0/vtadmin.txt
+@@ -0,0 +1,47   @@
++Usage:
++  vtadmin [flags]
++
++Flags:
++      --addr string                             address to serve on (default ":15000")
++      --alsologtostderr                         log to standard error as well as files
++      --cache-refresh-key string                instructs a request to ignore any cached data (if applicable) and refresh the cache;usable as an HTTP header named 'X-<key>' and as a gRPC metadata key '<key>'
++                                                Note: any whitespace characters are replaced with hyphens. (default "vt-cache-refresh")
++      --cluster cluster.ClustersFlag            per-cluster configuration. any values here take precedence over those in -cluster-defaults or -cluster-config (default [])
++      --cluster-config cluster.FileConfig       path to a yaml cluster configuration. see clusters.example.yaml (default {defaults: *cluster.Config:{ID: Name: DiscoveryImpl: DiscoveryFlagsByImpl:map[] TabletFQDNTmplStr: VtSQLFlags:map[] VtctldFlags:map[] BackupReadPoolConfig:<nil> SchemaReadPoolConfig:<nil> TopoRWPoolConfig:<nil> TopoReadPoolConfig:<nil> WorkflowReadPoolConfig:<nil> EmergencyFailoverPoolConfig:<nil> FailoverPoolConfig:<nil> SchemaCacheConfig:<nil> vtctldConfigOpts:[] vtsqlConfigOpts:[]}, clusters: []})
++      --cluster-defaults cluster.Config         default options for all clusters (default *cluster.Config:{ID: Name: DiscoveryImpl: DiscoveryFlagsByImpl:map[] TabletFQDNTmplStr: VtSQLFlags:map[] VtctldFlags:map[] BackupReadPoolConfig:<nil> SchemaReadPoolConfig:<nil> TopoRWPoolConfig:<nil> TopoReadPoolConfig:<nil> WorkflowReadPoolConfig:<nil> EmergencyFailoverPoolConfig:<nil> FailoverPoolConfig:<nil> SchemaCacheConfig:<nil> vtctldConfigOpts:[] vtsqlConfigOpts:[]})
++      --datadog-agent-host string               host to send spans to. if empty, no tracing will be done
++      --datadog-agent-port string               port to send spans to. if empty, no tracing will be done
++      --emit_stats                              If set, emit stats to push-based monitoring and stats backends
++      --enable-dynamic-clusters                 whether to enable dynamic clusters that are set by request header cookies or gRPC metadata
++      --grpc-allow-reflection grpc_cli          whether to register the gRPC server for reflection; this is required to use tools like grpc_cli
++      --grpc-enable-channelz                    whether to enable the channelz service on the gRPC server
++      --grpc-tracing                            whether to enable tracing on the gRPC server
++  -h, --help                                    help for vtadmin
++      --http-debug-omit-env StringSetFlag       name of an environment variable to omit from /debug/env, if http debug endpoints are enabled. specify multiple times to omit multiple env vars
++      --http-debug-sanitize-env StringSetFlag   name of an environment variable to sanitize in /debug/env, if http debug endpoints are enabled. specify multiple times to sanitize multiple env vars
++      --http-metrics-endpoint string            HTTP endpoint to expose prometheus metrics on. Omit to disable scraping metrics. Using a path used by VTAdmin's http API is unsupported and causes undefined behavior. (default "/metrics")
++      --http-no-compress                        whether to disable compression of HTTP API responses
++      --http-no-debug                           whether to disable /debug/pprof/* and /debug/env HTTP endpoints
++      --http-origin strings                     repeated, comma-separated flag of allowed CORS origins. omit to disable CORS
++      --http-tablet-url-tmpl string             [EXPERIMENTAL] Go template string to generate a reachable http(s) address for a tablet. Currently used to make passthrough requests to /debug/vars endpoints. (default "https://{{ .Tablet.Hostname }}:80")
++      --http-tracing                            whether to enable tracing on the HTTP server
++      --jaeger-agent-host string                host and port to send spans to. if empty, no tracing will be done
++      --lame-duck-duration duration             length of lame duck period at shutdown (default 5s)
++      --lmux-read-timeout duration              how long to spend connection muxing (default 1s)
++      --log_dir string                          If non-empty, write log files in this directory
++      --logtostderr                             log to standard error instead of files
++      --no-rbac                                 whether to disable RBAC. must be set if not passing --no-rbac
++      --rbac                                    whether to enable RBAC. must be set if not passing --rbac
++      --rbac-config string                      path to an RBAC config file. must be set if passing --rbac
++      --stats_backend string                    The name of the registered push-based monitoring/stats backend to use
++      --stats_combine_dimensions string         List of dimensions to be combined into a single "all" value in exported stats vars
++      --stats_common_tags strings               Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
++      --stats_drop_variables string             Variables to be dropped from the list of exported variables.
++      --stats_emit_period duration              Interval between emitting stats to all registered backends (default 1m0s)
++      --stderrthreshold severity                logs at or above this threshold go to stderr (default 1)
++      --tracer string                           tracing service to use (default "noop")
++      --tracing-enable-logging                  whether to enable logging in the tracing service
++      --tracing-sampling-rate float             sampling rate for the probabilistic jaeger sampler (default 0.1)
++      --tracing-sampling-type string            sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
++  -v, --v Level                                 log level for V logs
++      --version                                 version for vtadmin

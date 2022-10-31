@@ -50,6 +50,8 @@ var (
 	extraVtctldArgs       = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior
 	extraVTTabletArgs = []string{}
+
+	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -653,6 +655,9 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string) *cluster.VttabletProcess {
 	for _, cell := range vc.Cells {
 		keyspace := cell.Keyspaces[ksName]
+		if keyspace == nil {
+			continue
+		}
 		for _, shard := range keyspace.Shards {
 			if shard.Name != shardName {
 				continue

@@ -66,6 +66,13 @@ var (
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB
 	`
+	createT1IfNotExistsStatement = `
+		CREATE TABLE IF NOT EXISTS t1_test (
+			id bigint(20) not null,
+			hint_col varchar(64) not null default 'should_not_appear',
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
 	trivialAlterT1Statement = `
 		ALTER TABLE t1_test ENGINE=InnoDB;
 	`
@@ -79,7 +86,7 @@ var (
 		DROP TABLE IF EXISTS t3_test
 	`
 	dropT4Statement = `
-		DROP TABLE IF EXISTS t3_test
+		DROP TABLE IF EXISTS t4_test
 	`
 )
 
@@ -207,6 +214,77 @@ func TestSchemaChange(t *testing.T) {
 			checkTable(t, t2Name, true)
 		}
 		testTableSequentialTimes(t, t1uuid, t2uuid)
+	})
+	t.Run("Postpone launch CREATE", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true) // skip wait
+		time.Sleep(2 * time.Second)
+		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			postponeLaunch := row.AsInt64("postpone_launch", 0)
+			assert.Equal(t, int64(1), postponeLaunch)
+		}
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+
+		t.Run("launch all shards", func(t *testing.T) {
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "", true)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(0), postponeLaunch)
+			}
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+	})
+	t.Run("Postpone launch ALTER", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true) // skip wait
+		time.Sleep(2 * time.Second)
+		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			postponeLaunch := row.AsInt64("postpone_launch", 0)
+			assert.Equal(t, int64(1), postponeLaunch)
+		}
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+
+		t.Run("launch irrelevant UUID", func(t *testing.T) {
+			someOtherUUID := "00000000_1111_2222_3333_444444444444"
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, someOtherUUID, "", false)
+			time.Sleep(2 * time.Second)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(1), postponeLaunch)
+			}
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		})
+		t.Run("launch irrelevant shards", func(t *testing.T) {
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x,y,z", false)
+			time.Sleep(2 * time.Second)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(1), postponeLaunch)
+			}
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		})
+		t.Run("launch relevant shard", func(t *testing.T) {
+			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x, y, 1", true)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeLaunch := row.AsInt64("postpone_launch", 0)
+				assert.Equal(t, int64(0), postponeLaunch)
+			}
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
 	})
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
@@ -400,7 +478,8 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
-			time.Sleep(2 * time.Second)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
@@ -510,7 +589,8 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
-			time.Sleep(2 * time.Second)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
@@ -536,7 +616,8 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-			time.Sleep(2 * time.Second)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
 		})
 

@@ -33,7 +33,7 @@ func (d *AlterViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
-// IsEmpty implements EntityDiff
+// Entities implements EntityDiff
 func (d *AlterViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
 }
@@ -90,7 +90,7 @@ func (d *CreateViewEntityDiff) IsEmpty() bool {
 
 // Entities implements EntityDiff
 func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
-	return nil, &CreateViewEntity{CreateView: *d.createView}
+	return nil, &CreateViewEntity{CreateView: d.createView}
 }
 
 // Statement implements EntityDiff
@@ -192,14 +192,14 @@ func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
 type CreateViewEntity struct {
-	sqlparser.CreateView
+	*sqlparser.CreateView
 }
 
 func NewCreateViewEntity(c *sqlparser.CreateView) (*CreateViewEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
 	}
-	entity := &CreateViewEntity{CreateView: *c}
+	entity := &CreateViewEntity{CreateView: c}
 	entity.normalize()
 	return entity, nil
 }
@@ -233,38 +233,33 @@ func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, err
 // change this view to look like the other view.
 // It returns an AlterView statement if changes are found, or nil if not.
 // the other view may be of different name; its name is ignored.
-func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (*AlterViewEntityDiff, error) {
-	otherStmt := other.CreateView
-	otherStmt.ViewName = c.CreateView.ViewName
-
-	if !c.CreateView.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&c.CreateView)}
+func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*AlterViewEntityDiff, error) {
+	if !c.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateView)}
 	}
-	if !otherStmt.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&otherStmt)}
+	if !other.CreateView.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(other.CreateView)}
 	}
 
-	format := sqlparser.CanonicalString(&c.CreateView)
-	otherFormat := sqlparser.CanonicalString(&otherStmt)
-	if format == otherFormat {
+	if c.identicalOtherThanName(other) {
 		return nil, nil
 	}
 
 	alterView := &sqlparser.AlterView{
-		ViewName:    otherStmt.ViewName,
-		Algorithm:   otherStmt.Algorithm,
-		Definer:     otherStmt.Definer,
-		Security:    otherStmt.Security,
-		Columns:     otherStmt.Columns,
-		Select:      otherStmt.Select,
-		CheckOption: otherStmt.CheckOption,
+		ViewName:    c.CreateView.ViewName,
+		Algorithm:   other.CreateView.Algorithm,
+		Definer:     other.CreateView.Definer,
+		Security:    other.CreateView.Security,
+		Columns:     other.CreateView.Columns,
+		Select:      other.CreateView.Select,
+		CheckOption: other.CreateView.CheckOption,
 	}
 	return &AlterViewEntityDiff{alterView: alterView, from: c, to: other}, nil
 }
 
 // Create implements Entity interface
 func (c *CreateViewEntity) Create() EntityDiff {
-	return &CreateViewEntityDiff{createView: &c.CreateView}
+	return &CreateViewEntityDiff{createView: c.CreateView}
 }
 
 // Drop implements Entity interface
@@ -289,10 +284,28 @@ func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
 	if !ok {
 		return nil, ErrEntityTypeMismatch
 	}
-	dupCreateView := &sqlparser.CreateView{}
-	dup := &CreateViewEntity{CreateView: *dupCreateView}
+	dup := c.Clone().(*CreateViewEntity)
 	if err := dup.apply(alterDiff); err != nil {
 		return nil, err
 	}
+	dup.normalize()
 	return dup, nil
+}
+
+func (c *CreateViewEntity) Clone() Entity {
+	return &CreateViewEntity{CreateView: sqlparser.CloneRefOfCreateView(c.CreateView)}
+}
+
+func (c *CreateViewEntity) identicalOtherThanName(other *CreateViewEntity) bool {
+	if other == nil {
+		return false
+	}
+	return c.Algorithm == other.Algorithm &&
+		c.Security == other.Security &&
+		c.CheckOption == other.CheckOption &&
+		c.IsReplace == other.IsReplace &&
+		sqlparser.EqualsRefOfDefiner(c.Definer, other.Definer) &&
+		sqlparser.EqualsColumns(c.Columns, other.Columns) &&
+		sqlparser.EqualsSelectStatement(c.Select, other.Select) &&
+		sqlparser.EqualsRefOfParsedComments(c.Comments, other.Comments)
 }

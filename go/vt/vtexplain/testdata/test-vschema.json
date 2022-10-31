@@ -18,6 +18,16 @@
 				},
 				"owner": "orders"
 			},
+			"orders_id_vdx_no_verify": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_no_verify",
+					"from": "id",
+					"to": "keyspace_id",
+                                        "no_verify": "true"
+				},
+				"owner": "orders"
+			},
 			"music_user_map": {
 				"type": "lookup_hash_unique",
 				"owner": "music",
@@ -157,6 +167,14 @@
 				]
 			},
 			"orders_id_lookup": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					}
+				]
+			},
+			"orders_id_lookup_no_verify": {
 				"column_vindexes": [
 					{
 						"column": "id",

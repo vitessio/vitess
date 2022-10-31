@@ -16,6 +16,13 @@ jobs:
   unit-tests:
     runs-on: ubuntu-latest
     steps:
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
       - name: Check if workflow needs to be skipped
         id: skip-workflow
         run: |
@@ -26,10 +33,10 @@ jobs:
           echo Skip ${skip}
           echo "::set-output name=skip-workflow::${skip}"
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
 
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json

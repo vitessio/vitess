@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/faketmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -47,7 +48,7 @@ var (
 func init() {
 	// enforce we will use the right protocol (gRPC) (note the
 	// client is unused, but it is initialized, so it needs to exist)
-	*tmclient.TabletManagerProtocol = "grpc"
+	tmclienttest.SetProtocol("go.vt.schemamanager", "grpc")
 }
 
 func TestSchemaManagerControllerOpenFail(t *testing.T) {

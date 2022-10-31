@@ -23,20 +23,34 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	switch vschema.Destination().(type) {
-	case key.DestinationExactKeyRange:
-		if _, ok := stmt.(*sqlparser.Insert); ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", vschema.TargetString())
-		}
-	}
-
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
 	}
+
+	switch dest := vschema.Destination().(type) {
+	case key.DestinationExactKeyRange:
+		if _, ok := stmt.(*sqlparser.Insert); ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", vschema.TargetString())
+		}
+	case key.DestinationShard:
+		if !vschema.IsShardRoutingEnabled() {
+			break
+		}
+		shard := string(dest)
+		targetKeyspace, err := GetShardRoute(vschema, keyspace.Name, shard)
+		if err != nil {
+			return nil, err
+		}
+		if targetKeyspace != nil {
+			keyspace = targetKeyspace
+		}
+	}
+
 	send := &engine.Send{
 		Keyspace:             keyspace,
 		TargetDestination:    vschema.Destination(),
@@ -46,4 +60,12 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		MultishardAutocommit: sqlparser.MultiShardAutocommitDirective(stmt),
 	}
 	return newPlanResult(send), nil
+}
+
+func GetShardRoute(vschema plancontext.VSchema, keyspace, shard string) (*vindexes.Keyspace, error) {
+	targetKeyspaceName, err := vschema.FindRoutedShard(keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+	return vschema.FindKeyspace(targetKeyspaceName)
 }

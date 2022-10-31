@@ -18,7 +18,6 @@ package vreplication
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -28,20 +27,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 	"vitess.io/vitess/go/vt/withddl"
@@ -69,6 +72,31 @@ type LogExpectation struct {
 
 var heartbeatRe *regexp.Regexp
 
+// setFlag() sets a flag for a test in a non-racy way:
+//   - it registers the flag using a different flagset scope
+//   - clears other flags by passing a dummy os.Args() while parsing this flagset
+//   - sets the specific flag, if it has not already been defined
+//   - resets the os.Args() so that the remaining flagsets can be parsed correctly
+func setFlag(flagName, flagValue string) {
+	flagSetName := "vreplication-unit-test"
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{flagSetName}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(flagSetName, func(fs *pflag.FlagSet) {
+		if fs.Lookup(flagName) != nil {
+			fmt.Printf("found %s: %+v", flagName, fs.Lookup(flagName).Value)
+			return
+		}
+	})
+	servenv.ParseFlags(flagSetName)
+
+	if err := pflag.Set(flagName, flagValue); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, flagName, flagValue, err)
+	}
+}
+
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
@@ -79,14 +107,12 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vreplication.framework_test", "test")
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
-	flag.Set("binlog_player_protocol", "test")
-
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
 }
 
 func TestMain(m *testing.M) {
-	flag.Parse() // Do not remove this comment, import into google3 depends on it
-
+	binlogplayer.SetProtocol("vreplication_test_framework", "test")
+	_flag.ParseFlagsForTest()
 	exitCode := func() int {
 		var err error
 		env, err = testenv.Init()
@@ -96,7 +122,7 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
-		*vreplicationExperimentalFlags = 0
+		vreplicationExperimentalFlags = 0
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
@@ -132,6 +158,11 @@ func TestMain(m *testing.M) {
 		}
 
 		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), alterCopyState); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
@@ -409,6 +440,9 @@ func (dbc *realDBClient) Close() {
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	// Use Clone() because the contents of memory region referenced by
+	// string can change when clients (e.g. vcopier) use unsafe string methods.
+	query = strings.Clone(query)
 	if strings.HasPrefix(query, "use") ||
 		query == withddl.QueryToTriggerWithDDL { // this query breaks unit tests since it errors out
 		return nil, nil
@@ -427,10 +461,10 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
-	expectNontxQueries(t, []string{
+	expectNontxQueries(t, qh.Expect(
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
-	})
+	))
 }
 
 func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan any) {
@@ -489,27 +523,18 @@ func shouldIgnoreQuery(query string) bool {
 	return heartbeatRe.MatchString(query)
 }
 
-func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...string) {
+func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, skippableOnce ...string) {
 	extraQueries := withDDL.DDLs()
 	extraQueries = append(extraQueries, withDDLInitialQueries...)
 	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
 	skippedOnce := false
+	validator := qh.NewVerifier(expectations)
 
-	queryMatch := func(query string, got string) bool {
-		if query[0] == '/' {
-			result, err := regexp.MatchString(query[1:], got)
-			if err != nil {
-				panic(err)
-			}
-			return result
-		}
-		return (got == query)
-	}
-	for i, query := range queries {
+	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received, expecting %s", query)
+			t.Errorf("no query received")
 			continue
 		}
 		var got string
@@ -527,20 +552,25 @@ func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...stri
 				}
 			}
 
-			if !queryMatch(query, got) {
+			result := validator.AcceptQuery(got)
+
+			if !result.Accepted {
 				if !skippedOnce {
 					// let's see if "got" is a skippable query
 					for _, skippable := range skippableOnce {
-						if queryMatch(skippable, got) {
+						if ok, _ := qh.MatchQueries(skippable, got); ok {
 							skippedOnce = true
 							goto retry
 						}
 					}
 				}
-				t.Errorf("query:\n%q, does not match expected query %d:\n%q", got, i, query)
+				require.True(t, result.Accepted, fmt.Sprintf(
+					"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
+					got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
+				))
 			}
 		case <-time.After(5 * time.Second):
-			t.Errorf("no query received, expecting %s", query)
+			t.Fatalf("no query received")
 			failed = true
 		}
 	}
@@ -552,6 +582,8 @@ func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...stri
 			}
 			t.Errorf("unexpected query: %s", got)
 		default:
+			// Assert there are no pending expectations.
+			require.Len(t, validator.Pending(), 0)
 			return
 		}
 	}
@@ -559,23 +591,25 @@ func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...stri
 
 // expectNontxQueries disregards transactional statements like begin and commit.
 // It also disregards updates to _vt.vreplication.
-func expectNontxQueries(t *testing.T, queries []string) {
+func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 	t.Helper()
+
 	failed := false
 
 	skipQueries := withDDLInitialQueries
 	skipQueries = append(skipQueries, withDDL.DDLs()...)
-	for i, query := range queries {
+	validator := qh.NewVerifier(expectations)
+
+	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received, expecting %s", query)
+			t.Errorf("no query received")
 			continue
 		}
 		var got string
 	retry:
 		select {
 		case got = <-globalDBQueries:
-			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") ||
-				shouldIgnoreQuery(got) {
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || shouldIgnoreQuery(got) {
 				goto retry
 			}
 			for _, skipQuery := range skipQueries {
@@ -584,19 +618,14 @@ func expectNontxQueries(t *testing.T, queries []string) {
 				}
 			}
 
-			var match bool
-			if query[0] == '/' {
-				result, err := regexp.MatchString(query[1:], got)
-				if err != nil {
-					panic(err)
-				}
-				match = result
-			} else {
-				match = (got == query)
-			}
-			require.True(t, match, "query %d:: got:%s, want:%s", i, got, query)
+			result := validator.AcceptQuery(got)
+
+			require.True(t, result.Accepted, fmt.Sprintf(
+				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
+				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
+			))
 		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received, expecting %s", query)
+			t.Fatalf("no query received")
 			failed = true
 		}
 	}
@@ -611,10 +640,13 @@ func expectNontxQueries(t *testing.T, queries []string) {
 			}
 			t.Errorf("unexpected query: %s", got)
 		default:
+			// Assert there are no pending expectations.
+			require.Len(t, validator.Pending(), 0)
 			return
 		}
 	}
 }
+
 func expectData(t *testing.T, table string, values [][]string) {
 	t.Helper()
 	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)

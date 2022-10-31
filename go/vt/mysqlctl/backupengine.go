@@ -19,7 +19,6 @@ package mysqlctl
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -27,17 +26,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
 	// BackupEngineImplementation is the implementation to use for BackupEngine
-	backupEngineImplementation = flag.String("backup_engine_implementation", builtinBackupEngineName, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+	backupEngineImplementation = builtinBackupEngineName
 )
 
 // BackupEngine is the interface to take a backup with a given engine.
@@ -72,7 +74,7 @@ type RestoreParams struct {
 	Cnf    *Mycnf
 	Mysqld MysqlDaemon
 	Logger logutil.Logger
-	// Concurrency is the value of -restore_concurrency flag (init restore parameter)
+	// Concurrency is the value of --restore_concurrency flag (init restore parameter)
 	// It determines how many files are processed in parallel
 	Concurrency int
 	// Extra env variables for pre-restore and post-restore transform hooks
@@ -109,6 +111,16 @@ type BackupRestoreEngine interface {
 // BackupEngine and RestoreEngine.
 var BackupRestoreEngineMap = make(map[string]BackupRestoreEngine)
 
+func init() {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtexplain", "vtbackup"} {
+		servenv.OnParseFor(cmd, registerBackupEngineFlags)
+	}
+}
+
+func registerBackupEngineFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&backupEngineImplementation, "backup_engine_implementation", backupEngineImplementation, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+}
+
 // GetBackupEngine returns the BackupEngine implementation that should be used
 // to create new backups.
 //
@@ -117,7 +129,7 @@ var BackupRestoreEngineMap = make(map[string]BackupRestoreEngine)
 //
 // This must only be called after flags have been parsed.
 func GetBackupEngine() (BackupEngine, error) {
-	name := *backupEngineImplementation
+	name := backupEngineImplementation
 	be, ok := BackupRestoreEngineMap[name]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "unknown BackupEngine implementation %q", name)
@@ -378,31 +390,24 @@ func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]Fi
 	return fes, fi.Size(), nil
 }
 
+func hasDynamicRedoLog(cnf *Mycnf) bool {
+	dynamicRedoLogPath := path.Join(cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
+	info, err := os.Stat(dynamicRedoLogPath)
+	return !os.IsNotExist(err) && info.IsDir()
+}
+
 func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	var err error
 	var result []FileEntry
 	var size, totalSize int64
-	var flavor MySQLFlavor
-	var version ServerVersion
-	var features capabilitySet
-
-	// get the flavor and version to deal with any behavioral differences
-	versionStr, err := GetVersionString()
-	if err != nil {
-		return nil, 0, err
-	}
-	flavor, version, err = ParseVersionString(versionStr)
-	if err != nil {
-		return nil, 0, err
-	}
-	features = newCapabilitySet(flavor, version)
 
 	// first add innodb files
 	result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
 	if err != nil {
 		return nil, 0, err
 	}
-	if features.hasDynamicRedoLogCapacity() {
+
+	if hasDynamicRedoLog(cnf) {
 		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
 	} else {
 		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")

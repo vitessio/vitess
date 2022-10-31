@@ -18,21 +18,31 @@ package tabletmanager
 
 import (
 	"context"
-	"flag"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	shardSyncRetryDelay = flag.Duration("shard_sync_retry_delay", 30*time.Second, "delay between retries of updates to keep the tablet and its shard record in sync")
-)
+var shardSyncRetryDelay = 30 * time.Second
+
+func registerShardSyncFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&shardSyncRetryDelay, "shard_sync_retry_delay", shardSyncRetryDelay, "delay between retries of updates to keep the tablet and its shard record in sync")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerShardSyncFlags)
+	servenv.OnParseFor("vttablet", registerShardSyncFlags)
+}
 
 // shardSyncLoop is a loop that tries to keep the tablet state and the
 // shard record in sync.
@@ -99,7 +109,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			if tablet.PrimaryTermStartTime == nil {
 				log.Errorf("PrimaryTermStartTime should not be nil: %v", tablet)
 				// Start retry timer and go back to sleep.
-				retryChan = time.After(*shardSyncRetryDelay)
+				retryChan = time.After(shardSyncRetryDelay)
 				continue
 			}
 			// If we think we're primary, check if we need to update the shard record.
@@ -108,7 +118,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
-				retryChan = time.After(*shardSyncRetryDelay)
+				retryChan = time.After(shardSyncRetryDelay)
 				continue
 			}
 			if shouldDemote {
@@ -118,7 +128,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				if err := tm.endPrimaryTerm(ctx, primaryAlias); err != nil {
 					log.Errorf("Failed to end primary term: %v", err)
 					// Start retry timer and go back to sleep.
-					retryChan = time.After(*shardSyncRetryDelay)
+					retryChan = time.After(shardSyncRetryDelay)
 					continue
 				}
 				// We're not primary anymore, so stop watching the shard record.
@@ -135,7 +145,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			if err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
 				log.Errorf("Failed to start shard watch: %v", err)
 				// Start retry timer and go back to sleep.
-				retryChan = time.After(*shardSyncRetryDelay)
+				retryChan = time.After(shardSyncRetryDelay)
 				continue
 			}
 		default:
@@ -156,7 +166,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 // success (we successfully synchronized), but the returned primaryAlias will be
 // different from the input tablet.Alias.
 func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, PrimaryTermStartTime time.Time) (primaryAlias *topodatapb.TabletAlias, shouldDemote bool, err error) {
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
 	var shardInfo *topo.ShardInfo
@@ -207,10 +217,10 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	primaryAliasStr := topoproto.TabletAliasString(primaryAlias)
 	log.Warningf("Another tablet (%v) has won primary election. Stepping down to %v.", primaryAliasStr, tm.baseTabletType)
 
-	if *mysqlctl.DisableActiveReparents {
+	if mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Infof("Active reparents are disabled; updating tablet state only.")
-		changeTypeCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 		if err := tm.tmState.ChangeTabletType(changeTypeCtx, tm.baseTabletType, DBActionNone); err != nil {
 			return vterrors.Wrapf(err, "failed to change type to %v", tm.baseTabletType)
@@ -224,12 +234,12 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	// no return. Instead, we should leave partial results and retry the rest
 	// later.
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
-	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelDemotePrimary()
 	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */); err != nil {
 		return vterrors.Wrap(err, "failed to demote primary")
 	}
-	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelSetPrimary()
 	log.Infof("Attempting to reparent self to new primary %v.", primaryAliasStr)
 	if primaryAlias == nil {

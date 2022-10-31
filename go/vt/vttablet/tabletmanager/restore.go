@@ -18,10 +18,11 @@ package tabletmanager
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -45,22 +47,51 @@ import (
 // It is only enabled if restore_from_backup is set.
 
 var (
-	restoreFromBackup      = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
-	restoreFromBackupTsStr = flag.String("restore_from_backup_ts", "", "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
-	restoreConcurrency     = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
-	waitForBackupInterval  = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
-
-	// Flags for PITR
-	binlogHost           = flag.String("binlog_host", "", "PITR restore parameter: hostname/IP of binlog server.")
-	binlogPort           = flag.Int("binlog_port", 0, "PITR restore parameter: port of binlog server.")
-	binlogUser           = flag.String("binlog_user", "", "PITR restore parameter: username of binlog server.")
-	binlogPwd            = flag.String("binlog_password", "", "PITR restore parameter: password of binlog server.")
-	timeoutForGTIDLookup = flag.Duration("pitr_gtid_lookup_timeout", 60*time.Second, "PITR restore parameter: timeout for fetching gtid from timestamp.")
-	binlogSslCa          = flag.String("binlog_ssl_ca", "", "PITR restore parameter: Filename containing TLS CA certificate to verify binlog server TLS certificate against.")
-	binlogSslCert        = flag.String("binlog_ssl_cert", "", "PITR restore parameter: Filename containing mTLS client certificate to present to binlog server as authentication.")
-	binlogSslKey         = flag.String("binlog_ssl_key", "", "PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.")
-	binlogSslServerName  = flag.String("binlog_ssl_server_name", "", "PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).")
+	restoreFromBackup      bool
+	restoreFromBackupTsStr string
+	restoreConcurrency     = 4
+	waitForBackupInterval  time.Duration
 )
+
+func registerRestoreFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&restoreFromBackup, "restore_from_backup", restoreFromBackup, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
+	fs.StringVar(&restoreFromBackupTsStr, "restore_from_backup_ts", restoreFromBackupTsStr, "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
+	fs.IntVar(&restoreConcurrency, "restore_concurrency", restoreConcurrency, "(init restore parameter) how many concurrent files to restore at once")
+	fs.DurationVar(&waitForBackupInterval, "wait_for_backup_interval", waitForBackupInterval, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
+}
+
+var (
+	// Flags for PITR
+	binlogHost           string
+	binlogPort           int
+	binlogUser           string
+	binlogPwd            string
+	timeoutForGTIDLookup = 60 * time.Second
+	binlogSslCa          string
+	binlogSslCert        string
+	binlogSslKey         string
+	binlogSslServerName  string
+)
+
+func registerPointInTimeRestoreFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&binlogHost, "binlog_host", binlogHost, "PITR restore parameter: hostname/IP of binlog server.")
+	fs.IntVar(&binlogPort, "binlog_port", binlogPort, "PITR restore parameter: port of binlog server.")
+	fs.StringVar(&binlogUser, "binlog_user", binlogUser, "PITR restore parameter: username of binlog server.")
+	fs.StringVar(&binlogPwd, "binlog_password", binlogPwd, "PITR restore parameter: password of binlog server.")
+	fs.DurationVar(&timeoutForGTIDLookup, "pitr_gtid_lookup_timeout", timeoutForGTIDLookup, "PITR restore parameter: timeout for fetching gtid from timestamp.")
+	fs.StringVar(&binlogSslCa, "binlog_ssl_ca", binlogSslCa, "PITR restore parameter: Filename containing TLS CA certificate to verify binlog server TLS certificate against.")
+	fs.StringVar(&binlogSslCert, "binlog_ssl_cert", binlogSslCert, "PITR restore parameter: Filename containing mTLS client certificate to present to binlog server as authentication.")
+	fs.StringVar(&binlogSslKey, "binlog_ssl_key", binlogSslKey, "PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.")
+	fs.StringVar(&binlogSslServerName, "binlog_ssl_server_name", binlogSslServerName, "PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in --binlog_host).")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerRestoreFlags)
+	servenv.OnParseFor("vttablet", registerRestoreFlags)
+
+	servenv.OnParseFor("vtcombo", registerPointInTimeRestoreFlags)
+	servenv.OnParseFor("vttablet", registerPointInTimeRestoreFlags)
+}
 
 // RestoreData is the main entry point for backup restore.
 // It will either work, fail gracefully, or return
@@ -168,7 +199,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		Cnf:                 tm.Cnf,
 		Mysqld:              tm.MysqlDaemon,
 		Logger:              logger,
-		Concurrency:         *restoreConcurrency,
+		Concurrency:         restoreConcurrency,
 		HookExtraEnv:        tm.hookExtraEnv(),
 		LocalMetadata:       localMetadata,
 		DeleteBeforeRestore: deleteBeforeRestore,
@@ -259,8 +290,8 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 
 	// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore
 	// similar to completely clean start from scratch.
-	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && *initTabletType != "" {
-		initType, err := topoproto.ParseTabletType(*initTabletType)
+	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && initTabletType != "" {
+		initType, err := topoproto.ParseTabletType(initTabletType)
 		if err == nil {
 			originalType = initType
 		}
@@ -274,12 +305,12 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 // currently this works with mysql based database only (as it uses mysql specific queries for restoring)
 func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.Position, restoreTime *vttime.Time) error {
 	// validate the minimal settings necessary for connecting to binlog server
-	if *binlogHost == "" || *binlogPort <= 0 || *binlogUser == "" {
+	if binlogHost == "" || binlogPort <= 0 || binlogUser == "" {
 		log.Warning("invalid binlog server setting, restoring to last available backup.")
 		return nil
 	}
 
-	timeoutCtx, cancelFnc := context.WithTimeout(ctx, *timeoutForGTIDLookup)
+	timeoutCtx, cancelFnc := context.WithTimeout(ctx, timeoutForGTIDLookup)
 	defer cancelFnc()
 
 	afterGTIDPos, beforeGTIDPos, err := tm.getGTIDFromTimestamp(timeoutCtx, pos, restoreTime.Seconds)
@@ -314,18 +345,18 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 // beforePos will be used to check if replication was able to catch up from the binlog server
 func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (afterPos string, beforePos string, err error) {
 	connParams := &mysql.ConnParams{
-		Host:       *binlogHost,
-		Port:       *binlogPort,
-		Uname:      *binlogUser,
-		SslCa:      *binlogSslCa,
-		SslCert:    *binlogSslCert,
-		SslKey:     *binlogSslKey,
-		ServerName: *binlogSslServerName,
+		Host:       binlogHost,
+		Port:       binlogPort,
+		Uname:      binlogUser,
+		SslCa:      binlogSslCa,
+		SslCert:    binlogSslCert,
+		SslKey:     binlogSslKey,
+		ServerName: binlogSslServerName,
 	}
-	if *binlogPwd != "" {
-		connParams.Pass = *binlogPwd
+	if binlogPwd != "" {
+		connParams.Pass = binlogPwd
 	}
-	if *binlogSslCa != "" || *binlogSslCert != "" {
+	if binlogSslCa != "" || binlogSslCert != "" {
 		connParams.EnableSSL()
 	}
 	dbCfgs := &dbconfigs.DBConfigs{
@@ -420,22 +451,22 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 	}
 
-	if *binlogSslCa != "" || *binlogSslCert != "" {
+	if binlogSslCa != "" || binlogSslCert != "" {
 		// We need to use TLS
-		cmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
-		if *binlogSslCa != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
+		cmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", binlogHost, binlogPort, binlogUser, binlogPwd)
+		if binlogSslCa != "" {
+			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", binlogSslCa)
 		}
-		if *binlogSslCert != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
+		if binlogSslCert != "" {
+			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", binlogSslCert)
 		}
-		if *binlogSslKey != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
+		if binlogSslKey != "" {
+			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", binlogSslKey)
 		}
 		cmds = append(cmds, cmd+";")
 	} else {
 		// No TLS
-		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", *binlogHost, *binlogPort, *binlogUser, *binlogPwd))
+		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", binlogHost, binlogPort, binlogUser, binlogPwd))
 	}
 
 	if afterGTIDPos == "" { // when the there is no afterPos, that means need to replicate completely
@@ -453,7 +484,7 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	// We need to wait until replication catches upto the specified afterGTIDPos
 	chGTIDCaughtup := make(chan bool)
 	go func() {
-		timeToWait := time.Now().Add(*timeoutForGTIDLookup)
+		timeToWait := time.Now().Add(timeoutForGTIDLookup)
 		for time.Now().Before(timeToWait) {
 			pos, err := tm.MysqlDaemon.PrimaryPosition()
 			if err != nil {
@@ -519,7 +550,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	// the initial pos before proceeding
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	remoteCtx, remoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer remoteCancel()
 	posStr, err := tmc.PrimaryPosition(remoteCtx, primary.Tablet)
 	if err != nil {

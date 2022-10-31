@@ -2,7 +2,6 @@
 Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
@@ -252,7 +251,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %nonassoc <str> STRING
-%token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
+%token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
+%token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
@@ -313,7 +313,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -491,6 +491,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <subquery> subquery
 %type <derivedTable> derived_table
 %type <colName> column_name after_opt
+%type <expr> column_name_or_offset
 %type <colNames> column_names column_names_opt_paren
 %type <whens> when_expression_list
 %type <when> when_expression
@@ -1664,7 +1665,7 @@ text_literal
   {
    	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
   }
-| underscore_charsets column_name %prec UNARY
+| underscore_charsets column_name_or_offset %prec UNARY
   {
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
   }
@@ -3197,6 +3198,27 @@ alter_statement:
     $$ = &AlterMigration{
       Type: CleanupMigrationType,
       UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING LAUNCH
+  {
+    $$ = &AlterMigration{
+      Type: LaunchMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING LAUNCH VITESS_SHARDS STRING
+  {
+    $$ = &AlterMigration{
+      Type: LaunchMigrationType,
+      UUID: string($4),
+      Shards: string($7),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION LAUNCH ALL
+  {
+    $$ = &AlterMigration{
+      Type: LaunchAllMigrationType,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING COMPLETE
@@ -4750,13 +4772,13 @@ table_factor:
   }
 
 derived_table:
-  openb query_expression closeb
+  query_expression_parens
   {
-    $$ = &DerivedTable{Lateral: false, Select: $2}
+    $$ = &DerivedTable{Lateral: false, Select: $1}
   }
-| LATERAL openb query_expression closeb
+| LATERAL query_expression_parens
   {
-    $$ = &DerivedTable{Lateral: true, Select: $3}
+    $$ = &DerivedTable{Lateral: true, Select: $2}
   }
 
 aliased_table_name:
@@ -5228,7 +5250,7 @@ function_call_keyword
   {
   	$$ = $1
   }
-| column_name
+| column_name_or_offset
   {
   	$$ = $1
   }
@@ -5304,11 +5326,11 @@ function_call_keyword
 {
        $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
 }
-| column_name JSON_EXTRACT_OP text_literal_or_arg
+| column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
   }
-| column_name JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
+| column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
@@ -6532,6 +6554,16 @@ column_name:
     $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
   }
 
+column_name_or_offset:
+  column_name
+  {
+    $$ = $1
+  }
+| OFFSET_ARG
+  {
+    $$ = &Offset{V: convertStringToInt($1)}
+  }
+
 num_val:
   sql_id
   {
@@ -7587,6 +7619,7 @@ non_reserved_keyword:
 | LANGUAGE
 | LAST
 | LAST_INSERT_ID
+| LAUNCH
 | LESS
 | LEVEL
 | LINES

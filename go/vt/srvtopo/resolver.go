@@ -99,6 +99,19 @@ func ResolvedShardsEqual(rss1, rss2 []*ResolvedShard) bool {
 	return true
 }
 
+// WithKeyspace returns a ResolvedShard with a new keyspace keeping other parameters the same
+func (rs *ResolvedShard) WithKeyspace(newKeyspace string) *ResolvedShard {
+	return &ResolvedShard{
+		Target: &querypb.Target{
+			Keyspace:   newKeyspace,
+			Shard:      rs.Target.Shard,
+			TabletType: rs.Target.TabletType,
+			Cell:       rs.Target.Cell,
+		},
+		Gateway: rs.Gateway,
+	}
+}
+
 // GetKeyspaceShards return all the shards in a keyspace. It follows
 // redirection if ServedFrom is set. It is only valid for the local cell.
 // Do not use it to further resolve shards, instead use the Resolve* methods.

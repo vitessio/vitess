@@ -29,17 +29,16 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
+	// register the HTTP handlers for profiling
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
 
 	"github.com/spf13/pflag"
 
@@ -47,7 +46,9 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	// register the proper init and shutdown hooks for logging
@@ -58,16 +59,8 @@ import (
 )
 
 var (
-	// Port is part of the flags used when calling RegisterDefaultFlags.
-	Port *int
-
-	// Flags to alter the behavior of the library.
-	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "keep running at least this long after SIGTERM before stopping")
-	onTermTimeout  = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
-	onCloseTimeout = flag.Duration("onclose_timeout", time.Nanosecond, "wait no more than this for OnClose handlers before stopping")
-	_              = flag.Int("mem-profile-rate", 512*1024, "deprecated: use '-pprof=mem' instead")
-	_              = flag.Int("mutex-profile-fraction", 0, "deprecated: use '-pprof=mutex' instead")
-	catchSigpipe   = flag.Bool("catch-sigpipe", false, "catch and ignore SIGPIPE on stdout and stderr if specified")
+	// port is part of the flags used when calling RegisterDefaultFlags.
+	port int
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -82,6 +75,32 @@ var (
 	ListeningURL url.URL
 )
 
+// Flags specific to Init, Run, and RunDefault functions.
+var (
+	lameduckPeriod = 50 * time.Millisecond
+	onTermTimeout  = 10 * time.Second
+	onCloseTimeout = time.Nanosecond
+	catchSigpipe   bool
+	maxStackSize   = 64 * 1024 * 1024
+)
+
+// RegisterFlags installs the flags used by Init, Run, and RunDefault.
+//
+// This must be called before servenv.ParseFlags if using any of those
+// functions.
+func RegisterFlags() {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.DurationVar(&lameduckPeriod, "lameduck-period", lameduckPeriod, "keep running at least this long after SIGTERM before stopping")
+		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
+		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
+		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
+		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
+
+		// pid_file.go
+		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+	})
+}
+
 // Init is the first phase of the server startup.
 func Init() {
 	mu.Lock()
@@ -90,7 +109,7 @@ func Init() {
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr
 	// See https://golang.org/pkg/os/signal/#hdr-SIGPIPE
-	if *catchSigpipe {
+	if catchSigpipe {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGPIPE)
 		go func() {
@@ -124,6 +143,11 @@ func Init() {
 	}
 	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))
+
+	// Limit the stack size. We don't need huge stacks and smaller limits mean
+	// any infinite recursion fires earlier and on low memory systems avoids
+	// out of memory issues in favor of a stack overflow error.
+	debug.SetMaxStack(maxStackSize)
 
 	onInitHooks.Fire()
 }
@@ -225,12 +249,19 @@ func FireRunHooks() {
 // listening to a given port for standard connections.
 // If calling this, then call RunDefault()
 func RegisterDefaultFlags() {
-	Port = flag.Int("port", 0, "port for the server")
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.IntVar(&port, "port", port, "port for the server")
+	})
+}
+
+// Port returns the value of the `--port` flag.
+func Port() int {
+	return port
 }
 
 // RunDefault calls Run() with the parameters from the flags.
 func RunDefault() {
-	Run(*Port)
+	Run(port)
 }
 
 var (
@@ -241,7 +272,7 @@ var (
 	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
 )
 
-// OnParse registers a callback function to register flags on the flagset that
+// OnParse registers a callback function to register flags on the flagset that are
 // used by any caller of servenv.Parse or servenv.ParseWithArgs.
 func OnParse(f func(fs *pflag.FlagSet)) {
 	flagHooksM.Lock()
@@ -282,35 +313,40 @@ func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
-	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
-	for _, hook := range getFlagHooksFor(cmd) {
-		hook(fs)
-	}
+	fs := GetFlagSetFor(cmd)
 
 	_flag.Parse(fs)
 
-	if *Version {
+	if version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
 	args := fs.Args()
 	if len(args) > 0 {
-		flag.Usage()
+		_flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 }
 
-// ParseFlagsWithArgs initializes flags and returns the positional arguments
-func ParseFlagsWithArgs(cmd string) []string {
+// GetFlagSetFor returns the flag set for a given command.
+// This has to exported for the Vitess-operator to use
+func GetFlagSetFor(cmd string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
 	for _, hook := range getFlagHooksFor(cmd) {
 		hook(fs)
 	}
 
+	return fs
+}
+
+// ParseFlagsWithArgs initializes flags and returns the positional arguments
+func ParseFlagsWithArgs(cmd string) []string {
+	fs := GetFlagSetFor(cmd)
+
 	_flag.Parse(fs)
 
-	if *Version {
+	if version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
@@ -323,10 +359,11 @@ func ParseFlagsWithArgs(cmd string) []string {
 	return args
 }
 
+// Flag installations for packages that servenv imports. We need to register
+// here rather than in those packages (which is what we would normally do)
+// because that would create a dependency cycle.
 func init() {
-	// These are the binaries that call trace.StartTracing. We need to register
-	// here because package trace cannot import package servenv without creating
-	// a dependency cycle.
+	// These are the binaries that call trace.StartTracing.
 	for _, cmd := range []string{
 		"vtadmin",
 		"vtclient",
@@ -334,10 +371,61 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vttablet",
 	} {
 		OnParseFor(cmd, trace.RegisterFlags)
+	}
+
+	// These are the binaries that make gRPC calls.
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctlclient",
+		"vtctld",
+		"vtgate",
+		"vtgateclienttest",
+		"vtgr",
+		"vttablet",
+		"vttestserver",
+	} {
+		OnParseFor(cmd, grpccommon.RegisterFlags)
+	}
+
+	// These are the binaries that export stats
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctld",
+		"vtgate",
+		"vtgr",
+		"vttablet",
+		"vtorc",
+	} {
+		OnParseFor(cmd, stats.RegisterFlags)
+	}
+
+	// Flags in package log are installed for all binaries.
+	OnParse(log.RegisterFlags)
+	// Flags in package logutil are installed for all binaries.
+	OnParse(logutil.RegisterFlags)
+}
+
+func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
+	topoBinaries := []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctld",
+		"vtgate",
+		"vtgr",
+		"vttablet",
+		"vttestserver",
+		"zk",
+		"vtorc",
+	}
+	for _, cmd := range topoBinaries {
+		OnParseFor(cmd, registerFlags)
 	}
 }

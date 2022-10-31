@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/env"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -210,11 +208,6 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if charset == "" {
 		charset = DefaultCharset
 	}
-	verStr, err := env.CheckPlannerVersionFlag(&args.PlannerVersion, &args.PlannerVersionDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"--db_charset", charset,
@@ -229,7 +222,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
-		"--planner-version", verStr,
+		"--planner-version", args.PlannerVersion,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
@@ -250,8 +243,8 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.TabletHostName != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
 	}
-	if *servenv.GRPCAuth == "mtls" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", *servenv.GRPCAuth, "--grpc_key", *servenv.GRPCKey, "--grpc_cert", *servenv.GRPCCert, "--grpc_ca", *servenv.GRPCCA, "--grpc_auth_mtls_allowed_substrings", *servenv.ClientCertSubstrings}...)
+	if servenv.GRPCAuth() == "mtls" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", servenv.GRPCKey(), "--grpc_cert", servenv.GRPCCert(), "--grpc_ca", servenv.GRPCCertificateAuthority(), "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.InitWorkflowManager {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--workflow_manager_init"}...)
@@ -259,8 +252,8 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
-	if *servenv.MySQLServerVersion != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", *servenv.MySQLServerVersion)
+	if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", mySQLVersion)
 	}
 
 	if socket != "" {

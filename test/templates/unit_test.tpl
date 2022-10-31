@@ -6,9 +6,16 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
+    - name: Skip CI
+      run: |
+        if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
@@ -21,7 +28,7 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -40,13 +47,13 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/**'
+            - '.github/workflows/{{.FileName}}'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: 1.18.4
+        go-version: 1.18.7
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -62,15 +69,6 @@ jobs:
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
 
-        {{if (eq .Platform "mysql57")}}
-
-        # mysql57
-        sudo apt-get install -y mysql-server mysql-client
-
-        {{else}}
-
-        # !mysql57
-
         # Uninstall any previously installed MySQL first
         sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
@@ -79,6 +77,22 @@ jobs:
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
+
+        {{if (eq .Platform "mysql57")}}
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+
+        # mysql57
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
+        # Bionic packages are still compatible for Focal since there's no MySQL 5.7
+        # packages for Focal.
+        echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7*
+
+        {{end}}
 
         {{if (eq .Platform "mysql80")}}
         # Get key to latest MySQL repo
@@ -104,9 +118,7 @@ jobs:
 
         {{end}}
 
-        {{end}} {{/*outer if*/}}
-
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/

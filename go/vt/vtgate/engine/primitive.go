@@ -141,6 +141,7 @@ type (
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
+		SetConsolidator(querypb.ExecuteOptions_Consolidator)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)
@@ -170,8 +171,26 @@ type (
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
 
+		// VtExplainLogging enables logging of all interactions to the tablets so
+		// EXPLAIN `format=vtexplain` can report what's being done
 		VtExplainLogging()
+
+		// GetVTExplainLogs retrieves the vttablet interaction logs
 		GetVTExplainLogs() []ExecuteEntry
+
+		// SetCommitOrder sets the commit order for the shard session in respect of the type of vindex lookup.
+		// This is used to select the right shard session to perform the vindex lookup query.
+		SetCommitOrder(co vtgatepb.CommitOrder)
+
+		// GetQueryTimeout gets the query timeout and takes in the query timeout from comments
+		GetQueryTimeout(queryTimeoutFromComment int) int
+
+		// SetQueryTimeout sets the query timeout
+		SetQueryTimeout(queryTimeout int64)
+
+		// InTransaction returns true if the session has already opened transaction or
+		// will start a transaction on the query execution.
+		InTransaction() bool
 	}
 
 	// Match is used to check if a Primitive matches

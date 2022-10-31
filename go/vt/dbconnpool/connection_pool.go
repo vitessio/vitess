@@ -107,7 +107,7 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil, refreshCheck, cp.resolutionFrequency)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, nil, refreshCheck, cp.resolutionFrequency)
 }
 
 // connect is used by the resource pool to create a new Resource.
@@ -144,7 +144,7 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 	if p == nil {
 		return nil, ErrConnPoolClosed
 	}
-	r, err := p.Get(ctx)
+	r, err := p.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

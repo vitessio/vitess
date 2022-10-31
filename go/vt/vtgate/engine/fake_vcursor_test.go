@@ -50,6 +50,15 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) InTransaction() bool {
+	return false
+}
+
+func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (t *noopVCursor) StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(ctx, t, bindVars, wantfields, callback)
 }
@@ -219,6 +228,13 @@ func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
+}
+
+func (t *noopVCursor) GetQueryTimeout(queryTimeoutFromComments int) int {
+	return queryTimeoutFromComments
+}
+
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {
 	panic("implement me")
 }
@@ -236,6 +252,10 @@ func (t *noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 }
 
 func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetConsolidator(querypb.ExecuteOptions_Consolidator) {
 	panic("implement me")
 }
 

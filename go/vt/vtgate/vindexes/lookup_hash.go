@@ -30,10 +30,12 @@ import (
 )
 
 var (
-	_ SingleColumn = (*LookupHash)(nil)
-	_ Lookup       = (*LookupHash)(nil)
-	_ SingleColumn = (*LookupHashUnique)(nil)
-	_ Lookup       = (*LookupHashUnique)(nil)
+	_ SingleColumn   = (*LookupHash)(nil)
+	_ Lookup         = (*LookupHash)(nil)
+	_ LookupPlanable = (*LookupHash)(nil)
+	_ SingleColumn   = (*LookupHashUnique)(nil)
+	_ Lookup         = (*LookupHashUnique)(nil)
+	_ LookupPlanable = (*LookupHashUnique)(nil)
 )
 
 func init() {
@@ -46,7 +48,7 @@ func init() {
 // LookupHash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // NonUnique and a Lookup.
-// Warning: This Vindex is being depcreated in favor of Lookup
+// Warning: This Vindex is being deprecated in favor of Lookup
 type LookupHash struct {
 	name      string
 	writeOnly bool
@@ -126,6 +128,19 @@ func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.V
 	if err != nil {
 		return nil, err
 	}
+	return lh.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (lh *LookupHash) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lh.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			out = append(out, key.DestinationNone{})
@@ -144,6 +159,21 @@ func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.V
 		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
 	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lh *LookupHash) Query() (selQuery string, arguments []string) {
+	return lh.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lh *LookupHash) AllowBatch() bool {
+	return lh.lkp.BatchLookup
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lh *LookupHash) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
 }
 
 // Verify returns true if ids maps to ksids.
@@ -220,6 +250,8 @@ type LookupHashUnique struct {
 	lkp       lookupInternal
 }
 
+var _ LookupPlanable = (*LookupHashUnique)(nil)
+
 // NewLookupHashUnique creates a LookupHashUnique vindex.
 // The supplied map has the following required fields:
 //
@@ -272,8 +304,8 @@ func (lhu *LookupHashUnique) NeedsVCursor() bool {
 
 // Map can map ids to key.Destination objects.
 func (lhu *LookupHashUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
 	if lhu.writeOnly {
+		out := make([]key.Destination, 0, len(ids))
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
@@ -283,6 +315,17 @@ func (lhu *LookupHashUnique) Map(ctx context.Context, vcursor VCursor, ids []sql
 	results, err := lhu.lkp.Lookup(ctx, vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
+	}
+	return lhu.MapResult(ids, results)
+}
+
+func (lhu *LookupHashUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lhu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
 	}
 	for i, result := range results {
 		switch len(result.Rows) {
@@ -354,4 +397,17 @@ func (lhu *LookupHashUnique) MarshalJSON() ([]byte, error) {
 // IsBackfilling implements the LookupBackfill interface
 func (lhu *LookupHashUnique) IsBackfilling() bool {
 	return lhu.writeOnly
+}
+
+func (lhu *LookupHashUnique) AllowBatch() bool {
+	return lhu.lkp.BatchLookup
+}
+
+func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
+	return lhu.lkp.query()
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lhu *LookupHashUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
 }

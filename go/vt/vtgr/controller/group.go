@@ -26,9 +26,9 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtgr/inst"
 	"vitess.io/vitess/go/vt/vtgr/log"
 )
 

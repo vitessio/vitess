@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"hash"
 	"hash/crc32"
@@ -32,6 +31,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,9 +58,9 @@ var (
 	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
-	BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
+	BuiltinBackupMysqldTimeout = 10 * time.Minute
 
-	builtinBackupProgress = flag.Duration("builtinbackup_progress", 5*time.Second, "how often to send progress updates when backing up large files")
+	builtinBackupProgress = 5 * time.Second
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -110,6 +112,17 @@ type FileEntry struct {
 	Hash string
 }
 
+func init() {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
+		servenv.OnParseFor(cmd, registerBuiltinBackupEngineFlags)
+	}
+}
+
+func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&BuiltinBackupMysqldTimeout, "builtinbackup_mysqld_timeout", BuiltinBackupMysqldTimeout, "how long to wait for mysqld to shutdown at the start of the backup.")
+	fs.DurationVar(&builtinBackupProgress, "builtinbackup_progress", builtinBackupProgress, "how often to send progress updates when backing up large files.")
+}
+
 func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	// find the root to use
 	var root string
@@ -147,9 +160,10 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
-
-	params.Logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
-
+	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
+	if backupStorageHook != "" {
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
+	}
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
@@ -162,7 +176,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	replicaStatus, err := params.Mysqld.ReplicationStatus()
 	switch err {
 	case nil:
-		replicaStartRequired = replicaStatus.Healthy() && !*DisableActiveReparents
+		replicaStartRequired = replicaStatus.Healthy() && !DisableActiveReparents
 	case mysql.ErrNotReplica:
 		// keep going if we're the primary, might be a degenerate case
 		sourceIsPrimary = true
@@ -202,7 +216,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	shutdownCtx, cancel := context.WithTimeout(ctx, *BuiltinBackupMysqldTimeout)
+	shutdownCtx, cancel := context.WithTimeout(ctx, BuiltinBackupMysqldTimeout)
 	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
 	defer cancel()
 	if err != nil {
@@ -256,7 +270,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		// the saved replicationPosition before proceeding
 		tmc := tmclient.NewTabletManagerClient()
 		defer tmc.Close()
-		remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		remoteCtx, remoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer remoteCancel()
 
 		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
@@ -287,7 +301,6 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 // backupFiles finds the list of files to backup, and creates the backup.
 func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
-
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
 	fes, _, err := findFilesToBackup(params.Cnf)
@@ -355,9 +368,9 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 
 		// Builtin-specific fields
 		FileEntries:       fes,
-		TransformHook:     *backupStorageHook,
-		SkipCompress:      !*backupStorageCompress,
-		CompressionEngine: *CompressionEngineName,
+		TransformHook:     backupStorageHook,
+		SkipCompress:      !backupStorageCompress,
+		CompressionEngine: CompressionEngineName,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -486,30 +499,30 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	bw := newBackupWriter(fe.Name, fi.Size(), wc)
 	br := newBackupReader(fe.Name, fi.Size(), source)
-	go br.ReportProgress(*builtinBackupProgress, params.Logger)
+	go br.ReportProgress(builtinBackupProgress, params.Logger)
 
 	var writer io.Writer = bw
 
 	// Create the external write pipe, if any.
 	var pipe io.WriteCloser
 	var wait hook.WaitFunc
-	if *backupStorageHook != "" {
-		h := hook.NewHook(*backupStorageHook, []string{"-operation", "write"})
+	if backupStorageHook != "" {
+		h := hook.NewHook(backupStorageHook, []string{"-operation", "write"})
 		h.ExtraEnv = params.HookExtraEnv
 		pipe, wait, _, err = h.ExecuteAsWritePipe(writer)
 		if err != nil {
-			return vterrors.Wrapf(err, "'%v' hook returned error", *backupStorageHook)
+			return vterrors.Wrapf(err, "'%v' hook returned error", backupStorageHook)
 		}
 		writer = pipe
 	}
 
 	// Create the gzip compression pipe, if necessary.
 	var compressor io.WriteCloser
-	if *backupStorageCompress {
-		if *ExternalCompressorCmd != "" {
-			compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
+	if backupStorageCompress {
+		if ExternalCompressorCmd != "" {
+			compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
 		} else {
-			compressor, err = newBuiltinCompressor(*CompressionEngineName, writer, params.Logger)
+			compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
 		}
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
@@ -538,10 +551,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		}
 		stderr, err := wait()
 		if stderr != "" {
-			params.Logger.Infof("'%v' hook returned stderr: %v", *backupStorageHook, stderr)
+			params.Logger.Infof("'%v' hook returned stderr: %v", backupStorageHook, stderr)
 		}
 		if err != nil {
-			return vterrors.Wrapf(err, "'%v' returned error", *backupStorageHook)
+			return vterrors.Wrapf(err, "'%v' returned error", backupStorageHook)
 		}
 	}
 
@@ -578,6 +591,9 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
 		return nil, err
 	}
+	if bm.TransformHook != "" {
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
+	}
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
@@ -593,6 +609,16 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
 func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
+	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
+	if bm.CompressionEngine == PargzipCompressor {
+		params.Logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		bm.CompressionEngine = PgzipCompressor
+		defer func() {
+			bm.CompressionEngine = PargzipCompressor
+		}()
+	}
+
 	fes := bm.FileEntries
 	sema := sync2.NewSemaphore(params.Concurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
@@ -649,7 +675,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	bp := newBackupReader(name, 0, source)
-	go bp.ReportProgress(*builtinBackupProgress, params.Logger)
+	go bp.ReportProgress(builtinBackupProgress, params.Logger)
 
 	dst := bufio.NewWriterSize(dstFile, writerBufferSize)
 	var reader io.Reader = bp
@@ -673,9 +699,9 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
 		}
-		if *ExternalDecompressorCmd != "" {
+		if ExternalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
-				deCompressionEngine = *ExternalDecompressorCmd
+				deCompressionEngine = ExternalDecompressorCmd
 				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
 			} else {
 				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)

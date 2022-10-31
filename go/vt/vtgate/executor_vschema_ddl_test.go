@@ -132,9 +132,9 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 }
 
 func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
@@ -160,9 +160,9 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestPlanExecutorCreateVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	ks := "TestExecutor"
@@ -202,9 +202,9 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestPlanExecutorDropVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	ks := "TestExecutor"
@@ -271,9 +271,9 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 }
 
 func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := KsTestUnsharded
@@ -328,9 +328,9 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 }
 
 func TestExecutorAddSequenceDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	ks := KsTestUnsharded
@@ -388,9 +388,9 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv() //nolint
 	ks := "TestExecutor"
@@ -639,7 +639,7 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
 	if err != nil {
@@ -652,7 +652,7 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// test when only one user is enabled
-	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
+	vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
 	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
@@ -664,5 +664,5 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// restore the disallowed state
-	*vschemaacl.AuthorizedDDLUsers = ""
+	vschemaacl.AuthorizedDDLUsers = ""
 }

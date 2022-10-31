@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -200,13 +199,10 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 /* tablet streams */
 
 func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
-	var query string
-
-	switch constraint {
-	case "":
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
-	default:
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s and %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()), constraint)
+	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name=%s and workflow != %s",
+		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
+	if constraint != "" {
+		query += fmt.Sprintf(" and %s", constraint)
 	}
 
 	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, ti.Tablet, query)
@@ -217,22 +213,33 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 	qr := sqltypes.Proto3ToResult(p3qr)
 	tabletStreams := make([]*VReplicationStream, 0, len(qr.Rows))
 
-	for _, row := range qr.Rows {
-		id, err := evalengine.ToInt64(row[0])
+	for _, row := range qr.Named().Rows {
+		id, err := row["id"].ToInt64()
 		if err != nil {
 			return nil, err
 		}
 
-		workflowName := row[1].ToString()
+		workflowName := row["workflow"].ToString()
 		switch workflowName {
 		case "":
-			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
+			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s, stream: %d",
+				ti.Keyspace, ti.Shard, id)
 		case sm.ts.WorkflowName():
-			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
+			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d",
+				ti.Keyspace, ti.Shard, id)
+		}
+
+		workflowType, err := row["workflow_type"].ToInt64()
+		if err != nil {
+			return nil, err
+		}
+		workflowSubType, err := row["workflow_sub_type"].ToInt64()
+		if err != nil {
+			return nil, err
 		}
 
 		var bls binlogdatapb.BinlogSource
-		rowBytes, err := row[2].ToBytes()
+		rowBytes, err := row["source"].ToBytes()
 		if err != nil {
 			return nil, err
 		}
@@ -250,16 +257,18 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			continue
 		}
 
-		pos, err := mysql.DecodePosition(row[3].ToString())
+		pos, err := mysql.DecodePosition(row["pos"].ToString())
 		if err != nil {
 			return nil, err
 		}
 
 		tabletStreams = append(tabletStreams, &VReplicationStream{
-			ID:           uint32(id),
-			Workflow:     workflowName,
-			BinlogSource: &bls,
-			Position:     pos,
+			ID:              uint32(id),
+			Workflow:        workflowName,
+			BinlogSource:    &bls,
+			Position:        pos,
+			WorkflowType:    binlogdatapb.VReplicationWorkflowType(workflowType),
+			WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
 		})
 	}
 	return tabletStreams, nil
@@ -306,7 +315,7 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			return nil
 		}
 
-		query := fmt.Sprintf("select vrepl_id from _vt.copy_state where vrepl_id in %s", VReplicationStreams(tabletStreams).Values())
+		query := fmt.Sprintf("select distinct vrepl_id from _vt.copy_state where vrepl_id in %s", VReplicationStreams(tabletStreams).Values())
 		p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		switch {
 		case err != nil:
@@ -564,7 +573,8 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				rule.Filter = buf.String()
 			}
 
-			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "")
+			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "",
+				int64(vrs.WorkflowType), int64(vrs.WorkflowSubType))
 		}
 
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())

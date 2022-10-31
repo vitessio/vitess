@@ -59,11 +59,11 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	grpcport := int32(34)
 
 	// Hostname should be used as is.
-	*tabletHostname = "foo"
-	*initKeyspace = "test_keyspace"
-	*initShard = "0"
-	*initTabletType = "replica"
-	*initDbNameOverride = "aa"
+	tabletHostname = "foo"
+	initKeyspace = "test_keyspace"
+	initShard = "0"
+	initTabletType = "replica"
+	initDbNameOverride = "aa"
 	wantTablet := &topodatapb.Tablet{
 		Alias:    alias,
 		Hostname: "foo",
@@ -86,14 +86,14 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
-	*tabletHostname = ""
+	tabletHostname = ""
 	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, "", gotTablet.Hostname)
 
 	// Canonicalize shard name and compute keyrange.
-	*tabletHostname = "foo"
-	*initShard = "-C0"
+	tabletHostname = "foo"
+	initShard = "-C0"
 	wantTablet.Shard = "-c0"
 	wantTablet.KeyRange = &topodatapb.KeyRange{
 		Start: []byte(""),
@@ -107,26 +107,26 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	assert.Equal(t, wantTablet, gotTablet)
 
 	// Invalid inputs.
-	*initKeyspace = ""
-	*initShard = "0"
+	initKeyspace = ""
+	initShard = "0"
 	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
-	*initKeyspace = "test_keyspace"
-	*initShard = ""
+	initKeyspace = "test_keyspace"
+	initShard = ""
 	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
-	*initShard = "x-y"
+	initShard = "x-y"
 	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "cannot validate shard name")
 
-	*initShard = "0"
-	*initTabletType = "bad"
+	initShard = "0"
+	initTabletType = "bad"
 	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
-	*initTabletType = "primary"
+	initTabletType = "primary"
 	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
 }
@@ -140,13 +140,13 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 	grpcport := int32(34)
 
 	// Hostname should be used as is.
-	*tabletHostname = "foo"
-	*initKeyspace = "test_keyspace"
-	*initShard = "0"
-	*initTabletType = "replica"
-	*initDbNameOverride = "aa"
-	*skipBuildInfoTags = ""
-	defer func() { *skipBuildInfoTags = "/.*/" }()
+	tabletHostname = "foo"
+	initKeyspace = "test_keyspace"
+	initShard = "0"
+	initTabletType = "replica"
+	initDbNameOverride = "aa"
+	skipBuildInfoTags = ""
+	defer func() { skipBuildInfoTags = "/.*/" }()
 	wantTablet := &topodatapb.Tablet{
 		Alias:    alias,
 		Hostname: "foo",

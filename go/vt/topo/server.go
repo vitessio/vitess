@@ -44,15 +44,15 @@ package topo
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"sync"
 
-	"vitess.io/vitess/go/vt/proto/topodata"
-
-	"vitess.io/vitess/go/vt/vterrors"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -67,29 +67,28 @@ const (
 
 // Filenames for all object types.
 const (
-	CellInfoFile         = "CellInfo"
-	CellsAliasFile       = "CellsAlias"
-	KeyspaceFile         = "Keyspace"
-	ShardFile            = "Shard"
-	VSchemaFile          = "VSchema"
-	ShardReplicationFile = "ShardReplication"
-	TabletFile           = "Tablet"
-	SrvVSchemaFile       = "SrvVSchema"
-	SrvKeyspaceFile      = "SrvKeyspace"
-	RoutingRulesFile     = "RoutingRules"
-	ExternalClustersFile = "ExternalClusters"
+	CellInfoFile          = "CellInfo"
+	CellsAliasFile        = "CellsAlias"
+	KeyspaceFile          = "Keyspace"
+	ShardFile             = "Shard"
+	VSchemaFile           = "VSchema"
+	ShardReplicationFile  = "ShardReplication"
+	TabletFile            = "Tablet"
+	SrvVSchemaFile        = "SrvVSchema"
+	SrvKeyspaceFile       = "SrvKeyspace"
+	RoutingRulesFile      = "RoutingRules"
+	ExternalClustersFile  = "ExternalClusters"
+	ShardRoutingRulesFile = "ShardRoutingRules"
 )
 
 // Path for all object types.
 const (
-	CellsPath        = "cells"
-	CellsAliasesPath = "cells_aliases"
-	KeyspacesPath    = "keyspaces"
-	ShardsPath       = "shards"
-	TabletsPath      = "tablets"
-	MetadataPath     = "metadata"
-
-	ExternalClusterMySQL  = "mysql"
+	CellsPath             = "cells"
+	CellsAliasesPath      = "cells_aliases"
+	KeyspacesPath         = "keyspaces"
+	ShardsPath            = "shards"
+	TabletsPath           = "tablets"
+	MetadataPath          = "metadata"
 	ExternalClusterVitess = "vitess"
 )
 
@@ -157,15 +156,15 @@ type cellsToAliasesMap struct {
 
 var (
 	// topoImplementation is the flag for which implementation to use.
-	topoImplementation = flag.String("topo_implementation", "", "the topology implementation to use")
+	topoImplementation string
 
 	// topoGlobalServerAddress is the address of the global topology
 	// server.
-	topoGlobalServerAddress = flag.String("topo_global_server_address", "", "the address of the global topology server")
+	topoGlobalServerAddress string
 
 	// topoGlobalRoot is the root path to use for the global topology
 	// server.
-	topoGlobalRoot = flag.String("topo_global_root", "", "the path of the global topology data in the global topology server")
+	topoGlobalRoot string
 
 	// factories has the factories for the Conn objects.
 	factories = make(map[string]Factory)
@@ -173,7 +172,22 @@ var (
 	cellsAliases = cellsToAliasesMap{
 		cellsToAliases: make(map[string]string),
 	}
+
+	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtexplain", "vtgate",
+		"vtgr", "vtorc", "vtbackup"}
 )
+
+func init() {
+	for _, cmd := range FlagBinaries {
+		servenv.OnParseFor(cmd, registerTopoFlags)
+	}
+}
+
+func registerTopoFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&topoImplementation, "topo_implementation", topoImplementation, "the topology implementation to use")
+	fs.StringVar(&topoGlobalServerAddress, "topo_global_server_address", topoGlobalServerAddress, "the address of the global topology server")
+	fs.StringVar(&topoGlobalRoot, "topo_global_root", topoGlobalRoot, "the path of the global topology data in the global topology server")
+}
 
 // RegisterFactory registers a Factory for an implementation for a Server.
 // If an implementation with that name already exists, it log.Fatals out.
@@ -226,15 +240,15 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // Open returns a Server using the command line parameter flags
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
-	if *topoGlobalServerAddress == "" && *topoImplementation != "k8s" {
+	if topoGlobalServerAddress == "" && topoImplementation != "k8s" {
 		log.Exitf("topo_global_server_address must be configured")
 	}
-	if *topoGlobalRoot == "" {
+	if topoGlobalRoot == "" {
 		log.Exit("topo_global_root must be non-empty")
 	}
-	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
+	ts, err := OpenServer(topoImplementation, topoGlobalServerAddress, topoGlobalRoot)
 	if err != nil {
-		log.Exitf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
+		log.Exitf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err)
 	}
 	return ts
 }

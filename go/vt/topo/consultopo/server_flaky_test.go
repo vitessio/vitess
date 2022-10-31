@@ -125,7 +125,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 
 func TestConsulTopo(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
+	watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "")
@@ -169,9 +169,9 @@ func TestConsulTopo(t *testing.T) {
 
 func TestConsulTopoWithChecks(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
-	*consulLockSessionChecks = "serfHealth"
-	*consulLockSessionTTL = "15s"
+	watchPollDuration = 100 * time.Millisecond
+	consulLockSessionChecks = "serfHealth"
+	consulLockSessionTTL = "15s"
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "")
@@ -215,7 +215,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 func TestConsulTopoWithAuth(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
+	watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "123456")
@@ -240,7 +240,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	*consulAuthClientStaticFile = tmpFile.Name()
+	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
@@ -272,7 +272,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
-	*watchPollDuration = 100 * time.Millisecond
+	watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "123456")
@@ -289,7 +289,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	*consulAuthClientStaticFile = tmpFile.Name()
+	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {

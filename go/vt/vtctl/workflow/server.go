@@ -415,7 +415,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
 		shardStream, ok := workflow.ShardStreams[shardStreamKey]
 		if !ok {
-			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 
 			si, err := s.ts.GetShard(ctx, req.Keyspace, tablet.Shard)
@@ -722,7 +722,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	span.Annotate("tablet_alias", tablet.AliasString())
 	span.Annotate("vrepl_id", id)
 
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
+	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)", id, id)
 	qr, err := s.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err

@@ -93,7 +93,7 @@ func (c *cloneGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSP
 			// if n == nil { return nil }
 			ifNilReturnNil("n"),
 			//	res := make(Bytes, len(n))
-			jen.Id("res").Op(":=").Id("make").Call(jen.Id(typeString), jen.Lit(0), jen.Id("len").Call(jen.Id("n"))),
+			jen.Id("res").Op(":=").Id("make").Call(jen.Id(typeString), jen.Id("len").Call(jen.Id("n"))),
 			c.copySliceElement(t, slice.Elem(), spi),
 			//	return res
 			jen.Return(jen.Id("res")),
@@ -111,13 +111,13 @@ func (c *cloneGen) copySliceElement(t types.Type, elType types.Type, spi generat
 		return jen.Id("copy").Call(jen.Id("res"), jen.Id("n"))
 	}
 
-	//for _, x := range n {
-	//  res = append(res, CloneAST(x))
+	//for i := range n {
+	//  res[i] = CloneAST(x)
 	//}
 	spi.addType(elType)
 
-	return jen.For(jen.List(jen.Op("_"), jen.Id("x"))).Op(":=").Range().Id("n").Block(
-		jen.Id("res").Op("=").Id("append").Call(jen.Id("res"), c.readValueOfType(elType, jen.Id("x"), spi)),
+	return jen.For(jen.List(jen.Id("i"), jen.Id("x"))).Op(":=").Range().Id("n").Block(
+		jen.Id("res").Index(jen.Id("i")).Op("=").Add(c.readValueOfType(elType, jen.Id("x"), spi)),
 	)
 }
 

@@ -28,10 +28,12 @@ import (
 )
 
 var (
-	_ SingleColumn = (*LookupUnique)(nil)
-	_ Lookup       = (*LookupUnique)(nil)
-	_ SingleColumn = (*LookupNonUnique)(nil)
-	_ Lookup       = (*LookupNonUnique)(nil)
+	_ SingleColumn   = (*LookupUnique)(nil)
+	_ Lookup         = (*LookupUnique)(nil)
+	_ LookupPlanable = (*LookupUnique)(nil)
+	_ SingleColumn   = (*LookupNonUnique)(nil)
+	_ Lookup         = (*LookupNonUnique)(nil)
+	_ LookupPlanable = (*LookupNonUnique)(nil)
 )
 
 func init() {
@@ -44,7 +46,16 @@ func init() {
 type LookupNonUnique struct {
 	name      string
 	writeOnly bool
+	noVerify  bool
 	lkp       lookupInternal
+}
+
+func (ln *LookupNonUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
+}
+
+func (ln *LookupNonUnique) AllowBatch() bool {
+	return ln.lkp.BatchLookup
 }
 
 // String returns the name of the vindex.
@@ -89,6 +100,19 @@ func (ln *LookupNonUnique) Map(ctx context.Context, vcursor VCursor, ids []sqlty
 	if err != nil {
 		return nil, err
 	}
+
+	return ln.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (ln *LookupNonUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if ln.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			out = append(out, key.DestinationNone{})
@@ -109,7 +133,7 @@ func (ln *LookupNonUnique) Map(ctx context.Context, vcursor VCursor, ids []sqlty
 
 // Verify returns true if ids maps to ksids.
 func (ln *LookupNonUnique) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	if ln.writeOnly {
+	if ln.writeOnly || ln.noVerify {
 		out := make([]bool, len(ids))
 		for i := range ids {
 			out[i] = true
@@ -139,6 +163,11 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ln.lkp)
 }
 
+// Query implements the LookupPlanable interface
+func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
+	return ln.lkp.query()
+}
+
 // NewLookup creates a LookupNonUnique vindex.
 // The supplied map has the following required fields:
 //
@@ -150,6 +179,7 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 //
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//	no_verify: in this mode, Verify will always succeed.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
 
@@ -158,6 +188,11 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 	lookup.writeOnly, err = boolFromMap(m, "write_only")
+	if err != nil {
+		return nil, err
+	}
+
+	lookup.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +221,16 @@ func ksidsToValues(ksids [][]byte) []sqltypes.Value {
 type LookupUnique struct {
 	name      string
 	writeOnly bool
+	noVerify  bool
 	lkp       lookupInternal
+}
+
+func (lu *LookupUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
+}
+
+func (lu *LookupUnique) AllowBatch() bool {
+	return lu.lkp.BatchLookup
 }
 
 // NewLookupUnique creates a LookupUnique vindex.
@@ -208,6 +252,11 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 	lu.writeOnly, err = boolFromMap(m, "write_only")
+	if err != nil {
+		return nil, err
+	}
+
+	lu.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
 		return nil, err
 	}
@@ -241,8 +290,8 @@ func (lu *LookupUnique) NeedsVCursor() bool {
 
 // Map can map ids to key.Destination objects.
 func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
 	if lu.writeOnly {
+		out := make([]key.Destination, 0, len(ids))
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
@@ -252,6 +301,11 @@ func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes
 	if err != nil {
 		return nil, err
 	}
+	return lu.MapResult(ids, results)
+}
+
+func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
 	for i, result := range results {
 		switch len(result.Rows) {
 		case 0:
@@ -271,7 +325,7 @@ func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes
 
 // Verify returns true if ids maps to ksids.
 func (lu *LookupUnique) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	if lu.writeOnly {
+	if lu.writeOnly || lu.noVerify {
 		out := make([]bool, len(ids))
 		for i := range ids {
 			out[i] = true
@@ -304,4 +358,12 @@ func (lu *LookupUnique) MarshalJSON() ([]byte, error) {
 // IsBackfilling implements the LookupBackfill interface
 func (lu *LookupUnique) IsBackfilling() bool {
 	return lu.writeOnly
+}
+
+func (lu *LookupUnique) LookupQuery() (string, error) {
+	return lu.lkp.sel, nil
+}
+
+func (lu *LookupUnique) Query() (string, []string) {
+	return lu.lkp.query()
 }

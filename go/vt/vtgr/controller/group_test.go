@@ -22,8 +22,8 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgr/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtgr/inst"
 
 	"github.com/stretchr/testify/assert"
 )

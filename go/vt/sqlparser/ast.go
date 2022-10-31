@@ -56,12 +56,14 @@ type (
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		GetOrderBy() OrderBy
+		GetLimit() *Limit
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
 		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
+		GetColumns() SelectExprs
 		Commented
 	}
 
@@ -489,6 +491,7 @@ type (
 		UUID   string
 		Expire string
 		Ratio  *Literal
+		Shards string
 	}
 
 	// AlterTable represents a ALTER TABLE statement.

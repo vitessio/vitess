@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"flag"
 	"fmt"
 	"math"
 	"sort"
@@ -51,27 +50,12 @@ var (
 	idleTimeout = 1100 * time.Millisecond
 
 	dbLockRetryDelay = 1 * time.Second
-	relayLogMaxSize  = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
-	relayLogMaxItems = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 
-	copyPhaseDuration   = flag.Duration("vreplication_copy_phase_duration", 1*time.Hour, "Duration for each copy phase loop (before running the next catchup: default 1h)")
-	replicaLagTolerance = flag.Duration("vreplication_replica_lag_tolerance", 1*time.Minute, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
-
-	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
-	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
-	// outages. Keep this high if
-	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
-	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
-	vreplicationHeartbeatUpdateInterval = flag.Int("vreplication_heartbeat_update_interval", 1, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
 	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
 
-	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0x01, "(Bitmask) of experimental features in vreplication to enable")
-
 	vreplicationExperimentalFlagOptimizeInserts int64 = 1
-
-	vreplicationStoreCompressedGTID = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
 )
 
 const (
@@ -114,7 +98,7 @@ type vreplicator struct {
 	originalFKCheckSetting int64
 	originalSQLMode        string
 
-	WorkflowType int64
+	WorkflowType int32
 	WorkflowName string
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
@@ -143,9 +127,9 @@ type vreplicator struct {
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
-	if *vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
+	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("the supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
-			*vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	return &vreplicator{
 		vre:             vre,
@@ -195,7 +179,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	// Manage SQL_MODE in the same way that mysqldump does.
 	// Save the original sql_mode, set it to a permissive mode,
 	// and then reset it back to the original value at the end.
-	resetFunc, err := vr.setSQLMode(ctx)
+	resetFunc, err := vr.setSQLMode(ctx, vr.dbClient)
 	defer resetFunc()
 	if err != nil {
 		return err
@@ -210,7 +194,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		return err
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
-	defer vr.resetFKCheckAfterCopy()
+	defer vr.resetFKCheckAfterCopy(vr.dbClient)
 
 	for {
 		select {
@@ -222,7 +206,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		// in case the functions below leave transactions open.
 		vr.dbClient.Rollback()
 
-		settings, numTablesToCopy, err := vr.readSettings(ctx)
+		settings, numTablesToCopy, err := vr.loadSettings(ctx, vr.dbClient)
 		if err != nil {
 			return err
 		}
@@ -232,7 +216,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		}
 		switch {
 		case numTablesToCopy != 0:
-			if err := vr.clearFKCheck(); err != nil {
+			if err := vr.clearFKCheck(vr.dbClient); err != nil {
 				log.Warningf("Unable to clear FK check %v", err)
 				return err
 			}
@@ -240,7 +224,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
 			}
-			settings, numTablesToCopy, err = vr.readSettings(ctx)
+			settings, numTablesToCopy, err = vr.loadSettings(ctx, vr.dbClient)
 			if err != nil {
 				return err
 			}
@@ -255,7 +239,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 		default:
-			if err := vr.resetFKCheckAfterCopy(); err != nil {
+			if err := vr.resetFKCheckAfterCopy(vr.dbClient); err != nil {
 				log.Warningf("Unable to reset FK check %v", err)
 				return err
 			}
@@ -366,13 +350,23 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	return colInfoMap, nil
 }
 
-func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
-	settings, err = binlogplayer.ReadVRSettings(vr.dbClient, vr.id)
+// Same as readSettings, but stores some of the results on this vr.
+func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
+	settings, numTablesToCopy, err = vr.readSettings(ctx, dbClient)
+	if err == nil {
+		vr.WorkflowType = int32(settings.WorkflowType)
+		vr.WorkflowName = settings.WorkflowName
+	}
+	return settings, numTablesToCopy, err
+}
+
+func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
+	settings, err = binlogplayer.ReadVRSettings(dbClient, vr.id)
 	if err != nil {
 		return settings, numTablesToCopy, fmt.Errorf("error reading VReplication settings: %v", err)
 	}
 
-	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
+	query := fmt.Sprintf("select count(distinct table_name) from _vt.copy_state where vrepl_id=%d", vr.id)
 	qr, err := withDDL.Exec(ctx, query, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch)
 	if err != nil {
 		return settings, numTablesToCopy, err
@@ -384,8 +378,6 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
-	vr.WorkflowType = settings.WorkflowType
-	vr.WorkflowName = settings.WorkflowName
 	return settings, numTablesToCopy, nil
 }
 
@@ -455,16 +447,16 @@ func (vr *vreplicator) getSettingFKCheck() error {
 	return nil
 }
 
-func (vr *vreplicator) resetFKCheckAfterCopy() error {
-	_, err := vr.dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
+func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
+	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
 	return err
 }
 
-func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
+func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (func(), error) {
 	resetFunc := func() {}
 	// First save the original SQL mode if we have not already done so
 	if vr.originalSQLMode == "" {
-		res, err := vr.dbClient.Execute(getSQLModeQuery)
+		res, err := dbClient.Execute(getSQLModeQuery)
 		if err != nil || len(res.Rows) != 1 {
 			return resetFunc, fmt.Errorf("could not get the original sql_mode on target: %v", err)
 		}
@@ -476,17 +468,17 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	// You should defer this callback wherever you call setSQLMode()
 	resetFunc = func() {
 		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
-		_, err := vr.dbClient.Execute(query)
+		_, err := dbClient.Execute(query)
 		if err != nil {
 			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
 		}
 	}
 	vreplicationSQLMode := SQLMode
-	settings, _, err := vr.readSettings(ctx)
+	settings, _, err := vr.readSettings(ctx, dbClient)
 	if err != nil {
 		return resetFunc, err
 	}
-	if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+	if settings.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
 		vreplicationSQLMode = StrictSQLMode
 	}
 
@@ -494,7 +486,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	// any database object that exists on the source in full on the
 	// target
 	query := fmt.Sprintf(setSQLModeQueryf, vreplicationSQLMode)
-	if _, err := vr.dbClient.Execute(query); err != nil {
+	if _, err := dbClient.Execute(query); err != nil {
 		return resetFunc, fmt.Errorf("could not set the permissive sql_mode on target using %s: %v", query, err)
 	}
 
@@ -511,7 +503,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
 	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
-	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+	if vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
 		names = append(names, throttlerOnlineDDLAppName)
 	}
 	return strings.Join(names, ":")
@@ -543,8 +535,8 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 	return nil
 }
 
-func (vr *vreplicator) clearFKCheck() error {
-	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
+func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
+	_, err := dbClient.Execute("set foreign_key_checks=0;")
 	return err
 }
 

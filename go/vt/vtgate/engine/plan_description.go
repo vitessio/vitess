@@ -19,8 +19,10 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sort"
 
+	"vitess.io/vitess/go/tools/graphviz"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -91,6 +93,54 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (pd PrimitiveDescription) addToGraph(g *graphviz.Graph) (*graphviz.Node, error) {
+	var nodes []*graphviz.Node
+	for _, input := range pd.Inputs {
+		n, err := input.addToGraph(g)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, n)
+	}
+	name := pd.OperatorType + ":" + pd.Variant
+	if pd.Variant == "" {
+		name = pd.OperatorType
+	}
+	this := g.AddNode(name)
+	for k, v := range pd.Other {
+		switch k {
+		case "Query":
+			this.AddTooltip(fmt.Sprintf("%v", v))
+		case "FieldQuery":
+		// skip these
+		default:
+			slice, ok := v.([]string)
+			if ok {
+				this.AddAttribute(k)
+				for _, s := range slice {
+					this.AddAttribute(s)
+				}
+			} else {
+				this.AddAttribute(fmt.Sprintf("%s:%v", k, v))
+			}
+		}
+	}
+	for _, n := range nodes {
+		g.AddEdge(this, n)
+	}
+	return this, nil
+}
+
+func GraphViz(p Primitive) (*graphviz.Graph, error) {
+	g := graphviz.New()
+	description := PrimitiveToPlanDescription(p)
+	_, err := description.addToGraph(g)
+	if err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
 func addMap(input map[string]any, buf *bytes.Buffer) error {
 	var mk []string
 	for k, v := range input {
@@ -111,12 +161,11 @@ func addMap(input map[string]any, buf *bytes.Buffer) error {
 
 func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 	buf.WriteString(prepend + `"` + name + `":`)
-	b, err := json.Marshal(obj)
-	if err != nil {
-		return err
-	}
-	buf.Write(b)
-	return nil
+
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+
+	return enc.Encode(obj)
 }
 
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree

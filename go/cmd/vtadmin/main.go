@@ -20,13 +20,13 @@ import (
 	"context"
 	"flag"
 	"io"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -34,6 +34,8 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -55,10 +57,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			tmp := os.Args
-			os.Args = os.Args[0:1]
-			flag.Parse()
-			os.Args = tmp
+			_flag.TrickGlog()
 
 			if opts.EnableTracing || httpOpts.EnableTracing {
 				startTracing(cmd)
@@ -68,6 +67,7 @@ var (
 		PostRun: func(cmd *cobra.Command, args []string) {
 			trace.LogErrorsWhenClosing(traceCloser)
 		},
+		Version: servenv.AppVersion.String(),
 	}
 )
 
@@ -163,15 +163,12 @@ func main() {
 	rootCmd.Flags().BoolVar(&enableDynamicClusters, "enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies or gRPC metadata")
 
 	// Tracing flags
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                 // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-enable-logging")) // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type"))  // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-rate"))  // defined in go/vt/trace
+	trace.RegisterFlags(rootCmd.Flags()) // defined in go/vt/trace
 	rootCmd.Flags().BoolVar(&opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
 	// gRPC server flags
-	rootCmd.Flags().BoolVar(&opts.AllowReflection, "grpc-allow-reflection", false, "whether to register the gRPC server for reflection; this is required to use tools like `grpc_cli`")
+	rootCmd.Flags().BoolVar(&opts.AllowReflection, "grpc-allow-reflection", false, "whether to register the gRPC server for reflection; this is required to use tools like grpc_cli")
 	rootCmd.Flags().BoolVar(&opts.EnableChannelz, "grpc-enable-channelz", false, "whether to enable the channelz service on the gRPC server")
 
 	// HTTP server flags

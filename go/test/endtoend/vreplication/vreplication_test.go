@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/buger/jsonparser"
-	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -45,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 var (
@@ -62,15 +62,19 @@ var (
 	targetThrottlerAppName = "vreplication"
 )
 
-// for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
-// we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
 const (
+	// for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
+	// we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
 	openTxQuery       = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
 
-	merchantKeyspace = "merchant-type"
-	maxWait          = 60 * time.Second
-	BypassLagCheck   = true // temporary fix for flakiness seen only in CI when lag check is introduced
+	historyLenQuery = "select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'"
+
+	merchantKeyspace            = "merchant-type"
+	maxWait                     = 60 * time.Second
+	BypassLagCheck              = true                         // temporary fix for flakiness seen only in CI when lag check is introduced
+	throttlerStatusThrottled    = http.StatusExpectationFailed // 417
+	throttlerStatusNotThrottled = http.StatusOK                // 200
 )
 
 func init() {
@@ -117,9 +121,14 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	defer vc.TearDown(t)
 	defaultCell = vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
-	maxSourceTrxHistory := 5
+	maxSourceTrxHistory := int64(5)
 	extraVTTabletArgs = []string{
+		// We rely on holding open transactions to generate innodb history so extend the timeout
+		// to avoid flakiness when the CI is very slow.
+		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
+
+		parallelInsertWorkers,
 	}
 
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
@@ -138,9 +147,14 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// We update rows in a table not part of the MoveTables operation so that we're not blocking
 	// on the LOCK TABLE call but rather the InnoDB History List length.
 	trxConn := generateInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
+	// History should have been generated on the source primary tablet
+	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
-	verifySourceTabletThrottling(t, targetKs, workflow)
+	// Wait for the copy phase to start
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
+	// The initial copy phase should be blocking on the history list
+	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
 	trxConn.Close()
 }
@@ -148,6 +162,15 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	testBasicVreplicationWorkflow(t)
+}
+
+func TestVreplicationCopyParallel(t *testing.T) {
+	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
+	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	extraVTTabletArgs = []string{
+		parallelInsertWorkers,
+	}
 	testBasicVreplicationWorkflow(t)
 }
 
@@ -201,6 +224,15 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
 	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
+
+	t.Run("Verify CopyState Is Optimized Afterwards", func(t *testing.T) {
+		tabletMap := vc.getVttabletsInKeyspace(t, defaultCell, "customer", topodatapb.TabletType_PRIMARY.String())
+		require.NotNil(t, tabletMap)
+		require.Greater(t, len(tabletMap), 0)
+		for _, tablet := range tabletMap {
+			verifyCopyStateIsOptimized(t, tablet)
+		}
+	})
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
@@ -237,6 +269,85 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
+}
+
+func TestVStreamFlushBinlog(t *testing.T) {
+	defaultCellName := "zone1"
+	allCells := []string{defaultCellName}
+	allCellNames = defaultCellName
+	workflow := "test_vstream_p2c"
+	shard := "0"
+	vc = NewVitessCluster(t, "TestVStreamBinlogFlush", allCells, mainClusterConfig)
+	require.NotNil(t, vc)
+	defer vc.TearDown(t)
+	defaultCell = vc.Cells[defaultCellName]
+
+	// Keep the cluster processes minimal (no rdonly and no replica tablets)
+	// to deal with CI resource constraints.
+	// This also makes it easier to confirm the behavior as we know exactly
+	// what tablets will be involved.
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
+		t.Fatal(err)
+	}
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	verifyClusterHealth(t, vc)
+
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
+
+	insertInitialData(t)
+
+	tables := "product,customer,merchant,orders"
+	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, tables)
+	// Wait until we get through the copy phase...
+	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
+
+	// So far, we should not have rotated any binlogs
+	flushCount := int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(0), "VStreamerFlushedBinlogs should be 0")
+
+	// Generate a lot of binlog event bytes
+	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 16
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', repeat('A', 65000), now())"
+	for i := 100; i < 5000; i++ {
+		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i), -1, false)
+		require.NoError(t, err)
+		require.Greater(t, res.RowsAffected, uint64(0))
+
+		if i%100 == 0 {
+			res, err := sourceTab.QueryTablet("show binary logs", sourceKs, false)
+			require.NoError(t, err)
+			require.NotNil(t, res)
+			require.Greater(t, len(res.Rows), 0)
+			lastRow := res.Rows[len(res.Rows)-1]
+			size, err := lastRow[1].ToInt64()
+			require.NoError(t, err)
+			if size > targetBinlogSize {
+				break
+			}
+		}
+	}
+
+	// Now we should rotate the binary logs ONE time on the source, even
+	// though we're opening up multiple result streams (1 per table).
+	runVDiffsSideBySide = false
+	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
+	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should now be 1")
+
+	// Now if we do another vdiff, we should NOT rotate the binlogs again
+	// as we haven't been generating a lot of new binlog events.
+	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
+	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
 }
 
 func testVStreamCellFlag(t *testing.T) {
@@ -430,13 +541,15 @@ func insertInitialData(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
 		log.Infof("Done inserting initial data")
 
-		validateCount(t, vtgateConn, "product:0", "product", 2)
-		validateCount(t, vtgateConn, "product:0", "customer", 3)
-		validateQuery(t, vtgateConn, "product:0", "select * from merchant",
+		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
+		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
+		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 	})
 }
 
+// insertMoreCustomers creates additional customers.
+// Note: this will only work when the customer sequence is in place.
 func insertMoreCustomers(t *testing.T, numCustomers int) {
 	sql := "insert into customer (name) values "
 	i := 0
@@ -492,8 +605,22 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 
+		// Wait to finish the copy phase for all tables
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
+
+		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
+		dec80Replicated := false
+		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
+		waitForNoWorkflowLag(t, vc, targetKs, workflow)
+		for _, shard := range []string{"-80", "80-"} {
+			shardTarget := fmt.Sprintf("%s:%s", targetKs, shard)
+			if res := execVtgateQuery(t, vtgateConn, shardTarget, "select cid from customer"); len(res.Rows) > 0 {
+				waitForQueryResult(t, vtgateConn, shardTarget, "select distinct dec80 from customer", `[[DECIMAL(0)]]`)
+				dec80Replicated = true
+			}
+		}
+		require.Equal(t, true, dec80Replicated)
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
@@ -523,6 +650,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
 		switchWrites(t, ksWorkflow, false)
+		checkThatVDiffFails(t, targetKs, workflow)
+
 		if withOpenTx && commit != nil {
 			commit(t)
 		}
@@ -606,15 +735,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
 
 			execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
-			validateCountInTablet(t, customerTab1, "customer", "customer", 1)
-			validateCountInTablet(t, customerTab2, "customer", "customer", 2)
-			validateCount(t, vtgateConn, "customer", "customer.customer", 3)
+			waitForRowCountInTablet(t, customerTab1, "customer", "customer", 1)
+			waitForRowCountInTablet(t, customerTab2, "customer", "customer", 2)
+			waitForRowCount(t, vtgateConn, "customer", "customer.customer", 3)
 
 			query = "insert into customer (name, cid) values('george', 5)"
 			execVtgateQuery(t, vtgateConn, "customer", query)
-			validateCountInTablet(t, customerTab1, "customer", "customer", 1)
-			validateCountInTablet(t, customerTab2, "customer", "customer", 3)
-			validateCount(t, vtgateConn, "customer", "customer.customer", 4)
+			waitForRowCountInTablet(t, customerTab1, "customer", "customer", 1)
+			waitForRowCountInTablet(t, customerTab2, "customer", "customer", 3)
+			waitForRowCount(t, vtgateConn, "customer", "customer.customer", 4)
 		}
 	})
 }
@@ -622,45 +751,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 func validateRollupReplicates(t *testing.T) {
 	t.Run("validateRollupReplicates", func(t *testing.T) {
 		insertMoreProducts(t)
-		time.Sleep(1 * time.Second)
-		validateCount(t, vtgateConn, "product", "rollup", 1)
-		validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
+		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
 	})
-}
-
-func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
-	tDuration := time.Duration(15 * time.Second)
-	ticker := time.NewTicker(5 * time.Second)
-	timer := time.NewTimer(tDuration)
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
-	for {
-		select {
-		case <-ticker.C:
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-			require.NoError(t, err)
-			result := gjson.Get(output, "ShardStatuses")
-			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
-				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
-					if streamId.String() == "PrimaryReplicationStatuses" {
-						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
-							state := attributeValue.Get("State").String()
-							if state != "Copying" {
-								require.FailNowf(t, "Unexpected running workflow stream",
-									"Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. Show output: %s",
-									ksWorkflow, int(tDuration.Seconds()), output)
-							}
-							return true // end attribute loop
-						})
-					}
-					return true // end stream loop
-				})
-				return true // end tablet loop
-			})
-		case <-timer.C:
-			return
-		}
-	}
 }
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
@@ -668,10 +762,10 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 		ksName := "customer"
 		counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 		reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts, nil, cells, sourceCellOrAlias)
-		validateCount(t, vtgateConn, ksName, "customer", 20)
+		waitForRowCount(t, vtgateConn, ksName, "customer", 20)
 		query := "insert into customer (name) values('yoko')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
-		validateCount(t, vtgateConn, ksName, "customer", 21)
+		waitForRowCount(t, vtgateConn, ksName, "customer", 21)
 	})
 }
 
@@ -680,10 +774,10 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
 		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryRunResultsSwitchWritesM2m3, nil, "")
-		validateCount(t, vtgateConn, ksName, "merchant", 2)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 2)
 		query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
-		validateCount(t, vtgateConn, ksName, "merchant", 3)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 
 		var output string
 		var err error
@@ -726,10 +820,10 @@ func reshardMerchant3to1Merge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
 		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts, nil, nil, "")
-		validateCount(t, vtgateConn, ksName, "merchant", 3)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 		query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
-		validateCount(t, vtgateConn, ksName, "merchant", 4)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 4)
 	})
 }
 
@@ -767,7 +861,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				t.Fatal(err)
 			}
 		}
-		if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--v1", "--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", ksWorkflow, sourceShards, targetShards); err != nil {
+		if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--v1", "--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", ksWorkflow, "--", sourceShards, targetShards); err != nil {
 			t.Fatalf("Reshard command failed with %+v\n", err)
 		}
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
@@ -792,7 +886,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			if tablets[tabletName] == nil {
 				continue
 			}
-			validateCountInTablet(t, tablets[tabletName], ksName, tableName, count)
+			waitForRowCountInTablet(t, tablets[tabletName], ksName, tableName, count)
 		}
 	})
 }
@@ -817,9 +911,24 @@ func shardOrders(t *testing.T) {
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
-		validateCountInTablet(t, customerTab1, "customer", "orders", 1)
-		validateCountInTablet(t, customerTab2, "customer", "orders", 2)
-		validateCount(t, vtgateConn, "customer", "orders", 3)
+		waitForRowCountInTablet(t, customerTab1, "customer", "orders", 1)
+		waitForRowCountInTablet(t, customerTab2, "customer", "orders", 2)
+		waitForRowCount(t, vtgateConn, "customer", "orders", 3)
+	})
+}
+
+func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
+	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", ksWorkflow)
+		require.Error(t, err)
+		require.Contains(t, output, "invalid VDiff run")
+	})
+	t.Run("check that vdiff2 won't run", func(t2 *testing.T) {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", ksWorkflow)
+		require.Error(t, err)
+		require.Contains(t, output, "invalid VDiff run")
+
 	})
 }
 
@@ -860,9 +969,9 @@ func shardMerchant(t *testing.T) {
 		}
 		dropSources(t, ksWorkflow)
 
-		validateCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
-		validateCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
-		validateCount(t, vtgateConn, merchantKeyspace, "merchant", 2)
+		waitForRowCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
+		waitForRowCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
+		waitForRowCount(t, vtgateConn, merchantKeyspace, "merchant", 2)
 	})
 }
 
@@ -881,13 +990,9 @@ func materializeProduct(t *testing.T) {
 		applyVSchema(t, materializeProductVSchema, keyspace)
 		materialize(t, materializeProductSpec)
 		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "primary")
-		{
-			for _, tab := range customerTablets {
-				catchup(t, tab, workflow, "Materialize")
-			}
-			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 5)
-			}
+		for _, tab := range customerTablets {
+			catchup(t, tab, workflow, "Materialize")
+			waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 		}
 
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
@@ -897,27 +1002,16 @@ func materializeProduct(t *testing.T) {
 				_, body, err := throttleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
-			}
-			// Wait for throttling to take effect (caching will expire by this time):
-			time.Sleep(1 * time.Second)
-			for _, tab := range productTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "417")
-				}
-				{
-					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
+
+				// Wait for throttling to take effect (caching will expire by this time):
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled)
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
-			time.Sleep(1 * time.Second)
 			// we expect the additional rows to **not appear** in the materialized view
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 5)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 			}
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
@@ -926,68 +1020,44 @@ func materializeProduct(t *testing.T) {
 				_, body, err := unthrottleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
-			}
-			// give time for unthrottling to take effect and for target to fetch data
-			time.Sleep(3 * time.Second)
-			for _, tab := range productTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
+				// give time for unthrottling to take effect and for target to fetch data
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 8)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 			}
 		})
 
 		t.Run("throttle-app-customer", func(t *testing.T) {
-			// Now, throttle the streamer on source tablets, insert some rows
+			// Now, throttle vreplication (vcopier/vapplier) on target tablets, and
+			// insert some more rows.
 			for _, tab := range customerTablets {
 				_, body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
-			}
-			// Wait for throttling to take effect (caching will expire by this time):
-			time.Sleep(1 * time.Second)
-			for _, tab := range customerTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "417")
-				}
-				{
-					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
+				// Wait for throttling to take effect (caching will expire by this time):
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			insertMoreProductsForTargetThrottler(t)
-			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
-			time.Sleep(1 * time.Second)
-			// we expect the additional rows to **not appear** in the materialized view
+			// To be fair to the test, we give the target time to apply the new changes.
+			// We expect it to NOT get them in the first place, we expect the additional
+			// rows to **not appear** in the materialized view.
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 8)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 			}
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
-			// unthrottle on source tablets, and expect the rows to show up
+			// unthrottle on target tablets, and expect the rows to show up
 			for _, tab := range customerTablets {
 				_, body, err := unthrottleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
 			// give time for unthrottling to take effect and for target to fetch data
-			time.Sleep(3 * time.Second)
 			for _, tab := range customerTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
-			}
-			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 11)
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)
 			}
 		})
 	})
@@ -1001,8 +1071,8 @@ func materializeRollup(t *testing.T) {
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		materialize(t, materializeRollupSpec)
 		catchup(t, productTab, workflow, "Materialize")
-		validateCount(t, vtgateConn, "product", "rollup", 1)
-		validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
+		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(2)]]`)
 	})
 }
@@ -1014,8 +1084,8 @@ func materializeSales(t *testing.T) {
 		materialize(t, materializeSalesSpec)
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		catchup(t, productTab, "sales", "Materialize")
-		validateCount(t, vtgateConn, "product", "sales", 2)
-		validateQuery(t, vtgateConn, "product:0", "select kount, amount from sales",
+		waitForRowCount(t, vtgateConn, "product", "sales", 2)
+		waitForQueryResult(t, vtgateConn, "product:0", "select kount, amount from sales",
 			`[[INT32(1) INT32(10)] [INT32(2) INT32(35)]]`)
 	})
 }
@@ -1028,9 +1098,9 @@ func materializeMerchantSales(t *testing.T) {
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
-		validateCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "msales", 1)
-		validateCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "msales", 1)
-		validateCount(t, vtgateConn, merchantKeyspace, "msales", 2)
+		waitForRowCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "msales", 1)
+		waitForRowCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "msales", 1)
+		waitForRowCount(t, vtgateConn, merchantKeyspace, "msales", 2)
 	})
 }
 
@@ -1044,9 +1114,9 @@ func materializeMerchantOrders(t *testing.T) {
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
-		validateCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "morders", 2)
-		validateCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "morders", 1)
-		validateCount(t, vtgateConn, merchantKeyspace, "morders", 3)
+		waitForRowCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "morders", 2)
+		waitForRowCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "morders", 1)
+		waitForRowCount(t, vtgateConn, merchantKeyspace, "morders", 3)
 	})
 }
 
@@ -1141,7 +1211,7 @@ func applyVSchema(t *testing.T, vschema, keyspace string) {
 }
 
 func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=replica", "--dry_run", ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=replica", "--dry_run", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
@@ -1149,9 +1219,9 @@ func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []s
 func switchReads(t *testing.T, cells, ksWorkflow string) {
 	var output string
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=rdonly", ksWorkflow)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=rdonly", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=replica", ksWorkflow)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=replica", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
 }
 
@@ -1226,14 +1296,15 @@ func dropSources(t *testing.T, ksWorkflow string) {
 //
 // Returns a db connection used for the transaction which you can use for follow-up
 // work, such as rolling it back directly or using the releaseInnoDBRowHistory call.
-func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int) *mysql.Conn {
+func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int64) *mysql.Conn {
 	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	execQuery(t, dbConn1, "use "+sourceKS)
 	execQuery(t, dbConn2, "use "+sourceKS)
-	offset := 1000
+	offset := int64(1000)
+	limit := int64(neededTrxHistory * 100)
 	insertStmt := strings.Builder{}
-	for i := offset; i <= (neededTrxHistory*10)+offset; i++ {
+	for i := offset; i <= offset+limit; i++ {
 		if i == offset {
 			insertStmt.WriteString(fmt.Sprintf("insert into product (pid, description) values (%d, 'test')", i))
 		} else {
@@ -1246,8 +1317,32 @@ func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory in
 	execQuery(t, dbConn2, "rollback")
 	execQuery(t, dbConn2, "start transaction")
 	execQuery(t, dbConn2, "select count(*) from product")
-	execQuery(t, dbConn1, fmt.Sprintf("delete from product where pid >= %d and pid < %d", offset, offset+10000))
+	execQuery(t, dbConn1, fmt.Sprintf("delete from product where pid >= %d and pid <= %d", offset, offset+limit))
 	return dbConn2
+}
+
+// waitForInnoDBRowHistory waits for the history list length to be greater than the
+// expected length.
+func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, expectedLength int64) {
+	timer := time.NewTimer(defaultTimeout)
+	historyLen := int64(0)
+	for {
+		res, err := tablet.QueryTablet(historyLenQuery, tablet.Keyspace, false)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.Equal(t, 1, len(res.Rows))
+		historyLen, err = res.Rows[0][0].ToInt64()
+		require.NoError(t, err)
+		if historyLen > expectedLength {
+			return
+		}
+		select {
+		case <-timer.C:
+			t.Fatalf("Did not reach the expected InnoDB history length of %d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }
 
 func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {

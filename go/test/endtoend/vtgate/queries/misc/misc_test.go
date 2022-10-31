@@ -19,6 +19,7 @@ package misc
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -82,7 +83,32 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.ExecAllowAndCompareError(`select date'2022'`)
-	mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`)
-	mcmp.ExecAllowAndCompareError(`select timestamp'2022'`)
+	_, err := mcmp.ExecAllowAndCompareError(`select date'2022'`)
+	require.Error(t, err)
+	_, err = mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`)
+	require.Error(t, err)
+	_, err = mcmp.ExecAllowAndCompareError(`select timestamp'2022'`)
+	require.Error(t, err)
+}
+
+func TestQueryTimeout(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.04) from dual")
+	assert.NoError(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.24) from dual")
+	assert.Error(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "set @@session.query_timeout=20")
+	require.NoError(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.04) from dual")
+	assert.Error(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.01) from dual")
+	assert.NoError(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
+	assert.NoError(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
+	assert.Error(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.001) from dual")
+	assert.NoError(t, err)
 }
