@@ -67,22 +67,6 @@ func (v *Vindex) Clone(inputs []Operator) Operator {
 
 var _ PhysicalOperator = (*Vindex)(nil)
 
-func (v *Vindex) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
-	idxs := make([]int, len(columns))
-outer:
-	for i, newCol := range columns {
-		for j, existingCol := range v.Columns {
-			if sqlparser.EqualsExpr(newCol, existingCol) {
-				idxs[i] = j
-				continue outer
-			}
-		}
-		idxs[i] = len(v.Columns)
-		v.Columns = append(v.Columns, newCol)
-	}
-	return idxs, nil
-}
-
 func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	// TODO: unify with table
 	col, ok := expr.(*sqlparser.ColName)

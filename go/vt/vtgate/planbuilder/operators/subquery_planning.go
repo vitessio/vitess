@@ -408,8 +408,7 @@ func createCorrelatedSubqueryOp(
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
 					for colName, bindVar := range bindVars {
-						colNameDeps := ctx.SemTable.RecursiveDeps(colName)
-						if node.Name.Equal(colName.Name) && nodeDeps.Equals(colNameDeps) {
+						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))
 							return false
 						}
