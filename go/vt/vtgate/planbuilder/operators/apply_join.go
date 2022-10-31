@@ -31,6 +31,9 @@ type ApplyJoin struct {
 	// negative value comes from LHS and positive from RHS
 	Columns []int
 
+	// ColumnsAST keeps track of what AST expression is represented in the Columns array
+	ColumnsAST []sqlparser.Expr
+
 	// Vars are the arguments that need to be copied from the LHS to the RHS
 	Vars map[string]int
 
@@ -145,8 +148,12 @@ func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 }
 
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	// TODO: we should keep track of the expressions we are passing through, so if we see the same column needed
-	// multiple times, we should just return the offset to the already existing column
+	for i, existing := range a.ColumnsAST {
+		if ctx.SemTable.EqualsExpr(existing, expr) {
+			return i, nil
+		}
+	}
+
 	lhs := TableID(a.LHS)
 	rhs := TableID(a.RHS)
 	both := lhs.Merge(rhs)
@@ -181,5 +188,8 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 	default:
 		panic("what the what")
 	}
+
+	// it wasn't already there - let's add it now
+	a.ColumnsAST = append(a.ColumnsAST, expr)
 	return len(a.Columns) - 1, nil
 }

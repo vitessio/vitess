@@ -526,9 +526,9 @@
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "L:3,R:0,L:4,L:5,L:9,R:1,L:10,L:14,R:2,L:15,L:16,L:17,L:18,L:19,R:3,R:4,L:20,R:5,L:21",
+                    "JoinColumnIndexes": "L:2,R:0,L:3,L:4,L:8,R:1,L:9,L:13,R:2,L:14,L:15,L:16,L:17,L:18,R:3,R:4,L:19,R:5,L:20",
                     "JoinVars": {
-                      "n1_n_name": 2,
+                      "n1_n_name": 1,
                       "o_custkey": 0
                     },
                     "TableName": "lineitem_orders_supplier_nation_customer_nation",
@@ -536,7 +536,7 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:1,R:0,R:1,R:2,L:2,L:3,L:5,R:3,R:4,R:5,L:6,L:8,R:6,R:7,R:8,L:9,L:10,L:11,R:9,R:10,R:11,L:12",
+                        "JoinColumnIndexes": "L:1,R:0,R:1,L:2,L:3,L:5,R:2,R:3,R:4,L:6,L:8,R:5,R:6,R:7,L:9,L:10,L:11,R:8,R:9,R:10,L:12",
                         "JoinVars": {
                           "l_suppkey": 0
                         },
@@ -582,7 +582,7 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "R:0,R:0,R:1,R:0,R:0,R:1,R:3,R:3,R:4,L:1,R:2,R:5",
+                            "JoinColumnIndexes": "R:0,R:1,R:0,R:0,R:1,R:3,R:3,R:4,L:1,R:2,R:5",
                             "JoinVars": {
                               "s_nationkey": 0
                             },
