@@ -761,6 +761,61 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	}
 }
 
+func TestTabletServerBeginStreamExecute(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	callback := func(*sqltypes.Result) error { return nil }
+	transactionID, _, err := tsv.BeginStreamExecute(ctx, &target, nil, executeSQL, nil, 0, nil, callback)
+	if err != nil {
+		t.Fatalf("TabletServer.BeginStreamExecute should success: %s, but get error: %v",
+			executeSQL, err)
+	}
+	require.NoError(t, err)
+	_, err = tsv.Commit(ctx, &target, transactionID)
+	require.NoError(t, err)
+}
+
+func TestTabletServerBeginStreamExecuteWithError(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// Enforce an error so we can validate we get one back properly
+	tsv.qe.strictTableACL = true
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	callback := func(*sqltypes.Result) error { return nil }
+	transactionID, _, err := tsv.BeginStreamExecute(ctx, &target, nil, executeSQL, nil, 0, nil, callback)
+	require.Error(t, err)
+	err = tsv.Release(ctx, &target, transactionID, 0)
+	require.NoError(t, err)
+}
+
 func TestSerializeTransactionsSameRow(t *testing.T) {
 	// This test runs three transaction in parallel:
 	// tx1 | tx2 | tx3

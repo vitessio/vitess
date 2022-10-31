@@ -17,18 +17,16 @@ limitations under the License.
 package tabletconntest
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -567,7 +565,20 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 
 // BeginStreamExecute combines Begin and StreamExecute.
 func (f *FakeQueryService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
-	panic("FakeQueryService does not implement BeginStreamExecute")
+	transactionID, alias, err := f.Begin(ctx, target, options)
+	if err != nil {
+		return transactionID, alias, err
+	}
+
+	for _, preQuery := range preQueries {
+		_, err := f.Execute(ctx, target, preQuery, nil, transactionID, reservedID, options)
+		if err != nil {
+			return transactionID, alias, err
+		}
+	}
+
+	err = f.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
+	return transactionID, alias, err
 }
 
 var (
