@@ -45,7 +45,7 @@ var (
 	VT03020 = errorWithoutState("VT03020", vtrpcpb.Code_INVALID_ARGUMENT, "symbol %s not found in subquery", "The given symbol was not found in the subquery.")
 	VT03021 = errorWithoutState("VT03021", vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous symbol reference: %v", "The given symbol is ambiguous. You can use a table qualifier to make unambiguous.")
 	VT03022 = errorWithoutState("VT03022", vtrpcpb.Code_INVALID_ARGUMENT, "column %v not found in %v", "The given column cannot be found.")
-	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targetting a key range: %s", "INSERTs are not supported with key range targets.")
+	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", "INSERTs are not supported with key range targets.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "Can't drop database '%s'; database doesn't exists", "The given database does not exist, Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "Can't alter database '%s'; unknown database", "The given database does not exist, Vitess cannot alter it.")
