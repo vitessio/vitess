@@ -377,7 +377,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <declareHandlerAction> declare_handler_action
 %type <bytes> signal_condition_value
 %type <str> trigger_time trigger_event
-%type <statement> alter_statement alter_table_statement
+%type <statement> alter_statement alter_table_statement alter_database_statement
 %type <ddl> create_table_prefix rename_list alter_table_statement_part
 %type <ddls> alter_table_statement_list
 %type <statement> analyze_statement show_statement use_statement
@@ -3760,7 +3760,18 @@ pk_name_opt:
   }
 
 alter_statement:
-  alter_table_statement
+  alter_database_statement
+| alter_table_statement
+
+alter_database_statement:
+  ALTER DATABASE ID creation_option_opt
+  {
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3), CharsetCollate: $4}
+  }
+| ALTER DATABASE creation_option_opt
+  {
+    $$ = &DBDDL{Action: AlterStr, CharsetCollate: $3}
+  }
 
 alter_table_statement:
   ALTER ignore_opt TABLE table_name alter_table_statement_list
