@@ -17,7 +17,12 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -65,22 +70,15 @@ func (a *ApplyJoin) IPhysical() {}
 // Clone implements the Operator interface
 func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
-	varsClone := map[string]int{}
-	for key, value := range a.Vars {
-		varsClone[key] = value
-	}
-	columnsClone := make([]int, len(a.Columns))
-	copy(columnsClone, a.Columns)
-	lhsColumns := make([]*sqlparser.ColName, len(a.LHSColumns))
-	copy(lhsColumns, a.LHSColumns)
 	return &ApplyJoin{
 		LHS:        inputs[0],
 		RHS:        inputs[1],
-		Columns:    columnsClone,
-		Vars:       varsClone,
+		Columns:    slices.Clone(a.Columns),
+		ColumnsAST: slices.Clone(a.ColumnsAST),
+		Vars:       maps.Clone(a.Vars),
 		LeftJoin:   a.LeftJoin,
 		Predicate:  sqlparser.CloneExpr(a.Predicate),
-		LHSColumns: lhsColumns,
+		LHSColumns: slices.Clone(a.LHSColumns),
 	}
 }
 
@@ -148,6 +146,7 @@ func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 }
 
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	// first check if we already are passing through this expression
 	for i, existing := range a.ColumnsAST {
 		if ctx.SemTable.EqualsExpr(existing, expr) {
 			return i, nil
@@ -158,6 +157,10 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 	rhs := TableID(a.RHS)
 	both := lhs.Merge(rhs)
 	deps := ctx.SemTable.RecursiveDeps(expr)
+
+	// if we get here, it's a new expression we are dealing with.
+	// We need to decide if we can push it all on either side,
+	// or if we have to break the expression into left and right parts
 	switch {
 	case deps.IsSolvedBy(lhs):
 		offset, err := a.LHS.AddColumn(ctx, expr)
@@ -186,10 +189,10 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 		}
 		a.Columns = append(a.Columns, offset+1)
 	default:
-		panic("what the what")
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not try to push this predicate here")
 	}
 
-	// it wasn't already there - let's add it now
+	// the expression wasn't already there - let's add it
 	a.ColumnsAST = append(a.ColumnsAST, expr)
 	return len(a.Columns) - 1, nil
 }
