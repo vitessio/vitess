@@ -34,6 +34,10 @@ type Delete struct {
 	noInputs
 }
 
+func (d *Delete) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tried to push output column to delete")
+}
+
 var _ PhysicalOperator = (*Delete)(nil)
 
 // Introduces implements the PhysicalOperator interface
@@ -56,5 +60,5 @@ func (d *Delete) Clone(inputs []Operator) Operator {
 }
 
 func (d *Delete) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", d)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", d)
 }

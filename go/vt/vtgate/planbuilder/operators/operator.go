@@ -40,6 +40,7 @@ type (
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
+		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan

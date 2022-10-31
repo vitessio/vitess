@@ -83,6 +83,22 @@ outer:
 	return idxs, nil
 }
 
+func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	// TODO: unify with table
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
+	}
+
+	for idx, column := range v.Columns {
+		if col.Name.Equal(column.Name) {
+			return idx, nil
+		}
+	}
+	v.Columns = append(v.Columns, col)
+	return len(v.Columns) - 1, nil
+}
+
 // checkValid implements the Operator interface
 func (v *Vindex) checkValid() error {
 	if len(v.Table.Predicates) == 0 {

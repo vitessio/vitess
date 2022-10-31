@@ -119,3 +119,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 	return u, nil
 }
+
+func (u *Union) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", u)
+}

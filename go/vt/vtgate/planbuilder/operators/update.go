@@ -63,3 +63,7 @@ func (u *Update) Clone(inputs []Operator) Operator {
 func (u *Update) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", u)
 }
+
+func (u *Update) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tried to push output column to update")
+}

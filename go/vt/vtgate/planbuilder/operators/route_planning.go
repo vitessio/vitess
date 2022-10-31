@@ -496,23 +496,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: JOIN not supported between derived tables")
 		}
 
-		join := &ApplyJoin{
-			LHS:      Clone(rhs),
-			RHS:      Clone(lhs),
-			Vars:     map[string]int{},
-			LeftJoin: !inner,
-		}
-
+		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
 		return pushJoinPredicates(ctx, joinPredicates, join)
 	}
 
-	join := &ApplyJoin{
-		LHS:      Clone(lhs),
-		RHS:      Clone(rhs),
-		Vars:     map[string]int{},
-		LeftJoin: !inner,
-	}
-
+	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
@@ -527,6 +515,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		}
 	}
 
+	join := NewApplyJoin(aRoute.Source, bRoute.Source, sqlparser.AndExpressions(joinPredicates...), !inner)
 	r := &Route{
 		RouteOpCode:         aRoute.RouteOpCode,
 		Keyspace:            aRoute.Keyspace,
@@ -534,13 +523,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
-		Source: &ApplyJoin{
-			LHS:       aRoute.Source,
-			RHS:       bRoute.Source,
-			Vars:      map[string]int{},
-			LeftJoin:  !inner,
-			Predicate: sqlparser.AndExpressions(joinPredicates...),
-		},
+		Source:              join,
 	}
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {

@@ -358,14 +358,12 @@ func rewriteColumnsInSubqueryOpForJoin(
 					return false
 				}
 				// if it does not exist, then push this as an output column there and add it to the joinVars
-				newInnerOp, columnIndexes, err := PushOutputColumns(ctx, resultInnerOp, node)
+				offset, err := resultInnerOp.AddColumn(ctx, node)
 				if err != nil {
 					rewriteError = err
 					return false
 				}
-				columnIndex := columnIndexes[0]
-				outerTree.Vars[bindVar] = columnIndex
-				resultInnerOp = newInnerOp
+				outerTree.Vars[bindVar] = offset
 				return false
 			}
 		}
@@ -424,15 +422,13 @@ func createCorrelatedSubqueryOp(
 					bindVars[node] = bindVar
 
 					// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-					newOuterOp, columnIndexes, err := PushOutputColumns(ctx, resultOuterOp, node)
+					offset, err := resultOuterOp.AddColumn(ctx, node)
 					if err != nil {
 						rewriteError = err
 						return false
 					}
 					lhsCols = append(lhsCols, node)
-					columnIndex := columnIndexes[0]
-					vars[bindVar] = columnIndex
-					resultOuterOp = newOuterOp
+					vars[bindVar] = offset
 					return false
 				}
 			}

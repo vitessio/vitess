@@ -17,7 +17,9 @@ limitations under the License.
 package operators
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -56,6 +58,20 @@ func (to *Table) Introduces() semantics.TableSet {
 }
 
 // AddPredicate implements the PhysicalOperator interface
-func (to *Table) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
 	return newFilter(to, expr), nil
+}
+
+func (to *Table) AddColumn(_ *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
+	col, ok := e.(*sqlparser.ColName)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
+	}
+	for idx, column := range to.Columns {
+		if col.Name.Equal(column.Name) {
+			return idx, nil
+		}
+	}
+	to.Columns = append(to.Columns, col)
+	return len(to.Columns) - 1, nil
 }

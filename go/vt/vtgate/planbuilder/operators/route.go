@@ -817,3 +817,7 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	r.Source = newSrc
 	return r, err
 }
+
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
+	return r.Source.AddColumn(ctx, e)
+}

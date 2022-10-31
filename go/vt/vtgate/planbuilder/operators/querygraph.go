@@ -17,7 +17,9 @@ limitations under the License.
 package operators
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -196,4 +198,8 @@ func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpar
 		}
 	}
 	return qg, nil
+}
+
+func (qg *QueryGraph) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", qg)
 }

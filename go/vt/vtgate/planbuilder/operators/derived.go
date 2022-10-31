@@ -128,3 +128,37 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 	return d, nil
 }
+
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
+	}
+
+	i, err := d.findOutputColumn(col)
+	if err != nil {
+		return 0, err
+	}
+	var pos int
+	d.ColumnsOffset, pos = addToIntSlice(d.ColumnsOffset, i)
+
+	// add it to the source if we were not already passing it through
+	if i <= -1 {
+		d.Columns = append(d.Columns, col)
+		_, err := d.Source.AddColumn(ctx, sqlparser.NewColName(col.Name.String()))
+		if err != nil {
+			return 0, err
+		}
+	}
+	return pos, nil
+}
+
+func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
+	for idx, val := range columnOffset {
+		if val == valToAdd {
+			return columnOffset, idx
+		}
+	}
+	columnOffset = append(columnOffset, valToAdd)
+	return columnOffset, len(columnOffset) - 1
+}

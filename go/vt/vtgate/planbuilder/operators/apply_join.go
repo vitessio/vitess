@@ -46,6 +46,16 @@ type ApplyJoin struct {
 
 var _ PhysicalOperator = (*ApplyJoin)(nil)
 
+func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
+	return &ApplyJoin{
+		LHS:       lhs,
+		RHS:       rhs,
+		Vars:      map[string]int{},
+		Predicate: predicate,
+		LeftJoin:  leftOuterJoin,
+	}
+}
+
 // IPhysical implements the PhysicalOperator interface
 func (a *ApplyJoin) IPhysical() {}
 
@@ -115,19 +125,15 @@ func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 	if err != nil {
 		return err
 	}
-	lhs, idxs, err := PushOutputColumns(ctx, a.LHS, cols...)
-	if err != nil {
-		return err
+	for i, col := range cols {
+		offset, err := a.LHS.AddColumn(ctx, col)
+		if err != nil {
+			return err
+		}
+		a.Vars[bvName[i]] = offset
 	}
 	a.LHSColumns = append(a.LHSColumns, cols...)
 
-	a.LHS = lhs
-	if a.Vars == nil {
-		a.Vars = map[string]int{}
-	}
-	for i, idx := range idxs {
-		a.Vars[bvName[i]] = idx
-	}
 	rhs, err := a.RHS.AddPredicate(ctx, predicate)
 	if err != nil {
 		return err
@@ -136,4 +142,44 @@ func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 
 	a.Predicate = sqlparser.AndExpressions(expr, a.Predicate)
 	return nil
+}
+
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	// TODO: we should keep track of the expressions we are passing through, so if we see the same column needed
+	// multiple times, we should just return the offset to the already existing column
+	lhs := TableID(a.LHS)
+	rhs := TableID(a.RHS)
+	both := lhs.Merge(rhs)
+	deps := ctx.SemTable.RecursiveDeps(expr)
+	switch {
+	case deps.IsSolvedBy(lhs):
+		offset, err := a.LHS.AddColumn(ctx, expr)
+		if err != nil {
+			return 0, err
+		}
+		a.Columns = append(a.Columns, -offset-1)
+	case deps.IsSolvedBy(both):
+		bvNames, lhsExprs, rhsExpr, err := BreakExpressionInLHSandRHS(ctx, expr, lhs)
+		if err != nil {
+			return 0, err
+		}
+		for i, lhsExpr := range lhsExprs {
+			offset, err := a.LHS.AddColumn(ctx, lhsExpr)
+			if err != nil {
+				return 0, err
+			}
+			a.Vars[bvNames[i]] = offset
+		}
+		expr = rhsExpr
+		fallthrough // now we just pass the rest to the RHS of the join
+	case deps.IsSolvedBy(rhs):
+		offset, err := a.RHS.AddColumn(ctx, expr)
+		if err != nil {
+			return 0, err
+		}
+		a.Columns = append(a.Columns, offset+1)
+	default:
+		panic("what the what")
+	}
+	return len(a.Columns) - 1, nil
 }

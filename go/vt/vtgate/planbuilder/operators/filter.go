@@ -75,3 +75,7 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	f.Source = newSrc
 	return f, nil
 }
+
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	return f.Source.AddColumn(ctx, expr)
+}
