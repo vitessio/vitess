@@ -14,8 +14,106 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package viperutil provides additional functions for Vitess's use of viper for
-// managing configuration of various components.
+/*
+Package viperutil provides additional functions for Vitess's use of viper for
+managing configuration of various components.
+
+Example usage, without dynamic reload:
+
+	var (
+		tracingServer = viperutil.NewValue(
+			"trace.service",
+			viper.GetString,
+			viperutil.WithFlags[string]("tracer"),
+			viperutil.Withdefault("noop"),
+		)
+	)
+
+	func init() {
+		servenv.OnParse(func(fs *pflag.FlagSet) {
+			fs.String("tracer", tracingServer.Value(), "tracing service to use")
+			tracingServer.Bind(nil, fs)
+		})
+	}
+
+	func StartTracing(serviceName string) io.Closer {
+		backend := tracingServer.Get()
+		factory, ok := tracingBackendFactories[backend]
+		...
+	}
+
+Example usage, with dynamic reload:
+
+	var (
+		syncedViper = vipersync.New()
+		syncedGetDuration = vipersync.AdaptGetter(syncedViper, func(v *viper.Viper) func(key string) time.Duration {
+			return v.GetDuration
+		})
+		syncedGetInt = vipersync.AdaptGetter(syncedViper, func(v *viper.Viper) func(key string) int {
+			return v.GetInt
+		})
+
+		// Convenience to remove need to repeat this module's prefix constantly.
+		keyPrefix = viperutil.KeyPrefix("grpc.client")
+
+		keepaliveTime = viperutil.NewValue(
+			keyPrefix("keepalive.time"),
+			syncedGetDuration,
+			viperutil.WithFlags[time.Duration]("grpc_keepalive_time"),
+			viperutil.WithDefault(10 * time.Second),
+		)
+		keepaliveTimeout = viperutil.NewValue(
+			keyPrefix("keepalive.timeout"),
+			syncedGetDuration,
+			viperutil.WithFlags[time.Duration]("grpc_keepalive_timeout"),
+			viperutil.WithDefault(10 * time.Second),
+		)
+
+		initialConnWindowSize = viperutil.NewValue(
+			keyPrefix("initial_conn_window_size"),
+			syncedGetInt,
+			viperutil.WithFlags[int]("grpc_initial_conn_window_size"),
+		)
+	)
+
+	func init() {
+		binaries := []string{...}
+		for _, cmd := range binaries {
+			servenv.OnParseFor(cmd, func(fs *pflag.FlagSet) {
+
+			})
+		}
+
+		servenv.OnConfigLoad(func() {
+			// Watch the config file for changes to our synced variables.
+			syncedViper.Watch(viper.ConfigFileUsed())
+		})
+	}
+
+	func DialContext(ctx context.Context, target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		...
+
+		// Load our dynamic variables, thread-safely.
+		kaTime := keepaliveTime.Fetch()
+		kaTimeout := keepaliveTimeout.Fetch()
+		if kaTime != 0 || kaTimeout != 0 {
+			kp := keepalive.ClientParameters{
+				Time: kaTime,
+				Timeout: kaTimeout,
+				PermitWithoutStream: true,
+			}
+			newopts = append(newopts, grpc.WithKeepaliveParams(kp))
+		}
+
+		if size := initialConnWindowSize.Fetch(); size != 0 {
+			newopts = append(newopts, grpc.WithInitialConnWindowSize(int32(size)))
+		}
+
+		// and so on ...
+
+		return grpc.DialContext(ctx, target, newopts...)
+	}
+*/
 package viperutil
 
 import (

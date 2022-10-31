@@ -13,6 +13,7 @@ import (
 )
 
 // TODO: document all this
+// TODO: use jww for logging within go/viperutil
 
 type Viper struct {
 	disk *viper.Viper

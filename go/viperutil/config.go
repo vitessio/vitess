@@ -3,6 +3,7 @@ package viperutil
 import (
 	"os"
 
+	jww "github.com/spf13/jwalterweatherman"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -71,6 +72,21 @@ const (
 	ExitOnConfigFileNotFound
 )
 
+func (handling ConfigFileNotFoundHandling) String() string {
+	switch handling {
+	case IgnoreConfigFileNotFound:
+		return "ignore"
+	case WarnOnConfigFileNotFound:
+		return "warn"
+	case ErrorOnConfigFileNotFound:
+		return "error"
+	case ExitOnConfigFileNotFound:
+		return "exit"
+	default:
+		return "<UNKNOWN>"
+	}
+}
+
 type ConfigOptions struct {
 	Paths []string
 	Type  string
@@ -104,17 +120,25 @@ func ReadInConfig(v *viper.Viper, opts ConfigOptions, handling ConfigFileNotFoun
 		v.SetConfigFile(opts.File)
 	}
 
+	jww.DEBUG.Printf("Reading in config with options: %+v; FileNotFoundHandling: %s\n", opts, handling.String())
+
 	err := v.ReadInConfig()
 	if err != nil {
+		format, args := "Failed to read in config %s: %s", []any{v.ConfigFileUsed(), err.Error()}
+
 		if nferr, ok := err.(viper.ConfigFileNotFoundError); ok {
 			switch handling {
 			case IgnoreConfigFileNotFound:
+				DEBUG(format, args...)
 				return nil
 			case WarnOnConfigFileNotFound:
+				WARN(format, args...)
 				log.Warningf(nferr.Error())
 			case ErrorOnConfigFileNotFound:
+				ERROR(format, args...)
 				return err
 			case ExitOnConfigFileNotFound:
+				CRITICAL(format, args...)
 				log.Exitf(nferr.Error())
 			}
 		}
@@ -122,6 +146,21 @@ func ReadInConfig(v *viper.Viper, opts ConfigOptions, handling ConfigFileNotFoun
 
 	return err
 }
+
+var (
+	jwwlog = func(printer interface {
+		Printf(format string, args ...any)
+	}) func(format string, args ...any) {
+		return printer.Printf
+	}
+
+	TRACE    = jwwlog(jww.TRACE)
+	DEBUG    = jwwlog(jww.DEBUG)
+	INFO     = jwwlog(jww.INFO)
+	WARN     = jwwlog(jww.WARN)
+	ERROR    = jwwlog(jww.ERROR)
+	CRITICAL = jwwlog(jww.CRITICAL)
+)
 
 // ReadInDefaultConfig reads the default config (governed by the config-* flags
 // defined in this package) into the global viper singleton.

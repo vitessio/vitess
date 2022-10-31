@@ -26,9 +26,12 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/vipersync"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -42,6 +45,21 @@ var (
 	// LockTimeout is the maximum duration for which a
 	// shard / keyspace lock can be acquired for.
 	LockTimeout = 45 * time.Second
+
+	sv                          = vipersync.New()
+	__getRemoteOperationTimeout = vipersync.AdaptGetter(sv, "topo.remote_operation_timeout", func(v *viper.Viper) func(key string) time.Duration {
+		return v.GetDuration
+	})
+	remoteOperationTimeout = viperutil.NewValue(
+		"topo.remote_operation_timeout",
+
+		__getRemoteOperationTimeout,
+		// vipersync.AdaptGetter(sv, "topo.remote_operation_timeout", func(v *viper.Viper) func(key string) time.Duration {
+		// 	return v.GetDuration
+		// }),
+		viperutil.WithDefault(30*time.Second),
+		viperutil.WithFlags[time.Duration]("remote_operation_timeout"),
+	)
 
 	// RemoteOperationTimeout is used for operations where we have to
 	// call out to another process.
@@ -71,6 +89,41 @@ func init() {
 func registerTopoLockFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&RemoteOperationTimeout, "remote_operation_timeout", RemoteOperationTimeout, "time to wait for a remote operation")
 	fs.DurationVar(&LockTimeout, "lock-timeout", LockTimeout, "Maximum time for which a shard/keyspace lock can be acquired for")
+
+	remoteOperationTimeout.Bind(nil, fs)
+
+	servenv.OnRun(func() {
+		log.Errorf("servenv.OnRun hook for topo called")
+		vipersync.BindValue(sv, remoteOperationTimeout, fs)
+
+		cfg := viper.ConfigFileUsed()
+		if cfg == "" {
+			log.Errorf("no config file set on global viper")
+			return
+		}
+
+		ch := make(chan struct{}, 1)
+		go func() {
+			for range ch {
+				log.Errorf("topo.RemoteOperationTimeout updated; new value: %v", remoteOperationTimeout.Fetch())
+			}
+
+			log.Errorf("topo settings channel closed")
+		}()
+
+		servenv.OnTerm(func() {
+			close(ch)
+		})
+
+		sv.Notify(ch)
+		if err := sv.Watch(viper.ConfigFileUsed()); err != nil {
+			log.Errorf("failed to read config in vipersync.disk: %s", err.Error())
+			return
+		}
+
+		log.Errorf("initialized config watcher for topo settings")
+		log.Errorf("initial topo.RemoteOperationTimeout: %v", remoteOperationTimeout.Fetch())
+	})
 }
 
 // newLock creates a new Lock.
