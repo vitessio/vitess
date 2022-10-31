@@ -408,12 +408,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// Since Result is immutable, we make a copy.
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
-	out := &sqltypes.Result{
-		Fields:       in.Fields,
-		Rows:         in.Rows,
-		RowsAffected: in.RowsAffected,
-		InsertID:     in.InsertID,
-	}
+	out := in.ShallowCopy()
 
 	comparers := extractSlices(route.OrderBy)
 
