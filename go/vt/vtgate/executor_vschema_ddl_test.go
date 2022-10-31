@@ -601,11 +601,11 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	stmt = "alter vschema on nonexistent drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
-	require.EqualError(t, err, "Unknown database 'InvalidKeyspace' in vschema")
+	require.EqualError(t, err, "VT05003: Unknown database 'InvalidKeyspace' in vschema")
 
 	stmt = "alter vschema on nowhere.nohow drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, "Unknown database 'nowhere' in vschema")
+	require.EqualError(t, err, "VT05003: Unknown database 'nowhere' in vschema")
 
 	stmt = "alter vschema on test drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
