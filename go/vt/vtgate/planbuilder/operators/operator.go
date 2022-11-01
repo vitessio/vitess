@@ -34,10 +34,11 @@ The operators go through a few phases while planning:
 package operators
 
 import (
+	"fmt"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -125,356 +126,102 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, e
 }
 
 // AddPredicate implements the Operator interface
-func (noPredicates) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
 }
 
-func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
-	switch tableExpr := tableExpr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		return getOperatorFromAliasedTableExpr(ctx, tableExpr)
-	case *sqlparser.JoinTableExpr:
-		return getOperatorFromJoinTableExpr(ctx, tableExpr)
-	case *sqlparser.ParenTableExpr:
-		return crossJoin(ctx, tableExpr.Exprs)
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T table type", tableExpr)
-	}
-}
-
-func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (Operator, error) {
-	lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
-	if err != nil {
-		return nil, err
-	}
-	rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr)
-	if err != nil {
-		return nil, err
-	}
-
-	switch tableExpr.Join {
-	case sqlparser.NormalJoinType:
-		return createInnerJoin(ctx, tableExpr, lhs, rhs)
-	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-		return createOuterJoin(tableExpr, lhs, rhs)
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
-	}
-}
-
-func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (Operator, error) {
-	switch tbl := tableExpr.Expr.(type) {
-	case sqlparser.TableName:
-		tableID := ctx.SemTable.TableSetFor(tableExpr)
-		tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
+func VisitTopDown(root Operator, visitor func(Operator) error) error {
+	queue := []Operator{root}
+	for len(queue) > 0 {
+		this := queue[0]
+		queue = append(queue[1:], this.Inputs()...)
+		err := visitor(this)
 		if err != nil {
-			return nil, err
+			return err
+		}
+	}
+	return nil
+}
+
+func TableID(op Operator) (result semantics.TableSet) {
+	_ = VisitTopDown(op, func(this Operator) error {
+		if tbl, ok := this.(tableIDIntroducer); ok {
+			result.MergeInPlace(tbl.Introduces())
+		}
+		return nil
+	})
+	return
+}
+
+func unresolvedPredicates(op Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
+	_ = VisitTopDown(op, func(this Operator) error {
+		if tbl, ok := this.(unresolved); ok {
+			result = append(result, tbl.UnsolvedPredicates(st)...)
 		}
 
-		if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
-			solves := ctx.SemTable.TableSetFor(tableExpr)
-			return &Vindex{
-				Table: VindexTable{
-					TableID: tableID,
-					Alias:   tableExpr,
-					Table:   tbl,
-					VTable:  vt.Table.GetVindexTable(),
-				},
-				Vindex: vt.Vindex,
-				Solved: solves,
-			}, nil
+		return nil
+	})
+	return
+}
+
+func checkValid(op Operator) error {
+	return VisitTopDown(op, func(this Operator) error {
+		if chk, ok := this.(checkable); ok {
+			return chk.checkValid()
 		}
-		qg := newQueryGraph()
-		isInfSchema := tableInfo.IsInfSchema()
-		qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
-		qg.Tables = append(qg.Tables, qt)
-		return qg, nil
-	case *sqlparser.DerivedTable:
-		inner, err := CreateLogicalOperatorFromAST(ctx, tbl.Select)
+		return nil
+	})
+}
+
+func CostOf(op Operator) (cost int) {
+	_ = VisitTopDown(op, func(op Operator) error {
+		if costlyOp, ok := op.(costly); ok {
+			cost += costlyOp.Cost()
+		}
+		return nil
+	})
+	return
+}
+
+func Clone(op Operator) Operator {
+	inputs := op.Inputs()
+	clones := make([]Operator, len(inputs))
+	for i, input := range inputs {
+		clones[i] = Clone(input)
+	}
+	return op.Clone(clones)
+}
+
+func checkSize(inputs []Operator, shouldBe int) {
+	if len(inputs) != shouldBe {
+		panic(fmt.Sprintf("BUG: got the wrong number of inputs: got %d, expected %d", len(inputs), shouldBe))
+	}
+}
+
+type rewriterFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, changed bool, err error)
+
+func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter rewriterFunc) (Operator, bool, error) {
+	oldInputs := root.Inputs()
+	anythingChanged := false
+	newInputs := make([]Operator, len(oldInputs))
+	for i, operator := range oldInputs {
+		in, changed, err := rewriteBottomUp(ctx, operator, rewriter)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		if horizon, ok := inner.(*Horizon); ok {
-			inner = horizon.Source
+		if changed {
+			anythingChanged = true
 		}
-
-		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
+		newInputs[i] = in
 	}
-}
 
-func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (Operator, error) {
-	var output Operator
-	for _, tableExpr := range exprs {
-		op, err := getOperatorFromTableExpr(ctx, tableExpr)
-		if err != nil {
-			return nil, err
-		}
-		if output == nil {
-			output = op
-		} else {
-			output = createJoin(output, op)
-		}
+	if anythingChanged {
+		root = root.Clone(newInputs)
 	}
-	return output, nil
-}
 
-// CreateLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
-	switch node := selStmt.(type) {
-	case *sqlparser.Select:
-		op, err = createOperatorFromSelect(ctx, node)
-	case *sqlparser.Union:
-		op, err = createOperatorFromUnion(ctx, node)
-	case *sqlparser.Update:
-		op, err = createOperatorFromUpdate(ctx, node)
-	case *sqlparser.Delete:
-		op, err = createOperatorFromDelete(ctx, node)
-	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
-	}
+	newOp, b, err := rewriter(ctx, root)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-
-	if op, err = compact(ctx, op); err != nil {
-		return nil, err
-	}
-
-	if err = checkValid(op); err != nil {
-		return nil, err
-	}
-
-	return op, nil
-}
-
-func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
-	opLHS, err := CreateLogicalOperatorFromAST(ctx, node.Left)
-	if err != nil {
-		return nil, err
-	}
-
-	_, isRHSUnion := node.Right.(*sqlparser.Union)
-	if isRHSUnion {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
-	}
-	opRHS, err := CreateLogicalOperatorFromAST(ctx, node.Right)
-	if err != nil {
-		return nil, err
-	}
-
-	union := &Union{
-		Distinct: node.Distinct,
-		Sources:  []Operator{opLHS, opRHS},
-		Ordering: node.OrderBy,
-	}
-	return &Horizon{Source: union, Select: node}, nil
-}
-
-// createOperatorFromSelect creates an operator tree that represents the input SELECT query
-func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (Operator, error) {
-	subq, err := createSubqueryFromStatement(ctx, sel)
-	if err != nil {
-		return nil, err
-	}
-	op, err := crossJoin(ctx, sel.From)
-	if err != nil {
-		return nil, err
-	}
-	if sel.Where != nil {
-		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
-		for _, expr := range exprs {
-			op, err = op.AddPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr))
-			if err != nil {
-				return nil, err
-			}
-			addColumnEquality(ctx, expr)
-		}
-	}
-	if subq == nil {
-		return &Horizon{
-			Source: op,
-			Select: sel,
-		}, nil
-	}
-	subq.Outer = op
-	return &Horizon{
-		Source: subq,
-		Select: sel,
-	}, nil
-}
-
-func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
-	if err != nil {
-		return nil, err
-	}
-
-	assignments := make(map[string]sqlparser.Expr)
-	for _, set := range updStmt.Exprs {
-		assignments[set.Name.Name.String()] = set.Expr
-	}
-
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, tableInfo, qt, "update")
-	if err != nil {
-		return nil, err
-	}
-
-	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
-	if err != nil {
-		return nil, err
-	}
-
-	r := &Route{
-		Source: &Update{
-			QTable:              qt,
-			VTable:              vindexTable,
-			Assignments:         assignments,
-			ChangedVindexValues: cvv,
-			OwnedVindexQuery:    ovq,
-			AST:                 updStmt,
-		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vp,
-		TargetDestination: dest,
-	}
-
-	for _, predicate := range qt.Predicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if r.RouteOpCode == engine.Scatter && updStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
-	}
-
-	subq, err := createSubqueryFromStatement(ctx, updStmt)
-	if err != nil {
-		return nil, err
-	}
-	if subq == nil {
-		return r, nil
-	}
-	subq.Outer = r
-	return subq, nil
-}
-
-func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
-	alTbl, ok := tableExpr.(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
-	}
-	tblName, ok := alTbl.Expr.(sqlparser.TableName)
-	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
-	}
-
-	tableID := ctx.SemTable.TableSetFor(alTbl)
-	tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if tableInfo.IsInfSchema() {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
-	}
-
-	var predicates []sqlparser.Expr
-	if whereClause != nil {
-		predicates = sqlparser.SplitAndExpression(nil, whereClause.Expr)
-	}
-	qt := &QueryTable{
-		ID:          tableID,
-		Alias:       alTbl,
-		Table:       tblName,
-		Predicates:  predicates,
-		IsInfSchema: false,
-	}
-	return tableInfo, qt, nil
-}
-
-func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, deleteStmt.TableExprs[0], deleteStmt.Where)
-	if err != nil {
-		return nil, err
-	}
-
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, tableInfo, qt, "delete")
-	if err != nil {
-		return nil, err
-	}
-
-	del := &Delete{
-		QTable: qt,
-		VTable: vindexTable,
-		AST:    deleteStmt,
-	}
-	route := &Route{
-		Source:            del,
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		TargetDestination: dest,
-	}
-
-	if !vindexTable.Keyspace.Sharded {
-		return route, nil
-	}
-
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
-	if err != nil {
-		return nil, err
-	}
-
-	route.VindexPreds = vindexAndPredicates
-
-	var ovq string
-	if len(vindexTable.Owned) > 0 {
-		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: qt.Alias.As}
-		ovq = generateOwnedVindexQuery(tblExpr, deleteStmt, vindexTable, primaryVindex.Columns)
-	}
-
-	del.OwnedVindexQuery = ovq
-
-	for _, predicate := range qt.Predicates {
-		err := route.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if route.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
-	}
-
-	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
-	if subq == nil {
-		return route, nil
-	}
-	subq.Outer = route
-	return subq, nil
-}
-
-func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
-	switch expr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if expr.Operator != sqlparser.EqualOp {
-			return
-		}
-
-		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(left, expr.Right)
-		}
-		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(right, expr.Left)
-		}
-	}
+	return newOp, anythingChanged || b, nil
 }
