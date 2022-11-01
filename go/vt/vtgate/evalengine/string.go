@@ -19,6 +19,8 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -273,23 +275,75 @@ type builtinConv struct {
 }
 
 func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	const MaxUint = 18446744073709551615
+	var fromNum uint64
+	var fromNumNeg uint64
+	var isNeg bool
 	inarg := &args[0]
-	fromBase := args[1]
-	toBase := args[2]
+	inarg2 := &args[1]
+	inarg3 := &args[2]
+	fromBase := inarg2.int64()
+	toBase := inarg3.int64()
+	fromNum = 0
 
-	if inarg.isNull() || fromBase.isNull() || toBase.isNull() || fromBase.int64() < 2 || fromBase.int64() > 36 || toBase.int64() < 2 || toBase.int64() > 36 {
+	if inarg.isNull() || inarg2.isNull() || inarg3.isNull() || fromBase < 2 || fromBase > 36 || toBase < 2 || toBase > 36 {
 		result.setNull()
 		return
 	}
 
-	inarg.makeSignedIntegral()
+	rawString := string(inarg.toRawBytes())
+	re, _ := regexp.Compile(`[+-]?[0-9.x]+[a-vA-Vx]*`)
+	for _, num := range re.FindAllString(rawString, -1) {
+		isNeg = false
+		reFindDot, _ := regexp.Compile(`\.`)
+		reFindNeg, _ := regexp.Compile(`^-[0-9.]+[a-vA-V]*`)
+		if reFindDot.MatchString(num) {
+			temp, _ := strconv.ParseFloat(num, 64)
+			temp = math.Trunc(temp)
+			num = fmt.Sprint(int64(temp))
+		}
+		if reFindNeg.MatchString(num) {
+			isNeg = true
+			num = num[1:]
+		}
 
-	num, _ := strconv.ParseInt(fmt.Sprint(inarg.int64()), int(fromBase.int64()), 64)
+		if transNum, err := strconv.ParseUint(num, int(fromBase), 64); err == nil {
+			if isNeg {
+				fromNumNeg = fromNumNeg + transNum
+			} else {
+				fromNum = fromNum + transNum
+			}
+		} else if strings.Contains(err.Error(), "value out of range") {
+			if isNeg {
+				fromNumNeg = MaxUint
 
-	convNum := strconv.FormatUint(uint64(num), int(toBase.int64()))
-	convNum = strings.ToUpper(convNum)
-	result.setRaw(sqltypes.VarChar, []byte(convNum), inarg.collation())
-	result.makeTextual(env.DefaultCollation)
+			} else {
+				fromNum = MaxUint
+			}
+		} else {
+			fromNum = 0
+			break
+		}
+	}
+
+	if fromNumNeg < fromNum {
+		fromNum = fromNum - fromNumNeg
+	} else if fromNumNeg == MaxUint {
+		fromNum = 0
+	} else {
+		fromNum = fromNumNeg - fromNum
+	}
+	var toNum string
+	if isNeg {
+		temp := strconv.FormatUint(uint64(-fromNum), int(toBase))
+		toNum = strings.ToUpper(temp)
+	} else {
+		temp := strconv.FormatUint(fromNum, int(toBase))
+		toNum = strings.ToUpper(temp)
+	}
+
+	inarg.makeTextualAndConvert(env.DefaultCollation)
+	result.setString(toNum, inarg.collation())
 }
 
 func (builtinConv) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -297,8 +351,10 @@ func (builtinConv) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag)
 		throwArgError("CONV")
 	}
 	_, f1 := args[0].typeof(env)
+	_, f2 := args[1].typeof(env)
 	// typecheck the right-hand argument but ignore its flags
 	args[1].typeof(env)
+	args[2].typeof(env)
 
-	return sqltypes.VarChar, f1
+	return sqltypes.VarChar, f1 & f2
 }

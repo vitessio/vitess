@@ -209,10 +209,19 @@ func TestBuiltinConv(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 	cases := []string{
+		"-5.1",
+		"-5.9",
+		"-0xa21 + '1'",
 		"10",
 		"10 + '10' + 10",
+		"10 + '10' - 10",
 		"-10",
 		"'10'",
+		"10+'10'+'10a'+X'0a'",
+		"10 / 10",
+		"X'0FFFFFFFFFFFFFF'",
+		"99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+		"-99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
 	}
 	bases := []string{
 		"-1",
@@ -223,12 +232,18 @@ func TestBuiltinConv(t *testing.T) {
 		"10",
 		"16",
 		"32",
+		"64",
 	}
 
 	for _, num := range cases {
 		for _, fromBase := range bases {
-			for _, toBase := range bases {
+			for i := range bases {
+				toBase := bases[i]
 				query := fmt.Sprintf("CONV(%s, %s, %s)", num, fromBase, toBase)
+				compareRemoteExpr(t, conn, query)
+
+				toBase = bases[len(bases)-1-i]
+				query = fmt.Sprintf("CONV(%s, %s, %s)", num, fromBase, toBase)
 				compareRemoteExpr(t, conn, query)
 			}
 		}
