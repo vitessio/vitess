@@ -448,7 +448,7 @@ Below are the changes for each binary.
 - [zk](https://github.com/vitessio/vitess/blob/release-15.0/doc/flags/14.0-to-15.0-transition/zk.diff)
 - [zkctl](https://github.com/vitessio/vitess/blob/release-15.0/doc/flags/14.0-to-15.0-transition/zkctl.diff)
 - [zkctld](https://github.com/vitessio/vitess/blob/release-15.0/doc/flags/14.0-to-15.0-transition/zkctld.diff)
-- 
+
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/15_0_0_changelog.md).
 
