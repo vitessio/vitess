@@ -51,8 +51,8 @@ type (
 	// In some situation we go straight to the physical operator - when there are no options to consider,
 	// we can go straight to the end result.
 	Operator interface {
-		Clone(inputs []Operator) Operator
-		Inputs() []Operator
+		clone(inputs []Operator) Operator
+		inputs() []Operator
 
 		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
@@ -130,6 +130,15 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (O
 		return nil, err
 	}
 
+	backup := clone(op)
+
+	op, err = planHorizons(ctx, op)
+	if err == errNotHorizonPlanned {
+		op = backup
+	} else if err != nil {
+		return nil, err
+	}
+
 	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
@@ -137,8 +146,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (O
 	return op, err
 }
 
-// Inputs implements the Operator interface
-func (noInputs) Inputs() []Operator {
+// inputs implements the Operator interface
+func (noInputs) inputs() []Operator {
 	return nil
 }
 
@@ -156,7 +165,7 @@ func VisitTopDown(root Operator, visitor func(Operator) error) error {
 	queue := []Operator{root}
 	for len(queue) > 0 {
 		this := queue[0]
-		queue = append(queue[1:], this.Inputs()...)
+		queue = append(queue[1:], this.inputs()...)
 		err := visitor(this)
 		if err != nil {
 			return err
@@ -205,13 +214,13 @@ func CostOf(op Operator) (cost int) {
 	return
 }
 
-func Clone(op Operator) Operator {
-	inputs := op.Inputs()
+func clone(op Operator) Operator {
+	inputs := op.inputs()
 	clones := make([]Operator, len(inputs))
 	for i, input := range inputs {
-		clones[i] = Clone(input)
+		clones[i] = clone(input)
 	}
-	return op.Clone(clones)
+	return op.clone(clones)
 }
 
 func checkSize(inputs []Operator, shouldBe int) {
@@ -221,9 +230,10 @@ func checkSize(inputs []Operator, shouldBe int) {
 }
 
 type rewriterFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, changed bool, err error)
+type rewriterBreakableFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, visitChildren bool, err error)
 
 func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter rewriterFunc) (Operator, bool, error) {
-	oldInputs := root.Inputs()
+	oldInputs := root.inputs()
 	anythingChanged := false
 	newInputs := make([]Operator, len(oldInputs))
 	for i, operator := range oldInputs {
@@ -238,7 +248,7 @@ func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter r
 	}
 
 	if anythingChanged {
-		root = root.Clone(newInputs)
+		root = root.clone(newInputs)
 	}
 
 	newOp, b, err := rewriter(ctx, root)
@@ -246,4 +256,25 @@ func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter r
 		return nil, false, err
 	}
 	return newOp, anythingChanged || b, nil
+}
+
+func rewriteBreakableTopDown(ctx *plancontext.PlanningContext, in Operator, rewriterF rewriterBreakableFunc) (
+	newOp Operator,
+	err error,
+) {
+	newOp, visitChildren, err := rewriterF(ctx, in)
+	if err != nil || !visitChildren {
+		return
+	}
+
+	oldInputs := newOp.inputs()
+	newInputs := make([]Operator, len(oldInputs))
+	for i, oldInput := range oldInputs {
+		newInputs[i], err = rewriteBreakableTopDown(ctx, oldInput, rewriterF)
+		if err != nil {
+			return
+		}
+	}
+	newOp = newOp.clone(newInputs)
+	return
 }

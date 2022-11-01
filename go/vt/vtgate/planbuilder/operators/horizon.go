@@ -44,7 +44,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return h, nil
 }
 
-func (h *Horizon) Clone(inputs []Operator) Operator {
+func (h *Horizon) clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	return &Horizon{
 		Source: inputs[0],
@@ -52,6 +52,6 @@ func (h *Horizon) Clone(inputs []Operator) Operator {
 	}
 }
 
-func (h *Horizon) Inputs() []Operator {
+func (h *Horizon) inputs() []Operator {
 	return []Operator{h.Source}
 }
