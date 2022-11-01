@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/recovery/pitr"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -114,7 +116,7 @@ var (
 // - asserting that while restoring if we give small timeout value, it will restore upto to the last available backup (asserting only -80 shard)
 // - asserting that restoring to restoreTime2 (going from 2 shards to 2 shards with past time) is working, it will assert for both shards
 // - asserting that restoring to restoreTime3 is working, we should get complete data after restoring,  as we have in existing shards.
-func TestPITRRecovery(t *testing.T) {
+func TestPITRBinLogTLSRecovery(t *testing.T) {
 	defer cluster.PanicHandler(nil)
 	initializeCluster(t)
 	defer clusterInstance.Teardown()
@@ -343,11 +345,11 @@ func performResharding(t *testing.T) {
 	clusterInstance.WaitForTabletsToHealthyInVtgate()
 }
 
-func startBinlogServer(t *testing.T, primaryTablet *cluster.Vttablet) *BinLogServer {
-	bs, err := NewBinlogServer(hostname, clusterInstance.GetAndReservePort())
+func startBinlogServer(t *testing.T, primaryTablet *cluster.Vttablet) *pitr.BinLogServer {
+	bs, err := pitr.NewBinlogServer(hostname, clusterInstance.GetAndReservePort())
 	require.NoError(t, err)
 
-	err = bs.Start(MysqlSource{
+	err = bs.Start(pitr.MysqlSource{
 		Hostname: binlogHost,
 		Port:     primaryTablet.MysqlctlProcess.MySQLPort,
 		Username: mysqlUserName,
@@ -422,6 +424,7 @@ func initializeCluster(t *testing.T) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			tablet.MysqlctlProcess.SecureTransport = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -489,7 +492,7 @@ func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName stri
 	require.NoError(t, err)
 }
 
-func testTabletRecovery(t *testing.T, binlogServer *BinLogServer, lookupTimeout, restoreKeyspaceName, shardName, expectedRows string) {
+func testTabletRecovery(t *testing.T, binlogServer *pitr.BinLogServer, lookupTimeout, restoreKeyspaceName, shardName, expectedRows string) {
 	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
 	launchRecoveryTablet(t, recoveryTablet, binlogServer, lookupTimeout, restoreKeyspaceName, shardName)
 
@@ -501,7 +504,7 @@ func testTabletRecovery(t *testing.T, binlogServer *BinLogServer, lookupTimeout,
 	defer recoveryTablet.VttabletProcess.TearDown()
 }
 
-func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *BinLogServer, lookupTimeout, restoreKeyspaceName, shardName string) {
+func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *pitr.BinLogServer, lookupTimeout, restoreKeyspaceName, shardName string) {
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
