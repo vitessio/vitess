@@ -27,6 +27,8 @@ type Join struct {
 	LHS, RHS  Operator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
+
+	noColumns
 }
 
 var _ Operator = (*Join)(nil)
@@ -75,12 +77,17 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	op := createJoin(lhs, rhs)
 	if tableExpr.Condition.On != nil {
 		var err error
-		op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), op)
+		predicate := sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)
+		op, err = op.AddPredicate(ctx, predicate)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return op, nil
+}
+
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	return addPredicate(j, ctx, expr, false)
 }
 
 var _ joinOperator = (*Join)(nil)

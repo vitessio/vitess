@@ -61,7 +61,7 @@ func unresolvedPredicates(op Operator, st *semantics.SemTable) (result []sqlpars
 func checkValid(op Operator) error {
 	return VisitTopDown(op, func(this Operator) error {
 		if chk, ok := this.(checkable); ok {
-			return chk.CheckValid()
+			return chk.checkValid()
 		}
 		return nil
 	})

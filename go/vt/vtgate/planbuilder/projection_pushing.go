@@ -120,7 +120,7 @@ func pushProjectionIntoSemiJoin(
 func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, node *orderedAggregate, inner, hasAggregation bool) (int, bool, error) {
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
 	for _, aggregate := range node.aggregates {
-		if sqlparser.EqualsExpr(aggregate.Expr, expr.Expr) {
+		if ctx.SemTable.EqualsExpr(aggregate.Expr, expr.Expr) {
 			return aggregate.Col, false, nil
 		}
 		if isColName && colName.Name.EqualString(aggregate.Alias) {
@@ -128,7 +128,7 @@ func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		}
 	}
 	for _, key := range node.groupByKeys {
-		if sqlparser.EqualsExpr(key.Expr, expr.Expr) {
+		if ctx.SemTable.EqualsExpr(key.Expr, expr.Expr) {
 			return key.KeyCol, false, nil
 		}
 	}
