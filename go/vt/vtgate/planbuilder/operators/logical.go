@@ -25,8 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// CreateLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
+// createLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
+func createLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(ctx, node)
@@ -80,7 +80,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
-	opLHS, err := CreateLogicalOperatorFromAST(ctx, node.Left)
+	opLHS, err := createLogicalOperatorFromAST(ctx, node.Left)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	if isRHSUnion {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
 	}
-	opRHS, err := CreateLogicalOperatorFromAST(ctx, node.Right)
+	opRHS, err := createLogicalOperatorFromAST(ctx, node.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		qg.Tables = append(qg.Tables, qt)
 		return qg, nil
 	case *sqlparser.DerivedTable:
-		inner, err := CreateLogicalOperatorFromAST(ctx, tbl.Select)
+		inner, err := createLogicalOperatorFromAST(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}

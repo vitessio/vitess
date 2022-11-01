@@ -116,12 +116,8 @@ type (
 )
 
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (Operator, error) {
-	op, err := CreateLogicalOperatorFromAST(ctx, selStmt)
+	op, err := createLogicalOperatorFromAST(ctx, selStmt)
 	if err != nil {
-		return nil, err
-	}
-
-	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
 
@@ -129,7 +125,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (O
 		return nil, err
 	}
 
-	op, err = TransformToPhysical(ctx, op)
+	op, err = transformToPhysical(ctx, op)
 	if err != nil {
 		return nil, err
 	}

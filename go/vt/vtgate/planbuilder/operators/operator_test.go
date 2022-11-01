@@ -103,7 +103,7 @@ func TestOperator(t *testing.T) {
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
 			ctx := plancontext.NewPlanningContext(nil, semTable, nil, 0)
-			optree, err := CreateLogicalOperatorFromAST(ctx, stmt)
+			optree, err := createLogicalOperatorFromAST(ctx, stmt)
 			require.NoError(t, err)
 			optree, err = compact(ctx, optree)
 			require.NoError(t, err)

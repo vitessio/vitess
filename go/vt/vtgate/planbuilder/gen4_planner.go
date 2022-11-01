@@ -302,17 +302,12 @@ func gen4UpdateStmtPlanner(
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
-	logical, err := operators.CreateLogicalOperatorFromAST(ctx, updStmt)
+	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	physOp, err := operators.TransformToPhysical(ctx, logical)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, err
 	}
@@ -385,17 +380,12 @@ func gen4DeleteStmtPlanner(
 	}
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
-	logical, err := operators.CreateLogicalOperatorFromAST(ctx, deleteStmt)
+	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	physOp, err := operators.TransformToPhysical(ctx, logical)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, err
 	}

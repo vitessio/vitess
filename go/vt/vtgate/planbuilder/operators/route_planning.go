@@ -47,7 +47,7 @@ type (
 // This is where a lot of the optimisations of the query plans are done.
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
-func TransformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
+func transformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
 	op, _, err := rewriteBottomUp(ctx, in, func(context *plancontext.PlanningContext, operator Operator) (newOp Operator, changed bool, err error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
