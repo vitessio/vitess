@@ -25,169 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// PushPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
-// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
-// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
-func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
-	switch op := op.(type) {
-	case *Filter:
-		var err error
-		op.Source, err = PushPredicate(ctx, expr, op.Source)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
-	case *QueryGraph:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
-	case *Route:
-		return op.addPredicate(ctx, expr)
-	case *ApplyJoin, *Join:
-		join := op.(joinOperator) // stupid golang doesn't understand this without an explicit cast
-		return addPredicate(join, ctx, expr, false)
-	case *Table:
-		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
-		// changed by physical operators.
-		return newFilter(op, expr), nil
-	case *Derived:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
-	case *Vindex:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
-	case *Union:
-		err := op.addPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		return op, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
-	}
-}
-
-// PushOutputColumns will push the columns to the table they originate from,
-// making sure that intermediate operators pass the data through
-func PushOutputColumns(ctx *plancontext.PlanningContext, op Operator, columns ...*sqlparser.ColName) (PhysicalOperator, []int, error) {
-	switch op := op.(type) {
-	case *Route:
-		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
-		op.Source = retOp
-		return op, offsets, err
-	case *ApplyJoin:
-		var toTheLeft []bool
-		var lhs, rhs []*sqlparser.ColName
-		for _, col := range columns {
-			col.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-			if ctx.SemTable.RecursiveDeps(col).IsSolvedBy(TableID(op.LHS)) {
-				lhs = append(lhs, col)
-				toTheLeft = append(toTheLeft, true)
-			} else {
-				rhs = append(rhs, col)
-				toTheLeft = append(toTheLeft, false)
-			}
-		}
-		out, lhsOffset, err := PushOutputColumns(ctx, op.LHS, lhs...)
-		if err != nil {
-			return nil, nil, err
-		}
-		op.LHS = out
-		out, rhsOffset, err := PushOutputColumns(ctx, op.RHS, rhs...)
-		if err != nil {
-			return nil, nil, err
-		}
-		op.RHS = out
-
-		outputColumns := make([]int, len(toTheLeft))
-		var l, r int
-		for i, isLeft := range toTheLeft {
-			outputColumns[i] = len(op.Columns)
-			if isLeft {
-				op.Columns = append(op.Columns, -lhsOffset[l]-1)
-				l++
-			} else {
-				op.Columns = append(op.Columns, rhsOffset[r]+1)
-				r++
-			}
-		}
-		return op, outputColumns, nil
-	case *Table:
-		var offsets []int
-		for _, col := range columns {
-			exists := false
-			for idx, opCol := range op.Columns {
-				if sqlparser.EqualsRefOfColName(col, opCol) {
-					exists = true
-					offsets = append(offsets, idx)
-					break
-				}
-			}
-			if !exists {
-				offsets = append(offsets, len(op.Columns))
-				op.Columns = append(op.Columns, col)
-			}
-		}
-		return op, offsets, nil
-	case *Filter:
-		newSrc, ints, err := PushOutputColumns(ctx, op.Source, columns...)
-		op.Source = newSrc
-		return op, ints, err
-	case *Vindex:
-		idx, err := op.PushOutputColumns(columns)
-		return op, idx, err
-	case *Derived:
-		var noQualifierNames []*sqlparser.ColName
-		var offsets []int
-		if len(columns) == 0 {
-			return op, nil, nil
-		}
-		for _, col := range columns {
-			i, err := op.findOutputColumn(col)
-			if err != nil {
-				return nil, nil, err
-			}
-			var pos int
-			op.ColumnsOffset, pos = addToIntSlice(op.ColumnsOffset, i)
-			offsets = append(offsets, pos)
-			// skip adding to columns as it exists already.
-			if i > -1 {
-				continue
-			}
-			op.Columns = append(op.Columns, col)
-			noQualifierNames = append(noQualifierNames, sqlparser.NewColName(col.Name.String()))
-		}
-		if len(noQualifierNames) > 0 {
-			_, _, err := PushOutputColumns(ctx, op.Source, noQualifierNames...)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		return op, offsets, nil
-
-	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
-	}
-}
-
-func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
-	for idx, val := range columnOffset {
-		if val == valToAdd {
-			return columnOffset, idx
-		}
-	}
-	columnOffset = append(columnOffset, valToAdd)
-	return columnOffset, len(columnOffset) - 1
-}
-
 // RemovePredicate is used when we turn a predicate into a plan operator,
 // and the predicate needs to be removed as an AST construct
 func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
@@ -222,7 +59,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op O
 
 		var keep []sqlparser.Expr
 		for _, e := range sqlparser.SplitAndExpression(nil, op.Predicate) {
-			if !sqlparser.EqualsExpr(expr, e) {
+			if !ctx.SemTable.EqualsExpr(expr, e) {
 				keep = append(keep, e)
 				isRemoved = true
 			}
@@ -236,7 +73,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op O
 	case *Filter:
 		idx := -1
 		for i, predicate := range op.Predicates {
-			if sqlparser.EqualsExpr(predicate, expr) {
+			if ctx.SemTable.EqualsExpr(predicate, expr) {
 				idx = i
 			}
 		}
@@ -316,7 +153,7 @@ func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlp
 	switch {
 	case deps.IsSolvedBy(TableID(join.getLHS())):
 		// predicates can always safely be pushed down to the lhs if that is all they depend on
-		lhs, err := PushPredicate(ctx, expr, join.getLHS())
+		lhs, err := join.getLHS().AddPredicate(ctx, expr)
 		if err != nil {
 			return nil, err
 		}
@@ -336,7 +173,7 @@ func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlp
 		}
 
 		// For inner joins, we can just push the filtering on the RHS
-		rhs, err := PushPredicate(ctx, expr, join.getRHS())
+		rhs, err := join.getRHS().AddPredicate(ctx, expr)
 		if err != nil {
 			return nil, err
 		}

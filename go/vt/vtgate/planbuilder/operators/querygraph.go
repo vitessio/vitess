@@ -41,6 +41,7 @@ type (
 		NoDeps sqlparser.Expr
 
 		noInputs
+		noColumns
 	}
 
 	innerJoin struct {
@@ -188,12 +189,12 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 	return result
 }
 
-func (qg *QueryGraph) addPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(ctx, e)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return qg, nil
 }
