@@ -338,10 +338,10 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err := executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :vtg1 where id = :id /* trailing */",
+		Sql: "/* leading */ update `user` set a = :a where id = :id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1": sqltypes.TestBindVariable(int64(2)),
-			"id":   sqltypes.TestBindVariable(int64(1)),
+			"a":  sqltypes.TestBindVariable(int64(2)),
+			"id": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -353,10 +353,10 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err = executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :vtg1 where id = :id /* trailing */",
+		Sql: "/* leading */ update `user` set a = :a where id = :id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1": sqltypes.TestBindVariable(int64(2)),
-			"id":   sqltypes.TestBindVariable(int64(1)),
+			"a":  sqltypes.TestBindVariable(int64(2)),
+			"id": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
 	assertQueries(t, sbc1, nil)

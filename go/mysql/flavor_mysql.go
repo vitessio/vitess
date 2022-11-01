@@ -309,8 +309,18 @@ func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 }
 
 // TablesWithSize56 is a query to select table along with size for mysql 5.6
-const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
-		FROM information_schema.tables WHERE table_schema = database() group by table_name`
+const TablesWithSize56 = `SELECT table_name,
+	table_type,
+	UNIX_TIMESTAMP(create_time) AS uts_create_time,
+	table_comment,
+	SUM(data_length + index_length),
+	SUM(data_length + index_length)
+FROM information_schema.tables
+WHERE table_schema = database()
+GROUP BY table_name,
+	table_type,
+	uts_create_time,
+	table_comment`
 
 // TablesWithSize57 is a query to select table along with size for mysql 5.7.
 //
@@ -390,6 +400,7 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	case InstantDDLFlavorCapability,
+		InstantExpandEnumCapability,
 		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
 		InstantChangeColumnDefaultFlavorCapability:

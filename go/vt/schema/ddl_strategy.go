@@ -36,7 +36,7 @@ const (
 	postponeLaunchFlag     = "postpone-launch"
 	postponeCompletionFlag = "postpone-completion"
 	allowConcurrentFlag    = "allow-concurrent"
-	fastOverRevertibleFlag = "fast-over-revertible"
+	preferInstantDDL       = "prefer-instant-ddl"
 	fastRangeRotationFlag  = "fast-range-rotation"
 	vreplicationTestSuite  = "vreplication-test-suite"
 )
@@ -158,9 +158,9 @@ func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
 	return setting.hasFlag(allowConcurrentFlag)
 }
 
-// IsFastOverRevertibleFlag checks if strategy options include -fast-over-revertible
-func (setting *DDLStrategySetting) IsFastOverRevertibleFlag() bool {
-	return setting.hasFlag(fastOverRevertibleFlag)
+// IsPreferInstantDDL checks if strategy options include -prefer-instant-ddl
+func (setting *DDLStrategySetting) IsPreferInstantDDL() bool {
+	return setting.hasFlag(preferInstantDDL)
 }
 
 // IsFastRangeRotationFlag checks if strategy options include -fast-range-rotation
@@ -187,7 +187,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, postponeLaunchFlag):
 		case isFlag(opt, postponeCompletionFlag):
 		case isFlag(opt, allowConcurrentFlag):
-		case isFlag(opt, fastOverRevertibleFlag):
+		case isFlag(opt, preferInstantDDL):
 		case isFlag(opt, fastRangeRotationFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		default:

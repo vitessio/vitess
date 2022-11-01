@@ -53,9 +53,8 @@ func parseInterval(s string) (interval, error) {
 			return interval{}, vterrors.Wrapf(err, "invalid interval (%q)", s)
 		}
 		return interval{start: int64(start), end: int64(end)}, nil
-	} else {
-		return interval{start: int64(start), end: int64(start)}, nil
 	}
+	return interval{start: int64(start), end: int64(start)}, nil
 }
 
 // ParseMysql56GTIDSet is registered as a GTIDSet parser.
