@@ -182,6 +182,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	uvstreamerTestMode = true
 	defer func() { uvstreamerTestMode = false }()
 	initialize(t)
+
 	if err := engine.se.Reload(context.Background()); err != nil {
 		t.Fatal("Error reloading schema")
 	}
@@ -246,7 +247,7 @@ commit;"
 
 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
 	numCopyEvents += 2                                    /* GTID + Test event after all copy is done */
-	numCatchupEvents := 3 * 5                             /*2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT*/
+	numCatchupEvents := 2*5 + 1*7                         /*1 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT, 1 t1+t2 BEGIN+FIELD+ROW+GTID+FIELD+ROW+COMMIT*/
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
 	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 6 /* begin/field/2 inserts/gtid/commit */
@@ -408,7 +409,11 @@ func getTablePK(table string, idx int) *binlogdatapb.TableLastPK {
 }
 
 func insertRow(t *testing.T, table string, idx int, id int) {
-	execStatement(t, fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10))
+	query := fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10)
+	if table == "t2" {
+		log.Infof("&&&&&&&&&&&&&&& %s", query)
+	}
+	execStatement(t, query)
 }
 
 func printAllEvents(msg string) {
@@ -478,6 +483,8 @@ var expectedEvents = []string{
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
+	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"11220\"}}}",
 	"type:GTID",
 	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
 	"type:OTHER gtid:\"Copy Start t2\"",

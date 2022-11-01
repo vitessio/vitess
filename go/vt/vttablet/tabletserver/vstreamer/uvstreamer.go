@@ -230,25 +230,29 @@ func (uvs *uvstreamer) Cancel() {
 	uvs.cancel()
 }
 
+// We have not yet implemented the logic to check if an event for a row that is already copied,
+// so we always return true there so that we don't miss events
+func (uvs *uvstreamer) isRowCopied(tableName string, ev *binlogdatapb.VEvent) bool {
+	return true
+}
+
 // Only send events for tables whose copy phase is complete or in progress
 // Todo: filter out events for rows not yet copied. we can only do this as a best-effort for comparable PKs.
 func (uvs *uvstreamer) shouldSendEventForTable(tableName string, ev *binlogdatapb.VEvent) bool {
-	plan, ok := uvs.plans[tableName]
+	_, ok := uvs.plans[tableName]
 	// Event is for a table which is not in its copy phase.
 	if !ok {
 		return true
 	}
-	// Event is for a table whose copy phase is yet to be started
-	if plan.tablePK == nil || plan.tablePK.Lastpk == nil {
-		return false
-	}
-	// Table is currently in its copy phase.
+
+	// Table is currently in its copy phase. We have not yet implemented the logic to check if
+	// an event for a row that is already copied, so we always return true there so that we don't miss events
 	// We may send duplicate insert events or update/delete events for rows not yet seen to the client
 	// for the table being copied. This is ok as the client is expected to be
 	// idempotent: we only promise at-least-once semantics for VStream API (not exactly-once).
 	// Aside: vreplication workflows handle at-least-once by adding where clauses that render DML queries, related to
 	// events for rows not yet copied, as no-ops.
-	return true
+	return uvs.isRowCopied(tableName, ev)
 }
 
 // Do not send internal heartbeat events. Filter out events for tables whose copy has not been started.

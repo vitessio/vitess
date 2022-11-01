@@ -263,6 +263,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	catchupQueries := []string{
 		"insert into t1_copy_resume(id1,id2) values(9,9)", // this row will show up twice: once in catchup and copy
 		"update t1_copy_resume set id2 = 10 where id1 = 1",
+		"insert into t1(id1, id2) values(100,100)",
 		"delete from t1_copy_resume where id1 = 1",
 		"update t1_copy_resume set id2 = 90 where id1 = 9",
 	}
@@ -301,8 +302,8 @@ func TestVStreamCopyResume(t *testing.T) {
 	}
 	require.NotNil(t, reader)
 
-	expectedRowCopyEvents := 5 // id1 and id2 IN(5,6,7,8,9)
-	expectedCatchupEvents := len(catchupQueries)
+	expectedRowCopyEvents := 5                       // id1 and id2 IN(5,6,7,8,9)
+	expectedCatchupEvents := len(catchupQueries) - 1 // insert into t1 should never reach
 	rowCopyEvents, replCatchupEvents := 0, 0
 	expectedEvents := []string{
 		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"11"} after:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
