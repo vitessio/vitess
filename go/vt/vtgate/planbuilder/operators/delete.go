@@ -32,10 +32,7 @@ type Delete struct {
 	AST              *sqlparser.Delete
 
 	noInputs
-}
-
-func (d *Delete) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tried to push output column to delete")
+	noColumns
 }
 
 var _ PhysicalOperator = (*Delete)(nil)

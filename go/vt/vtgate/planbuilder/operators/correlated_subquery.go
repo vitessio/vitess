@@ -34,11 +34,15 @@ type (
 
 		// arguments that need to be copied from the outer to inner
 		Vars map[string]int
+
+		noColumns
 	}
 
 	SubQueryOp struct {
 		Outer, Inner Operator
 		Extracted    *sqlparser.ExtractedSubquery
+
+		noColumns
 	}
 )
 
@@ -100,14 +104,4 @@ func (s *SubQueryOp) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) 
 // AddPredicate implements the Operator interface
 func (c *CorrelatedSubQueryOp) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", c)
-}
-
-// AddColumn implements the Operator interface
-func (s *SubQueryOp) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", s)
-}
-
-// AddColumn implements the Operator interface
-func (c *CorrelatedSubQueryOp) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", c)
 }

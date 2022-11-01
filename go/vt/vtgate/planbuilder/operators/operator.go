@@ -40,6 +40,8 @@ type (
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
+
+		// AddColumn tells an operator which columns it should output.
 		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 	}
 
@@ -86,11 +88,18 @@ type (
 
 	// helper type that implements Inputs() returning nil
 	noInputs struct{}
+
+	noColumns struct{}
 )
 
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []Operator {
 	return nil
+}
+
+// AddColumn implements the Operator interface
+func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept columns")
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {

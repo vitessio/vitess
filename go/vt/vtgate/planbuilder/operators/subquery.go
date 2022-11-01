@@ -23,25 +23,31 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// SubQuery stores the information about subquery
-type SubQuery struct {
-	Outer Operator
-	Inner []*SubQueryInner
-}
+type (
+	// SubQuery stores the information about subquery
+	SubQuery struct {
+		Outer Operator
+		Inner []*SubQueryInner
+
+		noColumns
+	}
+
+	// SubQueryInner stores the subquery information for a select statement
+	SubQueryInner struct {
+		// Inner is the Operator inside the parenthesis of the subquery.
+		// i.e: select (select 1 union select 1), the Inner here would be
+		// of type Concatenate since we have a Union.
+		Inner Operator
+
+		// ExtractedSubquery contains all information we need about this subquery
+		ExtractedSubquery *sqlparser.ExtractedSubquery
+
+		noColumns
+	}
+)
 
 var _ Operator = (*SubQuery)(nil)
 var _ Operator = (*SubQueryInner)(nil)
-
-// SubQueryInner stores the subquery information for a select statement
-type SubQueryInner struct {
-	// Inner is the Operator inside the parenthesis of the subquery.
-	// i.e: select (select 1 union select 1), the Inner here would be
-	// of type Concatenate since we have a Union.
-	Inner Operator
-
-	// ExtractedSubquery contains all information we need about this subquery
-	ExtractedSubquery *sqlparser.ExtractedSubquery
-}
 
 // Clone implements the Operator interface
 func (s *SubQueryInner) Clone(inputs []Operator) Operator {
@@ -106,12 +112,4 @@ func (s *SubQuery) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (O
 
 func (s *SubQueryInner) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", s)
-}
-
-func (s *SubQuery) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", s)
-}
-
-func (s *SubQueryInner) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", s)
 }

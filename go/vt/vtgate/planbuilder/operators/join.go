@@ -17,9 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -29,6 +27,8 @@ type Join struct {
 	LHS, RHS  Operator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
+
+	noColumns
 }
 
 var _ Operator = (*Join)(nil)
@@ -88,10 +88,6 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 
 func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
 	return addPredicate(j, ctx, expr, false)
-}
-
-func (j *Join) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tried to push output column to join")
 }
 
 var _ joinOperator = (*Join)(nil)

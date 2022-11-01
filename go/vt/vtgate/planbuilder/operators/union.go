@@ -30,6 +30,8 @@ type Union struct {
 
 	// TODO this should be removed. For now it's used to fail queries
 	Ordering sqlparser.OrderBy
+
+	noColumns
 }
 
 var _ PhysicalOperator = (*Union)(nil)
@@ -118,8 +120,4 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	}
 
 	return u, nil
-}
-
-func (u *Union) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push columns into %T", u)
 }
