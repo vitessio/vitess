@@ -114,6 +114,8 @@ const (
 	vcopierCopyTaskCancel
 	vcopierCopyTaskComplete
 	vcopierCopyTaskFail
+
+	sqlSetReadCommitted = "set transaction isolation level read committed"
 )
 
 // vcopierCopyWorkQueue accepts tasks via Enqueue, and distributes those tasks
@@ -686,6 +688,13 @@ func (vc *vcopier) newCopyWorkerFactory(parallelism int) func(context.Context) (
 			dbClient, err := vc.newClientConnection(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create new db client: %s", err.Error())
+			}
+			// This is only helpful with parallel workers.
+			// No need to reset the isolation level as the connection
+			// is not shared/re-used and is closed when the copy phase
+			// is done.
+			if _, err := dbClient.Execute(sqlSetReadCommitted); err != nil {
+				return nil, fmt.Errorf("failed to set isolation level to READ-COMMITTED: %s", err.Error())
 			}
 			return newVCopierCopyWorker(
 				true, /* close db client */
