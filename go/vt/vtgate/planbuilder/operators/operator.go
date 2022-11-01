@@ -89,7 +89,11 @@ type (
 	// helper type that implements Inputs() returning nil
 	noInputs struct{}
 
+	// helper type that implements AddColumn() returning an error
 	noColumns struct{}
+
+	// helper type that implements AddPredicate() returning an error
+	noPredicates struct{}
 )
 
 // Inputs implements the Operator interface
@@ -100,6 +104,11 @@ func (noInputs) Inputs() []Operator {
 // AddColumn implements the Operator interface
 func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
 	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept columns")
+}
+
+// AddPredicate implements the Operator interface
+func (noPredicates) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
