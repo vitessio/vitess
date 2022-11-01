@@ -202,17 +202,12 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	logical, err := operators.CreateLogicalOperatorFromAST(ctx, selStmt)
+	op, err := operators.PlanQuery(ctx, selStmt)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	physOp, err := operators.TransformToPhysical(ctx, logical)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, nil, err
 	}

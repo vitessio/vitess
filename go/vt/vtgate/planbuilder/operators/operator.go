@@ -115,6 +115,15 @@ type (
 	noPredicates struct{}
 )
 
+func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (Operator, error) {
+	op, err := CreateLogicalOperatorFromAST(ctx, selStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	return TransformToPhysical(ctx, op)
+}
+
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []Operator {
 	return nil
