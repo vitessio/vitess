@@ -65,7 +65,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerBackupCompressionFlags)
 	}
 }
