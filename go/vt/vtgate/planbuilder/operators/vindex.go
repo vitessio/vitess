@@ -68,19 +68,14 @@ func (v *Vindex) Clone(inputs []Operator) Operator {
 var _ PhysicalOperator = (*Vindex)(nil)
 
 func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	// TODO: unify with table
-	col, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
-	}
+	return addColumn(v, expr)
+}
 
-	for idx, column := range v.Columns {
-		if col.Name.Equal(column.Name) {
-			return idx, nil
-		}
-	}
+func (v *Vindex) GetColumns() []*sqlparser.ColName {
+	return v.Columns
+}
+func (v *Vindex) AddCol(col *sqlparser.ColName) {
 	v.Columns = append(v.Columns, col)
-	return len(v.Columns) - 1, nil
 }
 
 // checkValid implements the Operator interface

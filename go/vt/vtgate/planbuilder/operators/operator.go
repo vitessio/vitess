@@ -41,7 +41,8 @@ type (
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 
-		// AddColumn tells an operator which columns it should output.
+		// AddColumn tells an operator to also output an additional column specified.
+		// The offset to the column is returned.
 		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 	}
 

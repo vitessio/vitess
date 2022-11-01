@@ -25,13 +25,19 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type Table struct {
-	QTable  *QueryTable
-	VTable  *vindexes.Table
-	Columns []*sqlparser.ColName
+type (
+	Table struct {
+		QTable  *QueryTable
+		VTable  *vindexes.Table
+		Columns []*sqlparser.ColName
 
-	noInputs
-}
+		noInputs
+	}
+	ColNameColumns interface {
+		GetColumns() []*sqlparser.ColName
+		AddCol(*sqlparser.ColName)
+	}
+)
 
 var _ PhysicalOperator = (*Table)(nil)
 
@@ -63,15 +69,28 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 }
 
 func (to *Table) AddColumn(_ *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
+	return addColumn(to, e)
+}
+
+func (to *Table) GetColumns() []*sqlparser.ColName {
+	return to.Columns
+}
+func (to *Table) AddCol(col *sqlparser.ColName) {
+	to.Columns = append(to.Columns, col)
+}
+
+func addColumn(op ColNameColumns, e sqlparser.Expr) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table/vindex")
 	}
-	for idx, column := range to.Columns {
+	cols := op.GetColumns()
+	for idx, column := range cols {
 		if col.Name.Equal(column.Name) {
 			return idx, nil
 		}
 	}
-	to.Columns = append(to.Columns, col)
-	return len(to.Columns) - 1, nil
+	offset := len(cols)
+	op.AddCol(col)
+	return offset, nil
 }

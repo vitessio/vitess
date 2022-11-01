@@ -413,7 +413,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // table column even though they are written differently. Example would be the `foobar` column in the following query:
 // `SELECT foobar FROM tbl ORDER BY tbl.foobar`
 // The expression in the select list is not equal to the one in the ORDER BY,
-// but they point to the same column and would be considered equal to this method
+// but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
