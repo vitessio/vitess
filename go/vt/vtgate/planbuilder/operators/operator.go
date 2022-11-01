@@ -14,6 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package operators contains the operators used to plan queries.
+/*
+The operators go through a few phases while planning:
+1. Logical
+   In this first pass, we build an operator tree from the incoming parsed query.
+   It will contain logical joins - we still haven't decided on the join algorithm to use yet.
+   At the leaves, it will contain QueryGraphs - these are the tables in the FROM clause
+   that we can easily do join ordering on. The logical tree will represent the full query,
+   including projections, grouping, ordering and so on.
+2. Physical
+   Once the logical plan has been fully built, we go bottom up and plan which routes that will be used.
+   During this phase, we will also decide which join algorithms should be used on the vtgate level
+3. Columns & Aggregation
+   Once we know which queries will be sent to the tablets, we go over the tree and decide which
+   columns each operator should output. At this point, we also do offset lookups,
+   so we know at runtime from which columns in the input table we need to read.
+*/
 package operators
 
 import (
@@ -177,6 +194,10 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		if err != nil {
 			return nil, err
 		}
+		if horizon, ok := inner.(*Horizon); ok {
+			inner = horizon.Source
+		}
+
 		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
@@ -252,12 +273,13 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		return nil, err
 	}
 
-	return &Union{
+	union := &Union{
 		Distinct:    node.Distinct,
 		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
 		Sources:     []Operator{opLHS, opRHS},
 		Ordering:    node.OrderBy,
-	}, nil
+	}
+	return &Horizon{Source: union, Select: node}, nil
 }
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
@@ -281,10 +303,16 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 		}
 	}
 	if subq == nil {
-		return op, nil
+		return &Horizon{
+			Source: op,
+			Select: sel,
+		}, nil
 	}
 	subq.Outer = op
-	return subq, nil
+	return &Horizon{
+		Source: subq,
+		Select: sel,
+	}, nil
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, error) {

@@ -117,6 +117,9 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 			return nil, err
 		}
 		u.Sources[i], err = u.Sources[i].AddPredicate(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return u, nil

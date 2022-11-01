@@ -52,8 +52,15 @@ func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 	var newSels []*sqlparser.Select
 	anythingChanged := false
 	for i, source := range u.Sources {
-		other, isUnion := source.(*Union)
-		if !isUnion {
+		var other *Union
+		horizon, ok := source.(*Horizon)
+		if ok {
+			union, ok := horizon.Source.(*Union)
+			if ok {
+				other = union
+			}
+		}
+		if other == nil {
 			newSources = append(newSources, source)
 			newSels = append(newSels, u.SelectStmts[i])
 			continue

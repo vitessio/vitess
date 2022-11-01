@@ -219,11 +219,6 @@ func newBuildSelectPlan(
 
 	plan = optimizePlan(plan)
 
-	plan, err = planHorizon(ctx, plan, selStmt, true)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
 		if err := setMiscFunc(plan, sel); err != nil {

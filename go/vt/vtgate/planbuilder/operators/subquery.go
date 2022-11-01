@@ -98,6 +98,10 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 		if err != nil {
 			return nil, err
 		}
+		if horizon, ok := opInner.(*Horizon); ok {
+			opInner = horizon.Source
+		}
+
 		subq.Inner = append(subq.Inner, &SubQueryInner{
 			ExtractedSubquery: sq,
 			Inner:             opInner,
