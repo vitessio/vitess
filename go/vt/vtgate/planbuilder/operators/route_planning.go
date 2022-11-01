@@ -337,57 +337,6 @@ func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
 	return nil
 }
 
-func tryRewriteOrFalse(expr sqlparser.Expr) sqlparser.Expr {
-	rewrote := false
-	newPred := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
-		_, ok := cursor.Node().(*sqlparser.OrExpr)
-		return ok
-	}, func(cursor *sqlparser.Cursor) bool {
-		// we are looking for the pattern WHERE c = 1 OR 1 = 0
-		switch or := cursor.Node().(type) {
-		case *sqlparser.OrExpr:
-			isFalse := func(subExpr sqlparser.Expr) bool {
-				cmp, ok := subExpr.(*sqlparser.ComparisonExpr)
-				if !ok {
-					return false
-				}
-
-				left, ok := cmp.Left.(*sqlparser.Literal)
-				if !ok {
-					return false
-				}
-
-				right, ok := cmp.Right.(*sqlparser.Literal)
-				if !ok {
-					return false
-				}
-
-				switch cmp.Operator {
-				case sqlparser.EqualOp:
-					if left.Val != right.Val {
-						return true
-					}
-				}
-
-				return false
-			}
-
-			if isFalse(or.Left) {
-				rewrote = true
-				cursor.Replace(or.Right)
-			} else if isFalse(or.Right) {
-				rewrote = true
-				cursor.Replace(or.Left)
-			}
-		}
-		return true
-	})
-	if rewrote {
-		return newPred.(sqlparser.Expr)
-	}
-	return nil
-}
-
 func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (*Route, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
