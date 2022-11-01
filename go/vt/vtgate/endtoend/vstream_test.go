@@ -250,13 +250,6 @@ func TestVStreamCopyResume(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// This GTID should end up as a no-op because we should have copied the
-	// existing row
-	_, err = conn.ExecuteFetch("insert into t1_copy_resume(id1,id2) values(9,9)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// lastPK is id1=4, meaning we should only copy rows for id1 IN(5,6,7,8,9)
 	lastPK := sqltypes.Result{
 		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT64}},
@@ -267,10 +260,17 @@ func TestVStreamCopyResume(t *testing.T) {
 		Lastpk:    sqltypes.ResultToProto3(&lastPK),
 	}}
 
-	// This GTID must have a before and after value
-	_, err = conn.ExecuteFetch("update t1_copy_resume set id2 = 10 where id1 = 1", 1, false)
-	if err != nil {
-		t.Fatal(err)
+	catchupQueries := []string{
+		"insert into t1_copy_resume(id1,id2) values(9,9)", // this row will show up twice: once in catchup and copy
+		"update t1_copy_resume set id2 = 10 where id1 = 1",
+		"delete from t1_copy_resume where id1 = 1",
+		"update t1_copy_resume set id2 = 90 where id1 = 9",
+	}
+	for _, query := range catchupQueries {
+		_, err = conn.ExecuteFetch(query, 1, false)
+		if err != nil {
+			require.NoError(t, err)
+		}
 	}
 
 	var shardGtids []*binlogdatapb.ShardGtid
@@ -302,16 +302,18 @@ func TestVStreamCopyResume(t *testing.T) {
 	require.NotNil(t, reader)
 
 	expectedRowCopyEvents := 5 // id1 and id2 IN(5,6,7,8,9)
-	expectedCatchupEvents := 2 // id1=9 and id2=9; id2=10 where id1=1
+	expectedCatchupEvents := len(catchupQueries)
 	rowCopyEvents, replCatchupEvents := 0, 0
 	expectedEvents := []string{
 		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"11"} after:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"55"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
 		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"66"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
 		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"77"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
 		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"88"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
 		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"99"} after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 	}
 	var evs []*binlogdatapb.VEvent
 	for {
@@ -524,8 +526,16 @@ func (v VEventSorter) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 func (v VEventSorter) Less(i, j int) bool {
-	valI := string(v[i].GetRowEvent().RowChanges[0].After.Values)
-	valJ := string(v[j].GetRowEvent().RowChanges[0].After.Values)
+	valsI := v[i].GetRowEvent().RowChanges[0].After
+	if valsI == nil {
+		valsI = v[i].GetRowEvent().RowChanges[0].Before
+	}
+	valsJ := v[j].GetRowEvent().RowChanges[0].After
+	if valsJ == nil {
+		valsJ = v[j].GetRowEvent().RowChanges[0].Before
+	}
+	valI := string(valsI.Values)
+	valJ := string(valsJ.Values)
 	if valI == valJ {
 		return v[i].Timestamp < v[j].Timestamp
 	}
