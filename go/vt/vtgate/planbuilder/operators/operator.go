@@ -121,7 +121,24 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (O
 		return nil, err
 	}
 
-	return TransformToPhysical(ctx, op)
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if err = checkValid(op); err != nil {
+		return nil, err
+	}
+
+	op, err = TransformToPhysical(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	return op, err
 }
 
 // Inputs implements the Operator interface

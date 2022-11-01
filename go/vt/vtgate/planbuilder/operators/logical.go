@@ -43,14 +43,6 @@ func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 		return nil, err
 	}
 
-	if op, err = compact(ctx, op); err != nil {
-		return nil, err
-	}
-
-	if err = checkValid(op); err != nil {
-		return nil, err
-	}
-
 	return op, nil
 }
 
