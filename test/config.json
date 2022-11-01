@@ -369,6 +369,17 @@
 				"site_test"
 			]
 		},
+		"pitrbinlogtls": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrbinservertls"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "10",
+			"RetryMax": 1,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"pitrtls": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],

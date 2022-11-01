@@ -441,9 +441,9 @@ func tlsPerformResharding(t *testing.T) {
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
-	removeTablets(t, []*cluster.Vttablet{primary, replica1})
+	removeTablets(t, []*cluster.Vttablet{primary, replica1, replica2})
 
-	for _, tablet := range []*cluster.Vttablet{replica1} {
+	for _, tablet := range []*cluster.Vttablet{replica1, replica2} {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.NoError(t, err)
 	}
