@@ -220,15 +220,6 @@ func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (Op
 	return output, nil
 }
 
-func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
-	switch s := s.(type) {
-	case *sqlparser.Select:
-		return s
-	default:
-		return nil
-	}
-}
-
 // CreateLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
 func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
 	switch node := selStmt.(type) {
@@ -274,10 +265,9 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	}
 
 	union := &Union{
-		Distinct:    node.Distinct,
-		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
-		Sources:     []Operator{opLHS, opRHS},
-		Ordering:    node.OrderBy,
+		Distinct: node.Distinct,
+		Sources:  []Operator{opLHS, opRHS},
+		Ordering: node.OrderBy,
 	}
 	return &Horizon{Source: union, Select: node}, nil
 }

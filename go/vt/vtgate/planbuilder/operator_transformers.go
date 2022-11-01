@@ -549,7 +549,12 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *operators.Un
 func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []collations.ID {
 	// TODO: coerce selects' select expressions' collations
 	var colls []collations.ID
-	for _, expr := range n.SelectStmts[0].SelectExprs {
+
+	sel, err := n.GetSelectFor(0)
+	if err != nil {
+		return nil
+	}
+	for _, expr := range sel.SelectExprs {
 		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil
