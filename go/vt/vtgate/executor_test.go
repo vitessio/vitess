@@ -1283,7 +1283,7 @@ func TestExecutorDDL(t *testing.T) {
 	}
 
 	stmts := []string{
-		"create table t1(id bigint primary key)",
+		"create table t2(id bigint primary key)",
 		"alter table t2 add primary key (id)",
 		"rename table t2 to t3",
 		"truncate table t2",
@@ -1307,10 +1307,10 @@ func TestExecutorDDL(t *testing.T) {
 			stmtType := "DDL"
 			_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
-				require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail")
+				require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail: %q", stmt)
 				stmtType = "" // For error case, plan is not generated to query log will not contain any stmtType.
 			} else {
-				require.NoError(t, err)
+				require.NoError(t, err, "did not expect error for query: %q", stmt)
 			}
 
 			diff := cmp.Diff(tc.wantCnts, cnts{
@@ -1330,6 +1330,7 @@ func TestExecutorDDL(t *testing.T) {
 		input  string
 		hasErr bool
 	}{
+		{input: "create table t1(id bigint primary key)", hasErr: false},
 		{input: "drop table t1", hasErr: false},
 		{input: "drop table t2", hasErr: true},
 		{input: "drop view t1", hasErr: false},
