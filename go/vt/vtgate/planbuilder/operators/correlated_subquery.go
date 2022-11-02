@@ -31,11 +31,17 @@ type (
 
 		// arguments that need to be copied from the outer to inner
 		Vars map[string]int
+
+		noColumns
+		noPredicates
 	}
 
 	SubQueryOp struct {
 		Outer, Inner Operator
 		Extracted    *sqlparser.ExtractedSubquery
+
+		noColumns
+		noPredicates
 	}
 )
 

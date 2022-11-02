@@ -29,6 +29,8 @@ type Delete struct {
 	AST              *sqlparser.Delete
 
 	noInputs
+	noColumns
+	noPredicates
 }
 
 var _ PhysicalOperator = (*Delete)(nil)
