@@ -4,15 +4,10 @@ concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
 
-env:
-  LAUNCHABLE_ORGANIZATION: "vitess"
-  LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
-
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    runs-on: ubuntu-20.04
     timeout-minutes: 45
 
     steps:
@@ -107,33 +102,12 @@ jobs:
     {{end}}
 
     - name: Run cluster endtoend test
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 45
       run: |
         source build.env
 
         set -x
-
-        {{if .LimitResourceUsage}}
-        # Increase our local ephemeral port range as we could exhaust this
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
-        # Increase our open file descriptor limit as we could hit this
-        ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql57.cnf
-        innodb_buffer_pool_dump_at_shutdown=OFF
-        innodb_buffer_pool_load_at_startup=OFF
-        innodb_buffer_pool_size=64M
-        innodb_doublewrite=OFF
-        innodb_flush_log_at_trx_commit=0
-        innodb_flush_method=O_DIRECT
-        innodb_numa_interleave=ON
-        innodb_adaptive_hash_index=OFF
-        sync_binlog=0
-        sync_relay_log=0
-        performance_schema=OFF
-        slow-query-log=OFF
-        EOF
-        {{end}}
 
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}}
