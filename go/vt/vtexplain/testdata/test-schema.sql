@@ -106,6 +106,24 @@ CREATE TABLE orders_id_lookup (
   primary key(id)
 );
 
+CREATE TABLE orders_id_lookup_exclusive_read_lock (
+  id int NOT NULL,
+  keyspace_id varbinary(128),
+  primary key(id)
+);
+
+CREATE TABLE orders_id_lookup_shared_read_lock (
+  id int NOT NULL,
+  keyspace_id varbinary(128),
+  primary key(id)
+);
+
+CREATE TABLE orders_id_lookup_no_read_lock (
+  id int NOT NULL,
+  keyspace_id varbinary(128),
+  primary key(id)
+);
+
 CREATE TABLE orders_id_lookup_no_verify (
   id int NOT NULL,
   keyspace_id varbinary(128),

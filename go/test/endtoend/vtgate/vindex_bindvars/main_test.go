@@ -42,6 +42,9 @@ var (
     field BIGINT NOT NULL,
     field2 BIGINT,
     field3 BIGINT,
+    field4 BIGINT,
+    field5 BIGINT,
+    field6 BIGINT,
     PRIMARY KEY (id)
 ) ENGINE=Innodb;
 
@@ -61,6 +64,24 @@ CREATE TABLE lookup3 (
     field3 BIGINT NOT NULL,
     keyspace_id binary(8),
     UNIQUE KEY (field3)
+) ENGINE=Innodb;
+
+CREATE TABLE lookup4 (
+    field4 BIGINT NOT NULL,
+    keyspace_id binary(8),
+    UNIQUE KEY (field4)
+) ENGINE=Innodb;
+
+CREATE TABLE lookup5 (
+    field5 BIGINT NOT NULL,
+    keyspace_id binary(8),
+    UNIQUE KEY (field5)
+) ENGINE=Innodb;
+
+CREATE TABLE lookup6 (
+    field6 BIGINT NOT NULL,
+    keyspace_id binary(8),
+    UNIQUE KEY (field6)
 ) ENGINE=Innodb;
 
 CREATE TABLE thex (
@@ -118,6 +139,36 @@ CREATE TABLE thex (
                 "to": "keyspace_id"
             },
             "owner": "t1"
+        },
+        "lookup4": {
+            "type": "lookup",
+            "params": {
+                "from": "field4",
+                "read_lock": "exclusive",
+                "table": "lookup4",
+                "to": "keyspace_id"
+            },
+            "owner": "t1"
+        },
+        "lookup5": {
+            "type": "lookup",
+            "params": {
+                "from": "field5",
+                "read_lock": "shared",
+                "table": "lookup5",
+                "to": "keyspace_id"
+            },
+            "owner": "t1"
+        },
+        "lookup6": {
+            "type": "lookup",
+            "params": {
+                "from": "field6",
+                "read_lock": "none",
+                "table": "lookup6",
+                "to": "keyspace_id"
+            },
+            "owner": "t1"
         }
     },
     "tables": {
@@ -138,6 +189,18 @@ CREATE TABLE thex (
                 {
                     "column": "field3",
                     "name": "lookup3"
+                },
+                {
+                    "column": "field4",
+                    "name": "lookup4"
+                },
+                {
+                    "column": "field5",
+                    "name": "lookup5"
+                },
+                {
+                    "column": "field6",
+                    "name": "lookup6"
                 }
             ]
         },
@@ -161,6 +224,30 @@ CREATE TABLE thex (
             "column_vindexes": [
                 {
                     "column": "field3",
+                    "name": "binary_md5_vdx"
+                }
+            ]
+        },
+        "lookup4": {
+            "column_vindexes": [
+                {
+                    "column": "field4",
+                    "name": "binary_md5_vdx"
+                }
+            ]
+        },
+        "lookup5": {
+            "column_vindexes": [
+                {
+                    "column": "field5",
+                    "name": "binary_md5_vdx"
+                }
+            ]
+        },
+        "lookup6": {
+            "column_vindexes": [
+                {
+                    "column": "field6",
                     "name": "binary_md5_vdx"
                 }
             ]
@@ -245,51 +332,51 @@ func TestVindexBindVarOverlap(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "INSERT INTO t1 (id, field, field2, field3) VALUES "+
-		"(0,1,2,3), "+
-		"(1,2,3,4), "+
-		"(2,3,4,5), "+
-		"(3,4,5,6), "+
-		"(4,5,6,7), "+
-		"(5,6,7,8), "+
-		"(6,7,8,9), "+
-		"(7,8,9,10), "+
-		"(8,9,10,11), "+
-		"(9,10,11,12), "+
-		"(10,11,12,13), "+
-		"(11,12,13,14), "+
-		"(12,13,14,15), "+
-		"(13,14,15,16), "+
-		"(14,15,16,17), "+
-		"(15,16,17,18), "+
-		"(16,17,18,19), "+
-		"(17,18,19,20), "+
-		"(18,19,20,21), "+
-		"(19,20,21,22), "+
-		"(20,21,22,23)")
-	result := utils.Exec(t, conn, "select id, field, field2, field3 from t1 order by id")
+	utils.Exec(t, conn, "INSERT INTO t1 (id, field, field2, field3, field4, field5, field6) VALUES "+
+		"(0,1,2,3,4,5,6), "+
+		"(1,2,3,4,5,6,7), "+
+		"(2,3,4,5,6,7,8), "+
+		"(3,4,5,6,7,8,9), "+
+		"(4,5,6,7,8,9,10), "+
+		"(5,6,7,8,9,10,11), "+
+		"(6,7,8,9,10,11,12), "+
+		"(7,8,9,10,11,12,13), "+
+		"(8,9,10,11,12,13,14), "+
+		"(9,10,11,12,13,14,15), "+
+		"(10,11,12,13,14,15,16), "+
+		"(11,12,13,14,15,16,17), "+
+		"(12,13,14,15,16,17,18), "+
+		"(13,14,15,16,17,18,19), "+
+		"(14,15,16,17,18,19,20), "+
+		"(15,16,17,18,19,20,21), "+
+		"(16,17,18,19,20,21,22), "+
+		"(17,18,19,20,21,22,23), "+
+		"(18,19,20,21,22,23,24), "+
+		"(19,20,21,22,23,24,25), "+
+		"(20,21,22,23,24,25,26)")
+	result := utils.Exec(t, conn, "select id, field, field2, field3, field4, field5, field6 from t1 order by id")
 
 	expected :=
-		"[[INT64(0) INT64(1) INT64(2) INT64(3)] " +
-			"[INT64(1) INT64(2) INT64(3) INT64(4)] " +
-			"[INT64(2) INT64(3) INT64(4) INT64(5)] " +
-			"[INT64(3) INT64(4) INT64(5) INT64(6)] " +
-			"[INT64(4) INT64(5) INT64(6) INT64(7)] " +
-			"[INT64(5) INT64(6) INT64(7) INT64(8)] " +
-			"[INT64(6) INT64(7) INT64(8) INT64(9)] " +
-			"[INT64(7) INT64(8) INT64(9) INT64(10)] " +
-			"[INT64(8) INT64(9) INT64(10) INT64(11)] " +
-			"[INT64(9) INT64(10) INT64(11) INT64(12)] " +
-			"[INT64(10) INT64(11) INT64(12) INT64(13)] " +
-			"[INT64(11) INT64(12) INT64(13) INT64(14)] " +
-			"[INT64(12) INT64(13) INT64(14) INT64(15)] " +
-			"[INT64(13) INT64(14) INT64(15) INT64(16)] " +
-			"[INT64(14) INT64(15) INT64(16) INT64(17)] " +
-			"[INT64(15) INT64(16) INT64(17) INT64(18)] " +
-			"[INT64(16) INT64(17) INT64(18) INT64(19)] " +
-			"[INT64(17) INT64(18) INT64(19) INT64(20)] " +
-			"[INT64(18) INT64(19) INT64(20) INT64(21)] " +
-			"[INT64(19) INT64(20) INT64(21) INT64(22)] " +
-			"[INT64(20) INT64(21) INT64(22) INT64(23)]]"
+		"[[INT64(0) INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6)] " +
+			"[INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6) INT64(7)] " +
+			"[INT64(2) INT64(3) INT64(4) INT64(5) INT64(6) INT64(7) INT64(8)] " +
+			"[INT64(3) INT64(4) INT64(5) INT64(6) INT64(7) INT64(8) INT64(9)] " +
+			"[INT64(4) INT64(5) INT64(6) INT64(7) INT64(8) INT64(9) INT64(10)] " +
+			"[INT64(5) INT64(6) INT64(7) INT64(8) INT64(9) INT64(10) INT64(11)] " +
+			"[INT64(6) INT64(7) INT64(8) INT64(9) INT64(10) INT64(11) INT64(12)] " +
+			"[INT64(7) INT64(8) INT64(9) INT64(10) INT64(11) INT64(12) INT64(13)] " +
+			"[INT64(8) INT64(9) INT64(10) INT64(11) INT64(12) INT64(13) INT64(14)] " +
+			"[INT64(9) INT64(10) INT64(11) INT64(12) INT64(13) INT64(14) INT64(15)] " +
+			"[INT64(10) INT64(11) INT64(12) INT64(13) INT64(14) INT64(15) INT64(16)] " +
+			"[INT64(11) INT64(12) INT64(13) INT64(14) INT64(15) INT64(16) INT64(17)] " +
+			"[INT64(12) INT64(13) INT64(14) INT64(15) INT64(16) INT64(17) INT64(18)] " +
+			"[INT64(13) INT64(14) INT64(15) INT64(16) INT64(17) INT64(18) INT64(19)] " +
+			"[INT64(14) INT64(15) INT64(16) INT64(17) INT64(18) INT64(19) INT64(20)] " +
+			"[INT64(15) INT64(16) INT64(17) INT64(18) INT64(19) INT64(20) INT64(21)] " +
+			"[INT64(16) INT64(17) INT64(18) INT64(19) INT64(20) INT64(21) INT64(22)] " +
+			"[INT64(17) INT64(18) INT64(19) INT64(20) INT64(21) INT64(22) INT64(23)] " +
+			"[INT64(18) INT64(19) INT64(20) INT64(21) INT64(22) INT64(23) INT64(24)] " +
+			"[INT64(19) INT64(20) INT64(21) INT64(22) INT64(23) INT64(24) INT64(25)] " +
+			"[INT64(20) INT64(21) INT64(22) INT64(23) INT64(24) INT64(25) INT64(26)]]"
 	assert.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }

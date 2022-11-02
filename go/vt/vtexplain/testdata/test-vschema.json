@@ -18,6 +18,36 @@
 				},
 				"owner": "orders"
 			},
+			"orders_id_vdx_exclusive_read_lock": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_exclusive_read_lock",
+					"from": "id",
+					"to": "keyspace_id",
+					"read_lock": "exclusive"
+				},
+				"owner": "orders"
+			},
+			"orders_id_vdx_shared_read_lock": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_shared_read_lock",
+					"from": "id",
+					"to": "keyspace_id",
+					"read_lock": "shared"
+				},
+				"owner": "orders"
+			},
+			"orders_id_vdx_no_read_lock": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_no_read_lock",
+					"from": "id",
+					"to": "keyspace_id",
+					"read_lock": "none"
+				},
+				"owner": "orders"
+			},
 			"orders_id_vdx_no_verify": {
 				"type": "lookup_unique",
 				"params": {
@@ -167,6 +197,14 @@
 				]
 			},
 			"orders_id_lookup": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					}
+				]
+			},
+			"orders_id_lookup_no_read_lock": {
 				"column_vindexes": [
 					{
 						"column": "id",
