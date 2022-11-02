@@ -63,7 +63,7 @@ const (
 
 var (
 	// flag vars
-	throttleThreshold         = 5 * time.Second
+	throttleThreshold         = 1 * time.Second
 	throttleTabletTypes       = "replica"
 	throttleMetricQuery       string
 	throttleMetricThreshold   = math.MaxFloat64
