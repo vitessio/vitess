@@ -279,19 +279,37 @@ func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 	var fromNum uint64
 	var fromNumNeg uint64
 	var isNeg bool
+	var rawString string
 	inarg := &args[0]
 	inarg2 := &args[1]
 	inarg3 := &args[2]
 	fromBase := inarg2.int64()
 	toBase := inarg3.int64()
 	fromNum = 0
+	t := inarg.typeof()
 
 	if inarg.isNull() || inarg2.isNull() || inarg3.isNull() || fromBase < 2 || fromBase > 36 || toBase < 2 || toBase > 36 {
 		result.setNull()
 		return
 	}
 
-	rawString := string(inarg.toRawBytes())
+	rawString = string(inarg.toRawBytes())
+	rawString = strings.ToLower(rawString)
+
+	if t == sqltypes.Float64 {
+		for i, c := range rawString {
+			if c == '-' {
+				continue
+			}
+			if (fromBase <= 9 && c >= '0' && c <= rune('0'+fromBase)) || (fromBase > 9 && ((c >= '0' && c <= '9') || (c >= 'a' && c <= rune('a'+fromBase-9)))) {
+				continue
+			} else {
+				rawString = rawString[:i]
+				break
+			}
+		}
+	}
+
 	re, _ := regexp.Compile(`[+-]?[0-9.x]+[a-vA-Vx]*`)
 	for _, num := range re.FindAllString(rawString, -1) {
 		isNeg = false

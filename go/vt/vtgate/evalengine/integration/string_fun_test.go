@@ -211,6 +211,7 @@ func TestBuiltinConv(t *testing.T) {
 	cases := []string{
 		"-5.1",
 		"-5.9",
+		"0xa21 + '1'",
 		"-0xa21 + '1'",
 		"10",
 		"10 + '10' + 10",
