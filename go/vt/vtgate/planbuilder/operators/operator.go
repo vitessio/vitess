@@ -35,6 +35,15 @@ type (
 	Operator interface {
 		Clone(inputs []Operator) Operator
 		Inputs() []Operator
+
+		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
+		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
+		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
+		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
+
+		// AddColumn tells an operator to also output an additional column specified.
+		// The offset to the column is returned.
+		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan
@@ -67,10 +76,10 @@ type (
 		Cost() int
 	}
 
-	checked interface {
-		// CheckValid allows operators that need a final check before being used, to make sure that
+	checkable interface {
+		// checkValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
-		CheckValid() error
+		checkValid() error
 	}
 
 	compactable interface {
@@ -80,11 +89,27 @@ type (
 
 	// helper type that implements Inputs() returning nil
 	noInputs struct{}
+
+	// helper type that implements AddColumn() returning an error
+	noColumns struct{}
+
+	// helper type that implements AddPredicate() returning an error
+	noPredicates struct{}
 )
 
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []Operator {
 	return nil
+}
+
+// AddColumn implements the Operator interface
+func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept columns")
+}
+
+// AddPredicate implements the Operator interface
+func (noPredicates) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
@@ -118,25 +143,6 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 	}
-}
-
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	if tableExpr.Join == sqlparser.RightJoinType {
-		lhs, rhs = rhs, lhs
-	}
-	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
-}
-
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	op := createJoin(lhs, rhs)
-	if tableExpr.Condition.On != nil {
-		var err error
-		op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return op, nil
 }
 
 func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (Operator, error) {
@@ -219,6 +225,15 @@ func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 	if err != nil {
 		return nil, err
 	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if err = checkValid(op); err != nil {
+		return nil, err
+	}
+
 	return op, nil
 }
 
@@ -258,7 +273,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(expr))
+			op, err = op.AddPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr))
 			if err != nil {
 				return nil, err
 			}
@@ -430,24 +445,6 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	return subq, nil
 }
 
-func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
-	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
-		return nil, nil
-	}
-	subq := &SubQuery{}
-	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
-		if err != nil {
-			return nil, err
-		}
-		subq.Inner = append(subq.Inner, &SubQueryInner{
-			ExtractedSubquery: sq,
-			Inner:             opInner,
-		})
-	}
-	return subq, nil
-}
-
 func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	switch expr := expr.(type) {
 	case *sqlparser.ComparisonExpr:
@@ -462,18 +459,4 @@ func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 			ctx.SemTable.AddColumnEquality(right, expr.Left)
 		}
 	}
-}
-
-func createJoin(LHS, RHS Operator) Operator {
-	lqg, lok := LHS.(*QueryGraph)
-	rqg, rok := RHS.(*QueryGraph)
-	if lok && rok {
-		op := &QueryGraph{
-			Tables:     append(lqg.Tables, rqg.Tables...),
-			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
-			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
-		}
-		return op
-	}
-	return &Join{LHS: LHS, RHS: RHS}
 }

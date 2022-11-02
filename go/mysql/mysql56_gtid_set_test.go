@@ -267,18 +267,18 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 }
 
 func TestMysql56GTIDSetContains2(t *testing.T) {
-	set1, err := parseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
+	set1, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
 	require.NoError(t, err)
-	set2, err := parseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+	set2, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
 	require.NoError(t, err)
-	set3, err := parseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-632")
+	set3, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-632")
 	require.NoError(t, err)
-	set4, err := parseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-664")
+	set4, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-664")
 	require.NoError(t, err)
-	set5, err := parseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-243")
+	set5, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-243")
 	require.NoError(t, err)
 
-	compareSet, err := parseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+	compareSet, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
 	require.NoError(t, err)
 
 	assert.True(t, compareSet.Contains(set1))

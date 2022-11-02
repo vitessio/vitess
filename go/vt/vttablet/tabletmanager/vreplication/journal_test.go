@@ -23,6 +23,7 @@ import (
 	"context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
 func TestJournalOneToOne(t *testing.T) {
@@ -70,7 +71,7 @@ func TestJournalOneToOne(t *testing.T) {
 	execStatements(t, []string{createReshardingJournalTable, query})
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set pos=",
 		"begin",
 		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
@@ -78,7 +79,7 @@ func TestJournalOneToOne(t *testing.T) {
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
-	})
+	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
 	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
@@ -137,7 +138,7 @@ func TestJournalOneToMany(t *testing.T) {
 	execStatements(t, []string{createReshardingJournalTable, query})
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set pos=",
 		"begin",
 		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"-80\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-5'`,
@@ -148,7 +149,7 @@ func TestJournalOneToMany(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
-	})
+	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
 	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
@@ -202,7 +203,7 @@ func TestJournalTablePresent(t *testing.T) {
 	execStatements(t, []string{createReshardingJournalTable, query})
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set pos=",
 		"begin",
 		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
@@ -210,7 +211,7 @@ func TestJournalTablePresent(t *testing.T) {
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
-	})
+	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
 	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
@@ -266,9 +267,9 @@ func TestJournalTableNotPresent(t *testing.T) {
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
 	// Wait for a heartbeat based update to confirm that the existing vreplication was not transitioned.
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set pos=",
-	})
+	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
 	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
@@ -328,10 +329,10 @@ func TestJournalTableMixed(t *testing.T) {
 	execStatements(t, []string{createReshardingJournalTable, query})
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set pos=",
 		"/update _vt.vreplication set state='Stopped', message='unable to handle journal event: tables were partially matched' where id",
-	})
+	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
 	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {

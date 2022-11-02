@@ -18,27 +18,36 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// SubQuery stores the information about subquery
-type SubQuery struct {
-	Outer Operator
-	Inner []*SubQueryInner
-}
+type (
+	// SubQuery stores the information about subquery
+	SubQuery struct {
+		Outer Operator
+		Inner []*SubQueryInner
+
+		noColumns
+		noPredicates
+	}
+
+	// SubQueryInner stores the subquery information for a select statement
+	SubQueryInner struct {
+		// Inner is the Operator inside the parenthesis of the subquery.
+		// i.e: select (select 1 union select 1), the Inner here would be
+		// of type Concatenate since we have a Union.
+		Inner Operator
+
+		// ExtractedSubquery contains all information we need about this subquery
+		ExtractedSubquery *sqlparser.ExtractedSubquery
+
+		noColumns
+		noPredicates
+	}
+)
 
 var _ Operator = (*SubQuery)(nil)
 var _ Operator = (*SubQueryInner)(nil)
-
-// SubQueryInner stores the subquery information for a select statement
-type SubQueryInner struct {
-	// Inner is the Operator inside the parenthesis of the subquery.
-	// i.e: select (select 1 union select 1), the Inner here would be
-	// of type Concatenate since we have a Union.
-	Inner Operator
-
-	// ExtractedSubquery contains all information we need about this subquery
-	ExtractedSubquery *sqlparser.ExtractedSubquery
-}
 
 // Clone implements the Operator interface
 func (s *SubQueryInner) Clone(inputs []Operator) Operator {
@@ -77,4 +86,22 @@ func (s *SubQuery) Inputs() []Operator {
 		operators = append(operators, inner)
 	}
 	return operators
+}
+
+func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
+	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
+		return nil, nil
+	}
+	subq := &SubQuery{}
+	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
+		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
+		if err != nil {
+			return nil, err
+		}
+		subq.Inner = append(subq.Inner, &SubQueryInner{
+			ExtractedSubquery: sq,
+			Inner:             opInner,
+		})
+	}
+	return subq, nil
 }

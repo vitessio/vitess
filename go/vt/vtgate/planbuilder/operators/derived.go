@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Derived struct {
@@ -100,4 +101,64 @@ func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 // Inputs implements the Operator interface
 func (d *Derived) Inputs() []Operator {
 	return []Operator{d.Source}
+}
+
+func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	if _, isUNion := d.Source.(*Union); isUNion {
+		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
+		var err error
+		d.Source, err = d.Source.AddPredicate(ctx, expr)
+		return d, err
+	}
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
+	if err != nil {
+		if err == semantics.ErrMultipleTables {
+			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		}
+		return nil, err
+	}
+
+	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if err != nil {
+		return nil, err
+	}
+	d.Source, err = d.Source.AddPredicate(ctx, newExpr)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
+	}
+
+	i, err := d.findOutputColumn(col)
+	if err != nil {
+		return 0, err
+	}
+	var pos int
+	d.ColumnsOffset, pos = addToIntSlice(d.ColumnsOffset, i)
+
+	// add it to the source if we were not already passing it through
+	if i <= -1 {
+		d.Columns = append(d.Columns, col)
+		_, err := d.Source.AddColumn(ctx, sqlparser.NewColName(col.Name.String()))
+		if err != nil {
+			return 0, err
+		}
+	}
+	return pos, nil
+}
+
+func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
+	for idx, val := range columnOffset {
+		if val == valToAdd {
+			return columnOffset, idx
+		}
+	}
+	columnOffset = append(columnOffset, valToAdd)
+	return columnOffset, len(columnOffset) - 1
 }
