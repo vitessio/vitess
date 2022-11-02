@@ -236,13 +236,18 @@ func (uvs *uvstreamer) isRowCopied(tableName string, ev *binlogdatapb.VEvent) bo
 	return true
 }
 
-// Only send events for tables whose copy phase is complete or in progress
+// Only send catchup/fastforward events for tables whose copy phase is complete or in progress
 // Todo: filter out events for rows not yet copied. we can only do this as a best-effort for comparable PKs.
 func (uvs *uvstreamer) shouldSendEventForTable(tableName string, ev *binlogdatapb.VEvent) bool {
-	_, ok := uvs.plans[tableName]
+	table, ok := uvs.plans[tableName]
 	// Event is for a table which is not in its copy phase.
 	if !ok {
 		return true
+	}
+
+	// if table copy was not started and no tablePK was specified we can ignore catchup/fastforward events for it
+	if table.tablePK == nil || table.tablePK.Lastpk == nil {
+		return false
 	}
 
 	// Table is currently in its copy phase. We have not yet implemented the logic to check if

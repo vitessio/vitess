@@ -191,6 +191,12 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	var tablePKs []*binlogdatapb.TableLastPK
 	for i, table := range testState.tables {
 		rules = append(rules, getRule(table))
+
+		// for table t2, let tablepk be nil, so that we don't send events
+		if table == "t2" {
+			continue
+		}
+
 		tablePKs = append(tablePKs, getTablePK(table, i+1))
 	}
 	filter := &binlogdatapb.Filter{
@@ -247,7 +253,7 @@ commit;"
 
 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
 	numCopyEvents += 2                                    /* GTID + Test event after all copy is done */
-	numCatchupEvents := 2*5 + 1*7                         /*1 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT, 1 t1+t2 BEGIN+FIELD+ROW+GTID+FIELD+ROW+COMMIT*/
+	numCatchupEvents := 3 * 5                             /*1 t1, 2 t2 : BEGIN+FIELD+ROW+GTID+COMMIT */
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
 	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 6 /* begin/field/2 inserts/gtid/commit */
@@ -483,8 +489,6 @@ var expectedEvents = []string{
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
-	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"}}",
-	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"11220\"}}}",
 	"type:GTID",
 	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
 	"type:OTHER gtid:\"Copy Start t2\"",
