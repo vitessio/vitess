@@ -175,6 +175,9 @@ func testString(op interface{}) string { // TODO
 			assignments = append(assignments, fmt.Sprintf("\t%s = %s", k, sqlparser.String(op.Assignments[k])))
 		}
 		return fmt.Sprintf("Update {\n\t%s\nassignments:\n%s\n}", tbl, strings.Join(assignments, "\n"))
+	case *Horizon:
+		src := indent(testString(op.Source))
+		return fmt.Sprintf("Horizon {\n\tQuery: \"%s\"\n\tInner:%s\n}", sqlparser.String(op.Select), src)
 	}
 	panic(fmt.Sprintf("%T", op))
 }
