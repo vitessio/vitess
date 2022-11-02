@@ -2814,6 +2814,9 @@ var (
 		input:  "SELECT JSON_INSERT(@i,@j,@k)",
 		output: "select json_insert(@i, @j, @k) from dual",
 	}, {
+		input:  "select JSON_EXTRACT(seg_value, JSON_UNQUOTE(JSON_SEARCH(seg_key, 'val1', 'val2'))) from event limit 1 ",
+		output: "select json_extract(seg_value, json_unquote(json_search(seg_key, 'val1', 'val2'))) from `event` limit 1",
+	}, {
 		input:  "SELECT JSON_INSERT(@j, '$.a', 10, '$.c', '[true, false]')",
 		output: "select json_insert(@j, '$.a', 10, '$.c', '[true, false]') from dual",
 	}, {
