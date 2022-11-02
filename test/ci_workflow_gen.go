@@ -79,7 +79,6 @@ var (
 		"21",
 		"22",
 		"mysql_server_vault",
-		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
@@ -129,7 +128,9 @@ var (
 		"vttablet_prscomplex",
 	}
 
-	clusterSelfHostedList       = []string{}
+	clusterSelfHostedList = []string{
+		"26",
+	}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
