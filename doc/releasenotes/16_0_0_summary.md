@@ -6,6 +6,13 @@
 
 ## Major Changes
 
+### Breaking Changes
+
+#### Orchestrator Integration Deletion
+
+Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
+Consider using `VTOrc` instead of `Orchestrator`.
+
 ### New command line flags and behavior
 
 #### VTGate: Support query timeout --query-timeout
