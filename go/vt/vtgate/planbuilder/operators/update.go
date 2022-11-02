@@ -32,6 +32,8 @@ type Update struct {
 	AST                 *sqlparser.Update
 
 	noInputs
+	noColumns
+	noPredicates
 }
 
 var _ PhysicalOperator = (*Update)(nil)

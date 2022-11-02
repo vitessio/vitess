@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -36,6 +37,15 @@ type (
 	Operator interface {
 		Clone(inputs []Operator) Operator
 		Inputs() []Operator
+
+		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
+		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
+		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
+		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
+
+		// AddColumn tells an operator to also output an additional column specified.
+		// The offset to the column is returned.
+		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan
@@ -71,7 +81,7 @@ type (
 	checkable interface {
 		// checkValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
-		CheckValid() error
+		checkValid() error
 	}
 
 	compactable interface {
@@ -81,11 +91,27 @@ type (
 
 	// helper type that implements Inputs() returning nil
 	noInputs struct{}
+
+	// helper type that implements AddColumn() returning an error
+	noColumns struct{}
+
+	// helper type that implements AddPredicate() returning an error
+	noPredicates struct{}
 )
 
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []Operator {
 	return nil
+}
+
+// AddColumn implements the Operator interface
+func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept columns")
+}
+
+// AddPredicate implements the Operator interface
+func (noPredicates) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
@@ -249,7 +275,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = PushPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr), op)
+			op, err = op.AddPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr))
 			if err != nil {
 				return nil, err
 			}
