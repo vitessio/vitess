@@ -246,7 +246,9 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
 	throttler.shard = shard
 
-	throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
+	if throttlerConfigViaTopo {
+		throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
+	}
 }
 
 // initThrottler initializes config
