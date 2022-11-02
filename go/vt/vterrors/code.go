@@ -80,9 +80,6 @@ var (
 	VT14003 = errorWithoutState("VT14003", vtrpcpb.Code_UNAVAILABLE, "No connection for tablet %v", "No connection for the given tablet.")
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "Cannot find keyspace for: %s", "The specified keyspace could not be found.")
 
-	VT17001 = errorWithoutState("VT17001", vtrpcpb.Code_CLUSTER_EVENT, "operation not allowed in state NOT_SERVING during query: %s", "The given operation can only be done in a non-NOT_SERVING state.")
-	VT17002 = errorWithoutState("VT17002", vtrpcpb.Code_CLUSTER_EVENT, "invalid tablet type: REPLICA, want: PRIMARY", "A PRIMARY tablet is required for this operation.")
-
 	Errors = []func(args ...any) *OurError{
 		VT03001,
 		VT03002,
@@ -132,8 +129,6 @@ var (
 		VT14002,
 		VT14003,
 		VT14004,
-		VT17001,
-		VT17002,
 	}
 )
 
