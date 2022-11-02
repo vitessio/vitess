@@ -33,10 +33,62 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
+type vcopierTestCase struct {
+	vreplicationExperimentalFlags     int64
+	vreplicationParallelInsertWorkers int
+}
+
+func commonVcopierTestCases() []vcopierTestCase {
+	return []vcopierTestCase{
+		// Default experimental flags.
+		{
+			vreplicationExperimentalFlags: vreplicationExperimentalFlags,
+		},
+		// Parallel bulk inserts enabled with 4 workers.
+		{
+			vreplicationExperimentalFlags:     vreplicationExperimentalFlags,
+			vreplicationParallelInsertWorkers: 4,
+		},
+	}
+}
+
+func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTestCase) {
+	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
+	oldVreplicationParallelInsertWorkers := vreplicationParallelInsertWorkers
+	// Extra reset at the end in case we return prematurely.
+	defer func() {
+		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
+	}()
+
+	for _, tc := range cases {
+		tc := tc // Avoid export loop bugs.
+		// Set test flags.
+		vreplicationExperimentalFlags = tc.vreplicationExperimentalFlags
+		vreplicationParallelInsertWorkers = tc.vreplicationParallelInsertWorkers
+		// Run test case.
+		t.Run(
+			fmt.Sprintf(
+				"vreplication_experimental_flags=%d,vreplication_parallel_insert_workers=%d",
+				tc.vreplicationExperimentalFlags, tc.vreplicationParallelInsertWorkers,
+			),
+			test,
+		)
+		// Reset.
+		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
+	}
+}
+
 func TestPlayerCopyCharPK(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyCharPK, commonVcopierTestCases())
+}
+
+func testPlayerCopyCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -116,19 +168,20 @@ func TestPlayerCopyCharPK(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(idc,val) values ('a\\0',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"a\\\\x00\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"a\\\\x00\\"}'.*`,
 		`update dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
 		"insert into dst(idc,val) values ('c\\0',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"c\\\\x00\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"c\\\\x00\\"}'.*`,
 		"/delete from _vt.copy_state.*dst",
-		"/update _vt.vreplication set state='Running'",
-	})
+		"/update _vt.vreplication set state='Running",
+	))
+
 	expectData(t, "dst", [][]string{
 		{"a\000", "3"},
 		{"c\000", "2"},
@@ -138,8 +191,13 @@ func TestPlayerCopyCharPK(t *testing.T) {
 // TestPlayerCopyVarcharPKCaseInsensitive tests the copy/catchup phase for a table with a varchar primary key
 // which is case insensitive.
 func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyVarcharPKCaseInsensitive, commonVcopierTestCases())
+}
+
+func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
+	// Set packet size low so that we send one row at a time.
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
@@ -149,7 +207,7 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -217,21 +275,36 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
+		// Copy mode.
 		"insert into dst(idc,val) values ('a',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}'.*`,
+		// Copy-catchup mode.
 		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
-		"insert into dst(idc,val) values ('B',3)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}' where vrepl_id=.*`,
-		"insert into dst(idc,val) values ('c',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}' where vrepl_id=.*`,
+	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
+		// Back to copy mode.
+		// Inserts can happen out of order.
+		// Updates must happen in order.
+		//upd1 := expect.
+		upd1 := expect.Then(qh.Eventually(
+			"insert into dst(idc,val) values ('B',3)",
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}'.*`,
+		))
+		upd2 := expect.Then(qh.Eventually(
+			"insert into dst(idc,val) values ('c',2)",
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}'.*`,
+		))
+		upd1.Then(upd2.Eventually())
+		return upd2
+	}).Then(qh.Immediately(
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
+
 	expectData(t, "dst", [][]string{
 		{"a", "1"},
 		{"B", "3"},
@@ -242,6 +315,10 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 // TestPlayerCopyVarcharPKCaseSensitiveCollation tests the copy/catchup phase for a table with varbinary columns
 // (which has a case sensitive collation with upper case alphabets below lower case in sort order)
 func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyVarcharCompositePKCaseSensitiveCollation, commonVcopierTestCases())
+}
+
+func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -321,19 +398,24 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
+		// Copy mode.
 		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}'.*`,
+		// Copy-catchup mode.
 		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
+		// Copy mode.
 		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}'.*`,
+		// Wrap-up.
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
-	})
+	))
+
 	expectData(t, "dst", [][]string{
 		{"1", "B", "B", "3"},
 		{"1", "a", "a", "1"},
@@ -343,6 +425,10 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 
 // TestPlayerCopyTablesWithFK validates that vreplication disables foreign keys during the copy phase
 func TestPlayerCopyTablesWithFK(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesWithFK, commonVcopierTestCases())
+}
+
+func testPlayerCopyTablesWithFK(t *testing.T) {
 	testForeignKeyQueries = true
 	defer func() {
 		testForeignKeyQueries = false
@@ -386,7 +472,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"select @@foreign_key_checks;",
@@ -398,10 +484,20 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"set foreign_key_checks=0;",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
+	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
+		// With parallel inserts, new db client connects are created on-the-fly.
+		if vreplicationParallelInsertWorkers > 1 {
+			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
+		}
+		return expect
+	}).Then(qh.Eventually(
+		// Copy.
+		// Inserts may happen out-of-order. Update happen in-order.
 		"begin",
 		"insert into dst1(id,id2) values (1,1), (2,2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
+	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		// The next FF executes and updates the position before copying.
@@ -409,17 +505,25 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"begin",
 		"/update _vt.vreplication set pos=",
 		"commit",
+	)).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
+		// With parallel inserts, new db client connects are created on-the-fly.
+		if vreplicationParallelInsertWorkers > 1 {
+			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
+		}
+		return expect
+	}).Then(qh.Eventually(
 		// copy dst2
 		"begin",
 		"insert into dst2(id,id2) values (1,21), (2,22)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
+	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
 		// All tables copied. Final catch up followed by Running state.
 		"set foreign_key_checks=1;",
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
 
 	expectData(t, "dst1", [][]string{
 		{"1", "1"},
@@ -436,16 +540,20 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
 	}
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"set foreign_key_checks=1;",
 		"begin",
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
 		"commit",
-	})
+	))
 }
 
 func TestPlayerCopyTables(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTables, commonVcopierTestCases())
+}
+
+func testPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -493,7 +601,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
@@ -505,7 +613,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,val,val2,d) values (1,'aaa','aaa',0), (2,'bbb','bbb',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -517,7 +625,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/delete from _vt.copy_state.*yes",
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
-	})
+	))
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa", "aaa", "0"},
 		{"2", "bbb", "bbb", "1"},
@@ -549,6 +657,10 @@ func TestPlayerCopyTables(t *testing.T) {
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
 func TestPlayerCopyBigTable(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyBigTable, commonVcopierTestCases())
+}
+
+func testPlayerCopyBigTable(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -589,7 +701,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		// Wait for context to expire and then send the row.
 		// This will cause the copier to abort and go back to catchup mode.
 		<-ctx.Done()
-		// Do this no more than once.
+		// Do this at most once.
 		vstreamRowsSendHook = nil
 	}
 
@@ -628,29 +740,40 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		// Create the list of tables to copy and transition to Copying state.
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
-		// Second row gets copied.
-		"insert into dst(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		// Back to copy mode.
+		// Inserts can happen out-of-order.
+		// Updates happen in-order.
+	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
+		ins1 := expect.Then(qh.Eventually("insert into dst(id,val) values (2,'bbb')"))
+		upd1 := ins1.Then(qh.Eventually(
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
+		))
 		// Third row copied without going back to catchup state.
-		"insert into dst(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
+		ins3 := expect.Then(qh.Eventually("insert into dst(id,val) values (3,'ccc')"))
+		upd3 := ins3.Then(qh.Eventually(
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}'.*`,
+		))
+		upd1.Then(upd3.Eventually())
+		return upd3
+	}).Then(qh.Eventually(
+		// Wrap-up.
 		"/delete from _vt.copy_state.*dst",
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
+
 	expectData(t, "dst", [][]string{
 		{"1", "aaa"},
 		{"2", "bbb"},
@@ -665,6 +788,10 @@ func TestPlayerCopyBigTable(t *testing.T) {
 // TestPlayerCopyWildcardRule ensures the copy-catchup back-and-forth loop works correctly
 // when the filter uses a wildcard rule
 func TestPlayerCopyWildcardRule(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyWildcardRule, commonVcopierTestCases())
+}
+
+func testPlayerCopyWildcardRule(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -743,28 +870,39 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		// Create the list of tables to copy and transition to Copying state.
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into src(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
-		// Second row gets copied.
-		"insert into src(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		// Return to copy mode.
+		// Inserts can happen out-of-order.
+		// Updates happen in-order.
+	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
+		ins1 := expect.Then(qh.Eventually("insert into src(id,val) values (2,'bbb')"))
+		upd1 := ins1.Then(qh.Eventually(
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
+		))
 		// Third row copied without going back to catchup state.
-		"insert into src(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
+		ins3 := expect.Then(qh.Eventually("insert into src(id,val) values (3,'ccc')"))
+		upd3 := ins3.Then(qh.Eventually(
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}'.*`,
+		))
+		upd1.Then(upd3.Eventually())
+		return upd3
+	}).Then(qh.Immediately(
+		// Wrap-up.
 		"/delete from _vt.copy_state.*src",
 		// Copy is done. Go into running state.
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
+
 	expectData(t, "src", [][]string{
 		{"1", "aaa"},
 		{"2", "bbb"},
@@ -773,7 +911,16 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 }
 
 // TestPlayerCopyTableContinuation tests the copy workflow where tables have been partially copied.
+// TODO(maxenglander): this test isn't repeatable, even with the same flags.
 func TestPlayerCopyTableContinuation(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTableContinuation, []vcopierTestCase{
+		{
+			vreplicationExperimentalFlags: 0,
+		},
+	})
+}
+
+func testPlayerCopyTableContinuation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -862,8 +1009,8 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst1", encodeString(fmt.Sprintf("%v", lastpk))),
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', null)", qr.InsertID, "not_copied"),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst1", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', null)", qr.InsertID, "not_copied"),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -884,7 +1031,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		}
 	}
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries(t, qh.Expect(
 		// Catchup
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"insert into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
@@ -902,16 +1049,21 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		"update copied set val='bbb' where id=1",
 		// Fast-forward
 		"update dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
-		// Copy
+	).Then(qh.Immediately(
 		"insert into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id1\\" type:INT32} fields:{name:\\"id2\\" type:INT32} rows:{lengths:2 lengths:1 values:\\"126\\"}' where vrepl_id=.*`,
+	)).Then(qh.Eventually(
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id1\\" type:INT32} fields:{name:\\"id2\\" type:INT32} rows:{lengths:2 lengths:1 values:\\"126\\"}'.*`,
+	)).Then(qh.Immediately(
 		"/delete from _vt.copy_state.*dst1",
-		// Copy again. There should be no events for catchup.
 		"insert into not_copied(id,val) values (1,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\\"id\\\" type:INT32} rows:{lengths:1 values:\\\"1\\\"}' where vrepl_id=.*`,
+	)).Then(qh.Eventually(
+		// Copy again. There should be no events for catchup.
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\\"id\\\" type:INT32} rows:{lengths:1 values:\\\"1\\\"}'.*`,
+	)).Then(qh.Immediately(
 		"/delete from _vt.copy_state.*not_copied",
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
+
 	expectData(t, "dst1", [][]string{
 		{"1", "insert in"},
 		{"2", "no change"},
@@ -931,13 +1083,26 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	})
 }
 
-// TestPlayerCopyWildcardTableContinuation tests the copy workflow where tables have been partially copied.
+// TestPlayerCopyWildcardTableContinuation.
 func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyWildcardTableContinuation, commonVcopierTestCases())
+	testVcopierTestCases(t, testPlayerCopyWildcardTableContinuation, []vcopierTestCase{
+		// Optimize inserts without parallel inserts.
+		{
+			vreplicationExperimentalFlags: vreplicationExperimentalFlagOptimizeInserts,
+		},
+		// Optimize inserts with parallel inserts.
+		{
+			vreplicationExperimentalFlags:     vreplicationExperimentalFlagOptimizeInserts,
+			vreplicationParallelInsertWorkers: 4,
+		},
+	})
+}
+
+func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		// src is initialized as partially copied.
-		// lastpk will be initialized at (6,6) later below.
 		"create table src(id int, val varbinary(128), primary key(id))",
 		"insert into src values(2,'copied'), (3,'uncopied')",
 		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -971,7 +1136,6 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// As mentioned above. lastpk cut-off is set at (6,6)
 	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id",
 		"int32"),
@@ -979,7 +1143,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -994,23 +1158,34 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		// Catchup
+	optimizeInsertsEnabled := vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts != 0
+
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set state = 'Copying'",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
-		// Copy
-		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
-		`/update _vt.copy_state set lastpk.*`,
+	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
+		if !optimizeInsertsEnabled {
+			expect = expect.Then(qh.Immediately("insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)"))
+		}
+		return expect.Then(qh.Immediately("insert into dst(id,val) values (3,'uncopied'), (4,'new')"))
+	}).Then(qh.Immediately(
+		`/insert into _vt.copy_state .*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
+
 	expectData(t, "dst", [][]string{
 		{"2", "copied"},
 		{"3", "uncopied"},
 		{"4", "new"},
 	})
+	if optimizeInsertsEnabled {
+		for _, ct := range playerEngine.controllers {
+			require.Equal(t, int64(1), ct.blpStats.NoopQueryCount.Counts()["insert"])
+			break
+		}
+	}
 }
 
 // TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
@@ -1065,7 +1240,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	))
 	lastpk.RowsAffected = 0
 	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+		fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name, lastpk) values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
@@ -1080,17 +1255,17 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries(t, qh.Expect(
 		// Catchup
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set state = 'Copying'",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Copy
 		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
-		`/update _vt.copy_state set lastpk.*`,
+		`/insert into _vt.copy_state .*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
-	})
+	))
 	expectData(t, "dst", [][]string{
 		{"2", "copied"},
 		{"3", "uncopied"},
@@ -1103,6 +1278,10 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 }
 
 func TestPlayerCopyTablesNone(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesNone, commonVcopierTestCases())
+}
+
+func testPlayerCopyTablesNone(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	filter := &binlogdatapb.Filter{
@@ -1131,16 +1310,20 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"begin",
 		"/update _vt.vreplication set state='Stopped'",
 		"commit",
-	})
+	))
 }
 
 func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesStopAfterCopy, commonVcopierTestCases())
+}
+
+func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -1181,7 +1364,7 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
@@ -1191,15 +1374,18 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
+	).Then(qh.Eventually(
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
+	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		// All tables copied. Stop vreplication because we requested it.
 		"/update _vt.vreplication set state='Stopped'",
-	})
+	)))
+
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa"},
 		{"2", "bbb"},
@@ -1207,6 +1393,10 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 }
 
 func TestPlayerCopyTableCancel(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTableCancel, commonVcopierTestCases())
+}
+
+func testPlayerCopyTableCancel(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -1258,7 +1448,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 	}()
 
 	// Make sure rows get copied in spite of the early context cancel.
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
@@ -1270,15 +1460,18 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		// The next copy should proceed as planned because we've made the timeout high again.
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
+	).Then(qh.Eventually(
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
+	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		// All tables copied. Go into running state.
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
+
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa"},
 		{"2", "bbb"},
@@ -1286,6 +1479,10 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 }
 
 func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesWithGeneratedColumn, commonVcopierTestCases())
+}
+
+func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
 	// Disable tests on percona and mariadb platforms in CI since
 	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
@@ -1339,23 +1536,23 @@ func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		// Create the list of tables to copy and transition to Copying state.
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message=",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > '.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		"insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > '.*`,
 		// copy of dst2 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
 		"/update _vt.vreplication set state",
-	})
+	))
+
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa", "1aaa", "aaa1", "10"},
 		{"2", "bbb", "2bbb", "bbb2", "20"},
@@ -1367,6 +1564,10 @@ func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 }
 
 func TestCopyTablesWithInvalidDates(t *testing.T) {
+	testVcopierTestCases(t, testCopyTablesWithInvalidDates, commonVcopierTestCases())
+}
+
+func testCopyTablesWithInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -1407,7 +1608,7 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
@@ -1417,15 +1618,17 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
+	).Then(qh.Eventually(
 		"begin",
 		"insert into dst1(id,dt) values (1,'2020-01-12'), (2,'0000-00-00')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
+	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
-	})
+	)))
 
 	expectData(t, "dst1", [][]string{
 		{"1", "2020-01-12"},
@@ -1436,12 +1639,12 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
 	}
-	expectDBClientQueries(t, []string{
+	expectDBClientQueries(t, qh.Expect(
 		"begin",
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
 		"commit",
-	})
+	))
 }
 
 func supportsInvisibleColumns() bool {
@@ -1454,6 +1657,10 @@ func supportsInvisibleColumns() bool {
 }
 
 func TestCopyInvisibleColumns(t *testing.T) {
+	testVcopierTestCases(t, testCopyInvisibleColumns, commonVcopierTestCases())
+}
+
+func testCopyInvisibleColumns(t *testing.T) {
 	if !supportsInvisibleColumns() {
 		t.Skip()
 	}
@@ -1497,19 +1704,19 @@ func TestCopyInvisibleColumns(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		// Create the list of tables to copy and transition to Copying state.
+	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message=",
 		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state",
+		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}'.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
-		"/update _vt.vreplication set state",
-	})
+		"/update _vt.vreplication set state='Running'",
+	))
+
 	expectData(t, "dst1", [][]string{
 		{"1", "10"},
 		{"2", "20"},

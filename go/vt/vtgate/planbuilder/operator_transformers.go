@@ -25,13 +25,11 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
-
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -41,23 +39,23 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, isRoot bool) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Operator, isRoot bool) (logicalPlan, error) {
 	switch op := op.(type) {
-	case *physical.Route:
+	case *operators.Route:
 		return transformRoutePlan(ctx, op)
-	case *physical.ApplyJoin:
+	case *operators.ApplyJoin:
 		return transformApplyJoinPlan(ctx, op)
-	case *physical.Union:
+	case *operators.Union:
 		return transformUnionPlan(ctx, op, isRoot)
-	case *physical.Vindex:
+	case *operators.Vindex:
 		return transformVindexPlan(ctx, op)
-	case *physical.SubQueryOp:
+	case *operators.SubQueryOp:
 		return transformSubQueryPlan(ctx, op)
-	case *physical.CorrelatedSubQueryOp:
+	case *operators.CorrelatedSubQueryOp:
 		return transformCorrelatedSubQueryPlan(ctx, op)
-	case *physical.Derived:
+	case *operators.Derived:
 		return transformDerivedPlan(ctx, op)
-	case *physical.Filter:
+	case *operators.Filter:
 		plan, err := transformToLogicalPlan(ctx, op.Source, false)
 		if err != nil {
 			return nil, err
@@ -85,7 +83,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformToLogicalPlan)", op)
 }
 
-func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJoin) (logicalPlan, error) {
+func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {
 	lhs, err := transformToLogicalPlan(ctx, n.LHS, false)
 	if err != nil {
 		return nil, err
@@ -109,11 +107,11 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 	}, nil
 }
 
-func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
+func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
-	case *physical.Update:
+	case *operators.Update:
 		return transformUpdatePlan(ctx, op, src)
-	case *physical.Delete:
+	case *operators.Delete:
 		return transformDeletePlan(ctx, op, src)
 	}
 	tableNames, err := getAllTableNames(op)
@@ -142,13 +140,13 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (l
 			},
 		},
 		Select:    sel,
-		tables:    op.TableID(),
+		tables:    operators.TableID(op),
 		condition: condition,
 	}, nil
 
 }
 
-func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, upd *physical.Update) (logicalPlan, error) {
+func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
 	var vindex vindexes.Vindex
 	var values []evalengine.Expr
 	if op.Selected != nil {
@@ -192,7 +190,7 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, u
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func transformDeletePlan(ctx *plancontext.PlanningContext, op *physical.Route, del *physical.Delete) (logicalPlan, error) {
+func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
 	var vindex vindexes.Vindex
 	var values []evalengine.Expr
 	if op.Selected != nil {
@@ -248,7 +246,7 @@ func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) 
 	}
 }
 
-func getVindexPredicate(ctx *plancontext.PlanningContext, op *physical.Route) sqlparser.Expr {
+func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) sqlparser.Expr {
 	var condition sqlparser.Expr
 	if op.Selected != nil {
 		if len(op.Selected.ValueExprs) > 0 {
@@ -281,10 +279,10 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *physical.Route) sq
 	return condition
 }
 
-func getAllTableNames(op *physical.Route) ([]string, error) {
+func getAllTableNames(op *operators.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := physical.VisitOperators(op, func(op abstract.PhysicalOperator) (bool, error) {
-		tbl, isTbl := op.(*physical.Table)
+	err := operators.VisitTopDown(op, func(op operators.Operator) error {
+		tbl, isTbl := op.(*operators.Table)
 		var name string
 		if isTbl {
 			if tbl.QTable.IsInfSchema {
@@ -294,7 +292,7 @@ func getAllTableNames(op *physical.Route) ([]string, error) {
 			}
 			tableNameMap[name] = nil
 		}
-		return true, nil
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -307,7 +305,7 @@ func getAllTableNames(op *physical.Route) ([]string, error) {
 	return tableNames, nil
 }
 
-func transformUnionPlan(ctx *plancontext.PlanningContext, op *physical.Union, isRoot bool) (logicalPlan, error) {
+func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, isRoot bool) (logicalPlan, error) {
 	var sources []logicalPlan
 	var err error
 	if op.Distinct {
@@ -434,7 +432,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 	return
 }
 
-func transformAndMerge(ctx *plancontext.PlanningContext, op *physical.Union) (sources []logicalPlan, err error) {
+func transformAndMerge(ctx *plancontext.PlanningContext, op *operators.Union) (sources []logicalPlan, err error) {
 	for i, source := range op.Sources {
 		// first we go over all the operator inputs and turn them into logical plans,
 		// including horizon planning
@@ -480,7 +478,7 @@ func transformAndMerge(ctx *plancontext.PlanningContext, op *physical.Union) (so
 	return sources, nil
 }
 
-func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *physical.Union) (sources []logicalPlan, err error) {
+func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *operators.Union) (sources []logicalPlan, err error) {
 	// We go over all the input operators and turn them into logical plans
 	for i, source := range op.Sources {
 		plan, err := createLogicalPlan(ctx, source, op.SelectStmts[i])
@@ -506,7 +504,7 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *physical.Uni
 	return sources, nil
 }
 
-func createLogicalPlan(ctx *plancontext.PlanningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlan(ctx *plancontext.PlanningContext, source operators.Operator, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformToLogicalPlan(ctx, source, false)
 	if err != nil {
 		return nil, err
@@ -523,7 +521,7 @@ func createLogicalPlan(ctx *plancontext.PlanningContext, source abstract.Physica
 	return plan, nil
 }
 
-func getCollationsFor(ctx *plancontext.PlanningContext, n *physical.Union) []collations.ID {
+func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []collations.ID {
 	// TODO: coerce selects' select expressions' collations
 	var colls []collations.ID
 	for _, expr := range n.SelectStmts[0].SelectExprs {
@@ -542,7 +540,7 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *physical.Union) []col
 	return colls
 }
 
-func transformDerivedPlan(ctx *plancontext.PlanningContext, op *physical.Derived) (logicalPlan, error) {
+func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Derived) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased

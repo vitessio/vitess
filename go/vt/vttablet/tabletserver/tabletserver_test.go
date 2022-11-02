@@ -761,6 +761,61 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	}
 }
 
+func TestTabletServerBeginStreamExecute(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	callback := func(*sqltypes.Result) error { return nil }
+	state, err := tsv.BeginStreamExecute(ctx, &target, nil, executeSQL, nil, 0, nil, callback)
+	if err != nil {
+		t.Fatalf("TabletServer.BeginStreamExecute should success: %s, but get error: %v",
+			executeSQL, err)
+	}
+	require.NoError(t, err)
+	_, err = tsv.Commit(ctx, &target, state.TransactionID)
+	require.NoError(t, err)
+}
+
+func TestTabletServerBeginStreamExecuteWithError(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// Enforce an error so we can validate we get one back properly
+	tsv.qe.strictTableACL = true
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	callback := func(*sqltypes.Result) error { return nil }
+	state, err := tsv.BeginStreamExecute(ctx, &target, nil, executeSQL, nil, 0, nil, callback)
+	require.Error(t, err)
+	err = tsv.Release(ctx, &target, state.TransactionID, 0)
+	require.NoError(t, err)
+}
+
 func TestSerializeTransactionsSameRow(t *testing.T) {
 	// This test runs three transaction in parallel:
 	// tx1 | tx2 | tx3
@@ -1250,6 +1305,34 @@ func TestMessageStream(t *testing.T) {
 	require.NoError(t, err)
 	if !called {
 		t.Fatal("callback was not called for MessageStream")
+	}
+}
+
+func TestCheckMySQLGauge(t *testing.T) {
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// Check that initially checkMySQLGauge has 0 value
+	assert.EqualValues(t, 0, tsv.checkMysqlGaugeFunc.Get())
+	tsv.CheckMySQL()
+	// After the checkMySQL call checkMySQLGauge should have 1 value
+	assert.EqualValues(t, 1, tsv.checkMysqlGaugeFunc.Get())
+
+	// Wait for CheckMySQL to finish.
+	// This wait is required because CheckMySQL waits for 1 second after it finishes execution
+	// before letting go of the acquired locks.
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timedout waiting for CheckMySQL to finish")
+		default:
+			if tsv.checkMysqlGaugeFunc.Get() == 0 {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 }
 

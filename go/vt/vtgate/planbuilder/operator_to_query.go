@@ -25,12 +25,10 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 )
 
 type queryBuilder struct {
@@ -39,29 +37,29 @@ type queryBuilder struct {
 	tableNames []string
 }
 
-func toSQL(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
+func toSQL(ctx *plancontext.PlanningContext, op operators.Operator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
 	q.sortTables()
 	return q.sel
 }
 
-func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
+func buildQuery(op operators.Operator, qb *queryBuilder) {
 	switch op := op.(type) {
-	case *physical.Table:
+	case *operators.Table:
 		dbName := ""
 
 		if op.QTable.IsInfSchema {
 			dbName = op.QTable.Table.Qualifier.String()
 		}
-		qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID(), op.QTable.Alias.Hints)
+		qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), operators.TableID(op), op.QTable.Alias.Hints)
 		for _, pred := range op.QTable.Predicates {
 			qb.addPredicate(pred)
 		}
 		for _, name := range op.Columns {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
 		}
-	case *physical.ApplyJoin:
+	case *operators.ApplyJoin:
 		buildQuery(op.LHS, qb)
 		// If we are going to add the predicate used in join here
 		// We should not add the predicate's copy of when it was split into
@@ -76,12 +74,12 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		} else {
 			qb.joinInnerWith(qbR, op.Predicate)
 		}
-	case *physical.Filter:
+	case *operators.Filter:
 		buildQuery(op.Source, qb)
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
 		}
-	case *physical.Derived:
+	case *operators.Derived:
 		buildQuery(op.Source, qb)
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil
@@ -91,7 +89,7 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		sel.GroupBy = opQuery.GroupBy
 		sel.Having = opQuery.Having
 		sel.SelectExprs = opQuery.SelectExprs
-		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
+		qb.addTableExpr(op.Alias, op.Alias, operators.TableID(op), &sqlparser.DerivedTable{
 			Select: sel,
 		}, nil, op.ColumnAliases)
 		for _, col := range op.Columns {

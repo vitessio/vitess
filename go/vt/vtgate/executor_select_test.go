@@ -19,11 +19,14 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -472,12 +475,12 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
+	wantQueries = []*querypb.BoundQuery{{Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1":           sqltypes.StringBindVariable("performance_schema"),
-			"vtg2":           sqltypes.StringBindVariable("foo"),
-			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
-			"ist_table_name": sqltypes.StringBindVariable("foo"),
+			"ist_table_schema": sqltypes.StringBindVariable("performance_schema"),
+			"__vtschemaname":   sqltypes.StringBindVariable("performance_schema"),
+			"ist_table_name":   sqltypes.StringBindVariable("foo"),
+			"ist_table_name1":  sqltypes.StringBindVariable("foo"),
 		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
@@ -488,13 +491,13 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 from information_schema.table_constraints where constraint_schema = :__vtschemaname and table_name = :table_name",
+	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 from information_schema.table_constraints where constraint_schema = :__vtschemaname and table_name = :table_name1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1":           sqltypes.Int64BindVariable(1),
-			"vtg2":           sqltypes.StringBindVariable("vt_ks"),
-			"vtg3":           sqltypes.StringBindVariable("user"),
-			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
-			"table_name":     sqltypes.StringBindVariable("user"),
+			"vtg1":              sqltypes.Int64BindVariable(1),
+			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
+			"table_name":        sqltypes.StringBindVariable("user"),
+			"__vtschemaname":    sqltypes.StringBindVariable("vt_ks"),
+			"table_name1":       sqltypes.StringBindVariable("user"),
 		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
@@ -507,9 +510,9 @@ func TestGen4SelectDBA(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 from information_schema.table_constraints where constraint_schema = :__vtschemaname",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1":           sqltypes.Int64BindVariable(1),
-			"vtg2":           sqltypes.StringBindVariable("vt_ks"),
-			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
+			"vtg1":              sqltypes.Int64BindVariable(1),
+			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
+			"__vtschemaname":    sqltypes.StringBindVariable("vt_ks"),
 		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
@@ -522,7 +525,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{Sql: "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1":                  sqltypes.StringBindVariable("TestExecutor"),
+			"t_table_schema":        sqltypes.StringBindVariable("TestExecutor"),
 			"__replacevtschemaname": sqltypes.Int64BindVariable(1),
 		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1258,9 +1261,9 @@ func TestSelectNormalize(t *testing.T) {
 	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ select id from `user` where id = :vtg1 /* trailing */",
+		Sql: "/* leading */ select id from `user` where id = :id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1": sqltypes.TestBindVariable(int64(1)),
+			"id": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1274,9 +1277,9 @@ func TestSelectNormalize(t *testing.T) {
 	_, err = executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ select id from `user` where id = :vtg1 /* trailing */",
+		Sql: "/* leading */ select id from `user` where id = :id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1": sqltypes.TestBindVariable(int64(1)),
+			"id": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
 	require.Empty(t, sbc1.Queries)
@@ -3116,10 +3119,10 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select * from user_region where cola = :vtg1 and colb = :vtg2",
+			Sql: "select * from user_region where cola = :cola and colb = :colb",
 			BindVariables: map[string]*querypb.BindVariable{
-				"vtg1": sqltypes.Int64BindVariable(1),
-				"vtg2": sqltypes.Int64BindVariable(2),
+				"cola": sqltypes.Int64BindVariable(1),
+				"colb": sqltypes.Int64BindVariable(2),
 			},
 		},
 	}
@@ -3137,10 +3140,10 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "select * from user_region where cola = :vtg1 and colb = :vtg2",
+			Sql: "select * from user_region where cola = :cola and colb = :colb",
 			BindVariables: map[string]*querypb.BindVariable{
-				"vtg1": sqltypes.Int64BindVariable(17984),
-				"vtg2": sqltypes.Int64BindVariable(1),
+				"cola": sqltypes.Int64BindVariable(17984),
+				"colb": sqltypes.Int64BindVariable(1),
 			},
 		},
 	}
@@ -3210,22 +3213,22 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 	vals0sbc2, _ := sqltypes.BuildBindVariable([]int64{17984})
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select * from user_region where colb = :vtg1 and cola in ::__vals0",
+			Sql: "select * from user_region where colb = :colb and cola in ::__vals0",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals0": vals0sbc1,
-				"vtg1":    bvtg1,
-				"vtg2":    bvtg2,
+				"colb":    bvtg1,
+				"vtg1":    bvtg2,
 			},
 		},
 	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "select * from user_region where colb = :vtg1 and cola in ::__vals0",
+			Sql: "select * from user_region where colb = :colb and cola in ::__vals0",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals0": vals0sbc2,
-				"vtg1":    bvtg1,
-				"vtg2":    bvtg2,
+				"colb":    bvtg1,
+				"vtg1":    bvtg2,
 			},
 		},
 	}
@@ -3248,11 +3251,11 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select * from user_region where colb = :vtg1 and cola in ::vtg2 and cola = :vtg3",
+			Sql: "select * from user_region where colb = :colb and cola in ::vtg1 and cola = :cola",
 			BindVariables: map[string]*querypb.BindVariable{
-				"vtg1": sqltypes.Int64BindVariable(2),
-				"vtg2": bvtg2,
-				"vtg3": sqltypes.Int64BindVariable(1),
+				"colb": sqltypes.Int64BindVariable(2),
+				"vtg1": bvtg2,
+				"cola": sqltypes.Int64BindVariable(1),
 			},
 		},
 	}
@@ -3273,12 +3276,12 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{10, 20})
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "select * from user_region where colb in ::vtg1 and cola in ::vtg2 and cola = :vtg3 and colb = :vtg4",
+			Sql: "select * from user_region where colb in ::vtg1 and cola in ::vtg2 and cola = :cola and colb = :colb",
 			BindVariables: map[string]*querypb.BindVariable{
 				"vtg1": bvtg1,
 				"vtg2": bvtg2,
-				"vtg3": sqltypes.Int64BindVariable(1),
-				"vtg4": sqltypes.Int64BindVariable(2),
+				"cola": sqltypes.Int64BindVariable(1),
+				"colb": sqltypes.Int64BindVariable(2),
 			},
 		},
 	}
@@ -3745,4 +3748,9 @@ func TestSelectHexAndBit(t *testing.T) {
 		"select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
 }

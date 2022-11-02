@@ -8,6 +8,7 @@ Usage of vtorc:
       --clusters_to_watch strings                    Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config string                                config file name
       --consul_auth_static_file string               JSON File to read the topos/tokens from.
+      --emit_stats                                   If set, emit stats to push-based monitoring and stats backends
       --grpc_auth_static_client_creds string         When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                      Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                          Enable gRPC tracing.
@@ -28,6 +29,7 @@ Usage of vtorc:
       --log_err_stacks                               log stack traces for errors
       --log_rotate_max_size uint                     size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                  log to standard error instead of files
+      --max-stack-size int                           configure the maximum stack size in bytes (default 67108864)
       --onclose_timeout duration                     wait no more than this for OnClose handlers before stopping (default 1ns)
       --onterm_timeout duration                      wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid_file string                              If set, the process will write its pid to the named file, and delete it on graceful shutdown.
@@ -43,6 +45,11 @@ Usage of vtorc:
       --shutdown_wait_time duration                  Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
       --snapshot-topology-interval duration          Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours
       --sqlite-data-file string                      SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
+      --stats_backend string                         The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string              List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings                    Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string                  Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration                   Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                     logs at or above this threshold go to stderr (default 1)
       --tablet_manager_grpc_ca string                the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string              the cert to use to connect
@@ -73,7 +80,7 @@ Usage of vtorc:
       --topo_zk_tls_ca string                        the server ca to use to validate servers when connecting to the zk topo server
       --topo_zk_tls_cert string                      the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
       --topo_zk_tls_key string                       the key to use to connect to the zk topo server, enables TLS
-  -v, --v Level                                      log level for V logs
-      --version                                      print binary version
+      --v Level                                      log level for V logs
+  -v, --version                                      print binary version
       --vmodule moduleSpec                           comma-separated list of pattern=N settings for file-filtered logging
       --wait-replicas-timeout duration               Duration for which to wait for replica's to respond when issuing RPCs (default 30s)

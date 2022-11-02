@@ -377,6 +377,11 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Consolidator != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Consolidator))
+		i--
+		dAtA[i] = 0x68
+	}
 	if m.HasCreatedTempTables {
 		i--
 		if m.HasCreatedTempTables {
@@ -4275,6 +4280,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.HasCreatedTempTables {
 		n += 2
 	}
+	if m.Consolidator != 0 {
+		n += 1 + sov(uint64(m.Consolidator))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -6836,6 +6844,25 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.HasCreatedTempTables = bool(v != 0)
+		case 13:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Consolidator", wireType)
+			}
+			m.Consolidator = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Consolidator |= ExecuteOptions_Consolidator(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

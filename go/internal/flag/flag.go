@@ -44,6 +44,7 @@ import (
 //
 // See VEP-4, phase 1 for details: https://github.com/vitessio/enhancements/blob/c766ea905e55409cddeb666d6073cd2ac4c9783e/veps/vep-4.md#phase-1-preparation
 func Parse(fs *flag.FlagSet) {
+	preventGlogVFlagFromClobberingVersionFlagShorthand(fs)
 	fs.AddGoFlagSet(goflag.CommandLine)
 
 	if fs.Lookup("help") == nil {
@@ -96,6 +97,32 @@ func TrickGlog() {
 	os.Args = append(os.Args, args...)
 }
 
+// The default behavior of PFlagFromGoFlag (which is called on each flag when
+// calling AddGoFlagSet) is to allow any flags with single-character names to be
+// accessible both as, for example, `-v` and `--v`.
+//
+// This prevents us from exposing version via `--version|-v` (pflag will actually
+// panic when it goes to add the glog log-level flag), so we intervene to blank
+// out the Shorthand for _just_ that flag before adding the rest of the goflags
+// to a particular pflag FlagSet.
+//
+// IMPORTANT: This must be called prior to AddGoFlagSet in both Parse and
+// ParseFlagsForTest.
+func preventGlogVFlagFromClobberingVersionFlagShorthand(fs *flag.FlagSet) {
+	// N.B. we use goflag.Lookup instead of this package's Lookup, because we
+	// explicitly want to check only the goflags.
+	if f := goflag.Lookup("v"); f != nil {
+		if fs.Lookup("v") != nil { // This check is exactly what AddGoFlagSet does.
+			return
+		}
+
+		pf := flag.PFlagFromGoFlag(f)
+		pf.Shorthand = ""
+
+		fs.AddFlag(pf)
+	}
+}
+
 // Usage invokes the current CommandLine's Usage func, or if not overridden,
 // "prints a simple header and calls PrintDefaults".
 func Usage() {
@@ -105,14 +132,23 @@ func Usage() {
 // filterTestFlags returns two slices: the second one has just the flags for `go test` and the first one contains
 // the rest of the flags.
 const goTestFlagSuffix = "-test"
+const goTestRunFlag = "-test.run"
 
 func filterTestFlags() ([]string, []string) {
 	args := os.Args
 	var testFlags []string
 	var otherArgs []string
+	hasExtraTestRunArg := false
 	for i := 0; 0 < len(args) && i < len(args); i++ {
-		if strings.HasPrefix(args[i], goTestFlagSuffix) {
+		// This additional logic to check for the test.run flag is required for running single unit tests in GoLand,
+		// due to the way it uses "go tool test2json" to run the test. The CLI `go test` specifies the test as "-test.run=TestHeartbeat",
+		// but test2json as "-test.run TestHeartbeat". So in the latter case we need to also add the arg following test.run
+		if strings.HasPrefix(args[i], goTestFlagSuffix) || hasExtraTestRunArg {
+			hasExtraTestRunArg = false
 			testFlags = append(testFlags, args[i])
+			if args[i] == goTestRunFlag {
+				hasExtraTestRunArg = true
+			}
 			continue
 		}
 		otherArgs = append(otherArgs, args[i])
@@ -135,6 +171,7 @@ func ParseFlagsForTest() {
 	}
 
 	// parse remaining flags including the log-related ones like --alsologtostderr
+	preventGlogVFlagFromClobberingVersionFlagShorthand(flag.CommandLine)
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 }

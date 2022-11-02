@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -51,6 +52,38 @@ that shard.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(1),
 		RunE:                  commandDeleteShards,
+	}
+	// GenerateShardRanges outputs a set of shard ranges assuming a (mostly)
+	// equal distribution of N shards.
+	GenerateShardRanges = &cobra.Command{
+		Use:                   "GenerateShardRanges <num_shards>",
+		Short:                 "Print a set of shard ranges assuming a keyspace with N shards.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			n, err := strconv.ParseInt(cmd.Flags().Arg(0), 10, 64)
+			if err != nil {
+				return err
+			}
+
+			cli.FinishedParsing(cmd)
+
+			shards, err := key.GenerateShardRanges(int(n))
+			if err != nil {
+				return err
+			}
+
+			data, err := cli.MarshalJSON(shards)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("%s\n", data)
+			return nil
+		},
+		Annotations: map[string]string{
+			skipClientCreationKey: "true",
+		},
 	}
 	// GetShard makes a GetShard gRPC request to a vtctld.
 	GetShard = &cobra.Command{
@@ -591,6 +624,7 @@ func init() {
 	Root.AddCommand(DeleteShards)
 
 	Root.AddCommand(GetShard)
+	Root.AddCommand(GenerateShardRanges)
 
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Recursive, "recursive", "r", false, "Also delete all tablets in that cell beloning to the specified shard.")

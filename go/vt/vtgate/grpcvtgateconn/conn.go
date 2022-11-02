@@ -53,7 +53,6 @@ func init() {
 		"vtclient",
 		"vtcombo",
 		"vtctl",
-		"vtctld",
 		"vttestserver",
 	} {
 		servenv.OnParseFor(cmd, registerFlags)

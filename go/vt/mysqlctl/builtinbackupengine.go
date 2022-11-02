@@ -113,7 +113,7 @@ type FileEntry struct {
 }
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerBuiltinBackupEngineFlags)
 	}
 }
@@ -160,9 +160,10 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
-
 	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
-
+	if backupStorageHook != "" {
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
+	}
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
@@ -300,7 +301,6 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 // backupFiles finds the list of files to backup, and creates the backup.
 func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
-
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
 	fes, _, err := findFilesToBackup(params.Cnf)
@@ -591,6 +591,9 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
 		return nil, err
 	}
+	if bm.TransformHook != "" {
+		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
+	}
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
@@ -606,6 +609,16 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
 func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
+	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
+	if bm.CompressionEngine == PargzipCompressor {
+		params.Logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		bm.CompressionEngine = PgzipCompressor
+		defer func() {
+			bm.CompressionEngine = PargzipCompressor
+		}()
+	}
+
 	fes := bm.FileEntries
 	sema := sync2.NewSemaphore(params.Concurrency, 0)
 	rec := concurrency.AllErrorRecorder{}

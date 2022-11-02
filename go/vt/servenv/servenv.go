@@ -29,9 +29,12 @@ limitations under the License.
 package servenv
 
 import (
+	// register the HTTP handlers for profiling
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -48,8 +51,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
 
@@ -80,6 +81,7 @@ var (
 	onTermTimeout  = 10 * time.Second
 	onCloseTimeout = time.Nanosecond
 	catchSigpipe   bool
+	maxStackSize   = 64 * 1024 * 1024
 )
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
@@ -92,6 +94,7 @@ func RegisterFlags() {
 		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
 		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
 		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
+		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
 
 		// pid_file.go
 		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
@@ -140,6 +143,11 @@ func Init() {
 	}
 	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))
+
+	// Limit the stack size. We don't need huge stacks and smaller limits mean
+	// any infinite recursion fires earlier and on low memory systems avoids
+	// out of memory issues in favor of a stack overflow error.
+	debug.SetMaxStack(maxStackSize)
 
 	onInitHooks.Fire()
 }
@@ -383,6 +391,19 @@ func init() {
 		"vttestserver",
 	} {
 		OnParseFor(cmd, grpccommon.RegisterFlags)
+	}
+
+	// These are the binaries that export stats
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctld",
+		"vtgate",
+		"vtgr",
+		"vttablet",
+		"vtorc",
+	} {
+		OnParseFor(cmd, stats.RegisterFlags)
 	}
 
 	// Flags in package log are installed for all binaries.
