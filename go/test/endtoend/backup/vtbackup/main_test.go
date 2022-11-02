@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+		sql = sql + initialsharding.GetPasswordUpdateSQL()
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err
@@ -117,12 +117,13 @@ func TestMain(m *testing.M) {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return 1, err
-			} else {
-				// ignore golint warning, we need the else block to use proc
-				mysqlProcs = append(mysqlProcs, proc)
 			}
+			// ignore golint warning, we need the else block to use proc
+			mysqlProcs = append(mysqlProcs, proc)
+
 		}
 		for _, proc := range mysqlProcs {
 			if err := proc.Wait(); err != nil {

@@ -96,7 +96,7 @@ func TestMainImpl(m *testing.M) {
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+		sql = sql + initialsharding.GetPasswordUpdateSQL()
 		// https://github.com/vitessio/vitess/issues/8315
 		oldAlterTableMode := `
 SET GLOBAL old_alter_table = ON;
