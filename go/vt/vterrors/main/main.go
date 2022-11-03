@@ -39,6 +39,9 @@ const (
 `
 )
 
+// This program reads the errors located in the `vitess.io/vitess/go/vt/vterrors` package
+// and prints on the standard output a table, in Markdown format, that lists all the
+// errors with their code, description, error content, mysql error code and the SQL state.
 func main() {
 	t := template.New("template")
 	t.Funcs(map[string]any{
