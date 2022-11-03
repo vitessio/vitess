@@ -56,6 +56,7 @@
 - The deprecated flag `--master_connect_retry` has been removed. Please use `--replication_connect_retry` instead.
 - `vtctl` commands that take shard names and ranges as positional arguments (e.g. `vtctl Reshard ks.workflow -80 -40,40-80`) need to have their positional arguments separated from their flag arguments by a double-dash separator to avoid the new parsing library from mistaking them as flags (e.g. `vtctl Reshard ks.workflow -- -80 -40,40-80`).
 - The `--cell` flag in the `vtgate` binary no longer has a default value. It is a required argument that has to be specified for the binary to run. Please explicitly specify the flag, if dependent on the flag's default value.
+- The `--db-config-*-*` VTTablet flags were deprecated in `v3.0.0`. They have now been deleted as part of this release. You must use `--db_dba_*` now.
 
 #### <a id="vttablet-flag-deletions"/>vttablet Flag Deletions
 The following VTTablet flags were deprecated in 7.0. They have now been deleted
@@ -446,4 +447,3 @@ Below are the changes for each binary.
 - [zk](https://github.com/vitessio/vitess/blob/release-15.0/doc/flags/14.0-to-15.0-transition/zk.diff)
 - [zkctl](https://github.com/vitessio/vitess/blob/release-15.0/doc/flags/14.0-to-15.0-transition/zkctl.diff)
 - [zkctld](https://github.com/vitessio/vitess/blob/release-15.0/doc/flags/14.0-to-15.0-transition/zkctld.diff)
-- 
