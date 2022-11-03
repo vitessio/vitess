@@ -83,7 +83,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
 	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to -throttle_metrics_query")
 	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
-	fs.BoolVar(&throttlerConfigViaTopo, "throttler_config_via_topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
+	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
 }
 
 var (
