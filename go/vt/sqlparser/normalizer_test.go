@@ -185,7 +185,7 @@ func TestNormalize(t *testing.T) {
 		outstmt: "select a, b from t group by 1",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
-		// ORDER BY column_position
+		// ORDER BY with literal inside complex expression
 		in:      "select a, b from t order by field(a,1,2,3) asc",
 		outstmt: "select a, b from t order by field(a, :bv1, :bv2, :bv3) asc",
 		outbv: map[string]*querypb.BindVariable{
