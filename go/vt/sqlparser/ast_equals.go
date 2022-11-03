@@ -2399,7 +2399,7 @@ func EqualsRefOfJSONAttributesExpr(a, b *JSONAttributesExpr) bool {
 	}
 	return a.Type == b.Type &&
 		EqualsExpr(a.JSONDoc, b.JSONDoc) &&
-		EqualsJSONPathParam(a.Path, b.Path)
+		EqualsExpr(a.Path, b.Path)
 }
 
 // EqualsRefOfJSONContainsExpr does deep equals between the two objects.
@@ -2412,7 +2412,7 @@ func EqualsRefOfJSONContainsExpr(a, b *JSONContainsExpr) bool {
 	}
 	return EqualsExpr(a.Target, b.Target) &&
 		EqualsExpr(a.Candidate, b.Candidate) &&
-		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+		EqualsSliceOfExpr(a.PathList, b.PathList)
 }
 
 // EqualsRefOfJSONContainsPathExpr does deep equals between the two objects.
@@ -2425,7 +2425,7 @@ func EqualsRefOfJSONContainsPathExpr(a, b *JSONContainsPathExpr) bool {
 	}
 	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
 		EqualsExpr(a.OneOrAll, b.OneOrAll) &&
-		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+		EqualsSliceOfExpr(a.PathList, b.PathList)
 }
 
 // EqualsRefOfJSONExtractExpr does deep equals between the two objects.
@@ -2437,7 +2437,7 @@ func EqualsRefOfJSONExtractExpr(a, b *JSONExtractExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
-		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+		EqualsSliceOfExpr(a.PathList, b.PathList)
 }
 
 // EqualsRefOfJSONKeysExpr does deep equals between the two objects.
@@ -2449,7 +2449,7 @@ func EqualsRefOfJSONKeysExpr(a, b *JSONKeysExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
-		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+		EqualsExpr(a.Path, b.Path)
 }
 
 // EqualsRefOfJSONObjectExpr does deep equals between the two objects.
@@ -2551,7 +2551,7 @@ func EqualsRefOfJSONSearchExpr(a, b *JSONSearchExpr) bool {
 		EqualsExpr(a.OneOrAll, b.OneOrAll) &&
 		EqualsExpr(a.SearchStr, b.SearchStr) &&
 		EqualsExpr(a.EscapeChar, b.EscapeChar) &&
-		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+		EqualsSliceOfExpr(a.PathList, b.PathList)
 }
 
 // EqualsRefOfJSONStorageFreeExpr does deep equals between the two objects.
@@ -2610,7 +2610,7 @@ func EqualsRefOfJSONValueExpr(a, b *JSONValueExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
-		EqualsJSONPathParam(a.Path, b.Path) &&
+		EqualsExpr(a.Path, b.Path) &&
 		EqualsRefOfConvertType(a.ReturningType, b.ReturningType) &&
 		EqualsRefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
 		EqualsRefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse)
@@ -5168,453 +5168,6 @@ func EqualsInsertRows(inA, inB InsertRows) bool {
 	}
 }
 
-// EqualsJSONPathParam does deep equals between the two objects.
-func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
-	if inA == nil && inB == nil {
-		return true
-	}
-	if inA == nil || inB == nil {
-		return false
-	}
-	switch a := inA.(type) {
-	case *AndExpr:
-		b, ok := inB.(*AndExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfAndExpr(a, b)
-	case Argument:
-		b, ok := inB.(Argument)
-		if !ok {
-			return false
-		}
-		return a == b
-	case *ArgumentLessWindowExpr:
-		b, ok := inB.(*ArgumentLessWindowExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfArgumentLessWindowExpr(a, b)
-	case *BetweenExpr:
-		b, ok := inB.(*BetweenExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfBetweenExpr(a, b)
-	case *BinaryExpr:
-		b, ok := inB.(*BinaryExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfBinaryExpr(a, b)
-	case BoolVal:
-		b, ok := inB.(BoolVal)
-		if !ok {
-			return false
-		}
-		return a == b
-	case *CaseExpr:
-		b, ok := inB.(*CaseExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfCaseExpr(a, b)
-	case *CastExpr:
-		b, ok := inB.(*CastExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfCastExpr(a, b)
-	case *ColName:
-		b, ok := inB.(*ColName)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfColName(a, b)
-	case *CollateExpr:
-		b, ok := inB.(*CollateExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfCollateExpr(a, b)
-	case *ComparisonExpr:
-		b, ok := inB.(*ComparisonExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfComparisonExpr(a, b)
-	case *ConvertExpr:
-		b, ok := inB.(*ConvertExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfConvertExpr(a, b)
-	case *ConvertUsingExpr:
-		b, ok := inB.(*ConvertUsingExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfConvertUsingExpr(a, b)
-	case *CurTimeFuncExpr:
-		b, ok := inB.(*CurTimeFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfCurTimeFuncExpr(a, b)
-	case *Default:
-		b, ok := inB.(*Default)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfDefault(a, b)
-	case *ExistsExpr:
-		b, ok := inB.(*ExistsExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfExistsExpr(a, b)
-	case *ExtractFuncExpr:
-		b, ok := inB.(*ExtractFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfExtractFuncExpr(a, b)
-	case *ExtractValueExpr:
-		b, ok := inB.(*ExtractValueExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfExtractValueExpr(a, b)
-	case *ExtractedSubquery:
-		b, ok := inB.(*ExtractedSubquery)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfExtractedSubquery(a, b)
-	case *FirstOrLastValueExpr:
-		b, ok := inB.(*FirstOrLastValueExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfFirstOrLastValueExpr(a, b)
-	case *FuncExpr:
-		b, ok := inB.(*FuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfFuncExpr(a, b)
-	case *GroupConcatExpr:
-		b, ok := inB.(*GroupConcatExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfGroupConcatExpr(a, b)
-	case *IntervalExpr:
-		b, ok := inB.(*IntervalExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfIntervalExpr(a, b)
-	case *IntroducerExpr:
-		b, ok := inB.(*IntroducerExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfIntroducerExpr(a, b)
-	case *IsExpr:
-		b, ok := inB.(*IsExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfIsExpr(a, b)
-	case *JSONArrayExpr:
-		b, ok := inB.(*JSONArrayExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONArrayExpr(a, b)
-	case *JSONAttributesExpr:
-		b, ok := inB.(*JSONAttributesExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONAttributesExpr(a, b)
-	case *JSONContainsExpr:
-		b, ok := inB.(*JSONContainsExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONContainsExpr(a, b)
-	case *JSONContainsPathExpr:
-		b, ok := inB.(*JSONContainsPathExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONContainsPathExpr(a, b)
-	case *JSONExtractExpr:
-		b, ok := inB.(*JSONExtractExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONExtractExpr(a, b)
-	case *JSONKeysExpr:
-		b, ok := inB.(*JSONKeysExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONKeysExpr(a, b)
-	case *JSONObjectExpr:
-		b, ok := inB.(*JSONObjectExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONObjectExpr(a, b)
-	case *JSONOverlapsExpr:
-		b, ok := inB.(*JSONOverlapsExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONOverlapsExpr(a, b)
-	case *JSONPrettyExpr:
-		b, ok := inB.(*JSONPrettyExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONPrettyExpr(a, b)
-	case *JSONQuoteExpr:
-		b, ok := inB.(*JSONQuoteExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONQuoteExpr(a, b)
-	case *JSONRemoveExpr:
-		b, ok := inB.(*JSONRemoveExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONRemoveExpr(a, b)
-	case *JSONSchemaValidFuncExpr:
-		b, ok := inB.(*JSONSchemaValidFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
-	case *JSONSchemaValidationReportFuncExpr:
-		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
-	case *JSONSearchExpr:
-		b, ok := inB.(*JSONSearchExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONSearchExpr(a, b)
-	case *JSONStorageFreeExpr:
-		b, ok := inB.(*JSONStorageFreeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONStorageFreeExpr(a, b)
-	case *JSONStorageSizeExpr:
-		b, ok := inB.(*JSONStorageSizeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONStorageSizeExpr(a, b)
-	case *JSONUnquoteExpr:
-		b, ok := inB.(*JSONUnquoteExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONUnquoteExpr(a, b)
-	case *JSONValueExpr:
-		b, ok := inB.(*JSONValueExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONValueExpr(a, b)
-	case *JSONValueMergeExpr:
-		b, ok := inB.(*JSONValueMergeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONValueMergeExpr(a, b)
-	case *JSONValueModifierExpr:
-		b, ok := inB.(*JSONValueModifierExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfJSONValueModifierExpr(a, b)
-	case *LagLeadExpr:
-		b, ok := inB.(*LagLeadExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfLagLeadExpr(a, b)
-	case ListArg:
-		b, ok := inB.(ListArg)
-		if !ok {
-			return false
-		}
-		return a == b
-	case *Literal:
-		b, ok := inB.(*Literal)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfLiteral(a, b)
-	case *LockingFunc:
-		b, ok := inB.(*LockingFunc)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfLockingFunc(a, b)
-	case *MatchExpr:
-		b, ok := inB.(*MatchExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfMatchExpr(a, b)
-	case *MemberOfExpr:
-		b, ok := inB.(*MemberOfExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfMemberOfExpr(a, b)
-	case *NTHValueExpr:
-		b, ok := inB.(*NTHValueExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfNTHValueExpr(a, b)
-	case *NamedWindow:
-		b, ok := inB.(*NamedWindow)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfNamedWindow(a, b)
-	case *NotExpr:
-		b, ok := inB.(*NotExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfNotExpr(a, b)
-	case *NtileExpr:
-		b, ok := inB.(*NtileExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfNtileExpr(a, b)
-	case *NullVal:
-		b, ok := inB.(*NullVal)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfNullVal(a, b)
-	case *Offset:
-		b, ok := inB.(*Offset)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfOffset(a, b)
-	case *OrExpr:
-		b, ok := inB.(*OrExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfOrExpr(a, b)
-	case *RegexpInstrExpr:
-		b, ok := inB.(*RegexpInstrExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRegexpInstrExpr(a, b)
-	case *RegexpLikeExpr:
-		b, ok := inB.(*RegexpLikeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRegexpLikeExpr(a, b)
-	case *RegexpReplaceExpr:
-		b, ok := inB.(*RegexpReplaceExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRegexpReplaceExpr(a, b)
-	case *RegexpSubstrExpr:
-		b, ok := inB.(*RegexpSubstrExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRegexpSubstrExpr(a, b)
-	case *Subquery:
-		b, ok := inB.(*Subquery)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfSubquery(a, b)
-	case *SubstrExpr:
-		b, ok := inB.(*SubstrExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfSubstrExpr(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfTimestampFuncExpr(a, b)
-	case *TrimFuncExpr:
-		b, ok := inB.(*TrimFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfTrimFuncExpr(a, b)
-	case *UnaryExpr:
-		b, ok := inB.(*UnaryExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfUnaryExpr(a, b)
-	case *UpdateXMLExpr:
-		b, ok := inB.(*UpdateXMLExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfUpdateXMLExpr(a, b)
-	case ValTuple:
-		b, ok := inB.(ValTuple)
-		if !ok {
-			return false
-		}
-		return EqualsValTuple(a, b)
-	case *ValuesFuncExpr:
-		b, ok := inB.(*ValuesFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfValuesFuncExpr(a, b)
-	case *WeightStringFuncExpr:
-		b, ok := inB.(*WeightStringFuncExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfWeightStringFuncExpr(a, b)
-	case *XorExpr:
-		b, ok := inB.(*XorExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfXorExpr(a, b)
-	default:
-		// this should never happen
-		return false
-	}
-}
-
 // EqualsSelectExpr does deep equals between the two objects.
 func EqualsSelectExpr(inA, inB SelectExpr) bool {
 	if inA == nil && inB == nil {
@@ -6230,13 +5783,13 @@ func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 	return true
 }
 
-// EqualsSliceOfJSONPathParam does deep equals between the two objects.
-func EqualsSliceOfJSONPathParam(a, b []JSONPathParam) bool {
+// EqualsSliceOfExpr does deep equals between the two objects.
+func EqualsSliceOfExpr(a, b []Expr) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsJSONPathParam(a[i], b[i]) {
+		if !EqualsExpr(a[i], b[i]) {
 			return false
 		}
 	}

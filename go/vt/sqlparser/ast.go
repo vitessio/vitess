@@ -2519,15 +2519,12 @@ type (
 		Expr         Expr
 	}
 
-	// JSONPathParam is used to store the path used as arguments in different JSON functions
-	JSONPathParam Expr
-
 	// JSONContainsExpr represents the function and arguments for JSON_CONTAINS()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains
 	JSONContainsExpr struct {
 		Target    Expr
 		Candidate Expr
-		PathList  []JSONPathParam
+		PathList  []Expr
 	}
 
 	// JSONContainsPathExpr represents the function and arguments for JSON_CONTAINS_PATH()
@@ -2535,7 +2532,7 @@ type (
 	JSONContainsPathExpr struct {
 		JSONDoc  Expr
 		OneOrAll Expr
-		PathList []JSONPathParam
+		PathList []Expr
 	}
 
 	// JSONContainsPathType is an enum to get types of Trim
@@ -2545,14 +2542,14 @@ type (
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-extract
 	JSONExtractExpr struct {
 		JSONDoc  Expr
-		PathList []JSONPathParam
+		PathList []Expr
 	}
 
 	// JSONKeysExpr represents the function and arguments for JSON_KEYS()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-keys
 	JSONKeysExpr struct {
-		JSONDoc  Expr
-		PathList []JSONPathParam
+		JSONDoc Expr
+		Path    Expr
 	}
 
 	// JSONOverlapsExpr represents the function and arguments for JSON_OVERLAPS()
@@ -2569,14 +2566,14 @@ type (
 		OneOrAll   Expr
 		SearchStr  Expr
 		EscapeChar Expr
-		PathList   []JSONPathParam
+		PathList   []Expr
 	}
 
 	// JSONValueExpr represents the function and arguments for JSON_VALUE()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
 	JSONValueExpr struct {
 		JSONDoc         Expr
-		Path            JSONPathParam
+		Path            Expr
 		ReturningType   *ConvertType
 		EmptyOnResponse *JtOnResponse
 		ErrorOnResponse *JtOnResponse
@@ -2608,7 +2605,7 @@ type (
 	JSONAttributesExpr struct {
 		Type    JSONAttributeType
 		JSONDoc Expr
-		Path    JSONPathParam
+		Path    Expr
 	}
 
 	// JSONAttributeType is an enum to get types of TrimFunc.

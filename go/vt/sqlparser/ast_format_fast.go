@@ -3224,14 +3224,11 @@ func (node *JSONExtractExpr) formatFast(buf *TrackedBuffer) {
 func (node *JSONKeysExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_keys(")
 	buf.printExpr(node, node.JSONDoc, true)
-	if len(node.PathList) > 0 {
+	if node.Path != nil {
 		buf.WriteString(", ")
-	}
-	var prefix string
-	for _, n := range node.PathList {
-		buf.WriteString(prefix)
-		buf.printExpr(node, n, true)
-		prefix = ", "
+		buf.printExpr(node, node.Path, true)
+		buf.WriteByte(')')
+		return
 	}
 	buf.WriteByte(')')
 }
