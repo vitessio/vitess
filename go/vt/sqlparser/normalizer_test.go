@@ -180,6 +180,15 @@ func TestNormalize(t *testing.T) {
 		outstmt: "select a, b from t order by 1 asc",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
+		// ORDER BY column_position
+		in:      "select a, b from t order by field(a,1,2,3) asc",
+		outstmt: "select a, b from t order by field(a, :bv1, :bv2, :bv3) asc",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(2),
+			"bv3": sqltypes.Int64BindVariable(3),
+		},
+	}, {
 		// ORDER BY variable
 		in:      "select a, b from t order by c asc",
 		outstmt: "select a, b from t order by c asc",
