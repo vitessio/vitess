@@ -3668,6 +3668,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	if *enable && *disable {
 		return fmt.Errorf("--enable and --disable are mutually exclusive")
 	}
+	if *checkAsCheckSelf && *checkAsCheckShard {
+		return fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
+	}
 
 	keyspace := subFlags.Arg(0)
 
