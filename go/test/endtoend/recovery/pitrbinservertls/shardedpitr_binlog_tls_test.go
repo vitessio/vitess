@@ -119,7 +119,7 @@ var (
 func TestPITRBinLogTLSRecovery(t *testing.T) {
 	defer cluster.PanicHandler(nil)
 	initializeCluster(t)
-	defer clusterInstance.Teardown()
+	//defer clusterInstance.Teardown()
 
 	//start the binlog server and point it to primary
 	bs := startBinlogServer(t, primary)
@@ -494,14 +494,15 @@ func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName stri
 
 func testTabletRecovery(t *testing.T, binlogServer *pitr.BinLogServer, lookupTimeout, restoreKeyspaceName, shardName, expectedRows string) {
 	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
+	log.Infof("recoverytablet id: %s", recoveryTablet.Alias)
 	launchRecoveryTablet(t, recoveryTablet, binlogServer, lookupTimeout, restoreKeyspaceName, shardName)
 
 	sqlRes, err := recoveryTablet.VttabletProcess.QueryTablet(getCountID, keyspaceName, true)
 	require.NoError(t, err)
 	assert.Equal(t, expectedRows, sqlRes.Rows[0][0].String())
 
-	defer recoveryTablet.MysqlctlProcess.Stop()
-	defer recoveryTablet.VttabletProcess.TearDown()
+	//defer recoveryTablet.MysqlctlProcess.Stop()
+	//defer recoveryTablet.VttabletProcess.TearDown()
 }
 
 func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *pitr.BinLogServer, lookupTimeout, restoreKeyspaceName, shardName string) {

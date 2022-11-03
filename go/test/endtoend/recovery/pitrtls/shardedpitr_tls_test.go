@@ -251,7 +251,7 @@ func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName stri
 func TestTLSPITRRecovery(t *testing.T) {
 	defer cluster.PanicHandler(nil)
 	initializeCluster(t)
-	defer clusterInstance.Teardown()
+	//defer clusterInstance.Teardown()
 
 	// Creating the table
 	_, err := primary.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
@@ -476,8 +476,8 @@ func tlsTestTabletRecovery(t *testing.T, tabletForBinlogs *cluster.Vttablet, loo
 	require.NoError(t, err)
 	assert.Equal(t, expectedRows, sqlRes.Rows[0][0].String())
 
-	defer recoveryTablet.MysqlctlProcess.Stop()
-	defer recoveryTablet.VttabletProcess.TearDown()
+	//defer recoveryTablet.MysqlctlProcess.Stop()
+	//defer recoveryTablet.VttabletProcess.TearDown()
 }
 
 func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBinlogs *cluster.Vttablet, lookupTimeout, restoreKeyspaceName, shardName string) {
