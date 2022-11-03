@@ -67,13 +67,14 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       run: |
         if [ ${{matrix.os}} = "ubuntu-latest" ]; then
-          # Setup MySQL 8.0
+          # Get key to latest MySQL repo
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+          # Setup MySQL 8.0
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.3-1_all.deb
           echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
           sudo apt-get update
-
+        
           # Install everything else we need, and configure
           sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
           sudo service mysql stop
