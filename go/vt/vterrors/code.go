@@ -80,7 +80,7 @@ var (
 	VT14003 = errorWithoutState("VT14003", vtrpcpb.Code_UNAVAILABLE, "No connection for tablet %v", "No connection for the given tablet.")
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "Cannot find keyspace for: %s", "The specified keyspace could not be found.")
 
-	Errors = []func(args ...any) *OurError{
+	Errors = []func(args ...any) *VitessError{
 		VT03001,
 		VT03002,
 		VT03003,
@@ -132,31 +132,31 @@ var (
 	}
 )
 
-type OurError struct {
+type VitessError struct {
 	Err         error
 	Description string
 	ID          string
 	State       State
 }
 
-func (o *OurError) Error() string {
+func (o *VitessError) Error() string {
 	return o.Err.Error()
 }
 
-func (o *OurError) Cause() error {
+func (o *VitessError) Cause() error {
 	return o.Err
 }
 
-var _ error = (*OurError)(nil)
+var _ error = (*VitessError)(nil)
 
-func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(args ...any) *OurError {
-	return func(args ...any) *OurError {
+func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(args ...any) *VitessError {
+	return func(args ...any) *VitessError {
 		s := short
 		if len(args) != 0 {
 			s = fmt.Sprintf(s, args...)
 		}
 
-		return &OurError{
+		return &VitessError{
 			Err:         New(code, id+": "+s),
 			Description: long,
 			ID:          id,
@@ -164,9 +164,9 @@ func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(ar
 	}
 }
 
-func errorWithState(id string, code vtrpcpb.Code, state State, short, long string) func(args ...any) *OurError {
-	return func(args ...any) *OurError {
-		return &OurError{
+func errorWithState(id string, code vtrpcpb.Code, state State, short, long string) func(args ...any) *VitessError {
+	return func(args ...any) *VitessError {
+		return &VitessError{
 			Err:         NewErrorf(code, state, id+": "+short, args...),
 			Description: long,
 			ID:          id,
