@@ -57,6 +57,7 @@ func ChooseBinlogsForIncrementalBackup(
 	lookFromGTIDSet mysql.GTIDSet,
 	binaryLogs []string,
 	pgtids func(ctx context.Context, binlog string) (gtids string, err error),
+	unionPreviousGTIDs bool,
 ) (
 	binaryLogsToBackup []string,
 	incrementalBackupFromGTID string,
@@ -64,6 +65,7 @@ func ChooseBinlogsForIncrementalBackup(
 	err error,
 ) {
 
+	var prevGTIDsUnion mysql.GTIDSet
 	for i, binlog := range binaryLogs {
 		previousGtids, err := pgtids(ctx, binlog)
 		if err != nil {
@@ -73,6 +75,12 @@ func ChooseBinlogsForIncrementalBackup(
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot decode binlog %s position in incremental backup: %v", binlog, prevPos)
 		}
+		if prevGTIDsUnion == nil {
+			prevGTIDsUnion = prevPos.GTIDSet
+		} else {
+			prevGTIDsUnion = prevGTIDsUnion.Union(prevPos.GTIDSet)
+		}
+
 		containedInFromPos := lookFromGTIDSet.Contains(prevPos.GTIDSet)
 		// The binary logs are read in-order. They are build one on top of the other: we know
 		// the PreviousGTIDs of once binary log fully cover the previous binary log's.
@@ -86,6 +94,9 @@ func ChooseBinlogsForIncrementalBackup(
 		// of "backupPos"
 		if i == 0 {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the very first binlog file %v has PreviousGTIDs %s that exceed given incremental backup pos. There are GTID entries that are missing and this backup cannot run", binlog, prevPos)
+		}
+		if unionPreviousGTIDs {
+			prevPos.GTIDSet = prevGTIDsUnion
 		}
 		if !prevPos.GTIDSet.Contains(lookFromGTIDSet) {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "binary log %v with previous GTIDS %s neither contains requested GTID %s nor contains it. Backup cannot take place", binlog, prevPos.GTIDSet, lookFromGTIDSet)

@@ -269,7 +269,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		previousGTIDs[binlog] = gtids
 		return gtids, nil
 	}
-	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := ChooseBinlogsForIncrementalBackup(ctx, binlogCompareGTID, binaryLogs, getPreviousGTIDs)
+	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := ChooseBinlogsForIncrementalBackup(ctx, binlogCompareGTID, binaryLogs, getPreviousGTIDs, true)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
 	}

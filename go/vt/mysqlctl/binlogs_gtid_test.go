@@ -15,7 +15,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 )
 
-func TestBinlogsToBackup(t *testing.T) {
+func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 	binlogs := []string{
 		"vt-bin.000001",
 		"vt-bin.000002",
@@ -85,6 +85,18 @@ func TestBinlogsToBackup(t *testing.T) {
 			backupPos:   "16b1039f-22b6-11ed-b765-0a43f95f0000:1-63",
 			expectError: "neither contains requested GTID",
 		},
+		{
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-50",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:3-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:20-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:200-331",
+			},
+			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-63",
+			expectBinlogs: []string{"vt-bin.000003", "vt-bin.000004", "vt-bin.000005"},
+		},
 	}
 	for i, tc := range tt {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
@@ -102,12 +114,14 @@ func TestBinlogsToBackup(t *testing.T) {
 					}
 					return gtids, nil
 				},
+				true,
 			)
 			if tc.expectError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectError)
 				return
 			}
+			require.NoError(t, err)
 			require.NotEmpty(t, binlogsToBackup)
 			assert.Equal(t, tc.expectBinlogs, binlogsToBackup)
 			assert.Equal(t, tc.previousGTIDs[binlogsToBackup[0]], fromGTID)
