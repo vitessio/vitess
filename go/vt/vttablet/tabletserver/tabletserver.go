@@ -1788,7 +1788,8 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 				appName = throttle.DefaultAppName
 			}
 			flags := &throttle.CheckFlags{
-				LowPriority: (r.URL.Query().Get("p") == "low"),
+				LowPriority:           (r.URL.Query().Get("p") == "low"),
+				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 			}
 			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
 			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {

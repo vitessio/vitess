@@ -973,7 +973,7 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remot
 
 // CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
-	if throttler.IsEnabled() {
+	if throttler.IsEnabled() && !flags.SkipRequestHeartbeats {
 		go throttler.heartbeatWriter.RequestHeartbeats()
 	}
 	switch checkType {

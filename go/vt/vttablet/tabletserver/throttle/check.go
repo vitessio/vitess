@@ -29,10 +29,11 @@ const (
 
 // CheckFlags provide hints for a check
 type CheckFlags struct {
-	ReadCheck         bool
-	OverrideThreshold float64
-	LowPriority       bool
-	OKIfNotExists     bool
+	ReadCheck             bool
+	OverrideThreshold     float64
+	LowPriority           bool
+	OKIfNotExists         bool
+	SkipRequestHeartbeats bool
 }
 
 // StandardCheckFlags have no special hints
