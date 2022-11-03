@@ -170,10 +170,10 @@ func updateThrottlerConfig(enable bool, disable bool, threshold float64, metrics
 		args = append(args, "--threshold", fmt.Sprintf("%f", threshold))
 	}
 	if metricsQuery != "" {
-		args = append(args, "--custom_query", metricsQuery)
-		args = append(args, "--check_as_check_self")
+		args = append(args, "--custom-query", metricsQuery)
+		args = append(args, "--check-as-check-self")
 	} else {
-		args = append(args, "--check_as_check_shard")
+		args = append(args, "--check-as-check-shard")
 	}
 	args = append(args, keyspaceName)
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)

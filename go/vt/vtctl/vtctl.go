@@ -710,7 +710,7 @@ var commands = []commandGroup{
 			{
 				name:   "UpdateThrottlerConfig",
 				method: commandUpdateThrottlerConfig,
-				params: "[--enable] [--disable] [--default_threshold=<float64>] <keyspace>",
+				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
 				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
 			},
 			{
@@ -3655,9 +3655,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	enable := subFlags.Bool("enable", false, "Enable the throttler")
 	disable := subFlags.Bool("disable", false, "Disable the throttler")
 	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
-	customQuery := subFlags.String("custom_query", noValueIndicator, "custom throttler check query")
-	checkAsCheckSelf := subFlags.Bool("check_as_check_self", false, "/throttler/check requests behave as is /throttler/check-self was called")
-	checkAsCheckShard := subFlags.Bool("check_as_check_shard", false, "use standard behavior for /throttler/check requests")
+	customQuery := subFlags.String("custom-query", noValueIndicator, "custom throttler check query")
+	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
+	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
