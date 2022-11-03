@@ -330,34 +330,28 @@ func TestInitialThrottler(t *testing.T) {
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	time.Sleep(applyConfigWait)
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
 	//
-	respStatus := warmUpHeartbeat(t)
-	assert.NotEqual(t, http.StatusOK, respStatus)
-	time.Sleep(time.Second)
-	{
-		resp, err := throttleCheck(primaryTablet, false)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
-	{
+	t.Run("validating throttler OK", func(t *testing.T) {
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("validating throttled apps", func(t *testing.T) {
 		resp, body, err := throttledApps(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, body, "always-throttled-app")
-	}
-	{
+	})
+	t.Run("validating primary check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
-	{
+	})
+	t.Run("validating replica check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
+	})
 }
 
 func TestLag(t *testing.T) {
