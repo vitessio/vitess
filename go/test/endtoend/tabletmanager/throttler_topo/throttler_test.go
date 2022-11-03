@@ -84,7 +84,6 @@ const (
 	throttlerThreshold        = 1 * time.Second // standard, tight threshold
 	unreasonablyLowThreshold  = 1 * time.Millisecond
 	extremelyHighThreshold    = 1 * time.Hour
-	replicationCatchUpWait    = 10 * time.Second // time to allow replication catchup
 	onDemandHeartbeatDuration = 5 * time.Second
 	applyConfigWait           = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
 )
@@ -364,85 +363,65 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 func TestLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	{
+	t.Run("stopping replication", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
-
+	})
+	t.Run("accumulating lag, expecting throttler push back", func(t *testing.T) {
 		time.Sleep(2 * throttlerThreshold)
-		// Lag will have accumulated
-		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
-		{
-			resp, err := throttleCheck(primaryTablet, false)
-			assert.NoError(t, err)
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
-		}
-		{
-			resp, err := throttleCheckSelf(primaryTablet)
-			assert.NoError(t, err)
-			// self (on primary) is unaffected by replication lag
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
-		{
-			resp, err := throttleCheckSelf(replicaTablet)
-			assert.NoError(t, err)
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
-		}
-	}
-	{
+
+		resp, err := throttleCheck(primaryTablet, false)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	})
+	t.Run("primary self-check should still be fine", func(t *testing.T) {
+		resp, err := throttleCheckSelf(primaryTablet)
+		assert.NoError(t, err)
+		// self (on primary) is unaffected by replication lag
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("replica self-check should show error", func(t *testing.T) {
+		resp, err := throttleCheckSelf(replicaTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	})
+	t.Run("starting replication", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
-
-		time.Sleep(replicationCatchUpWait)
-		// Restore
-		// by now heartbeat lease has expired. Let's warm it up
-		respStatus := warmUpHeartbeat(t)
-		assert.NotEqual(t, http.StatusOK, respStatus)
-		time.Sleep(time.Second)
-		{
-			resp, err := throttleCheck(primaryTablet, false)
-			assert.NoError(t, err)
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
-		{
-			resp, err := throttleCheckSelf(primaryTablet)
-			assert.NoError(t, err)
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
-		{
-			resp, err := throttleCheckSelf(replicaTablet)
-			assert.NoError(t, err)
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
-	}
+	})
+	t.Run("expecting replication to catch up and throttler check to return OK", func(t *testing.T) {
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("primary self-check should be fine", func(t *testing.T) {
+		resp, err := throttleCheckSelf(primaryTablet)
+		assert.NoError(t, err)
+		// self (on primary) is unaffected by replication lag
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("replica self-check should be fine", func(t *testing.T) {
+		resp, err := throttleCheckSelf(replicaTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
 }
 
 func TestNoReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	{
+	t.Run("changing replica to RDONLY", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		assert.NoError(t, err)
 
-		time.Sleep(applyConfigWait)
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
-		respStatus := warmUpHeartbeat(t)
-		assert.Equal(t, http.StatusOK, respStatus)
-		resp, err := throttleCheck(primaryTablet, false)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
-	{
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("restoring to REPLICA", func(t *testing.T) {
+
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		assert.NoError(t, err)
 
-		time.Sleep(applyConfigWait)
-		// Restore valid replica
-		respStatus := warmUpHeartbeat(t)
-		assert.NotEqual(t, http.StatusOK, respStatus)
-		resp, err := throttleCheck(primaryTablet, false)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+	})
 }
 
 func TestCustomQuery(t *testing.T) {
