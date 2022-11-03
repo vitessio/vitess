@@ -16,6 +16,7 @@ limitations under the License.
 package throttler
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -146,8 +148,8 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 	return resp, respBody, err
 }
 
-func throttleCheck(tablet *cluster.Vttablet) (*http.Response, error) {
-	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
+func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*http.Response, error) {
+	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?s=%t", tablet.HTTPPort, checkAPIPath, skipRequestHeartbeats))
 	return resp, err
 }
 
@@ -158,10 +160,38 @@ func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
 func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
 	// Let's warm it up.
-	resp, err := throttleCheck(primaryTablet)
+	resp, err := throttleCheck(primaryTablet, false)
 	time.Sleep(time.Second)
 	assert.NoError(t, err)
 	return resp.StatusCode
+}
+
+// waitForThrotteCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
+func waitForThrotteCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode int) {
+	_ = warmUpHeartbeat(t)
+	ctx, cancel := context.WithTimeout(context.Background(), onDemandHeartbeatDuration+applyConfigWait)
+	defer cancel()
+
+	for {
+		resp, err := throttleCheck(tablet, true)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+
+		if wantCode == resp.StatusCode {
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			return
+		}
+		select {
+		case <-ctx.Done():
+			b, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, wantCode, resp.StatusCode, "body: %v", string(b))
+		default:
+			time.Sleep(time.Second)
+		}
+	}
 }
 
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
@@ -172,10 +202,8 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	// After a few seconds, the heartbeat lease terminates. We wait for that.
 	// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
 	t.Run("expect push back once initial heartbeat lease terminates", func(t *testing.T) {
-		time.Sleep(onDemandHeartbeatDuration + applyConfigWait)
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		time.Sleep(onDemandHeartbeatDuration)
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("requesting heartbeats", func(t *testing.T) {
 		respStatus := warmUpHeartbeat(t)
@@ -183,13 +211,13 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	})
 	t.Run("expect OK once heartbeats lease renewed", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("expect OK once heartbeats lease renewed, still", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
@@ -222,7 +250,7 @@ func TestLag(t *testing.T) {
 		// Lag will have accumulated
 		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
 		{
-			resp, err := throttleCheck(primaryTablet)
+			resp, err := throttleCheck(primaryTablet, false)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
@@ -249,7 +277,7 @@ func TestLag(t *testing.T) {
 		assert.NotEqual(t, http.StatusOK, respStatus)
 		time.Sleep(time.Second)
 		{
-			resp, err := throttleCheck(primaryTablet)
+			resp, err := throttleCheck(primaryTablet, false)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
@@ -277,7 +305,7 @@ func TestNoReplicas(t *testing.T) {
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		respStatus := warmUpHeartbeat(t)
 		assert.Equal(t, http.StatusOK, respStatus)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
@@ -289,7 +317,7 @@ func TestNoReplicas(t *testing.T) {
 		// Restore valid replica
 		respStatus := warmUpHeartbeat(t)
 		assert.NotEqual(t, http.StatusOK, respStatus)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}

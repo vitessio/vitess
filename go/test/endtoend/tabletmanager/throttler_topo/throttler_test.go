@@ -81,7 +81,9 @@ var (
 )
 
 const (
-	throttlerThreshold        = 1 * time.Second  // standard, tight threshold
+	throttlerThreshold        = 1 * time.Second // standard, tight threshold
+	unreasonablyLowThreshold  = 1 * time.Millisecond
+	extremelyHighThreshold    = 1 * time.Hour
 	replicationCatchUpWait    = 10 * time.Second // time to allow replication catchup
 	onDemandHeartbeatDuration = 5 * time.Second
 	applyConfigWait           = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
@@ -191,8 +193,8 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 	return resp, respBody, err
 }
 
-func throttleCheck(tablet *cluster.Vttablet) (*http.Response, error) {
-	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
+func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*http.Response, error) {
+	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?s=%t", tablet.HTTPPort, checkAPIPath, skipRequestHeartbeats))
 	return resp, err
 }
 
@@ -203,10 +205,38 @@ func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
 func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
 	// Let's warm it up.
-	resp, err := throttleCheck(primaryTablet)
+	resp, err := throttleCheck(primaryTablet, false)
 	time.Sleep(time.Second)
 	assert.NoError(t, err)
 	return resp.StatusCode
+}
+
+// waitForThrotteCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
+func waitForThrotteCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode int) {
+	_ = warmUpHeartbeat(t)
+	ctx, cancel := context.WithTimeout(context.Background(), onDemandHeartbeatDuration+applyConfigWait)
+	defer cancel()
+
+	for {
+		resp, err := throttleCheck(tablet, true)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+
+		if wantCode == resp.StatusCode {
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			return
+		}
+		select {
+		case <-ctx.Done():
+			b, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, wantCode, resp.StatusCode, "body: %v", string(b))
+		default:
+			time.Sleep(time.Second)
+		}
+	}
 }
 
 func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
@@ -231,28 +261,25 @@ func TestInitialThrottler(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("validating OK response from disabled throttler", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("enabling throttler with low threshold", func(t *testing.T) {
-		output, err := updateThrottlerConfig(true, false, 0.01, "")
+		output, err := updateThrottlerConfig(true, false, unreasonablyLowThreshold.Seconds(), "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating pushback response from throttler", func(t *testing.T) {
-		time.Sleep(applyConfigWait)
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("disabling throttler", func(t *testing.T) {
-		output, err := updateThrottlerConfig(false, true, 0.01, "")
+		output, err := updateThrottlerConfig(false, true, unreasonablyLowThreshold.Seconds(), "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating OK response from disabled throttler, again", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
@@ -262,21 +289,15 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating pushback response from throttler, again", func(t *testing.T) {
-		time.Sleep(applyConfigWait)
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
-		output, err := updateThrottlerConfig(false, false, applyConfigWait.Seconds()+onDemandHeartbeatDuration.Seconds(), "")
+		output, err := updateThrottlerConfig(false, false, extremelyHighThreshold.Seconds(), "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating OK response from throttler with high threshold", func(t *testing.T) {
-		time.Sleep(applyConfigWait)
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("setting low threshold", func(t *testing.T) {
 		output, err := updateThrottlerConfig(false, false, throttlerThreshold.Seconds(), "")
@@ -284,10 +305,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating pushback response from throttler on low threshold", func(t *testing.T) {
-		time.Sleep(applyConfigWait)
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("requesting heartbeats", func(t *testing.T) {
 		respStatus := warmUpHeartbeat(t)
@@ -295,21 +313,18 @@ func TestInitialThrottler(t *testing.T) {
 	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running still", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
-		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 }
 
@@ -324,7 +339,7 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	assert.NotEqual(t, http.StatusOK, respStatus)
 	time.Sleep(time.Second)
 	{
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
@@ -357,7 +372,7 @@ func TestLag(t *testing.T) {
 		// Lag will have accumulated
 		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
 		{
-			resp, err := throttleCheck(primaryTablet)
+			resp, err := throttleCheck(primaryTablet, false)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
@@ -384,7 +399,7 @@ func TestLag(t *testing.T) {
 		assert.NotEqual(t, http.StatusOK, respStatus)
 		time.Sleep(time.Second)
 		{
-			resp, err := throttleCheck(primaryTablet)
+			resp, err := throttleCheck(primaryTablet, false)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
@@ -412,7 +427,7 @@ func TestNoReplicas(t *testing.T) {
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		respStatus := warmUpHeartbeat(t)
 		assert.Equal(t, http.StatusOK, respStatus)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
@@ -424,7 +439,7 @@ func TestNoReplicas(t *testing.T) {
 		// Restore valid replica
 		respStatus := warmUpHeartbeat(t)
 		assert.NotEqual(t, http.StatusOK, respStatus)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
@@ -440,7 +455,7 @@ func TestCustomQuery(t *testing.T) {
 	})
 	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
 		time.Sleep(applyConfigWait)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
@@ -460,7 +475,7 @@ func TestCustomQuery(t *testing.T) {
 			// by this time we will have testThreshold+1 threads_running, and we should hit the threshold
 			// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
 			{
-				resp, err := throttleCheck(primaryTablet)
+				resp, err := throttleCheck(primaryTablet, false)
 				assert.NoError(t, err)
 				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 			}
@@ -476,7 +491,7 @@ func TestCustomQuery(t *testing.T) {
 		})
 		t.Run("restored below threshold", func(t *testing.T) {
 			{
-				resp, err := throttleCheck(primaryTablet)
+				resp, err := throttleCheck(primaryTablet, false)
 				assert.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
 			}
@@ -503,13 +518,13 @@ func TestRestoreDefaultQuery(t *testing.T) {
 	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
-		resp, err := throttleCheck(primaryTablet)
+		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
