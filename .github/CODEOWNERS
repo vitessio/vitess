@@ -3,6 +3,7 @@ bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 /.github/ISSUE_TEMPLATE/ @deepthi @frouioui @mattlord
 /.github/workflows/ @deepthi @frouioui @mattlord
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
+/doc/ @deepthi @frouioui @GuptaManan100 @rsajwani
 /docker/ @deepthi @derekperkins @dkhenry @mattlord
 /examples/compose @shlomi-noach @GuptaManan100 @frouioui
 /examples/demo @sougou @mattlord
