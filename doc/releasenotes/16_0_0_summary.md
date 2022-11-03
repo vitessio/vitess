@@ -33,3 +33,7 @@ Other aspects of the VReplication copy-phase logic are preserved:
   4. The vstream packets are committed in the order seen in the stream. So for any PK1 and PK2, the write to `_vt.copy_state` and  `commit` steps (steps 2 and 3 above) for PK1 will both precede the `_vt.copy_state` write and commit steps of PK2.
 
  Other phases, catchup, fast-forward, and replicating/"running", are unchanged.
+
+### Deprecations
+
+The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
