@@ -230,14 +230,14 @@ func (uvs *uvstreamer) Cancel() {
 	uvs.cancel()
 }
 
-// We have not yet implemented the logic to check if an event for a row that is already copied,
-// so we always return true there so that we don't miss events
+// We have not yet implemented the logic to check if an event is for a row that is already copied,
+// so we always return true so that we send all events for this table and so we don't miss events.
 func (uvs *uvstreamer) isRowCopied(tableName string, ev *binlogdatapb.VEvent) bool {
 	return true
 }
 
-// Only send catchup/fastforward events for tables whose copy phase is complete or in progress
-// Todo: filter out events for rows not yet copied. we can only do this as a best-effort for comparable PKs.
+// Only send catchup/fastforward events for tables whose copy phase is complete or in progress.
+// todo: filter out events for rows not yet copied. Note that we can only do this as a best-effort for comparable PKs.
 func (uvs *uvstreamer) shouldSendEventForTable(tableName string, ev *binlogdatapb.VEvent) bool {
 	table, ok := uvs.plans[tableName]
 	// Event is for a table which is not in its copy phase.
@@ -251,7 +251,7 @@ func (uvs *uvstreamer) shouldSendEventForTable(tableName string, ev *binlogdatap
 	}
 
 	// Table is currently in its copy phase. We have not yet implemented the logic to check if
-	// an event for a row that is already copied, so we always return true there so that we don't miss events
+	// an event for a row that is already copied, so we always return true there so that we don't miss events.
 	// We may send duplicate insert events or update/delete events for rows not yet seen to the client
 	// for the table being copied. This is ok as the client is expected to be
 	// idempotent: we only promise at-least-once semantics for VStream API (not exactly-once).
@@ -376,7 +376,7 @@ func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
 }
 
 // Possible states:
-// 1. TablePKs nil, startPos set to gtid or "current"  => start replicating from pos
+// 1. TablePKs nil, startPos set to gtid or "current" => start replicating from pos
 // 2. TablePKs nil, startPos empty => full table copy of tables matching filter
 // 3. TablePKs not nil, startPos empty => table copy (for pks > lastPK)
 // 4. TablePKs not nil, startPos set => run catchup from startPos, then table copy  (for pks > lastPK)
