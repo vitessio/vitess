@@ -427,7 +427,6 @@ func TestCustomQuery(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
-		time.Sleep(applyConfigWait)
 		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
