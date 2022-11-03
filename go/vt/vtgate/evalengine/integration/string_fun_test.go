@@ -209,11 +209,16 @@ func TestBuiltinConv(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 	cases := []string{
+		"++5",
+		"--4",
 		"-5.1",
 		"-5.9",
 		"0xa21 + '1'",
+		"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
 		"-0xa21 + '1'",
-		"10",
+		"'+10'",
+		"'10-9+10'",
+		"'+10-9+10'",
 		"10 + '10' + 10",
 		"10 + '10' - 10",
 		"-10",
@@ -234,6 +239,7 @@ func TestBuiltinConv(t *testing.T) {
 		"16",
 		"32",
 		"64",
+		"0xa",
 	}
 
 	for _, num := range cases {

@@ -18,9 +18,6 @@ package evalengine
 
 import (
 	"bytes"
-	"fmt"
-	"math"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -283,12 +280,24 @@ func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 	inarg := &args[0]
 	inarg2 := &args[1]
 	inarg3 := &args[2]
-	fromBase := inarg2.int64()
-	toBase := inarg3.int64()
-	fromNum = 0
-	t := inarg.typeof()
 
-	if inarg.isNull() || inarg2.isNull() || inarg3.isNull() || fromBase < 2 || fromBase > 36 || toBase < 2 || toBase > 36 {
+	if sqltypes.IsBinary(inarg.typeof()) {
+		inarg.makeUnsignedIntegral()
+	}
+
+	if sqltypes.IsBinary(inarg2.typeof()) {
+		inarg2.makeUnsignedIntegral()
+	}
+
+	if sqltypes.IsBinary(inarg3.typeof()) {
+		inarg3.makeUnsignedIntegral()
+	}
+
+	fromBase, _ := strconv.Atoi(string(inarg2.toRawBytes()))
+	toBase, _ := strconv.Atoi(string(inarg3.toRawBytes()))
+	fromNum = 0
+
+	if inarg.isNull() || fromBase < 2 || fromBase > 36 || toBase < 2 || toBase > 36 {
 		result.setNull()
 		return
 	}
@@ -296,52 +305,41 @@ func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 	rawString = string(inarg.toRawBytes())
 	rawString = strings.ToLower(rawString)
 
-	if t == sqltypes.Float64 {
-		for i, c := range rawString {
-			if c == '-' {
+	trimStr := func(s string, isNeg *bool) string {
+		start := 0
+		for i, c := range s {
+			if (c == '+' || c == '-') && i == 0 {
+				start++
+				*isNeg = (c == '-')
 				continue
 			}
-			if (fromBase <= 9 && c >= '0' && c <= rune('0'+fromBase)) || (fromBase > 9 && ((c >= '0' && c <= '9') || (c >= 'a' && c <= rune('a'+fromBase-9)))) {
+			if (fromBase <= 9 && c >= '0' && c <= rune('0'+fromBase)) ||
+				(fromBase > 9 && ((c >= '0' && c <= '9') || (c >= 'a' && c <= rune('a'+fromBase-9)))) {
 				continue
 			} else {
-				rawString = rawString[:i]
-				break
+				return s[start:i]
 			}
 		}
+		return s[start:]
 	}
 
-	re, _ := regexp.Compile(`[+-]?[0-9.x]+[a-vA-Vx]*`)
-	for _, num := range re.FindAllString(rawString, -1) {
-		isNeg = false
-		reFindDot, _ := regexp.Compile(`\.`)
-		reFindNeg, _ := regexp.Compile(`^-[0-9.]+[a-vA-V]*`)
-		if reFindDot.MatchString(num) {
-			temp, _ := strconv.ParseFloat(num, 64)
-			temp = math.Trunc(temp)
-			num = fmt.Sprint(int64(temp))
-		}
-		if reFindNeg.MatchString(num) {
-			isNeg = true
-			num = num[1:]
-		}
+	num := trimStr(rawString, &isNeg)
 
-		if transNum, err := strconv.ParseUint(num, int(fromBase), 64); err == nil {
-			if isNeg {
-				fromNumNeg = fromNumNeg + transNum
-			} else {
-				fromNum = fromNum + transNum
-			}
-		} else if strings.Contains(err.Error(), "value out of range") {
-			if isNeg {
-				fromNumNeg = MaxUint
-
-			} else {
-				fromNum = MaxUint
-			}
+	if transNum, err := strconv.ParseUint(num, int(fromBase), 64); err == nil {
+		if isNeg {
+			fromNumNeg = fromNumNeg + transNum
 		} else {
-			fromNum = 0
-			break
+			fromNum = fromNum + transNum
 		}
+	} else if strings.Contains(err.Error(), "value out of range") {
+		if isNeg {
+			fromNumNeg = MaxUint
+
+		} else {
+			fromNum = MaxUint
+		}
+	} else {
+		fromNum = 0
 	}
 
 	if fromNumNeg < fromNum {
