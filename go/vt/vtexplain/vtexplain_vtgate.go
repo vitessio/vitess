@@ -132,7 +132,7 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 			// should only consider the one that is serving, hence we skip the ones not serving. Otherwise, vtexplain
 			// gives inconsistent results - sometimes it will route the query being explained to the source shard, and
 			// sometimes to the destination shard. See https://github.com/vitessio/vitess/issues/11632 .
-			if !ksShardMap[ks][shard.Name].IsPrimaryServing {
+			if shardInfo, ok := ksShardMap[ks][shard.Name]; ok && !shardInfo.IsPrimaryServing {
 				continue
 			}
 			hostname := fmt.Sprintf("%s/%s", ks, shard.Name)
