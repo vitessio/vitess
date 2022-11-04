@@ -6,7 +6,7 @@ bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 /doc/ @deepthi @frouioui @GuptaManan100 @rsajwani
 /docker/ @deepthi @derekperkins @dkhenry @mattlord
 /examples/compose @shlomi-noach @GuptaManan100 @frouioui
-/examples/demo @sougou @mattlord
+/examples/demo @sougou @mattlord @rohit-nayak-ps
 /examples/local @rohit-nayak-ps @frouioui @mattlord @GuptaManan100
 /examples/operator @GuptaManan100 @frouioui @mattlord
 /examples/region_sharding @deepthi @mattlord
@@ -20,7 +20,7 @@ bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 /go/pools @deepthi @harshit-gangal
 /go/protoutil @ajm188 @deepthi
 /go/sqltypes @harshit-gangal @shlomi-noach @vmg
-/go/test/endtoend/onlineddl @shlomi-noach
+/go/test/endtoend/onlineddl @shlomi-noach @rohit-nayak-ps
 /go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
 /go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
@@ -40,7 +40,7 @@ bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 /go/vt/vitessdriver @harshit-gangal
 /go/vt/vtadmin @ajm188 @notfelineit @rohit-nayak-ps
 /go/vt/vtctl @ajm188 @deepthi @rohit-nayak-ps
-/go/vt/vtctl/vtctl.go @notfelineit
+/go/vt/vtctl/vtctl.go @notfelineit @rohit-nayak-ps
 /go/vt/vtctl/grpcvtctldclient @ajm188 @notfelineit
 /go/vt/vtctl/grpcvtctldserver @ajm188 @notfelineit
 /go/vt/vtctl/reparentutil @ajm188 @GuptaManan100 @deepthi
