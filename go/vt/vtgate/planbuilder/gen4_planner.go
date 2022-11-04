@@ -202,27 +202,17 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	logical, err := operators.CreateLogicalOperatorFromAST(ctx, selStmt)
+	op, err := operators.PlanQuery(ctx, selStmt)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	physOp, err := operators.TransformToPhysical(ctx, logical)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	plan = optimizePlan(plan)
-
-	plan, err = planHorizon(ctx, plan, selStmt, true)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
@@ -312,17 +302,12 @@ func gen4UpdateStmtPlanner(
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
-	logical, err := operators.CreateLogicalOperatorFromAST(ctx, updStmt)
+	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	physOp, err := operators.TransformToPhysical(ctx, logical)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, err
 	}
@@ -395,17 +380,12 @@ func gen4DeleteStmtPlanner(
 	}
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
-	logical, err := operators.CreateLogicalOperatorFromAST(ctx, deleteStmt)
+	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	physOp, err := operators.TransformToPhysical(ctx, logical)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, err
 	}
