@@ -167,7 +167,10 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		values = op.Selected.Values
 	}
 	condition := getVindexPredicate(ctx, op)
-	sel := toSQL(ctx, op.Source)
+	sel, err := operators.ToSQL(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
 	replaceSubQuery(ctx, sel)
 	return &routeGen4{
 		eroute: &engine.Route{

@@ -135,9 +135,15 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 }
 
 func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
-	horizon, ok := u.Sources[source].(*Horizon)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
+	src := u.Sources[source]
+	for {
+		switch op := src.(type) {
+		case *Horizon:
+			return sqlparser.GetFirstSelect(op.Select), nil
+		case *Route:
+			src = op.Source
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
+		}
 	}
-	return sqlparser.GetFirstSelect(horizon.Select), nil
 }

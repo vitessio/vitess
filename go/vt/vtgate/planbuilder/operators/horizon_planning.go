@@ -44,12 +44,16 @@ func planHorizons(ctx *plancontext.PlanningContext, in Operator) (Operator, erro
 
 func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operator, error) {
 	rb, isRoute := in.Source.(*Route)
-	if isRoute && rb.IsSingleShard() {
+	if !isRoute {
+		return in, nil
+	}
+	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
 		return planSingleShardRoute(in.Select, rb, in)
 	}
 
 	return nil, errNotHorizonPlanned
 }
 func planSingleShardRoute(statement sqlparser.SelectStatement, rb *Route, horizon *Horizon) (Operator, error) {
-	return nil, errNotHorizonPlanned
+	rb.Source, horizon.Source = horizon, rb.Source
+	return rb, nil
 }
