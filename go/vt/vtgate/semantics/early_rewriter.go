@@ -79,6 +79,23 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		if newNode != nil {
 			node.Expr = newNode
 		}
+	case *sqlparser.ComparisonExpr:
+		lft, lftOK := node.Left.(sqlparser.ValTuple)
+		rgt, rgtOK := node.Right.(sqlparser.ValTuple)
+		if !lftOK || !rgtOK || len(lft) != len(rgt) || node.Operator != sqlparser.EqualOp {
+			return nil
+		}
+		var predicates []sqlparser.Expr
+		for i, l := range lft {
+			r := rgt[i]
+			predicates = append(predicates, &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left:     l,
+				Right:    r,
+				Escape:   node.Escape,
+			})
+		}
+		cursor.Replace(sqlparser.AndExpressions(predicates...))
 	}
 	return nil
 }
@@ -129,7 +146,19 @@ func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 					continue
 				}
 				if ae.As.Equal(col.Name) {
-					inner.Replace(ae.Expr)
+					safeToRewrite := true
+					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
+						switch cursor.Node().(type) {
+						case *sqlparser.ColName:
+							safeToRewrite = false
+						case sqlparser.AggrFunc:
+							return false
+						}
+						return true
+					}, nil)
+					if safeToRewrite {
+						inner.Replace(ae.Expr)
+					}
 				}
 			}
 		}

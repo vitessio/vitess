@@ -1,0 +1,37 @@
+diff --git a/flags/14.0/vttlstest.txt b/flags/15.0/vttlstest.txt
+index 87321df..e149cf2 100644
+--- a/flags/14.0/vttlstest.txt
++++ b/flags/15.0/vttlstest.txt
+@@ -1,13 +1,19 @@
+-Usage of vttlstest:
+-      --alsologtostderr                                                       log to standard error as well as files
+-      --keep_logs duration                                                    keep logs for this long (using ctime) (zero to keep forever)
+-      --keep_logs_by_mtime duration                                           keep logs for this long (using mtime) (zero to keep forever)
+-      --log_backtrace_at value                                                when logging hits line file:N, emit a stack trace
+-      --log_dir string                                                        If non-empty, write log files in this directory
+-      --log_rotate_max_size uint                                              size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+-      --logtostderr                                                           log to standard error instead of files
+-      --purge_logs_interval duration                                          how often try to remove old logs (default 1h0m0s)
+-      --root string                                                           root directory for certificates and keys (default ".")
+-      --stderrthreshold value                                                 logs at or above this threshold go to stderr (default 1)
+-      --v value                                                               log level for V logs
+-      --vmodule value                                                         comma-separated list of pattern=N settings for file-filtered logging
++vttlstest is a tool for generating test certificates, keys, and related artifacts for TLS tests.
++
++Usage:
++  vttlstest [command]
++
++Available Commands:
++  CreateCA             Create certificate authority
++  CreateCRL            Create certificate revocation list
++  CreateIntermediateCA Create intermediate certificate authority
++  CreateSignedCert     Create signed certificate
++  RevokeCert           Revoke a certificate
++  completion           Generate the autocompletion script for the specified shell
++  help                 Help about any command
++
++Flags:
++  -h, --help          help for vttlstest
++      --root string   root directory for all artifacts (default ".")
++
++Use "vttlstest [command] --help" for more information about a command.

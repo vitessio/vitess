@@ -321,6 +321,11 @@ func (client *localVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb
 	return client.s.GetTablets(ctx, in)
 }
 
+// GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
+	return client.s.GetTopologyPath(ctx, in)
+}
+
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
 	return client.s.GetVSchema(ctx, in)

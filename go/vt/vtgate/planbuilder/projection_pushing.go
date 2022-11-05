@@ -21,7 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -120,7 +120,7 @@ func pushProjectionIntoSemiJoin(
 func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, node *orderedAggregate, inner, hasAggregation bool) (int, bool, error) {
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
 	for _, aggregate := range node.aggregates {
-		if sqlparser.EqualsExpr(aggregate.Expr, expr.Expr) {
+		if ctx.SemTable.EqualsExpr(aggregate.Expr, expr.Expr) {
 			return aggregate.Col, false, nil
 		}
 		if isColName && colName.Name.EqualString(aggregate.Alias) {
@@ -128,7 +128,7 @@ func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		}
 	}
 	for _, key := range node.groupByKeys {
-		if sqlparser.EqualsExpr(key.Expr, expr.Expr) {
+		if ctx.SemTable.EqualsExpr(key.Expr, expr.Expr) {
 			return key.KeyCol, false, nil
 		}
 	}
@@ -205,7 +205,7 @@ func pushProjectionIntoJoin(
 			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
 		}
 		// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
-		bvName, cols, rewrittenExpr, err := physical.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
+		bvName, cols, rewrittenExpr, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
 		if err != nil {
 			return 0, false, err
 		}

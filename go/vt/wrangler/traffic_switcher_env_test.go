@@ -46,7 +46,7 @@ import (
 const (
 	streamInfoQuery    = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
 	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
-	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d"
+	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)"
 )
 
 var (
@@ -202,7 +202,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			}
 			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
@@ -235,7 +235,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 				},
 			}
 			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
@@ -359,7 +359,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			rows = append(rows, fmt.Sprintf("%d|%v||||0|0", j+1, bls))
 			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY|0|0", j+1, bls))
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbTargetClients[i].addInvariant(streamInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
@@ -383,7 +383,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		dbclient.addInvariant(streamInfoKs, &sqltypes.Result{})
 		for j := range targetShards {
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks|%d|%d|0|0|||", j+1, now, now))
-			tme.dbSourceClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
+			tme.dbSourceClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbSourceClients[i].addInvariant(streamExtInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",

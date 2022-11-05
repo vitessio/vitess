@@ -183,8 +183,6 @@ func createGRPCServer() {
 		return
 	}
 
-	grpccommon.EnableTracingOpt()
-
 	var opts []grpc.ServerOption
 	if gRPCCert != "" && gRPCKey != "" {
 		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)

@@ -340,7 +340,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
 
 	sql := "select * from test_db_01 where col = 'secret'"
-	redactedSQL := "select * from test_db_01 where col = :redacted1"
+	redactedSQL := "select * from test_db_01 where col = :col"
 
 	// First with the redaction off
 	streamlog.SetRedactDebugUIQueries(false)

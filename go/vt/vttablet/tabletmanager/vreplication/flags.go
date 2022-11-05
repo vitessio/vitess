@@ -39,6 +39,7 @@ var (
 	vreplicationHeartbeatUpdateInterval = 1
 	vreplicationExperimentalFlags       = int64(0x01) // enable vreplicationExperimentalFlagOptimizeInserts by default
 	vreplicationStoreCompressedGTID     = false
+	vreplicationParallelInsertWorkers   = 1
 )
 
 func registerVReplicationFlags(fs *pflag.FlagSet) {
@@ -68,6 +69,8 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
 	fs.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
 	fs.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
+
+	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication-parallel-insert-workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase.")
 }
 
 func init() {

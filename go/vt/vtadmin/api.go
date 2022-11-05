@@ -341,6 +341,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/cells", httpAPI.Adapt(vtadminhttp.GetCellInfos)).Name("API.GetCellInfos")
 	router.HandleFunc("/cells_aliases", httpAPI.Adapt(vtadminhttp.GetCellsAliases)).Name("API.GetCellsAliases")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
+	router.HandleFunc("/cluster/{cluster_id}/topology", httpAPI.Adapt(vtadminhttp.GetTopologyPath)).Name("API.GetTopologyPath")
 	router.HandleFunc("/cluster/{cluster_id}/validate", httpAPI.Adapt(vtadminhttp.Validate)).Name("API.Validate").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
@@ -1168,6 +1169,25 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	return &vtadminpb.GetTabletsResponse{
 		Tablets: tablets,
 	}, nil
+}
+
+// GetTopologyPath is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyPathRequest) (*vtctldatapb.GetTopologyPathResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetTopologyPath")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.TopologyResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{Path: req.Path})
 }
 
 // GetVSchema is part of the vtadminpb.VTAdminServer interface.
