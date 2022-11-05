@@ -33,17 +33,31 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+var (
+	readLockExclusive = "exclusive"
+	readLockShared    = "shared"
+	readLockNone      = "none"
+	readLockDefault   = readLockExclusive
+
+	readLockExprs = map[string]string{
+		readLockExclusive: "for update",
+		readLockShared:    "lock in share mode",
+		readLockNone:      "",
+	}
+)
+
 // lookupInternal implements the functions for the Lookup vindexes.
 type lookupInternal struct {
-	Table                string   `json:"table"`
-	FromColumns          []string `json:"from_columns"`
-	To                   string   `json:"to"`
-	Autocommit           bool     `json:"autocommit,omitempty"`
-	MultiShardAutocommit bool     `json:"multi_shard_autocommit,omitempty"`
-	Upsert               bool     `json:"upsert,omitempty"`
-	IgnoreNulls          bool     `json:"ignore_nulls,omitempty"`
-	BatchLookup          bool     `json:"batch_lookup,omitempty"`
-	sel, ver, del        string   // sel: map query, ver: verify query, del: delete query
+	Table                   string   `json:"table"`
+	FromColumns             []string `json:"from_columns"`
+	To                      string   `json:"to"`
+	Autocommit              bool     `json:"autocommit,omitempty"`
+	MultiShardAutocommit    bool     `json:"multi_shard_autocommit,omitempty"`
+	Upsert                  bool     `json:"upsert,omitempty"`
+	IgnoreNulls             bool     `json:"ignore_nulls,omitempty"`
+	BatchLookup             bool     `json:"batch_lookup,omitempty"`
+	ReadLock                string   `json:"read_lock,omitempty"`
+	sel, selTxDml, ver, del string   // sel: map query, ver: verify query, del: delete query
 }
 
 func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert, multiShardAutocommit bool) error {
@@ -64,6 +78,12 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	if err != nil {
 		return err
 	}
+	if readLock, ok := lookupQueryParams["read_lock"]; ok {
+		if _, valid := readLockExprs[readLock]; !valid {
+			return fmt.Errorf("invalid read_lock value: %s", readLock)
+		}
+		lkp.ReadLock = readLock
+	}
 
 	lkp.Autocommit = autocommit
 	lkp.Upsert = upsert
@@ -76,6 +96,15 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	// as part of face 2 of https://github.com/vitessio/vitess/issues/3481
 	// For now multi column behaves as a single column for Map and Verify operations
 	lkp.sel = fmt.Sprintf("select %s, %s from %s where %s in ::%s", lkp.FromColumns[0], lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
+	if lkp.ReadLock != readLockNone {
+		lockExpr, ok := readLockExprs[lkp.ReadLock]
+		if !ok {
+			lockExpr = readLockExprs[readLockDefault]
+		}
+		lkp.selTxDml = fmt.Sprintf("%s %s", lkp.sel, lockExpr)
+	} else {
+		lkp.selTxDml = lkp.sel
+	}
 	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns[0], lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)
 	lkp.del = lkp.initDelStmt()
 	return nil
@@ -90,9 +119,11 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 	if lkp.Autocommit {
 		co = vtgatepb.CommitOrder_AUTOCOMMIT
 	}
-	sel := lkp.sel
+	var sel string
 	if vcursor.InTransactionAndIsDML() {
-		sel = sel + " for update"
+		sel = lkp.selTxDml
+	} else {
+		sel = lkp.sel
 	}
 	if ids[0].IsIntegral() || lkp.BatchLookup {
 		// for integral types, batch query all ids and then map them back to the input order

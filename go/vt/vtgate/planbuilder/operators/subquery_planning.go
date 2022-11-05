@@ -358,14 +358,12 @@ func rewriteColumnsInSubqueryOpForJoin(
 					return false
 				}
 				// if it does not exist, then push this as an output column there and add it to the joinVars
-				newInnerOp, columnIndexes, err := PushOutputColumns(ctx, resultInnerOp, node)
+				offset, err := resultInnerOp.AddColumn(ctx, node)
 				if err != nil {
 					rewriteError = err
 					return false
 				}
-				columnIndex := columnIndexes[0]
-				outerTree.Vars[bindVar] = columnIndex
-				resultInnerOp = newInnerOp
+				outerTree.Vars[bindVar] = offset
 				return false
 			}
 		}
@@ -404,12 +402,13 @@ func createCorrelatedSubqueryOp(
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
-				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultOuterOp)) {
+				nodeDeps := ctx.SemTable.RecursiveDeps(node)
+				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
 					for colName, bindVar := range bindVars {
-						if node.Name.Equal(colName.Name) && ctx.SemTable.RecursiveDeps(node).Equals(ctx.SemTable.RecursiveDeps(colName)) {
+						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))
 							return false
 						}
@@ -422,15 +421,13 @@ func createCorrelatedSubqueryOp(
 					bindVars[node] = bindVar
 
 					// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-					newOuterOp, columnIndexes, err := PushOutputColumns(ctx, resultOuterOp, node)
+					offset, err := resultOuterOp.AddColumn(ctx, node)
 					if err != nil {
 						rewriteError = err
 						return false
 					}
 					lhsCols = append(lhsCols, node)
-					columnIndex := columnIndexes[0]
-					vars[bindVar] = columnIndex
-					resultOuterOp = newOuterOp
+					vars[bindVar] = offset
 					return false
 				}
 			}
@@ -440,7 +437,7 @@ func createCorrelatedSubqueryOp(
 			return nil, rewriteError
 		}
 		var err error
-		innerOp, err = PushPredicate(ctx, pred, innerOp)
+		innerOp, err = innerOp.AddPredicate(ctx, pred)
 		if err != nil {
 			return nil, err
 		}

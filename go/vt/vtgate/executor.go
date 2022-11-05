@@ -268,8 +268,7 @@ func (e *Executor) StreamExecute(
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
-					qrfield := &sqltypes.Result{Fields: qr.Fields}
-					if err := callback(qrfield); err != nil {
+					if err := callback(qr.Metadata()); err != nil {
 						return err
 					}
 					seenResults.Set(true)

@@ -78,6 +78,7 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
+        
         # Setup Percona Server for MySQL 8.0
         sudo apt-get update
         sudo apt-get install -y lsb-release gnupg2 curl
@@ -88,6 +89,7 @@ jobs:
 
         # Install everything else we need, and configure
         sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
+
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/

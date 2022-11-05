@@ -447,12 +447,6 @@
     "gen4-plan": "using aggregation on top of a *planbuilder.concatenateGen4 plan is not yet supported"
   },
   {
-    "comment": "systable union query in derived table with constraint on outside (without star projection)",
-    "query": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
-    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": "can't push predicates on concatenate"
-  },
-  {
     "comment": "insert having subquery in row values",
     "query": "insert into user(id, name) values ((select 1 from user where id = 1), 'A')",
     "plan": "expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
@@ -471,5 +465,11 @@
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
     "plan": "unsupported: lock function and other expression in same select query"
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (star projection)",
+    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+    "v3-plan": "symbol constraint_name not found in table or subquery",
+    "gen4-plan": "can't push predicates on UNION where the first SELECT contains star or next"
   }
 ]
