@@ -118,15 +118,6 @@
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
 		},
-		"backup_transform": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtbackup_transform",
-			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
-		},
 		"backup_transform_mysqlctld": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
