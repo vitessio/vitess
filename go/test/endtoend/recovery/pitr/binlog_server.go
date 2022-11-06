@@ -36,28 +36,28 @@ const (
 	binlogPasswordHash   = "D4CDF66E273494CEA9592162BEBB6D62D94C4168"
 )
 
-type BinLogServer struct {
-	Hostname       string
-	Port           int
-	Username       string
-	Password       string
-	PasswordHash   string
-	DataDirectory  string
-	ExecutablePath string
+type binLogServer struct {
+	hostname       string
+	port           int
+	username       string
+	password       string
+	passwordHash   string
+	dataDirectory  string
+	executablePath string
 
-	Proc *exec.Cmd
-	Exit chan error
+	proc *exec.Cmd
+	exit chan error
 }
 
-type MysqlSource struct {
-	Hostname string
-	Port     int
-	Username string
-	Password string
+type mysqlSource struct {
+	hostname string
+	port     int
+	username string
+	password string
 }
 
-// NewBinlogServer returns an instance of binlog server
-func NewBinlogServer(hostname string, port int) (*BinLogServer, error) {
+// newBinlogServer returns an instance of binlog server
+func newBinlogServer(hostname string, port int) (*binLogServer, error) {
 	dataDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", binlogDataDir, port))
 	fmt.Println(dataDir)
 	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
@@ -67,67 +67,67 @@ func NewBinlogServer(hostname string, port int) (*BinLogServer, error) {
 			return nil, err
 		}
 	}
-	return &BinLogServer{
-		ExecutablePath: path.Join(os.Getenv("EXTRA_BIN"), binlogExecutableName),
-		DataDirectory:  dataDir,
-		Username:       binlogUser,
-		Password:       binlogPassword,
-		PasswordHash:   binlogPasswordHash,
-		Hostname:       hostname,
-		Port:           port,
+	return &binLogServer{
+		executablePath: path.Join(os.Getenv("EXTRA_BIN"), binlogExecutableName),
+		dataDirectory:  dataDir,
+		username:       binlogUser,
+		password:       binlogPassword,
+		passwordHash:   binlogPasswordHash,
+		hostname:       hostname,
+		port:           port,
 	}, nil
 }
 
 // start starts the binlog server points to running mysql port
-func (bs *BinLogServer) Start(source MysqlSource) error {
-	bs.Proc = exec.Command(
-		bs.ExecutablePath,
-		fmt.Sprintf("-ripple_datadir=%s", bs.DataDirectory),
-		fmt.Sprintf("-ripple_server_password_hash=%s", bs.PasswordHash),
-		fmt.Sprintf("-ripple_master_address=%s", source.Hostname),
-		fmt.Sprintf("-ripple_master_port=%d", source.Port),
-		fmt.Sprintf("-ripple_master_user=%s", source.Username),
-		fmt.Sprintf("-ripple_server_ports=%d", bs.Port),
+func (bs *binLogServer) start(source mysqlSource) error {
+	bs.proc = exec.Command(
+		bs.executablePath,
+		fmt.Sprintf("-ripple_datadir=%s", bs.dataDirectory),
+		fmt.Sprintf("-ripple_server_password_hash=%s", bs.passwordHash),
+		fmt.Sprintf("-ripple_master_address=%s", source.hostname),
+		fmt.Sprintf("-ripple_master_port=%d", source.port),
+		fmt.Sprintf("-ripple_master_user=%s", source.username),
+		fmt.Sprintf("-ripple_server_ports=%d", bs.port),
 	)
-	if source.Password != "" {
-		bs.Proc.Args = append(bs.Proc.Args, fmt.Sprintf("-ripple_master_password=%s", source.Password))
+	if source.password != "" {
+		bs.proc.Args = append(bs.proc.Args, fmt.Sprintf("-ripple_master_password=%s", source.password))
 	}
 
-	errFile, _ := os.Create(path.Join(bs.DataDirectory, "log.txt"))
-	bs.Proc.Stderr = errFile
+	errFile, _ := os.Create(path.Join(bs.dataDirectory, "log.txt"))
+	bs.proc.Stderr = errFile
 
-	bs.Proc.Env = append(bs.Proc.Env, os.Environ()...)
+	bs.proc.Env = append(bs.proc.Env, os.Environ()...)
 
-	log.Infof("Running binlog server with command: %v", strings.Join(bs.Proc.Args, " "))
+	log.Infof("Running binlog server with command: %v", strings.Join(bs.proc.Args, " "))
 
-	err := bs.Proc.Start()
+	err := bs.proc.Start()
 	if err != nil {
 		return err
 	}
-	bs.Exit = make(chan error)
+	bs.exit = make(chan error)
 	go func() {
-		if bs.Proc != nil {
-			bs.Exit <- bs.Proc.Wait()
+		if bs.proc != nil {
+			bs.exit <- bs.proc.Wait()
 		}
 	}()
 	return nil
 }
 
-func (bs *BinLogServer) Stop() error {
-	if bs.Proc == nil || bs.Exit == nil {
+func (bs *binLogServer) stop() error {
+	if bs.proc == nil || bs.exit == nil {
 		return nil
 	}
 	// Attempt graceful shutdown with SIGTERM first
-	bs.Proc.Process.Signal(syscall.SIGTERM)
+	bs.proc.Process.Signal(syscall.SIGTERM)
 
 	select {
-	case err := <-bs.Exit:
-		bs.Proc = nil
+	case err := <-bs.exit:
+		bs.proc = nil
 		return err
 
 	case <-time.After(10 * time.Second):
-		bs.Proc.Process.Kill()
-		bs.Proc = nil
-		return <-bs.Exit
+		bs.proc.Process.Kill()
+		bs.proc = nil
+		return <-bs.exit
 	}
 }

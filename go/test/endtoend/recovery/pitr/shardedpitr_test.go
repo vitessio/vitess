@@ -121,7 +121,7 @@ func TestPITRRecovery(t *testing.T) {
 
 	//start the binlog server and point it to primary
 	bs := startBinlogServer(t, primary)
-	defer bs.Stop()
+	defer bs.stop()
 
 	// Creating the table
 	_, err := primary.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
@@ -158,11 +158,11 @@ func TestPITRRecovery(t *testing.T) {
 
 	//start the binlog server and point it to shard0Primary
 	bs0 := startBinlogServer(t, shard0Primary)
-	defer bs0.Stop()
+	defer bs0.stop()
 
 	//start the binlog server and point it to shard1Primary
 	bs1 := startBinlogServer(t, shard1Primary)
-	defer bs1.Stop()
+	defer bs1.stop()
 
 	for counter := 7; counter <= 10; counter++ {
 		insertRow(t, counter, fmt.Sprintf("prd-%d", counter), false)
@@ -343,15 +343,15 @@ func performResharding(t *testing.T) {
 	clusterInstance.WaitForTabletsToHealthyInVtgate()
 }
 
-func startBinlogServer(t *testing.T, primaryTablet *cluster.Vttablet) *BinLogServer {
-	bs, err := NewBinlogServer(hostname, clusterInstance.GetAndReservePort())
+func startBinlogServer(t *testing.T, primaryTablet *cluster.Vttablet) *binLogServer {
+	bs, err := newBinlogServer(hostname, clusterInstance.GetAndReservePort())
 	require.NoError(t, err)
 
-	err = bs.Start(MysqlSource{
-		Hostname: binlogHost,
-		Port:     primaryTablet.MysqlctlProcess.MySQLPort,
-		Username: mysqlUserName,
-		Password: mysqlPassword,
+	err = bs.start(mysqlSource{
+		hostname: binlogHost,
+		port:     primaryTablet.MysqlctlProcess.MySQLPort,
+		username: mysqlUserName,
+		password: mysqlPassword,
 	})
 	require.NoError(t, err)
 	return bs
@@ -489,7 +489,7 @@ func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName stri
 	require.NoError(t, err)
 }
 
-func testTabletRecovery(t *testing.T, binlogServer *BinLogServer, lookupTimeout, restoreKeyspaceName, shardName, expectedRows string) {
+func testTabletRecovery(t *testing.T, binlogServer *binLogServer, lookupTimeout, restoreKeyspaceName, shardName, expectedRows string) {
 	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
 	launchRecoveryTablet(t, recoveryTablet, binlogServer, lookupTimeout, restoreKeyspaceName, shardName)
 
@@ -501,7 +501,7 @@ func testTabletRecovery(t *testing.T, binlogServer *BinLogServer, lookupTimeout,
 	defer recoveryTablet.VttabletProcess.TearDown()
 }
 
-func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *BinLogServer, lookupTimeout, restoreKeyspaceName, shardName string) {
+func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *binLogServer, lookupTimeout, restoreKeyspaceName, shardName string) {
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
@@ -531,10 +531,10 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		"--init_tablet_type", "replica",
 		"--init_keyspace", restoreKeyspaceName,
 		"--init_shard", shardName,
-		"--binlog_host", binlogServer.Hostname,
-		"--binlog_port", fmt.Sprintf("%d", binlogServer.Port),
-		"--binlog_user", binlogServer.Username,
-		"--binlog_password", binlogServer.Password,
+		"--binlog_host", binlogServer.hostname,
+		"--binlog_port", fmt.Sprintf("%d", binlogServer.port),
+		"--binlog_user", binlogServer.username,
+		"--binlog_password", binlogServer.password,
 		"--pitr_gtid_lookup_timeout", lookupTimeout,
 		"--vreplication_healthcheck_topology_refresh", "1s",
 		"--vreplication_healthcheck_retry_delay", "1s",
