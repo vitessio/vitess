@@ -1,4 +1,8 @@
 # Release of Vitess v14.0.3
+## Known Issues
+
+- [Corrupted results for non-full-group-by queries with JOINs](https://github.com/vitessio/vitess/issues/11625). This can be resolved by using full-group-by queries.
+
 ## Major Changes
 
 ### Fix VTOrc Discovery

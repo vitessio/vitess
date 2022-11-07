@@ -33,3 +33,10 @@ Other aspects of the VReplication copy-phase logic are preserved:
   4. The vstream packets are committed in the order seen in the stream. So for any PK1 and PK2, the write to `_vt.copy_state` and  `commit` steps (steps 2 and 3 above) for PK1 will both precede the `_vt.copy_state` write and commit steps of PK2.
 
  Other phases, catchup, fast-forward, and replicating/"running", are unchanged.
+
+### Important bug fixes
+
+#### Corrupted results for non-full-group-by queries with JOINs
+
+An issue in versions `<= v14.0.3` and `<= v15.0.0` that generated corrupted results for non-full-group-by queries with a JOIN
+is now fixed. The full issue can be found [here](https://github.com/vitessio/vitess/issues/11625), and its fix [here](https://github.com/vitessio/vitess/pull/11633).
