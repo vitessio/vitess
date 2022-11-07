@@ -39,7 +39,9 @@ const (
 
 // Code represents canonical error codes. The names, numbers and comments
 // must match the ones defined by grpc (0-16):
-//   https://godoc.org/google.golang.org/grpc/codes.
+//
+//	https://godoc.org/google.golang.org/grpc/codes.
+//
 // 17+ are custom codes
 type Code int32
 
