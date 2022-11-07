@@ -20,25 +20,32 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type Table struct {
-	QTable  *QueryTable
-	VTable  *vindexes.Table
-	Columns []*sqlparser.ColName
+type (
+	Table struct {
+		QTable  *QueryTable
+		VTable  *vindexes.Table
+		Columns []*sqlparser.ColName
 
-	noInputs
-}
+		noInputs
+	}
+	ColNameColumns interface {
+		GetColumns() []*sqlparser.ColName
+		AddCol(*sqlparser.ColName)
+	}
+)
 
 var _ PhysicalOperator = (*Table)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
 
-// Clone implements the Operator interface
-func (to *Table) Clone(inputs []Operator) Operator {
+// clone implements the Operator interface
+func (to *Table) clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
@@ -56,7 +63,34 @@ func (to *Table) Introduces() semantics.TableSet {
 	return to.QTable.ID
 }
 
-// PushPredicate implements the PhysicalOperator interface
-func (to *Table) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a Table. It is meant to be immutable")
+// AddPredicate implements the PhysicalOperator interface
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	return newFilter(to, expr), nil
+}
+
+func (to *Table) AddColumn(_ *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
+	return addColumn(to, e)
+}
+
+func (to *Table) GetColumns() []*sqlparser.ColName {
+	return to.Columns
+}
+func (to *Table) AddCol(col *sqlparser.ColName) {
+	to.Columns = append(to.Columns, col)
+}
+
+func addColumn(op ColNameColumns, e sqlparser.Expr) (int, error) {
+	col, ok := e.(*sqlparser.ColName)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table/vindex")
+	}
+	cols := op.GetColumns()
+	for idx, column := range cols {
+		if col.Name.Equal(column.Name) {
+			return idx, nil
+		}
+	}
+	offset := len(cols)
+	op.AddCol(col)
+	return offset, nil
 }

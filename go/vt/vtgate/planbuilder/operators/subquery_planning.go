@@ -26,21 +26,16 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, error) {
-	outerOp, err := CreatePhysicalOperator(ctx, op.Outer)
-	if err != nil {
-		return nil, err
-	}
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, bool, error) {
 	var unmerged []*SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
+	outer := op.Outer
 	for _, inner := range op.Inner {
-		innerOp, err := CreatePhysicalOperator(ctx, inner.Inner)
-		if err != nil {
-			return nil, err
-		}
+		innerOp := inner.Inner
 
-		preds := unresolvedPredicates(inner.Inner, ctx.SemTable)
+		var preds []sqlparser.Expr
+		preds, innerOp = unresolvedAndSource(ctx, innerOp)
 		merger := func(a, b *Route) (*Route, error) {
 			return mergeSubQueryOp(ctx, a, b, inner)
 		}
@@ -49,13 +44,13 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator,
 			Inner:             inner.Inner,
 			ExtractedSubquery: inner.ExtractedSubquery,
 		}
-		merged, err := tryMergeSubQueryOp(ctx, outerOp, innerOp, newInner, preds, merger)
+		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, merger)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		if merged != nil {
-			outerOp = merged
+			outer = merged
 			continue
 		}
 
@@ -70,31 +65,35 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator,
 		}
 
 		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
-			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outerOp, preds, inner.ExtractedSubquery)
+			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
-			outerOp = correlatedTree
+			outer = correlatedTree
 			continue
 		}
 
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 	}
 
-	/*
-		build a tree of the unmerged subqueries
-		rt: route, sqt: subqueryTree
-
-
-		            sqt
-		         sqt   rt
-		        rt rt
-	*/
 	for _, tree := range unmerged {
-		tree.Outer = outerOp
-		outerOp = tree
+		tree.Outer = outer
+		outer = tree
 	}
-	return outerOp, nil
+	return outer, true, nil
+}
+
+func unresolvedAndSource(ctx *plancontext.PlanningContext, op Operator) ([]sqlparser.Expr, Operator) {
+	preds := unresolvedPredicates(op, ctx.SemTable)
+	if filter, ok := op.(*Filter); ok {
+		if sqlparser.EqualsExprs(preds, filter.Predicates) {
+			// if we are seeing a single filter with only these predicates,
+			// we can throw away the filter and just use the source
+			return preds, filter.Source
+		}
+	}
+
+	return preds, op
 }
 
 func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner) (*Route, error) {
@@ -207,6 +206,13 @@ func tryMergeSubQueryOp(
 	merger mergeFunc,
 ) (Operator, error) {
 	switch outerOp := outer.(type) {
+	case *Filter:
+		op, err := tryMergeSubQueryOp(ctx, outerOp.Source, subq, subQueryInner, joinPredicates, merger)
+		if err != nil || op == nil {
+			return nil, err
+		}
+		outerOp.Source = op
+		return outerOp, nil
 	case *Route:
 		return tryMergeSubqueryWithRoute(ctx, subq, outerOp, joinPredicates, merger, subQueryInner)
 	case *ApplyJoin:
@@ -352,14 +358,12 @@ func rewriteColumnsInSubqueryOpForJoin(
 					return false
 				}
 				// if it does not exist, then push this as an output column there and add it to the joinVars
-				newInnerOp, columnIndexes, err := PushOutputColumns(ctx, resultInnerOp, node)
+				offset, err := resultInnerOp.AddColumn(ctx, node)
 				if err != nil {
 					rewriteError = err
 					return false
 				}
-				columnIndex := columnIndexes[0]
-				outerTree.Vars[bindVar] = columnIndex
-				resultInnerOp = newInnerOp
+				outerTree.Vars[bindVar] = offset
 				return false
 			}
 		}
@@ -398,12 +402,13 @@ func createCorrelatedSubqueryOp(
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
-				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultOuterOp)) {
+				nodeDeps := ctx.SemTable.RecursiveDeps(node)
+				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
 					for colName, bindVar := range bindVars {
-						if node.Name.Equal(colName.Name) && ctx.SemTable.RecursiveDeps(node).Equals(ctx.SemTable.RecursiveDeps(colName)) {
+						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))
 							return false
 						}
@@ -416,15 +421,13 @@ func createCorrelatedSubqueryOp(
 					bindVars[node] = bindVar
 
 					// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-					newOuterOp, columnIndexes, err := PushOutputColumns(ctx, resultOuterOp, node)
+					offset, err := resultOuterOp.AddColumn(ctx, node)
 					if err != nil {
 						rewriteError = err
 						return false
 					}
 					lhsCols = append(lhsCols, node)
-					columnIndex := columnIndexes[0]
-					vars[bindVar] = columnIndex
-					resultOuterOp = newOuterOp
+					vars[bindVar] = offset
 					return false
 				}
 			}
@@ -434,7 +437,7 @@ func createCorrelatedSubqueryOp(
 			return nil, rewriteError
 		}
 		var err error
-		innerOp, err = PushPredicate(ctx, pred, innerOp)
+		innerOp, err = innerOp.AddPredicate(ctx, pred)
 		if err != nil {
 			return nil, err
 		}

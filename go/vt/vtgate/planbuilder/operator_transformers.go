@@ -78,9 +78,51 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 				ASTPredicate: ast,
 			},
 		}, nil
+	case *operators.Horizon:
+		return transformHorizon(ctx, op, isRoot)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformToLogicalPlan)", op)
+}
+
+func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, isRoot bool) (logicalPlan, error) {
+	source, err := transformToLogicalPlan(ctx, op.Source, isRoot)
+	if err != nil {
+		return nil, err
+	}
+	switch node := op.Select.(type) {
+	case *sqlparser.Select:
+		hp := horizonPlanning{
+			sel: node,
+		}
+
+		replaceSubQuery(ctx, node)
+		plan, err := hp.planHorizon(ctx, source, true)
+		if err != nil {
+			return nil, err
+		}
+		return planLimit(node.Limit, plan)
+	case *sqlparser.Union:
+		var err error
+		rb, isRoute := source.(*routeGen4)
+		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+			return nil, ctx.SemTable.NotSingleRouteErr
+		}
+		var plan logicalPlan
+		if isRoute && rb.isSingleShard() {
+			err = planSingleShardRoutePlan(node, rb)
+			plan = rb
+		} else {
+			plan, err = planOrderByOnUnion(ctx, source, node)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		return planLimit(node.Limit, plan)
+	default:
+		panic("only SELECT and UNION implement the SelectStatement interface")
+	}
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {
@@ -433,10 +475,10 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 }
 
 func transformAndMerge(ctx *plancontext.PlanningContext, op *operators.Union) (sources []logicalPlan, err error) {
-	for i, source := range op.Sources {
+	for _, source := range op.Sources {
 		// first we go over all the operator inputs and turn them into logical plans,
 		// including horizon planning
-		plan, err := createLogicalPlan(ctx, source, op.SelectStmts[i])
+		plan, err := transformToLogicalPlan(ctx, source, false)
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +523,7 @@ func transformAndMerge(ctx *plancontext.PlanningContext, op *operators.Union) (s
 func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *operators.Union) (sources []logicalPlan, err error) {
 	// We go over all the input operators and turn them into logical plans
 	for i, source := range op.Sources {
-		plan, err := createLogicalPlan(ctx, source, op.SelectStmts[i])
+		plan, err := transformToLogicalPlan(ctx, source, false)
 		if err != nil {
 			return nil, err
 		}
@@ -504,27 +546,15 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *operators.Un
 	return sources, nil
 }
 
-func createLogicalPlan(ctx *plancontext.PlanningContext, source operators.Operator, selStmt *sqlparser.Select) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, source, false)
-	if err != nil {
-		return nil, err
-	}
-	if selStmt != nil {
-		plan, err = planHorizon(ctx, plan, selStmt, true)
-		if err != nil {
-			return nil, err
-		}
-		if err := setMiscFunc(plan, selStmt); err != nil {
-			return nil, err
-		}
-	}
-	return plan, nil
-}
-
 func getCollationsFor(ctx *plancontext.PlanningContext, n *operators.Union) []collations.ID {
 	// TODO: coerce selects' select expressions' collations
 	var colls []collations.ID
-	for _, expr := range n.SelectStmts[0].SelectExprs {
+
+	sel, err := n.GetSelectFor(0)
+	if err != nil {
+		return nil
+	}
+	for _, expr := range sel.SelectExprs {
 		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil

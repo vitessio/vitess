@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -44,119 +43,98 @@ type (
 	opCacheMap map[tableSetPair]Operator
 )
 
-func mapToPhys(ctx *plancontext.PlanningContext, ops []Operator) (sources []Operator, err error) {
-	for _, in := range ops {
-		physOp, err := CreatePhysicalOperator(ctx, in)
-		if err != nil {
-			return nil, err
+// TransformToPhysical takes an operator tree and rewrites any parts that have not yet been planned as physical operators.
+// This is where a lot of the optimisations of the query plans are done.
+// Here we try to merge query parts into the same route primitives. At the end of this process,
+// all the operators in the tree are guaranteed to be PhysicalOperators
+func transformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
+	op, _, err := rewriteBottomUp(ctx, in, func(context *plancontext.PlanningContext, operator Operator) (newOp Operator, changed bool, err error) {
+		switch op := operator.(type) {
+		case *QueryGraph:
+			return optimizeQueryGraph(ctx, op)
+		case *Join:
+			return optimizeJoin(ctx, op)
+		case *Derived:
+			return optimizeDerived(ctx, op)
+		case *SubQuery:
+			return optimizeSubQuery(ctx, op)
+		case *Filter:
+			return optimizeFilter(op)
+		default:
+			return operator, false, nil
 		}
-		sources = append(sources, physOp)
-	}
-	return
-}
+	})
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree Operator) (Operator, error) {
-	switch op := opTree.(type) {
-	case *QueryGraph:
-		return optimizeQueryGraph(ctx, op)
-	case *Join:
-		return optimizeJoin(ctx, op)
-	case *Derived:
-		return optimizeDerived(ctx, op)
-	case *SubQuery:
-		return optimizeSubQuery(ctx, op)
-	case *Filter:
-		return optimizeFilter(ctx, op)
-	case PhysicalOperator:
-		inputs, err := mapToPhys(ctx, op.Inputs())
-		if err != nil {
-			return nil, err
-		}
-		return op.Clone(inputs), nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
-	}
-}
-
-func optimizeFilter(ctx *plancontext.PlanningContext, op *Filter) (Operator, error) {
-	src, err := CreatePhysicalOperator(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	filter := &Filter{
-		Predicates: op.Predicates,
+	err = VisitTopDown(op, func(op Operator) error {
+		if _, isPhys := op.(PhysicalOperator); !isPhys {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	if route, ok := src.(*Route); ok {
+	return compact(ctx, op)
+}
+
+func optimizeFilter(op *Filter) (Operator, bool, error) {
+	if route, ok := op.Source.(*Route); ok {
 		// let's push the filter into the route
-		filter.Source = route.Source
-		route.Source = filter
-		return route, nil
+		op.Source = route.Source
+		route.Source = op
+		return route, true, nil
 	}
 
-	filter.Source = src
-
-	return filter, nil
+	return op, false, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, error) {
-	opInner, err := CreatePhysicalOperator(ctx, op.Source)
-	if err != nil {
-		return nil, err
-	}
-
-	innerRoute, ok := opInner.(*Route)
+func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (Operator, bool, error) {
+	innerRoute, ok := op.Source.(*Route)
 	if !ok {
-		return buildDerivedOp(op, opInner), nil
+		return op, false, nil
 	}
 
-	derived := &Derived{
-		Source:        innerRoute.Source,
-		Query:         op.Query,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
-	}
-
-	if innerRoute.RouteOpCode == engine.EqualUnique {
+	if !(innerRoute.RouteOpCode == engine.EqualUnique) && !op.IsMergeable(ctx) {
 		// no need to check anything if we are sure that we will only hit a single shard
-	} else if !derived.IsMergeable(ctx) {
-		return buildDerivedOp(op, opInner), nil
+		return op, false, nil
 	}
 
-	innerRoute.Source = derived
-	return innerRoute, nil
+	op.Source = innerRoute.Source
+	innerRoute.Source = op
+
+	return innerRoute, true, nil
 }
 
-func buildDerivedOp(op *Derived, opInner Operator) *Derived {
-	return &Derived{
-		Source:        opInner,
-		Query:         op.Query,
-		Alias:         op.Alias,
-		ColumnAliases: op.ColumnAliases,
-	}
-}
-
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, error) {
-	lhs, err := CreatePhysicalOperator(ctx, op.LHS)
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, bool, error) {
+	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	rhs, err := CreatePhysicalOperator(ctx, op.RHS)
-	if err != nil {
-		return nil, err
-	}
-
-	return mergeOrJoin(ctx, lhs, rhs, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+	return join, true, nil
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (Operator, error) {
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result Operator, changed bool, err error) {
+	changed = true
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
-		return leftToRightSolve(ctx, op)
+		result, err = leftToRightSolve(ctx, op)
 	default:
-		return greedySolve(ctx, op)
+		result, err = greedySolve(ctx, op)
 	}
+
+	unresolved := op.UnsolvedPredicates(ctx.SemTable)
+	if len(unresolved) > 0 {
+		// if we have any predicates that none of the joins or tables took care of,
+		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
+		result = newFilter(result, unresolved...)
+	}
+
+	return
 }
 
 func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantics.TableInfo, table *QueryTable, dmlType string) (*vindexes.Table, engine.Opcode, key.Destination, error) {
@@ -280,102 +258,14 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Opera
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source = &Filter{
-				Source:     plan.Source,
-				Predicates: []sqlparser.Expr{qg.NoDeps},
+			plan.Source, err = plan.Source.AddPredicate(ctx, qg.NoDeps)
+			if err != nil {
+				return nil, err
 			}
 		}
 		plans[i] = plan
 	}
 	return plans, nil
-}
-
-func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves semantics.TableSet) (*Route, error) {
-	if table.IsInfSchema {
-		return createInfSchemaRoute(ctx, table)
-	}
-	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(table.Table)
-	if target != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
-	}
-	if err != nil {
-		return nil, err
-	}
-	if vschemaTable.Name.String() != table.Table.Name.String() {
-		// we are dealing with a routed table
-		name := table.Table.Name
-		table.Table.Name = vschemaTable.Name
-		astTable, ok := table.Alias.Expr.(sqlparser.TableName)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
-		}
-		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
-		astTable.Name = realTableName
-		if table.Alias.As.IsEmpty() {
-			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
-			table.Alias.As = sqlparser.NewIdentifierCS(name.String())
-		}
-	}
-	plan := &Route{
-		Source: &Table{
-			QTable: table,
-			VTable: vschemaTable,
-		},
-		Keyspace: vschemaTable.Keyspace,
-	}
-
-	for _, columnVindex := range vschemaTable.ColumnVindexes {
-		plan.VindexPreds = append(plan.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})
-	}
-
-	switch {
-	case vschemaTable.Type == vindexes.TypeSequence:
-		plan.RouteOpCode = engine.Next
-	case vschemaTable.Type == vindexes.TypeReference:
-		plan.RouteOpCode = engine.Reference
-	case !vschemaTable.Keyspace.Sharded:
-		plan.RouteOpCode = engine.Unsharded
-	case vschemaTable.Pinned != nil:
-		// Pinned tables have their keyspace ids already assigned.
-		// Use the Binary vindex, which is the identity function
-		// for keyspace id.
-		plan.RouteOpCode = engine.EqualUnique
-		vindex, _ := vindexes.NewBinary("binary", nil)
-		plan.Selected = &VindexOption{
-			Ready:       true,
-			Values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
-			ValueExprs:  nil,
-			Predicates:  nil,
-			OpCode:      engine.EqualUnique,
-			FoundVindex: vindex,
-			Cost: Cost{
-				OpCode: engine.EqualUnique,
-			},
-		}
-	default:
-		plan.RouteOpCode = engine.Scatter
-	}
-	for _, predicate := range table.Predicates {
-		err = plan.UpdateRoutingLogic(ctx, predicate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
-		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
-		for _, pred := range table.Predicates {
-			rewritten := tryRewriteOrToIn(pred)
-			if rewritten != nil {
-				err = plan.UpdateRoutingLogic(ctx, rewritten)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	return plan, nil
 }
 
 func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
@@ -606,23 +496,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: JOIN not supported between derived tables")
 		}
 
-		join := &ApplyJoin{
-			LHS:      Clone(rhs),
-			RHS:      Clone(lhs),
-			Vars:     map[string]int{},
-			LeftJoin: !inner,
-		}
-
+		join := NewApplyJoin(clone(rhs), clone(lhs), nil, !inner)
 		return pushJoinPredicates(ctx, joinPredicates, join)
 	}
 
-	join := &ApplyJoin{
-		LHS:      Clone(lhs),
-		RHS:      Clone(rhs),
-		Vars:     map[string]int{},
-		LeftJoin: !inner,
-	}
-
+	join := NewApplyJoin(clone(lhs), clone(rhs), nil, !inner)
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
@@ -637,6 +515,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		}
 	}
 
+	join := NewApplyJoin(aRoute.Source, bRoute.Source, sqlparser.AndExpressions(joinPredicates...), !inner)
 	r := &Route{
 		RouteOpCode:         aRoute.RouteOpCode,
 		Keyspace:            aRoute.Keyspace,
@@ -644,13 +523,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
-		Source: &ApplyJoin{
-			LHS:       aRoute.Source,
-			RHS:       bRoute.Source,
-			Vars:      map[string]int{},
-			LeftJoin:  !inner,
-			Predicate: sqlparser.AndExpressions(joinPredicates...),
-		},
+		Source:              join,
 	}
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
@@ -680,7 +553,7 @@ func tryMerge(
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 ) (Operator, error) {
-	aRoute, bRoute := operatorsToRoutes(Clone(a), Clone(b))
+	aRoute, bRoute := operatorsToRoutes(clone(a), clone(b))
 	if aRoute == nil || bRoute == nil {
 		return nil, nil
 	}
@@ -1017,130 +890,17 @@ func hexEqual(a, b *sqlparser.Literal) bool {
 	return false
 }
 
-func pushJoinPredicates(
-	ctx *plancontext.PlanningContext,
-	exprs []sqlparser.Expr,
-	op Operator,
-) (Operator, error) {
+func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, op *ApplyJoin) (Operator, error) {
 	if len(exprs) == 0 {
 		return op, nil
 	}
 
-	switch op := op.(type) {
-	case *ApplyJoin:
-		return pushJoinPredicateOnJoin(ctx, exprs, op)
-	case *Route:
-		return pushJoinPredicateOnRoute(ctx, exprs, op)
-	case *Table:
-		return PushPredicate(ctx, sqlparser.AndExpressions(exprs...), op)
-	case *Derived:
-		return pushJoinPredicateOnDerived(ctx, exprs, op)
-	case *Filter:
-		op.Predicates = append(op.Predicates, exprs...)
-		return op, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown type %T pushJoinPredicates", op)
-	}
-}
-
-func pushJoinPredicateOnRoute(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, op *Route) (Operator, error) {
 	for _, expr := range exprs {
-		err := op.UpdateRoutingLogic(ctx, expr)
+		_, err := addPredicate(op, ctx, expr, true)
 		if err != nil {
 			return nil, err
 		}
 	}
-	newSrc, err := pushJoinPredicates(ctx, exprs, op.Source)
-	op.Source = newSrc
-	return op, err
-}
 
-func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *ApplyJoin) (Operator, error) {
-	node = Clone(node).(*ApplyJoin)
-	var rhsPreds []sqlparser.Expr
-	var lhsPreds []sqlparser.Expr
-	var lhsVarsName []string
-	for _, expr := range exprs {
-		// We find the dependencies for the given expression and if they are solved entirely by one
-		// side of the join tree, then we push the predicate there and do not break it into parts.
-		// In case a predicate has no dependencies, then it is pushed to both sides so that we can filter
-		// rows as early as possible making join cheaper on the vtgate level.
-		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
-		singleSideDeps := false
-		lhsTables := TableID(node.LHS)
-		if depsForExpr.IsSolvedBy(lhsTables) {
-			lhsPreds = append(lhsPreds, expr)
-			singleSideDeps = true
-		}
-		if depsForExpr.IsSolvedBy(TableID(node.RHS)) {
-			rhsPreds = append(rhsPreds, expr)
-			singleSideDeps = true
-		}
-
-		if singleSideDeps {
-			continue
-		}
-
-		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, lhsTables)
-		if err != nil {
-			return nil, err
-		}
-		node.LHSColumns = append(node.LHSColumns, cols...)
-		lhsVarsName = append(lhsVarsName, bvName...)
-		rhsPreds = append(rhsPreds, predicate)
-	}
-	if node.LHSColumns != nil && lhsVarsName != nil {
-		newNode, offsets, err := PushOutputColumns(ctx, node.LHS, node.LHSColumns...)
-		if err != nil {
-			return nil, err
-		}
-		node.LHS = newNode
-		for i, idx := range offsets {
-			node.Vars[lhsVarsName[i]] = idx
-		}
-	}
-	lhsPlan, err := pushJoinPredicates(ctx, lhsPreds, node.LHS)
-	if err != nil {
-		return nil, err
-	}
-
-	rhsPlan, err := pushJoinPredicates(ctx, rhsPreds, node.RHS)
-	if err != nil {
-		return nil, err
-	}
-
-	node.LHS = lhsPlan
-	node.RHS = rhsPlan
-	// If the predicate field is previously non-empty
-	// keep that predicate too
-	if node.Predicate != nil {
-		exprs = append(exprs, node.Predicate)
-	}
-	node.Predicate = sqlparser.AndExpressions(exprs...)
-	return node, nil
-}
-
-func pushJoinPredicateOnDerived(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, node *Derived) (Operator, error) {
-	node = Clone(node).(*Derived)
-
-	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
-	for _, expr := range exprs {
-		tblInfo, err := ctx.SemTable.TableInfoForExpr(expr)
-		if err != nil {
-			return nil, err
-		}
-		rewritten, err := semantics.RewriteDerivedTableExpression(expr, tblInfo)
-		if err != nil {
-			return nil, err
-		}
-		newExpressions = append(newExpressions, rewritten)
-	}
-
-	newInner, err := pushJoinPredicates(ctx, newExpressions, node.Source)
-	if err != nil {
-		return nil, err
-	}
-
-	node.Source = newInner
-	return node, nil
+	return op, nil
 }

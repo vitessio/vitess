@@ -41,8 +41,11 @@ var (
 
 func registerVtctldWorkflowFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&workflowManagerInit, "workflow_manager_init", workflowManagerInit, "Initialize the workflow manager in this vtctld instance.")
+	fs.MarkDeprecated("workflow_manager_init", "it will be removed in a future releases.")
 	fs.BoolVar(&workflowManagerUseElection, "workflow_manager_use_election", workflowManagerUseElection, "if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.")
+	fs.MarkDeprecated("workflow_manager_use_election", "it will be removed in a future releases.")
 	fs.StringSliceVar(&workflowManagerDisable, "workflow_manager_disable", workflowManagerDisable, "comma separated list of workflow types to disable")
+	fs.MarkDeprecated("workflow_manager_disable", "it will be removed in a future releases.")
 }
 
 func init() {

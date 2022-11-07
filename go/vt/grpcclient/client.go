@@ -105,7 +105,6 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 // failFast is a non-optional parameter because callers are required to specify
 // what that should be.
 func DialContext(ctx context.Context, target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	grpccommon.EnableTracingOpt()
 	msgSize := grpccommon.MaxMessageSize()
 	newopts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(

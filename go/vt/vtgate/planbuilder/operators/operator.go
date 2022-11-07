@@ -14,13 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package operators contains the operators used to plan queries.
+/*
+The operators go through a few phases while planning:
+1. Logical
+   In this first pass, we build an operator tree from the incoming parsed query.
+   It will contain logical joins - we still haven't decided on the join algorithm to use yet.
+   At the leaves, it will contain QueryGraphs - these are the tables in the FROM clause
+   that we can easily do join ordering on. The logical tree will represent the full query,
+   including projections, grouping, ordering and so on.
+2. Physical
+   Once the logical plan has been fully built, we go bottom up and plan which routes that will be used.
+   During this phase, we will also decide which join algorithms should be used on the vtgate level
+3. Columns & Aggregation
+   Once we know which queries will be sent to the tablets, we go over the tree and decide which
+   columns each operator should output. At this point, we also do offset lookups,
+   so we know at runtime from which columns in the input table we need to read.
+*/
 package operators
 
 import (
+	"fmt"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -33,8 +51,17 @@ type (
 	// In some situation we go straight to the physical operator - when there are no options to consider,
 	// we can go straight to the end result.
 	Operator interface {
-		Clone(inputs []Operator) Operator
-		Inputs() []Operator
+		clone(inputs []Operator) Operator
+		inputs() []Operator
+
+		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
+		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
+		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
+		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
+
+		// AddColumn tells an operator to also output an additional column specified.
+		// The offset to the column is returned.
+		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan
@@ -51,6 +78,11 @@ type (
 	unresolved interface {
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
 		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
+		// This is used for sub-queries. An example query could be:
+		// SELECT * FROM tbl WHERE EXISTS (SELECT 1 FROM otherTbl WHERE tbl.col = otherTbl.col)
+		// The subquery would have one unsolved predicate: `tbl.col = otherTbl.col`
+		// It's a predicate that belongs to the inner query, but it needs data from the outer query
+		// These predicates dictate which data we have to send from the outer side to the inner
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 
@@ -62,408 +94,187 @@ type (
 		Cost() int
 	}
 
-	checked interface {
-		// CheckValid allows operators that need a final check before being used, to make sure that
+	checkable interface {
+		// checkValid allows operators that need a final check before being used, to make sure that
 		// all the necessary information is in the operator
-		CheckValid() error
+		checkValid() error
+	}
+
+	compactable interface {
+		// implement this interface for operators that have easy to see optimisations
+		compact(ctx *plancontext.PlanningContext) (Operator, bool, error)
 	}
 
 	// helper type that implements Inputs() returning nil
 	noInputs struct{}
+
+	// helper type that implements AddColumn() returning an error
+	noColumns struct{}
+
+	// helper type that implements AddPredicate() returning an error
+	noPredicates struct{}
 )
 
-// Inputs implements the Operator interface
-func (noInputs) Inputs() []Operator {
+func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (Operator, error) {
+	op, err := createLogicalOperatorFromAST(ctx, selStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = checkValid(op); err != nil {
+		return nil, err
+	}
+
+	op, err = transformToPhysical(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+
+	backup := clone(op)
+
+	op, err = planHorizons(ctx, op)
+	if err == errNotHorizonPlanned {
+		op = backup
+	} else if err != nil {
+		return nil, err
+	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	return op, err
+}
+
+// inputs implements the Operator interface
+func (noInputs) inputs() []Operator {
 	return nil
 }
 
-func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
-	switch tableExpr := tableExpr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		return getOperatorFromAliasedTableExpr(ctx, tableExpr)
-	case *sqlparser.JoinTableExpr:
-		return getOperatorFromJoinTableExpr(ctx, tableExpr)
-	case *sqlparser.ParenTableExpr:
-		return crossJoin(ctx, tableExpr.Exprs)
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T table type", tableExpr)
-	}
+// AddColumn implements the Operator interface
+func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept columns")
 }
 
-func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (Operator, error) {
-	lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
-	if err != nil {
-		return nil, err
-	}
-	rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr)
-	if err != nil {
-		return nil, err
-	}
-
-	switch tableExpr.Join {
-	case sqlparser.NormalJoinType:
-		return createInnerJoin(ctx, tableExpr, lhs, rhs)
-	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-		return createOuterJoin(tableExpr, lhs, rhs)
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
-	}
+// AddPredicate implements the Operator interface
+func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (Operator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
 }
 
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	if tableExpr.Join == sqlparser.RightJoinType {
-		lhs, rhs = rhs, lhs
-	}
-	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
-}
-
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
-	op := createJoin(lhs, rhs)
-	if tableExpr.Condition.On != nil {
-		var err error
-		op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On))
+func VisitTopDown(root Operator, visitor func(Operator) error) error {
+	queue := []Operator{root}
+	for len(queue) > 0 {
+		this := queue[0]
+		queue = append(queue[1:], this.inputs()...)
+		err := visitor(this)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return op, nil
+	return nil
 }
 
-func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (Operator, error) {
-	switch tbl := tableExpr.Expr.(type) {
-	case sqlparser.TableName:
-		tableID := ctx.SemTable.TableSetFor(tableExpr)
-		tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
-		if err != nil {
-			return nil, err
+func TableID(op Operator) (result semantics.TableSet) {
+	_ = VisitTopDown(op, func(this Operator) error {
+		if tbl, ok := this.(tableIDIntroducer); ok {
+			result.MergeInPlace(tbl.Introduces())
 		}
-
-		if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
-			solves := ctx.SemTable.TableSetFor(tableExpr)
-			return &Vindex{
-				Table: VindexTable{
-					TableID: tableID,
-					Alias:   tableExpr,
-					Table:   tbl,
-					VTable:  vt.Table.GetVindexTable(),
-				},
-				Vindex: vt.Vindex,
-				Solved: solves,
-			}, nil
-		}
-		qg := newQueryGraph()
-		isInfSchema := tableInfo.IsInfSchema()
-		qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
-		qg.Tables = append(qg.Tables, qt)
-		return qg, nil
-	case *sqlparser.DerivedTable:
-		inner, err := CreateLogicalOperatorFromAST(ctx, tbl.Select)
-		if err != nil {
-			return nil, err
-		}
-		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
-	}
-}
-
-func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (Operator, error) {
-	var output Operator
-	for _, tableExpr := range exprs {
-		op, err := getOperatorFromTableExpr(ctx, tableExpr)
-		if err != nil {
-			return nil, err
-		}
-		if output == nil {
-			output = op
-		} else {
-			output = createJoin(output, op)
-		}
-	}
-	return output, nil
-}
-
-func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
-	switch s := s.(type) {
-	case *sqlparser.Select:
-		return s
-	default:
 		return nil
-	}
+	})
+	return
 }
 
-// CreateLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
-	switch node := selStmt.(type) {
-	case *sqlparser.Select:
-		op, err = createOperatorFromSelect(ctx, node)
-	case *sqlparser.Union:
-		op, err = createOperatorFromUnion(ctx, node)
-	case *sqlparser.Update:
-		op, err = createOperatorFromUpdate(ctx, node)
-	case *sqlparser.Delete:
-		op, err = createOperatorFromDelete(ctx, node)
-	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return Compact(ctx, op)
-}
-
-func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
-	opLHS, err := CreateLogicalOperatorFromAST(ctx, node.Left)
-	if err != nil {
-		return nil, err
-	}
-
-	_, isRHSUnion := node.Right.(*sqlparser.Union)
-	if isRHSUnion {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
-	}
-	opRHS, err := CreateLogicalOperatorFromAST(ctx, node.Right)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Union{
-		Distinct:    node.Distinct,
-		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
-		Sources:     []Operator{opLHS, opRHS},
-		Ordering:    node.OrderBy,
-	}, nil
-}
-
-// createOperatorFromSelect creates an operator tree that represents the input SELECT query
-func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (Operator, error) {
-	subq, err := createSubqueryFromStatement(ctx, sel)
-	if err != nil {
-		return nil, err
-	}
-	op, err := crossJoin(ctx, sel.From)
-	if err != nil {
-		return nil, err
-	}
-	if sel.Where != nil {
-		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
-		for _, expr := range exprs {
-			op, err = LogicalPushPredicate(ctx, op, sqlparser.RemoveKeyspaceFromColName(expr))
-			if err != nil {
-				return nil, err
-			}
-			addColumnEquality(ctx, expr)
+func unresolvedPredicates(op Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
+	_ = VisitTopDown(op, func(this Operator) error {
+		if tbl, ok := this.(unresolved); ok {
+			result = append(result, tbl.UnsolvedPredicates(st)...)
 		}
-	}
-	if subq == nil {
-		return op, nil
-	}
-	subq.Outer = op
-	return subq, nil
+
+		return nil
+	})
+	return
 }
 
-func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
-	if err != nil {
-		return nil, err
-	}
+func checkValid(op Operator) error {
+	return VisitTopDown(op, func(this Operator) error {
+		if chk, ok := this.(checkable); ok {
+			return chk.checkValid()
+		}
+		return nil
+	})
+}
 
-	assignments := make(map[string]sqlparser.Expr)
-	for _, set := range updStmt.Exprs {
-		assignments[set.Name.Name.String()] = set.Expr
-	}
+func CostOf(op Operator) (cost int) {
+	_ = VisitTopDown(op, func(op Operator) error {
+		if costlyOp, ok := op.(costly); ok {
+			cost += costlyOp.Cost()
+		}
+		return nil
+	})
+	return
+}
 
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, tableInfo, qt, "update")
-	if err != nil {
-		return nil, err
+func clone(op Operator) Operator {
+	inputs := op.inputs()
+	clones := make([]Operator, len(inputs))
+	for i, input := range inputs {
+		clones[i] = clone(input)
 	}
+	return op.clone(clones)
+}
 
-	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
-	if err != nil {
-		return nil, err
+func checkSize(inputs []Operator, shouldBe int) {
+	if len(inputs) != shouldBe {
+		panic(fmt.Sprintf("BUG: got the wrong number of inputs: got %d, expected %d", len(inputs), shouldBe))
 	}
+}
 
-	r := &Route{
-		Source: &Update{
-			QTable:              qt,
-			VTable:              vindexTable,
-			Assignments:         assignments,
-			ChangedVindexValues: cvv,
-			OwnedVindexQuery:    ovq,
-			AST:                 updStmt,
-		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vp,
-		TargetDestination: dest,
-	}
+type rewriterFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, changed bool, err error)
+type rewriterBreakableFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, visitChildren bool, err error)
 
-	for _, predicate := range qt.Predicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
+func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter rewriterFunc) (Operator, bool, error) {
+	oldInputs := root.inputs()
+	anythingChanged := false
+	newInputs := make([]Operator, len(oldInputs))
+	for i, operator := range oldInputs {
+		in, changed, err := rewriteBottomUp(ctx, operator, rewriter)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
+		if changed {
+			anythingChanged = true
+		}
+		newInputs[i] = in
 	}
 
-	if r.RouteOpCode == engine.Scatter && updStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+	if anythingChanged {
+		root = root.clone(newInputs)
 	}
 
-	subq, err := createSubqueryFromStatement(ctx, updStmt)
+	newOp, b, err := rewriter(ctx, root)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if subq == nil {
-		return r, nil
-	}
-	subq.Outer = r
-	return subq, nil
+	return newOp, anythingChanged || b, nil
 }
 
-func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
-	alTbl, ok := tableExpr.(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
-	}
-	tblName, ok := alTbl.Expr.(sqlparser.TableName)
-	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected TableName")
-	}
-
-	tableID := ctx.SemTable.TableSetFor(alTbl)
-	tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
-	if err != nil {
-		return nil, nil, err
+func rewriteBreakableTopDown(ctx *plancontext.PlanningContext, in Operator, rewriterF rewriterBreakableFunc) (
+	newOp Operator,
+	err error,
+) {
+	newOp, visitChildren, err := rewriterF(ctx, in)
+	if err != nil || !visitChildren {
+		return
 	}
 
-	if tableInfo.IsInfSchema() {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't update information schema tables")
-	}
-
-	var predicates []sqlparser.Expr
-	if whereClause != nil {
-		predicates = sqlparser.SplitAndExpression(nil, whereClause.Expr)
-	}
-	qt := &QueryTable{
-		ID:          tableID,
-		Alias:       alTbl,
-		Table:       tblName,
-		Predicates:  predicates,
-		IsInfSchema: false,
-	}
-	return tableInfo, qt, nil
-}
-
-func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, deleteStmt.TableExprs[0], deleteStmt.Where)
-	if err != nil {
-		return nil, err
-	}
-
-	vindexTable, opCode, dest, err := buildVindexTableForDML(ctx, tableInfo, qt, "delete")
-	if err != nil {
-		return nil, err
-	}
-
-	del := &Delete{
-		QTable: qt,
-		VTable: vindexTable,
-		AST:    deleteStmt,
-	}
-	route := &Route{
-		Source:            del,
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		TargetDestination: dest,
-	}
-
-	if !vindexTable.Keyspace.Sharded {
-		return route, nil
-	}
-
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
-	if err != nil {
-		return nil, err
-	}
-
-	route.VindexPreds = vindexAndPredicates
-
-	var ovq string
-	if len(vindexTable.Owned) > 0 {
-		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: qt.Alias.As}
-		ovq = generateOwnedVindexQuery(tblExpr, deleteStmt, vindexTable, primaryVindex.Columns)
-	}
-
-	del.OwnedVindexQuery = ovq
-
-	for _, predicate := range qt.Predicates {
-		err := route.UpdateRoutingLogic(ctx, predicate)
+	oldInputs := newOp.inputs()
+	newInputs := make([]Operator, len(oldInputs))
+	for i, oldInput := range oldInputs {
+		newInputs[i], err = rewriteBreakableTopDown(ctx, oldInput, rewriterF)
 		if err != nil {
-			return nil, err
-		}
-	}
-
-	if route.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard delete with limit is not supported")
-	}
-
-	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
-	if subq == nil {
-		return route, nil
-	}
-	subq.Outer = route
-	return subq, nil
-}
-
-func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
-	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
-		return nil, nil
-	}
-	subq := &SubQuery{}
-	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
-		if err != nil {
-			return nil, err
-		}
-		subq.Inner = append(subq.Inner, &SubQueryInner{
-			ExtractedSubquery: sq,
-			Inner:             opInner,
-		})
-	}
-	return subq, nil
-}
-
-func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
-	switch expr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if expr.Operator != sqlparser.EqualOp {
 			return
 		}
-
-		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(left, expr.Right)
-		}
-		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(right, expr.Left)
-		}
 	}
-}
-
-func createJoin(LHS, RHS Operator) Operator {
-	lqg, lok := LHS.(*QueryGraph)
-	rqg, rok := RHS.(*QueryGraph)
-	if lok && rok {
-		op := &QueryGraph{
-			Tables:     append(lqg.Tables, rqg.Tables...),
-			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
-			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
-		}
-		return op
-	}
-	return &Join{LHS: LHS, RHS: RHS}
+	newOp = newOp.clone(newInputs)
+	return
 }

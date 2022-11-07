@@ -20,9 +20,11 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -158,14 +160,17 @@ func getTxMode() vtgatepb.TransactionMode {
 var (
 	rpcVTGate *VTGate
 
-	vschemaCounters *stats.CountersWithSingleLabel
+	// vschemaCounters needs to be initialized before planner to
+	// catch the initial load stats.
+	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
 
 	// Error counters should be global so they can be set from anywhere
-	errorCounts *stats.CountersWithMultiLabels
+	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
-	warnings *stats.CountersWithSingleLabel
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded", "WarnPayloadSizeExceeded")
 
-	vstreamSkewDelayCount *stats.Counter
+	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
+		"Number of events that had to wait because the skew across shards was too high")
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -209,13 +214,6 @@ func Init(
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
-
-	// vschemaCounters needs to be initialized before planner to
-	// catch the initial load stats.
-	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
-
-	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
-		"Number of events that had to wait because the skew across shards was too high")
 
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -306,8 +304,6 @@ func Init(
 		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 	}
 
-	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
-
 	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
 	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
 	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
@@ -316,8 +312,6 @@ func Init(
 	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
 	_ = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	_ = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
-
-	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded", "WarnPayloadSizeExceeded")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
@@ -588,6 +582,12 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 		statsKey[1],
 		statsKey[2],
 		ec.String(),
+	}
+
+	if terseErrors {
+		regexpBv := regexp.MustCompile(`BindVars: \{.*\}`)
+		str := regexpBv.ReplaceAllString(err.Error(), "BindVars: {REDACTED}")
+		err = errors.New(str)
 	}
 
 	// Traverse the request structure and truncate any long values

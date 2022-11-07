@@ -103,7 +103,9 @@ func TestOperator(t *testing.T) {
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
 			ctx := plancontext.NewPlanningContext(nil, semTable, nil, 0)
-			optree, err := CreateLogicalOperatorFromAST(ctx, stmt)
+			optree, err := createLogicalOperatorFromAST(ctx, stmt)
+			require.NoError(t, err)
+			optree, err = compact(ctx, optree)
 			require.NoError(t, err)
 			output := testString(optree)
 			assert.Equal(t, tc.expected, output)
@@ -173,6 +175,9 @@ func testString(op interface{}) string { // TODO
 			assignments = append(assignments, fmt.Sprintf("\t%s = %s", k, sqlparser.String(op.Assignments[k])))
 		}
 		return fmt.Sprintf("Update {\n\t%s\nassignments:\n%s\n}", tbl, strings.Join(assignments, "\n"))
+	case *Horizon:
+		src := indent(testString(op.Source))
+		return fmt.Sprintf("Horizon {\n\tQuery: \"%s\"\n\tInner:%s\n}", sqlparser.String(op.Select), src)
 	}
 	panic(fmt.Sprintf("%T", op))
 }

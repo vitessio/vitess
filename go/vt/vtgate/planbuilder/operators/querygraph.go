@@ -41,6 +41,7 @@ type (
 		NoDeps sqlparser.Expr
 
 		noInputs
+		noColumns
 	}
 
 	innerJoin struct {
@@ -160,7 +161,7 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 	}
 }
 
-// UnsolvedPredicates implements the Operator interface
+// UnsolvedPredicates implements the unresolved interface
 func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
 	tables := TableID(qg)
@@ -173,8 +174,8 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 	return result
 }
 
-// Clone implements the Operator interface
-func (qg *QueryGraph) Clone(inputs []Operator) Operator {
+// clone implements the Operator interface
+func (qg *QueryGraph) clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	result := &QueryGraph{
 		Tables:     nil,
@@ -186,4 +187,14 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 	result.innerJoins = append([]*innerJoin{}, qg.innerJoins...)
 	result.NoDeps = qg.NoDeps
 	return result
+}
+
+func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
+		err := qg.collectPredicate(ctx, e)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return qg, nil
 }

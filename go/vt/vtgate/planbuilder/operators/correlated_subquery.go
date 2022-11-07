@@ -31,11 +31,17 @@ type (
 
 		// arguments that need to be copied from the outer to inner
 		Vars map[string]int
+
+		noColumns
+		noPredicates
 	}
 
 	SubQueryOp struct {
 		Outer, Inner Operator
 		Extracted    *sqlparser.ExtractedSubquery
+
+		noColumns
+		noPredicates
 	}
 )
 
@@ -45,8 +51,8 @@ var _ PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (s *SubQueryOp) IPhysical() {}
 
-// Clone implements the Operator interface
-func (s *SubQueryOp) Clone(inputs []Operator) Operator {
+// clone implements the Operator interface
+func (s *SubQueryOp) clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	result := &SubQueryOp{
 		Outer:     inputs[0],
@@ -56,29 +62,35 @@ func (s *SubQueryOp) Clone(inputs []Operator) Operator {
 	return result
 }
 
-// Inputs implements the Operator interface
-func (s *SubQueryOp) Inputs() []Operator {
+// inputs implements the Operator interface
+func (s *SubQueryOp) inputs() []Operator {
 	return []Operator{s.Outer, s.Inner}
 }
 
 // IPhysical implements the PhysicalOperator interface
 func (c *CorrelatedSubQueryOp) IPhysical() {}
 
-// Clone implements the Operator interface
-func (c *CorrelatedSubQueryOp) Clone(inputs []Operator) Operator {
+// clone implements the Operator interface
+func (c *CorrelatedSubQueryOp) clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
 	copy(columns, c.LHSColumns)
+	vars := make(map[string]int, len(c.Vars))
+	for k, v := range c.Vars {
+		vars[k] = v
+	}
+
 	result := &CorrelatedSubQueryOp{
 		Outer:      inputs[0],
 		Inner:      inputs[1],
 		Extracted:  c.Extracted,
 		LHSColumns: columns,
+		Vars:       vars,
 	}
 	return result
 }
 
-// Inputs implements the Operator interface
-func (c *CorrelatedSubQueryOp) Inputs() []Operator {
+// inputs implements the Operator interface
+func (c *CorrelatedSubQueryOp) inputs() []Operator {
 	return []Operator{c.Outer, c.Inner}
 }

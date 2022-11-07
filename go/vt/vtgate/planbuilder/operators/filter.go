@@ -18,6 +18,8 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
@@ -27,11 +29,17 @@ type Filter struct {
 
 var _ PhysicalOperator = (*Filter)(nil)
 
+func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
+	return &Filter{
+		Source: op, Predicates: expr,
+	}
+}
+
 // IPhysical implements the PhysicalOperator interface
 func (f *Filter) IPhysical() {}
 
-// Clone implements the Operator interface
-func (f *Filter) Clone(inputs []Operator) Operator {
+// clone implements the Operator interface
+func (f *Filter) clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
@@ -41,7 +49,33 @@ func (f *Filter) Clone(inputs []Operator) Operator {
 	}
 }
 
-// Inputs implements the Operator interface
-func (f *Filter) Inputs() []Operator {
+// inputs implements the Operator interface
+func (f *Filter) inputs() []Operator {
 	return []Operator{f.Source}
+}
+
+// UnsolvedPredicates implements the unresolved interface
+func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
+	var result []sqlparser.Expr
+	id := TableID(f)
+	for _, p := range f.Predicates {
+		deps := st.RecursiveDeps(p)
+		if !deps.IsSolvedBy(id) {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+	newSrc, err := f.Source.AddPredicate(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	f.Source = newSrc
+	return f, nil
+}
+
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	return f.Source.AddColumn(ctx, expr)
 }

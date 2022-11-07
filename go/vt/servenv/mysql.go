@@ -51,7 +51,6 @@ func init() {
 		"vtbackup",
 		"vtcombo",
 		"vtctl",
-		"vtctld",
 		"vtctldclient",
 		"vtexplain",
 		"vtgate",
