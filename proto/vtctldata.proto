@@ -669,6 +669,24 @@ message GetSrvKeyspacesResponse {
   map<string, topodata.SrvKeyspace> srv_keyspaces = 1;
 }
 
+message UpdateThrottlerConfigRequest {
+  // Enable instructs to enable the throttler
+  bool enable = 1;
+  // Disable instructs to disable the throttler
+  bool disable = 2;
+  // Threshold for throttler (with no custom query, ie using default query, only positive values are considered)
+  double threshold = 3;
+  // CustomQuery replaces the default replication lag query
+  string custom_query = 4;
+  // CheckAsCheckSelf instructs the throttler to respond to /check requests by checking the tablet's own health
+  bool check_as_check_self=5;
+  // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
+  bool check_as_check_shard=6;
+}
+
+message UpdateThrottlerConfigResponse {
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }
