@@ -2,9 +2,18 @@
 
 - [New command line flags and behavior](#new-command-line-flags-and-behavior)
 
+- **[VReplication](#vreplication)**
+  - [VStream Copy Resume](#vstream-copy-resume)
+
 ## Known Issues
 
 ## Major Changes
+
+### <a id="vreplication"/>VReplication
+
+#### <a id="vstream-copy-resume"/>VStream Copy Resume
+
+In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
 
 ### Breaking Changes
 
