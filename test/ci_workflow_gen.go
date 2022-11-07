@@ -73,7 +73,7 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"vtgate_general_heavy",
-		"vtbackup_transform",
+		"vtbackup",
 		"18",
 		"xb_backup",
 		"21",
