@@ -55,7 +55,7 @@ func buildShowThrottlerStatusPlan(query string, vschema plancontext.VSchema) (*p
 		return nil, err
 	}
 	if ks == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard> or keyspace<[range]> (<> are optional)")
 	}
 
 	if tabletType != topodatapb.TabletType_PRIMARY {
