@@ -47,7 +47,7 @@ type (
 // This is where a lot of the optimisations of the query plans are done.
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
-func TransformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
+func transformToPhysical(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
 	op, _, err := rewriteBottomUp(ctx, in, func(context *plancontext.PlanningContext, operator Operator) (newOp Operator, changed bool, err error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
@@ -496,11 +496,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: JOIN not supported between derived tables")
 		}
 
-		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
+		join := NewApplyJoin(clone(rhs), clone(lhs), nil, !inner)
 		return pushJoinPredicates(ctx, joinPredicates, join)
 	}
 
-	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
+	join := NewApplyJoin(clone(lhs), clone(rhs), nil, !inner)
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
@@ -553,7 +553,7 @@ func tryMerge(
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 ) (Operator, error) {
-	aRoute, bRoute := operatorsToRoutes(Clone(a), Clone(b))
+	aRoute, bRoute := operatorsToRoutes(clone(a), clone(b))
 	if aRoute == nil || bRoute == nil {
 		return nil, nil
 	}

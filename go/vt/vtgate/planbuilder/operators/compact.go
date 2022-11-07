@@ -49,13 +49,18 @@ func (f *Filter) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 
 func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 	var newSources []Operator
-	var newSels []*sqlparser.Select
 	anythingChanged := false
-	for i, source := range u.Sources {
-		other, isUnion := source.(*Union)
-		if !isUnion {
+	for _, source := range u.Sources {
+		var other *Union
+		horizon, ok := source.(*Horizon)
+		if ok {
+			union, ok := horizon.Source.(*Union)
+			if ok {
+				other = union
+			}
+		}
+		if other == nil {
 			newSources = append(newSources, source)
-			newSels = append(newSels, u.SelectStmts[i])
 			continue
 		}
 		anythingChanged = true
@@ -65,16 +70,13 @@ func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 		case u.Distinct:
 			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
 			newSources = append(newSources, other.Sources...)
-			newSels = append(newSels, other.SelectStmts...)
 
 		default:
 			newSources = append(newSources, other)
-			newSels = append(newSels, nil)
 		}
 	}
 	if anythingChanged {
 		u.Sources = newSources
-		u.SelectStmts = newSels
 	}
 	return u, anythingChanged, nil
 }
