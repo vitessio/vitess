@@ -411,9 +411,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 			if err != nil {
 				return nil, err
 			}
-			// Add backupTime and restorePosition to LocalMetadata
-			params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
-			params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
+			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
 		}
 		params.Logger.Infof("Restore: done applying incremental backups")
 	}
