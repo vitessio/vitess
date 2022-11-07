@@ -19,7 +19,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -44,11 +43,8 @@ type Delete struct {
 
 // TryExecute performs a non-streaming exec.
 func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	if del.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(del.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, del.QueryTimeout)
+	defer cancelFunc()
 
 	rss, _, err := del.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
@@ -62,7 +58,7 @@ func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	switch del.Opcode {
 	case Unsharded:
 		return del.execUnsharded(ctx, vcursor, bindVars, rss)
-	case Equal, IN, Scatter, ByDestination, SubShard:
+	case Equal, IN, Scatter, ByDestination, SubShard, EqualUnique, MultiEqual:
 		return del.execMultiDestination(ctx, vcursor, bindVars, rss, del.deleteVindexEntries)
 	default:
 		// Unreachable.

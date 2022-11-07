@@ -135,6 +135,10 @@ func TestComparisonSemantics(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
+	if v, err := conn.ServerVersionAtLeast(8, 0, 31); err != nil || !v {
+		t.Skipf("The behavior of Coercion Semantics is not correct before 8.0.31")
+	}
+
 	for _, coll := range collations.Local().AllCollations() {
 		text := verifyTranscoding(t, coll, remote.NewCollation(conn, coll.Name()), []byte(BaseString))
 		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll})

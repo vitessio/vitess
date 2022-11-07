@@ -278,8 +278,14 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case LaunchMigrationType:
+		alterType = "launch"
+	case LaunchAllMigrationType:
+		alterType = "launch all"
 	case CompleteMigrationType:
 		alterType = "complete"
+	case CompleteAllMigrationType:
+		alterType = "complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -299,6 +305,9 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	}
 	if node.Ratio != nil {
 		buf.astPrintf(node, " ratio %v", node.Ratio)
+	}
+	if node.Shards != "" {
+		buf.astPrintf(node, " vitess_shards '%s'", node.Shards)
 	}
 }
 
@@ -2443,13 +2452,8 @@ func (node *JtOnResponse) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
 func (node *Offset) Format(buf *TrackedBuffer) {
-	if node.Original == "" {
-		buf.astPrintf(node, "OFFSET(%d)", node.V)
-	} else {
-		buf.astPrintf(node, "OFFSET(%d, '%s')", node.V, node.Original)
-	}
+	buf.astPrintf(node, ":%d", node.V)
 }
 
 // Format formats the node.

@@ -64,7 +64,6 @@ func (q *SrvKeyspaceNamesQuery) srvKeyspaceNamesCacheStatus() (result []*SrvKeys
 			ExpirationTime: entry.insertionTime.Add(q.rq.cacheTTL),
 			LastQueryTime:  entry.lastQueryTime,
 			LastError:      entry.lastError,
-			LastErrorCtx:   entry.lastErrorCtx,
 		})
 		entry.mutex.Unlock()
 	}

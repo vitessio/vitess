@@ -406,8 +406,14 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case LaunchMigrationType:
+		alterType = "launch"
+	case LaunchAllMigrationType:
+		alterType = "launch all"
 	case CompleteMigrationType:
 		alterType = "complete"
+	case CompleteAllMigrationType:
+		alterType = "complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -431,6 +437,11 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 	if node.Ratio != nil {
 		buf.WriteString(" ratio ")
 		node.Ratio.formatFast(buf)
+	}
+	if node.Shards != "" {
+		buf.WriteString(" vitess_shards '")
+		buf.WriteString(node.Shards)
+		buf.WriteByte('\'')
 	}
 }
 
@@ -3200,19 +3211,9 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
 func (node *Offset) formatFast(buf *TrackedBuffer) {
-	if node.Original == "" {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteByte(')')
-	} else {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteString(", '")
-		buf.WriteString(node.Original)
-		buf.WriteString("')")
-	}
+	buf.WriteByte(':')
+	buf.WriteString(fmt.Sprintf("%d", node.V))
 }
 
 // formatFast formats the node.

@@ -17,14 +17,18 @@ limitations under the License.
 package flagutil
 
 import (
-	"flag"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStringList(t *testing.T) {
 	p := StringListValue([]string{})
-	var _ flag.Value = &p
+	var _ pflag.Value = &p
 	wanted := map[string]string{
 		"0ala,ma,kota":   "0ala.ma.kota",
 		`1ala\,ma,kota`:  "1ala,ma.kota",
@@ -48,7 +52,7 @@ func TestStringList(t *testing.T) {
 // TestEmptyStringList verifies that an empty parameter results in an empty list
 func TestEmptyStringList(t *testing.T) {
 	var p StringListValue
-	var _ flag.Value = &p
+	var _ pflag.Value = &p
 	if err := p.Set(""); err != nil {
 		t.Fatalf("p.Set(\"\"): %v", err)
 	}
@@ -65,7 +69,7 @@ type pair struct {
 
 func TestStringMap(t *testing.T) {
 	v := StringMapValue(nil)
-	var _ flag.Value = &v
+	var _ pflag.Value = &v
 	wanted := []pair{
 		{
 			in:  "tag1:value1,tag2:value2",
@@ -103,5 +107,55 @@ func TestStringMap(t *testing.T) {
 		if vs := v.String(); vs != want.in {
 			t.Errorf("v.String(): want %#v, got %#v", want.in, vs)
 		}
+	}
+}
+
+func TestDurationOrIntVar(t *testing.T) {
+	getflag := func() *DurationOrIntVar { return NewDurationOrIntVar("test-flag", time.Minute, time.Second) }
+
+	tests := []struct {
+		name    string
+		arg     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{
+			name: "duration format",
+			arg:  "1h",
+			want: time.Hour,
+		},
+		{
+			name: "legacy format",
+			arg:  "10",
+			want: 10 * time.Second,
+		},
+		{
+			name:    "invalid",
+			arg:     "this is not a duration or an int",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name: "default value",
+			arg:  "",
+			want: time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		flag := getflag()
+		if tt.arg == "" {
+			assert.Equal(t, tt.want, flag.Value())
+			return
+		}
+
+		err := flag.Set(tt.arg)
+		if tt.wantErr {
+			assert.Error(t, err)
+			return
+		}
+
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, flag.Value())
 	}
 }

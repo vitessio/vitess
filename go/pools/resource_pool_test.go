@@ -17,6 +17,7 @@ limitations under the License.
 package pools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -25,47 +26,46 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"context"
-
 	"vitess.io/vitess/go/sync2"
 )
 
-var lastID, count, closeCount sync2.AtomicInt64
-var waitStarts []time.Time
+var (
+	lastID, count, closeCount, resetCount sync2.AtomicInt64
+
+	waitStarts []time.Time
+
+	sFoo    = &Setting{query: "set foo=1"}
+	sBar    = &Setting{query: "set bar=1"}
+	sFooBar = &Setting{query: "set foo=1, bar=2"}
+)
 
 type TestResource struct {
 	num       int64
 	closed    bool
-	setting   []string
+	setting   string
 	failApply bool
 }
 
-func (tr *TestResource) ApplySettings(_ context.Context, settings []string) error {
-	if tr.failApply {
-		return fmt.Errorf("ApplySettings failed")
-	}
-	tr.setting = settings
+func (tr *TestResource) ResetSetting(ctx context.Context) error {
+	resetCount.Add(1)
+	tr.setting = ""
 	return nil
 }
 
-func (tr *TestResource) IsSettingsApplied() bool {
+func (tr *TestResource) ApplySetting(ctx context.Context, setting *Setting) error {
+	if tr.failApply {
+		return fmt.Errorf("ApplySetting failed")
+	}
+	tr.setting = setting.query
+	return nil
+}
+
+func (tr *TestResource) IsSettingApplied() bool {
 	return len(tr.setting) > 0
 }
 
-func (tr *TestResource) IsSameSetting(settings []string) bool {
-	return compareStringSlice(tr.setting, settings)
-}
-
-func compareStringSlice(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, aVal := range a {
-		if aVal != b[i] {
-			return false
-		}
-	}
-	return true
+func (tr *TestResource) IsSameSetting(setting string) bool {
+	return tr.setting == setting
 }
 
 func (tr *TestResource) Close() {
@@ -75,6 +75,8 @@ func (tr *TestResource) Close() {
 		tr.closed = true
 	}
 }
+
+var _ Resource = (*TestResource)(nil)
 
 func logWait(start time.Time) {
 	waitStarts = append(waitStarts, start)
@@ -116,7 +118,7 @@ func TestOpen(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -135,7 +137,7 @@ func TestOpen(t *testing.T) {
 			if i%2 == 0 {
 				r, err = p.Get(ctx, nil)
 			} else {
-				r, err = p.Get(ctx, []string{"foo"})
+				r, err = p.Get(ctx, sFoo)
 			}
 			require.NoError(t, err)
 			resources[i] = r
@@ -174,7 +176,7 @@ func TestOpen(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -200,7 +202,7 @@ func TestOpen(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -233,7 +235,7 @@ func TestShrinking(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -274,7 +276,7 @@ func TestShrinking(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -314,7 +316,7 @@ func TestShrinking(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -365,7 +367,7 @@ func TestClosing(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -412,7 +414,7 @@ func TestReopen(t *testing.T) {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
-			r, err = p.Get(ctx, []string{"foo"})
+			r, err = p.Get(ctx, sFoo)
 		}
 		require.NoError(t, err)
 		resources[i] = r
@@ -504,7 +506,7 @@ func TestIdleTimeoutWithSettings(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, logWait, nil, 0)
 	defer p.Close()
 
-	r, err := p.Get(ctx, []string{"foo", "bar"})
+	r, err := p.Get(ctx, sFooBar)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, count.Get())
 	assert.EqualValues(t, 0, p.IdleClosed())
@@ -518,7 +520,7 @@ func TestIdleTimeoutWithSettings(t *testing.T) {
 	assert.EqualValues(t, 1, count.Get())
 	assert.EqualValues(t, 1, p.IdleClosed())
 
-	r, err = p.Get(ctx, []string{"foo", "bar"})
+	r, err = p.Get(ctx, sFooBar)
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, lastID.Get())
 	assert.EqualValues(t, 1, count.Get())
@@ -532,7 +534,7 @@ func TestIdleTimeoutWithSettings(t *testing.T) {
 	assert.EqualValues(t, 1, p.IdleClosed())
 
 	p.Put(r)
-	r, err = p.Get(ctx, []string{"foo", "bar"})
+	r, err = p.Get(ctx, sFooBar)
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, lastID.Get())
 	assert.EqualValues(t, 1, count.Get())
@@ -549,7 +551,7 @@ func TestIdleTimeoutWithSettings(t *testing.T) {
 	assert.EqualValues(t, 1, p.IdleClosed())
 
 	// Get and Put to refresh timeUsed
-	r, err = p.Get(ctx, []string{"foo", "bar"})
+	r, err = p.Get(ctx, sFooBar)
 	require.NoError(t, err)
 	p.Put(r)
 	p.SetIdleTimeout(10 * time.Millisecond)
@@ -565,7 +567,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, logWait, nil, 0)
 	defer p.Close()
-	for _, setting := range [][]string{nil, {"foo"}} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		r, err := p.Get(ctx, setting)
 		require.NoError(t, err)
 		// Change the factory before putting back
@@ -573,9 +575,14 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 		// try to use it.
 		p.factory = FailFactory
 		p.Put(r)
-		time.Sleep(15 * time.Millisecond)
-		assert.Zero(t, p.Active())
-
+		timeout := time.After(1 * time.Second)
+		for p.Active() != 0 {
+			select {
+			case <-timeout:
+				t.Errorf("Timed out waiting for resource to be closed by idle timeout")
+			default:
+			}
+		}
 		// reset factory for next run.
 		p.factory = PoolFactory
 	}
@@ -588,7 +595,7 @@ func TestCreateFail(t *testing.T) {
 	p := NewResourcePool(FailFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	for _, setting := range [][]string{nil, {"foo"}} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		if _, err := p.Get(ctx, setting); err.Error() != "Failed" {
 			t.Errorf("Expecting Failed, received %v", err)
 		}
@@ -605,7 +612,7 @@ func TestCreateFailOnPut(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	for _, setting := range [][]string{nil, {"foo"}} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		_, err := p.Get(ctx, setting)
 		require.NoError(t, err)
 
@@ -626,7 +633,7 @@ func TestSlowCreateFail(t *testing.T) {
 	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, logWait, nil, 0)
 	defer p.Close()
 	ch := make(chan bool)
-	for _, setting := range [][]string{nil, {"foo"}} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		// The third Get should not wait indefinitely
 		for i := 0; i < 3; i++ {
 			go func() {
@@ -652,7 +659,7 @@ func TestTimeout(t *testing.T) {
 	r, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 
-	for _, setting := range [][]string{nil, {"foo"}} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		// trying to get the connection without a timeout.
 		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 		_, err = p.Get(newctx, setting)
@@ -671,7 +678,7 @@ func TestExpired(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	for _, setting := range [][]string{nil, {"foo"}} {
+	for _, setting := range []*Setting{nil, sFoo} {
 		// expired context
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 		_, err := p.Get(ctx, setting)
@@ -691,7 +698,7 @@ func TestMultiSettings(t *testing.T) {
 	var r Resource
 	var err error
 
-	settings := [][]string{nil, {"foo"}, {"bar"}, {"bar"}, {"foo"}}
+	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 
 	// Test Get
 	for i := 0; i < 5; i++ {
@@ -743,18 +750,18 @@ func TestMultiSettings(t *testing.T) {
 	assert.EqualValues(t, 0, count.Get())
 }
 
-func TestMultiSettingsWithClosures(t *testing.T) {
+func TestMultiSettingsWithReset(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	closeCount.Set(0)
+	resetCount.Set(0)
 
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
 	var resources [10]Resource
 	var r Resource
 	var err error
 
-	settings := [][]string{nil, {"foo"}, {"bar"}, {"bar"}, {"foo"}}
+	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 
 	// Test Get
 	for i := 0; i < 5; i++ {
@@ -771,15 +778,15 @@ func TestMultiSettingsWithClosures(t *testing.T) {
 		p.Put(resources[i])
 	}
 
-	// Getting all with same settings.
+	// Getting all with same setting.
 	for i := 0; i < 5; i++ {
 		r, err = p.Get(ctx, settings[1]) // {foo}
 		require.NoError(t, err)
 		p.Put(r)
 	}
-	assert.EqualValues(t, 2, closeCount.Get()) // when setting was {bar} and getting for {foo}
+	assert.EqualValues(t, 2, resetCount.Get()) // when setting was {bar} and getting for {foo}
 	assert.EqualValues(t, 5, p.Available())
-	assert.EqualValues(t, 7, lastID.Get())
+	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 5, count.Get())
 
 	// Close
@@ -798,7 +805,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
 
-	settings := [][]string{nil, {"foo"}, {"bar"}, {"bar"}, {"foo"}}
+	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 	// get the resource and mark for failure
 	for i := 0; i < 5; i++ {
 		r, err = p.Get(ctx, settings[i])
@@ -811,11 +818,11 @@ func TestApplySettingsFailure(t *testing.T) {
 		p.Put(r)
 	}
 
-	// any new connection created will fail to apply settings
+	// any new connection created will fail to apply setting
 	p.factory = DisallowSettingsFactory
 
-	// Get the resource with "foo" settings
-	// For an applied connection if the settings are same it will be returned as-is.
+	// Get the resource with "foo" setting
+	// For an applied connection if the setting are same it will be returned as-is.
 	// Otherwise, will fail to get the resource.
 	var failCount int
 	resources = nil
@@ -823,7 +830,7 @@ func TestApplySettingsFailure(t *testing.T) {
 		r, err = p.Get(ctx, settings[1])
 		if err != nil {
 			failCount++
-			assert.EqualError(t, err, "ApplySettings failed")
+			assert.EqualError(t, err, "ApplySetting failed")
 			continue
 		}
 		resources = append(resources, r)
@@ -834,7 +841,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	}
 	require.Equal(t, 3, failCount)
 
-	// should be able to get all the resource with no settings
+	// should be able to get all the resource with no setting
 	resources = nil
 	for i := 0; i < 5; i++ {
 		r, err = p.Get(ctx, nil)

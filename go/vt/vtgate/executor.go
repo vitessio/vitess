@@ -202,13 +202,13 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	} else {
 		saveSessionStats(safeSession, stmtType, result.RowsAffected, result.InsertID, len(result.Rows), err)
 	}
-	if result != nil && len(result.Rows) > *warnMemoryRows {
+	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, warnMemoryRows)
 	}
 
 	logStats.SaveEndTime()
@@ -268,8 +268,7 @@ func (e *Executor) StreamExecute(
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
-					qrfield := &sqltypes.Result{Fields: qr.Fields}
-					if err := callback(qrfield); err != nil {
+					if err := callback(qr.Metadata()); err != nil {
 						return err
 					}
 					seenResults.Set(true)
@@ -337,13 +336,13 @@ func (e *Executor) StreamExecute(
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
-	if srr.rowsReturned > *warnMemoryRows {
+	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, warnMemoryRows)
 	}
 
 	logStats.SaveEndTime()
@@ -417,6 +416,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		switch sysVar {
 		case sysvars.Autocommit.Name:
 			bindVars[key] = sqltypes.BoolBindVariable(session.Autocommit)
+		case sysvars.QueryTimeout.Name:
+			bindVars[key] = sqltypes.Int64BindVariable(session.GetQueryTimeout())
 		case sysvars.ClientFoundRows.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
@@ -842,7 +843,7 @@ func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 }
 
 func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, *HealthCheckTimeout)
+	ctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
 	defer cancel()
 	rows := [][]sqltypes.Value{}
 
@@ -985,6 +986,8 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
+	consolidator := sqlparser.Consolidator(stmt)
+	vcursor.SetConsolidator(consolidator)
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {
@@ -1027,7 +1030,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 		}
 	}
 
-	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
+	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -1186,10 +1189,10 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 
 func isValidPayloadSize(query string) bool {
 	payloadSize := len(query)
-	if *maxPayloadSize > 0 && payloadSize > *maxPayloadSize {
+	if maxPayloadSize > 0 && payloadSize > maxPayloadSize {
 		return false
 	}
-	if *warnPayloadSize > 0 && payloadSize > *warnPayloadSize {
+	if warnPayloadSize > 0 && payloadSize > warnPayloadSize {
 		warnings.Add("WarnPayloadSizeExceeded", 1)
 	}
 	return true

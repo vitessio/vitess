@@ -70,4 +70,15 @@
 
 # get_lock cannot be executed outside of reserved connection
 "select get_lock('foo', 10) from dual"
-"get_lock('foo', 10) not allowed without a reserved connections"
+{
+  "PlanID": "SelectLockFunc",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "select get_lock('foo', 10) from dual limit :#maxLimit",
+  "NeedsReservedConn": true
+}

@@ -2017,7 +2017,17 @@ var (
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40,40-80'",
+	}, {
+		input: "alter vitess_migration launch all",
+	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
+	}, {
+		input: "alter vitess_migration complete all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
@@ -3235,13 +3245,19 @@ var (
 		output: "select wait_for_executed_gtid_set(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
 	}, {
 		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('3E11FA47-71CA-11E1-9E33-C80AA9429562:23')",
-		output: "select wati_until_sql_thread_after_gtids('3E11FA47-71CA-11E1-9E33-C80AA9429562:23') from dual",
+		output: "select wait_until_sql_thread_after_gtids('3E11FA47-71CA-11E1-9E33-C80AA9429562:23') from dual",
 	}, {
 		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j)",
-		output: "select wati_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
+		output: "select wait_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
 	}, {
 		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i)",
-		output: "select wati_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i) from dual",
+		output: "select wait_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i) from dual",
+	}, {
+		// Offset as part of expressions
+		input: "select a, b from c where :1 + :2 = :302 and sum(:34) < :24",
+	}, {
+		input:  "select * from (((select 1))) as tbl",
+		output: "select * from (select 1 from dual) as tbl",
 	}}
 )
 
@@ -5374,8 +5390,8 @@ var (
 		input:  "select x'777' from t",
 		output: "syntax error at position 14 near '777'",
 	}, {
-		input:  "select * from t where :1 = 2",
-		output: "syntax error at position 24 near ':'",
+		input:  "select * from t where :1f = 2",
+		output: "syntax error at position 26 near 'f'",
 	}, {
 		input:  "select * from t where :. = 2",
 		output: "syntax error at position 24 near ':'",

@@ -168,7 +168,20 @@ func (c *Config) GetAuthorizer() *Authorizer {
 // It is mainly used in the case where users explicitly pass --no-rbac flag.
 func DefaultConfig() *Config {
 	log.Info("[rbac]: using default rbac configuration")
-	actions := []string{string(GetAction), string(CreateAction), string(DeleteAction), string(PutAction), string(PingAction)}
+	actions := []string{
+		string(GetAction),
+		string(CreateAction),
+		string(DeleteAction),
+		string(PutAction),
+		string(PingAction),
+		string(ReloadAction),
+		string(EmergencyFailoverShardAction),
+		string(PlannedFailoverShardAction),
+		string(TabletExternallyPromotedAction),
+		string(ManageTabletReplicationAction),
+		string(ManageTabletWritabilityAction),
+		string(RefreshTabletReplicationSourceAction),
+	}
 	subjects := []string{"*"}
 	clusters := []string{"*"}
 

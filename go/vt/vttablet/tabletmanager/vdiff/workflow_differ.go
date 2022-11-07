@@ -293,11 +293,11 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		}
 	}
 	query := fmt.Sprintf(sqlGetAllTableRows, encodeString(wd.ct.vde.dbName), tableIn.String())
-	qr, err := dbClient.ExecuteFetch(query, -1)
+	isqr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
-	for _, row := range qr.Named().Rows {
+	for _, row := range isqr.Named().Rows {
 		tableName, _ := row.ToString("table_name")
 		tableRows, _ := row.ToInt64("table_rows")
 

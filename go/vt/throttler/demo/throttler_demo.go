@@ -18,16 +18,19 @@ package main
 
 import (
 	"context"
-	"flag"
 	"math/rand"
 	"net/http"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,9 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 	"vitess.io/vitess/go/vt/wrangler/testlib"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // This file contains a demo binary that demonstrates how the resharding
@@ -61,12 +61,22 @@ import (
 // replication lag.
 
 var (
-	rate                     = flag.Int64("rate", 1000, "maximum rate of the throttled demo server at the start")
-	duration                 = flag.Duration("duration", 600*time.Second, "total duration the demo runs")
-	lagUpdateInterval        = flag.Duration("lag_update_interval", 5*time.Second, "interval at which the current replication lag will be broadcasted to the throttler")
-	replicaDegrationInterval = flag.Duration("replica_degration_interval", 0*time.Second, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for -reparent_duration and the replication lag might go up)")
-	replicaDegrationDuration = flag.Duration("replica_degration_duration", 10*time.Second, "duration a simulated degration should take")
+	rate                     = int64(1000)
+	duration                 = 600 * time.Second
+	lagUpdateInterval        = 5 * time.Second
+	replicaDegrationDuration = 10 * time.Second
+	replicaDegrationInterval time.Duration
 )
+
+const flagSetName = "throttler_demo"
+
+func registerDemoFlags(fs *pflag.FlagSet) {
+	fs.Int64Var(&rate, "rate", rate, "maximum rate of the throttled demo server at the start")
+	fs.DurationVar(&duration, "duration", duration, "total duration the demo runs")
+	fs.DurationVar(&lagUpdateInterval, "lag_update_interval", lagUpdateInterval, "interval at which the current replication lag will be broadcast to the throttler")
+	fs.DurationVar(&replicaDegrationInterval, "replica_degration_interval", replicaDegrationInterval, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for -reparent_duration and the replication lag might go up)")
+	fs.DurationVar(&replicaDegrationDuration, "replica_degration_duration", replicaDegrationDuration, "duration a simulated degration should take")
+}
 
 // primary simulates an *unthrottled* MySQL primary which replicates every
 // received "execute" call to a known "replica".
@@ -119,7 +129,7 @@ func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Dur
 	qs := fakes.NewStreamHealthQueryService(target)
 	grpcqueryservice.Register(fakeTablet.RPCServer, qs)
 
-	throttler, err := throttler.NewThrottler("replica", "TPS", 1, *rate, throttler.ReplicationLagModuleDisabled)
+	throttler, err := throttler.NewThrottler("replica", "TPS", 1, rate, throttler.ReplicationLagModuleDisabled)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -177,14 +187,14 @@ func (r *replica) processReplicationStream() {
 			actualRate = 0
 		}
 		if !r.nextDegration.IsZero() && time.Now().After(r.nextDegration) && r.currentDegrationEnd.IsZero() {
-			degradedRate := rand.Int63n(*rate)
-			log.Infof("degrading the replica for %.f seconds from %v TPS to %v", r.degrationDuration.Seconds(), *rate, degradedRate)
+			degradedRate := rand.Int63n(rate)
+			log.Infof("degrading the replica for %.f seconds from %v TPS to %v", r.degrationDuration.Seconds(), rate, degradedRate)
 			r.throttler.SetMaxRate(degradedRate)
 			r.currentDegrationEnd = time.Now().Add(r.degrationDuration)
 		}
 		if !r.currentDegrationEnd.IsZero() && time.Now().After(r.currentDegrationEnd) {
-			log.Infof("degrading the replica stopped. Restoring TPS to: %v", *rate)
-			r.throttler.SetMaxRate(*rate)
+			log.Infof("degrading the replica stopped. Restoring TPS to: %v", rate)
+			r.throttler.SetMaxRate(rate)
 			r.currentDegrationEnd = time.Time{}
 			r.nextDegration = time.Now().Add(r.degrationInterval)
 		}
@@ -289,25 +299,29 @@ func (c *client) StatsUpdate(ts *discovery.TabletHealth) {
 }
 
 func main() {
-	flag.Parse()
+	servenv.ParseFlags(flagSetName)
 
 	go servenv.RunDefault()
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/throttlerz", http.StatusTemporaryRedirect)
 	})
 
-	log.Infof("start rate set to: %v", *rate)
+	log.Infof("start rate set to: %v", rate)
 	ts := memorytopo.NewServer("cell1")
-	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration, ts)
+	replica := newReplica(lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts)
 	primary := &primary{replica: replica}
 	client := newClient(primary, replica, ts)
 	client.run()
 
-	time.Sleep(*duration)
+	time.Sleep(duration)
 	client.stop()
 	replica.stop()
 }
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
+	servenv.OnParseFor(flagSetName, registerDemoFlags)
 }

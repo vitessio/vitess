@@ -23,6 +23,7 @@ import (
 	"os"
 	"testing"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttest"
@@ -209,7 +210,7 @@ create table t1_sharded(
 )
 
 func TestMain(m *testing.M) {
-	flag.Parse()
+	_flag.ParseFlagsForTest()
 
 	exitCode := func() int {
 		var cfg vttest.Config

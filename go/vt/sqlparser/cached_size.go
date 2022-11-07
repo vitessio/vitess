@@ -206,7 +206,7 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field UUID string
 	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
@@ -214,6 +214,8 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Expire)))
 	// field Ratio *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Ratio.CachedSize(true)
+	// field Shards string
+	size += hack.RuntimeAllocSize(int64(len(cached.Shards)))
 	return size
 }
 func (cached *AlterTable) CachedSize(alloc bool) int64 {

@@ -27,16 +27,14 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/env"
-
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -63,8 +61,7 @@ var (
 	mysqlPort          = flags.Int("mysql_port", 3306, "mysql port")
 	externalTopoServer = flags.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
-	plannerVersion           = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
-	plannerVersionDeprecated = flags.String("planner_version", "", "Deprecated flag. Use planner-version instead")
+	plannerName = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
 	tpb             vttestpb.VTTestTopology
 	ts              *topo.Server
@@ -76,6 +73,10 @@ func init() {
 	flags.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	servenv.RegisterDefaultFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
 }
 
 func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
@@ -118,7 +119,6 @@ func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
 
 func main() {
 	defer exit.Recover()
-
 	// flag parsing
 	var globalFlags *pflag.FlagSet
 	dbconfigs.RegisterFlags(dbconfigs.All...)
@@ -133,6 +133,8 @@ func main() {
 		fs.AddFlagSet(flags)
 		// Save for later -- see comment directly after ParseFlags for why.
 		globalFlags = fs
+
+		acl.RegisterFlags(fs)
 	})
 
 	servenv.ParseFlags("vtcombo")
@@ -277,11 +279,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	version, err := env.CheckPlannerVersionFlag(plannerVersion, plannerVersionDeprecated)
-	if err != nil {
-		log.Exitf("failed to get planner version from flags: %v", err)
-	}
-	plannerVersion, _ := plancontext.PlannerNameToVersion(version)
+	plannerVersion, _ := plancontext.PlannerNameToVersion(*plannerName)
 
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"

@@ -87,7 +87,7 @@ func InitWithoutServenv(namespace string) {
 		return
 	}
 	statsdC.Namespace = namespace + "."
-	if tags := stats.ParseCommonTags(*stats.CommonTags); len(tags) > 0 {
+	if tags := stats.ParseCommonTags(stats.CommonTags); len(tags) > 0 {
 		statsdC.Tags = makeCommonTags(tags)
 	}
 	sb.namespace = namespace

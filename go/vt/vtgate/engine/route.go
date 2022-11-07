@@ -173,16 +173,22 @@ func (route *Route) SetTruncateColumnCount(count int) {
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if route.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, route.QueryTimeout)
+	defer cancelFunc()
 	qr, err := route.executeInternal(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
+}
+
+// addQueryTimeout adds a query timeout to the context it receives and returns the modified context along with the cancel function.
+func addQueryTimeout(ctx context.Context, vcursor VCursor, queryTimeout int) (context.Context, context.CancelFunc) {
+	timeout := vcursor.Session().GetQueryTimeout(queryTimeout)
+	if timeout != 0 {
+		return context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
+	}
+	return ctx, func() {}
 }
 
 type cxtKey int
@@ -402,12 +408,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// Since Result is immutable, we make a copy.
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
-	out := &sqltypes.Result{
-		Fields:       in.Fields,
-		Rows:         in.Rows,
-		RowsAffected: in.RowsAffected,
-		InsertID:     in.InsertID,
-	}
+	out := in.ShallowCopy()
 
 	comparers := extractSlices(route.OrderBy)
 
@@ -434,7 +435,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		return true
 	})
 
-	return out, err
+	return out.Truncate(route.TruncateColumnCount), err
 }
 
 func (route *Route) description() PrimitiveDescription {

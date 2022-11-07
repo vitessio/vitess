@@ -68,7 +68,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 	// without recursive flag, should fail on existing tablets.
 	if err := vp.Run([]string{
 		"DeleteShard",
-		"-even_if_serving",
+		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
 	}); err == nil || !strings.Contains(err.Error(), "use -recursive or remove them manually") {
 		t.Fatalf("DeleteShard(evenIfServing=true) returned wrong error: %v", err)
@@ -78,8 +78,8 @@ func TestDeleteShardCleanup(t *testing.T) {
 	// it should just work.
 	if err := vp.Run([]string{
 		"DeleteShard",
-		"-recursive",
-		"-even_if_serving",
+		"--recursive",
+		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
 	}); err != nil {
 		t.Fatalf("DeleteShard(recursive=true, evenIfServing=true) should have worked but returned: %v", err)

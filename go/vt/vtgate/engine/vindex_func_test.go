@@ -44,22 +44,24 @@ func (*uvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]
 }
 
 func (v *uvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	if v.matchkr {
-		return []key.Destination{
-			key.DestinationKeyRange{
-				KeyRange: &topodatapb.KeyRange{
-					Start: []byte{0x40},
-					End:   []byte{0x60},
-				},
-			},
-		}, nil
+	destinations := make([]key.Destination, 0, len(ids))
+	dkid := []byte("foo")
+	for i := 0; i < len(ids); i++ {
+		if v.matchkr {
+			destinations = append(destinations,
+				key.DestinationKeyRange{
+					KeyRange: &topodatapb.KeyRange{
+						Start: []byte{0x40},
+						End:   []byte{0x60},
+					},
+				})
+		} else if v.matchid {
+			destinations = append(destinations, key.DestinationKeyspaceID(dkid))
+		} else {
+			destinations = append(destinations, key.DestinationNone{})
+		}
 	}
-	if v.matchid {
-		return []key.Destination{
-			key.DestinationKeyspaceID([]byte("foo")),
-		}, nil
-	}
-	return []key.Destination{key.DestinationNone{}}, nil
+	return destinations, nil
 }
 
 // nvindex is NonUnique.
@@ -74,25 +76,31 @@ func (*nvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]
 }
 
 func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	if v.matchid {
-		return []key.Destination{
-			key.DestinationKeyspaceIDs([][]byte{
-				[]byte("foo"),
-				[]byte("bar"),
-			}),
-		}, nil
+	destinations := make([]key.Destination, 0)
+	for i := 0; i < len(ids); i++ {
+		if v.matchid {
+			destinations = append(destinations,
+				[]key.Destination{
+					key.DestinationKeyspaceIDs([][]byte{
+						[]byte("foo"),
+						[]byte("bar"),
+					}),
+				}...)
+		} else if v.matchkr {
+			destinations = append(destinations,
+				[]key.Destination{
+					key.DestinationKeyRange{
+						KeyRange: &topodatapb.KeyRange{
+							Start: []byte{0x40},
+							End:   []byte{0x60},
+						},
+					},
+				}...)
+		} else {
+			destinations = append(destinations, []key.Destination{key.DestinationNone{}}...)
+		}
 	}
-	if v.matchkr {
-		return []key.Destination{
-			key.DestinationKeyRange{
-				KeyRange: &topodatapb.KeyRange{
-					Start: []byte{0x40},
-					End:   []byte{0x60},
-				},
-			},
-		}, nil
-	}
-	return []key.Destination{key.DestinationNone{}}, nil
+	return destinations, nil
 }
 
 func TestVindexFuncMap(t *testing.T) {
@@ -147,13 +155,15 @@ func TestVindexFuncMap(t *testing.T) {
 	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("1"),
-			sqltypes.NULL,
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x40}),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x60}),
-			sqltypes.NULL,
-		}},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NULL,
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x40}),
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x60}),
+				sqltypes.NULL,
+			},
+		},
 		RowsAffected: 0,
 	}
 	require.Equal(t, got, want)

@@ -17,13 +17,12 @@ limitations under the License.
 package servenv
 
 import (
+	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 
-	"context"
-
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -32,10 +31,14 @@ import (
 )
 
 var (
-	credsFile = flag.String("grpc_auth_static_password_file", "", "JSON File to read the users/passwords from.")
+	credsFile string
 	// StaticAuthPlugin implements AuthPlugin interface
 	_ Authenticator = (*StaticAuthPlugin)(nil)
 )
+
+func registerGRPCServerAuthStaticFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&credsFile, "grpc_auth_static_password_file", credsFile, "JSON File to read the users/passwords from.")
+}
 
 // StaticAuthConfigEntry is the container for server side credentials. Current implementation matches the
 // the one from the client but this will change in the future as we hooked this pluging into ACL
@@ -73,12 +76,12 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 
 func staticAuthPluginInitializer() (Authenticator, error) {
 	entries := make([]StaticAuthConfigEntry, 0)
-	if *credsFile == "" {
+	if credsFile == "" {
 		err := fmt.Errorf("failed to load static auth plugin. Plugin configured but grpc_auth_static_password_file not provided")
 		return nil, err
 	}
 
-	data, err := os.ReadFile(*credsFile)
+	data, err := os.ReadFile(credsFile)
 	if err != nil {
 		err := fmt.Errorf("failed to load static auth plugin %v", err)
 		return nil, err
@@ -98,4 +101,5 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 
 func init() {
 	RegisterAuthPlugin("static", staticAuthPluginInitializer)
+	grpcAuthServerFlagHooks = append(grpcAuthServerFlagHooks, registerGRPCServerAuthStaticFlags)
 }

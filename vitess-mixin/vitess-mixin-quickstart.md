@@ -171,7 +171,7 @@ The vitess mixin supports DEV/PROD configurations (Currently it is possible to e
 
   4. Add/Edit dashboard resources.
 
-      **Note:** Some of the resources have been grouped in the following categories `vtgate`, `vttablet`, `orchestrator`, `webapp`, `os` for convenience. The resources under this categories follow a helper/config pattern. The `.*_helper.libsonnet` libraries within `grafonnet` folder functions to retrieve resources such as `getPanel(panel_name_config)`, reading the configuration by name for the desired resource from the corresponding `.*_config.libsonnet` library .
+      **Note:** Some of the resources have been grouped in the following categories `vtgate`, `vttablet`, `vtorc`, `webapp`, `os` for convenience. The resources under this categories follow a helper/config pattern. The `.*_helper.libsonnet` libraries within `grafonnet` folder functions to retrieve resources such as `getPanel(panel_name_config)`, reading the configuration by name for the desired resource from the corresponding `.*_config.libsonnet` library .
 
       **Note:** To isolate **PROD** and **DEV** the configuration files have a section for each environment where we can define specific `notifications`(ex: pagerduty, vitess-alerts...) and `conditions` (alert thresholds).
 

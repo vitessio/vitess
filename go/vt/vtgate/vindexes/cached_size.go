@@ -180,7 +180,7 @@ func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -194,7 +194,7 @@ func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -208,7 +208,7 @@ func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -222,7 +222,7 @@ func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -236,7 +236,7 @@ func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -250,7 +250,7 @@ func (cached *LookupUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -492,7 +492,7 @@ func (cached *clCommon) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(256)
+		size += int64(288)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -525,7 +525,7 @@ func (cached *lookupInternal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(144)
 	}
 	// field Table string
 	size += hack.RuntimeAllocSize(int64(len(cached.Table)))
@@ -538,8 +538,12 @@ func (cached *lookupInternal) CachedSize(alloc bool) int64 {
 	}
 	// field To string
 	size += hack.RuntimeAllocSize(int64(len(cached.To)))
+	// field ReadLock string
+	size += hack.RuntimeAllocSize(int64(len(cached.ReadLock)))
 	// field sel string
 	size += hack.RuntimeAllocSize(int64(len(cached.sel)))
+	// field selTxDml string
+	size += hack.RuntimeAllocSize(int64(len(cached.selTxDml)))
 	// field ver string
 	size += hack.RuntimeAllocSize(int64(len(cached.ver)))
 	// field del string

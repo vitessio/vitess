@@ -101,6 +101,9 @@ type (
 		Collation collations.ID
 
 		Warning string
+
+		// ExpandedColumns is a map of all the added columns for a given table.
+		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 	}
 
 	columnName struct {
@@ -301,13 +304,12 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 	return deps
 }
 
-// RewriteDerivedExpression rewrites all the ColName instances in the supplied expression with
+// RewriteDerivedTableExpression rewrites all the ColName instances in the supplied expression with
 // the expressions behind the column definition of the derived table
 // SELECT foo FROM (SELECT id+42 as foo FROM user) as t
 // We need `foo` to be translated to `id+42` on the inside of the derived table
-func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
-	newExpr := sqlparser.CloneExpr(expr)
-	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
+func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
+	newExpr := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())
@@ -323,7 +325,8 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 		}
 		return true
 	}, nil)
-	return newExpr, nil
+
+	return newExpr.(sqlparser.Expr), nil
 }
 
 // FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
@@ -403,4 +406,23 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		tables = append(tables, vindexTable)
 	}
 	return ks, tables
+}
+
+// EqualsExpr compares two expressions using the semantic analysis information.
+// This means that we use the binding info to recognize that two ColName's can point to the same
+// table column even though they are written differently. Example would be the `foobar` column in the following query:
+// `SELECT foobar FROM tbl ORDER BY tbl.foobar`
+// The expression in the select list is not equal to the one in the ORDER BY,
+// but they point to the same column and would be considered equal by this method
+func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
+	switch a := a.(type) {
+	case *sqlparser.ColName:
+		colB, ok := b.(*sqlparser.ColName)
+		if !ok {
+			return false
+		}
+		return a.Name.Equal(colB.Name) && st.RecursiveDeps(a).Equals(st.RecursiveDeps(b))
+	default:
+		return sqlparser.EqualsExpr(a, b)
+	}
 }

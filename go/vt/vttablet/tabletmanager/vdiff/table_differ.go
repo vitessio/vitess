@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -46,6 +47,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
+
+// how long to wait for background operations to complete
+var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
@@ -106,7 +110,13 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		return err
 	}
 	defer func() {
-		if err := td.restartTargetVReplicationStreams(ctx); err != nil {
+		// We use a new context as we want to reset the state even
+		// when the parent context has timed out or been canceled.
+		log.Infof("Restarting the %q VReplication workflow on target tablets in keyspace %q",
+			td.wd.ct.workflow, targetKeyspace)
+		restartCtx, restartCancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout)
+		defer restartCancel()
+		if err := td.restartTargetVReplicationStreams(restartCtx); err != nil {
 			log.Errorf("error restarting target streams: %v", err)
 		}
 	}()
@@ -133,7 +143,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	log.Infof("stopTargetVReplicationStreams")
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped' %s", ct.workflowFilter)
+	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped', message='for vdiff' %s", ct.workflowFilter)
 	if _, err := ct.vde.vre.Exec(query); err != nil {
 		return err
 	}
@@ -193,12 +203,22 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	var wg sync.WaitGroup
 	ct := td.wd.ct
 	var err1, err2 error
+
+	// For Mount+Migrate, the source tablets will be in a different
+	// Vitess cluster with its own TopoServer.
+	sourceTopoServer := ct.ts
+	if ct.externalCluster != "" {
+		extTS, err := ct.ts.OpenExternalVitessClusterServer(ctx, ct.externalCluster)
+		if err != nil {
+			return err
+		}
+		sourceTopoServer = extTS
+	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err1 = td.forEachSource(func(source *migrationSource) error {
-			// TODO: handle external sources to support Mount+Migrate
-			tablet, err := pickTablet(ctx, ct.ts, cell, ct.sourceKeyspace, source.shard, tabletTypes)
+			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
 			if err != nil {
 				return err
 			}
@@ -310,16 +330,26 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(ct.vde.dbName), encodeString(ct.workflow))
-	log.Infof("restarting target replication with %s", query)
-	_, err := ct.tmc.VReplicationExec(ctx, ct.vde.thisTablet, query)
+	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
+		encodeString(ct.vde.dbName), encodeString(ct.workflow))
+	log.Infof("Restarting the %q VReplication workflow using %q", ct.workflow, query)
+	var err error
+	// Let's retry a few times if we get a retryable error.
+	for i := 1; i <= 3; i++ {
+		_, err := ct.tmc.VReplicationExec(ctx, ct.vde.thisTablet, query)
+		if err == nil || !mysql.IsEphemeralError(err) {
+			break
+		}
+		log.Warningf("Encountered the following error while restarting the %q VReplication workflow, will retry (attempt #%d): %v",
+			ct.workflow, i, err)
+	}
 	return err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
-	log.Infof("streamOneShard Start %s", participant.tablet.Alias.String())
+	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
 	defer func() {
-		log.Infof("streamOneShard End %s", participant.tablet.Alias.String())
+		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
 		close(participant.result)
 		close(gtidch)
 	}()
@@ -710,4 +740,65 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
 		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
 	})
 	return buf, err
+}
+
+// If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the
+// VReplication workflow would have converted the datetime columns expecting the
+// source to have been in the SourceTimeZone and target in TargetTimeZone. We need
+// to do the reverse conversion in VDiff before the comparison.
+func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+	if td.wd.ct.sourceTimeZone == "" {
+		return targetSelectExprs
+	}
+	log.Infof("source time zone specified: %s", td.wd.ct.sourceTimeZone)
+	var newSelectExprs sqlparser.SelectExprs
+	var modified bool
+	for _, expr := range targetSelectExprs {
+		converted := false
+		switch selExpr := expr.(type) {
+		case *sqlparser.AliasedExpr:
+			if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
+				var convertTZFuncExpr *sqlparser.FuncExpr
+				colName := colAs.Name.Lowered()
+				fieldType := fields[colName]
+				if fieldType == querypb.Type_DATETIME {
+					convertTZFuncExpr = &sqlparser.FuncExpr{
+						Name: sqlparser.NewIdentifierCI("convert_tz"),
+						Exprs: sqlparser.SelectExprs{
+							expr,
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone)},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone)},
+						},
+					}
+					log.Infof("converting datetime column %s using convert_tz()", colName)
+					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
+					converted = true
+					modified = true
+				}
+			}
+		}
+		if !converted { // not datetime
+			newSelectExprs = append(newSelectExprs, expr)
+		}
+	}
+	if modified { // at least one datetime was found
+		log.Infof("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz()")
+		return newSelectExprs
+	}
+	return targetSelectExprs
+}
+
+func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
+	aliasedExpr := selectExpression.(*sqlparser.AliasedExpr)
+	expr := aliasedExpr.Expr
+	var colname string
+	switch t := expr.(type) {
+	case *sqlparser.ColName:
+		colname = t.Name.Lowered()
+	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
+		colname = aliasedExpr.As.Lowered()
+	default:
+		return "", fmt.Errorf("found target SelectExpr which was neither ColName nor FuncExpr: %+v", aliasedExpr)
+	}
+	return colname, nil
 }

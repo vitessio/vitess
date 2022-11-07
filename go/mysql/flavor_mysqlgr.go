@@ -247,6 +247,7 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	case InstantDDLFlavorCapability,
+		InstantExpandEnumCapability,
 		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
 		InstantChangeColumnDefaultFlavorCapability:

@@ -36,25 +36,25 @@ func (k cellName) String() string {
 }
 
 func NewSrvVSchemaWatcher(topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvVSchemaWatcher {
-	watch := func(ctx context.Context, entry *watchEntry) {
+	watch := func(entry *watchEntry) {
 		key := entry.key.(cellName)
-		ctx, cancel := context.WithCancel(ctx)
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		current, changes, err := topoServer.WatchSrvVSchema(ctx, key.String())
 		if err != nil {
-			entry.update(ctx, nil, err, true)
+			entry.update(nil, err, true)
 			return
 		}
 
-		entry.update(ctx, current.Value, current.Err, true)
+		entry.update(current.Value, current.Err, true)
 		if current.Err != nil {
 			return
 		}
 
 		defer cancel()
 		for c := range changes {
-			entry.update(ctx, c.Value, c.Err, false)
+			entry.update(c.Value, c.Err, false)
 			if c.Err != nil {
 				return
 			}
