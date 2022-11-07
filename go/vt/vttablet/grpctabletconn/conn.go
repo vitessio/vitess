@@ -524,6 +524,10 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
 
+		if ser.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(ser.Error)
+		}
+
 		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return state, nil

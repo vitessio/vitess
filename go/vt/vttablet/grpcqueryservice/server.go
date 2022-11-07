@@ -272,16 +272,14 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
 
-	errInLastPacket := stream.Send(&querypb.BeginStreamExecuteResponse{
+	err = stream.Send(&querypb.BeginStreamExecuteResponse{
+		Error:               vterrors.ToVTRPC(err),
 		TransactionId:       state.TransactionID,
 		TabletAlias:         state.TabletAlias,
 		SessionStateChanges: state.SessionStateChanges,
 	})
-	return vterrors.ToGRPC(errInLastPacket)
+	return vterrors.ToGRPC(err)
 }
 
 // MessageStream is part of the queryservice.QueryServer interface
