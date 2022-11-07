@@ -988,6 +988,13 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 collate utf8mb3_bin",
 			cdiff: "ALTER TABLE `t1` COLLATE utf8mb3_bin",
 		},
+		{
+			name:  "remove table comment",
+			from:  "create table t1 (id int primary key) comment='foo'",
+			to:    "create table t1 (id int primary key)",
+			diff:  "alter table t1 comment ''",
+			cdiff: "ALTER TABLE `t1` COMMENT ''",
+		},
 	}
 	standardHints := DiffHints{}
 	for _, ts := range tt {
