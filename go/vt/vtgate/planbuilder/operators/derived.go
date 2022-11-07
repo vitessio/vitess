@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/slices"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -42,15 +44,16 @@ var _ PhysicalOperator = (*Derived)(nil)
 func (d *Derived) IPhysical() {}
 
 // Clone implements the Operator interface
-func (d *Derived) Clone(inputs []Operator) Operator {
+func (d *Derived) clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
-	clone := *d
-	clone.Source = inputs[0]
-	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
-	clone.Columns = append([]*sqlparser.ColName{}, d.Columns...)
-	clone.ColumnsOffset = make([]int, 0, len(d.ColumnsOffset))
-	copy(clone.ColumnsOffset, d.ColumnsOffset)
-	return &clone
+	return &Derived{
+		Source:        inputs[0],
+		Query:         d.Query,
+		Alias:         d.Alias,
+		ColumnAliases: sqlparser.CloneColumns(d.ColumnAliases),
+		Columns:       slices.Clone(d.Columns),
+		ColumnsOffset: slices.Clone(d.ColumnsOffset),
+	}
 }
 
 // findOutputColumn returns the index on which the given name is found in the slice of
@@ -98,8 +101,8 @@ func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
 }
 
-// Inputs implements the Operator interface
-func (d *Derived) Inputs() []Operator {
+// inputs implements the Operator interface
+func (d *Derived) inputs() []Operator {
 	return []Operator{d.Source}
 }
 

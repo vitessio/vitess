@@ -180,6 +180,20 @@ func TestNormalize(t *testing.T) {
 		outstmt: "select a, b from t order by 1 asc",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
+		// GROUP BY column_position
+		in:      "select a, b from t group by 1",
+		outstmt: "select a, b from t group by 1",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// ORDER BY with literal inside complex expression
+		in:      "select a, b from t order by field(a,1,2,3) asc",
+		outstmt: "select a, b from t order by field(a, :bv1, :bv2, :bv3) asc",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(2),
+			"bv3": sqltypes.Int64BindVariable(3),
+		},
+	}, {
 		// ORDER BY variable
 		in:      "select a, b from t order by c asc",
 		outstmt: "select a, b from t order by c asc",
@@ -225,6 +239,13 @@ func TestNormalize(t *testing.T) {
 		// IN clause with vals
 		in:      "select * from t where v1 in (1, '2')",
 		outstmt: "select * from t where v1 in ::bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
+		},
+	}, {
+		// EXPLAIN queries
+		in:      "explain select * from t where v1 in (1, '2')",
+		outstmt: "explain select * from t where v1 in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
@@ -281,6 +302,14 @@ func TestNormalize(t *testing.T) {
 		outstmt: `select :bv1 from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
+		},
+	}, {
+		// TimestampVal should also be normalized
+		in:      `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
+		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id limit :bv1, :bv1`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1":                   sqltypes.Int64BindVariable(1),
+			"comms_by_companies_id": sqltypes.StringBindVariable("rjve634shXzaavKHbAH16ql6OrxJ"),
 		},
 	}}
 	for _, tc := range testcases {

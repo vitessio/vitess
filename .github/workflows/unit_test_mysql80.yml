@@ -84,7 +84,7 @@ jobs:
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
         # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
