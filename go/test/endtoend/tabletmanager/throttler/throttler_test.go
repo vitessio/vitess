@@ -104,6 +104,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
+			"--disable_active_reparents",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
