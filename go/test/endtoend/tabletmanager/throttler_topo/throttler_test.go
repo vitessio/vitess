@@ -211,8 +211,8 @@ func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	return resp.StatusCode
 }
 
-// waitForThrotteCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
-func waitForThrotteCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode int) {
+// waitForThrottleCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
+func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode int) {
 	_ = warmUpHeartbeat(t)
 	ctx, cancel := context.WithTimeout(context.Background(), onDemandHeartbeatDuration+applyConfigWait)
 	defer cancel()
@@ -271,7 +271,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating pushback response from throttler", func(t *testing.T) {
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("disabling throttler", func(t *testing.T) {
 		output, err := updateThrottlerConfig(false, true, unreasonablyLowThreshold.Seconds(), "")
@@ -289,7 +289,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating pushback response from throttler, again", func(t *testing.T) {
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
 		output, err := updateThrottlerConfig(false, false, extremelyHighThreshold.Seconds(), "")
@@ -297,7 +297,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating OK response from throttler with high threshold", func(t *testing.T) {
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("setting low threshold", func(t *testing.T) {
 		output, err := updateThrottlerConfig(false, false, throttlerThreshold.Seconds(), "")
@@ -305,7 +305,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NotEmpty(t, output)
 	})
 	t.Run("validating pushback response from throttler on low threshold", func(t *testing.T) {
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("requesting heartbeats", func(t *testing.T) {
 		respStatus := warmUpHeartbeat(t)
@@ -324,7 +324,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 }
 
@@ -335,7 +335,7 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
 	//
 	t.Run("validating throttler OK", func(t *testing.T) {
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("validating throttled apps", func(t *testing.T) {
 		resp, body, err := throttledApps(primaryTablet)
@@ -385,7 +385,7 @@ func TestLag(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("expecting replication to catch up and throttler check to return OK", func(t *testing.T) {
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("primary self-check should be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
@@ -408,14 +408,14 @@ func TestNoReplicas(t *testing.T) {
 
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("restoring to REPLICA", func(t *testing.T) {
 
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		assert.NoError(t, err)
 
-		waitForThrotteCheckStatus(t, primaryTablet, http.StatusOK)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 }
 
