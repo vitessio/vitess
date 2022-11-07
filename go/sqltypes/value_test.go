@@ -501,3 +501,42 @@ func TestHexAndBitToBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestStripLeadingZero(t *testing.T) {
+	tests := []struct{ in, out string }{
+		{
+			in:  "01001900",
+			out: "1001900",
+		}, {
+			in:  "0x1001900",
+			out: "0x1001900",
+		}, {
+			in:  "000000001",
+			out: "1",
+		}, {
+			in:  "00000000",
+			out: "0",
+		}, {
+			in:  "not a number",
+			out: "not a number",
+		}, {
+			in:  "-0001",
+			out: "-1",
+		}, {
+			in:  "",
+			out: "",
+		}, {
+			in:  "00",
+			out: "0",
+		}, {
+			in:  "-0000000",
+			out: "-0",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			assert.Equal(t, tc.out, stripUnsignedLeadingZero([]byte(tc.in)))
+		})
+	}
+}

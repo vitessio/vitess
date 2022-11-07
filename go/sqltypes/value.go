@@ -73,12 +73,12 @@ type (
 func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 	switch {
 	case IsSigned(typ):
-		if _, err := strconv.ParseInt(string(val), 0, 64); err != nil {
+		if _, err := strconv.ParseInt(stripSignedLeadingZero(val), 0, 64); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
 	case IsUnsigned(typ):
-		if _, err := strconv.ParseUint(string(val), 0, 64); err != nil {
+		if _, err := strconv.ParseUint(stripUnsignedLeadingZero(val), 0, 64); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
@@ -92,6 +92,33 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 	}
 	// All other types are unsafe or invalid.
 	return NULL, fmt.Errorf("invalid type specified for MakeValue: %v", typ)
+}
+
+// some integer literals are considered valid numbers by mysql, but not by `atoi.ParseInt`.
+// these includes numbers with leading zeros. This is perfectly valid according to mysql but not so much by golang
+func stripUnsignedLeadingZero(in []byte) string {
+	if len(in) < 2 {
+		return string(in)
+	}
+
+	if in[0] != '0' || in[1] < '0' || in[1] > '9' {
+		return string(in)
+	}
+
+	for i, b := range in {
+		if b != '0' {
+			return string(in[i:])
+		}
+	}
+
+	return "0"
+}
+
+func stripSignedLeadingZero(s []byte) string {
+	if s[0] == '-' {
+		return "-" + stripUnsignedLeadingZero(s[1:])
+	}
+	return stripUnsignedLeadingZero(s)
 }
 
 // MakeTrusted makes a new Value based on the type.

@@ -311,6 +311,13 @@ func TestNormalize(t *testing.T) {
 			"bv1":                   sqltypes.Int64BindVariable(1),
 			"comms_by_companies_id": sqltypes.StringBindVariable("rjve634shXzaavKHbAH16ql6OrxJ"),
 		},
+	}, {
+		// TimestampVal should also be normalized
+		in:      `select * from t where zipcode = 01001900`,
+		outstmt: `select * from t where zipcode = :zipcode`,
+		outbv: map[string]*querypb.BindVariable{
+			"zipcode": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Int64, []byte("01001900"))),
+		},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
