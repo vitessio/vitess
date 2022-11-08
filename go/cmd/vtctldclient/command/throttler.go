@@ -17,8 +17,6 @@ limitations under the License.
 package command
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -43,32 +41,15 @@ var (
 	}
 )
 
-var updateThrottlerConfigOptions = struct {
-	Enable            bool
-	Disable           bool
-	Threshold         float64
-	CustomQuery       string
-	CheckAsCheckSelf  bool
-	CheckAsCheckShard bool
-}{}
+var updateThrottlerConfigOptions vtctldatapb.UpdateThrottlerConfigRequest
 
 func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	_, err := client.UpdateThrottlerConfig(commandCtx, &vtctldatapb.UpdateThrottlerConfigRequest{
-		Enable:            updateThrottlerConfigOptions.Enable,
-		Disable:           updateThrottlerConfigOptions.Disable,
-		Threshold:         updateThrottlerConfigOptions.Threshold,
-		CustomQuery:       updateThrottlerConfigOptions.CustomQuery,
-		CheckAsCheckSelf:  updateThrottlerConfigOptions.CheckAsCheckSelf,
-		CheckAsCheckShard: updateThrottlerConfigOptions.CheckAsCheckShard,
-	})
+	_, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
 	if err != nil {
 		return err
 	}
-
-	fmt.Println("UpdateThrottlerConfig: ok")
-
 	return nil
 }
 
