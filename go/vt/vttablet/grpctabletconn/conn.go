@@ -871,6 +871,10 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
 
+		if ser.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(ser.Error)
+		}
+
 		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return state, nil
@@ -970,6 +974,10 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *q
 
 		if err != nil {
 			return state, tabletconn.ErrorFromGRPC(err)
+		}
+
+		if ser.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(ser.Error)
 		}
 
 		// The last stream receive will not have a result, so callback will not be called for it.
