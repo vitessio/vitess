@@ -64,6 +64,8 @@ func init() {
 	}
 
 	configPaths.(*value.Static[[]string]).DefaultVal = []string{wd}
+	// Need to re-trigger the SetDefault call done during Configure.
+	registry.Static.SetDefault(configPaths.Key(), configPaths.Default())
 }
 
 func RegisterFlags(fs *pflag.FlagSet) {
