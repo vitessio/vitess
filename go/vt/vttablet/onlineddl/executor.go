@@ -831,7 +831,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		defer cancel()
 
 		for {
-			renameProcessFound, err := e.doesConnectionInfoMatch(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
+			renameProcessFound, err := e.doesConnectionInfoMatch(renameWaitCtx, renameConn.ID(), "rename")
 			if err != nil {
 				return err
 			}
