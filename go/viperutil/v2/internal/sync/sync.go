@@ -35,7 +35,13 @@ func (v *Viper) Watch(static *viper.Viper) error {
 		return errors.New("duplicate watch")
 	}
 
-	v.disk.SetConfigFile(static.ConfigFileUsed())
+	cfg := static.ConfigFileUsed()
+	if cfg == "" {
+		// No config file to watch, just merge the settings and return.
+		return v.live.MergeConfigMap(static.AllSettings())
+	}
+
+	v.disk.SetConfigFile(cfg)
 	if err := v.disk.ReadInConfig(); err != nil {
 		return err
 	}
