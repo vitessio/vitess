@@ -26,10 +26,9 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/v2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -137,29 +136,30 @@ var (
 
 	/* flags */
 
-	configKey = viperutil.KeyPartial(configKeyPrefix)
+	configKey = viperutil.KeyPrefixFunc(configKeyPrefix)
 
-	tracingServer = viperutil.NewValue(
+	tracingServer = viperutil.Configure(
 		configKey("service"),
-		viper.GetString,
-		viperutil.WithFlags[string]("tracer"),
-		viperutil.WithDefault("noop"),
+		viperutil.Options[string]{
+			Default:  "noop",
+			FlagName: "tracer",
+		},
 	)
-	enableLogging = viperutil.NewValue(
+	enableLogging = viperutil.Configure(
 		configKey("enable-logging"),
-		viper.GetBool,
-		viperutil.WithFlags[bool]("tracing-enable-logging"),
+		viperutil.Options[bool]{
+			FlagName: "tracing-enable-logging",
+		},
 	)
 
 	pluginFlags []func(fs *pflag.FlagSet)
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.String("tracer", tracingServer.Value(), "tracing service to use")
-	tracingServer.Bind(nil, fs)
-
+	fs.String("tracer", tracingServer.Default(), "tracing service to use")
 	fs.Bool("tracing-enable-logging", false, "whether to enable logging in the tracing service")
-	enableLogging.Bind(nil, fs)
+
+	viperutil.BindFlags(fs, tracingServer, enableLogging)
 
 	for _, fn := range pluginFlags {
 		fn(fs)
