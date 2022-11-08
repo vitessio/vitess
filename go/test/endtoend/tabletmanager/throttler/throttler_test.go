@@ -188,6 +188,7 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 			require.NoError(t, err)
 
 			assert.Equal(t, wantCode, resp.StatusCode, "body: %v", string(b))
+			return
 		default:
 			time.Sleep(time.Second)
 		}
