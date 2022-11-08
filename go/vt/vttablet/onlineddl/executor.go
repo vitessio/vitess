@@ -780,8 +780,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
 			toggleBuffering(false)
+			go log.Infof("cutOverVReplMigration %v: unbuffered queries", s.workflow)
 		})
 	}
+	go log.Infof("cutOverVReplMigration %v: buffering queries", s.workflow)
 	// stop writes on source:
 	err = toggleBuffering(true)
 	defer reenableWritesOnce()
@@ -807,6 +809,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	} else {
 		// real production
+		go log.Infof("cutOverVReplMigration %v: renaming table %v to %v", s.workflow, onlineDDL.Table, stowawayTableName)
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, stowawayTableName)
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
@@ -820,6 +823,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err := e.renameTableIfApplicable(ctx, stowawayTableName, onlineDDL.Table); err != nil {
 			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot rename back swapped table: %v into %v: %v", stowawayTableName, onlineDDL.Table, err)
 		}
+		go log.Infof("cutOverVReplMigration %v: restored table %v back to %v", s.workflow, stowawayTableName, onlineDDL.Table)
 	}()
 	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
 	// that some leftover query finds the table is not actually there anymore...
@@ -847,14 +851,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// Target is now in sync with source!
 		return nil
 	}
-	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
+	go log.Infof("cutOverVReplMigration %v: waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	if err := waitForPos(); err != nil {
 		return err
 	}
+	go log.Infof("cutOverVReplMigration %v: done waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	// Stop vreplication
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
 		return err
 	}
+	go log.Infof("cutOverVReplMigration %v: stopped vreplication", s.workflow)
 
 	// rename tables atomically (remember, writes on source tables are stopped)
 	{
@@ -877,6 +883,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				vreplTable, onlineDDL.Table,
 				stowawayTableName, vreplTable,
 			)
+			go log.Infof("cutOverVReplMigration %v: switch of tables %v, %v, %v", s.workflow, vreplTable, onlineDDL.Table, stowawayTableName)
 			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
@@ -897,6 +904,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// Tables are now swapped! Migration is successful
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
+	go log.Infof("cutOverVReplMigration %v: marking as complete", s.workflow)
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied, emptyHint)
 	return nil
 
@@ -935,6 +943,53 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
+// newConstraintName generates a new, unique name for a constraint. Our problem is that a MySQL
+// constraint's name is unique in the schema (!). And so as we duplicate the original table, we must
+// create completely new names for all constraints.
+// Moreover, we really want this name to be consistent across all shards. We therefore use a deterministic
+// UUIDv5 (SHA) function over the migration UUID, table name, and constraint's _contents_.
+// We _also_ include the original constraint name as prefix, as room allows
+// for example, if the original constraint name is "check_1",
+// we might generate "check_1_cps1okb4uafunfqusi2lp22u3".
+// If we then again migrate a table whose constraint name is "check_1_cps1okb4uafunfqusi2lp22u3	" we
+// get for example "check_1_19l09s37kbhj4axnzmi10e18k" (hash changes, and we still try to preserve original name)
+//
+// Furthermore, per bug report https://bugs.mysql.com/bug.php?id=107772, if the user doesn't provide a name for
+// their CHECK constraint, then MySQL picks a name in this format <tablename>_chk_<number>.
+// Example: sometable_chk_1
+// Next, when MySQL is asked to RENAME TABLE and sees a constraint with this format, it attempts to rename
+// the constraint with the new table's name. This is problematic for Vitess, because we often rename tables to
+// very long names, such as _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048.
+// As we rename the constraint to e.g. `sometable_chk_1_cps1okb4uafunfqusi2lp22u3`, this makes MySQL want to
+// call the new constraint something like _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048_chk_1_cps1okb4uafunfqusi2lp22u3,
+// which exceeds the 64 character limit for table names. Long story short, we also trim down <tablename> if the constraint seems
+// to be auto-generated.
+func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, hashExists map[string]bool, seed string, oldName string) string {
+	oldName = schemadiff.ExtractConstraintOriginalName(oldName)
+	autoGeneratedName := fmt.Sprintf("%s_chk_", onlineDDL.Table)
+	if strings.HasPrefix(oldName, autoGeneratedName) {
+		// strip out table name
+		oldName = "chk_" + oldName[len(autoGeneratedName):]
+	}
+
+	hash := textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed)
+	for i := 1; hashExists[hash]; i++ {
+		hash = textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed, fmt.Sprintf("%d", i))
+	}
+	hashExists[hash] = true
+	suffix := "_" + hash
+	maxAllowedNameLength := maxConstraintNameLength - len(suffix)
+	newName := oldName
+	if newName == "" {
+		newName = "chk" // start with something that looks consistent with MySQL's naming
+	}
+	if len(newName) > maxAllowedNameLength {
+		newName = newName[0:maxAllowedNameLength]
+	}
+	newName = newName + suffix
+	return newName
+}
+
 // validateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
 // - extra validation (no FKs for now...)
 // - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
@@ -942,56 +997,13 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 	constraintMap = map[string]string{}
 	hashExists := map[string]bool{}
 
-	// newConstraintName generates a new, unique name for a constraint. Our problem is that a MySQL
-	// constraint's name is unique in the schema (!). And so as we duplicate the original table, we must
-	// create completely new names for all constraints.
-	// Moreover, we really want this name to be consistent across all shards. We therefore use a deterministic
-	// UUIDv5 (SHA) function over the migration UUID, table name, and constraint's _contents_.
-	// We _also_ include the original constraint name as prefix, as room allows
-	// for example, if the original constraint name is "check_1",
-	// we might generate "check_1_cps1okb4uafunfqusi2lp22u3".
-	// If we then again migrate a table whose constraint name is "check_1_cps1okb4uafunfqusi2lp22u3	" we
-	// get for example "check_1_19l09s37kbhj4axnzmi10e18k" (hash changes, and we still try to preserve original name)
-	//
-	// Furthermore, per bug report https://bugs.mysql.com/bug.php?id=107772, if the user doesn' tprovide a name for
-	// their CHECK constraint, then MySQL picks a name in this format <tablename>_chk_<number>.
-	// Example: sometable_chk_1
-	// Next, when MySQL is asked to RENAME TABLE and sees a constraint with this format, it attempts to rename
-	// the constraint with the new table's name. This is problematic for Vitess, because we often rename tables to
-	// very long names, such as _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048.
-	// As we rename the constraint to e.g. `sometable_chk_1_cps1okb4uafunfqusi2lp22u3`, this makes MySQL want to
-	// call the new constraint something like _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048_chk_1_cps1okb4uafunfqusi2lp22u3,
-	// which exceeds the 64 character limit for table names. Long story short, we also trim down <tablename> if the constraint seems
-	// to be auto-generated.
-	newConstraintName := func(seed string, oldName string) string {
-		oldName = schemadiff.ExtractConstraintOriginalName(oldName)
-		autoGeneratedName := fmt.Sprintf("%s_chk_", onlineDDL.Table)
-		if strings.HasPrefix(oldName, autoGeneratedName) {
-			// strip out table name
-			oldName = "chk_" + oldName[len(autoGeneratedName):]
-		}
-
-		hash := textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed)
-		for i := 1; hashExists[hash]; i++ {
-			hash = textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed, fmt.Sprintf("%d", i))
-		}
-		hashExists[hash] = true
-		suffix := "_" + hash
-		maxAllowedNameLength := maxConstraintNameLength - len(suffix)
-		newName := oldName
-		if len(newName) > maxAllowedNameLength {
-			newName = newName[0:maxAllowedNameLength]
-		}
-		newName = newName + suffix
-		return newName
-	}
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ForeignKeyDefinition:
 			return false, schema.ErrForeignKeyFound
 		case *sqlparser.ConstraintDefinition:
 			oldName := node.Name.String()
-			newName := newConstraintName(sqlparser.CanonicalString(node.Details), oldName)
+			newName := e.newConstraintName(onlineDDL, hashExists, sqlparser.CanonicalString(node.Details), oldName)
 			node.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
 		}
@@ -1006,7 +1018,8 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 // validateAndEditAlterTableStatement inspects the AlterTable statement and:
 // - modifies any CONSTRAINT name according to given name mapping
 // - explode ADD FULLTEXT KEY into multiple statements
-func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlineDDL *schema.OnlineDDL, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
+	hashExists := map[string]bool{}
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
@@ -1018,6 +1031,11 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alter
 				}
 				node.Name = sqlparser.NewIdentifierCI(mappedName)
 			}
+		case *sqlparser.AddConstraintDefinition:
+			oldName := node.ConstraintDefinition.Name.String()
+			newName := e.newConstraintName(onlineDDL, hashExists, sqlparser.CanonicalString(node.ConstraintDefinition.Details), oldName)
+			node.ConstraintDefinition.Name = sqlparser.NewIdentifierCI(newName)
+			constraintMap[oldName] = newName
 		}
 		return true, nil
 	}
@@ -1117,7 +1135,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		// ALTER TABLE should apply to the vrepl table
 		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 		// Also, change any constraint names:
-		alters, err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap)
+		alters, err := e.validateAndEditAlterTableStatement(ctx, onlineDDL, alterTable, constraintMap)
 		if err != nil {
 			return v, err
 		}

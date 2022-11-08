@@ -179,7 +179,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	// Manage SQL_MODE in the same way that mysqldump does.
 	// Save the original sql_mode, set it to a permissive mode,
 	// and then reset it back to the original value at the end.
-	resetFunc, err := vr.setSQLMode(ctx)
+	resetFunc, err := vr.setSQLMode(ctx, vr.dbClient)
 	defer resetFunc()
 	if err != nil {
 		return err
@@ -194,7 +194,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		return err
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
-	defer vr.resetFKCheckAfterCopy()
+	defer vr.resetFKCheckAfterCopy(vr.dbClient)
 
 	for {
 		select {
@@ -206,7 +206,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		// in case the functions below leave transactions open.
 		vr.dbClient.Rollback()
 
-		settings, numTablesToCopy, err := vr.readSettings(ctx)
+		settings, numTablesToCopy, err := vr.loadSettings(ctx, vr.dbClient)
 		if err != nil {
 			return err
 		}
@@ -216,7 +216,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		}
 		switch {
 		case numTablesToCopy != 0:
-			if err := vr.clearFKCheck(); err != nil {
+			if err := vr.clearFKCheck(vr.dbClient); err != nil {
 				log.Warningf("Unable to clear FK check %v", err)
 				return err
 			}
@@ -224,7 +224,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
 			}
-			settings, numTablesToCopy, err = vr.readSettings(ctx)
+			settings, numTablesToCopy, err = vr.loadSettings(ctx, vr.dbClient)
 			if err != nil {
 				return err
 			}
@@ -239,7 +239,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 		default:
-			if err := vr.resetFKCheckAfterCopy(); err != nil {
+			if err := vr.resetFKCheckAfterCopy(vr.dbClient); err != nil {
 				log.Warningf("Unable to reset FK check %v", err)
 				return err
 			}
@@ -350,8 +350,18 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	return colInfoMap, nil
 }
 
-func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
-	settings, err = binlogplayer.ReadVRSettings(vr.dbClient, vr.id)
+// Same as readSettings, but stores some of the results on this vr.
+func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
+	settings, numTablesToCopy, err = vr.readSettings(ctx, dbClient)
+	if err == nil {
+		vr.WorkflowType = int32(settings.WorkflowType)
+		vr.WorkflowName = settings.WorkflowName
+	}
+	return settings, numTablesToCopy, err
+}
+
+func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
+	settings, err = binlogplayer.ReadVRSettings(dbClient, vr.id)
 	if err != nil {
 		return settings, numTablesToCopy, fmt.Errorf("error reading VReplication settings: %v", err)
 	}
@@ -368,8 +378,6 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
-	vr.WorkflowType = int32(settings.WorkflowType)
-	vr.WorkflowName = settings.WorkflowName
 	return settings, numTablesToCopy, nil
 }
 
@@ -439,16 +447,16 @@ func (vr *vreplicator) getSettingFKCheck() error {
 	return nil
 }
 
-func (vr *vreplicator) resetFKCheckAfterCopy() error {
-	_, err := vr.dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
+func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
+	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
 	return err
 }
 
-func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
+func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (func(), error) {
 	resetFunc := func() {}
 	// First save the original SQL mode if we have not already done so
 	if vr.originalSQLMode == "" {
-		res, err := vr.dbClient.Execute(getSQLModeQuery)
+		res, err := dbClient.Execute(getSQLModeQuery)
 		if err != nil || len(res.Rows) != 1 {
 			return resetFunc, fmt.Errorf("could not get the original sql_mode on target: %v", err)
 		}
@@ -460,13 +468,13 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	// You should defer this callback wherever you call setSQLMode()
 	resetFunc = func() {
 		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
-		_, err := vr.dbClient.Execute(query)
+		_, err := dbClient.Execute(query)
 		if err != nil {
 			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
 		}
 	}
 	vreplicationSQLMode := SQLMode
-	settings, _, err := vr.readSettings(ctx)
+	settings, _, err := vr.readSettings(ctx, dbClient)
 	if err != nil {
 		return resetFunc, err
 	}
@@ -478,7 +486,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	// any database object that exists on the source in full on the
 	// target
 	query := fmt.Sprintf(setSQLModeQueryf, vreplicationSQLMode)
-	if _, err := vr.dbClient.Execute(query); err != nil {
+	if _, err := dbClient.Execute(query); err != nil {
 		return resetFunc, fmt.Errorf("could not set the permissive sql_mode on target using %s: %v", query, err)
 	}
 
@@ -527,8 +535,8 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 	return nil
 }
 
-func (vr *vreplicator) clearFKCheck() error {
-	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
+func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
+	_, err := dbClient.Execute("set foreign_key_checks=0;")
 	return err
 }
 

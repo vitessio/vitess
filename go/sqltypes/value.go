@@ -73,12 +73,12 @@ type (
 func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 	switch {
 	case IsSigned(typ):
-		if _, err := strconv.ParseInt(string(val), 0, 64); err != nil {
+		if _, err := strconv.ParseInt(string(val), 10, 64); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
 	case IsUnsigned(typ):
-		if _, err := strconv.ParseUint(string(val), 0, 64); err != nil {
+		if _, err := strconv.ParseUint(string(val), 10, 64); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil

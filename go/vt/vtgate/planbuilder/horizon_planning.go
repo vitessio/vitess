@@ -171,7 +171,6 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 }
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
-	exprDep := semTable.RecursiveDeps(expr.Expr)
 	// Here to find if the expr already exists in the SelectStatement, we have 3 cases
 	// input is a Select -> In this case we want to search in the select
 	// input is a Union -> In this case we want to search in the First Select of the Union
@@ -200,21 +199,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 			continue
 		}
 
-		selectExprCol, isSelectExprCol := selectExpr.Expr.(*sqlparser.ColName)
-		selectExprDep := semTable.RecursiveDeps(selectExpr.Expr)
-
-		// Check that the two expressions have the same dependencies
-		if !selectExprDep.Equals(exprDep) {
-			continue
-		}
-
-		if isSelectExprCol && isExprCol && exprCol.Name.Equal(selectExprCol.Name) {
-			// the expressions are ColName, we compare their name
-			return i
-		}
-
-		if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
-			// the expressions are not ColName, so we just compare the expressions
+		if semTable.EqualsExpr(expr.Expr, selectExpr.Expr) {
 			return i
 		}
 	}
@@ -514,7 +499,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 		if distinctExpr == nil {
 			distinctExpr = innerWS
 		} else {
-			if !sqlparser.EqualsExpr(distinctExpr, innerWS) {
+			if !ctx.SemTable.EqualsExpr(distinctExpr, innerWS) {
 				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
 				return nil, nil, nil, err
 			}
@@ -936,7 +921,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 		}
 		found := false
 		for _, grpParam := range currPlan.groupByKeys {
-			if sqlparser.EqualsExpr(expr, grpParam.Expr) {
+			if semTable.EqualsExpr(expr, grpParam.Expr) {
 				found = true
 				oa.groupByKeys = append(oa.groupByKeys, grpParam)
 				break
@@ -946,7 +931,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 			continue
 		}
 		for _, aggrParam := range currPlan.aggregates {
-			if sqlparser.EqualsExpr(expr, aggrParam.Expr) {
+			if semTable.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
 				oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationForExpr(expr)})
 				break

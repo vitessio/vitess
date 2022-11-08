@@ -29,6 +29,8 @@ type Delete struct {
 	AST              *sqlparser.Delete
 
 	noInputs
+	noColumns
+	noPredicates
 }
 
 var _ PhysicalOperator = (*Delete)(nil)
@@ -41,8 +43,8 @@ func (d *Delete) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (d *Delete) IPhysical() {}
 
-// Clone implements the Operator interface
-func (d *Delete) Clone(inputs []Operator) Operator {
+// clone implements the Operator interface
+func (d *Delete) clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	return &Delete{
 		QTable:           d.QTable,

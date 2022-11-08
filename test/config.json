@@ -114,27 +114,9 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtbackup_transform",
+			"Shard": "vtbackup",
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtbackup_transform",
-			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform_mysqlctld": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "21", 
-			"RetryMax": 1,
-			"Tags": []
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
@@ -364,17 +346,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"pitrtls": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "26",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
@@ -936,6 +907,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"consolidator": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/consolidator"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"prefixfanout": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/prefixfanout"],
@@ -1041,7 +1021,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_copy_throttling": {
@@ -1050,7 +1030,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_copy_parallel": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_flush_binlog": {
