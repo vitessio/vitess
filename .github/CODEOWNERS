@@ -52,7 +52,7 @@ bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 /go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
 /go/vt/vttablet/*conn* @harshit-gangal @systay
 /go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay
-/go/vt/vttablet/grpc* @ajm188 @rohit-nayak-ps @rsajwani @shlomi-noach
+/go/vt/vttablet/grpc* @ajm188 @rohit-nayak-ps @rsajwani @shlomi-noach @harshit-gangal
 /go/vt/vttablet/onlineddl @mattlord @rohit-nayak-ps @shlomi-noach
 /go/vt/vttablet/queryservice @harshit-gangal @systay
 /go/vt/vttablet/tabletmanager @deepthi @GuptaManan100 @rohit-nayak-ps @rsajwani @shlomi-noach
