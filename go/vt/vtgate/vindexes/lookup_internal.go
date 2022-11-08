@@ -39,7 +39,7 @@ var (
 	readLockNone      = "none"
 	readLockDefault   = readLockExclusive
 
-	readLockExprs map[string]string = map[string]string{
+	readLockExprs = map[string]string{
 		readLockExclusive: "for update",
 		readLockShared:    "lock in share mode",
 		readLockNone:      "",
