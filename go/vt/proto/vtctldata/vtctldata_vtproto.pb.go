@@ -4576,7 +4576,7 @@ func (m *UpdateThrottlerConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x30
+		dAtA[i] = 0x38
 	}
 	if m.CheckAsCheckSelf {
 		i--
@@ -4586,20 +4586,20 @@ func (m *UpdateThrottlerConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x28
+		dAtA[i] = 0x30
 	}
 	if len(m.CustomQuery) > 0 {
 		i -= len(m.CustomQuery)
 		copy(dAtA[i:], m.CustomQuery)
 		i = encodeVarint(dAtA, i, uint64(len(m.CustomQuery)))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x2a
 	}
 	if m.Threshold != 0 {
 		i -= 8
 		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Threshold))))
 		i--
-		dAtA[i] = 0x19
+		dAtA[i] = 0x21
 	}
 	if m.Disable {
 		i--
@@ -4609,7 +4609,7 @@ func (m *UpdateThrottlerConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x10
+		dAtA[i] = 0x18
 	}
 	if m.Enable {
 		i--
@@ -4619,7 +4619,14 @@ func (m *UpdateThrottlerConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x10
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarint(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -11466,6 +11473,10 @@ func (m *UpdateThrottlerConfigRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.Enable {
 		n += 2
 	}
@@ -24140,6 +24151,38 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Enable", wireType)
 			}
@@ -24159,7 +24202,7 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Enable = bool(v != 0)
-		case 2:
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Disable", wireType)
 			}
@@ -24179,7 +24222,7 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Disable = bool(v != 0)
-		case 3:
+		case 4:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Threshold", wireType)
 			}
@@ -24190,7 +24233,7 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
 			m.Threshold = float64(math.Float64frombits(v))
-		case 4:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CustomQuery", wireType)
 			}
@@ -24222,7 +24265,7 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.CustomQuery = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CheckAsCheckSelf", wireType)
 			}
@@ -24242,7 +24285,7 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.CheckAsCheckSelf = bool(v != 0)
-		case 6:
+		case 7:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CheckAsCheckShard", wireType)
 			}
