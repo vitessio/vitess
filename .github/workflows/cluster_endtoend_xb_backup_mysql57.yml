@@ -6,11 +6,7 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (xb_backup) mysql57')
   cancel-in-progress: true
 
-env:
-  LAUNCHABLE_ORGANIZATION: "vitess"
-  LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
-
+#env:
   # This is used if we need to pin the xtrabackup version used in tests.
   # If this is NOT set then the latest version available will be used.
   #XTRABACKUP_VERSION: "2.4.24-1"
@@ -120,18 +116,6 @@ jobs:
           sudo apt-get install -y percona-xtrabackup-24
         fi
 
-    - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        pip3 install --user launchable~=1.0 > /dev/null
-
-        # verify that launchable setup is all correct.
-        launchable verify || true
-
-        # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
-
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
@@ -144,13 +128,4 @@ jobs:
         set -x
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard xb_backup | tee -a output.txt | go-junit-report -set-exit-code > report.xml
-
-    - name: Print test output and Record test result in launchable
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
-      run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-
-        # print test output
-        cat output.txt
+        eatmydata -- go run test.go -docker=false -follow -shard xb_backup
