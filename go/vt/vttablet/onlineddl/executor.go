@@ -974,9 +974,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 			// Normal (non-testing) alter table
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "dropping sentry table")
-			dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
 
 			{
+				dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
 				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 				defer cancel()
 				if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
