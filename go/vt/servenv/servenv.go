@@ -44,14 +44,11 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/v2"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	// register the proper init and shutdown hooks for logging
-	_ "vitess.io/vitess/go/vt/logutil"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
 	_flag "vitess.io/vitess/go/internal/flag"
@@ -329,6 +326,8 @@ func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
 func ParseFlags(cmd string) {
 	fs := GetFlagSetFor(cmd)
 
+	viperutil.BindFlags(fs)
+
 	_flag.Parse(fs)
 
 	if version {
@@ -342,7 +341,9 @@ func ParseFlags(cmd string) {
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 
-	readViperConfig(cmd)
+	if err := viperutil.LoadConfig(); err != nil {
+		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
+	}
 
 	logutil.PurgeLogs()
 }
@@ -362,6 +363,8 @@ func GetFlagSetFor(cmd string) *pflag.FlagSet {
 func ParseFlagsWithArgs(cmd string) []string {
 	fs := GetFlagSetFor(cmd)
 
+	viperutil.BindFlags(fs)
+
 	_flag.Parse(fs)
 
 	if version {
@@ -374,21 +377,13 @@ func ParseFlagsWithArgs(cmd string) []string {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
 
-	readViperConfig(cmd)
+	if err := viperutil.LoadConfig(); err != nil {
+		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
+	}
 
 	logutil.PurgeLogs()
 
 	return args
-}
-
-func readViperConfig(cmd string) {
-	if err := viperutil.ReadInDefaultConfig(); err != nil {
-		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
-	}
-
-	// TODO: MergeConfigMap with servenv's local viper (which does not exist
-	// yet) before returning.
-	return
 }
 
 // Flag installations for packages that servenv imports. We need to register
@@ -443,8 +438,8 @@ func init() {
 	OnParse(log.RegisterFlags)
 	// Flags in package logutil are installed for all binaries.
 	OnParse(logutil.RegisterFlags)
-	// Flags in package viperutil are installed for all binaries.
-	OnParse(viperutil.RegisterDefaultConfigFlags)
+	// Flags in package viperutil/config are installed for all binaries.
+	OnParse(viperutil.RegisterFlags)
 }
 
 func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {

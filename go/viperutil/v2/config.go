@@ -1,0 +1,210 @@
+package viperutil
+
+import (
+	"fmt"
+	"os"
+	"reflect"
+	"sort"
+	"strings"
+
+	"github.com/mitchellh/mapstructure"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+
+	"vitess.io/vitess/go/viperutil/v2/funcs"
+	"vitess.io/vitess/go/viperutil/v2/internal/log"
+	"vitess.io/vitess/go/viperutil/v2/internal/registry"
+	"vitess.io/vitess/go/viperutil/v2/internal/value"
+)
+
+var (
+	configPaths = Configure(
+		"config.paths",
+		Options[[]string]{
+			GetFunc:  funcs.GetPath,
+			EnvVars:  []string{"VT_CONFIG_PATH"},
+			FlagName: "config-path",
+		},
+	)
+	configType = Configure(
+		"config.type",
+		Options[string]{
+			EnvVars:  []string{"VT_CONFIG_TYPE"},
+			FlagName: "config-type",
+		},
+	)
+	configName = Configure(
+		"config.name",
+		Options[string]{
+			Default:  "vtconfig",
+			EnvVars:  []string{"VT_CONFIG_NAME"},
+			FlagName: "config-name",
+		},
+	)
+	configFile = Configure(
+		"config.file",
+		Options[string]{
+			EnvVars:  []string{"VT_CONFIG_FILE"},
+			FlagName: "config-file",
+		},
+	)
+	configFileNotFoundHandling = Configure(
+		"config.notfound.handling",
+		Options[ConfigFileNotFoundHandling]{
+			GetFunc: getHandlingValue,
+		},
+	)
+)
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		log.WARN("failed to get working directory (err=%s), not appending to default config-paths", err)
+		return
+	}
+
+	configPaths.(*value.Static[[]string]).DefaultVal = []string{wd}
+}
+
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringSlice("config-path", configPaths.Default(), "Paths to search for config files in.")
+	fs.String("config-type", configType.Default(), "Config file type (omit to infer config type from file extension).")
+	fs.String("config-name", configName.Default(), "Name of the config file (without extension) to search for.")
+	fs.String("config-file", configFile.Default(), "Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.")
+
+	var h = WarnOnConfigFileNotFound
+	fs.Var(&h, "config-file-not-found-handling", fmt.Sprintf("Behavior when a config file is not found. (Options: %s)", strings.Join(handlingNames, ", ")))
+
+	BindFlags(fs, configPaths, configType, configName, configFile)
+}
+
+func LoadConfig() error {
+	var err error
+	switch file := configFile.Get(); file {
+	case "":
+		if name := configName.Get(); name != "" {
+			registry.Static.SetConfigName(name)
+
+			for _, path := range configPaths.Get() {
+				registry.Static.AddConfigPath(path)
+			}
+
+			if cfgType := configType.Get(); cfgType != "" {
+				registry.Static.SetConfigType(cfgType)
+			}
+
+			err = registry.Static.ReadInConfig()
+		}
+	default:
+		registry.Static.SetConfigFile(file)
+		err = registry.Static.ReadInConfig()
+	}
+
+	if err != nil {
+		if nferr, ok := err.(viper.ConfigFileNotFoundError); ok {
+			switch configFileNotFoundHandling.Get() {
+			case IgnoreConfigFileNotFound:
+				// TODO: finish this switch block.
+			}
+			log.WARN("Failed to read in config %s: %s", registry.Static.ConfigFileUsed(), nferr.Error())
+			err = nil
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return registry.Dynamic.Watch(registry.Static)
+}
+
+func NotifyConfigReload(ch chan<- struct{}) {
+	registry.Dynamic.Notify(ch)
+}
+
+type ConfigFileNotFoundHandling int
+
+const (
+	IgnoreConfigFileNotFound ConfigFileNotFoundHandling = iota
+	WarnOnConfigFileNotFound
+	ErrorOnConfigFileNotFound
+	ExitOnConfigFileNotFound
+)
+
+var (
+	handlingNames         []string
+	handlingNamesToValues = map[string]int{
+		"ignore": int(IgnoreConfigFileNotFound),
+		"warn":   int(WarnOnConfigFileNotFound),
+		"error":  int(ErrorOnConfigFileNotFound),
+		"exit":   int(ExitOnConfigFileNotFound),
+	}
+	handlingValuesToNames map[int]string
+)
+
+func getHandlingValue(v *viper.Viper) func(key string) ConfigFileNotFoundHandling {
+	return func(key string) (h ConfigFileNotFoundHandling) {
+		if err := v.UnmarshalKey(key, &h, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(decodeHandlingValue))); err != nil {
+			h = IgnoreConfigFileNotFound
+			log.WARN("failed to unmarshal %s: %s; defaulting to %s", err.Error(), key, err.Error(), h.String())
+		}
+
+		return h
+	}
+}
+
+func decodeHandlingValue(from, to reflect.Type, data any) (any, error) {
+	var h ConfigFileNotFoundHandling
+	if to != reflect.TypeOf(h) {
+		return data, nil
+	}
+
+	switch {
+	case from.ConvertibleTo(reflect.TypeOf(h)):
+		return data.(ConfigFileNotFoundHandling), nil
+	case from.Kind() == reflect.Int:
+		return ConfigFileNotFoundHandling(data.(int)), nil
+	case from.Kind() == reflect.String:
+		if err := h.Set(data.(string)); err != nil {
+			return h, err
+		}
+
+		return h, nil
+	}
+
+	return data, fmt.Errorf("invalid value for ConfigHandlingType: %v", data)
+}
+
+func init() {
+	handlingNames = make([]string, 0, len(handlingNamesToValues))
+	handlingValuesToNames = make(map[int]string, len(handlingNamesToValues))
+
+	for name, val := range handlingNamesToValues {
+		handlingValuesToNames[val] = name
+		handlingNames = append(handlingNames, name)
+	}
+
+	sort.Slice(handlingNames, func(i, j int) bool {
+		return handlingNames[i] < handlingNames[j]
+	})
+}
+
+func (h *ConfigFileNotFoundHandling) Set(arg string) error {
+	larg := strings.ToLower(arg)
+	if v, ok := handlingNamesToValues[larg]; ok {
+		*h = ConfigFileNotFoundHandling(v)
+		return nil
+	}
+
+	return fmt.Errorf("unknown handling name %s", arg)
+}
+
+func (h *ConfigFileNotFoundHandling) String() string {
+	if name, ok := handlingValuesToNames[int(*h)]; ok {
+		return name
+	}
+
+	return "<UNKNOWN>"
+}
+
+func (h *ConfigFileNotFoundHandling) Type() string { return "ConfigFileNotFoundHandling" }
