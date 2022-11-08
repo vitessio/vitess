@@ -1,6 +1,7 @@
 # Release of Vitess v15.0.0
 ## Summary
 
+- **[Known Issues](#known-issues)**
 - **[Breaking Changes](#breaking-changes)**
   - [Flags](#flags)
   - [VTTablet Flag Deletions](#vttablet-flag-deletions)
@@ -43,6 +44,10 @@
   - [Default Configuration Files](#default-configuration-files)
 - **[Flags Restructure](#flags-restructure)**
   - [Flags Diff](#flags-diff)
+
+## <a id="known-issues"/>Known Issues
+
+- [Corrupted results for non-full-group-by queries with JOINs](https://github.com/vitessio/vitess/issues/11625). This can be resolved by using full-group-by queries.
 
 ## Major Changes
 
