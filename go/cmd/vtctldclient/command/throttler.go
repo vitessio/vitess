@@ -44,8 +44,10 @@ var (
 var updateThrottlerConfigOptions vtctldatapb.UpdateThrottlerConfigRequest
 
 func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
 	cli.FinishedParsing(cmd)
 
+	updateThrottlerConfigOptions.Keyspace = keyspace
 	_, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
 	if err != nil {
 		return err
