@@ -436,13 +436,13 @@ var commands = []commandGroup{
 			{
 				name:   "Reshard",
 				method: commandReshard,
-				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>]  [--skip_schema_copy] [--on-ddl=<act>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
+				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--on-ddl=<action>] [--skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
 				help:   "Start a Resharding process. Example: Reshard --cells='zone1,alias1' --tablet_types='PRIMARY,REPLICA,RDONLY'  ks.workflow001 -- '0' '-80,80-'",
 			},
 			{
 				name:   "MoveTables",
 				method: commandMoveTables,
-				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--on-ddl=<act>] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
+				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--on-ddl=<action>] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
