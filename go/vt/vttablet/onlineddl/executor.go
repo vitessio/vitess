@@ -650,9 +650,11 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	return acceptableErrorCodeFound, nil
 }
 
-func (e *Executor) isConnectionQueryRunning(ctx context.Context, connID int64, submatch string) (bool, error) {
+// doesConnectionInfoMatch checks if theres a MySQL connection in PROCESSLIST whose Info matches given text
+func (e *Executor) doesConnectionInfoMatch(ctx context.Context, connID int64, submatch string) (bool, error) {
 	findProcessQuery, err := sqlparser.ParseAndBind(sqlFindProcess,
 		sqltypes.Int64BindVariable(connID),
+		sqltypes.StringBindVariable("%"+submatch+"%"),
 	)
 	if err != nil {
 		return false, err
@@ -661,15 +663,7 @@ func (e *Executor) isConnectionQueryRunning(ctx context.Context, connID int64, s
 	if err != nil {
 		return false, err
 	}
-	row := rs.Named().Row()
-	if row == nil {
-		return false, nil
-	}
-	info, err := row.ToString("info")
-	if err != nil {
-		return false, err
-	}
-	return strings.Contains(info, submatch), nil
+	return len(rs.Rows) == 1, nil
 }
 
 // validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
@@ -835,7 +829,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		defer cancel()
 
 		for {
-			renameProcessFound, err := e.isConnectionQueryRunning(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
+			renameProcessFound, err := e.doesConnectionInfoMatch(renameWaitCtx, renameConn.ID(), strings.Fields(renameQuery.Query)[0])
 			if err != nil {
 				return err
 			}

@@ -602,7 +602,7 @@ const (
 	sqlLockTwoTablesWrite = "LOCK TABLES `%a` WRITE, `%a` WRITE"
 	sqlUnlockTables       = "UNLOCK TABLES"
 	sqlCreateSentryTable  = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
-	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a"
+	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
 )
 
 const (
