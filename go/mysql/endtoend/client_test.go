@@ -364,7 +364,6 @@ func TestClientInfo(t *testing.T) {
 	result, err := conn.ExecuteFetch(`PREPARE stmt1 FROM 'SELECT 1 = 1'`, -1, true)
 	require.NoError(t, err, "select failed: %v", err)
 	require.Equal(t, infoPrepared, result.Info, "expected result.Info=%q, got=%q", infoPrepared, result.Info)
-
 }
 
 func TestBaseShowTables(t *testing.T) {
