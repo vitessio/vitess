@@ -1388,8 +1388,6 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	if logMethod != nil {
-		log.Info("this is error")
-		time.Sleep(10 * time.Second)
 		logMethod(message)
 	}
 

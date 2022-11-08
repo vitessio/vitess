@@ -427,7 +427,6 @@ func testMessaging(t *testing.T, name, ks string) {
 
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
-	//time.Sleep(10 * time.Minute)
 	require.Nil(t, err)
 	require.Equal(t, 3, len(res.Fields))
 	validateField(t, res.Fields[0], "id", query.Type_INT64)
