@@ -954,7 +954,7 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 // If we then again migrate a table whose constraint name is "check_1_cps1okb4uafunfqusi2lp22u3	" we
 // get for example "check_1_19l09s37kbhj4axnzmi10e18k" (hash changes, and we still try to preserve original name)
 //
-// Furthermore, per bug report https://bugs.mysql.com/bug.php?id=107772, if the user doesn' tprovide a name for
+// Furthermore, per bug report https://bugs.mysql.com/bug.php?id=107772, if the user doesn't provide a name for
 // their CHECK constraint, then MySQL picks a name in this format <tablename>_chk_<number>.
 // Example: sometable_chk_1
 // Next, when MySQL is asked to RENAME TABLE and sees a constraint with this format, it attempts to rename
@@ -980,6 +980,9 @@ func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, hashExists map
 	suffix := "_" + hash
 	maxAllowedNameLength := maxConstraintNameLength - len(suffix)
 	newName := oldName
+	if newName == "" {
+		newName = "chk" // start with something that looks consistent with MySQL's naming
+	}
 	if len(newName) > maxAllowedNameLength {
 		newName = newName[0:maxAllowedNameLength]
 	}

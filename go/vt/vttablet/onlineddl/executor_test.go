@@ -122,7 +122,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 		},
 		{
 			alter:  "alter table t add constraint check (id != 1)",
-			expect: []string{"alter table t add constraint _aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter:  "alter table t add constraint t_chk_1 check (id != 1)",
