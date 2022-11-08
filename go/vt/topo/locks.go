@@ -319,12 +319,13 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 // - an unlock method
 // - an error if anything failed.
 
-// TryLockShard is different than LockShard. It is non-blocking (best effort) which means
+// TryLockShard is different from LockShard. It is non-blocking (best-effort) which means
 // if there is already a lock at Global-cell level for a given shard then instead
-// of waiting (block) on that shard it returns immediately with error Lock already acquired.
-// It is the best effort because there is a possibility that we find there is no lock but by the
-// time we try to acquire lock someone else get it before, in this case client will block until
-// the former one releases the lock or current client call times out.
+// of waiting (blocking) on that lock it returns immediately with an error Lock already acquired.
+// It is the best effort because there is a possibility that a thread checks for lock for a given dirPath
+// but by the time it acquires the lock, some other thread has already acquired it.
+// In this case the client will block until the other caller releases the lock or the
+// client call times out.
 //
 // We are currently only using this method to lock actions that would
 // impact each-other. Most changes of the Shard object are done by

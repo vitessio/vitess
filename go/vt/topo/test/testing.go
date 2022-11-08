@@ -65,6 +65,11 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server, ignoreList [
 	executeTestSuite(checkShard, t, ts, ignoreList, "checkShard")
 	ts.Close()
 
+	t.Log("=== checkShardWithLock")
+	ts = factory()
+	executeTestSuite(checkShardWithLock, t, ts, ignoreList, "checkShardWithLock")
+	ts.Close()
+
 	t.Log("=== checkTablet")
 	ts = factory()
 	executeTestSuite(checkTablet, t, ts, ignoreList, "checkTablet")

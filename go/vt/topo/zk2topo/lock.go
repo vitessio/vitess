@@ -17,11 +17,9 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"fmt"
 	"path"
-	"regexp"
-
-	"context"
 
 	"github.com/z-division/go-zookeeper/zk"
 
@@ -32,8 +30,6 @@ import (
 )
 
 // This file contains the lock management code for zktopo.Server.
-
-var nodeUnderLockPath = regexp.MustCompile(fmt.Sprintf("^%s$", locksPath))
 
 // zkLockDescriptor implements topo.LockDescriptor.
 type zkLockDescriptor struct {
@@ -47,10 +43,6 @@ func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 }
 
 // TryLock is part of the topo.Conn interface.
-// TryLock provides exactly same functionality as 'Lock', the only difference is
-// it tires its best to be non-blocking call. Non-blocking is the best effort though.
-// If there is already lock exists for dirPath then TryLock
-// unlike Lock will return immediately with error 'lock already exists'.
 func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list all the entries under dirPath
 	entries, err := zs.ListDir(ctx, dirPath, true)
@@ -63,15 +55,18 @@ func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.L
 		return nil, convertError(err, dirPath)
 	}
 
-	// if there is a folder '/locks' with some entries in it then we can assume that keyspace already have a lock
-	// throw error in this case
+	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
+	// Throw error in this case
 	for _, e := range entries {
-		if nodeUnderLockPath.MatchString(e.Name) && e.Type == topo.TypeDirectory {
+		// there is a bug where ListDir return ephemeral = false for locks. It is due
+		// https://github.com/vitessio/vitess/blob/main/go/vt/topo/zk2topo/utils.go#L55
+		// TODO: Fix/send ephemeral flag value recursively while creating ephemeral file
+		if e.Name == locksPath && e.Type == topo.TypeDirectory {
 			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
 		}
 	}
 
-	// everything is good lets acquire lock.
+	// everything is good let's acquire the lock.
 	return zs.lock(ctx, dirPath, contents)
 }
 

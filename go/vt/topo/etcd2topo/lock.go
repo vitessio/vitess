@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"regexp"
 
 	"github.com/spf13/pflag"
 
@@ -35,8 +34,7 @@ import (
 )
 
 var (
-	leaseTTL          = 30
-	nodeUnderLockPath = regexp.MustCompile(fmt.Sprintf("^%s$", locksPath))
+	leaseTTL = 30
 )
 
 func init() {
@@ -134,10 +132,6 @@ type etcdLockDescriptor struct {
 }
 
 // TryLock is part of the topo.Conn interface.
-// TryLock provides exactly same functionality as 'Lock', the only difference is
-// it tires its best to be non-blocking call. Non-blocking is the best effort though.
-// If there is already lock exists for dirPath then TryLock
-// unlike Lock will return immediately with error 'lock already exists'.
 func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list all the entries under dirPath
 	entries, err := s.ListDir(ctx, dirPath, true)
@@ -150,15 +144,15 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	// if there is a folder '/locks' with some entries in it then we can assume that keyspace already have a lock
-	// throw error in this case
+	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
+	// Throw error in this case
 	for _, e := range entries {
-		if nodeUnderLockPath.MatchString(e.Name) && e.Type == topo.TypeDirectory {
+		if e.Name == locksPath && e.Type == topo.TypeDirectory && e.Ephemeral {
 			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
 		}
 	}
 
-	// everything is good lets acquire lock.
+	// everything is good let's acquire the lock.
 	return s.lock(ctx, dirPath, contents)
 }
 

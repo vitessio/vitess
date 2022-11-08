@@ -17,9 +17,11 @@ limitations under the License.
 package test
 
 import (
-	"testing"
-
 	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"google.golang.org/protobuf/proto"
 
@@ -92,5 +94,74 @@ func checkShard(t *testing.T, ts *topo.Server) {
 
 	if _, err := ts.GetShardNames(ctx, "test_keyspace666"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetShardNames(666): %v", err)
+	}
+}
+
+// checkShardWithLock verifies the Shard operations work correctly With Lock
+func checkShardWithLock(t *testing.T, ts *topo.Server) {
+	ctx := context.Background()
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace: %v", err)
+	}
+
+	unblock := make(chan struct{})
+	finished := make(chan struct{})
+
+	// Check GetShardNames returns [], nil for existing keyspace with no shards.
+	if names, err := ts.GetShardNames(ctx, "test_keyspace"); err != nil || len(names) != 0 {
+		t.Errorf("GetShardNames(keyspace with no shards) didn't return [] nil: %v %v", names, err)
+	}
+
+	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0"); err != nil {
+		t.Fatalf("CreateShard: %v", err)
+	}
+
+	_, unlock1, err := ts.LockShard(ctx, "test_keyspace", "b0-c0", "lock")
+	if err != nil {
+		t.Errorf("CreateShard called second time, got: %v", err)
+	}
+
+	// As soon as we're unblocked, we try to lock the keyspace.
+	go func() {
+		<-unblock
+		waitUntil := time.Now().Add(10 * time.Second)
+		var isUnLocked1 = false
+		for time.Now().Before(waitUntil) {
+			_, unlock2, err := ts.TryLockShard(ctx, "test_keyspace", "b0-c0", "lock")
+			if err != nil {
+				if !topo.IsErrType(err, topo.NodeExists) {
+					require.Fail(t, "expected node exists during trylock", err.Error())
+				}
+				time.Sleep(1 * time.Second)
+				var finalErr error
+				unlock1(&finalErr)
+				isUnLocked1 = true
+				if finalErr != nil {
+					require.Fail(t, "Unlock(test_keyspace) failed", finalErr.Error())
+				}
+			} else {
+				unlock2(&err)
+				if err != nil {
+					require.Fail(t, "Unlock(test_keyspace) failed", err.Error())
+				}
+				if isUnLocked1 {
+					close(finished)
+				}
+				break
+			}
+		}
+	}()
+
+	// sleep for a while so we're sure the go routine is blocking
+	time.Sleep(2 * time.Second)
+
+	// unblock the go routine so it starts waiting
+	close(unblock)
+
+	timeout := time.After(15 * time.Second)
+	select {
+	case <-finished:
+	case <-timeout:
+		t.Fatalf("unlocking timed out")
 	}
 }

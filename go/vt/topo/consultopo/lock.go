@@ -17,11 +17,9 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"fmt"
 	"path"
-	"regexp"
-
-	"context"
 
 	"github.com/hashicorp/consul/api"
 
@@ -31,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
-
-var nodeUnderLockPath = regexp.MustCompile(fmt.Sprintf("^%s$", locksFilename))
 
 // consulLockDescriptor implements topo.LockDescriptor.
 type consulLockDescriptor struct {
@@ -57,10 +53,6 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 }
 
 // TryLock is part of the topo.Conn interface.
-// TryLock provides exactly same functionality as 'Lock', the only difference is
-// it tires its best to be non-blocking call. Non-blocking is the best effort though.
-// If there is already lock exists for dirPath then TryLock
-// unlike Lock will return immediately with error 'lock already exists'.
 func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list all the entries under dirPath
 	entries, err := s.ListDir(ctx, dirPath, true)
@@ -73,15 +65,15 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	// if there is a file 'lock' in it then we can assume that keyspace already have a lock
-	// throw error in this case
+	// If there is a file 'lock' in it then we can assume that someone else already has a lock.
+	// Throw error in this case
 	for _, e := range entries {
-		if nodeUnderLockPath.MatchString(e.Name) && e.Type == topo.TypeFile && e.Ephemeral {
+		if e.Name == locksFilename && e.Type == topo.TypeFile && e.Ephemeral {
 			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
 		}
 	}
 
-	// everything is good lets acquire lock.
+	// everything is good let's acquire the lock.
 	return s.lock(ctx, dirPath, contents)
 }
 
