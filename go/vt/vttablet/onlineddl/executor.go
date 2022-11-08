@@ -825,6 +825,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	waitForRenameProcess := func() error {
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
+		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
+		// is locked, then the RENAME will be near-instantaneious and it's unlikely that the function will find it.
 		renameWaitCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 		defer cancel()
 
