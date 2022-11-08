@@ -2863,4 +2863,20 @@ func TestMoveTablesDDLHandling(t *testing.T) {
 		_, err = env.tmc.ApplySchema(ctx, env.tablets[100], &tmutils.SchemaChange{SQL: ddlQuery})
 		require.NoError(t, err)
 	})
+
+	t.Run("OnDDL: EXEC_IGNORE", func(t *testing.T) {
+		onDDLAction := binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC_IGNORE)]
+		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+		defer env.close()
+
+		addExpectedQueries(env, onDDLAction)
+		err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
+			"", false, "", false, true, "", false, "", onDDLAction, nil)
+		require.NoError(t, err)
+
+		env.tmc.expectVRQuery(100, ddlQuery, &sqltypes.Result{})
+		env.tmc.expectVRQuery(200, ddlQuery, &sqltypes.Result{})
+		_, err = env.tmc.ApplySchema(ctx, env.tablets[100], &tmutils.SchemaChange{SQL: ddlQuery})
+		require.NoError(t, err)
+	})
 }
