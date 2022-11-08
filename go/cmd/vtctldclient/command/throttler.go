@@ -1,0 +1,84 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package command
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+)
+
+const (
+	// noValueIndicator helps to differentiate between a "no value given in --custom-query hence don't change it"
+	// vs. a "change --custom-query to be empty" scenarios.
+	noValueIndicator = "~"
+)
+
+var (
+	// UpdateThrottlerConfig makes a UpdateThrottlerConfig gRPC call to a vtctld.
+	UpdateThrottlerConfig = &cobra.Command{
+		Use:                   "UpdateThrottlerConfig [--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
+		Short:                 "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandUpdateThrottlerConfig,
+	}
+)
+
+var updateThrottlerConfigOptions = struct {
+	Enable            bool
+	Disable           bool
+	Threshold         float64
+	CustomQuery       string
+	CheckAsCheckSelf  bool
+	CheckAsCheckShard bool
+}{}
+
+func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	_, err := client.UpdateThrottlerConfig(commandCtx, &vtctldatapb.UpdateThrottlerConfigRequest{
+		Enable:            updateThrottlerConfigOptions.Enable,
+		Disable:           updateThrottlerConfigOptions.Disable,
+		Threshold:         updateThrottlerConfigOptions.Threshold,
+		CustomQuery:       updateThrottlerConfigOptions.CustomQuery,
+		CheckAsCheckSelf:  updateThrottlerConfigOptions.CheckAsCheckSelf,
+		CheckAsCheckShard: updateThrottlerConfigOptions.CheckAsCheckShard,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("UpdateThrottlerConfig: ok")
+
+	return nil
+}
+
+func init() {
+
+	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
+	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Disable, "disable", false, "Disable the throttler")
+	UpdateThrottlerConfig.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
+	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", noValueIndicator, "custom throttler check query")
+	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckSelf, "check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
+	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckShard, "check-as-check-shard", false, "use standard behavior for /throttler/check requests")
+	Root.AddCommand(UpdateThrottlerConfig)
+}

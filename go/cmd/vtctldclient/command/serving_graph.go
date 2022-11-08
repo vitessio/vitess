@@ -51,14 +51,6 @@ var (
 		Args:                  cobra.MinimumNArgs(1),
 		RunE:                  commandGetSrvKeyspaces,
 	}
-	// UpdateThrottlerConfig makes a UpdateThrottlerConfig gRPC call to a vtctld.
-	UpdateThrottlerConfig = &cobra.Command{
-		Use:                   "UpdateThrottlerConfig [--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
-		Short:                 "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandUpdateThrottlerConfig,
-	}
 	// GetSrvVSchema makes a GetSrvVSchema gRPC call to a vtctld.
 	GetSrvVSchema = &cobra.Command{
 		Use:                   "GetSrvVSchema cell",
@@ -144,35 +136,6 @@ func commandGetSrvKeyspaces(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%s\n", data)
-
-	return nil
-}
-
-var updateThrottlerConfigOptions = struct {
-	Enable            bool
-	Disable           bool
-	Threshold         float64
-	CustomQuery       string
-	CheckAsCheckSelf  bool
-	CheckAsCheckShard bool
-}{}
-
-func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
-	_, err := client.UpdateThrottlerConfig(commandCtx, &vtctldatapb.UpdateThrottlerConfigRequest{
-		Enable:            updateThrottlerConfigOptions.Enable,
-		Disable:           updateThrottlerConfigOptions.Disable,
-		Threshold:         updateThrottlerConfigOptions.Threshold,
-		CustomQuery:       updateThrottlerConfigOptions.CustomQuery,
-		CheckAsCheckSelf:  updateThrottlerConfigOptions.CheckAsCheckSelf,
-		CheckAsCheckShard: updateThrottlerConfigOptions.CheckAsCheckShard,
-	})
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("UpdateThrottlerConfig: ok")
 
 	return nil
 }
@@ -282,13 +245,4 @@ func init() {
 
 	RebuildVSchemaGraph.Flags().StringSliceVarP(&rebuildVSchemaGraphOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to look for tablets.")
 	Root.AddCommand(RebuildVSchemaGraph)
-
-	noValueIndicator := "~"
-	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
-	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Disable, "disable", false, "Disable the throttler")
-	UpdateThrottlerConfig.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
-	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", noValueIndicator, "custom throttler check query")
-	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckSelf, "check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
-	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckShard, "check-as-check-shard", false, "use standard behavior for /throttler/check requests")
-	Root.AddCommand(UpdateThrottlerConfig)
 }
