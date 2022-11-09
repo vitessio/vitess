@@ -287,12 +287,9 @@ func (f *FakeConn) Lock(ctx context.Context, dirPath, contents string) (topo.Loc
 	return &fakeLockDescriptor{}, nil
 }
 
-// TryLock implements the Conn interface
-// As of today it provides same functionality as Lock
+// TryLock is part of the topo.Conn interface. Its implementation is same as Lock
 func (f *FakeConn) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return &fakeLockDescriptor{}, nil
+	return f.Lock(ctx, dirPath, contents)
 }
 
 // Watch implements the Conn interface

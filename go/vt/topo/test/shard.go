@@ -152,13 +152,10 @@ func checkShardWithLock(t *testing.T, ts *topo.Server) {
 		}
 	}()
 
-	// sleep for a while so we're sure the go routine is blocking
-	time.Sleep(2 * time.Second)
-
 	// unblock the go routine so it starts waiting
 	close(unblock)
 
-	timeout := time.After(15 * time.Second)
+	timeout := time.After(60 * time.Second)
 	select {
 	case <-finished:
 	case <-timeout:

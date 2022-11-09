@@ -18,6 +18,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"testing"
 	"time"
@@ -98,12 +99,32 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 
 	// test we can interrupt taking the lock
 	interruptCtx, cancel := context.WithCancel(ctx)
+	finished := make(chan struct{})
+
 	go func() {
-		time.Sleep(1 * time.Second)
+		<-finished
 		cancel()
 	}()
-	if _, err := conn.TryLock(interruptCtx, keyspacePath, "interrupted"); !topo.IsErrType(err, topo.NodeExists) {
-		require.Fail(t, "TryLock failed", err.Error())
+
+	waitUntil := time.Now().Add(10 * time.Second)
+	var firstTime = true
+	for {
+		fmt.Println("The Current time is: ", time.Now())
+		if time.Now().After(waitUntil) {
+			t.Fatalf("unlocking timed out")
+		}
+		if interruptCtx.Err() != nil {
+			require.ErrorContains(t, interruptCtx.Err(), "context canceled")
+			break
+		}
+		if _, err := conn.TryLock(interruptCtx, keyspacePath, "interrupted"); !topo.IsErrType(err, topo.NodeExists) {
+			require.Fail(t, "TryLock failed", err.Error())
+		}
+		if firstTime {
+			close(finished)
+			firstTime = false
+		}
+		time.Sleep(1 * time.Second)
 	}
 
 	if err := lockDescriptor.Check(ctx); err != nil {
@@ -165,9 +186,6 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 
 	// unblock the go routine so it starts waiting
 	close(unblock)
-
-	// sleep for a while so we're sure the go routine is blocking
-	time.Sleep(5 * time.Second)
 
 	if err = lockDescriptor2.Unlock(ctx); err != nil {
 		require.Fail(t, "Unlock(test_keyspace) failed", err.Error())

@@ -41,8 +41,10 @@ func newKeyRange(value string) *topodatapb.KeyRange {
 }
 
 func executeTestSuite(f func(*testing.T, *topo.Server), t *testing.T, ts *topo.Server, ignoreList []string, name string) {
+	// some test does not apply every where therefore we ignore them
 	for _, n := range ignoreList {
 		if n == name {
+			t.Logf("=== ignoring test %s", name)
 			return
 		}
 	}
@@ -52,6 +54,9 @@ func executeTestSuite(f func(*testing.T, *topo.Server), t *testing.T, ts *topo.S
 // TopoServerTestSuite runs the full topo.Server/Conn test suite.
 // The factory method should return a topo.Server that has a single cell
 // called LocalCellName.
+// Not all tests are applicable for each Topo server, therefore we provide ignoreList in order to
+// avoid them for given Topo server tests. For example `TryLock` implementation is same as `Lock` for some Topo servers.
+// Hence, for these Topo servers we ignore executing TryLock Tests.
 func TopoServerTestSuite(t *testing.T, factory func() *topo.Server, ignoreList []string) {
 	var ts *topo.Server
 

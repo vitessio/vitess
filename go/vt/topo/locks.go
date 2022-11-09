@@ -318,33 +318,17 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 // - a context with a locksInfo structure for future reference.
 // - an unlock method
 // - an error if anything failed.
-
-// TryLockShard is different from LockShard. It is non-blocking (best-effort) which means
-// if there is already a lock at Global-cell level for a given shard then instead
-// of waiting (blocking) on that lock it returns immediately with an error Lock already acquired.
-// It is the best effort because there is a possibility that a thread checks for lock for a given dirPath
-// but by the time it acquires the lock, some other thread has already acquired it.
-// In this case the client will block until the other caller releases the lock or the
-// client call times out.
 //
-// We are currently only using this method to lock actions that would
-// impact each-other. Most changes of the Shard object are done by
-// UpdateShardFields, which is not locking the shard object. The
-// current list of actions that lock a shard are:
-// * all Vitess-controlled re-parenting operations:
-//   - InitShardPrimary
-//   - PlannedReparentShard
-//   - EmergencyReparentShard
+// `TryLockShard` is different from `LockShard`. If there is already a lock on given shard,
+// then unlike `LockShard` instead of waiting and blocking the client it returns with
+// `Lock already exists` error. With current implementation it may not be able to fail-fast
+// for some scenarios. For example there is a possibility that a thread checks for lock for
+// a given shard but by the time it acquires the lock, some other thread has already acquired it,
+// in this case the client will block until the other caller releases the lock or the
+// client call times out (just like standard `LockShard' implementation). In short the lock checking
+// and acquiring is not under the same mutex in current implementation of `TryLockShard`.
 //
-// * any vtorc recovery e.g
-//   - RecoverDeadPrimary
-//   - ElectNewPrimary
-//   - FixPrimary
-//
-// * before any replication repair from replication manager
-//
-// * operations that we don't want to conflict with re-parenting:
-//   - DeleteTablet when it's the shard's current primary
+// We are currently using `TryLockShard` during tablet discovery in Vtorc recovery
 func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
 	return ts.internalLockShard(ctx, keyspace, shard, action, false)
 }

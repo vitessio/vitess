@@ -113,15 +113,16 @@ type Conn interface {
 	// Returns ErrInterrupted if ctx is canceled.
 	Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 
-	// TryLock provides exactly same functionality as 'Lock', the only difference is
-	// it tries its best to be non-blocking. With current implementation for concurrent
-	// operations it may result in blocking the client (in some scenarios) just like the 'Lock' operation.
-	// For example there is a possibility that a thread checks for lock for a given dirPath
+	// TryLock takes lock on the given directory with a fail-fast approach.
+	// It is similar to `Lock` but the difference is it attempts to acquire the lock
+	// if it is likely to succeed. If there is already a lock on given path, then unlike `Lock`
+	// instead of waiting and blocking the client it returns with `Lock already exists` error.
+	// With current implementation it may not be able to fail-fast for some scenarios.
+	// For example there is a possibility that a thread checks for lock for a given path
 	// but by the time it acquires the lock, some other thread has already acquired it,
 	// in this case the client will block until the other caller releases the lock or the
-	// client call times out. In short lock checking and acquiring is not under the same mutex in
-	// current implementation of TryLock. If there is already a lock exists for a given dirPath
-	// then 'TryLock' unlike 'Lock' will return immediately with error 'lock already exists'.
+	// client call times out (just like standard `Lock' implementation). In short the lock checking
+	// and acquiring is not under the same mutex in current implementation of `TryLock`.
 	TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 
 	//
