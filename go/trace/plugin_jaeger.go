@@ -21,10 +21,9 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"github.com/uber/jaeger-client-go/config"
 
-	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/v2"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -35,25 +34,28 @@ included but nothing Jaeger specific.
 */
 
 var (
-	jaegerConfigKey = viperutil.KeyPartial(configKey("jaeger"))
-	agentHost       = viperutil.NewValue(
+	jaegerConfigKey = viperutil.KeyPrefixFunc(configKey("jaeger"))
+	agentHost       = viperutil.Configure(
 		jaegerConfigKey("agent-host"),
-		viper.GetString,
-		viperutil.WithFlags[string]("jaeger-agent-host"),
+		viperutil.Options[string]{
+			FlagName: "jaeger-agent-host",
+		},
 	)
-	samplingType = viperutil.NewValue(
+	samplingType = viperutil.Configure(
 		jaegerConfigKey("sampling_type"),
-		viper.GetString,
-		viperutil.WithFlags[string]("tracing-sampling-type"),
-		viperutil.WithDefault("const"),
-		viperutil.WithEnvVars[string]("JAEGER_SAMPLER_TYPE"),
+		viperutil.Options[string]{
+			Default:  "const",
+			EnvVars:  []string{"JAEGER_SAMPLER_TYPE"},
+			FlagName: "tracing-sampling-type",
+		},
 	)
-	samplingRate = viperutil.NewValue(
+	samplingRate = viperutil.Configure(
 		jaegerConfigKey("sampling_rate"),
-		viper.GetFloat64,
-		viperutil.WithFlags[float64]("tracing-sampling-rate"),
-		viperutil.WithDefault(0.1),
-		viperutil.WithEnvVars[float64]("JAEGER_SAMPLER_PARAM"),
+		viperutil.Options[float64]{
+			Default:  0.1,
+			EnvVars:  []string{"JAEGER_SAMPLER_PARAM"},
+			FlagName: "tracing-sampling-rate",
+		},
 	)
 )
 
@@ -61,14 +63,11 @@ func init() {
 	// If compiled with plugin_jaeger, ensure that trace.RegisterFlags includes
 	// jaeger tracing flags.
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
-		fs.String("jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
-		agentHost.Bind(nil, fs)
+		fs.String("jaeger-agent-host", agentHost.Default(), "host and port to send spans to. if empty, no tracing will be done")
+		fs.String("tracing-sampling-type", samplingType.Default(), "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
+		fs.Float64("tracing-sampling-rate", samplingRate.Default(), "sampling rate for the probabilistic jaeger sampler")
 
-		fs.String("tracing-sampling-type", samplingType.Value(), "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
-		samplingType.Bind(nil, fs)
-
-		fs.Float64("tracing-sampling-rate", samplingRate.Value(), "sampling rate for the probabilistic jaeger sampler")
-		samplingRate.Bind(nil, fs)
+		viperutil.BindFlags(fs, agentHost, samplingRate, samplingType)
 	})
 }
 

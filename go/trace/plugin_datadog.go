@@ -6,25 +6,26 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 	ddtracer "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 
-	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/v2"
 )
 
 var (
-	dataDogConfigKey = viperutil.KeyPartial(configKey("datadog"))
+	dataDogConfigKey = viperutil.KeyPrefixFunc(configKey("datadog"))
 
-	dataDogHost = viperutil.NewValue(
+	dataDogHost = viperutil.Configure(
 		dataDogConfigKey("agent.host"),
-		viper.GetString,
-		viperutil.WithFlags[string]("datadog-agent-host"),
+		viperutil.Options[string]{
+			FlagName: "datadog-agent-host",
+		},
 	)
-	dataDogPort = viperutil.NewValue(
+	dataDogPort = viperutil.Configure(
 		dataDogConfigKey("agent.port"),
-		viper.GetString,
-		viperutil.WithFlags[string]("datadog-agent-port"),
+		viperutil.Options[string]{
+			FlagName: "datadog-agent-port",
+		},
 	)
 )
 
@@ -33,10 +34,9 @@ func init() {
 	// includes datadaog tracing flags.
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
 		fs.String("datadog-agent-host", "", "host to send spans to. if empty, no tracing will be done")
-		dataDogHost.Bind(nil, fs)
-
 		fs.String("datadog-agent-port", "", "port to send spans to. if empty, no tracing will be done")
-		dataDogPort.Bind(nil, fs)
+
+		viperutil.BindFlags(fs, dataDogHost, dataDogPort)
 	})
 }
 
