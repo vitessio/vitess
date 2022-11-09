@@ -368,3 +368,15 @@ func TestEmptyTableAggr(t *testing.T) {
 	}
 
 }
+
+func TestAggregateRandom(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(t1_id, name, value, shardKey) values (1, 'name 1', 'value 1', 1), (2, 'name 2', 'value 2', 2)")
+	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
+
+	utils.Exec(t, mcmp.VtConn, "set sql_mode=''")
+	utils.Exec(t, mcmp.MySQLConn, "set sql_mode=''")
+	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
+}
