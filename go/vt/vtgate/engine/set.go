@@ -101,6 +101,13 @@ type (
 
 var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
 
+var isolationLevelToExecuteOptionIsolationLevel = map[string]querypb.ExecuteOptions_TransactionIsolation{
+	"repeatable-read":  querypb.ExecuteOptions_REPEATABLE_READ,
+	"read-committed":   querypb.ExecuteOptions_READ_COMMITTED,
+	"read-uncommitted": querypb.ExecuteOptions_READ_UNCOMMITTED,
+	"serializable":     querypb.ExecuteOptions_SERIALIZABLE,
+}
+
 var _ Primitive = (*Set)(nil)
 
 // RouteType implements the Primitive interface method.
@@ -459,6 +466,17 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		// TODO (4127): This is a dangerous NOP.
 		noop := func(context.Context, bool) error { return nil }
 		err = svss.setBoolSysVar(ctx, env, noop)
+	case sysvars.TxIsolation.Name,
+		sysvars.TransactionIsolation.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		out, ok := isolationLevelToExecuteOptionIsolationLevel[strings.ToLower(str)]
+		if !ok {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value of '%s'", svss.Name, str)
+		}
+		vcursor.Session().SetTransactionIsolation(querypb.ExecuteOptions_TransactionIsolation(out))
 	case sysvars.SQLSelectLimit.Name:
 		intValue, err := svss.evalAsInt64(env)
 		if err != nil {

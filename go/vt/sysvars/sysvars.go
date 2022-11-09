@@ -59,6 +59,8 @@ var (
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
 	QueryTimeout                = SystemVariable{Name: "query_timeout"}
+	TransactionIsolation        = SystemVariable{Name: "transaction_isolation", Default: off}
+	TxIsolation                 = SystemVariable{Name: "tx_isolation", Default: off}
 
 	// Online DDL
 	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
@@ -88,6 +90,8 @@ var (
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
 		QueryTimeout,
+		TransactionIsolation,
+		TxIsolation,
 	}
 
 	ReadOnly = []SystemVariable{
@@ -185,8 +189,6 @@ var (
 		{Name: "optimizer_trace_features"},
 		{Name: "optimizer_trace_limit"},
 		{Name: "optimizer_trace_max_mem_size"},
-		{Name: "transaction_isolation"},
-		{Name: "tx_isolation"},
 		{Name: "optimizer_trace_offset"},
 		{Name: "parser_max_mem_size"},
 		{Name: "profiling", IsBoolean: true},

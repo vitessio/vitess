@@ -155,6 +155,18 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set workload = 1",
 		err: "incorrect argument type to variable 'workload': INT64",
 	}, {
+		in:  "set tx_isolation = 'read-committed'",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED}},
+	}, {
+		in:  "set transaction_isolation = 'read-committed'",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED}},
+	}, {
+		in:  "set transaction_isolation = 'read_committed'",
+		err: "Variable 'transaction_isolation' can't be set to the value of 'read_committed'",
+	}, {
+		in:  "set transaction_isolation = 'read committed'",
+		err: "Variable 'transaction_isolation' can't be set to the value of 'read committed'",
+	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
@@ -305,10 +317,6 @@ func TestExecutorSetOp(t *testing.T) {
 		in:      "set sql_safe_updates = 1",
 		sysVars: map[string]string{"sql_safe_updates": "1"},
 		result:  returnResult("sql_safe_updates", "int64", "1"),
-	}, {
-		in:      "set tx_isolation = 'read-committed'",
-		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
-		result:  returnResult("tx_isolation", "varchar", "read-committed"),
 	}, {
 		in:      "set sql_quote_show_create = 0",
 		sysVars: map[string]string{"sql_quote_show_create": "0"},
