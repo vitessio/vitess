@@ -41457,6 +41457,9 @@ export namespace vtctldata {
         /** UpdateThrottlerConfigRequest custom_query */
         custom_query?: (string|null);
 
+        /** UpdateThrottlerConfigRequest custom_query_set */
+        custom_query_set?: (boolean|null);
+
         /** UpdateThrottlerConfigRequest check_as_check_self */
         check_as_check_self?: (boolean|null);
 
@@ -41487,6 +41490,9 @@ export namespace vtctldata {
 
         /** UpdateThrottlerConfigRequest custom_query. */
         public custom_query: string;
+
+        /** UpdateThrottlerConfigRequest custom_query_set. */
+        public custom_query_set: boolean;
 
         /** UpdateThrottlerConfigRequest check_as_check_self. */
         public check_as_check_self: boolean;
