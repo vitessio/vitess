@@ -219,25 +219,25 @@ func TestExecutorSet(t *testing.T) {
 		err: "variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set session transaction isolation level repeatable read",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_REPEATABLE_READ}},
 	}, {
 		in:  "set session transaction isolation level read committed",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED}},
 	}, {
 		in:  "set session transaction isolation level read uncommitted",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_UNCOMMITTED}},
 	}, {
 		in:  "set session transaction isolation level serializable",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE}},
 	}, {
 		in:  "set transaction isolation level serializable",
-		out: &vtgatepb.Session{Autocommit: true},
+		err: "unsupported: 'transaction_isolation' for next transaction scope is not supported, usage with 'session' scope is allowed",
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true},
+		err: "unsupported: 'transaction_read_only' for next transaction scope is not supported, usage with 'session' scope is allowed",
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true},
+		err: "unsupported: 'transaction_read_only' for next transaction scope is not supported, usage with 'session' scope is allowed",
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},

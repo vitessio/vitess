@@ -413,20 +413,6 @@ const (
 	YearMonthStr         = "year_month"
 )
 
-// Constants for Enum type - AccessMode
-const (
-	ReadOnly AccessMode = iota
-	ReadWrite
-)
-
-// Constants for Enum type - IsolationLevel
-const (
-	ReadUncommitted IsolationLevel = iota
-	ReadCommitted
-	RepeatableRead
-	Serializable
-)
-
 // Constants for Enum Type - Insert.Action
 const (
 	InsertAct InsertAction = iota

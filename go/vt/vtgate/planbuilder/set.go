@@ -100,6 +100,8 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 
 			setOps = append(setOps,
 				&engine.VitessMetadata{Name: expr.Var.Name.Lowered(), Value: val})
+		case sqlparser.NoScope:
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '%v' for next transaction scope is not supported, usage with 'session' scope is allowed", expr.Var.Name.String())
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined set type: %v", expr.Var.Scope.ToString())
 		}

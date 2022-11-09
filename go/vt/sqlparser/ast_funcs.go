@@ -687,6 +687,14 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 	}
 }
 
+// UpdateSetExprsScope updates the scope of the variables in SetExprs.
+func UpdateSetExprsScope(setExprs SetExprs, scope Scope) SetExprs {
+	for _, setExpr := range setExprs {
+		setExpr.Var.Scope = scope
+	}
+	return setExprs
+}
+
 // NewSetVariable returns a variable that can be used with SET.
 func NewSetVariable(str string, scope Scope) *Variable {
 	return &Variable{Name: createIdentifierCI(str), Scope: scope}
@@ -721,6 +729,10 @@ func NewVariableExpression(str string, at AtCount) *Variable {
 			v.Name = createIdentifierCI(str[16:])
 			v.Scope = VitessMetadataScope
 		default:
+			if strings.HasSuffix(l, "transaction_isolation") || strings.HasSuffix(l, "transaction_read_only") {
+				v.Scope = NoScope
+				break
+			}
 			v.Scope = SessionScope
 		}
 	case SingleAt:

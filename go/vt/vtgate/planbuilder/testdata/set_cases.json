@@ -535,12 +535,24 @@
   },
   {
     "comment": "set transaction",
-    "query": "set transaction read only",
+    "query": "set session transaction read only",
     "plan": {
       "QueryType": "SET",
-      "Original": "set transaction read only",
+      "Original": "set session transaction read only",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "transaction_read_only",
+            "Expr": "INT64(1)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
       }
     }
   },

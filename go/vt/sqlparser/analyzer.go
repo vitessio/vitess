@@ -72,7 +72,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUpdate
 	case *Delete:
 		return StmtDelete
-	case *Set, *SetTransaction:
+	case *Set:
 		return StmtSet
 	case *Show:
 		return StmtShow
