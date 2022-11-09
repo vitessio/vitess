@@ -21,8 +21,8 @@ type Base[T any] struct {
 	KeyName    string
 	DefaultVal T
 
-	GetFunc func(v *viper.Viper) func(key string) T
-	get     func(key string) T
+	GetFunc      func(v *viper.Viper) func(key string) T
+	BoundGetFunc func(key string) T
 
 	Aliases  []string
 	FlagName string
@@ -31,7 +31,7 @@ type Base[T any] struct {
 
 func (val *Base[T]) Key() string { return val.KeyName }
 func (val *Base[T]) Default() T  { return val.DefaultVal }
-func (val *Base[T]) Get() T      { return val.get(val.Key()) }
+func (val *Base[T]) Get() T      { return val.BoundGetFunc(val.Key()) }
 
 var errNoFlagDefined = errors.New("flag not defined")
 
@@ -106,7 +106,7 @@ type Static[T any] struct {
 
 func NewStatic[T any](base *Base[T]) *Static[T] {
 	base.Bind(registry.Static)
-	base.get = base.GetFunc(registry.Static)
+	base.BoundGetFunc = base.GetFunc(registry.Static)
 
 	return &Static[T]{
 		Base: base,
@@ -123,7 +123,7 @@ type Dynamic[T any] struct {
 
 func NewDynamic[T any](base *Base[T]) *Dynamic[T] {
 	base.Bind(registry.Dynamic)
-	base.get = sync.AdaptGetter(base.Key(), base.GetFunc, registry.Dynamic)
+	base.BoundGetFunc = sync.AdaptGetter(base.Key(), base.GetFunc, registry.Dynamic)
 
 	return &Dynamic[T]{
 		Base: base,
