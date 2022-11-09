@@ -41442,6 +41442,9 @@ export namespace vtctldata {
     /** Properties of an UpdateThrottlerConfigRequest. */
     interface IUpdateThrottlerConfigRequest {
 
+        /** UpdateThrottlerConfigRequest keyspace */
+        keyspace?: (string|null);
+
         /** UpdateThrottlerConfigRequest enable */
         enable?: (boolean|null);
 
@@ -41469,6 +41472,9 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.IUpdateThrottlerConfigRequest);
+
+        /** UpdateThrottlerConfigRequest keyspace. */
+        public keyspace: string;
 
         /** UpdateThrottlerConfigRequest enable. */
         public enable: boolean;
