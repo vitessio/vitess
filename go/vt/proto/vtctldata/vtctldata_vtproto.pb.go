@@ -4576,11 +4576,21 @@ func (m *UpdateThrottlerConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x38
+		dAtA[i] = 0x40
 	}
 	if m.CheckAsCheckSelf {
 		i--
 		if m.CheckAsCheckSelf {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
+	}
+	if m.CustomQuerySet {
+		i--
+		if m.CustomQuerySet {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -11489,6 +11499,9 @@ func (m *UpdateThrottlerConfigRequest) SizeVT() (n int) {
 	l = len(m.CustomQuery)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.CustomQuerySet {
+		n += 2
 	}
 	if m.CheckAsCheckSelf {
 		n += 2
@@ -24267,6 +24280,26 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 6:
 			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CustomQuerySet", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.CustomQuerySet = bool(v != 0)
+		case 7:
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CheckAsCheckSelf", wireType)
 			}
 			var v int
@@ -24285,7 +24318,7 @@ func (m *UpdateThrottlerConfigRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.CheckAsCheckSelf = bool(v != 0)
-		case 7:
+		case 8:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CheckAsCheckShard", wireType)
 			}

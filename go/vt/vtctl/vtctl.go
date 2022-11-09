@@ -3651,11 +3651,11 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) (err error) {
-	noValueIndicator := "~"
 	enable := subFlags.Bool("enable", false, "Enable the throttler")
 	disable := subFlags.Bool("disable", false, "Disable the throttler")
 	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
-	customQuery := subFlags.String("custom-query", noValueIndicator, "custom throttler check query")
+	customQuerySet := subFlags.Changed("custom-query")
+	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
 	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
 
@@ -3678,7 +3678,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
 		}
-		if *customQuery != noValueIndicator {
+		if customQuerySet {
 			// custom query provided
 			throttlerConfig.CustomQuery = *customQuery
 			throttlerConfig.Threshold = *threshold // allowed to be zero/negative because who knows what kind of custom query this is

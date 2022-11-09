@@ -679,10 +679,12 @@ message UpdateThrottlerConfigRequest {
   double threshold = 4;
   // CustomQuery replaces the default replication lag query
   string custom_query = 5;
+  // CustomQuerySet indicates that the value of CustomQuery has changed
+  bool custom_query_set = 6;
   // CheckAsCheckSelf instructs the throttler to respond to /check requests by checking the tablet's own health
-  bool check_as_check_self=6;
+  bool check_as_check_self=7;
   // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
-  bool check_as_check_shard=7;
+  bool check_as_check_shard=8;
 }
 
 message UpdateThrottlerConfigResponse {

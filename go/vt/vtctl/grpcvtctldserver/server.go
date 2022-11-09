@@ -1566,12 +1566,11 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
-	noValueIndicator := "~"
 	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
 		}
-		if req.CustomQuery != noValueIndicator {
+		if req.CustomQuerySet {
 			// custom query provided
 			throttlerConfig.CustomQuery = req.CustomQuery
 			throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is

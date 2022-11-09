@@ -24,12 +24,6 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const (
-	// noValueIndicator helps to differentiate between a "no value given in --custom-query hence don't change it"
-	// vs. a "change --custom-query to be empty" scenarios.
-	noValueIndicator = "~"
-)
-
 var (
 	// UpdateThrottlerConfig makes a UpdateThrottlerConfig gRPC call to a vtctld.
 	UpdateThrottlerConfig = &cobra.Command{
@@ -56,11 +50,11 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Disable, "disable", false, "Disable the throttler")
 	UpdateThrottlerConfig.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
-	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", noValueIndicator, "custom throttler check query")
+	updateThrottlerConfigOptions.CustomQuerySet = UpdateThrottlerConfig.Flags().Changed("custom-query")
+	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", "", "custom throttler check query")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckSelf, "check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckShard, "check-as-check-shard", false, "use standard behavior for /throttler/check requests")
 	Root.AddCommand(UpdateThrottlerConfig)
