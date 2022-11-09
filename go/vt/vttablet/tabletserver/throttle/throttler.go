@@ -347,6 +347,8 @@ func (throttler *Throttler) IsEnabled() bool {
 	return atomic.LoadInt64(&throttler.isEnabled) > 0
 }
 
+// Enable activates the throttler probes; when enabled, the throttler responds to check queries based on
+// the collected metrics.
 func (throttler *Throttler) Enable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
@@ -366,6 +368,8 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 	return true
 }
 
+// Disable deactivates the probes and associated operations. When disabled, the throttler reponds to check
+// queries with "200 OK" irrespective of lag or any other metrics.
 func (throttler *Throttler) Disable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
@@ -378,7 +382,6 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 	throttler.aggregatedMetrics.Flush()
 	throttler.recentApps.Flush()
-	throttler.nonLowPriorityAppRequestsThrottled.Flush()
 	throttler.nonLowPriorityAppRequestsThrottled.Flush()
 	// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
 
@@ -401,12 +404,39 @@ func (throttler *Throttler) Open() error {
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 
 	if throttlerConfigViaTopo {
-		throttlerConfig, err := throttler.readThrottlerConfig(ctx)
-		if err != nil {
-			return err
-		}
-		throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
+		// We want to read throttler config from topo and apply it.
+		// But also, we're in an Open() function, which blocks state manager's operation, and affects
+		// opening of all other components. We thus read the throttler config in the background.
+		// However, we want to handle a situation where the read errors out.
+		// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
+		go func() {
+			retryTicker := time.NewTicker(time.Minute)
+			defer retryTicker.Stop()
+			for {
+				if atomic.LoadInt64(&throttler.isOpen) == 0 {
+					// closed down. No need to keep retrying
+					return
+				}
+
+				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
+				if err == nil {
+					// it's possible that during a retry-sleep, the throttler is closed and opened again, leading
+					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
+					// attempt to read the throttler config; but we just want to ensure they don't step on each other
+					// while applying the changes.
+					throttler.initMutex.Lock()
+					defer throttler.initMutex.Unlock()
+
+					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
+					return
+				}
+				log.Errorf("Throttler.Open(): error reading throttler config. Will retry in 1 minute. Err=%+v", err)
+				<-retryTicker.C
+			}
+		}()
 	} else {
+		// backwards-cmpatible: check for --enable-lag-throttler flag in vttablet
+		// this will be removed in a future version
 		if throttler.env.Config().EnableLagThrottler {
 			go throttler.Enable(ctx)
 		}
