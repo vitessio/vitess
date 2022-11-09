@@ -42,6 +42,29 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	}
 }
 
+// AssertMatchesAny ensures the given query produces any one of the expected results.
+func AssertMatchesAny(t testing.TB, conn *mysql.Conn, query string, expected ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, e := range expected {
+		diff := cmp.Diff(e, got)
+		if diff == "" {
+			return
+		}
+	}
+	t.Errorf("Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
+}
+
+// Exec executes the given query using the given connection. The results are returned.
+// The test fails if the query produces an error.
+func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err, "for query: "+query)
+	return qr
+}
+
 func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	_, err := ExecAllowError(t, conn, query)
@@ -85,13 +108,6 @@ func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
 		require.NoError(t, err)
 		assert.Empty(t, qr.Rows)
 	})
-}
-
-func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err, "for query: "+query)
-	return qr
 }
 
 func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {

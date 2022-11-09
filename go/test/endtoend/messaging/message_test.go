@@ -591,20 +591,3 @@ func getVar(vttablet *cluster.Vttablet) (map[string]interface{}, error) {
 	}
 	return nil, nil
 }
-
-func parseDebugVars(t *testing.T, output interface{}, vttablet *cluster.Vttablet) {
-	debugVarURL := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
-	resp, err := http.Get(debugVarURL)
-	if err != nil {
-		t.Fatalf("failed to fetch %q: %v", debugVarURL, err)
-	}
-
-	respByte, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		t.Fatalf("status code %d while fetching %q:\n%s", resp.StatusCode, debugVarURL, respByte)
-	}
-
-	if err := json.Unmarshal(respByte, output); err != nil {
-		t.Fatalf("failed to unmarshal JSON from %q: %v", debugVarURL, err)
-	}
-}

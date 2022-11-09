@@ -66,11 +66,14 @@ func TestShowColumns(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	expected := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
-	utils.AssertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
+	expected80 := `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")] [VARCHAR("idx") BLOB("varchar(50)") VARCHAR("YES") BINARY("") NULL VARCHAR("")]]`
+	expected57 := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
+	utils.AssertMatchesAny(t, conn, "show columns from `t5_null_vindex` in `ks`", expected80, expected57)
+	utils.AssertMatchesAny(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected80, expected57)
+	utils.AssertMatchesAny(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected80, expected57)
+	utils.AssertMatchesAny(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'",
+		`[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")]]`,
+		`[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
 }
 
 func TestShowTables(t *testing.T) {
@@ -81,7 +84,6 @@ func TestShowTables(t *testing.T) {
 	query := "show tables;"
 	qr := utils.Exec(t, conn, query)
 
-	assert.Equal(t, "information_schema", qr.Fields[0].Database)
 	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
 }
 
@@ -475,10 +477,9 @@ func TestFunctionInDefault(t *testing.T) {
 
 	// set the sql mode ALLOW_INVALID_DATES
 	utils.Exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
-
-	_, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
-	// this query fails because mysql57 does not support functions in default clause
-	require.Error(t, err)
+	// test that default expression works for columns.
+	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
+	utils.Exec(t, conn, "drop table function_default")
 
 	// verify that currenet_timestamp and it's aliases work as default values
 	utils.Exec(t, conn, `create table function_default (
@@ -501,11 +502,11 @@ ts10 TIMESTAMP DEFAULT LOCALTIME,
 ts11 TIMESTAMP DEFAULT LOCALTIMESTAMP(),
 ts12 TIMESTAMP DEFAULT LOCALTIME()
 )`)
+
 	utils.Exec(t, conn, "drop table function_default")
 
-	_, err = conn.ExecuteFetch(`create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`, 1000, true)
-	// this query fails because utc_timestamp is not supported in default clause
-	require.Error(t, err)
+	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
+	utils.Exec(t, conn, "drop table function_default")
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	utils.Exec(t, conn, "drop table function_default")
