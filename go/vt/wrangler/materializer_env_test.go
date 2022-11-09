@@ -18,7 +18,6 @@ package wrangler
 
 import (
 	"context"
-	_ "flag"
 	"fmt"
 	"os"
 	"regexp"
