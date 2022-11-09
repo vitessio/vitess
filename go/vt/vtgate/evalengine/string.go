@@ -273,8 +273,9 @@ type builtinConv struct {
 
 func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	const MaxUint = 18446744073709551615
+	const MAXINT = 9223372036854775807
+	const MININT = -9223372036854775808
 	var fromNum uint64
-	var fromNumNeg uint64
 	var isNeg bool
 	var rawString string
 	inarg := &args[0]
@@ -297,7 +298,9 @@ func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 	toBase, _ := strconv.Atoi(string(inarg3.toRawBytes()))
 	fromNum = 0
 
-	if inarg.isNull() || fromBase < 2 || fromBase > 36 || toBase < 2 || toBase > 36 {
+	if inarg.isNull() ||
+		(fromBase > -2 && fromBase < 2) || (toBase > -2 && toBase < 2) ||
+		fromBase < -36 || fromBase > 36 || toBase < -36 || toBase > 36 {
 		result.setNull()
 		return
 	}
@@ -306,6 +309,12 @@ func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 	rawString = strings.ToLower(rawString)
 
 	trimStr := func(s string, isNeg *bool) string {
+		var base uint64
+		if fromBase > 0 {
+			base = uint64(fromBase)
+		} else {
+			base = -uint64(fromBase)
+		}
 		start := 0
 		for i, c := range s {
 			if (c == '+' || c == '-') && i == 0 {
@@ -313,8 +322,8 @@ func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 				*isNeg = (c == '-')
 				continue
 			}
-			if (fromBase <= 9 && c >= '0' && c <= rune('0'+fromBase)) ||
-				(fromBase > 9 && ((c >= '0' && c <= '9') || (c >= 'a' && c <= rune('a'+fromBase-9)))) {
+			if (base <= 9 && c >= '0' && c <= rune('0'+base)) ||
+				(base > 9 && ((c >= '0' && c <= '9') || (c >= 'a' && c <= rune('a'+base-9)))) {
 				continue
 			} else {
 				return s[start:i]
@@ -325,38 +334,52 @@ func (builtinConv) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 
 	num := trimStr(rawString, &isNeg)
 
-	if transNum, err := strconv.ParseUint(num, int(fromBase), 64); err == nil {
+	if fromBase < 0 {
 		if isNeg {
-			fromNumNeg = fromNumNeg + transNum
-		} else {
-			fromNum = fromNum + transNum
+			num = "-" + num
 		}
-	} else if strings.Contains(err.Error(), "value out of range") {
-		if isNeg {
-			fromNumNeg = MaxUint
-
-		} else {
-			fromNum = MaxUint
+		if transNum, err := strconv.ParseInt(num, -fromBase, 64); err == nil {
+			if isNeg {
+				fromNum = uint64(-transNum)
+			} else {
+				fromNum = uint64(transNum)
+			}
+		} else if strings.Contains(err.Error(), "value out of range") {
+			if isNeg {
+				fromNum = uint64(-MININT)
+			} else {
+				fromNum = uint64(MAXINT)
+			}
 		}
 	} else {
-		fromNum = 0
+		if transNum, err := strconv.ParseUint(num, int(fromBase), 64); err == nil {
+			fromNum = transNum
+		} else if strings.Contains(err.Error(), "value out of range") {
+			if isNeg {
+				fromNum = 0
+			} else {
+				fromNum = MaxUint
+			}
+		}
 	}
 
-	if fromNumNeg < fromNum {
-		fromNum = fromNum - fromNumNeg
-	} else if fromNumNeg == MaxUint {
-		fromNum = 0
-	} else {
-		fromNum = fromNumNeg - fromNum
-	}
 	var toNum string
-	if isNeg {
-		temp := strconv.FormatUint(uint64(-fromNum), int(toBase))
-		toNum = strings.ToUpper(temp)
+	var temp string
+	if toBase > 0 {
+		if isNeg {
+			temp = strconv.FormatUint(uint64(-fromNum), toBase)
+		} else {
+			temp = strconv.FormatUint(fromNum, toBase)
+		}
 	} else {
-		temp := strconv.FormatUint(fromNum, int(toBase))
-		toNum = strings.ToUpper(temp)
+		toBase = -toBase
+		if isNeg {
+			temp = strconv.FormatInt(int64(-fromNum), toBase)
+		} else {
+			temp = strconv.FormatInt(int64(fromNum), toBase)
+		}
 	}
+	toNum = strings.ToUpper(temp)
 
 	inarg.makeTextualAndConvert(env.DefaultCollation)
 	result.setString(toNum, inarg.collation())
@@ -368,7 +391,6 @@ func (builtinConv) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag)
 	}
 	_, f1 := args[0].typeof(env)
 	_, f2 := args[1].typeof(env)
-	// typecheck the right-hand argument but ignore its flags
 	args[1].typeof(env)
 	args[2].typeof(env)
 
