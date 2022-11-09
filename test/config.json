@@ -114,27 +114,9 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtbackup_transform",
+			"Shard": "vtbackup",
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtbackup_transform",
-			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform_mysqlctld": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "21", 
-			"RetryMax": 1,
-			"Tags": []
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
@@ -369,17 +351,6 @@
 				"site_test"
 			]
 		},
-		"pitrtls": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "26",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"recovery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
@@ -547,6 +518,15 @@
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vtgate_queries_derived": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/derived"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_queries_aggregation": {
