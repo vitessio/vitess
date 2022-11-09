@@ -19,6 +19,8 @@ package semantics
 import (
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -244,29 +246,23 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 OR 1 = 0`
 	isFalse := func(subExpr sqlparser.Expr) bool {
-		cmp, ok := subExpr.(*sqlparser.ComparisonExpr)
-		if !ok {
+		evalEnginePred, err := evalengine.Translate(subExpr, nil)
+		if err != nil {
 			return false
 		}
 
-		left, ok := cmp.Left.(*sqlparser.Literal)
-		if !ok {
+		env := evalengine.EmptyExpressionEnv()
+		res, err := env.Evaluate(evalEnginePred)
+		if err != nil {
 			return false
 		}
 
-		right, ok := cmp.Right.(*sqlparser.Literal)
-		if !ok {
+		boolValue, err := res.Value().ToBool()
+		if err != nil {
 			return false
 		}
 
-		switch cmp.Operator {
-		case sqlparser.EqualOp:
-			if left.Val != right.Val {
-				return true
-			}
-		}
-
-		return false
+		return !boolValue
 	}
 
 	if isFalse(orExpr.Left) {
