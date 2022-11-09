@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -45,7 +44,7 @@ const mzSelectIDQuery = "select id from _vt.vreplication where db_name='vt_targe
 const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 const mzCheckJournal = "/select val from _vt.resharding_journal where id="
 
-var onDDL = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
+var defaultOnDDL = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
 
 func TestMigrateTables(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
@@ -67,7 +66,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "", onDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -108,11 +107,11 @@ func TestMissingTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, "", onDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, "", onDDL, nil)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "", onDDL, nil)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
 	require.NoError(t, err)
 }
 
@@ -168,7 +167,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, "", onDDL, nil)
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, "", defaultOnDDL, nil)
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(env))
 		})
@@ -202,7 +201,7 @@ func TestMoveTablesStopFlags(t *testing.T) {
 		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 		// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
 		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, "", onDDL, nil)
+			"", false, "", false, true, "", false, "", defaultOnDDL, nil)
 		require.NoError(t, err)
 		env.tmc.verifyQueries(t)
 	})
@@ -228,7 +227,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, "", onDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -2793,7 +2792,11 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 	}
 }
 
-func TestMoveTablesDDLHandling(t *testing.T) {
+// TestMoveTablesDDLFlag tests that we save the on-ddl flag value in the workflow.
+// Note:
+//   - TestPlayerDDL tests that the vplayer correctly implements the ddl behavior
+//   - We have a manual e2e test for the full behavior: TestVReplicationDDLHandling
+func TestMoveTablesDDLFlag(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -2805,78 +2808,28 @@ func TestMoveTablesDDLHandling(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	ddlQuery := "alter table t1 add column c1 int"
 
-	addExpectedQueries := func(env *testMaterializerEnv, onDDLAction string) {
-		env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-		env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-		if onDDLAction == binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)] {
-			// this is the default and we don't save it so use default insert
-			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
-		} else {
-			env.tmc.expectVRQuery(200, fmt.Sprintf(`/insert into _vt.vreplication\(.*on_ddl:%s.*`, onDDLAction),
-				&sqltypes.Result{})
-		}
-		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
-		env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+	for onDDLAction := range binlogdatapb.OnDDLAction_value {
+		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
+			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			defer env.close()
+
+			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+			if onDDLAction == binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)] {
+				// This is the default and go does not marshal defaults
+				// for prototext fields so we use the default insert stmt.
+				env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+			} else {
+				env.tmc.expectVRQuery(200, fmt.Sprintf(`/insert into _vt.vreplication\(.*on_ddl:%s.*`, onDDLAction),
+					&sqltypes.Result{})
+			}
+			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+			err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
+				"", false, "", false, true, "", false, "", onDDLAction, nil)
+			require.NoError(t, err)
+		})
 	}
-
-	t.Run("OnDDL: IGNORE", func(t *testing.T) {
-		onDDLAction := binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
-		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
-		defer env.close()
-
-		addExpectedQueries(env, onDDLAction)
-		err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, "", onDDLAction, nil)
-		require.NoError(t, err)
-	})
-
-	t.Run("OnDDL: STOP", func(t *testing.T) {
-		onDDLAction := binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_STOP)]
-		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
-		defer env.close()
-
-		addExpectedQueries(env, onDDLAction)
-		err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, "", onDDLAction, nil)
-		require.NoError(t, err)
-
-		env.tmc.expectVRQuery(100, ddlQuery, &sqltypes.Result{})
-		env.tmc.expectVRQuery(200, `update _vt.vreplication set state='Stopped'.*`, &sqltypes.Result{})
-		_, err = env.tmc.ApplySchema(ctx, env.tablets[100], &tmutils.SchemaChange{SQL: ddlQuery})
-		require.NoError(t, err)
-	})
-
-	t.Run("OnDDL: EXEC", func(t *testing.T) {
-		onDDLAction := binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)]
-		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
-		defer env.close()
-
-		addExpectedQueries(env, onDDLAction)
-		err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, "", onDDLAction, nil)
-		require.NoError(t, err)
-
-		env.tmc.expectVRQuery(100, ddlQuery, &sqltypes.Result{})
-		env.tmc.expectVRQuery(200, ddlQuery, &sqltypes.Result{})
-		_, err = env.tmc.ApplySchema(ctx, env.tablets[100], &tmutils.SchemaChange{SQL: ddlQuery})
-		require.NoError(t, err)
-	})
-
-	t.Run("OnDDL: EXEC_IGNORE", func(t *testing.T) {
-		onDDLAction := binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC_IGNORE)]
-		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
-		defer env.close()
-
-		addExpectedQueries(env, onDDLAction)
-		err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, "", onDDLAction, nil)
-		require.NoError(t, err)
-
-		env.tmc.expectVRQuery(100, ddlQuery, &sqltypes.Result{})
-		env.tmc.expectVRQuery(200, ddlQuery, &sqltypes.Result{})
-		_, err = env.tmc.ApplySchema(ctx, env.tablets[100], &tmutils.SchemaChange{SQL: ddlQuery})
-		require.NoError(t, err)
-	})
 }

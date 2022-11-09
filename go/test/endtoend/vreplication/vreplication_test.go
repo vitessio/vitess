@@ -112,11 +112,11 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	return resp, respBody, err
 }
 
-// TestVreplicationDDLHandling tests the DDL handling in
+// TestVReplicationDDLHandling tests the DDL handling in
 // VReplication for the values of IGNORE, STOP, and EXEC.
 // NOTE: this is a manual test. It is not executed in the
 // CI.
-func TestVreplicationDDLHandling(t *testing.T) {
+func TestVReplicationDDLHandling(t *testing.T) {
 	workflow := "onddl_test"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	table := "orders"
