@@ -482,6 +482,11 @@ func TestCreateTableDiff(t *testing.T) {
 			from: "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
 			to:   "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) /*!50100 WITH PARSER `ngram` */)",
 		},
+		{
+			name: "no fulltext diff",
+			from: "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			to:   "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser NGRAM)",
+		},
 		// CHECK constraints
 		{
 			name: "identical check constraints",
