@@ -246,9 +246,7 @@ func TestVStreamCopyResume(t *testing.T) {
 
 	// Any subsequent GTIDs will be part of the stream
 	mpos, err := mconn.PrimaryPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// lastPK is id1=4, meaning we should only copy rows for id1 IN(5,6,7,8,9)
 	lastPK := sqltypes.Result{
@@ -269,9 +267,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	}
 	for _, query := range catchupQueries {
 		_, err = conn.ExecuteFetch(query, 1, false)
-		if err != nil {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 	}
 
 	var shardGtids []*binlogdatapb.ShardGtid
