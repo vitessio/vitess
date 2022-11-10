@@ -53,6 +53,7 @@ type VReplicationWorkflowParams struct {
 	Timeout                           time.Duration
 	Direction                         workflow.TrafficSwitchDirection
 	MaxAllowedTransactionLagSeconds   int64
+	OnDDL                             string
 
 	// MoveTables/Migrate specific
 	SourceKeyspace, Tables  string
@@ -429,13 +430,14 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
 		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
-		vrw.params.SourceTimeZone, vrw.params.SourceShards)
+		vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
 	log.Infof("In VReplicationWorkflow.initReshard() for %+v", vrw)
 	return vrw.wr.Reshard(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.SourceShards,
-		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AutoStart, vrw.params.StopAfterCopy)
+		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes,
+		vrw.params.OnDDL, vrw.params.AutoStart, vrw.params.StopAfterCopy)
 }
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {
