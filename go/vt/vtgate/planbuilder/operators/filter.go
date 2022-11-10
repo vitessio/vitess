@@ -18,18 +18,19 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
-	Source     Operator
+	Source     ops.Operator
 	Predicates []sqlparser.Expr
 }
 
-var _ PhysicalOperator = (*Filter)(nil)
+var _ ops.PhysicalOperator = (*Filter)(nil)
 
-func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
+func newFilter(op ops.Operator, expr ...sqlparser.Expr) ops.Operator {
 	return &Filter{
 		Source: op, Predicates: expr,
 	}
@@ -39,7 +40,7 @@ func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 func (f *Filter) IPhysical() {}
 
 // Clone implements the Operator interface
-func (f *Filter) Clone(inputs []Operator) Operator {
+func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 	checkSize(inputs, 1)
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
@@ -50,8 +51,8 @@ func (f *Filter) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (f *Filter) Inputs() []Operator {
-	return []Operator{f.Source}
+func (f *Filter) Inputs() []ops.Operator {
+	return []ops.Operator{f.Source}
 }
 
 // UnsolvedPredicates implements the unresolved interface
@@ -67,7 +68,7 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	newSrc, err := f.Source.AddPredicate(ctx, expr)
 	if err != nil {
 		return nil, err

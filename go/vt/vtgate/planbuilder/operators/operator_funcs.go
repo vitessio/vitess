@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -27,7 +28,7 @@ import (
 
 // RemovePredicate is used when we turn a predicate into a plan operator,
 // and the predicate needs to be removed as an AST construct
-func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
+func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
 	switch op := op.(type) {
 	case *Route:
 		newSrc, err := RemovePredicate(ctx, expr, op.Source)
@@ -138,17 +139,17 @@ func BreakExpressionInLHSandRHS(
 }
 
 type joinOperator interface {
-	Operator
-	getLHS() Operator
-	getRHS() Operator
-	setLHS(Operator)
-	setRHS(Operator)
+	ops.Operator
+	getLHS() ops.Operator
+	getRHS() ops.Operator
+	setLHS(ops.Operator)
+	setRHS(ops.Operator)
 	makeInner()
 	isInner() bool
 	addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
 }
 
-func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlparser.Expr, joinPredicates bool) (Operator, error) {
+func addPredicate(join joinOperator, ctx *plancontext.PlanningContext, expr sqlparser.Expr, joinPredicates bool) (ops.Operator, error) {
 	deps := ctx.SemTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(TableID(join.getLHS())):

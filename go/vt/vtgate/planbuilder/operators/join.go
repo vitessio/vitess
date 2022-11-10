@@ -18,23 +18,24 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  Operator
+	LHS, RHS  ops.Operator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
 
 	noColumns
 }
 
-var _ Operator = (*Join)(nil)
+var _ ops.Operator = (*Join)(nil)
 
 // Clone implements the Operator interface
-func (j *Join) Clone(inputs []Operator) Operator {
+func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	checkSize(inputs, 2)
 	clone := *j
 	clone.LHS = inputs[0]
@@ -48,18 +49,18 @@ func (j *Join) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (j *Join) Inputs() []Operator {
-	return []Operator{j.LHS, j.RHS}
+func (j *Join) Inputs() []ops.Operator {
+	return []ops.Operator{j.LHS, j.RHS}
 }
 
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
+func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
 	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
 }
 
-func createJoin(LHS, RHS Operator) Operator {
+func createJoin(LHS, RHS ops.Operator) ops.Operator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {
@@ -73,7 +74,7 @@ func createJoin(LHS, RHS Operator) Operator {
 	return &Join{LHS: LHS, RHS: RHS}
 }
 
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
+func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
 	op := createJoin(lhs, rhs)
 	if tableExpr.Condition.On != nil {
 		var err error
@@ -86,7 +87,7 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	return op, nil
 }
 
-func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	return addPredicate(j, ctx, expr, false)
 }
 
@@ -96,19 +97,19 @@ func (j *Join) tableID() semantics.TableSet {
 	return TableID(j)
 }
 
-func (j *Join) getLHS() Operator {
+func (j *Join) getLHS() ops.Operator {
 	return j.LHS
 }
 
-func (j *Join) getRHS() Operator {
+func (j *Join) getRHS() ops.Operator {
 	return j.RHS
 }
 
-func (j *Join) setLHS(operator Operator) {
+func (j *Join) setLHS(operator ops.Operator) {
 	j.LHS = operator
 }
 
-func (j *Join) setRHS(operator Operator) {
+func (j *Join) setRHS(operator ops.Operator) {
 	j.RHS = operator
 }
 

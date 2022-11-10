@@ -20,11 +20,12 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Union struct {
-	Sources  []Operator
+	Sources  []ops.Operator
 	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
@@ -33,13 +34,13 @@ type Union struct {
 	noColumns
 }
 
-var _ PhysicalOperator = (*Union)(nil)
+var _ ops.PhysicalOperator = (*Union)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
 // Clone implements the Operator interface
-func (u *Union) Clone(inputs []Operator) Operator {
+func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
 	checkSize(inputs, len(u.Sources))
 	newOp.Sources = inputs
@@ -47,7 +48,7 @@ func (u *Union) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (u *Union) Inputs() []Operator {
+func (u *Union) Inputs() []ops.Operator {
 	return u.Sources
 }
 
@@ -72,7 +73,7 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	offsets := make(map[string]int)
 	sel, err := u.GetSelectFor(0)
 	if err != nil {

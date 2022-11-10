@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -32,7 +33,7 @@ import (
 
 type (
 	Route struct {
-		Source Operator
+		Source ops.Operator
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -86,7 +87,7 @@ type (
 	}
 )
 
-var _ PhysicalOperator = (*Route)(nil)
+var _ ops.PhysicalOperator = (*Route)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
@@ -117,7 +118,7 @@ func (r *Route) Cost() int {
 }
 
 // Clone implements the Operator interface
-func (r *Route) Clone(inputs []Operator) Operator {
+func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 	checkSize(inputs, 1)
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]
@@ -131,8 +132,8 @@ func (r *Route) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (r *Route) Inputs() []Operator {
-	return []Operator{r.Source}
+func (r *Route) Inputs() []ops.Operator {
+	return []ops.Operator{r.Source}
 }
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
@@ -805,7 +806,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 	return plan, nil
 }
 
-func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	err := r.UpdateRoutingLogic(ctx, expr)
 	if err != nil {
 		return nil, err

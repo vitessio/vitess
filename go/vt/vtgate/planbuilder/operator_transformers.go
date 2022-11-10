@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -39,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Operator, isRoot bool) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, isRoot bool) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -326,7 +328,7 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 
 func getAllTableNames(op *operators.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := operators.VisitTopDown(op, func(op operators.Operator) error {
+	err := operators.VisitTopDown(op, func(op ops.Operator) error {
 		tbl, isTbl := op.(*operators.Table)
 		var name string
 		if isTbl {

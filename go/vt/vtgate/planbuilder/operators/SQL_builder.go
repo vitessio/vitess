@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -36,7 +38,7 @@ type (
 	}
 )
 
-func ToSQL(ctx *plancontext.PlanningContext, op Operator) (sqlparser.SelectStatement, error) {
+func ToSQL(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectStatement, error) {
 	q := &queryBuilder{ctx: ctx}
 	err := buildQuery(op, q)
 	if err != nil {
@@ -294,7 +296,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	return nil
 }
 
-func buildQuery(op Operator, qb *queryBuilder) error {
+func buildQuery(op ops.Operator, qb *queryBuilder) error {
 	switch op := op.(type) {
 	case *Table:
 		dbName := ""

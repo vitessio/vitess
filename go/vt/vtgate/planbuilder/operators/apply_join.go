@@ -20,6 +20,8 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -30,7 +32,7 @@ import (
 // ApplyJoin is a nested loop join - for each row on the LHS,
 // we'll execute the plan on the RHS, feeding data from left to right
 type ApplyJoin struct {
-	LHS, RHS Operator
+	LHS, RHS ops.Operator
 
 	// Columns stores the column indexes of the columns coming from the left and right side
 	// negative value comes from LHS and positive from RHS
@@ -52,9 +54,9 @@ type ApplyJoin struct {
 	Predicate sqlparser.Expr
 }
 
-var _ PhysicalOperator = (*ApplyJoin)(nil)
+var _ ops.PhysicalOperator = (*ApplyJoin)(nil)
 
-func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
+func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
 	return &ApplyJoin{
 		LHS:       lhs,
 		RHS:       rhs,
@@ -68,7 +70,7 @@ func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin boo
 func (a *ApplyJoin) IPhysical() {}
 
 // Clone implements the Operator interface
-func (a *ApplyJoin) Clone(inputs []Operator) Operator {
+func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	checkSize(inputs, 2)
 	return &ApplyJoin{
 		LHS:        inputs[0],
@@ -82,13 +84,13 @@ func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 	}
 }
 
-func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	return addPredicate(a, ctx, expr, false)
 }
 
 // Inputs implements the Operator interface
-func (a *ApplyJoin) Inputs() []Operator {
-	return []Operator{a.LHS, a.RHS}
+func (a *ApplyJoin) Inputs() []ops.Operator {
+	return []ops.Operator{a.LHS, a.RHS}
 }
 
 var _ joinOperator = (*ApplyJoin)(nil)
@@ -97,19 +99,19 @@ func (a *ApplyJoin) tableID() semantics.TableSet {
 	return TableID(a)
 }
 
-func (a *ApplyJoin) getLHS() Operator {
+func (a *ApplyJoin) getLHS() ops.Operator {
 	return a.LHS
 }
 
-func (a *ApplyJoin) getRHS() Operator {
+func (a *ApplyJoin) getRHS() ops.Operator {
 	return a.RHS
 }
 
-func (a *ApplyJoin) setLHS(operator Operator) {
+func (a *ApplyJoin) setLHS(operator ops.Operator) {
 	a.LHS = operator
 }
 
-func (a *ApplyJoin) setRHS(operator Operator) {
+func (a *ApplyJoin) setRHS(operator ops.Operator) {
 	a.RHS = operator
 }
 

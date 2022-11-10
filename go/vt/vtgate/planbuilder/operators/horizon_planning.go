@@ -19,14 +19,16 @@ package operators
 import (
 	"errors"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var errNotHorizonPlanned = errors.New("query can't be fully operator planned")
 
-func planHorizons(ctx *plancontext.PlanningContext, in Operator) (Operator, error) {
-	return rewriteBreakableTopDown(ctx, in, func(ctx *plancontext.PlanningContext, in Operator) (Operator, bool, error) {
+func planHorizons(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
+	return rewriteBreakableTopDown(ctx, in, func(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, bool, error) {
 		switch in := in.(type) {
 		case *Horizon:
 			op, err := planHorizon(ctx, in)
@@ -42,7 +44,7 @@ func planHorizons(ctx *plancontext.PlanningContext, in Operator) (Operator, erro
 	})
 }
 
-func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operator, error) {
+func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
 	if !isRoute {
 		return in, nil
@@ -53,7 +55,7 @@ func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operator, error
 
 	return nil, errNotHorizonPlanned
 }
-func planSingleShardRoute(statement sqlparser.SelectStatement, rb *Route, horizon *Horizon) (Operator, error) {
+func planSingleShardRoute(statement sqlparser.SelectStatement, rb *Route, horizon *Horizon) (ops.Operator, error) {
 	rb.Source, horizon.Source = horizon, rb.Source
 	return rb, nil
 }

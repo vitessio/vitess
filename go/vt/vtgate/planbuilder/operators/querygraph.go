@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -60,7 +61,7 @@ type (
 	}
 )
 
-var _ Operator = (*QueryGraph)(nil)
+var _ ops.Operator = (*QueryGraph)(nil)
 
 // Introduces implements the tableIDIntroducer interface
 func (qg *QueryGraph) Introduces() semantics.TableSet {
@@ -175,7 +176,7 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 }
 
 // Clone implements the Operator interface
-func (qg *QueryGraph) Clone(inputs []Operator) Operator {
+func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
 	checkSize(inputs, 0)
 	result := &QueryGraph{
 		Tables:     nil,
@@ -189,7 +190,7 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 	return result
 }
 
-func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(ctx, e)
 		if err != nil {

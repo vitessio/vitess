@@ -18,12 +18,13 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // compact will optimise the operator tree into a smaller but equivalent version
-func compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
-	newOp, _, err := rewriteBottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op Operator) (Operator, bool, error) {
+func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	newOp, _, err := rewriteBottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, bool, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
 			return op, false, nil
@@ -33,7 +34,7 @@ func compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
 	return newOp, err
 }
 
-func (f *Filter) compact(*plancontext.PlanningContext) (Operator, bool, error) {
+func (f *Filter) compact(*plancontext.PlanningContext) (ops.Operator, bool, error) {
 	if len(f.Predicates) == 0 {
 		return f.Source, true, nil
 	}
@@ -47,8 +48,8 @@ func (f *Filter) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 	return f, true, nil
 }
 
-func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
-	var newSources []Operator
+func (u *Union) compact(*plancontext.PlanningContext) (ops.Operator, bool, error) {
+	var newSources []ops.Operator
 	anythingChanged := false
 	for _, source := range u.Sources {
 		var other *Union
@@ -81,7 +82,7 @@ func (u *Union) compact(*plancontext.PlanningContext) (Operator, bool, error) {
 	return u, anythingChanged, nil
 }
 
-func (j *Join) compact(ctx *plancontext.PlanningContext) (Operator, bool, error) {
+func (j *Join) compact(ctx *plancontext.PlanningContext) (ops.Operator, bool, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return j, false, nil
