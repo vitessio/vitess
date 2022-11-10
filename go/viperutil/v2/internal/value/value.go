@@ -33,7 +33,7 @@ func (val *Base[T]) Key() string { return val.KeyName }
 func (val *Base[T]) Default() T  { return val.DefaultVal }
 func (val *Base[T]) Get() T      { return val.BoundGetFunc(val.Key()) }
 
-var errNoFlagDefined = errors.New("flag not defined")
+var ErrNoFlagDefined = errors.New("flag not defined")
 
 func (val *Base[T]) Flag(fs *pflag.FlagSet) (*pflag.Flag, error) {
 	if val.FlagName == "" {
@@ -42,7 +42,7 @@ func (val *Base[T]) Flag(fs *pflag.FlagSet) (*pflag.Flag, error) {
 
 	flag := fs.Lookup(val.FlagName)
 	if flag == nil {
-		return nil, fmt.Errorf("%w with name %s (for key %s)", errNoFlagDefined, val.FlagName, val.Key()) // TODO: export error
+		return nil, fmt.Errorf("%w with name %s (for key %s)", ErrNoFlagDefined, val.FlagName, val.Key())
 	}
 
 	return flag, nil
@@ -66,7 +66,6 @@ func BindFlags(fs *pflag.FlagSet, values ...Registerable) {
 		flag, err := val.Flag(fs)
 		switch {
 		case err != nil:
-			// TODO: panic
 			panic(fmt.Errorf("failed to load flag for %s: %w", val.Key(), err))
 		case flag == nil:
 			continue
@@ -78,27 +77,6 @@ func BindFlags(fs *pflag.FlagSet, values ...Registerable) {
 		}
 	}
 }
-
-// func xxx_DELETE_ME_bindFlag(v registry.Bindable, key string, flagName string) {
-// 	registry.AddFlagBinding(func(fs *pflag.FlagSet) {
-// 		flag := fs.Lookup(flagName)
-// 		if flag == nil {
-// 			// TODO: panic
-//
-// 			// TODO: need a way for API consumers to add flags in an
-// 			// OnParse hook, which usually will happen _after_ a call
-// 			// to Configure (viperutil.Value doesn't expose this right
-// 			// now, which you can see the result of in config.go's init
-// 			// func to add the working directory to config-paths).
-// 		}
-//
-// 		_ = v.BindPFlag(key, flag)
-//
-// 		if flag.Name != key {
-// 			v.RegisterAlias(flag.Name, key)
-// 		}
-// 	})
-// }
 
 type Static[T any] struct {
 	*Base[T]

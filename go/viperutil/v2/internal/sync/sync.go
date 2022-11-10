@@ -28,11 +28,11 @@ func New() *Viper {
 	}
 }
 
+var ErrDuplicateWatch = errors.New("duplicate watch")
+
 func (v *Viper) Watch(static *viper.Viper) error {
 	if v.watchingConfig {
-		// TODO: declare an exported error and include the filename in wrapped
-		// error.
-		return errors.New("duplicate watch")
+		return fmt.Errorf("%w: viper is already watching %s", ErrDuplicateWatch, v.disk.ConfigFileUsed())
 	}
 
 	cfg := static.ConfigFileUsed()
