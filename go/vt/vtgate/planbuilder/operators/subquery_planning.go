@@ -86,7 +86,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 }
 
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
-	preds := unresolvedPredicates(op, ctx.SemTable)
+	preds := UnresolvedPredicates(op, ctx.SemTable)
 	if filter, ok := op.(*Filter); ok {
 		if sqlparser.EqualsExprs(preds, filter.Predicates) {
 			// if we are seeing a single filter with only these predicates,

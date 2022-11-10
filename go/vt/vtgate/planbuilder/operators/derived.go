@@ -47,7 +47,6 @@ func (d *Derived) IPhysical() {}
 
 // Clone implements the Operator interface
 func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 1)
 	return &Derived{
 		Source:        inputs[0],
 		Query:         d.Query,

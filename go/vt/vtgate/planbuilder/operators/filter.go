@@ -19,6 +19,7 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -30,9 +31,9 @@ type Filter struct {
 
 var _ ops.PhysicalOperator = (*Filter)(nil)
 
-func newFilter(op ops.Operator, expr ...sqlparser.Expr) ops.Operator {
+func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
-		Source: op, Predicates: expr,
+		Source: op, Predicates: []sqlparser.Expr{expr},
 	}
 }
 
@@ -41,7 +42,6 @@ func (f *Filter) IPhysical() {}
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 1)
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
 	return &Filter{
@@ -79,4 +79,18 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 
 func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	return f.Source.AddColumn(ctx, expr)
+}
+
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+	if len(f.Predicates) == 0 {
+		return f.Source, rewrite.NewTree, nil
+	}
+
+	other, isFilter := f.Source.(*Filter)
+	if !isFilter {
+		return f, rewrite.SameTree, nil
+	}
+	f.Source = other.Source
+	f.Predicates = append(f.Predicates, other.Predicates...)
+	return f, rewrite.NewTree, nil
 }

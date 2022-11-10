@@ -54,7 +54,6 @@ func (s *SubQueryOp) IPhysical() {}
 
 // Clone implements the Operator interface
 func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 2)
 	result := &SubQueryOp{
 		Outer:     inputs[0],
 		Inner:     inputs[1],
@@ -73,7 +72,6 @@ func (c *CorrelatedSubQueryOp) IPhysical() {}
 
 // Clone implements the Operator interface
 func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 2)
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
 	copy(columns, c.LHSColumns)
 	vars := make(map[string]int, len(c.Vars))

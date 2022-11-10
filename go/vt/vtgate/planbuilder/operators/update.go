@@ -49,7 +49,6 @@ func (u *Update) IPhysical() {}
 
 // Clone implements the Operator interface
 func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 0)
 	return &Update{
 		QTable:              u.QTable,
 		VTable:              u.VTable,

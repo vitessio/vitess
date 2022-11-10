@@ -119,7 +119,6 @@ func (r *Route) Cost() int {
 
 // Clone implements the Operator interface
 func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 1)
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))

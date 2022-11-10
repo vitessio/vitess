@@ -34,55 +34,14 @@ The operators go through a few phases while planning:
 package operators
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
-	// tableIDIntroducer is used to signal that this operator introduces data from a new source
-	tableIDIntroducer interface {
-		Introduces() semantics.TableSet
-	}
-
-	unresolved interface {
-		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
-		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
-		// This is used for sub-queries. An example query could be:
-		// SELECT * FROM tbl WHERE EXISTS (SELECT 1 FROM otherTbl WHERE tbl.col = otherTbl.col)
-		// The subquery would have one unsolved predicate: `tbl.col = otherTbl.col`
-		// It's a predicate that belongs to the inner query, but it needs data from the outer query
-		// These predicates dictate which data we have to send from the outer side to the inner
-		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
-	}
-
-	costly interface {
-		// Cost returns the cost for this operator. All the costly operators in the tree are summed together to get the
-		// total cost of the operator tree.
-		// TODO: We should really calculate this using cardinality estimation,
-		//       but until then this is better than nothing
-		Cost() int
-	}
-
-	checkable interface {
-		// checkValid allows operators that need a final check before being used, to make sure that
-		// all the necessary information is in the operator
-		checkValid() error
-	}
-
-	compactable interface {
-		// implement this interface for operators that have easy to see optimisations
-		compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error)
-	}
-
 	// helper type that implements Inputs() returning nil
 	noInputs struct{}
 
@@ -99,7 +58,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 		return nil, err
 	}
 
-	if err = checkValid(op); err != nil {
+	if err = CheckValid(op); err != nil {
 		return nil, err
 	}
 
@@ -108,7 +67,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 		return nil, err
 	}
 
-	backup := clone(op)
+	backup := Clone(op)
 
 	op, err = planHorizons(op)
 	if err == errNotHorizonPlanned {
@@ -117,7 +76,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 		return nil, err
 	}
 
-	if op, err = compact(ctx, op); err != nil {
+	if op, err = Compact(ctx, op); err != nil {
 		return nil, err
 	}
 
@@ -137,59 +96,4 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, e
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
-}
-
-func TableID(op ops.Operator) (result semantics.TableSet) {
-	_ = rewrite.Visit(op, func(this ops.Operator) error {
-		if tbl, ok := this.(tableIDIntroducer); ok {
-			result.MergeInPlace(tbl.Introduces())
-		}
-		return nil
-	})
-	return
-}
-
-func unresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
-	_ = rewrite.Visit(op, func(this ops.Operator) error {
-		if tbl, ok := this.(unresolved); ok {
-			result = append(result, tbl.UnsolvedPredicates(st)...)
-		}
-
-		return nil
-	})
-	return
-}
-
-func checkValid(op ops.Operator) error {
-	return rewrite.Visit(op, func(this ops.Operator) error {
-		if chk, ok := this.(checkable); ok {
-			return chk.checkValid()
-		}
-		return nil
-	})
-}
-
-func CostOf(op ops.Operator) (cost int) {
-	_ = rewrite.Visit(op, func(op ops.Operator) error {
-		if costlyOp, ok := op.(costly); ok {
-			cost += costlyOp.Cost()
-		}
-		return nil
-	})
-	return
-}
-
-func clone(op ops.Operator) ops.Operator {
-	inputs := op.Inputs()
-	clones := make([]ops.Operator, len(inputs))
-	for i, input := range inputs {
-		clones[i] = clone(input)
-	}
-	return op.Clone(clones)
-}
-
-func checkSize(inputs []ops.Operator, shouldBe int) {
-	if len(inputs) != shouldBe {
-		panic(fmt.Sprintf("BUG: got the wrong number of inputs: got %d, expected %d", len(inputs), shouldBe))
-	}
 }

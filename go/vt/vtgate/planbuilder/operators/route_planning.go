@@ -83,7 +83,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		return nil, err
 	}
 
-	return compact(ctx, op)
+	return Compact(ctx, op)
 }
 
 func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
@@ -135,7 +135,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 	if len(unresolved) > 0 {
 		// if we have any predicates that none of the joins or tables took care of,
 		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
-		result = newFilter(result, unresolved...)
+		result = newFilter(result, sqlparser.AndExpressions(unresolved...))
 	}
 
 	return
@@ -500,11 +500,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: JOIN not supported between derived tables")
 		}
 
-		join := NewApplyJoin(clone(rhs), clone(lhs), nil, !inner)
+		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
 		return pushJoinPredicates(ctx, joinPredicates, join)
 	}
 
-	join := NewApplyJoin(clone(lhs), clone(rhs), nil, !inner)
+	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
@@ -557,7 +557,7 @@ func tryMerge(
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 ) (ops.Operator, error) {
-	aRoute, bRoute := operatorsToRoutes(clone(a), clone(b))
+	aRoute, bRoute := operatorsToRoutes(Clone(a), Clone(b))
 	if aRoute == nil || bRoute == nil {
 		return nil, nil
 	}
@@ -736,7 +736,7 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a ops.Operator, exp sqlp
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = rewrite.Visit(a, func(rel ops.Operator) error {
-			to, isTableOp := rel.(tableIDIntroducer)
+			to, isTableOp := rel.(TableIDIntroducer)
 			if !isTableOp {
 				return nil
 			}
@@ -900,7 +900,7 @@ func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr
 	}
 
 	for _, expr := range exprs {
-		_, err := addPredicate(op, ctx, expr, true)
+		_, err := AddPredicate(op, ctx, expr, true, newFilter)
 		if err != nil {
 			return nil, err
 		}

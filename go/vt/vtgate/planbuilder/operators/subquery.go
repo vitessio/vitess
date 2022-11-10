@@ -52,7 +52,6 @@ var _ ops.Operator = (*SubQueryInner)(nil)
 
 // Clone implements the Operator interface
 func (s *SubQueryInner) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 1)
 	return &SubQueryInner{
 		Inner:             inputs[0],
 		ExtractedSubquery: s.ExtractedSubquery,
@@ -66,7 +65,6 @@ func (s *SubQueryInner) Inputs() []ops.Operator {
 
 // Clone implements the Operator interface
 func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, len(s.Inner)+1)
 	result := &SubQuery{
 		Outer: inputs[0],
 	}

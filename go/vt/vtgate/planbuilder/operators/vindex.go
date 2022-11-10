@@ -60,8 +60,7 @@ func (v *Vindex) Introduces() semantics.TableSet {
 func (v *Vindex) IPhysical() {}
 
 // Clone implements the Operator interface
-func (v *Vindex) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 0)
+func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	clone := *v
 	return &clone
 }
@@ -80,7 +79,7 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 }
 
 // checkValid implements the Operator interface
-func (v *Vindex) checkValid() error {
+func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 	}

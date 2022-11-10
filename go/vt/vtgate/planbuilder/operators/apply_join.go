@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // ApplyJoin is a nested loop join - for each row on the LHS,
@@ -71,7 +70,6 @@ func (a *ApplyJoin) IPhysical() {}
 
 // Clone implements the Operator interface
 func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 2)
 	return &ApplyJoin{
 		LHS:        inputs[0],
 		RHS:        inputs[1],
@@ -85,7 +83,7 @@ func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return addPredicate(a, ctx, expr, false)
+	return AddPredicate(a, ctx, expr, false, newFilter)
 }
 
 // Inputs implements the Operator interface
@@ -93,37 +91,33 @@ func (a *ApplyJoin) Inputs() []ops.Operator {
 	return []ops.Operator{a.LHS, a.RHS}
 }
 
-var _ joinOperator = (*ApplyJoin)(nil)
+var _ JoinOp = (*ApplyJoin)(nil)
 
-func (a *ApplyJoin) tableID() semantics.TableSet {
-	return TableID(a)
-}
-
-func (a *ApplyJoin) getLHS() ops.Operator {
+func (a *ApplyJoin) GetLHS() ops.Operator {
 	return a.LHS
 }
 
-func (a *ApplyJoin) getRHS() ops.Operator {
+func (a *ApplyJoin) GetRHS() ops.Operator {
 	return a.RHS
 }
 
-func (a *ApplyJoin) setLHS(operator ops.Operator) {
+func (a *ApplyJoin) SetLHS(operator ops.Operator) {
 	a.LHS = operator
 }
 
-func (a *ApplyJoin) setRHS(operator ops.Operator) {
+func (a *ApplyJoin) SetRHS(operator ops.Operator) {
 	a.RHS = operator
 }
 
-func (a *ApplyJoin) makeInner() {
+func (a *ApplyJoin) MakeInner() {
 	a.LeftJoin = false
 }
 
-func (a *ApplyJoin) isInner() bool {
+func (a *ApplyJoin) IsInner() bool {
 	return !a.LeftJoin
 }
 
-func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
 	if err != nil {
 		return err

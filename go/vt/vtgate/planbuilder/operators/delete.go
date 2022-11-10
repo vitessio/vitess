@@ -46,7 +46,6 @@ func (d *Delete) IPhysical() {}
 
 // Clone implements the Operator interface
 func (d *Delete) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 0)
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,

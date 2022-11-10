@@ -63,7 +63,7 @@ type (
 
 var _ ops.Operator = (*QueryGraph)(nil)
 
-// Introduces implements the tableIDIntroducer interface
+// Introduces implements the TableIDIntroducer interface
 func (qg *QueryGraph) Introduces() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
@@ -177,7 +177,6 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 
 // Clone implements the Operator interface
 func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
-	checkSize(inputs, 0)
 	result := &QueryGraph{
 		Tables:     nil,
 		innerJoins: nil,

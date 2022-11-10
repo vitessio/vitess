@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -42,7 +43,6 @@ func (u *Union) IPhysical() {}
 // Clone implements the Operator interface
 func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
-	checkSize(inputs, len(u.Sources))
 	newOp.Sources = inputs
 	return &newOp
 }
@@ -147,4 +147,43 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
 		}
 	}
+}
+
+func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+	var newSources []ops.Operator
+	anythingChanged := false
+	for _, source := range u.Sources {
+		var other *Union
+		horizon, ok := source.(*Horizon)
+		if ok {
+			union, ok := horizon.Source.(*Union)
+			if ok {
+				other = union
+			}
+		}
+		if other == nil {
+			newSources = append(newSources, source)
+			continue
+		}
+		anythingChanged = true
+		switch {
+		case len(other.Ordering) == 0 && !other.Distinct:
+			fallthrough
+		case u.Distinct:
+			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
+			newSources = append(newSources, other.Sources...)
+
+		default:
+			newSources = append(newSources, other)
+		}
+	}
+	if anythingChanged {
+		u.Sources = newSources
+	}
+	identity := rewrite.SameTree
+	if anythingChanged {
+		identity = rewrite.NewTree
+	}
+
+	return u, identity, nil
 }
