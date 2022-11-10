@@ -201,6 +201,8 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
 				if err == nil {
 					actualCells = append(actualCells, alias.Cells...)
+				} else {
+					log.Infof("Unable to resolve cell %s, ignoring", cell)
 				}
 			} else {
 				// valid cell, add it to our list
