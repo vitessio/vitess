@@ -826,7 +826,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	for _, opt := range idx.Options {
 		buf.astPrintf(idx, " %s", opt.Name)
 		if opt.String != "" {
-			buf.astPrintf(idx, " %s", opt.String)
+			buf.astPrintf(idx, " %#s", opt.String)
 		} else if opt.Value != nil {
 			buf.astPrintf(idx, " %v", opt.Value)
 		}

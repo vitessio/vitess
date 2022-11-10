@@ -443,7 +443,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:  "create table t1 (id int primary key, name tinytext not null)",
 			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
 			diff:  "alter table t1 add fulltext key name_ft (`name`) with parser ngram",
-			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`) WITH PARSER NGRAM",
+			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram",
 		},
 		{
 			name:  "add one fulltext key and one normal key",
@@ -1712,7 +1712,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "does not drop non-default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using hash)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) USING HASH\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) USING hash\n)",
 		},
 		{
 			name: "drops default index visibility",
