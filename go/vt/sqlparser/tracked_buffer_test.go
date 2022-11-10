@@ -220,6 +220,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"select char(77, 121, 83, 81, '76' using utf8mb4) from dual",
 			"SELECT CHAR(77, 121, 83, 81, '76' USING utf8mb4) FROM `dual`",
 		},
+		{
+			"create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			"CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`name` tinytext NOT NULL,\n\tFULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram\n)",
+		},
 	}
 
 	for _, tc := range testcases {
