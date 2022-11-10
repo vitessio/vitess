@@ -22,42 +22,39 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var errNotHorizonPlanned = errors.New("query can't be fully operator planned")
 
-func planHorizons(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	return rewrite.BreakableTopDown(ctx, in, func(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, rewrite.VisitRule, error) {
+func planHorizons(in ops.Operator) (ops.Operator, error) {
+	return rewrite.TopDown(in, func(in ops.Operator) (ops.Operator, rewrite.TreeIdentity, rewrite.VisitRule, error) {
 		switch in := in.(type) {
 		case *Horizon:
-			op, err := planHorizon(ctx, in)
+			op, err := planHorizon(in)
 			if err != nil {
-				return nil, rewrite.SkipChildren, err
+				return nil, rewrite.SameTree, rewrite.SkipChildren, err
 			}
-			return op, rewrite.VisitChildren, nil
+			return op, rewrite.NewTree, rewrite.VisitChildren, nil
 		case *Route:
-			return in, rewrite.SkipChildren, nil
+			return in, rewrite.SameTree, rewrite.SkipChildren, nil
 		default:
-			return in, rewrite.VisitChildren, nil
+			return in, rewrite.SameTree, rewrite.VisitChildren, nil
 		}
 	})
 }
 
-func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, error) {
+func planHorizon(in *Horizon) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
 	if !isRoute {
 		return in, nil
 	}
 	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
-		return planSingleShardRoute(in.Select, rb, in)
+		return planSingleShardRoute(rb, in)
 	}
 
 	return nil, errNotHorizonPlanned
 }
-func planSingleShardRoute(statement sqlparser.SelectStatement, rb *Route, horizon *Horizon) (ops.Operator, error) {
+func planSingleShardRoute(rb *Route, horizon *Horizon) (ops.Operator, error) {
 	rb.Source, horizon.Source = horizon, rb.Source
 	return rb, nil
 }

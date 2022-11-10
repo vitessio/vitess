@@ -52,7 +52,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUp(ctx, in, func(context *plancontext.PlanningContext, operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	op, err := rewrite.BottomUp(in, func(operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -73,7 +73,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		return nil, err
 	}
 
-	err = rewrite.VisitTopDown(op, func(op ops.Operator) error {
+	err = rewrite.Visit(op, func(op ops.Operator) error {
 		if _, isPhys := op.(ops.PhysicalOperator); !isPhys {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
 		}
@@ -467,7 +467,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs ops.Op
 func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) bool {
 	required := false
 
-	_ = rewrite.VisitTopDown(op, func(current ops.Operator) error {
+	_ = rewrite.Visit(op, func(current ops.Operator) error {
 		derived, isDerived := current.(*Derived)
 
 		if isDerived && !derived.IsMergeable(ctx) {
@@ -735,7 +735,7 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a ops.Operator, exp sqlp
 
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
-		_ = rewrite.VisitTopDown(a, func(rel ops.Operator) error {
+		_ = rewrite.Visit(a, func(rel ops.Operator) error {
 			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
 				return nil

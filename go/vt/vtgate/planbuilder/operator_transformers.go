@@ -330,7 +330,7 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 
 func getAllTableNames(op *operators.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := rewrite.VisitTopDown(op, func(op ops.Operator) error {
+	err := rewrite.Visit(op, func(op ops.Operator) error {
 		tbl, isTbl := op.(*operators.Table)
 		var name string
 		if isTbl {

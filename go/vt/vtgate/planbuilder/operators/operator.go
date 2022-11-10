@@ -110,7 +110,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 
 	backup := clone(op)
 
-	op, err = planHorizons(ctx, op)
+	op, err = planHorizons(op)
 	if err == errNotHorizonPlanned {
 		op = backup
 	} else if err != nil {
@@ -140,7 +140,7 @@ func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (
 }
 
 func TableID(op ops.Operator) (result semantics.TableSet) {
-	_ = rewrite.VisitTopDown(op, func(this ops.Operator) error {
+	_ = rewrite.Visit(op, func(this ops.Operator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {
 			result.MergeInPlace(tbl.Introduces())
 		}
@@ -150,7 +150,7 @@ func TableID(op ops.Operator) (result semantics.TableSet) {
 }
 
 func unresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
-	_ = rewrite.VisitTopDown(op, func(this ops.Operator) error {
+	_ = rewrite.Visit(op, func(this ops.Operator) error {
 		if tbl, ok := this.(unresolved); ok {
 			result = append(result, tbl.UnsolvedPredicates(st)...)
 		}
@@ -161,7 +161,7 @@ func unresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sql
 }
 
 func checkValid(op ops.Operator) error {
-	return rewrite.VisitTopDown(op, func(this ops.Operator) error {
+	return rewrite.Visit(op, func(this ops.Operator) error {
 		if chk, ok := this.(checkable); ok {
 			return chk.checkValid()
 		}
@@ -170,7 +170,7 @@ func checkValid(op ops.Operator) error {
 }
 
 func CostOf(op ops.Operator) (cost int) {
-	_ = rewrite.VisitTopDown(op, func(op ops.Operator) error {
+	_ = rewrite.Visit(op, func(op ops.Operator) error {
 		if costlyOp, ok := op.(costly); ok {
 			cost += costlyOp.Cost()
 		}

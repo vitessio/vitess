@@ -25,7 +25,7 @@ import (
 
 // compact will optimise the operator tree into a smaller but equivalent version
 func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-	newOp, err := rewrite.BottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	newOp, err := rewrite.BottomUp(op, func(op ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
 			return op, rewrite.SameTree, nil

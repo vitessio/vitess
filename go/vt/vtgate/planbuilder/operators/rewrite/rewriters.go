@@ -18,18 +18,19 @@ package rewrite
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
-	Func          func(*plancontext.PlanningContext, ops.Operator) (ops.Operator, TreeIdentity, error)
-	BreakableFunc func(*plancontext.PlanningContext, ops.Operator) (ops.Operator, VisitRule, error)
+	Func          func(ops.Operator) (ops.Operator, TreeIdentity, error)
+	BreakableFunc func(ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error)
 
 	// TreeIdentity tracks modifications to node and expression trees.
 	// Only return SameTree when it is acceptable to return the original
 	// input and discard the returned result as a performance improvement.
 	TreeIdentity bool
-	VisitRule    bool
+
+	// VisitRule signals to the rewriter if the children of this operator should be visited or not
+	VisitRule bool
 )
 
 const (
@@ -40,33 +41,44 @@ const (
 	SkipChildren  VisitRule = false
 )
 
-func VisitTopDown(root ops.Operator, visitor func(ops.Operator) error) error {
-	queue := []ops.Operator{root}
-	for len(queue) > 0 {
-		this := queue[0]
-		queue = append(queue[1:], this.Inputs()...)
-		err := visitor(this)
+// Visit allows for the walking of the operator tree. If any error is returned, the walk is aborted
+func Visit(root ops.Operator, visitor func(ops.Operator) error) error {
+	_, err := TopDown(root, func(op ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error) {
+		err := visitor(op)
 		if err != nil {
-			return err
+			return nil, SameTree, SkipChildren, err
 		}
-	}
-	return nil
+		return op, SameTree, VisitChildren, nil
+	})
+	return err
 }
 
-func BottomUp(ctx *plancontext.PlanningContext, root ops.Operator, rewriter Func) (ops.Operator, error) {
-	op, _, err := bottomUp(ctx, root, rewriter)
+// BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
+// the given operator tree from the bottom up. Each callback [f] returns a TreeIdentity that is aggregated
+// into a final output indicating whether the operator tree was changed.
+func BottomUp(root ops.Operator, f Func) (ops.Operator, error) {
+	op, _, err := bottomUp(root, f)
 	if err != nil {
 		return nil, err
 	}
 	return op, nil
 }
 
-func bottomUp(ctx *plancontext.PlanningContext, root ops.Operator, rewriter Func) (ops.Operator, TreeIdentity, error) {
+// TopDown applies a transformation function to the given operator tree from the bottom up. =
+// Each callback [f] returns a TreeIdentity that is aggregated into a final output indicating whether the
+// operator tree was changed.
+// The callback also returns a VisitRule that signals whether the children of this operator should be visited or not
+func TopDown(in ops.Operator, rewriter BreakableFunc) (ops.Operator, error) {
+	op, _, err := breakableTopDown(in, rewriter)
+	return op, err
+}
+
+func bottomUp(root ops.Operator, rewriter Func) (ops.Operator, TreeIdentity, error) {
 	oldInputs := root.Inputs()
 	anythingChanged := false
 	newInputs := make([]ops.Operator, len(oldInputs))
 	for i, operator := range oldInputs {
-		in, changed, err := bottomUp(ctx, operator, rewriter)
+		in, changed, err := bottomUp(operator, rewriter)
 		if err != nil {
 			return nil, SameTree, err
 		}
@@ -80,7 +92,7 @@ func bottomUp(ctx *plancontext.PlanningContext, root ops.Operator, rewriter Func
 		root = root.Clone(newInputs)
 	}
 
-	newOp, treeIdentity, err := rewriter(ctx, root)
+	newOp, treeIdentity, err := rewriter(root)
 	if err != nil {
 		return nil, SameTree, err
 	}
@@ -90,20 +102,27 @@ func bottomUp(ctx *plancontext.PlanningContext, root ops.Operator, rewriter Func
 	return newOp, treeIdentity, nil
 }
 
-func BreakableTopDown(ctx *plancontext.PlanningContext, in ops.Operator, rewriter BreakableFunc) (ops.Operator, error) {
-	newOp, visitChildren, err := rewriter(ctx, in)
-	if err != nil || visitChildren == VisitChildren {
-		return newOp, err
+func breakableTopDown(in ops.Operator, rewriter BreakableFunc) (ops.Operator, TreeIdentity, error) {
+	newOp, identity, visit, err := rewriter(in)
+	if err != nil || visit == SkipChildren {
+		return newOp, identity, err
 	}
+
+	anythingChanged := identity == NewTree
 
 	oldInputs := newOp.Inputs()
 	newInputs := make([]ops.Operator, len(oldInputs))
 	for i, oldInput := range oldInputs {
-		newInputs[i], err = BreakableTopDown(ctx, oldInput, rewriter)
+		newInputs[i], identity, err = breakableTopDown(oldInput, rewriter)
+		anythingChanged = anythingChanged || identity == NewTree
 		if err != nil {
-			return nil, err
+			return nil, SameTree, err
 		}
 	}
 
-	return newOp.Clone(newInputs), nil
+	if anythingChanged {
+		return newOp.Clone(newInputs), NewTree, nil
+	}
+
+	return newOp, SameTree, nil
 }
