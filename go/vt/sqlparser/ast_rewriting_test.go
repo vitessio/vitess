@@ -174,6 +174,10 @@ func TestRewrites(in *testing.T) {
 		expected:    "select :__vttransaction_isolation as `@@transaction_isolation` from dual",
 		txIsolation: true,
 	}, {
+		in:          "SELECT @@session.transaction_isolation",
+		expected:    "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
+		txIsolation: true,
+	}, {
 		in:       "SELECT @@socket",
 		expected: "SELECT :__vtsocket as `@@socket`",
 		socket:   true,

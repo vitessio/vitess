@@ -2725,7 +2725,7 @@ func (node *Variable) Format(buf *TrackedBuffer) {
 		buf.literal("@@")
 	case GlobalScope, PersistSysScope, PersistOnlySysScope:
 		buf.astPrintf(node, "@@%s.", node.Scope.ToString())
-	case NoScope:
+	case NextTxScope:
 		buf.literal("@@")
 	}
 	buf.astPrintf(node, "%v", node.Name)
