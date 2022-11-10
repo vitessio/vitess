@@ -115,6 +115,8 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
+  string workflow_type = 6;
+  string workflow_sub_type = 7;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -151,6 +153,8 @@ message Workflow {
     // ith log, we will still return logs in [0, i) + (i, N].
     string log_fetch_error = 14;
     repeated string tags = 15;
+    binlogdata.VReplicationWorkflowType workflow_type = 16;
+    binlogdata.VReplicationWorkflowSubType workflow_sub_type = 17;
 
     message CopyState {
       string table = 1;

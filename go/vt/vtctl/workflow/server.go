@@ -294,7 +294,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			time_updated,
 			transaction_timestamp,
 			message,
-			tags
+			tags,
+			workflow_type,
+			workflow_sub_type
 		FROM
 			_vt.vreplication
 		%s`,
@@ -322,6 +324,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	// - sourceShardsByWorkflow[workflow.Name] != nil
 	// - targetShardsByWorkflow[workflow.Name] != nil
 	// - workflow.ShardStatuses != nil
+	// todo: should use NamedRows instead of []sqltypes.Value
 	scanWorkflow := func(ctx context.Context, workflow *vtctldatapb.Workflow, row []sqltypes.Value, tablet *topo.TabletInfo) error {
 		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
 		defer span.Finish()
@@ -368,6 +371,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		if tags != "" {
 			tagArray = strings.Split(tags, ",")
 		}
+		workflowType, _ := row[12].ToInt64()
+		workflowSubType, _ := row[13].ToInt64()
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -383,10 +388,13 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			TimeUpdated: &vttime.Time{
 				Seconds: timeUpdatedSeconds,
 			},
-			Message: message,
-			Tags:    tagArray,
+			Message:         message,
+			Tags:            tagArray,
+			WorkflowType:    binlogdatapb.VReplicationWorkflowType(workflowType),
+			WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
 		}
-
+		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)]
+		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)]
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err

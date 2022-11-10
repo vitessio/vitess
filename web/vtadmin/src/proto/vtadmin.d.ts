@@ -33767,6 +33767,12 @@ export namespace vtctldata {
 
         /** Workflow shard_streams */
         shard_streams?: ({ [k: string]: vtctldata.Workflow.IShardStream }|null);
+
+        /** Workflow workflow_type */
+        workflow_type?: (string|null);
+
+        /** Workflow workflow_sub_type */
+        workflow_sub_type?: (string|null);
     }
 
     /** Represents a Workflow. */
@@ -33792,6 +33798,12 @@ export namespace vtctldata {
 
         /** Workflow shard_streams. */
         public shard_streams: { [k: string]: vtctldata.Workflow.IShardStream };
+
+        /** Workflow workflow_type. */
+        public workflow_type: string;
+
+        /** Workflow workflow_sub_type. */
+        public workflow_sub_type: string;
 
         /**
          * Creates a new Workflow instance using the specified properties.
@@ -34111,6 +34123,12 @@ export namespace vtctldata {
 
             /** Stream tags */
             tags?: (string[]|null);
+
+            /** Stream workflow_type */
+            workflow_type?: (binlogdata.VReplicationWorkflowType|null);
+
+            /** Stream workflow_sub_type */
+            workflow_sub_type?: (binlogdata.VReplicationWorkflowSubType|null);
         }
 
         /** Represents a Stream. */
@@ -34166,6 +34184,12 @@ export namespace vtctldata {
 
             /** Stream tags. */
             public tags: string[];
+
+            /** Stream workflow_type. */
+            public workflow_type: binlogdata.VReplicationWorkflowType;
+
+            /** Stream workflow_sub_type. */
+            public workflow_sub_type: binlogdata.VReplicationWorkflowSubType;
 
             /**
              * Creates a new Stream instance using the specified properties.

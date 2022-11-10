@@ -693,6 +693,20 @@ func (m *Workflow_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.WorkflowSubType != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.WorkflowSubType))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x88
+	}
+	if m.WorkflowType != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.WorkflowType))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x80
+	}
 	if len(m.Tags) > 0 {
 		for iNdEx := len(m.Tags) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.Tags[iNdEx])
@@ -852,6 +866,20 @@ func (m *Workflow) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.WorkflowSubType) > 0 {
+		i -= len(m.WorkflowSubType)
+		copy(dAtA[i:], m.WorkflowSubType)
+		i = encodeVarint(dAtA, i, uint64(len(m.WorkflowSubType)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.WorkflowType) > 0 {
+		i -= len(m.WorkflowType)
+		copy(dAtA[i:], m.WorkflowType)
+		i = encodeVarint(dAtA, i, uint64(len(m.WorkflowType)))
+		i--
+		dAtA[i] = 0x32
 	}
 	if len(m.ShardStreams) > 0 {
 		for k := range m.ShardStreams {
@@ -9863,6 +9891,12 @@ func (m *Workflow_Stream) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	if m.WorkflowType != 0 {
+		n += 2 + sov(uint64(m.WorkflowType))
+	}
+	if m.WorkflowSubType != 0 {
+		n += 2 + sov(uint64(m.WorkflowSubType))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -9902,6 +9936,14 @@ func (m *Workflow) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
+	}
+	l = len(m.WorkflowType)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.WorkflowSubType)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -15594,6 +15636,44 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Tags = append(m.Tags, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 16:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowType", wireType)
+			}
+			m.WorkflowType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.WorkflowType |= binlogdata.VReplicationWorkflowType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 17:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowSubType", wireType)
+			}
+			m.WorkflowSubType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.WorkflowSubType |= binlogdata.VReplicationWorkflowSubType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -15896,6 +15976,70 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ShardStreams[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.WorkflowType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowSubType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.WorkflowSubType = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
