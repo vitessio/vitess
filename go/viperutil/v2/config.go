@@ -162,7 +162,7 @@ func decodeHandlingValue(from, to reflect.Type, data any) (any, error) {
 	}
 
 	switch {
-	case from.ConvertibleTo(reflect.TypeOf(h)):
+	case from == reflect.TypeOf(h):
 		return data.(ConfigFileNotFoundHandling), nil
 	case from.Kind() == reflect.Int:
 		return ConfigFileNotFoundHandling(data.(int)), nil

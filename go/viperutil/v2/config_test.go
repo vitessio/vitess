@@ -11,6 +11,7 @@ import (
 
 func TestGetConfigHandlingValue(t *testing.T) {
 	v := viper.New()
+	v.SetDefault("default", ExitOnConfigFileNotFound)
 	v.SetConfigType("yaml")
 
 	cfg := `
@@ -27,5 +28,6 @@ duration: 10h
 	assert.Equal(t, IgnoreConfigFileNotFound, getHandlingValueFunc("bar"), "failed to get int-like string value")
 	assert.Equal(t, ErrorOnConfigFileNotFound, getHandlingValueFunc("baz"), "failed to get string value")
 	assert.Equal(t, IgnoreConfigFileNotFound, getHandlingValueFunc("notset"), "failed to get value on unset key")
-	assert.Equal(t, IgnoreConfigFileNotFound, getHandlingValueFunc("duration"), "failed to get value on duration value")
+	assert.Equal(t, IgnoreConfigFileNotFound, getHandlingValueFunc("duration"), "failed to get value on duration key")
+	assert.Equal(t, ExitOnConfigFileNotFound, getHandlingValueFunc("default"), "failed to get value on default key")
 }
