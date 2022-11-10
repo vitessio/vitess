@@ -482,6 +482,7 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 		idx.Info.Type = strings.ToLower(idx.Info.Type)
 		for _, opt := range idx.Options {
 			opt.Name = strings.ToLower(opt.Name)
+			opt.String = strings.ToLower(opt.String)
 		}
 	}
 }

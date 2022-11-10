@@ -439,6 +439,20 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`)",
 		},
 		{
+			name:  "add one fulltext key with explicit parser",
+			from:  "create table t1 (id int primary key, name tinytext not null)",
+			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			diff:  "alter table t1 add fulltext key name_ft (`name`) with parser ngram",
+			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram",
+		},
+		{
+			name:  "add one fulltext key and one normal key",
+			from:  "create table t1 (id int primary key, name tinytext not null)",
+			to:    "create table t1 (id int primary key, name tinytext not null, key name_idx(name(32)), fulltext key name_ft(name))",
+			diff:  "alter table t1 add key name_idx (`name`(32)), add fulltext key name_ft (`name`)",
+			cdiff: "ALTER TABLE `t1` ADD KEY `name_idx` (`name`(32)), ADD FULLTEXT KEY `name_ft` (`name`)",
+		},
+		{
 			name:   "add two fulltext keys, distinct statements",
 			from:   "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
 			to:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
@@ -452,6 +466,26 @@ func TestCreateTableDiff(t *testing.T) {
 			fulltext: FullTextKeyUnifyStatements,
 			diff:     "alter table t1 add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
 			cdiff:    "ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`), ADD FULLTEXT KEY `name2_ft` (`name2`)",
+		},
+		{
+			name: "no fulltext diff",
+			from: "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			to:   "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+		},
+		{
+			name: "no fulltext diff, 2",
+			from: "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			to:   "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) WITH PARSER `ngram`)",
+		},
+		{
+			name: "no fulltext diff, 3",
+			from: "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			to:   "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) /*!50100 WITH PARSER `ngram` */)",
+		},
+		{
+			name: "no fulltext diff",
+			from: "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			to:   "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser NGRAM)",
 		},
 		// CHECK constraints
 		{
@@ -1678,7 +1712,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "does not drop non-default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using hash)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) USING HASH\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) USING hash\n)",
 		},
 		{
 			name: "drops default index visibility",
