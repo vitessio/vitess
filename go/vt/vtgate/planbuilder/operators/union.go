@@ -24,9 +24,8 @@ import (
 )
 
 type Union struct {
-	Sources     []Operator
-	SelectStmts []*sqlparser.Select
-	Distinct    bool
+	Sources  []Operator
+	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
 	Ordering sqlparser.OrderBy
@@ -39,16 +38,16 @@ var _ PhysicalOperator = (*Union)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
-// Clone implements the Operator interface
-func (u *Union) Clone(inputs []Operator) Operator {
+// clone implements the Operator interface
+func (u *Union) clone(inputs []Operator) Operator {
 	newOp := *u
 	checkSize(inputs, len(u.Sources))
 	newOp.Sources = inputs
 	return &newOp
 }
 
-// Inputs implements the Operator interface
-func (u *Union) Inputs() []Operator {
+// inputs implements the Operator interface
+func (u *Union) inputs() []Operator {
 	return u.Sources
 }
 
@@ -75,7 +74,11 @@ can be found on the same offset. The names of the RHS are discarded.
 */
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
 	offsets := make(map[string]int)
-	for i, selectExpr := range u.SelectStmts[0].SelectExprs {
+	sel, err := u.GetSelectFor(0)
+	if err != nil {
+		return nil, err
+	}
+	for i, selectExpr := range sel.SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on UNION where the first SELECT contains star or next")
@@ -105,7 +108,13 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 				return false
 			}
 
-			ae, ok := u.SelectStmts[i].SelectExprs[idx].(*sqlparser.AliasedExpr)
+			var sel *sqlparser.Select
+			sel, err = u.GetSelectFor(i)
+			if err != nil {
+				return false
+			}
+
+			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
 				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 				return false
@@ -117,7 +126,18 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 			return nil, err
 		}
 		u.Sources[i], err = u.Sources[i].AddPredicate(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return u, nil
+}
+
+func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
+	horizon, ok := u.Sources[source].(*Horizon)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
+	}
+	return sqlparser.GetFirstSelect(horizon.Select), nil
 }

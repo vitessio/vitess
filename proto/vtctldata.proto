@@ -91,6 +91,8 @@ message MaterializeSettings {
   // and to the SourceTimeZone in reverse workflows
   string target_time_zone = 11;
   repeated string source_shards = 12;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 13;
 }
 
 /* Data types for VtctldServer */

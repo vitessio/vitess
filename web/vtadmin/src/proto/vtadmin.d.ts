@@ -33542,6 +33542,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings source_shards */
         source_shards?: (string[]|null);
+
+        /** MaterializeSettings on_ddl */
+        on_ddl?: (string|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -33588,6 +33591,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings source_shards. */
         public source_shards: string[];
+
+        /** MaterializeSettings on_ddl. */
+        public on_ddl: string;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
