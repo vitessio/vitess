@@ -159,6 +159,6 @@ func checkShardWithLock(t *testing.T, ts *topo.Server) {
 	select {
 	case <-finished:
 	case <-timeout:
-		t.Fatalf("unlocking timed out")
+		t.Fatalf("Unlock(test_keyspace) timed out")
 	}
 }

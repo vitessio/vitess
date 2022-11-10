@@ -111,7 +111,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	for {
 		fmt.Println("The Current time is: ", time.Now())
 		if time.Now().After(waitUntil) {
-			t.Fatalf("unlocking timed out")
+			t.Fatalf("Unlock(test_keyspace) timed out")
 		}
 		if interruptCtx.Err() != nil {
 			require.ErrorContains(t, interruptCtx.Err(), "context canceled")
@@ -195,6 +195,6 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 	select {
 	case <-finished:
 	case <-timeout:
-		require.Fail(t, "unlocking timed out")
+		require.Fail(t, "Unlock(test_keyspace) timed out")
 	}
 }
