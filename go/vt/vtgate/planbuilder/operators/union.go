@@ -38,16 +38,16 @@ var _ PhysicalOperator = (*Union)(nil)
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
-// clone implements the Operator interface
-func (u *Union) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (u *Union) Clone(inputs []Operator) Operator {
 	newOp := *u
 	checkSize(inputs, len(u.Sources))
 	newOp.Sources = inputs
 	return &newOp
 }
 
-// inputs implements the Operator interface
-func (u *Union) inputs() []Operator {
+// Inputs implements the Operator interface
+func (u *Union) Inputs() []Operator {
 	return u.Sources
 }
 

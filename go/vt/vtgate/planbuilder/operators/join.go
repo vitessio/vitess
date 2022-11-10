@@ -33,8 +33,8 @@ type Join struct {
 
 var _ Operator = (*Join)(nil)
 
-// clone implements the Operator interface
-func (j *Join) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (j *Join) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	clone := *j
 	clone.LHS = inputs[0]
@@ -47,8 +47,8 @@ func (j *Join) clone(inputs []Operator) Operator {
 	}
 }
 
-// inputs implements the Operator interface
-func (j *Join) inputs() []Operator {
+// Inputs implements the Operator interface
+func (j *Join) Inputs() []Operator {
 	return []Operator{j.LHS, j.RHS}
 }
 

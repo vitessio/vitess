@@ -44,32 +44,6 @@ import (
 )
 
 type (
-	// Operator forms the tree of operators, representing the declarative query provided.
-	// While planning, the operator tree starts with logical operators, and later moves to physical operators.
-	// The difference between the two is that when we get to a physical operator, we have made decisions on in
-	// which order to do the joins, and how to split them up across shards and keyspaces.
-	// In some situation we go straight to the physical operator - when there are no options to consider,
-	// we can go straight to the end result.
-	Operator interface {
-		clone(inputs []Operator) Operator
-		inputs() []Operator
-
-		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
-		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
-		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
-		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
-
-		// AddColumn tells an operator to also output an additional column specified.
-		// The offset to the column is returned.
-		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
-	}
-
-	// PhysicalOperator means that this operator is ready to be turned into a logical plan
-	PhysicalOperator interface {
-		Operator
-		IPhysical()
-	}
-
 	// tableIDIntroducer is used to signal that this operator introduces data from a new source
 	tableIDIntroducer interface {
 		Introduces() semantics.TableSet
@@ -146,8 +120,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (O
 	return op, err
 }
 
-// inputs implements the Operator interface
-func (noInputs) inputs() []Operator {
+// Inputs implements the Operator interface
+func (noInputs) Inputs() []Operator {
 	return nil
 }
 
@@ -165,7 +139,7 @@ func VisitTopDown(root Operator, visitor func(Operator) error) error {
 	queue := []Operator{root}
 	for len(queue) > 0 {
 		this := queue[0]
-		queue = append(queue[1:], this.inputs()...)
+		queue = append(queue[1:], this.Inputs()...)
 		err := visitor(this)
 		if err != nil {
 			return err
@@ -215,12 +189,12 @@ func CostOf(op Operator) (cost int) {
 }
 
 func clone(op Operator) Operator {
-	inputs := op.inputs()
+	inputs := op.Inputs()
 	clones := make([]Operator, len(inputs))
 	for i, input := range inputs {
 		clones[i] = clone(input)
 	}
-	return op.clone(clones)
+	return op.Clone(clones)
 }
 
 func checkSize(inputs []Operator, shouldBe int) {
@@ -233,7 +207,7 @@ type rewriterFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, 
 type rewriterBreakableFunc func(*plancontext.PlanningContext, Operator) (newOp Operator, visitChildren bool, err error)
 
 func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter rewriterFunc) (Operator, bool, error) {
-	oldInputs := root.inputs()
+	oldInputs := root.Inputs()
 	anythingChanged := false
 	newInputs := make([]Operator, len(oldInputs))
 	for i, operator := range oldInputs {
@@ -248,7 +222,7 @@ func rewriteBottomUp(ctx *plancontext.PlanningContext, root Operator, rewriter r
 	}
 
 	if anythingChanged {
-		root = root.clone(newInputs)
+		root = root.Clone(newInputs)
 	}
 
 	newOp, b, err := rewriter(ctx, root)
@@ -267,7 +241,7 @@ func rewriteBreakableTopDown(ctx *plancontext.PlanningContext, in Operator, rewr
 		return
 	}
 
-	oldInputs := newOp.inputs()
+	oldInputs := newOp.Inputs()
 	newInputs := make([]Operator, len(oldInputs))
 	for i, oldInput := range oldInputs {
 		newInputs[i], err = rewriteBreakableTopDown(ctx, oldInput, rewriterF)
@@ -275,6 +249,6 @@ func rewriteBreakableTopDown(ctx *plancontext.PlanningContext, in Operator, rewr
 			return
 		}
 	}
-	newOp = newOp.clone(newInputs)
+	newOp = newOp.Clone(newInputs)
 	return
 }

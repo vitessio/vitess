@@ -49,8 +49,8 @@ type (
 var _ Operator = (*SubQuery)(nil)
 var _ Operator = (*SubQueryInner)(nil)
 
-// clone implements the Operator interface
-func (s *SubQueryInner) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (s *SubQueryInner) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	return &SubQueryInner{
 		Inner:             inputs[0],
@@ -58,13 +58,13 @@ func (s *SubQueryInner) clone(inputs []Operator) Operator {
 	}
 }
 
-// inputs implements the Operator interface
-func (s *SubQueryInner) inputs() []Operator {
+// Inputs implements the Operator interface
+func (s *SubQueryInner) Inputs() []Operator {
 	return []Operator{s.Inner}
 }
 
-// clone implements the Operator interface
-func (s *SubQuery) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (s *SubQuery) Clone(inputs []Operator) Operator {
 	checkSize(inputs, len(s.Inner)+1)
 	result := &SubQuery{
 		Outer: inputs[0],
@@ -79,8 +79,8 @@ func (s *SubQuery) clone(inputs []Operator) Operator {
 	return result
 }
 
-// inputs implements the Operator interface
-func (s *SubQuery) inputs() []Operator {
+// Inputs implements the Operator interface
+func (s *SubQuery) Inputs() []Operator {
 	operators := []Operator{s.Outer}
 	for _, inner := range s.Inner {
 		operators = append(operators, inner)

@@ -38,8 +38,8 @@ func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 // IPhysical implements the PhysicalOperator interface
 func (f *Filter) IPhysical() {}
 
-// clone implements the Operator interface
-func (f *Filter) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (f *Filter) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
@@ -49,8 +49,8 @@ func (f *Filter) clone(inputs []Operator) Operator {
 	}
 }
 
-// inputs implements the Operator interface
-func (f *Filter) inputs() []Operator {
+// Inputs implements the Operator interface
+func (f *Filter) Inputs() []Operator {
 	return []Operator{f.Source}
 }
 

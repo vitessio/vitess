@@ -116,8 +116,8 @@ func (r *Route) Cost() int {
 	return 1
 }
 
-// clone implements the Operator interface
-func (r *Route) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (r *Route) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]
@@ -130,8 +130,8 @@ func (r *Route) clone(inputs []Operator) Operator {
 	return &cloneRoute
 }
 
-// inputs implements the Operator interface
-func (r *Route) inputs() []Operator {
+// Inputs implements the Operator interface
+func (r *Route) Inputs() []Operator {
 	return []Operator{r.Source}
 }
 

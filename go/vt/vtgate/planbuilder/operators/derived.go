@@ -44,7 +44,7 @@ var _ PhysicalOperator = (*Derived)(nil)
 func (d *Derived) IPhysical() {}
 
 // Clone implements the Operator interface
-func (d *Derived) clone(inputs []Operator) Operator {
+func (d *Derived) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 1)
 	return &Derived{
 		Source:        inputs[0],
@@ -101,8 +101,8 @@ func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
 }
 
-// inputs implements the Operator interface
-func (d *Derived) inputs() []Operator {
+// Inputs implements the Operator interface
+func (d *Derived) Inputs() []Operator {
 	return []Operator{d.Source}
 }
 

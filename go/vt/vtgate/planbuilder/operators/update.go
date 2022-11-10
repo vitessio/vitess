@@ -46,8 +46,8 @@ func (u *Update) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (u *Update) IPhysical() {}
 
-// clone implements the Operator interface
-func (u *Update) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (u *Update) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 0)
 	return &Update{
 		QTable:              u.QTable,

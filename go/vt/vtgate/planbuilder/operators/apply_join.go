@@ -68,7 +68,7 @@ func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin boo
 func (a *ApplyJoin) IPhysical() {}
 
 // Clone implements the Operator interface
-func (a *ApplyJoin) clone(inputs []Operator) Operator {
+func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 	checkSize(inputs, 2)
 	return &ApplyJoin{
 		LHS:        inputs[0],
@@ -86,8 +86,8 @@ func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 	return addPredicate(a, ctx, expr, false)
 }
 
-// inputs implements the Operator interface
-func (a *ApplyJoin) inputs() []Operator {
+// Inputs implements the Operator interface
+func (a *ApplyJoin) Inputs() []Operator {
 	return []Operator{a.LHS, a.RHS}
 }
 
