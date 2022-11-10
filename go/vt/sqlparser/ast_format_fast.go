@@ -3569,7 +3569,9 @@ func (node *Variable) formatFast(buf *TrackedBuffer) {
 	case VariableScope:
 		buf.WriteString("@")
 	case SessionScope:
-		if node.Name.EqualString("transaction_isolation") || node.Name.EqualString("transaction_read_only") {
+		if node.Name.EqualString(TransactionIsolationStr) || node.Name.EqualString(TransactionReadOnlyStr) {
+			// @@ without session have `next transaction` scope for these system variables.
+			// so if they are in session scope it has to be printed explicitly.
 			buf.WriteString("@@")
 			buf.WriteString(node.Scope.ToString())
 			buf.WriteByte('.')

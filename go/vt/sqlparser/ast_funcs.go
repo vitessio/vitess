@@ -728,7 +728,7 @@ func NewVariableExpression(str string, at AtCount) *Variable {
 		case strings.HasPrefix(l, "vitess_metadata."):
 			v.Name = createIdentifierCI(str[16:])
 			v.Scope = VitessMetadataScope
-		case strings.HasSuffix(l, "transaction_isolation") || strings.HasSuffix(l, "transaction_read_only"):
+		case strings.HasSuffix(l, TransactionIsolationStr) || strings.HasSuffix(l, TransactionReadOnlyStr):
 			v.Scope = NextTxScope
 		default:
 			v.Scope = SessionScope

@@ -1068,33 +1068,33 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Var: NewSetVariable("transaction_isolation", NextTxScope), Expr: NewStrLiteral($3)}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: NewStrLiteral($3)}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Var: NewSetVariable("transaction_read_only", NextTxScope), Expr: NewStrLiteral("off")}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("off")}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Var: NewSetVariable("transaction_read_only", NextTxScope), Expr: NewStrLiteral("on")}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("on")}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = "repeatable-read"
+    $$ = RepeatableReadStr
   }
 | READ COMMITTED
   {
-    $$ = "read-committed"
+    $$ = ReadCommittedStr
   }
 | READ UNCOMMITTED
   {
-    $$ = "read-uncommitted"
+    $$ = ReadUncommittedStr
   }
 | SERIALIZABLE
   {
-    $$ = "serializable"
+    $$ = SerializableStr
   }
 
 set_session_or_global:

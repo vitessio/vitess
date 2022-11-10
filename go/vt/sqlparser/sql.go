@@ -9634,7 +9634,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:1070
 		{
-			yyLOCAL = &SetExpr{Var: NewSetVariable("transaction_isolation", NextTxScope), Expr: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: NewStrLiteral(yyDollar[3].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 116:
@@ -9642,7 +9642,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:1074
 		{
-			yyLOCAL = &SetExpr{Var: NewSetVariable("transaction_read_only", NextTxScope), Expr: NewStrLiteral("off")}
+			yyLOCAL = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("off")}
 		}
 		yyVAL.union = yyLOCAL
 	case 117:
@@ -9650,32 +9650,32 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:1078
 		{
-			yyLOCAL = &SetExpr{Var: NewSetVariable("transaction_read_only", NextTxScope), Expr: NewStrLiteral("on")}
+			yyLOCAL = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("on")}
 		}
 		yyVAL.union = yyLOCAL
 	case 118:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1084
 		{
-			yyVAL.str = "repeatable-read"
+			yyVAL.str = RepeatableReadStr
 		}
 	case 119:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1088
 		{
-			yyVAL.str = "read-committed"
+			yyVAL.str = ReadCommittedStr
 		}
 	case 120:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1092
 		{
-			yyVAL.str = "read-uncommitted"
+			yyVAL.str = ReadUncommittedStr
 		}
 	case 121:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1096
 		{
-			yyVAL.str = "serializable"
+			yyVAL.str = SerializableStr
 		}
 	case 122:
 		yyDollar = yyS[yypt-1 : yypt+1]

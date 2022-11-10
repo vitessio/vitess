@@ -228,18 +228,15 @@ const (
 	AscScr  = "asc"
 	DescScr = "desc"
 
-	// SetExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
-	// TransactionStr is the Name for a SET TRANSACTION statement
-	TransactionStr = "transaction"
+	// SetExpr.Expr transaction variables
+	TransactionIsolationStr = "transaction_isolation"
+	TransactionReadOnlyStr  = "transaction_read_only"
 
 	// Transaction isolation levels
-	ReadUncommittedStr = "read uncommitted"
-	ReadCommittedStr   = "read committed"
-	RepeatableReadStr  = "repeatable read"
+	ReadUncommittedStr = "read-uncommitted"
+	ReadCommittedStr   = "read-committed"
+	RepeatableReadStr  = "repeatable-read"
 	SerializableStr    = "serializable"
-
-	TxReadOnly  = "read only"
-	TxReadWrite = "read write"
 
 	// Explain formats
 	EmptyStr       = ""
