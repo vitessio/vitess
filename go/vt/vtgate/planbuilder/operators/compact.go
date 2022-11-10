@@ -19,36 +19,37 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // compact will optimise the operator tree into a smaller but equivalent version
 func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-	newOp, _, err := rewriteBottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, bool, error) {
+	newOp, err := rewrite.BottomUp(ctx, op, func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
-			return op, false, nil
+			return op, rewrite.SameTree, nil
 		}
 		return newOp.compact(ctx)
 	})
 	return newOp, err
 }
 
-func (f *Filter) compact(*plancontext.PlanningContext) (ops.Operator, bool, error) {
+func (f *Filter) compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
 	if len(f.Predicates) == 0 {
-		return f.Source, true, nil
+		return f.Source, rewrite.NewTree, nil
 	}
 
 	other, isFilter := f.Source.(*Filter)
 	if !isFilter {
-		return f, false, nil
+		return f, rewrite.SameTree, nil
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, true, nil
+	return f, rewrite.NewTree, nil
 }
 
-func (u *Union) compact(*plancontext.PlanningContext) (ops.Operator, bool, error) {
+func (u *Union) compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
 	var newSources []ops.Operator
 	anythingChanged := false
 	for _, source := range u.Sources {
@@ -79,19 +80,24 @@ func (u *Union) compact(*plancontext.PlanningContext) (ops.Operator, bool, error
 	if anythingChanged {
 		u.Sources = newSources
 	}
-	return u, anythingChanged, nil
+	identity := rewrite.SameTree
+	if anythingChanged {
+		identity = rewrite.NewTree
+	}
+
+	return u, identity, nil
 }
 
-func (j *Join) compact(ctx *plancontext.PlanningContext) (ops.Operator, bool, error) {
+func (j *Join) compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
-		return j, false, nil
+		return j, rewrite.SameTree, nil
 	}
 
 	lqg, lok := j.LHS.(*QueryGraph)
 	rqg, rok := j.RHS.(*QueryGraph)
 	if !lok || !rok {
-		return j, false, nil
+		return j, rewrite.SameTree, nil
 	}
 
 	newOp := &QueryGraph{
@@ -102,8 +108,8 @@ func (j *Join) compact(ctx *plancontext.PlanningContext) (ops.Operator, bool, er
 	if j.Predicate != nil {
 		err := newOp.collectPredicate(ctx, j.Predicate)
 		if err != nil {
-			return nil, false, err
+			return nil, rewrite.SameTree, err
 		}
 	}
-	return newOp, true, nil
+	return newOp, rewrite.NewTree, nil
 }

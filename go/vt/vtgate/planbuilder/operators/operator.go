@@ -36,6 +36,8 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -78,7 +80,7 @@ type (
 
 	compactable interface {
 		// implement this interface for operators that have easy to see optimisations
-		compact(ctx *plancontext.PlanningContext) (ops.Operator, bool, error)
+		compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error)
 	}
 
 	// helper type that implements Inputs() returning nil
@@ -137,21 +139,8 @@ func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
 }
 
-func VisitTopDown(root ops.Operator, visitor func(ops.Operator) error) error {
-	queue := []ops.Operator{root}
-	for len(queue) > 0 {
-		this := queue[0]
-		queue = append(queue[1:], this.Inputs()...)
-		err := visitor(this)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func TableID(op ops.Operator) (result semantics.TableSet) {
-	_ = VisitTopDown(op, func(this ops.Operator) error {
+	_ = rewrite.VisitTopDown(op, func(this ops.Operator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {
 			result.MergeInPlace(tbl.Introduces())
 		}
@@ -161,7 +150,7 @@ func TableID(op ops.Operator) (result semantics.TableSet) {
 }
 
 func unresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
-	_ = VisitTopDown(op, func(this ops.Operator) error {
+	_ = rewrite.VisitTopDown(op, func(this ops.Operator) error {
 		if tbl, ok := this.(unresolved); ok {
 			result = append(result, tbl.UnsolvedPredicates(st)...)
 		}
@@ -172,7 +161,7 @@ func unresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sql
 }
 
 func checkValid(op ops.Operator) error {
-	return VisitTopDown(op, func(this ops.Operator) error {
+	return rewrite.VisitTopDown(op, func(this ops.Operator) error {
 		if chk, ok := this.(checkable); ok {
 			return chk.checkValid()
 		}
@@ -181,7 +170,7 @@ func checkValid(op ops.Operator) error {
 }
 
 func CostOf(op ops.Operator) (cost int) {
-	_ = VisitTopDown(op, func(op ops.Operator) error {
+	_ = rewrite.VisitTopDown(op, func(op ops.Operator) error {
 		if costlyOp, ok := op.(costly); ok {
 			cost += costlyOp.Cost()
 		}
@@ -203,54 +192,4 @@ func checkSize(inputs []ops.Operator, shouldBe int) {
 	if len(inputs) != shouldBe {
 		panic(fmt.Sprintf("BUG: got the wrong number of inputs: got %d, expected %d", len(inputs), shouldBe))
 	}
-}
-
-type rewriterFunc func(*plancontext.PlanningContext, ops.Operator) (newOp ops.Operator, changed bool, err error)
-type rewriterBreakableFunc func(*plancontext.PlanningContext, ops.Operator) (newOp ops.Operator, visitChildren bool, err error)
-
-func rewriteBottomUp(ctx *plancontext.PlanningContext, root ops.Operator, rewriter rewriterFunc) (ops.Operator, bool, error) {
-	oldInputs := root.Inputs()
-	anythingChanged := false
-	newInputs := make([]ops.Operator, len(oldInputs))
-	for i, operator := range oldInputs {
-		in, changed, err := rewriteBottomUp(ctx, operator, rewriter)
-		if err != nil {
-			return nil, false, err
-		}
-		if changed {
-			anythingChanged = true
-		}
-		newInputs[i] = in
-	}
-
-	if anythingChanged {
-		root = root.Clone(newInputs)
-	}
-
-	newOp, b, err := rewriter(ctx, root)
-	if err != nil {
-		return nil, false, err
-	}
-	return newOp, anythingChanged || b, nil
-}
-
-func rewriteBreakableTopDown(ctx *plancontext.PlanningContext, in ops.Operator, rewriterF rewriterBreakableFunc) (
-	newOp ops.Operator,
-	err error,
-) {
-	newOp, visitChildren, err := rewriterF(ctx, in)
-	if err != nil || !visitChildren {
-		return
-	}
-
-	oldInputs := newOp.Inputs()
-	newInputs := make([]ops.Operator, len(oldInputs))
-	for i, oldInput := range oldInputs {
-		newInputs[i], err = rewriteBreakableTopDown(ctx, oldInput, rewriterF)
-		if err != nil {
-			return
-		}
-	}
-	newOp = newOp.Clone(newInputs)
-	return
 }

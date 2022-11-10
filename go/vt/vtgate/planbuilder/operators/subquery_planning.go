@@ -22,12 +22,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Operator, bool, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Operator, rewrite.TreeIdentity, error) {
 	var unmerged []*SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
@@ -47,7 +48,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 		}
 		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, merger)
 		if err != nil {
-			return nil, false, err
+			return nil, rewrite.SameTree, err
 		}
 
 		if merged != nil {
@@ -68,20 +69,20 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
 			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
-				return nil, false, err
+				return nil, rewrite.SameTree, err
 			}
 			outer = correlatedTree
 			continue
 		}
 
-		return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, rewrite.SameTree, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
 		tree.Outer = outer
 		outer = tree
 	}
-	return outer, true, nil
+	return outer, rewrite.NewTree, nil
 }
 
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {

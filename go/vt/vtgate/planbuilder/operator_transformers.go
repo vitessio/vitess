@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -328,7 +330,7 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 
 func getAllTableNames(op *operators.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := operators.VisitTopDown(op, func(op ops.Operator) error {
+	err := rewrite.VisitTopDown(op, func(op ops.Operator) error {
 		tbl, isTbl := op.(*operators.Table)
 		var name string
 		if isTbl {

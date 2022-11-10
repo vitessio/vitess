@@ -19,6 +19,8 @@ package operators
 import (
 	"errors"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -28,18 +30,18 @@ import (
 var errNotHorizonPlanned = errors.New("query can't be fully operator planned")
 
 func planHorizons(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	return rewriteBreakableTopDown(ctx, in, func(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, bool, error) {
+	return rewrite.BreakableTopDown(ctx, in, func(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, rewrite.VisitRule, error) {
 		switch in := in.(type) {
 		case *Horizon:
 			op, err := planHorizon(ctx, in)
 			if err != nil {
-				return nil, false, err
+				return nil, rewrite.SkipChildren, err
 			}
-			return op, true, nil
+			return op, rewrite.VisitChildren, nil
 		case *Route:
-			return in, false, nil
+			return in, rewrite.SkipChildren, nil
 		default:
-			return in, true, nil
+			return in, rewrite.VisitChildren, nil
 		}
 	})
 }

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/key"
@@ -50,7 +52,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, _, err := rewriteBottomUp(ctx, in, func(context *plancontext.PlanningContext, operator ops.Operator) (newOp ops.Operator, changed bool, err error) {
+	op, err := rewrite.BottomUp(ctx, in, func(context *plancontext.PlanningContext, operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -63,7 +65,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		case *Filter:
 			return optimizeFilter(op)
 		default:
-			return operator, false, nil
+			return operator, rewrite.SameTree, nil
 		}
 	})
 
@@ -71,7 +73,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		return nil, err
 	}
 
-	err = VisitTopDown(op, func(op ops.Operator) error {
+	err = rewrite.VisitTopDown(op, func(op ops.Operator) error {
 		if _, isPhys := op.(ops.PhysicalOperator); !isPhys {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
 		}
@@ -84,44 +86,44 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	return compact(ctx, op)
 }
 
-func optimizeFilter(op *Filter) (ops.Operator, bool, error) {
+func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
 	if route, ok := op.Source.(*Route); ok {
 		// let's push the filter into the route
 		op.Source = route.Source
 		route.Source = op
-		return route, true, nil
+		return route, rewrite.NewTree, nil
 	}
 
-	return op, false, nil
+	return op, rewrite.SameTree, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, bool, error) {
+func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, rewrite.TreeIdentity, error) {
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
-		return op, false, nil
+		return op, rewrite.SameTree, nil
 	}
 
 	if !(innerRoute.RouteOpCode == engine.EqualUnique) && !op.IsMergeable(ctx) {
 		// no need to check anything if we are sure that we will only hit a single shard
-		return op, false, nil
+		return op, rewrite.SameTree, nil
 	}
 
 	op.Source = innerRoute.Source
 	innerRoute.Source = op
 
-	return innerRoute, true, nil
+	return innerRoute, rewrite.NewTree, nil
 }
 
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, bool, error) {
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.TreeIdentity, error) {
 	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
-		return nil, false, err
+		return nil, rewrite.SameTree, err
 	}
-	return join, true, nil
+	return join, rewrite.NewTree, nil
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed bool, err error) {
-	changed = true
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed rewrite.TreeIdentity, err error) {
+	changed = rewrite.NewTree
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
 		result, err = leftToRightSolve(ctx, op)
@@ -465,7 +467,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs ops.Op
 func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) bool {
 	required := false
 
-	_ = VisitTopDown(op, func(current ops.Operator) error {
+	_ = rewrite.VisitTopDown(op, func(current ops.Operator) error {
 		derived, isDerived := current.(*Derived)
 
 		if isDerived && !derived.IsMergeable(ctx) {
@@ -733,7 +735,7 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a ops.Operator, exp sqlp
 
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
-		_ = VisitTopDown(a, func(rel ops.Operator) error {
+		_ = rewrite.VisitTopDown(a, func(rel ops.Operator) error {
 			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
 				return nil
