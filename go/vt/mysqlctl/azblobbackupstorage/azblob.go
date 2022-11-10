@@ -31,9 +31,8 @@ import (
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 
-	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/v2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -42,60 +41,59 @@ import (
 
 var (
 	// This is the account name
-	accountName = viperutil.NewValue(
+	accountName = viperutil.Configure(
 		configKey("account.name"),
-		viper.GetString,
-		viperutil.WithFlags[string]("azblob_backup_account_name"),
-		viperutil.WithEnvVars[string]("VT_AZBLOB_ACCOUNT_NAME"),
+		viperutil.Options[string]{
+			EnvVars:  []string{"VT_AZBLOB_ACCOUNT_NAME"},
+			FlagName: "azblob_backup_account_name",
+		},
 	)
 
 	// This is the private access key
-	accountKeyFile = viperutil.NewValue(
+	accountKeyFile = viperutil.Configure(
 		configKey("account.key_file"),
-		viper.GetString,
-		viperutil.WithFlags[string]("azblob_backup_account_key_file"),
+		viperutil.Options[string]{
+			FlagName: "azblob_backup_account_key_file",
+		},
 	)
 
 	// This is the name of the container that will store the backups
-	containerName = viperutil.NewValue(
+	containerName = viperutil.Configure(
 		configKey("container_name"),
-		viper.GetString,
-		viperutil.WithFlags[string]("azblob_backup_container_name"),
+		viperutil.Options[string]{
+			FlagName: "azblob_backup_container_name",
+		},
 	)
 
 	// This is an optional prefix to prepend to all files
-	storageRoot = viperutil.NewValue(
+	storageRoot = viperutil.Configure(
 		configKey("storage_root"),
-		viper.GetString,
-		viperutil.WithFlags[string]("azblob_backup_storage_root"),
+		viperutil.Options[string]{
+			FlagName: "azblob_backup_storage_root",
+		},
 	)
 
-	azBlobParallelism = viperutil.NewValue(
+	azBlobParallelism = viperutil.Configure(
 		configKey("parallelism"),
-		viper.GetInt,
-		viperutil.WithFlags[int]("azblob_backup_parallelism"),
+		viperutil.Options[int]{
+			Default:  1,
+			FlagName: "azblob_backup_parallelism",
+		},
 	)
 )
 
 const configKeyPrefix = "backup.storage.azblob"
 
-var configKey = viperutil.KeyPartial(configKeyPrefix)
+var configKey = viperutil.KeyPrefixFunc(configKeyPrefix)
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.String("azblob_backup_account_name", "", "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
-	accountName.Bind(nil, fs)
+	fs.String("azblob_backup_account_name", accountName.Default(), "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
+	fs.String("azblob_backup_account_key_file", accountKeyFile.Default(), "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
+	fs.String("azblob_backup_container_name", containerName.Default(), "Azure Blob Container Name.")
+	fs.String("azblob_backup_storage_root", storageRoot.Default(), "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
+	fs.Int("azblob_backup_parallelism", azBlobParallelism.Default(), "Azure Blob operation parallelism (requires extra memory when increased).")
 
-	fs.String("azblob_backup_account_key_file", "", "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
-	accountKeyFile.Bind(nil, fs)
-
-	fs.String("azblob_backup_container_name", "", "Azure Blob Container Name.")
-	containerName.Bind(nil, fs)
-
-	fs.String("azblob_backup_storage_root", "", "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
-	storageRoot.Bind(nil, fs)
-
-	fs.Int("azblob_backup_parallelism", 1, "Azure Blob operation parallelism (requires extra memory when increased).")
-	azBlobParallelism.Bind(nil, fs)
+	viperutil.BindFlags(fs, accountName, accountKeyFile, containerName, storageRoot, azBlobParallelism)
 }
 
 func init() {
