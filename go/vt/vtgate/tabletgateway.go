@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
+	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -269,6 +270,20 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 
 		tablets := gw.hc.GetHealthyTabletStats(target)
+
+		// temporary hack to enable REPLICA type queries to address both REPLICA tablets and RDONLY tablets
+		// original commit - https://github.com/tinyspeck/vitess/pull/166/commits/2552b4ce25a9fdb41ff07fa69f2ccf485fea83ac
+		// discoverygateway patch - https://github.com/slackhq/vitess/commit/47adb7c8fc720cb4cb7a090530b3e88d310ff6d3
+		if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+			// Create a new target for the same original keyspace/shard, but RDONLY tablet type.
+			rdonlyTarget := &query.Target{
+				Keyspace:   target.Keyspace,
+				Shard:      target.Shard,
+				TabletType: topodatapb.TabletType_RDONLY,
+			}
+			tablets = append(tablets, gw.hc.GetHealthyTabletStats(rdonlyTarget)...)
+		}
+
 		if len(tablets) == 0 {
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
 			// or if a reparent operation is in progress.
