@@ -112,10 +112,10 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 // rewriteHavingAndOrderBy rewrites columns on the ORDER BY/HAVING
 // clauses to use aliases from the SELECT expressions when available.
 // The scoping rules are:
-//  - A column identifier with no table qualifier that matches an alias introduced
-//    in SELECT points to that expression, and not at any table column
-//  - Except when expression aliased is an aggregation, and the column identifier in the
-//    HAVING/ORDER BY clause is inside an aggregation function
+//   - A column identifier with no table qualifier that matches an alias introduced
+//     in SELECT points to that expression, and not at any table column
+//   - Except when expression aliased is an aggregation, and the column identifier in the
+//     HAVING/ORDER BY clause is inside an aggregation function
 //
 // This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
 func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
