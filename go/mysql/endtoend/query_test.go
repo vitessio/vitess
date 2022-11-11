@@ -255,10 +255,7 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 	result, warnings, err := conn.ExecuteFetchWithWarningCount("insert into a(id) values(10)", 1000, true)
 	require.NoError(t, err, "insert failed: %v", err)
 
-	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
-	}
-	assert.Equal(t, 1, result.RowsAffected, "unexpected rows affected by insert; result: %v", result)
+	assert.Equal(t, uint64(1), result.RowsAffected, "unexpected rows affected by insert; result: %v", result)
 	assert.Equal(t, 0, len(result.Rows), "unexpected row count in result for insert: %v", result)
 	assert.Equal(t, uint16(1), warnings, "unexpected result for warnings: %v", warnings)
 
