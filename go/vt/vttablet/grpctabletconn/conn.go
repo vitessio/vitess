@@ -17,11 +17,10 @@ limitations under the License.
 package grpctabletconn
 
 import (
+	"context"
 	"flag"
 	"io"
 	"sync"
-
-	"context"
 
 	"google.golang.org/grpc"
 
@@ -498,6 +497,10 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 			return transactionID, alias, tabletconn.ErrorFromGRPC(err)
 		}
 
+		if ser.Error != nil {
+			return transactionID, alias, tabletconn.ErrorFromVTRPC(ser.Error)
+		}
+
 		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return transactionID, alias, nil
@@ -834,6 +837,10 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 			return transactionID, reservedID, alias, tabletconn.ErrorFromGRPC(err)
 		}
 
+		if ser.Error != nil {
+			return transactionID, reservedID, alias, tabletconn.ErrorFromVTRPC(ser.Error)
+		}
+
 		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return transactionID, reservedID, alias, nil
@@ -931,6 +938,10 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *q
 
 		if err != nil {
 			return reservedID, alias, tabletconn.ErrorFromGRPC(err)
+		}
+
+		if ser.Error != nil {
+			return reservedID, alias, tabletconn.ErrorFromVTRPC(ser.Error)
 		}
 
 		// The last stream receive will not have a result, so callback will not be called for it.
