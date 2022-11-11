@@ -298,7 +298,7 @@ func TestDDLUnsharded(t *testing.T) {
 	assertMatches(t, conn, "select * from v1", `[[INT64(3) INT64(0) INT64(3) VARCHAR("a")] [INT64(30) INT64(10) INT64(30) VARCHAR("ac")] [INT64(300) INT64(100) INT64(300) VARCHAR("abc")]]`)
 	exec(t, conn, `drop view v1`)
 	exec(t, conn, `drop table tempt1`)
-	assertMatches(t, conn, "show tables", `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+	utils.AssertMatchesAny(t, conn, "show tables", `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`, `[[VARBINARY("allDefaults")] [VARBINARY("t1")]]`)
 }
 
 func TestCallProcedure(t *testing.T) {
@@ -462,7 +462,7 @@ func TestFloatValueDefault(t *testing.T) {
 	exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1);`)
 	defer exec(t, conn, `drop table test_float_default`)
 	utils.AssertMatchesAny(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_default desc",
-		`[[VARCHAR("test_float_default") VARCHAR("pos_f") BLOB("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") BLOB("-2.1")]]`,
+		`[[VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")]]`,
 		`[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
 }
 

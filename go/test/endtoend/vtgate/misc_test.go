@@ -263,9 +263,9 @@ func TestShowTablesWithWhereClause(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.AssertMatches(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`)
+	utils.AssertMatchesAny(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`, `[[VARBINARY("t6")]]`)
 	utils.Exec(t, conn, "begin")
-	utils.AssertMatches(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`)
+	utils.AssertMatchesAny(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`, `[[VARBINARY("t3")]]`)
 }
 
 func TestOffsetAndLimitWithOLAP(t *testing.T) {
