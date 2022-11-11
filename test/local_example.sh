@@ -74,7 +74,7 @@ done;
 
 sleep 3 # TODO: Required for now!
 
-exit
+
 ./304_switch_reads.sh
 ./305_switch_writes.sh
 
