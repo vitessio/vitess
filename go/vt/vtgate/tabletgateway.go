@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -276,7 +275,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// discoverygateway patch - https://github.com/slackhq/vitess/commit/47adb7c8fc720cb4cb7a090530b3e88d310ff6d3
 		if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
 			// Create a new target for the same original keyspace/shard, but RDONLY tablet type.
-			rdonlyTarget := &query.Target{
+			rdonlyTarget := &querypb.Target{
 				Keyspace:   target.Keyspace,
 				Shard:      target.Shard,
 				TabletType: topodatapb.TabletType_RDONLY,
