@@ -282,8 +282,8 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 
 	for _, other := range equal {
 		assert.True(t, set.Equal(other), "%#v.Equal(%#v) = false, want true", set, other)
-		assert.True(t, // Equality should be transitive.
-			other.Equal(set), "%#v.Equal(%#v) = false, want true", other, set)
+		// Equality should be transitive.
+		assert.True(t, other.Equal(set), "%#v.Equal(%#v) = false, want true", other, set)
 
 	}
 

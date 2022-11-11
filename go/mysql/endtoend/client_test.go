@@ -243,9 +243,7 @@ func expectNoError(t *testing.T, err error) {
 
 func expectFlag(t *testing.T, msg string, flag, want bool) {
 	t.Helper()
-	require.Equal(t, want, flag, "%s: %v, want: %v",
-		// We cannot continue the test if flag is incorrect.
-		msg, flag, want)
+	require.Equal(t, want, flag, "%s: %v, want: %v", msg, flag, want)
 
 }
 

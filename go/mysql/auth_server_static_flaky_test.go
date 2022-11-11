@@ -160,8 +160,8 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond)
-	require. // wait for signal handler
-			Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
+	// wait for signal handler
+	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
 	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
 
 }
@@ -173,8 +173,8 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 	}
 
 	time.Sleep(20 * time.Millisecond)
-	require. // wait for signal handler
-			Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
+	// wait for signal handler
+	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
 	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
 
 }

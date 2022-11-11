@@ -98,11 +98,9 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 			t.Logf("Got a rotate packet: %v", be)
 			continue
 		}
-		require.
-
-			// And we want a FORMAT_DESCRIPTION_EVENT.
-			// Print a few things about the event for sanity checks.
-			True(t, be.IsFormatDescription(), "Unexpected packet: %v", be)
+		// And we want a FORMAT_DESCRIPTION_EVENT.
+		// Print a few things about the event for sanity checks.
+		require.True(t, be.IsFormatDescription(), "Unexpected packet: %v", be)
 
 		f, err = be.Format()
 		require.NoError(t, err, "Format() returned error: %v", err)

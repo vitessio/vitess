@@ -221,11 +221,9 @@ func TestComStmtSendLongData(t *testing.T) {
 	require.True(t, ok, "parseComStmtSendLongData failed")
 	require.Equal(t, uint16(1), paramID, "Received incorrect ParamID, want %v, got %v:", paramID, 1)
 	require.Equal(t, prepare.StatementID, stmtID, "Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
-	require.
-
-		// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
-		// sizeof(uint32) + sizeof(uint16) + 1 = 7
-		Equal(t, len(data)-7, len(chunkData), "Received bad chunkData")
+	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
+	// sizeof(uint32) + sizeof(uint16) + 1 = 7
+	require.Equal(t, len(data)-7, len(chunkData), "Received bad chunkData")
 
 }
 
