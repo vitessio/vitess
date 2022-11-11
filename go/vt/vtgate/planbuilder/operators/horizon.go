@@ -18,24 +18,25 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Horizon is an operator we use until we decide how to handle the source to the horizon.
 // It contains information about the planning we have to do after deciding how we will send the query to the tablets.
 type Horizon struct {
-	Source Operator
+	Source ops.Operator
 	Select sqlparser.SelectStatement
 
 	noColumns
 }
 
-var _ Operator = (*Horizon)(nil)
-var _ PhysicalOperator = (*Horizon)(nil)
+var _ ops.Operator = (*Horizon)(nil)
+var _ ops.PhysicalOperator = (*Horizon)(nil)
 
 func (h *Horizon) IPhysical() {}
 
-func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	newSrc, err := h.Source.AddPredicate(ctx, expr)
 	if err != nil {
 		return nil, err
@@ -44,14 +45,13 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return h, nil
 }
 
-func (h *Horizon) clone(inputs []Operator) Operator {
-	checkSize(inputs, 1)
+func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 	return &Horizon{
 		Source: inputs[0],
 		Select: h.Select,
 	}
 }
 
-func (h *Horizon) inputs() []Operator {
-	return []Operator{h.Source}
+func (h *Horizon) Inputs() []ops.Operator {
+	return []ops.Operator{h.Source}
 }
