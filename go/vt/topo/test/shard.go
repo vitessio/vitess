@@ -97,7 +97,9 @@ func checkShard(t *testing.T, ts *topo.Server) {
 	}
 }
 
-// checkShardWithLock verifies the Shard operations work correctly With Lock
+// checkShardWithLock verifies that `TryLockShard` will keep failing with `NodeExists` error if there is
+// a lock already taken for given shard. Once we unlock that shard, then subsequent call to `TryLockShard`
+// should succeed.
 func checkShardWithLock(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
@@ -121,41 +123,47 @@ func checkShardWithLock(t *testing.T, ts *topo.Server) {
 		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
+	duration := 10 * time.Second
+	waitUntil := time.Now().Add(duration)
 	// As soon as we're unblocked, we try to lock the keyspace.
 	go func() {
 		<-unblock
-		waitUntil := time.Now().Add(10 * time.Second)
 		var isUnLocked1 = false
 		for time.Now().Before(waitUntil) {
 			_, unlock2, err := ts.TryLockShard(ctx, "test_keyspace", "b0-c0", "lock")
+			// TryLockShard will fail since we already have acquired lock for `test-keyspace`
 			if err != nil {
 				if !topo.IsErrType(err, topo.NodeExists) {
-					require.Fail(t, "expected node exists during trylock", err.Error())
+					require.Fail(t, "expected node exists during tryLockShard", err.Error())
 				}
-				time.Sleep(1 * time.Second)
 				var finalErr error
+				// unlock `test-keyspace` shard. Now the subsequent call to `TryLockShard` will succeed.
 				unlock1(&finalErr)
 				isUnLocked1 = true
 				if finalErr != nil {
 					require.Fail(t, "Unlock(test_keyspace) failed", finalErr.Error())
 				}
 			} else {
+				// unlock shard acquired through `TryLockShard`
 				unlock2(&err)
 				if err != nil {
 					require.Fail(t, "Unlock(test_keyspace) failed", err.Error())
 				}
+				// true value of 'isUnLocked1' signify that we at-least hit 'NodeExits' once.
 				if isUnLocked1 {
 					close(finished)
+				} else {
+					require.Fail(t, "Test was expecting to hit `NodeExists` error at-least once")
 				}
 				break
 			}
 		}
 	}()
 
-	// unblock the go routine so it starts waiting
+	// unblock the go routine
 	close(unblock)
 
-	timeout := time.After(60 * time.Second)
+	timeout := time.After(duration * 2)
 	select {
 	case <-finished:
 	case <-timeout:

@@ -18,7 +18,6 @@ package test
 
 import (
 	"context"
-	"fmt"
 	"path"
 	"testing"
 	"time"
@@ -30,7 +29,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// checkLock checks we can lock / unlock as expected. It's using a keyspace
+// checkTryLock checks if we can lock / unlock as expected. It's using a keyspace
 // as the lock target.
 func checkTryLock(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
@@ -53,7 +52,7 @@ func checkTryLock(t *testing.T, ts *topo.Server) {
 	checkTryLockUnblocks(ctx, t, conn)
 }
 
-// checkTryLockTimeout test the non-blocking nature of TryLock
+// checkTryLockTimeout test the fail-fast nature of TryLock
 func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	lockDescriptor, err := conn.TryLock(ctx, keyspacePath, "")
@@ -90,7 +89,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 		}
 	}
 
-	// test we can't take the lock again
+	// We should not be able to take the lock again. It should throw `NodeExists` error.
 	fastCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	if _, err := conn.TryLock(fastCtx, keyspacePath, "again"); !topo.IsErrType(err, topo.NodeExists) {
 		require.Fail(t, "TryLock failed", err.Error())
@@ -101,6 +100,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	interruptCtx, cancel := context.WithCancel(ctx)
 	finished := make(chan struct{})
 
+	// go routine to cancel the context.
 	go func() {
 		<-finished
 		cancel()
@@ -108,11 +108,13 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 
 	waitUntil := time.Now().Add(10 * time.Second)
 	var firstTime = true
+	// after attempting the `TryLock` and getting an error `NodeExists`, we will cancel the context deliberately
+	// and expect `context canceled` error in next iteration of `for` loop.
 	for {
-		fmt.Println("The Current time is: ", time.Now())
 		if time.Now().After(waitUntil) {
 			t.Fatalf("Unlock(test_keyspace) timed out")
 		}
+		// we expect context to fail with `context canceled` error
 		if interruptCtx.Err() != nil {
 			require.ErrorContains(t, interruptCtx.Err(), "context canceled")
 			break
@@ -156,11 +158,12 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 	unblock := make(chan struct{})
 	finished := make(chan struct{})
 
+	duration := 10 * time.Second
+	waitUntil := time.Now().Add(duration)
 	// TryLock will keep getting NodeExists until lockDescriptor2 unlock itself.
 	// It will not wait but immediately return with NodeExists error.
 	go func() {
 		<-unblock
-		waitUntil := time.Now().Add(10 * time.Second)
 		for time.Now().Before(waitUntil) {
 			lockDescriptor, err := conn.TryLock(ctx, keyspacePath, "unblocks")
 			if err != nil {
@@ -191,7 +194,7 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 		require.Fail(t, "Unlock(test_keyspace) failed", err.Error())
 	}
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(2 * duration)
 	select {
 	case <-finished:
 	case <-timeout:

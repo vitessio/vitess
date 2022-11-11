@@ -333,6 +333,7 @@ func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action stri
 	return ts.internalLockShard(ctx, keyspace, shard, action, false)
 }
 
+// isBlocking is used to indicate whether the call should fail-fast or not.
 func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action string, isBlocking bool) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
@@ -422,8 +423,7 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 	return l.internalLockShard(ctx, ts, keyspace, shard, true)
 }
 
-// tryLockShard will lock the shard in the topology server.
-// It is non-blocking call for blocking call lockshard instead.
+// tryLockShard will lock the shard in the topology server but unlike `lockShard` it fail-fast if not able to get lock
 // UnlockShard should be called if this returns no error.
 func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
 	return l.internalLockShard(ctx, ts, keyspace, shard, false)
