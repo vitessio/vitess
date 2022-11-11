@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -38,10 +37,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-var (
-	routeReplicaToRdonly = flag.Bool("gateway_route_replica_to_rdonly", false, "route REPLICA queries to RDONLY tablets as well as REPLICA tablets")
 )
 
 const (
