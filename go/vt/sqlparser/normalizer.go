@@ -92,8 +92,11 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 		switch parent.(type) {
 		case *Order, GroupBy:
 			return false
+		case *Limit:
+			nz.convertLiteral(node, cursor)
+		default:
+			nz.convertLiteralDedup(node, cursor)
 		}
-		nz.convertLiteralDedup(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *FramePoint:
