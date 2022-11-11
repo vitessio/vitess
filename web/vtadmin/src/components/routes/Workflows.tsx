@@ -72,7 +72,12 @@ export const Workflows = () => {
                 <tr key={idx}>
                     <DataCell>
                         <div className="font-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
-                        <div className="text-secondary text-success-200">{row.workflowType}</div>
+                        <div className="text-secondary text-success-200">
+                            {row.workflowType}
+                            <span className="text-sm">
+                                {row.workflowSubType !== 'None' ? ' (' + row.workflowSubType + ')' : ''}
+                            </span>
+                        </div>
                         <div className="text-sm text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>

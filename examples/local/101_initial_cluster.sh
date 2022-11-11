@@ -43,7 +43,7 @@ done
 vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce
 
 # start vtorc
-./scripts/vtorc-up.sh
+#./scripts/vtorc-up.sh
 
 # Wait for all the tablets to be up and registered in the topology server
 for _ in $(seq 0 200); do

@@ -388,10 +388,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			TimeUpdated: &vttime.Time{
 				Seconds: timeUpdatedSeconds,
 			},
-			Message:         message,
-			Tags:            tagArray,
-			WorkflowType:    binlogdatapb.VReplicationWorkflowType(workflowType),
-			WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
+			Message: message,
+			Tags:    tagArray,
 		}
 		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)]
 		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)]
