@@ -2158,9 +2158,9 @@ resignal_statement:
   }
 
 call_statement:
-  CALL ID call_param_list_opt
+  CALL procedure_name call_param_list_opt
   {
-    $$ = &Call{FuncName: string($2), Params: $3}
+    $$ = &Call{ProcName: $2, Params: $3}
   }
 
 call_param_list_opt:

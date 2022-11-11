@@ -1239,12 +1239,12 @@ func (s *Resignal) Format(buf *TrackedBuffer) {
 
 // Call represents the CALL statement
 type Call struct {
-	FuncName string
+	ProcName ProcedureName
 	Params   []Expr
 }
 
 func (c *Call) Format(buf *TrackedBuffer) {
-	buf.Myprintf("call %s", c.FuncName)
+	buf.Myprintf("call %s", c.ProcName.String())
 	if len(c.Params) > 0 {
 		buf.Myprintf("(")
 		for i, param := range c.Params {
