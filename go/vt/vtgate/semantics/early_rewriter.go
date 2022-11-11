@@ -53,7 +53,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 			node.Join = sqlparser.NormalJoinType
 			r.warning = "straight join is converted to normal join"
 		}
-	case *sqlparser.Order:
+	case sqlparser.OrderBy:
 		r.clause = "order clause"
 		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.GroupBy:
@@ -127,6 +127,15 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 	return nil
 }
 
+// rewriteHavingAndOrderBy rewrites columns on the ORDER BY/HAVING
+// clauses to use aliases from the SELECT expressions when available.
+// The scoping rules are:
+//   - A column identifier with no table qualifier that matches an alias introduced
+//     in SELECT points to that expression, and not at any table column
+//   - Except when expression aliased is an aggregation, and the column identifier in the
+//     HAVING/ORDER BY clause is inside an aggregation function
+//
+// This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
 func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 	sel, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
@@ -140,12 +149,18 @@ func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 			if !col.Qualifier.IsEmpty() {
 				return false
 			}
+			_, parentIsAggr := inner.Parent().(sqlparser.AggrFunc)
 			for _, e := range sel.SelectExprs {
 				ae, ok := e.(*sqlparser.AliasedExpr)
 				if !ok {
 					continue
 				}
 				if ae.As.Equal(col.Name) {
+					_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
+					if parentIsAggr && aliasPointsToAggr {
+						return false
+					}
+
 					safeToRewrite := true
 					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
 						switch cursor.Node().(type) {
