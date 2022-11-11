@@ -56,8 +56,7 @@ export const Workflows = () => {
             timeUpdated: getTimeUpdated(workflow),
             workflowType: workflow.workflow?.workflow_type,
             workflowSubType: workflow.workflow?.workflow_sub_type,
-
-        }))
+        }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
     }, [workflowsQuery.data, filter]);
