@@ -534,7 +534,7 @@
     "plan": "variable 'socket' is a read only variable"
   },
   {
-    "comment": "set transaction",
+    "comment": "set transaction read only",
     "query": "set session transaction read only",
     "plan": {
       "QueryType": "SET",
@@ -546,6 +546,29 @@
             "Type": "SysVarAware",
             "Name": "transaction_read_only",
             "Expr": "INT64(1)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set transaction isolation level",
+    "query": "set transaction isolation level read committed",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set transaction isolation level read committed",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarAware",
+            "Name": "transaction_isolation",
+            "Expr": "VARCHAR(\"read-committed\")"
           }
         ],
         "Inputs": [

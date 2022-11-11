@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -231,13 +232,13 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE}},
 	}, {
 		in:  "set transaction isolation level serializable",
-		err: "unsupported: 'transaction_isolation' for next transaction scope is not supported, usage with 'session' scope is allowed",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE}, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set transaction read only",
-		err: "unsupported: 'transaction_read_only' for next transaction scope is not supported, usage with 'session' scope is allowed",
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set transaction read write",
-		err: "unsupported: 'transaction_read_only' for next transaction scope is not supported, usage with 'session' scope is allowed",
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
