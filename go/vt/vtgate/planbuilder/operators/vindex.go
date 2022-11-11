@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -58,14 +59,13 @@ func (v *Vindex) Introduces() semantics.TableSet {
 // IPhysical implements the PhysicalOperator interface
 func (v *Vindex) IPhysical() {}
 
-// clone implements the Operator interface
-func (v *Vindex) clone(inputs []Operator) Operator {
-	checkSize(inputs, 0)
+// Clone implements the Operator interface
+func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	clone := *v
 	return &clone
 }
 
-var _ PhysicalOperator = (*Vindex)(nil)
+var _ ops.PhysicalOperator = (*Vindex)(nil)
 
 func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	return addColumn(v, expr)
@@ -79,7 +79,7 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 }
 
 // checkValid implements the Operator interface
-func (v *Vindex) checkValid() error {
+func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 	}
@@ -87,7 +87,7 @@ func (v *Vindex) checkValid() error {
 	return nil
 }
 
-func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := ctx.SemTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {

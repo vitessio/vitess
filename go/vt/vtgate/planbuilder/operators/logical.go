@@ -21,12 +21,13 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // createLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func createLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
+func createLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(ctx, node)
@@ -47,7 +48,7 @@ func createLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 }
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
-func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (Operator, error) {
+func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (ops.Operator, error) {
 	subq, err := createSubqueryFromStatement(ctx, sel)
 	if err != nil {
 		return nil, err
@@ -79,7 +80,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	}, nil
 }
 
-func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
+func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
 	opLHS, err := createLogicalOperatorFromAST(ctx, node.Left)
 	if err != nil {
 		return nil, err
@@ -96,13 +97,13 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 
 	union := &Union{
 		Distinct: node.Distinct,
-		Sources:  []Operator{opLHS, opRHS},
+		Sources:  []ops.Operator{opLHS, opRHS},
 		Ordering: node.OrderBy,
 	}
 	return &Horizon{Source: union, Select: node}, nil
 }
 
-func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, error) {
+func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
 	tableInfo, qt, err := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
 	if err != nil {
 		return nil, err
@@ -161,7 +162,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	return subq, nil
 }
 
-func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (Operator, error) {
+func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (ops.Operator, error) {
 	tableInfo, qt, err := createQueryTableForDML(ctx, deleteStmt.TableExprs[0], deleteStmt.Where)
 	if err != nil {
 		return nil, err
@@ -226,7 +227,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	return subq, nil
 }
 
-func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (Operator, error) {
+func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (ops.Operator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return getOperatorFromAliasedTableExpr(ctx, tableExpr)
@@ -239,7 +240,7 @@ func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlpar
 	}
 }
 
-func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (Operator, error) {
+func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (ops.Operator, error) {
 	lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr)
 	if err != nil {
 		return nil, err
@@ -259,7 +260,7 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 	}
 }
 
-func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (Operator, error) {
+func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (ops.Operator, error) {
 	switch tbl := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		tableID := ctx.SemTable.TableSetFor(tableExpr)
@@ -301,8 +302,8 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 	}
 }
 
-func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (Operator, error) {
-	var output Operator
+func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (ops.Operator, error) {
+	var output ops.Operator
 	for _, tableExpr := range exprs {
 		op, err := getOperatorFromTableExpr(ctx, tableExpr)
 		if err != nil {
