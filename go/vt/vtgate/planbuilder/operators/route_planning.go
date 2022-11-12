@@ -349,11 +349,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (
 			Keyspace: ks,
 		},
 	}
-	r := &Route{
-		RouteOpCode: engine.DBA,
-		Source:      src,
-		Keyspace:    ks,
-	}
+	r := newRoute(src, engine.DBA, ks, nil, nil, nil, nil)
 	for _, pred := range table.Predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, ctx.ReservedVars)
 		if err != nil {
@@ -520,15 +516,15 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 	}
 
 	join := NewApplyJoin(aRoute.Source, bRoute.Source, sqlparser.AndExpressions(joinPredicates...), !inner)
-	r := &Route{
-		RouteOpCode:         aRoute.RouteOpCode,
-		Keyspace:            aRoute.Keyspace,
-		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
-		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
-		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
-		SysTableTableName:   sysTableName,
-		Source:              join,
-	}
+	r := newRoute(join,
+		aRoute.RouteOpCode,
+		aRoute.Keyspace,
+		nil,
+		append(aRoute.VindexPreds, bRoute.VindexPreds...),
+		append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
+		sysTableName,
+	)
+	r.SeenPredicates = append(aRoute.SeenPredicates, bRoute.SeenPredicates...)
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
 		r.Selected = aRoute.Selected

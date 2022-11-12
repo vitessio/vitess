@@ -51,7 +51,7 @@ type (
 	// helper type that implements AddPredicate() returning an error
 	noPredicates struct{}
 
-	singleInput struct {
+	singleSource struct {
 		Source ops.Operator
 	}
 )
@@ -89,7 +89,7 @@ func (noInputs) Inputs() []ops.Operator {
 }
 
 // Inputs implements the Operator interface
-func (s singleInput) Inputs() []ops.Operator {
+func (s singleSource) Inputs() []ops.Operator {
 	return []ops.Operator{s.Source}
 }
 

@@ -25,7 +25,8 @@ import (
 )
 
 type Filter struct {
-	Source     ops.Operator
+	singleSource
+
 	Predicates []sqlparser.Expr
 }
 
@@ -33,7 +34,7 @@ var _ ops.PhysicalOperator = (*Filter)(nil)
 
 func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
-		Source: op, Predicates: []sqlparser.Expr{expr},
+		singleSource: singleSource{Source: op}, Predicates: []sqlparser.Expr{expr},
 	}
 }
 
@@ -45,14 +46,9 @@ func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
 	return &Filter{
-		Source:     inputs[0],
-		Predicates: predicatesClone,
+		singleSource: singleSource{Source: inputs[0]},
+		Predicates:   predicatesClone,
 	}
-}
-
-// Inputs implements the Operator interface
-func (f *Filter) Inputs() []ops.Operator {
-	return []ops.Operator{f.Source}
 }
 
 // UnsolvedPredicates implements the unresolved interface

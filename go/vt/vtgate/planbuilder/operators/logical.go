@@ -68,16 +68,10 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 		}
 	}
 	if subq == nil {
-		return &Horizon{
-			Source: op,
-			Select: sel,
-		}, nil
+		return newHorizon(op, sel), nil
 	}
 	subq.Outer = op
-	return &Horizon{
-		Source: subq,
-		Select: sel,
-	}, nil
+	return newHorizon(subq, sel), nil
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
@@ -100,7 +94,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		Sources:  []ops.Operator{opLHS, opRHS},
 		Ordering: node.OrderBy,
 	}
-	return &Horizon{Source: union, Select: node}, nil
+	return newHorizon(union, node), nil
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
@@ -124,8 +118,8 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, err
 	}
 
-	r := &Route{
-		Source: &Update{
+	r := newRoute(
+		&Update{
 			QTable:              qt,
 			VTable:              vindexTable,
 			Assignments:         assignments,
@@ -133,11 +127,13 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 			OwnedVindexQuery:    ovq,
 			AST:                 updStmt,
 		},
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		VindexPreds:       vp,
-		TargetDestination: dest,
-	}
+		opCode,
+		vindexTable.Keyspace,
+		dest,
+		vp,
+		nil,
+		nil,
+	)
 
 	for _, predicate := range qt.Predicates {
 		err := r.UpdateRoutingLogic(ctx, predicate)
@@ -178,12 +174,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		VTable: vindexTable,
 		AST:    deleteStmt,
 	}
-	route := &Route{
-		Source:            del,
-		RouteOpCode:       opCode,
-		Keyspace:          vindexTable.Keyspace,
-		TargetDestination: dest,
-	}
+	route := newRoute(del, opCode, vindexTable.Keyspace, dest, nil, nil, nil)
 
 	if !vindexTable.Keyspace.Sharded {
 		return route, nil

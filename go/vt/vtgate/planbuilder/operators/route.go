@@ -33,7 +33,7 @@ import (
 
 type (
 	Route struct {
-		Source ops.Operator
+		singleSource
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -89,6 +89,26 @@ type (
 
 var _ ops.PhysicalOperator = (*Route)(nil)
 
+func newRoute(
+	src ops.Operator,
+	opCode engine.Opcode,
+	keyspace *vindexes.Keyspace,
+	destination key.Destination,
+	vindexPreds []*VindexPlusPredicates,
+	sysTableTableSchema []evalengine.Expr,
+	sysTableTableName map[string]evalengine.Expr,
+) *Route {
+	return &Route{
+		singleSource:        singleSource{src},
+		RouteOpCode:         opCode,
+		Keyspace:            keyspace,
+		VindexPreds:         vindexPreds,
+		SysTableTableSchema: sysTableTableSchema,
+		SysTableTableName:   sysTableTableName,
+		TargetDestination:   destination,
+	}
+}
+
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
 
@@ -120,7 +140,7 @@ func (r *Route) Cost() int {
 // Clone implements the Operator interface
 func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 	cloneRoute := *r
-	cloneRoute.Source = inputs[0]
+	cloneRoute.singleSource = singleSource{inputs[0]}
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
 	for i, pred := range r.VindexPreds {
 		// we do this to create a copy of the struct
@@ -128,11 +148,6 @@ func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 		cloneRoute.VindexPreds[i] = &p
 	}
 	return &cloneRoute
-}
-
-// Inputs implements the Operator interface
-func (r *Route) Inputs() []ops.Operator {
-	return []ops.Operator{r.Source}
 }
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
@@ -743,13 +758,10 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 			table.Alias.As = sqlparser.NewIdentifierCS(name.String())
 		}
 	}
-	plan := &Route{
-		Source: &Table{
-			QTable: table,
-			VTable: vschemaTable,
-		},
-		Keyspace: vschemaTable.Keyspace,
-	}
+	plan := newRoute(&Table{
+		QTable: table,
+		VTable: vschemaTable,
+	}, 0, vschemaTable.Keyspace, nil, nil, nil, nil)
 
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
 		plan.VindexPreds = append(plan.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})

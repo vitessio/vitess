@@ -29,6 +29,8 @@ import (
 )
 
 type Derived struct {
+	singleSource
+
 	Query         sqlparser.SelectStatement
 	Alias         string
 	ColumnAliases sqlparser.Columns
@@ -36,8 +38,6 @@ type Derived struct {
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
 	ColumnsOffset []int
-
-	singleInput
 }
 
 var _ ops.PhysicalOperator = (*Derived)(nil)
@@ -49,7 +49,7 @@ func newDerived(
 	columnAliases sqlparser.Columns,
 ) ops.Operator {
 	return &Derived{
-		singleInput:   singleInput{Source: src},
+		singleSource:  singleSource{Source: src},
 		Query:         stmt,
 		Alias:         alias,
 		ColumnAliases: columnAliases,
@@ -62,7 +62,7 @@ func (d *Derived) IPhysical() {}
 // Clone implements the Operator interface
 func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 	return &Derived{
-		singleInput:   singleInput{Source: inputs[0]},
+		singleSource:  singleSource{Source: inputs[0]},
 		Query:         d.Query,
 		Alias:         d.Alias,
 		ColumnAliases: sqlparser.CloneColumns(d.ColumnAliases),
