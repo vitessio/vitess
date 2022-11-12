@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -1143,8 +1144,40 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 
 				// Here we need to save the original DDL to recreate any secondary keys
-				if ddl, err = stripTableSecondaryKeys(ddl); err != nil {
+				var secondaryKeys []*sqlparser.IndexDefinition
+				if ddl, secondaryKeys, err = pullOutTableSecondaryKeys(ddl); err != nil {
+					log.Errorf("Error pulling out secondary keys from DDL: %s", err.Error())
 					return err
+				}
+				if len(secondaryKeys) > 0 {
+					alter := &sqlparser.AlterTable{
+						Table: sqlparser.TableName{
+							Name: sqlparser.NewIdentifierCS(ts.TargetTable),
+						},
+					}
+					for _, secondaryKey := range secondaryKeys {
+						alter.AlterOptions = append(alter.AlterOptions,
+							&sqlparser.AddIndexDefinition{IndexDefinition: secondaryKey},
+						)
+					}
+					action, err := json.Marshal(vreplication.PostCopyAction{
+						Type:   vreplication.PostCopyActionSQL,
+						Action: sqlparser.String(alter),
+					})
+					if err != nil {
+						return err
+					}
+					insert, err := sqlparser.ParseAndBind(`insert into _vt.copy_table_post(vrepl_id, table_name, action) values(%a, %a, %a)`,
+						sqltypes.Int32BindVariable(1), sqltypes.StringBindVariable(ts.TargetTable), sqltypes.StringBindVariable(string(action)))
+					if err != nil {
+						return err
+					}
+					if _, err = mz.wr.tmc.ExecuteFetchAsAllPrivs(ctx, targetTablet.Tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+						Query:   []byte(insert),
+						MaxRows: 1,
+					}); err != nil {
+						return err
+					}
 				}
 				createDDL = ddl
 			}
@@ -1200,10 +1233,11 @@ func stripTableForeignKeys(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func stripTableSecondaryKeys(ddl string) (string, error) {
+func pullOutTableSecondaryKeys(ddl string) (string, []*sqlparser.IndexDefinition, error) {
+	var secondaryKeys []*sqlparser.IndexDefinition
 	ast, err := sqlparser.ParseStrictDDL(ddl)
 	if err != nil {
-		return "", err
+		return "", secondaryKeys, err
 	}
 
 	stripSecondaryKeys := func(cursor *sqlparser.Cursor) bool {
@@ -1214,6 +1248,8 @@ func stripTableSecondaryKeys(ddl string) (string, error) {
 				for _, index := range node.GetTableSpec().Indexes {
 					if index.Info.Primary {
 						pks = append(pks, index)
+					} else {
+						secondaryKeys = append(secondaryKeys, index)
 					}
 				}
 				node.GetTableSpec().Indexes = pks
@@ -1224,7 +1260,7 @@ func stripTableSecondaryKeys(ddl string) (string, error) {
 
 	onlyPKsAST := sqlparser.Rewrite(ast, stripSecondaryKeys, nil)
 	newDDL := sqlparser.String(onlyPKsAST)
-	return newDDL, nil
+	return newDDL, secondaryKeys, nil
 }
 
 func stripTableConstraints(ddl string) (string, error) {

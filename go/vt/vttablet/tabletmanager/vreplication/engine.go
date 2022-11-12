@@ -67,14 +67,22 @@ const (
   add column id bigint unsigned not null auto_increment first,
   drop primary key, add primary key(id),
   add key (vrepl_id, table_name)`
+
+	createCopyTablePost = `create table if not exists _vt.copy_table_post(
+  vrepl_id int,
+  table_name varbinary(128),
+  action JSON,
+  primary key (vrepl_id, table_name))`
 )
 
 var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
 
 const (
-	throttlerVReplicationAppName = "vreplication"
-	throttlerOnlineDDLAppName    = "online-ddl"
+	throttlerVReplicationAppName                    = "vreplication"
+	throttlerOnlineDDLAppName                       = "online-ddl"
+	PostCopyActionNone           PostCopyActionType = iota
+	PostCopyActionSQL
 )
 
 func init() {
@@ -83,6 +91,7 @@ func init() {
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
 	allddls = append(allddls, alterCopyState)
+	allddls = append(allddls, createCopyTablePost)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
@@ -139,6 +148,12 @@ type journalEvent struct {
 	journal      *binlogdatapb.Journal
 	participants map[string]int
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
+}
+
+type PostCopyActionType int
+type PostCopyAction struct {
+	Type   PostCopyActionType `json:"type"`
+	Action string             `json:"action"`
 }
 
 // NewEngine creates a new Engine.
