@@ -67,12 +67,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 		return nil, err
 	}
 
-	backup := Clone(op)
-
 	op, err = planHorizons(op)
-	if err == errNotHorizonPlanned {
-		op = backup
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 
