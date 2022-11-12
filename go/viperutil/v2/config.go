@@ -120,12 +120,18 @@ func LoadConfig() error {
 
 	if err != nil {
 		if nferr, ok := err.(viper.ConfigFileNotFoundError); ok {
+			msg := "Failed to read in config %s: %s"
 			switch configFileNotFoundHandling.Get() {
+			case WarnOnConfigFileNotFound:
+				log.WARN(msg, registry.Static.ConfigFileUsed(), nferr.Error())
+				fallthrough // after warning, ignore the error
 			case IgnoreConfigFileNotFound:
-				// TODO: finish this switch block.
+				err = nil
+			case ErrorOnConfigFileNotFound:
+				log.ERROR(msg, registry.Static.ConfigFileUsed(), nferr.Error())
+			case ExitOnConfigFileNotFound:
+				log.CRITICAL(msg, registry.Static.ConfigFileUsed(), nferr.Error())
 			}
-			log.WARN("Failed to read in config %s: %s", registry.Static.ConfigFileUsed(), nferr.Error())
-			err = nil
 		}
 	}
 
