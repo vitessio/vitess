@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -70,6 +71,9 @@ const (
 	SQLMode          = "NO_AUTO_VALUE_ON_ZERO"
 	StrictSQLMode    = "STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO"
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
+
+	sqlCreatePostCopyAction = `insert into _vt.copy_table_post(vrepl_id, table_name, action)
+	values(%a, %a, convert(%a using utf8mb4))`
 )
 
 type ComponentName string
@@ -557,4 +561,98 @@ func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos 
 		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
 	}
 	return pkColInfos
+}
+
+// stashSecondaryKeys temporarily DROPs all secondary keys from the table and
+// stashes an ALTER TABLE statement that can be used to recreate them after
+// the copy is complete.
+func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string) error {
+	if vr.WorkflowType != int32(binlogdatapb.VReplicationWorkflowType_MoveTables) {
+		return fmt.Errorf("temporarily removing secondary keys is only supported for MoveTables workflows")
+	}
+	var secondaryKeys []*sqlparser.IndexDefinition
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	if err != nil {
+		return err
+	}
+	if len(schema.TableDefinitions) != 1 {
+		return fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
+			tableName, len(schema.TableDefinitions))
+	}
+	ddl := schema.TableDefinitions[0].Schema
+	if secondaryKeys, err = vr.getTableSecondaryKeys(ddl); err != nil {
+		return err
+	}
+	if len(secondaryKeys) > 0 {
+		alterDrop := &sqlparser.AlterTable{
+			Table: sqlparser.TableName{
+				Name: sqlparser.NewIdentifierCS(tableName),
+			},
+		}
+		alterReAdd := &sqlparser.AlterTable{
+			Table: sqlparser.TableName{
+				Name: sqlparser.NewIdentifierCS(tableName),
+			},
+		}
+		for _, secondaryKey := range secondaryKeys {
+			// should never happen
+			if secondaryKey.Info.Primary {
+				continue
+			}
+			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
+				&sqlparser.DropKey{
+					Name: secondaryKey.Info.Name,
+					Type: sqlparser.NormalKeyType,
+				},
+			)
+			alterReAdd.AlterOptions = append(alterReAdd.AlterOptions,
+				&sqlparser.AddIndexDefinition{IndexDefinition: secondaryKey},
+			)
+		}
+		action, err := json.Marshal(PostCopyAction{
+			Type:   PostCopyActionSQL,
+			Action: sqlparser.String(alterReAdd),
+		})
+		if err != nil {
+			return err
+		}
+		insert, err := sqlparser.ParseAndBind(sqlCreatePostCopyAction, sqltypes.Uint32BindVariable(vr.id),
+			sqltypes.StringBindVariable(tableName), sqltypes.StringBindVariable(string(action)))
+		if err != nil {
+			return err
+		}
+		if _, err := withDDL.Exec(ctx, insert, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+			return err
+		}
+		if _, err := withDDL.Exec(ctx, sqlparser.String(alterDrop), vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (vr *vreplicator) getTableSecondaryKeys(ddl string) ([]*sqlparser.IndexDefinition, error) {
+	var secondaryKeys []*sqlparser.IndexDefinition
+	createTableDDL, err := sqlparser.ParseStrictDDL(ddl)
+	if err != nil {
+		return secondaryKeys, err
+	}
+
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case sqlparser.DDLStatement:
+			if node.GetTableSpec() != nil {
+				for _, index := range node.GetTableSpec().Indexes {
+					if !index.Info.Primary {
+						secondaryKeys = append(secondaryKeys, index)
+					}
+				}
+			}
+		}
+		return true, nil
+	}, createTableDDL)
+
+	return secondaryKeys, err
 }

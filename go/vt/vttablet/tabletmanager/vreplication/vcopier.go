@@ -243,6 +243,12 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 			len(plan.TargetTables))); err != nil {
 			return err
 		}
+
+		for name := range plan.TargetTables {
+			if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
+				return err
+			}
+		}
 	} else {
 		if err := vc.vr.setState(binlogplayer.BlpStopped, "There is nothing to replicate"); err != nil {
 			return err
