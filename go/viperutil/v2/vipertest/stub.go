@@ -10,6 +10,13 @@ import (
 	"vitess.io/vitess/go/viperutil/v2/internal/value"
 )
 
+// Stub stubs out a given value to use the passed-in viper to retrieve its
+// config value for testing purposes. It returns a function to undo this,
+// resetting the Value to whatever registry (Static, or Dynamic) it was
+// originally bound to.
+//
+// It fails the test if a caller attempts to stub the same value multiple times
+// to a particular viper.
 func Stub[T any](t *testing.T, v *viper.Viper, val viperutil.Value[T]) (reset func()) {
 	t.Helper()
 
@@ -36,7 +43,3 @@ func Stub[T any](t *testing.T, v *viper.Viper, val viperutil.Value[T]) (reset fu
 		base.BoundGetFunc = oldGet
 	}
 }
-
-// func StubValues(v *viper.Viper, values ...any) (reset func()) {
-//
-// }

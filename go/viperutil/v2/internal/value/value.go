@@ -45,6 +45,13 @@ func (val *Base[T]) Get() T      { return val.BoundGetFunc(val.Key()) }
 // FlagSet does not define a flag with that name.
 var ErrNoFlagDefined = errors.New("flag not defined")
 
+// Flag is part of the Registerable interface. If the given flag set has a flag
+// with the name of this value's configured flag, that flag is returned, along
+// with a nil error. If no flag exists on the flag set with that name, an error
+// is returned.
+//
+// If the value is not configured to correspond to a flag (FlagName == ""), then
+// (nil, nil) is returned.
 func (val *Base[T]) Flag(fs *pflag.FlagSet) (*pflag.Flag, error) {
 	if val.FlagName == "" {
 		return nil, nil
@@ -58,7 +65,7 @@ func (val *Base[T]) Flag(fs *pflag.FlagSet) (*pflag.Flag, error) {
 	return flag, nil
 }
 
-func (val *Base[T]) Bind(v registry.Bindable) {
+func (val *Base[T]) bind(v registry.Bindable) {
 	v.SetDefault(val.Key(), val.DefaultVal)
 
 	for _, alias := range val.Aliases {
@@ -71,6 +78,9 @@ func (val *Base[T]) Bind(v registry.Bindable) {
 	}
 }
 
+// BindFlags creates bindings between each value's registry and the given flag
+// set. This function will panic if any of the values defines a flag that does
+// not exist in the flag set.
 func BindFlags(fs *pflag.FlagSet, values ...Registerable) {
 	for _, val := range values {
 		flag, err := val.Flag(fs)
@@ -88,12 +98,17 @@ func BindFlags(fs *pflag.FlagSet, values ...Registerable) {
 	}
 }
 
+// Static is a static value. Static values register to the Static registry, and
+// do not respond to changes to config files. Their Get() method will return the
+// same value for the lifetime of the process.
 type Static[T any] struct {
 	*Base[T]
 }
 
+// NewStatic returns a static value derived from the given base value, after
+// binding it to the static registry.
 func NewStatic[T any](base *Base[T]) *Static[T] {
-	base.Bind(registry.Static)
+	base.bind(registry.Static)
 	base.BoundGetFunc = base.GetFunc(registry.Static)
 
 	return &Static[T]{
@@ -105,12 +120,19 @@ func (val *Static[T]) Registry() registry.Bindable {
 	return registry.Static
 }
 
+// Dynamic is a dynamic value. Dynamic values register to the Dynamic registry,
+// and respond to changes to watched config files. Their Get() methods will
+// return whatever value is currently live in the config, in a threadsafe
+// manner.
 type Dynamic[T any] struct {
 	*Base[T]
 }
 
+// NewDynamic returns a dynamic value derived from the given base value, after
+// binding it to the dynamic registry and wrapping its GetFunc to be threadsafe
+// with respect to config reloading.
 func NewDynamic[T any](base *Base[T]) *Dynamic[T] {
-	base.Bind(registry.Dynamic)
+	base.bind(registry.Dynamic)
 	base.BoundGetFunc = sync.AdaptGetter(base.Key(), base.GetFunc, registry.Dynamic)
 
 	return &Dynamic[T]{
