@@ -1141,6 +1141,11 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 					ddl = strippedDDL
 				}
+
+				// Here we need to save the original DDL to recreate any secondary keys
+				if ddl, err = stripTableSecondaryKeys(ddl); err != nil {
+					return err
+				}
 				createDDL = ddl
 			}
 
@@ -1192,6 +1197,33 @@ func stripTableForeignKeys(ddl string) (string, error) {
 
 	noFKConstraintAST := sqlparser.Rewrite(ast, stripFKConstraints, nil)
 	newDDL := sqlparser.String(noFKConstraintAST)
+	return newDDL, nil
+}
+
+func stripTableSecondaryKeys(ddl string) (string, error) {
+	ast, err := sqlparser.ParseStrictDDL(ddl)
+	if err != nil {
+		return "", err
+	}
+
+	stripSecondaryKeys := func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case sqlparser.DDLStatement:
+			if node.GetTableSpec() != nil {
+				var pks []*sqlparser.IndexDefinition
+				for _, index := range node.GetTableSpec().Indexes {
+					if index.Info.Primary {
+						pks = append(pks, index)
+					}
+				}
+				node.GetTableSpec().Indexes = pks
+			}
+		}
+		return true
+	}
+
+	onlyPKsAST := sqlparser.Rewrite(ast, stripSecondaryKeys, nil)
+	newDDL := sqlparser.String(onlyPKsAST)
 	return newDDL, nil
 }
 

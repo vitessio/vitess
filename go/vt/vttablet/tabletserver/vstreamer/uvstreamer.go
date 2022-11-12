@@ -121,12 +121,11 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 	return uvs
 }
 
-// buildTablePlan identifies the tables for the copy phase and creates the plans which consist of the lastPK seen
-// for a table and its Rule (for filtering purposes by the vstreamer engine)
-// it can be called
-//
-//	the first time, with just the filter and an empty pos
-//	during a restart, with both the filter and list of TableLastPK from the vgtid
+// buildTablePlan identifies the tables for the copy phase and creates the plans
+// which consist of the lastPK seen for a table and its Rule (for filtering
+// purposes by the vstreamer engine). It can be called the first time, with just
+// the filter and an empty pos during a restart, with both the filter and list
+// of TableLastPK from the vgtid.
 func (uvs *uvstreamer) buildTablePlan() error {
 	uvs.plans = make(map[string]*tablePlan)
 	tableLastPKs := make(map[string]*binlogdatapb.TableLastPK)
