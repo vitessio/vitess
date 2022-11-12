@@ -84,6 +84,11 @@ func init() {
 	registry.Static.SetDefault(configPaths.Key(), configPaths.Default())
 }
 
+// RegisterFlags installs the flags that control viper config-loading behavior.
+// It is exported to be called by servenv before parsing flags for all binaries.
+//
+// It cannot be registered here via servenv.OnParse since this causes an import
+// cycle.
 func RegisterFlags(fs *pflag.FlagSet) {
 	fs.StringSlice("config-path", configPaths.Default(), "Paths to search for config files in.")
 	fs.String("config-type", configType.Default(), "Config file type (omit to infer config type from file extension).")
@@ -96,6 +101,25 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	BindFlags(fs, configPaths, configType, configName, configFile)
 }
 
+// LoadConfig attempts to find, and then load, a config file for viper-backed
+// config values to use.
+//
+// Config searching follows the behavior used by viper [1], namely:
+//	* --config-file (full path, including extension) if set will be used to the
+//	  exclusion of all other flags.
+//	* --config-type is required if the config file does not have one of viper's
+//	  supported extensions (.yaml, .yml, .json, and so on)
+//
+// An additional --config-file-not-found-handling flag controls how to treat the
+// situation where viper cannot find any config files in any of the provided
+// paths (for ex, users may want to exit immediately if a config file that
+// should exist doesn't for some reason, or may wish to operate with flags and
+// environment variables alone, and not use config files at all).
+//
+// If a config file is successfully loaded, then the dynamic registry will also
+// start watching that file for changes.
+//
+// [1]: https://github.com/spf13/viper#reading-config-files.
 func LoadConfig() error {
 	var err error
 	switch file := configFile.Get(); file {
@@ -155,12 +179,24 @@ func NotifyConfigReload(ch chan<- struct{}) {
 	registry.Dynamic.Notify(ch)
 }
 
+// ConfigFileNotFoundHandling is an enum to control how LoadConfig treats errors
+// of type viper.ConfigFileNotFoundError when loading a config.
 type ConfigFileNotFoundHandling int
 
 const (
+	// IgnoreConfigFileNotFound causes LoadConfig to completely ignore a
+	// ConfigFileNotFoundError (i.e. not even logging it).
 	IgnoreConfigFileNotFound ConfigFileNotFoundHandling = iota
+	// WarnOnConfigFileNotFound causes LoadConfig to log a warning with details
+	// about the failed config load, but otherwise proceeds with the given
+	// process, which will get config values entirely from defaults,
+	// envirnoment variables, and flags.
 	WarnOnConfigFileNotFound
+	// ErrorOnConfigFileNotFound causes LoadConfig to return the
+	// ConfigFileNotFoundError after logging an error.
 	ErrorOnConfigFileNotFound
+	// ExitOnConfigFileNotFound causes LoadConfig to log.Fatal on a
+	// ConfigFileNotFoundError.
 	ExitOnConfigFileNotFound
 )
 
