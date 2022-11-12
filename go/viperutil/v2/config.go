@@ -142,6 +142,15 @@ func LoadConfig() error {
 	return registry.Dynamic.Watch(registry.Static)
 }
 
+// NotifyConfigReload adds a subscription that the dynamic registry will attempt
+// to notify on config changes. The notification fires after the updated config
+// has been loaded from disk into the live config.
+//
+// Analogous to signal.Notify, notifications are sent non-blocking, so users
+// should account for this when writing code to consume from the channel.
+//
+// This function must be called prior to LoadConfig; it will panic if called
+// after the dynamic registry has started watching the loaded config.
 func NotifyConfigReload(ch chan<- struct{}) {
 	registry.Dynamic.Notify(ch)
 }
