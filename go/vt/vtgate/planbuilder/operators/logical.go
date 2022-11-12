@@ -295,8 +295,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		if horizon, ok := inner.(*Horizon); ok {
 			inner = horizon.Source
 		}
-
-		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
+		return newDerived(inner, tbl.Select, tableExpr.As.String(), tableExpr.Columns), err
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
 	}

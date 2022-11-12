@@ -47,6 +47,7 @@ func planHorizon(in *Horizon) (ops.Operator, error) {
 
 	return in, nil
 }
+
 func planSingleShardRoute(rb *Route, horizon *Horizon) (ops.Operator, error) {
 	rb.Source, horizon.Source = horizon, rb.Source
 	return rb, nil

@@ -29,8 +29,6 @@ import (
 )
 
 type Derived struct {
-	Source ops.Operator
-
 	Query         sqlparser.SelectStatement
 	Alias         string
 	ColumnAliases sqlparser.Columns
@@ -38,9 +36,25 @@ type Derived struct {
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
 	ColumnsOffset []int
+
+	singleInput
 }
 
 var _ ops.PhysicalOperator = (*Derived)(nil)
+
+func newDerived(
+	src ops.Operator,
+	stmt sqlparser.SelectStatement,
+	alias string,
+	columnAliases sqlparser.Columns,
+) ops.Operator {
+	return &Derived{
+		singleInput:   singleInput{Source: src},
+		Query:         stmt,
+		Alias:         alias,
+		ColumnAliases: columnAliases,
+	}
+}
 
 // IPhysical implements the PhysicalOperator interface
 func (d *Derived) IPhysical() {}
@@ -48,7 +62,7 @@ func (d *Derived) IPhysical() {}
 // Clone implements the Operator interface
 func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 	return &Derived{
-		Source:        inputs[0],
+		singleInput:   singleInput{Source: inputs[0]},
 		Query:         d.Query,
 		Alias:         d.Alias,
 		ColumnAliases: sqlparser.CloneColumns(d.ColumnAliases),
@@ -100,11 +114,6 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 // if they do some things, like LIMIT or GROUP BY on wrong columns
 func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
-}
-
-// Inputs implements the Operator interface
-func (d *Derived) Inputs() []ops.Operator {
-	return []ops.Operator{d.Source}
 }
 
 func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {

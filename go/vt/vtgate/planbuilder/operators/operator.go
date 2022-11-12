@@ -50,6 +50,10 @@ type (
 
 	// helper type that implements AddPredicate() returning an error
 	noPredicates struct{}
+
+	singleInput struct {
+		Source ops.Operator
+	}
 )
 
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
@@ -82,6 +86,11 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []ops.Operator {
 	return nil
+}
+
+// Inputs implements the Operator interface
+func (s singleInput) Inputs() []ops.Operator {
+	return []ops.Operator{s.Source}
 }
 
 // AddColumn implements the Operator interface
