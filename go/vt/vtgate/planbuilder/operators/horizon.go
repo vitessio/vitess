@@ -25,7 +25,7 @@ import (
 // Horizon is an operator we use until we decide how to handle the source to the horizon.
 // It contains information about the planning we have to do after deciding how we will send the query to the tablets.
 type Horizon struct {
-	singleSource
+	*singleSource
 
 	Select sqlparser.SelectStatement
 
@@ -39,7 +39,7 @@ func (h *Horizon) IPhysical() {}
 
 func newHorizon(src ops.Operator, stmt sqlparser.SelectStatement) ops.Operator {
 	return &Horizon{
-		singleSource: singleSource{src},
+		singleSource: &singleSource{src},
 		Select:       stmt,
 	}
 }
@@ -55,7 +55,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 
 func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 	return &Horizon{
-		singleSource: singleSource{inputs[0]},
+		singleSource: &singleSource{inputs[0]},
 		Select:       h.Select,
 	}
 }

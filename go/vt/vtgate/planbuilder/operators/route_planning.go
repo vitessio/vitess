@@ -89,9 +89,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
 	if route, ok := op.Source.(*Route); ok {
 		// let's push the filter into the route
-		op.Source = route.Source
-		route.Source = op
-		return route, rewrite.NewTree, nil
+		return swap(op, route), rewrite.NewTree, nil
 	}
 
 	return op, rewrite.SameTree, nil

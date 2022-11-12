@@ -54,6 +54,12 @@ type (
 	singleSource struct {
 		Source ops.Operator
 	}
+
+	singleSourceI interface {
+		ops.Operator
+		getSource() ops.Operator
+		setSource(ops.Operator)
+	}
 )
 
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
@@ -89,8 +95,16 @@ func (noInputs) Inputs() []ops.Operator {
 }
 
 // Inputs implements the Operator interface
-func (s singleSource) Inputs() []ops.Operator {
+func (s *singleSource) Inputs() []ops.Operator {
 	return []ops.Operator{s.Source}
+}
+
+func (s *singleSource) getSource() ops.Operator {
+	return s.Source
+}
+
+func (s *singleSource) setSource(src ops.Operator) {
+	s.Source = src
 }
 
 // AddColumn implements the Operator interface
@@ -101,4 +115,14 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, e
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
+}
+
+// swap takes two operators with a single source and swaps them. the assumption is that the first op provided has the
+// second operator as source. this method will the two operators with each other and return the new root.
+// this method is used to push one operator underneath the other
+func swap(op, src singleSourceI) ops.Operator {
+	tmp := src.getSource()
+	src.setSource(op)
+	op.setSource(tmp)
+	return src
 }

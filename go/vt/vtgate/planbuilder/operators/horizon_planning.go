@@ -42,13 +42,8 @@ func planHorizons(in ops.Operator) (ops.Operator, error) {
 func planHorizon(in *Horizon) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
 	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
-		return planSingleShardRoute(rb, in)
+		return swap(in, rb), nil
 	}
 
 	return in, nil
-}
-
-func planSingleShardRoute(rb *Route, horizon *Horizon) (ops.Operator, error) {
-	rb.Source, horizon.Source = horizon, rb.Source
-	return rb, nil
 }

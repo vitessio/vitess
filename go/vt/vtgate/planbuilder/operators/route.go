@@ -33,7 +33,7 @@ import (
 
 type (
 	Route struct {
-		singleSource
+		*singleSource
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -99,7 +99,7 @@ func newRoute(
 	sysTableTableName map[string]evalengine.Expr,
 ) *Route {
 	return &Route{
-		singleSource:        singleSource{src},
+		singleSource:        &singleSource{src},
 		RouteOpCode:         opCode,
 		Keyspace:            keyspace,
 		VindexPreds:         vindexPreds,
@@ -140,7 +140,7 @@ func (r *Route) Cost() int {
 // Clone implements the Operator interface
 func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 	cloneRoute := *r
-	cloneRoute.singleSource = singleSource{inputs[0]}
+	cloneRoute.singleSource = &singleSource{inputs[0]}
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
 	for i, pred := range r.VindexPreds {
 		// we do this to create a copy of the struct
