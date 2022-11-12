@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -54,6 +55,8 @@ type Send struct {
 	// MultishardAutocommit specifies that a multishard transaction query can autocommit
 	MultishardAutocommit bool
 
+	QueryTimeout int
+
 	noInputs
 }
 
@@ -86,7 +89,7 @@ func (s *Send) GetTableName() string {
 
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, 0)
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, s.QueryTimeout)
 	defer cancelFunc()
 	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
@@ -140,6 +143,11 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 
 // TryStreamExecute implements Primitive interface
 func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if s.QueryTimeout != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(s.QueryTimeout)*time.Millisecond)
+		defer cancel()
+	}
 	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return err

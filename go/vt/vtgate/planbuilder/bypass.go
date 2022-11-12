@@ -51,6 +51,10 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		}
 	}
 
+	var timeout int
+	if comment, ok := stmt.(sqlparser.Commented); ok {
+		timeout = queryTimeout(comment.GetParsedComments().Directives())
+	}
 	send := &engine.Send{
 		Keyspace:             keyspace,
 		TargetDestination:    vschema.Destination(),
@@ -58,6 +62,7 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		IsDML:                sqlparser.IsDMLStatement(stmt),
 		SingleShardOnly:      false,
 		MultishardAutocommit: sqlparser.MultiShardAutocommitDirective(stmt),
+		QueryTimeout:         timeout,
 	}
 	return newPlanResult(send), nil
 }
