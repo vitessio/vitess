@@ -673,7 +673,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ddl string) ([]*sqlparser.IndexDefi
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
 	dbClient := vr.vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
-		return fmt.Errorf("unable to connect to the database when executing post-copy actions: %v", err)
+		return fmt.Errorf("unable to connect to the database when executing post copy actions: %v", err)
 	}
 	defer dbClient.Close()
 
@@ -690,7 +690,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		return nil
 	}
 	if len(qr.Rows[0]) != 1 {
-		return fmt.Errorf("unexpected results for post-copy actions: %v", qr.Rows[0])
+		return fmt.Errorf("unexpected results for post copy actions: %v", qr.Rows[0])
 	}
 	var action PostCopyAction
 	if err := json.Unmarshal(qr.Rows[0][0].Raw(), &action); err != nil {
@@ -699,12 +699,12 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 
 	switch action.Type {
 	case PostCopyActionSQL:
-		log.Infof("Executing VReplication MoveTables post-copy action for table %q: %s", tableName, action.Action)
+		log.Infof("Executing VReplication MoveTables post copy action for table %q: %s", tableName, action.Action)
 		if _, err := dbClient.ExecuteFetch(action.Action, -1); err != nil {
 			return err
 		}
 	default:
-		return fmt.Errorf("unsupported post-copy action type: %v", action.Type)
+		return fmt.Errorf("unsupported post copy action type: %v", action.Type)
 	}
 
 	return nil

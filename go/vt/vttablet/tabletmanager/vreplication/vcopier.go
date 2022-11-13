@@ -244,9 +244,12 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 			return err
 		}
 
-		for name := range plan.TargetTables {
-			if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
-				return err
+		// Deferring secondary index generation is only supported with MoveTables
+		if vc.vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) {
+			for name := range plan.TargetTables {
+				if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
+					return err
+				}
 			}
 		}
 	} else {
@@ -632,7 +635,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 
 	// Perform any post copy actions
-	vc.vr.execPostCopyActions(ctx, tableName)
+	if err := vc.vr.execPostCopyActions(ctx, tableName); err != nil {
+		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
+	}
 
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, lastpkbv)
 	buf := sqlparser.NewTrackedBuffer(nil)
