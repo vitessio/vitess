@@ -631,12 +631,15 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return serr
 	}
 
+	// Perform any post copy actions
+	vc.vr.execPostCopyActions(ctx, tableName)
+
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, lastpkbv)
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf(
-		"delete from _vt.copy_state where vrepl_id=%s and table_name=%s",
-		strconv.Itoa(int(vc.vr.id)),
-		encodeString(tableName),
+		"delete cs, ctp from %s as cs left join %s as ctp on cs.vrepl_id=ctp.vrepl_id and cs.table_name=ctp.table_name where cs.vrepl_id=%d and cs.table_name=%s",
+		copyStateTableName, copyTablePostTableName,
+		vc.vr.id, encodeString(tableName),
 	)
 	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
 		return err

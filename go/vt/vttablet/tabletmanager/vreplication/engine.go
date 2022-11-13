@@ -49,6 +49,7 @@ const (
 	reshardingJournalTableName = "_vt.resharding_journal"
 	vreplicationTableName      = "_vt.vreplication"
 	copyStateTableName         = "_vt.copy_state"
+	copyTablePostTableName     = "_vt.copy_table_post"
 
 	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
   id bigint,
@@ -79,10 +80,10 @@ var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
 
 const (
-	throttlerVReplicationAppName                    = "vreplication"
-	throttlerOnlineDDLAppName                       = "online-ddl"
-	PostCopyActionNone           PostCopyActionType = iota
+	PostCopyActionNone PostCopyActionType = iota
 	PostCopyActionSQL
+	throttlerVReplicationAppName = "vreplication"
+	throttlerOnlineDDLAppName    = "online-ddl"
 )
 
 func init() {

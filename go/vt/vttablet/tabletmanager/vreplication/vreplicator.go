@@ -74,6 +74,8 @@ const (
 
 	sqlCreatePostCopyAction = `insert into _vt.copy_table_post(vrepl_id, table_name, action)
 	values(%a, %a, convert(%a using utf8mb4))`
+	sqlGetPostCopyActions = `select action from _vt.copy_table_post where vrepl_id=%a and
+	table_name=%a`
 )
 
 type ComponentName string
@@ -592,7 +594,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		}
 		alterReAdd := &sqlparser.AlterTable{
 			Table: sqlparser.TableName{
-				Name: sqlparser.NewIdentifierCS(tableName),
+				Qualifier: sqlparser.NewIdentifierCS(vr.dbClient.DBName()),
+				Name:      sqlparser.NewIdentifierCS(tableName),
 			},
 		}
 		for _, secondaryKey := range secondaryKeys {
@@ -607,7 +610,9 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 				},
 			)
 			alterReAdd.AlterOptions = append(alterReAdd.AlterOptions,
-				&sqlparser.AddIndexDefinition{IndexDefinition: secondaryKey},
+				&sqlparser.AddIndexDefinition{
+					IndexDefinition: secondaryKey,
+				},
 			)
 		}
 		action, err := json.Marshal(PostCopyAction{
@@ -622,10 +627,18 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		if err != nil {
 			return err
 		}
-		if _, err := withDDL.Exec(ctx, insert, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		// Use a new DB client to avoid interfering with open transactions
+		// in the shared client as DDL includes an implied commit.
+		dbClient := vr.vre.dbClientFactoryFiltered()
+		if err := dbClient.Connect(); err != nil {
+			log.Errorf("unable to connect to the database when stashing secondary keys: %v", err)
 			return err
 		}
-		if _, err := withDDL.Exec(ctx, sqlparser.String(alterDrop), vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		defer dbClient.Close()
+		if _, err := withDDL.Exec(ctx, insert, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+			return err
+		}
+		if _, err := withDDL.Exec(ctx, sqlparser.String(alterDrop), dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 			return err
 		}
 	}
@@ -655,4 +668,44 @@ func (vr *vreplicator) getTableSecondaryKeys(ddl string) ([]*sqlparser.IndexDefi
 	}, createTableDDL)
 
 	return secondaryKeys, err
+}
+
+func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
+	dbClient := vr.vre.dbClientFactoryFiltered()
+	if err := dbClient.Connect(); err != nil {
+		return fmt.Errorf("unable to connect to the database when executing post-copy actions: %v", err)
+	}
+	defer dbClient.Close()
+
+	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Uint32BindVariable(vr.id),
+		sqltypes.StringBindVariable(tableName))
+	if err != nil {
+		return err
+	}
+	qr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return err
+	}
+	if len(qr.Rows) == 0 {
+		return nil
+	}
+	if len(qr.Rows[0]) != 1 {
+		return fmt.Errorf("unexpected results for post-copy actions: %v", qr.Rows[0])
+	}
+	var action PostCopyAction
+	if err := json.Unmarshal(qr.Rows[0][0].Raw(), &action); err != nil {
+		return err
+	}
+
+	switch action.Type {
+	case PostCopyActionSQL:
+		log.Infof("Executing VReplication MoveTables post-copy action for table %q: %s", tableName, action.Action)
+		if _, err := dbClient.ExecuteFetch(action.Action, -1); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported post-copy action type: %v", action.Type)
+	}
+
+	return nil
 }
