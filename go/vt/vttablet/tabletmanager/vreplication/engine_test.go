@@ -514,6 +514,7 @@ func TestCreateDBAndTable(t *testing.T) {
 			"create table if not exists _vt.resharding_journal.*",
 			"create table if not exists _vt.copy_state.*",
 			"alter table _vt.copy_state.*",
+			fmt.Sprintf("create table if not exists %s.*", copyTablePostTableName),
 		}
 		for _, ddl := range ddls {
 			dbClient.ExpectRequestRE(ddl, &sqltypes.Result{}, nil)

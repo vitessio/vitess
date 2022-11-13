@@ -569,8 +569,9 @@ func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos 
 // stashes an ALTER TABLE statement that can be used to recreate them after
 // the copy is complete.
 func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string) error {
-	if vr.WorkflowType != int32(binlogdatapb.VReplicationWorkflowType_MoveTables) {
-		return fmt.Errorf("temporarily removing secondary keys is only supported for MoveTables workflows")
+	if vr.WorkflowType != int32(binlogdatapb.VReplicationWorkflowType_MoveTables) &&
+		vr.WorkflowType != int32(binlogdatapb.VReplicationWorkflowType_Reshard) {
+		return fmt.Errorf("temporarily removing secondary keys is only supported for MoveTables and Reshard workflows")
 	}
 	var secondaryKeys []*sqlparser.IndexDefinition
 	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
@@ -635,10 +636,10 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			return err
 		}
 		defer dbClient.Close()
-		if _, err := withDDL.Exec(ctx, insert, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+		if _, err := dbClient.ExecuteFetch(insert, 1); err != nil {
 			return err
 		}
-		if _, err := withDDL.Exec(ctx, sqlparser.String(alterDrop), dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+		if _, err := dbClient.ExecuteFetch(sqlparser.String(alterDrop), 1); err != nil {
 			return err
 		}
 	}
@@ -682,7 +683,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	if err != nil {
 		return err
 	}
-	qr, err := dbClient.ExecuteFetch(query, 1)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
@@ -693,7 +694,11 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		return fmt.Errorf("unexpected results for post copy actions: %v", qr.Rows[0])
 	}
 	var action PostCopyAction
-	if err := json.Unmarshal(qr.Rows[0][0].Raw(), &action); err != nil {
+	acv, err := qr.Rows[0][0].ToBytes()
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(acv, &action); err != nil {
 		return err
 	}
 

@@ -67,6 +67,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"insert into tab1(id,val) values (1,'a'), (2,'b')",
 		"/insert into _vt.copy_state",
 		"commit",
+		"/select action from _vt.copy_table_post where vrepl_id",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
 	}, "")
