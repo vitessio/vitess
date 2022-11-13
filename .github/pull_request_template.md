@@ -18,7 +18,7 @@
 
 ## Checklist
 
--   [ ] "Backport me!" label has been added if this change should be backported
+-   [ ] "Backport to:" labels have been added if this change should be back-ported
 -   [ ] Tests were added or are not required
 -   [ ] Documentation was added or is not required
 
