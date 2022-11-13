@@ -13,7 +13,7 @@ require (
 	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.34.2
-	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
+	github.com/buger/jsonparser v1.1.1
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
