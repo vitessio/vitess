@@ -22,6 +22,12 @@ import (
 )
 
 var (
+	// ErrDuplicateWatch is returned when Watch is called multiple times on a
+	// single synced viper. Viper only supports reading/watching a single
+	// config file.
 	ErrDuplicateWatch = sync.ErrDuplicateWatch
-	ErrNoFlagDefined  = value.ErrNoFlagDefined
+	// ErrNoFlagDefined is returned from Value's Flag method when the value was
+	// configured to bind to a given FlagName but the provided flag set does not
+	// define a flag with that name.
+	ErrNoFlagDefined = value.ErrNoFlagDefined
 )

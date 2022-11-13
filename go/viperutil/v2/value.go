@@ -27,12 +27,29 @@ var (
 	_ Value[int] = (*value.Dynamic[int])(nil)
 )
 
+// Value represents the public API to access viper-backed config values.
+//
+// N.B. the embedded value.Registerable interface is necessary only for
+// BindFlags and other mechanisms of binding Values to the internal registries
+// to work. Users of Value objects should only need to call Get() and Default().
 type Value[T any] interface {
 	value.Registerable
+
+	// Get returns the current value. For static implementations, this will
+	// never change after the initial config load. For dynamic implementations,
+	// this may change throughout the lifetime of the vitess process.
 	Get() T
+	// Default returns the default value configured for this Value. For both
+	// static and dynamic implementations, it should never change.
 	Default() T
 }
 
+// BindFlags binds a set of Registerable values to the given flag set.
+//
+// This function will panic if any of the values was configured to map to a flag
+// which is not defined on the flag set. Therefore, this function should usually
+// be called in an OnParse or OnParseFor hook after defining the flags for the
+// values in question.
 func BindFlags(fs *pflag.FlagSet, values ...value.Registerable) {
 	value.BindFlags(fs, values...)
 }
