@@ -247,7 +247,7 @@ func TestEtcd2Topo(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
 	test.TopoServerTestSuite(t, func() *topo.Server {
 		return newServer()
-	})
+	}, []string{})
 
 	// Run etcd-specific tests.
 	ts := newServer()

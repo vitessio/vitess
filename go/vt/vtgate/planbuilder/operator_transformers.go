@@ -21,6 +21,10 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -39,7 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Operator, isRoot bool) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, isRoot bool) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -167,7 +171,10 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		values = op.Selected.Values
 	}
 	condition := getVindexPredicate(ctx, op)
-	sel := toSQL(ctx, op.Source)
+	sel, err := operators.ToSQL(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
 	replaceSubQuery(ctx, sel)
 	return &routeGen4{
 		eroute: &engine.Route{
@@ -323,7 +330,7 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 
 func getAllTableNames(op *operators.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := operators.VisitTopDown(op, func(op operators.Operator) error {
+	err := rewrite.Visit(op, func(op ops.Operator) error {
 		tbl, isTbl := op.(*operators.Table)
 		var name string
 		if isTbl {

@@ -20,11 +20,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Union struct {
-	Sources  []Operator
+	Sources  []ops.Operator
 	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
@@ -33,21 +35,20 @@ type Union struct {
 	noColumns
 }
 
-var _ PhysicalOperator = (*Union)(nil)
+var _ ops.PhysicalOperator = (*Union)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
-// clone implements the Operator interface
-func (u *Union) clone(inputs []Operator) Operator {
+// Clone implements the Operator interface
+func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
-	checkSize(inputs, len(u.Sources))
 	newOp.Sources = inputs
 	return &newOp
 }
 
-// inputs implements the Operator interface
-func (u *Union) inputs() []Operator {
+// Inputs implements the Operator interface
+func (u *Union) Inputs() []ops.Operator {
 	return u.Sources
 }
 
@@ -72,7 +73,7 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	offsets := make(map[string]int)
 	sel, err := u.GetSelectFor(0)
 	if err != nil {
@@ -135,9 +136,54 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 }
 
 func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
-	horizon, ok := u.Sources[source].(*Horizon)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
+	src := u.Sources[source]
+	for {
+		switch op := src.(type) {
+		case *Horizon:
+			return sqlparser.GetFirstSelect(op.Select), nil
+		case *Route:
+			src = op.Source
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
+		}
 	}
-	return sqlparser.GetFirstSelect(horizon.Select), nil
+}
+
+func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+	var newSources []ops.Operator
+	anythingChanged := false
+	for _, source := range u.Sources {
+		var other *Union
+		horizon, ok := source.(*Horizon)
+		if ok {
+			union, ok := horizon.Source.(*Union)
+			if ok {
+				other = union
+			}
+		}
+		if other == nil {
+			newSources = append(newSources, source)
+			continue
+		}
+		anythingChanged = true
+		switch {
+		case len(other.Ordering) == 0 && !other.Distinct:
+			fallthrough
+		case u.Distinct:
+			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
+			newSources = append(newSources, other.Sources...)
+
+		default:
+			newSources = append(newSources, other)
+		}
+	}
+	if anythingChanged {
+		u.Sources = newSources
+	}
+	identity := rewrite.SameTree
+	if anythingChanged {
+		identity = rewrite.NewTree
+	}
+
+	return u, identity, nil
 }

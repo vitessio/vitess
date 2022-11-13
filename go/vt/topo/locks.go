@@ -301,9 +301,40 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 //   - PlannedReparentShard
 //   - EmergencyReparentShard
 //
+// * any vtorc recovery e.g
+//   - RecoverDeadPrimary
+//   - ElectNewPrimary
+//   - FixPrimary
+//
+// * before any replication repair from replication manager
+//
 // * operations that we don't want to conflict with re-parenting:
 //   - DeleteTablet when it's the shard's current primary
 func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+	return ts.internalLockShard(ctx, keyspace, shard, action, true)
+}
+
+// TryLockShard will lock the shard, and return:
+// - a context with a locksInfo structure for future reference.
+// - an unlock method
+// - an error if anything failed.
+//
+// `TryLockShard` is different from `LockShard`. If there is already a lock on given shard,
+// then unlike `LockShard` instead of waiting and blocking the client it returns with
+// `Lock already exists` error. With current implementation it may not be able to fail-fast
+// for some scenarios. For example there is a possibility that a thread checks for lock for
+// a given shard but by the time it acquires the lock, some other thread has already acquired it,
+// in this case the client will block until the other caller releases the lock or the
+// client call times out (just like standard `LockShard' implementation). In short the lock checking
+// and acquiring is not under the same mutex in current implementation of `TryLockShard`.
+//
+// We are currently using `TryLockShard` during tablet discovery in Vtorc recovery
+func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+	return ts.internalLockShard(ctx, keyspace, shard, action, false)
+}
+
+// isBlocking is used to indicate whether the call should fail-fast or not.
+func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action string, isBlocking bool) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -322,7 +353,13 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 
 	// lock
 	l := newLock(action)
-	lockDescriptor, err := l.lockShard(ctx, ts, keyspace, shard)
+	var lockDescriptor LockDescriptor
+	var err error
+	if isBlocking {
+		lockDescriptor, err = l.lockShard(ctx, ts, keyspace, shard)
+	} else {
+		lockDescriptor, err = l.tryLockShard(ctx, ts, keyspace, shard)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -383,6 +420,16 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 // lockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
 func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
+	return l.internalLockShard(ctx, ts, keyspace, shard, true)
+}
+
+// tryLockShard will lock the shard in the topology server but unlike `lockShard` it fail-fast if not able to get lock
+// UnlockShard should be called if this returns no error.
+func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
+	return l.internalLockShard(ctx, ts, keyspace, shard, false)
+}
+
+func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
@@ -399,7 +446,10 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 	if err != nil {
 		return nil, err
 	}
-	return ts.globalCell.Lock(ctx, shardPath, j)
+	if isBlocking {
+		return ts.globalCell.Lock(ctx, shardPath, j)
+	}
+	return ts.globalCell.TryLock(ctx, shardPath, j)
 }
 
 // unlockShard unlocks a previously locked shard.

@@ -19,6 +19,8 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -27,7 +29,7 @@ import (
 )
 
 type Derived struct {
-	Source Operator
+	Source ops.Operator
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -38,14 +40,13 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ PhysicalOperator = (*Derived)(nil)
+var _ ops.PhysicalOperator = (*Derived)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (d *Derived) IPhysical() {}
 
 // Clone implements the Operator interface
-func (d *Derived) clone(inputs []Operator) Operator {
-	checkSize(inputs, 1)
+func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 	return &Derived{
 		Source:        inputs[0],
 		Query:         d.Query,
@@ -101,12 +102,12 @@ func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
 }
 
-// inputs implements the Operator interface
-func (d *Derived) inputs() []Operator {
-	return []Operator{d.Source}
+// Inputs implements the Operator interface
+func (d *Derived) Inputs() []ops.Operator {
+	return []ops.Operator{d.Source}
 }
 
-func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	if _, isUNion := d.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
 		var err error
