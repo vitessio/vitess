@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package log provides dual-use logging between vitess's vt/log package and
+viper's jww log.
+*/
 package log
 
 import (
@@ -37,10 +41,17 @@ var (
 		}
 	}
 
-	TRACE    = jwwlog(jww.TRACE, nil)
-	DEBUG    = jwwlog(jww.DEBUG, nil)
-	INFO     = jwwlog(jww.INFO, log.Infof)
-	WARN     = jwwlog(jww.WARN, log.Warningf)
-	ERROR    = jwwlog(jww.ERROR, log.Errorf)
+	// TRACE logs to viper's TRACE level, and nothing to vitess logs.
+	TRACE = jwwlog(jww.TRACE, nil)
+	// DEBUG logs to viper's DEBUG level, and nothing to vitess logs.
+	DEBUG = jwwlog(jww.DEBUG, nil)
+	// INFO logs to viper and vitess at INFO levels.
+	INFO = jwwlog(jww.INFO, log.Infof)
+	// WARN logs to viper and vitess at WARN/WARNING levels.
+	WARN = jwwlog(jww.WARN, log.Warningf)
+	// ERROR logs to viper and vitess at ERROR levels.
+	ERROR = jwwlog(jww.ERROR, log.Errorf)
+	// CRITICAL logs to viper at CRITICAL level, and then fatally logs to
+	// vitess, exiting the process.
 	CRITICAL = jwwlog(jww.CRITICAL, log.Fatalf)
 )
