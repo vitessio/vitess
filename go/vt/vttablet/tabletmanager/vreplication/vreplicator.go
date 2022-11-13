@@ -687,29 +687,28 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	if err != nil {
 		return err
 	}
-	if len(qr.Rows) == 0 {
+	if qr == nil || len(qr.Rows) == 0 {
 		return nil
 	}
-	if len(qr.Rows[0]) != 1 {
-		return fmt.Errorf("unexpected results for post copy actions: %v", qr.Rows[0])
-	}
-	var action PostCopyAction
-	acv, err := qr.Rows[0][0].ToBytes()
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(acv, &action); err != nil {
-		return err
-	}
-
-	switch action.Type {
-	case PostCopyActionSQL:
-		log.Infof("Executing VReplication MoveTables post copy action for table %q: %s", tableName, action.Action)
-		if _, err := dbClient.ExecuteFetch(action.Action, -1); err != nil {
+	for _, row := range qr.Named().Rows {
+		var action PostCopyAction
+		acv, err := row["action"].ToBytes()
+		if err != nil {
 			return err
 		}
-	default:
-		return fmt.Errorf("unsupported post copy action type: %v", action.Type)
+		if err := json.Unmarshal(acv, &action); err != nil {
+			return err
+		}
+
+		switch action.Type {
+		case PostCopyActionSQL:
+			log.Infof("Executing VReplication MoveTables post copy SQL action for table %q: %s", tableName, action.Action)
+			if _, err := dbClient.ExecuteFetch(action.Action, -1); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported post copy action type: %v", action.Type)
+		}
 	}
 
 	return nil
