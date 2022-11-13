@@ -182,6 +182,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	uvstreamerTestMode = true
 	defer func() { uvstreamerTestMode = false }()
 	initialize(t)
+
 	if err := engine.se.Reload(context.Background()); err != nil {
 		t.Fatal("Error reloading schema")
 	}
@@ -190,6 +191,12 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	var tablePKs []*binlogdatapb.TableLastPK
 	for i, table := range testState.tables {
 		rules = append(rules, getRule(table))
+
+		// for table t2, let tablepk be nil, so that we don't send events for the insert in initTables()
+		if table == "t2" {
+			continue
+		}
+
 		tablePKs = append(tablePKs, getTablePK(table, i+1))
 	}
 	filter := &binlogdatapb.Filter{
@@ -246,7 +253,7 @@ commit;"
 
 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
 	numCopyEvents += 2                                    /* GTID + Test event after all copy is done */
-	numCatchupEvents := 3 * 5                             /*2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT*/
+	numCatchupEvents := 3 * 5                             /* 2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT */
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
 	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 6 /* begin/field/2 inserts/gtid/commit */

@@ -306,9 +306,10 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// TimestampVal should also be normalized
 		in:      `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
-		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id limit :bv1, :bv1`,
+		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id limit :bv1, :bv2`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1":                   sqltypes.Int64BindVariable(1),
+			"bv2":                   sqltypes.Int64BindVariable(1),
 			"comms_by_companies_id": sqltypes.StringBindVariable("rjve634shXzaavKHbAH16ql6OrxJ"),
 		},
 	}, {
@@ -317,6 +318,15 @@ func TestNormalize(t *testing.T) {
 		outstmt: `select * from t where zipcode = :zipcode`,
 		outbv: map[string]*querypb.BindVariable{
 			"zipcode": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Int64, []byte("01001900"))),
+		},
+	}, {
+		// Int leading with zero should also be normalized
+		in:      `select * from t where id = 10 limit 10 offset 10`,
+		outstmt: `select * from t where id = :id limit :bv1, :bv2`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(10),
+			"bv2": sqltypes.Int64BindVariable(10),
+			"id":  sqltypes.Int64BindVariable(10),
 		},
 	}}
 	for _, tc := range testcases {

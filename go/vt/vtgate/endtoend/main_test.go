@@ -46,6 +46,12 @@ create table t1(
 	primary key(id1)
 ) Engine=InnoDB;
 
+create table t1_copy_resume(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
 create table t1_id2_idx(
 	id2 bigint,
 	keyspace_id varbinary(10),
@@ -132,6 +138,12 @@ create table t1_sharded(
 				}, {
 					Column: "id2",
 					Name:   "t1_id2_vdx",
+				}},
+			},
+			"t1_copy_resume": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
 				}},
 			},
 			"t1_sharded": {

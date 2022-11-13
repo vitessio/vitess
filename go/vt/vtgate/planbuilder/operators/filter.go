@@ -18,29 +18,30 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
-	Source     Operator
+	Source     ops.Operator
 	Predicates []sqlparser.Expr
 }
 
-var _ PhysicalOperator = (*Filter)(nil)
+var _ ops.PhysicalOperator = (*Filter)(nil)
 
-func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
+func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
-		Source: op, Predicates: expr,
+		Source: op, Predicates: []sqlparser.Expr{expr},
 	}
 }
 
 // IPhysical implements the PhysicalOperator interface
 func (f *Filter) IPhysical() {}
 
-// clone implements the Operator interface
-func (f *Filter) clone(inputs []Operator) Operator {
-	checkSize(inputs, 1)
+// Clone implements the Operator interface
+func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
 	return &Filter{
@@ -49,9 +50,9 @@ func (f *Filter) clone(inputs []Operator) Operator {
 	}
 }
 
-// inputs implements the Operator interface
-func (f *Filter) inputs() []Operator {
-	return []Operator{f.Source}
+// Inputs implements the Operator interface
+func (f *Filter) Inputs() []ops.Operator {
+	return []ops.Operator{f.Source}
 }
 
 // UnsolvedPredicates implements the unresolved interface
@@ -67,7 +68,7 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	newSrc, err := f.Source.AddPredicate(ctx, expr)
 	if err != nil {
 		return nil, err
@@ -78,4 +79,18 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 
 func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	return f.Source.AddColumn(ctx, expr)
+}
+
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+	if len(f.Predicates) == 0 {
+		return f.Source, rewrite.NewTree, nil
+	}
+
+	other, isFilter := f.Source.(*Filter)
+	if !isFilter {
+		return f, rewrite.SameTree, nil
+	}
+	f.Source = other.Source
+	f.Predicates = append(f.Predicates, other.Predicates...)
+	return f, rewrite.NewTree, nil
 }

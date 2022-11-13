@@ -164,7 +164,7 @@ func TestConsulTopo(t *testing.T) {
 		}
 
 		return ts
-	})
+	}, []string{})
 }
 
 func TestConsulTopoWithChecks(t *testing.T) {
@@ -210,7 +210,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 		}
 
 		return ts
-	})
+	}, []string{})
 }
 
 func TestConsulTopoWithAuth(t *testing.T) {
@@ -267,7 +267,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 		}
 
 		return ts
-	})
+	}, []string{})
 }
 
 func TestConsulTopoWithAuthFailure(t *testing.T) {
