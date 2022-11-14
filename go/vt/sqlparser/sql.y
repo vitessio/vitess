@@ -78,7 +78,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   optVal        Expr
   constraintInfo ConstraintInfo
   alterOption      AlterOption
-  characteristic Characteristic
 
   ins           *Insert
   colName       *ColName
@@ -158,7 +157,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
   partSpecs     []*PartitionSpec
-  characteristics []Characteristic
   selectExpr    SelectExpr
   columns       Columns
   partitions    Partitions
@@ -177,7 +175,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   colKeyOpt     ColumnKeyOption
   referenceAction ReferenceAction
   matchAction MatchAction
-  isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
   lock 		Lock
@@ -513,13 +510,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list
-%type <str> charset_or_character_set charset_or_character_set_or_names
+%type <setExprs> set_list transaction_chars
+%type <setExpr> set_expression transaction_char
+%type <str> charset_or_character_set charset_or_character_set_or_names isolation_level
 %type <updateExpr> update_expression
-%type <setExpr> set_expression
-%type <characteristic> transaction_char
-%type <characteristics> transaction_chars
-%type <isolationLevel> isolation_level
 %type <str> for_from from_or_on
 %type <str> default_opt
 %type <ignore> ignore_opt
@@ -1009,56 +1003,98 @@ set_statement:
     $$ = NewSetStatement(Comments($2).Parsed(), $3)
   }
 
+set_list:
+  set_expression
+  {
+    $$ = SetExprs{$1}
+  }
+| set_list ',' set_expression
+  {
+    $$ = append($1, $3)
+  }
+
+set_expression:
+  set_variable '=' ON
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
+  }
+| set_variable '=' OFF
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
+  }
+| set_variable '=' expression
+  {
+    $$ = &SetExpr{Var: $1, Expr: $3}
+  }
+| charset_or_character_set_or_names charset_value collate_opt
+  {
+    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
+  }
+
+set_variable:
+  ID
+  {
+    $$ = NewSetVariable(string($1), SessionScope)
+  }
+| variable_expr
+  {
+    $$ = $1
+  }
+| set_session_or_global ID
+  {
+    $$ = NewSetVariable(string($2), $1)
+  }
+
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Scope: $3, Characteristics: $5}
+    $$ = NewSetStatement(Comments($2).Parsed(), UpdateSetExprsScope($5, $3))
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Characteristics: $4, Scope: NoScope}
+    $$ = NewSetStatement(Comments($2).Parsed(), $4)
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = []Characteristic{$1}
+    $$ = SetExprs{$1}
   }
 | transaction_chars ',' transaction_char
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = $3
+    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: NewStrLiteral($3)}
   }
 | READ WRITE
   {
-    $$ = ReadWrite
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("off")}
   }
 | READ ONLY
   {
-    $$ = ReadOnly
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("on")}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = RepeatableRead
+    $$ = RepeatableReadStr
   }
 | READ COMMITTED
   {
-    $$ = ReadCommitted
+    $$ = ReadCommittedStr
   }
 | READ UNCOMMITTED
   {
-    $$ = ReadUncommitted
+    $$ = ReadUncommittedStr
   }
 | SERIALIZABLE
   {
-    $$ = Serializable
+    $$ = SerializableStr
   }
 
 set_session_or_global:
@@ -7117,48 +7153,6 @@ update_expression:
   column_name '=' expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
-  }
-
-set_list:
-  set_expression
-  {
-    $$ = SetExprs{$1}
-  }
-| set_list ',' set_expression
-  {
-    $$ = append($1, $3)
-  }
-
-set_expression:
-  set_variable '=' ON
-  {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
-  }
-| set_variable '=' OFF
-  {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
-  }
-| set_variable '=' expression
-  {
-    $$ = &SetExpr{Var: $1, Expr: $3}
-  }
-| charset_or_character_set_or_names charset_value collate_opt
-  {
-    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
-  }
-
-set_variable:
-  ID
-  {
-    $$ = NewSetVariable(string($1), SessionScope)
-  }
-| variable_expr
-  {
-    $$ = $1
-  }
-| set_session_or_global ID
-  {
-    $$ = NewSetVariable(string($2), $1)
   }
 
 charset_or_character_set:

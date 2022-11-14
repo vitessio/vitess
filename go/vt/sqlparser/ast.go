@@ -369,28 +369,6 @@ type (
 		Exprs    SetExprs
 	}
 
-	// SetTransaction represents a SET TRANSACTION statement.
-	SetTransaction struct {
-		Comments        *ParsedComments
-		Scope           Scope
-		Characteristics []Characteristic
-	}
-
-	// Scope is an enum for scope of query
-	Scope int8
-
-	// Characteristic is a transaction related change
-	Characteristic interface {
-		SQLNode
-		iChar()
-	}
-
-	// IsolationLevel is an enum for isolation levels
-	IsolationLevel int8
-
-	// AccessMode is enum for the mode - ReadOnly or ReadWrite
-	AccessMode int8
-
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
 		Comments *ParsedComments
@@ -700,7 +678,6 @@ func (*Insert) iStatement()            {}
 func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
-func (*SetTransaction) iStatement()    {}
 func (*DropDatabase) iStatement()      {}
 func (*Flush) iStatement()             {}
 func (*Show) iStatement()              {}
@@ -2274,6 +2251,9 @@ type (
 		Qualifier TableName
 	}
 
+	// Scope is an enum for scope of query
+	Scope int8
+
 	Variable struct {
 		Scope Scope
 		Name  IdentifierCI
@@ -3227,6 +3207,3 @@ type IdentifierCI struct {
 type IdentifierCS struct {
 	v string
 }
-
-func (IsolationLevel) iChar() {}
-func (AccessMode) iChar()     {}

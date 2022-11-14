@@ -2888,7 +2888,7 @@ INPUT
 select @@session.transaction_isolation;
 END
 OUTPUT
-select @@transaction_isolation from dual
+select @@session.transaction_isolation from dual
 END
 INPUT
 select hex(left(_utf16 0xD800DC00D87FDFFF, 1));
