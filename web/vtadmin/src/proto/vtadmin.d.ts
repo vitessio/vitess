@@ -24994,6 +24994,9 @@ export namespace query {
 
         /** ExecuteOptions consolidator */
         consolidator?: (query.ExecuteOptions.Consolidator|null);
+
+        /** ExecuteOptions transaction_access_mode */
+        transaction_access_mode?: (query.ExecuteOptions.TransactionAccessMode[]|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -25031,6 +25034,9 @@ export namespace query {
 
         /** ExecuteOptions consolidator. */
         public consolidator: query.ExecuteOptions.Consolidator;
+
+        /** ExecuteOptions transaction_access_mode. */
+        public transaction_access_mode: query.ExecuteOptions.TransactionAccessMode[];
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -25148,6 +25154,14 @@ export namespace query {
             CONSOLIDATOR_DISABLED = 1,
             CONSOLIDATOR_ENABLED = 2,
             CONSOLIDATOR_ENABLED_REPLICAS = 3
+        }
+
+        /** TransactionAccessMode enum. */
+        enum TransactionAccessMode {
+            ACESS_MODE_UNSPECIFIED = 0,
+            CONSISTENT_SNAPSHOT = 1,
+            READ_WRITE = 2,
+            READ_ONLY = 3
         }
     }
 

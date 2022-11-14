@@ -334,6 +334,15 @@ message ExecuteOptions {
   }
 
   Consolidator consolidator = 13;
+
+  enum TransactionAccessMode {
+    ACESS_MODE_UNSPECIFIED = 0;
+    CONSISTENT_SNAPSHOT = 1;
+    READ_WRITE = 2;
+    READ_ONLY = 3;
+  }
+
+  repeated TransactionAccessMode transaction_access_mode = 14;
 }
 
 // Field describes a single column returned by a query
