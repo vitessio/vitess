@@ -62,7 +62,7 @@ func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVari
 func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// no need to normalize the statement types
-	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
+	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
 		_ = Rewrite(node, nz.WalkSelect, nil)

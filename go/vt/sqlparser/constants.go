@@ -228,18 +228,15 @@ const (
 	AscScr  = "asc"
 	DescScr = "desc"
 
-	// SetExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
-	// TransactionStr is the Name for a SET TRANSACTION statement
-	TransactionStr = "transaction"
+	// SetExpr.Expr transaction variables
+	TransactionIsolationStr = "transaction_isolation"
+	TransactionReadOnlyStr  = "transaction_read_only"
 
 	// Transaction isolation levels
-	ReadUncommittedStr = "read uncommitted"
-	ReadCommittedStr   = "read committed"
-	RepeatableReadStr  = "repeatable read"
+	ReadUncommittedStr = "read-uncommitted"
+	ReadCommittedStr   = "read-committed"
+	RepeatableReadStr  = "repeatable-read"
 	SerializableStr    = "serializable"
-
-	TxReadOnly  = "read only"
-	TxReadWrite = "read write"
 
 	// Explain formats
 	EmptyStr       = ""
@@ -413,20 +410,6 @@ const (
 	YearMonthStr         = "year_month"
 )
 
-// Constants for Enum type - AccessMode
-const (
-	ReadOnly AccessMode = iota
-	ReadWrite
-)
-
-// Constants for Enum type - IsolationLevel
-const (
-	ReadUncommitted IsolationLevel = iota
-	ReadCommitted
-	RepeatableRead
-	Serializable
-)
-
 // Constants for Enum Type - Insert.Action
 const (
 	InsertAct InsertAction = iota
@@ -454,13 +437,14 @@ const (
 // Constants for scope of variables
 // See https://dev.mysql.com/doc/refman/8.0/en/set-variable.html
 const (
-	NoScope             Scope = iota // This is only used for SET ISOLATION LEVEL
-	SessionScope                     // [SESSION | @@SESSION.| @@LOCAL. | @@] This is the default if no scope is given
-	GlobalScope                      // {GLOBAL | @@GLOBAL.} system_var_name
-	VitessMetadataScope              // @@vitess_metadata.system_var_name
-	PersistSysScope                  // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
-	PersistOnlySysScope              // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
-	VariableScope                    // @var_name   This is used for user defined variables.
+	NoScope             Scope = iota
+	SessionScope              // [SESSION | @@SESSION.| @@LOCAL. | @@] This is the default if no scope is given
+	GlobalScope               // {GLOBAL | @@GLOBAL.} system_var_name
+	VitessMetadataScope       // @@vitess_metadata.system_var_name
+	PersistSysScope           // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	PersistOnlySysScope       // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	VariableScope             // @var_name   This is used for user defined variables.
+	NextTxScope               // This is used for transaction related variables like transaction_isolation, transaction_read_write and set transaction statement.
 )
 
 // Constants for Enum Type - Lock
