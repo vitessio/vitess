@@ -134,7 +134,7 @@ type Throttler struct {
 
 	mysqlInventory *mysql.Inventory
 
-	metricsQuery     string
+	metricsQuery     atomic.Value
 	MetricsThreshold sync2.AtomicFloat64
 
 	mysqlClusterThresholds *cache.Cache
@@ -202,9 +202,9 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
-	throttler.metricsQuery = replicationLagQuery // default
+	throttler.metricsQuery.Store(replicationLagQuery) // default
 	if throttleMetricQuery != "" {
-		throttler.metricsQuery = throttleMetricQuery // override
+		throttler.metricsQuery.Store(throttleMetricQuery) // override
 	}
 	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds()) //default
 	if throttleMetricThreshold != math.MaxFloat64 {
@@ -251,6 +251,10 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	}
 }
 
+func (throttler *Throttler) GetMetricsQuery() string {
+	return throttler.metricsQuery.Load().(string)
+}
+
 // initThrottler initializes config
 func (throttler *Throttler) initConfig() {
 	log.Infof("Throttler: initializing config")
@@ -264,12 +268,12 @@ func (throttler *Throttler) initConfig() {
 		},
 	}
 	config.Instance.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
-		MetricQuery:       throttler.metricsQuery,
+		MetricQuery:       throttler.GetMetricsQuery(),
 		ThrottleThreshold: &throttler.MetricsThreshold,
 		IgnoreHostsCount:  0,
 	}
 	config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
-		MetricQuery:       throttler.metricsQuery,
+		MetricQuery:       throttler.GetMetricsQuery(),
 		ThrottleThreshold: &throttler.MetricsThreshold,
 		IgnoreHostsCount:  0,
 	}
@@ -330,9 +334,9 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		return
 	}
 	if throttlerConfig.CustomQuery == "" {
-		throttler.metricsQuery = replicationLagQuery
+		throttler.metricsQuery.Store(replicationLagQuery)
 	} else {
-		throttler.metricsQuery = throttlerConfig.CustomQuery
+		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
 	throttler.MetricsThreshold.Set(throttlerConfig.Threshold)
 	throttlerCheckAsCheckSelf = throttlerConfig.CheckAsCheckSelf
@@ -497,7 +501,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 		return metric
 	}
 
-	metricsQueryType := mysql.GetMetricsQueryType(throttler.metricsQuery)
+	metricsQueryType := mysql.GetMetricsQueryType(throttler.GetMetricsQuery())
 	switch metricsQueryType {
 	case mysql.MetricsQueryTypeSelect:
 		// We expect a single row, single column result.
@@ -508,7 +512,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 	case mysql.MetricsQueryTypeShowGlobal:
 		metric.Value, metric.Err = strconv.ParseFloat(row["Value"].ToString(), 64)
 	default:
-		metric.Err = fmt.Errorf("Unsupported metrics query type for query: %s", throttler.metricsQuery)
+		metric.Err = fmt.Errorf("Unsupported metrics query type for query: %s", throttler.GetMetricsQuery())
 	}
 
 	return metric
@@ -718,7 +722,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
-	metricsQuery := throttler.metricsQuery
+	metricsQuery := throttler.GetMetricsQuery()
 	metricsThreshold := throttler.MetricsThreshold.Get()
 	addInstanceKey := func(tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {

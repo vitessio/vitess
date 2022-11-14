@@ -990,12 +990,17 @@ func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
 				Name: "threshold",
 				Type: sqltypes.Float64,
 			},
+			{
+				Name: "query",
+				Type: sqltypes.VarChar,
+			},
 		},
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarChar(qre.tsv.sm.target.Shard),
 				sqltypes.NewInt32(enabled),
 				sqltypes.NewFloat64(qre.tsv.lagThrottler.MetricsThreshold.Get()),
+				sqltypes.NewVarChar(qre.tsv.lagThrottler.GetMetricsQuery()),
 			},
 		},
 	}
