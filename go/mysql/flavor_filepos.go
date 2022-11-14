@@ -326,6 +326,11 @@ func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 	return ""
 }
 
+// baseShowTables is part of the Flavor interface.
+func (*filePosFlavor) baseShowTables() string {
+	return mysqlFlavor{}.baseShowTables()
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
