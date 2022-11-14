@@ -84,10 +84,7 @@ func TestDerivedTableWithHaving(t *testing.T) {
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
-
-	// this is probably flaky? the id returned from the derived table could be any of the ids from user.
-	// works on my machine (TM)
-	mcmp.Exec("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s")
+	mcmp.AssertMatchesAnyNoCompare("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(4)]]")
 }
 
 func TestDerivedTableColumns(t *testing.T) {
