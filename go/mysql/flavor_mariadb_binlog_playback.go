@@ -30,6 +30,11 @@ func (mariadbFlavor) disableBinlogPlaybackCommand() string {
 	return ""
 }
 
+// baseShowTables is part of the Flavor interface.
+func (mariadbFlavor) baseShowTables() string {
+	return mysqlFlavor{}.baseShowTables()
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mariadbFlavor101) baseShowTablesWithSizes() string {
 	return TablesWithSize56
