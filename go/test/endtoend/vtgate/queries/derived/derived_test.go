@@ -56,6 +56,7 @@ func TestDerivedTableWithOrderByLimit(t *testing.T) {
 }
 
 func TestDerivedAggregationOnRHS(t *testing.T) {
+	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11703")
 	mcmp, closer := start(t)
 	defer closer()
 
