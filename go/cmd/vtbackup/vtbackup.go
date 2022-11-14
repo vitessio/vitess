@@ -299,6 +299,11 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
+		// We need to switch off super-read-only before we create database.
+		_ = mysqld.SetSuperReadOnly(false)
+		defer func() {
+			_ = mysqld.SetSuperReadOnly(true)
+		}()
 		cmds := mysqlctl.CreateReparentJournal()
 		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {

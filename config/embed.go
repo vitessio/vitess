@@ -28,3 +28,6 @@ var MycnfMySQL57 string
 
 //go:embed mycnf/mysql80.cnf
 var MycnfMySQL80 string
+
+//go:embed init_maria_db.sql
+var DefaultInitMariaDB string

@@ -133,4 +133,8 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
+        {{if (eq .Platform "mariadb103")}}
+          # mariadb103
+          export MYSQL_FLAVOR="MariaDB103"
+        {{end}}
         eatmydata -- make unit_test

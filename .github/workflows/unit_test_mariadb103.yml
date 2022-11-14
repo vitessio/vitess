@@ -102,4 +102,8 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
+        
+          # mariadb103
+          export MYSQL_FLAVOR="MariaDB103"
+        
         eatmydata -- make unit_test
