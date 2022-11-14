@@ -27,5 +27,5 @@ func TestMemoryTopo(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
 	test.TopoServerTestSuite(t, func() *topo.Server {
 		return NewServer(test.LocalCellName)
-	})
+	}, []string{"checkTryLock", "checkShardWithLock"})
 }
