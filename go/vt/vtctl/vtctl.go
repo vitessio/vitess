@@ -3678,7 +3678,6 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	enable := subFlags.Bool("enable", false, "Enable the throttler")
 	disable := subFlags.Bool("disable", false, "Disable the throttler")
 	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
-	customQuerySet := subFlags.Changed("custom-query")
 	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
 	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
@@ -3686,6 +3685,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+	customQuerySet := subFlags.Changed("custom-query")
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <keyspace> arguments are required for the SetThrottlerConfig command")
 	}

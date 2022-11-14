@@ -41,6 +41,7 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	keyspace := cmd.Flags().Arg(0)
 	cli.FinishedParsing(cmd)
 
+	updateThrottlerConfigOptions.CustomQuerySet = cmd.Flags().Changed("custom-query")
 	updateThrottlerConfigOptions.Keyspace = keyspace
 	_, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
 	if err != nil {
@@ -53,7 +54,6 @@ func init() {
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Disable, "disable", false, "Disable the throttler")
 	UpdateThrottlerConfig.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
-	updateThrottlerConfigOptions.CustomQuerySet = UpdateThrottlerConfig.Flags().Changed("custom-query")
 	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", "", "custom throttler check query")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckSelf, "check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckShard, "check-as-check-shard", false, "use standard behavior for /throttler/check requests")
