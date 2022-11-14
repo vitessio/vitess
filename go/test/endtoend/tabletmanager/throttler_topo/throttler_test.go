@@ -426,11 +426,15 @@ func TestCustomQuery(t *testing.T) {
 	t.Run("enabling throttler with low threshold", func(t *testing.T) {
 		_, err := updateThrottlerConfig(true, false, float64(customThreshold), customQuery, false)
 		assert.NoError(t, err)
+		time.Sleep(applyConfigWait)
 	})
 	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		b, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "response: %v", string(b))
 	})
 	t.Run("test threads running", func(t *testing.T) {
 		sleepDuration := 10 * time.Second
@@ -450,12 +454,18 @@ func TestCustomQuery(t *testing.T) {
 			{
 				resp, err := throttleCheck(primaryTablet, false)
 				assert.NoError(t, err)
-				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+
+				b, err := io.ReadAll(resp.Body)
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "response: %v", string(b))
 			}
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				assert.NoError(t, err)
-				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+
+				b, err := io.ReadAll(resp.Body)
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "response: %v", string(b))
 			}
 		})
 		t.Run("wait for queries to terminate", func(t *testing.T) {
