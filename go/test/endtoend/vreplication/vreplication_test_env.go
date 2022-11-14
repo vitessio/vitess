@@ -27,7 +27,7 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Enable writes on keyspace customer tables [Lead,Lead-1,customer,db_order_test]",
 	"Switch routing from keyspace product to keyspace customer",
 	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
-	"SwitchWrites completed, freeze and delete vreplication streams on:",
+	"Switch writes completed, freeze and delete vreplication streams on:",
 	"       tablet 200 ",
 	"       tablet 300 ",
 	"Start reverse replication streams on:",
@@ -41,7 +41,7 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace product",
-	"Switch reads for tables [Lead,Lead-1,customer,db_order_test] to keyspace customer for tablet types [REPLICA,RDONLY]",
+	"Switch reads for tables [Lead,Lead-1,customer,db_order_test] to keyspace customer for tablet types [RDONLY,REPLICA]",
 	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
 	"Unlock keyspace product",
 }
@@ -72,7 +72,7 @@ var dryRunResultsSwitchWritesM2m3 = []string{
 	"       Shard -40, Tablet 1600 ",
 	"       Shard 40-c0, Tablet 1700 ",
 	"       Shard c0-, Tablet 1800 ",
-	"SwitchWrites completed, freeze and delete vreplication streams on:",
+	"Switch writes completed, freeze and delete vreplication streams on:",
 	"       tablet 1600 ",
 	"       tablet 1700 ",
 	"       tablet 1800 ",

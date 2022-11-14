@@ -482,18 +482,6 @@ var commands = []commandGroup{
 				help:   "Perform a diff of all tables in the workflow",
 			},
 			{
-				name:   "SwitchReads",
-				method: commandSwitchReads,
-				params: "[--cells=c1,c2,...] [--reverse] [--tablet_types=REPLICA,RDONLY] [--dry_run] <keyspace.workflow>",
-				help:   "Switch read traffic for the specified workflow.",
-			},
-			{
-				name:   "SwitchWrites",
-				method: commandSwitchWrites,
-				params: "[--timeout=30s] [--reverse] [--reverse_replication=true] [--dry_run] <keyspace.workflow>",
-				help:   "Switch write traffic for the specified workflow.",
-			},
-			{
 				name:   "FindAllShardsInKeyspace",
 				method: commandFindAllShardsInKeyspace,
 				params: "<keyspace>",
@@ -2101,7 +2089,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	}
 	wr.Logger().Printf("*** The MoveTables v1 flow is deprecated, consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
 
-	workflow := subFlags.String("workflow", "", "Workflow name. Can be any descriptive string. Will be used to later migrate traffic via SwitchReads/SwitchWrites.")
+	workflow := subFlags.String("workflow", "", "Workflow name. Can be any descriptive string. Will be used to later migrate traffic via SwitchTraffic.")
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY.")
 	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
@@ -2183,7 +2171,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY. Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken. --dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchTraffic and only reports the actions to be taken. --dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
 	timeout := subFlags.Duration("timeout", defaultWaitTime, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout. --timeout is only supported for SwitchTraffic and ReverseTraffic.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication (default true). --reverse_replication is only supported for SwitchTraffic.")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up).  --keep_data is only supported for Complete and Cancel.")
@@ -2685,91 +2673,6 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		wr.Logger().Printf("Dry Run results for commandDropSources run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
 		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
 	}
-	return nil
-}
-
-func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** SwitchReads is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-
-	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
-	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	tabletTypes := subFlags.String("tablet_types", "rdonly,replica", "Tablet types to switch one or both of rdonly/replica")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	tabletTypesArr := strings.Split(*tabletTypes, ",")
-	var servedTypes []topodatapb.TabletType
-	for _, tabletType := range tabletTypesArr {
-		servedType, err := parseTabletType(tabletType, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
-		if err != nil {
-			return err
-		}
-		servedTypes = append(servedTypes, servedType)
-	}
-	var cells []string
-	if *cellsStr != "" {
-		cells = strings.Split(*cellsStr, ",")
-	}
-	direction := workflow.DirectionForward
-	if *reverse {
-		direction = workflow.DirectionBackward
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("<keyspace.workflow> is required")
-	}
-	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflowName, servedTypes, cells, direction, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		wr.Logger().Printf("Dry Run results for SwitchReads run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
-	}
-	return nil
-}
-
-func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** SwitchWrites is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-
-	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout.")
-	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout.")
-	_ = subFlags.MarkDeprecated("filtered_replication_wait_time", "Use --timeout instead.")
-	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
-	cancel := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
-	reverse := subFlags.Bool("reverse", false, "Reverse a previous SwitchWrites serve from source")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchWrites and only reports the actions to be taken")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("<keyspace.workflow> is required")
-	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	if filteredReplicationWaitTime != timeout {
-		timeout = filteredReplicationWaitTime
-	}
-
-	journalID, dryRunResults, err := wr.SwitchWrites(ctx, keyspace, workflow, *timeout, *cancel, *reverse, *reverseReplication, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		wr.Logger().Printf("Dry Run results for SwitchWrites run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
-	} else {
-		wr.Logger().Infof("Migration Journal ID: %v", journalID)
-	}
-
 	return nil
 }
 

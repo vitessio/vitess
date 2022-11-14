@@ -296,23 +296,21 @@ func performResharding(t *testing.T) {
 	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "--", "--force", "ks/80-", shard1Primary.Alias)
 	require.NoError(t, err)
 
-	// we need to create the schema, and the worker will do data copying
-	for _, keyspaceShard := range []string{"ks/-80", "ks/80-"} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "ks/0", keyspaceShard)
-		require.NoError(t, err)
-	}
-
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--v1", "ks.reshardWorkflow", "0", "--", "-80,80-")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--source_shards=0", "--target_shards=-80,80-", "Create", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_types=rdonly", "ks.reshardWorkflow")
+	waitTimeout := 30 * time.Second
+	shard0Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, waitTimeout)
+	shard1Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, waitTimeout)
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=rdonly", "SwitchTraffic", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_types=replica", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=replica", "SwitchTraffic", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchWrites", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=primary", "SwitchTraffic", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard

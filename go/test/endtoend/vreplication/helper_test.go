@@ -458,13 +458,6 @@ func printShardPositions(vc *VitessCluster, ksShards []string) {
 	}
 }
 
-func clearRoutingRules(t *testing.T, vc *VitessCluster) error {
-	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "--", "--rules={}"); err != nil {
-		return err
-	}
-	return nil
-}
-
 func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	var output string
 	var err error
