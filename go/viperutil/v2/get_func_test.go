@@ -25,12 +25,46 @@ import (
 
 func TestGetFuncForType(t *testing.T) {
 	v := viper.New()
-	v.Set("foo", true)
-	v.Set("bar", 5)
-	v.Set("baz", []int{1, 2, 3})
+	v.Set("foo.bool", true)
+	v.Set("foo.int", 5)
+	v.Set("foo.float", 5.1)
+	v.Set("foo.intslice", []int{1, 2, 3})
+	v.Set("foo.stringslice", []string{"a", "b", "c"})
+	v.Set("foo.string", "hello")
 
-	getBool := GetFuncForType[bool]()
-	assert.True(t, getBool(v)("foo"))
+	assert := assert.New(t)
 
-	assert.Equal(t, 5, GetFuncForType[int]()(v)("bar"))
+	// Bool types
+	assert.Equal(true, get[bool](t, v, "foo.bool"), "GetFuncForType[bool](foo.bool)")
+
+	// Int types
+	assert.Equal(5, get[int](t, v, "foo.int"), "GetFuncForType[int](foo.int)")
+	assert.Equal(int8(5), get[int8](t, v, "foo.int"), "GetFuncForType[int8](foo.int)")
+	assert.Equal(int16(5), get[int16](t, v, "foo.int"), "GetFuncForType[int16](foo.int)")
+	assert.Equal(int32(5), get[int32](t, v, "foo.int"), "GetFuncForType[int32](foo.int)")
+	assert.Equal(int64(5), get[int64](t, v, "foo.int"), "GetFuncForType[int64](foo.int)")
+
+	// Uint types
+	assert.Equal(uint(5), get[uint](t, v, "foo.int"), "GetFuncForType[uint](foo.int)")
+	assert.Equal(uint8(5), get[uint8](t, v, "foo.int"), "GetFuncForType[uint8](foo.int)")
+	assert.Equal(uint16(5), get[uint16](t, v, "foo.int"), "GetFuncForType[uint16](foo.int)")
+	assert.Equal(uint32(5), get[uint32](t, v, "foo.int"), "GetFuncForType[uint32](foo.int)")
+	assert.Equal(uint64(5), get[uint64](t, v, "foo.int"), "GetFuncForType[uint64](foo.int)")
+
+	// Float types
+	assert.Equal(5.1, get[float64](t, v, "foo.float"), "GetFuncForType[float64](foo.float)")
+	assert.Equal(float32(5.1), get[float32](t, v, "foo.float"), "GetFuncForType[float32](foo.float)")
+	assert.Equal(float64(5), get[float64](t, v, "foo.int"), "GetFuncForType[float64](foo.int)")
+
+	// Slice types
+	assert.ElementsMatch([]int{1, 2, 3}, get[[]int](t, v, "foo.intslice"), "GetFuncForType[[]int](foo.intslice)")
+	assert.ElementsMatch([]string{"a", "b", "c"}, get[[]string](t, v, "foo.stringslice"), "GetFuncForType[[]string](foo.stringslice)")
+
+	// String types
+	assert.Equal("hello", get[string](t, v, "foo.string"), "GetFuncForType[string](foo.string)")
+}
+
+func get[T any](t testing.TB, v *viper.Viper, key string) T {
+	t.Helper()
+	return GetFuncForType[T]()(v)(key)
 }
