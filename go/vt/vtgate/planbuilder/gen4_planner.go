@@ -173,12 +173,12 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (logicalPlan, *semantics.SemTable, error) {
+) (plan logicalPlan, semTable *semantics.SemTable, err error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
+	semTable, err = semantics.Analyze(selStmt, ksName, vschema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -188,7 +188,14 @@ func newBuildSelectPlan(
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan, err := unshardedShortcut(ctx, selStmt, ks)
+		plan, err = unshardedShortcut(ctx, selStmt, ks)
+		if err != nil {
+			return nil, nil, err
+		}
+		plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
+		if err != nil {
+			return nil, nil, err
+		}
 		return plan, semTable, err
 	}
 
@@ -207,7 +214,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err = transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,12 +223,12 @@ func newBuildSelectPlan(
 
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
-		if err := setMiscFunc(plan, sel); err != nil {
+		if err = setMiscFunc(plan, sel); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if err := plan.WireupGen4(ctx); err != nil {
+	if err = plan.WireupGen4(ctx); err != nil {
 		return nil, nil, err
 	}
 
