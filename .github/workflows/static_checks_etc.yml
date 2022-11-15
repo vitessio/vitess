@@ -83,7 +83,8 @@ jobs:
               - 'Makefile'
               - 'bootstrap.sh'
               - '.github/workflows/static_checks_etc.yml'
-
+            ci_config:
+              - 'test/config.json'
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
@@ -188,3 +189,8 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
         run: |
           tools/check_make_proto.sh || exit 1
+
+      - name: Check test/config.json
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.ci_config == 'true')
+        run: |
+          go run ./go/tools/ci-config/main.go || exit 1
