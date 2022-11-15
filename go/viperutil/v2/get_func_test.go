@@ -17,6 +17,7 @@ limitations under the License.
 package viperutil
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -42,6 +43,7 @@ func TestGetFuncForType(t *testing.T) {
 	v.Set("foo.int", 5)
 	v.Set("foo.duration", time.Second)
 	v.Set("foo.float", 5.1)
+	v.Set("foo.complex", fmt.Sprintf("%v", complex(1, 2)))
 	v.Set("foo.intslice", []int{1, 2, 3})
 	v.Set("foo.stringslice", []string{"a", "b", "c"})
 	v.Set("foo.string", "hello")
@@ -73,6 +75,14 @@ func TestGetFuncForType(t *testing.T) {
 	assert.Equal(5.1, get[float64](t, v, "foo.float"), "GetFuncForType[float64](foo.float)")
 	assert.Equal(float32(5.1), get[float32](t, v, "foo.float"), "GetFuncForType[float32](foo.float)")
 	assert.Equal(float64(5), get[float64](t, v, "foo.int"), "GetFuncForType[float64](foo.int)")
+
+	// Complex types
+	assert.Equal(complex(5, 0), get[complex128](t, v, "foo.int"), "GetFuncForType[complex128](foo.int)")
+	assert.Equal(complex(5.1, 0), get[complex128](t, v, "foo.float"), "GetFuncForType[complex128](foo.float)")
+	assert.Equal(complex(1, 2), get[complex128](t, v, "foo.complex"), "GetFuncForType[complex128](foo.complex)")
+	assert.Equal(complex64(complex(5, 0)), get[complex64](t, v, "foo.int"), "GetFuncForType[complex64](foo.int)")
+	assert.Equal(complex64(complex(5.1, 0)), get[complex64](t, v, "foo.float"), "GetFuncForType[complex64](foo.float)")
+	assert.Equal(complex64(complex(1, 2)), get[complex64](t, v, "foo.complex"), "GetFuncForType[complex64](foo.complex)")
 
 	// Slice types
 	assert.ElementsMatch([]int{1, 2, 3}, get[[]int](t, v, "foo.intslice"), "GetFuncForType[[]int](foo.intslice)")

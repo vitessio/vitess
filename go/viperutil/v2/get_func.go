@@ -19,6 +19,7 @@ package viperutil
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/spf13/viper"
@@ -88,7 +89,9 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 			return v.GetFloat64
 		}
 	case reflect.Complex64:
+		f = getComplex[complex64](64)
 	case reflect.Complex128:
+		f = getComplex[complex128](128)
 	case reflect.Array:
 	case reflect.Chan:
 		panic("GetFuncForType does not support channel types")
@@ -182,6 +185,19 @@ func getCastedUint[T uint8 | uint16]() func(v *viper.Viper) func(key string) T {
 	return func(v *viper.Viper) func(key string) T {
 		return func(key string) T {
 			return T(v.GetUint(key))
+		}
+	}
+}
+
+func getComplex[T complex64 | complex128](bitSize int) func(v *viper.Viper) func(key string) T {
+	return func(v *viper.Viper) func(key string) T {
+		return func(key string) T {
+			x, err := strconv.ParseComplex(v.GetString(key), bitSize)
+			if err != nil {
+				panic(err) // TODO: wrap with more details (key, type (64 vs 128), etc)
+			}
+
+			return T(x)
 		}
 	}
 }
