@@ -210,15 +210,32 @@ func TestVStreamCopyBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	numExpectedEvents := 2 /* num shards */ * (7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */)
+	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation compled*/) + 1 /* fully copy operation completed*/
+	expectedCompletedEvents := []string{
+		`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
+		`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
+		`type:COPY_COMPLETED`,
+	}
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
+	var completedEvs []*binlogdatapb.VEvent
 	for {
 		e, err := reader.Recv()
 		switch err {
 		case nil:
 			evs = append(evs, e...)
+
+			for _, ev := range e {
+				if ev.Type == binlogdatapb.VEventType_COPY_COMPLETED {
+					completedEvs = append(completedEvs, ev)
+				}
+			}
+
 			if len(evs) == numExpectedEvents {
+				sort.Sort(VEventShardSorter(completedEvs))
+				for i, ev := range completedEvs {
+					require.Regexp(t, expectedCompletedEvents[i], ev.String())
+				}
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
 			}
@@ -537,4 +554,18 @@ func (v VEventSorter) Less(i, j int) bool {
 		return v[i].Timestamp < v[j].Timestamp
 	}
 	return valI < valJ
+}
+
+// Sort the VEvents by a shard. Note that fully copy completed event does not have
+// a shard and the value will be empty.
+type VEventShardSorter []*binlogdatapb.VEvent
+
+func (v VEventShardSorter) Len() int {
+	return len(v)
+}
+func (v VEventShardSorter) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
+}
+func (v VEventShardSorter) Less(i, j int) bool {
+	return v[i].GetShard() > v[j].GetShard()
 }
