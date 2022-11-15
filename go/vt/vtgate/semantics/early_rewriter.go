@@ -19,6 +19,8 @@ package semantics
 import (
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,6 +58,11 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.OrderBy:
 		r.clause = "order clause"
 		rewriteHavingAndOrderBy(cursor, node)
+	case *sqlparser.OrExpr:
+		newNode := rewriteOrFalse(*node)
+		if newNode != nil {
+			cursor.Replace(newNode)
+		}
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
 
@@ -234,6 +241,37 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 		}
 		return true
 	}, nil).(sqlparser.Expr)
+}
+
+func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
+	// we are looking for the pattern `WHERE c = 1 OR 1 = 0`
+	isFalse := func(subExpr sqlparser.Expr) bool {
+		evalEnginePred, err := evalengine.Translate(subExpr, nil)
+		if err != nil {
+			return false
+		}
+
+		env := evalengine.EmptyExpressionEnv()
+		res, err := env.Evaluate(evalEnginePred)
+		if err != nil {
+			return false
+		}
+
+		boolValue, err := res.Value().ToBool()
+		if err != nil {
+			return false
+		}
+
+		return !boolValue
+	}
+
+	if isFalse(orExpr.Left) {
+		return orExpr.Right
+	} else if isFalse(orExpr.Right) {
+		return orExpr.Left
+	}
+
+	return nil
 }
 
 func rewriteJoinUsing(
