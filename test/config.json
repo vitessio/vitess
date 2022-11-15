@@ -520,6 +520,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vtgate_queries_derived": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/derived"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_queries_aggregation": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/aggregation"],
@@ -685,15 +694,6 @@
 		"vtgate_mysql80": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "mysql80",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"vtgate_mysql80_derived": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80/derived"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql80",
