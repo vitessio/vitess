@@ -101,6 +101,9 @@ type vstream struct {
 	// the timestamp of the most recent event, keyed by streamId. streamId is of the form <keyspace>.<shard>
 	timestamps map[string]int64
 
+	// the shard map tracking the copy completion, keyed by streamId. streamId is of the form <keyspace>.<shard>
+	copyCompletedShard map[string]struct{}
+
 	vsm *vstreamManager
 
 	eventCh           chan []*binlogdatapb.VEvent
@@ -152,6 +155,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		heartbeatInterval:  flags.GetHeartbeatInterval(),
 		ts:                 ts,
+		copyCompletedShard: make(map[string]struct{}),
 	}
 	return vs.stream(ctx)
 }
@@ -549,6 +553,22 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					}
 					eventss = nil
 					sendevents = nil
+				case binlogdatapb.VEventType_COPY_COMPLETED:
+					sendevents = append(sendevents, event)
+					if fullyCopied := vs.generateFullyCopyCompleted(ctx, sgtid, event); fullyCopied != nil {
+						sendevents = append(sendevents, fullyCopied)
+					}
+					eventss = append(eventss, sendevents)
+
+					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						return err
+					}
+
+					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+						return err
+					}
+					eventss = nil
+					sendevents = nil
 				case binlogdatapb.VEventType_HEARTBEAT:
 					// Remove all heartbeat events for now.
 					// Otherwise they can accumulate indefinitely if there are no real events.
@@ -674,6 +694,24 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 		}
 	}
 	return nil
+}
+
+// generateFullyCopyCompleted returns a new copy_completed event only if all stream has received a copy_completed event.
+// This new event represents the completion of all the copy operations.
+func (vs *vstream) generateFullyCopyCompleted(ctx context.Context, sgtid *binlogdatapb.ShardGtid, event *binlogdatapb.VEvent) *binlogdatapb.VEvent {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+
+	vs.copyCompletedShard[fmt.Sprintf("%s/%s", event.Keyspace, event.Shard)] = struct{}{}
+
+	for _, shard := range vs.vgtid.ShardGtids {
+		if _, ok := vs.copyCompletedShard[fmt.Sprintf("%s/%s", shard.Keyspace, shard.Shard)]; !ok {
+			return nil
+		}
+	}
+	return &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_COPY_COMPLETED,
+	}
 }
 
 func (vs *vstream) getError() error {
