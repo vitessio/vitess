@@ -1,5 +1,7 @@
 * @deepthi
 bootstrap.sh @ajm188 @deepthi @frouioui @vmg
+go.mod @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay
+go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay
 /.github/ISSUE_TEMPLATE/ @deepthi @frouioui @mattlord
 /.github/workflows/ @deepthi @frouioui @mattlord
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
