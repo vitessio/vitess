@@ -43,6 +43,7 @@ type myTestCase struct {
 	udv                                                                   int
 	autocommit, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
 	sqlSelectLimit, transactionMode, workload, version, versionComment    bool
+	txIsolation                                                           bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -164,6 +165,18 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT @@workload",
 		expected: "SELECT :__vtworkload as `@@workload`",
 		workload: true,
+	}, {
+		in:          "SELECT @@tx_isolation",
+		expected:    "select :__vttx_isolation as `@@tx_isolation` from dual",
+		txIsolation: true,
+	}, {
+		in:          "SELECT @@transaction_isolation",
+		expected:    "select :__vttransaction_isolation as `@@transaction_isolation` from dual",
+		txIsolation: true,
+	}, {
+		in:          "SELECT @@session.transaction_isolation",
+		expected:    "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
+		txIsolation: true,
 	}, {
 		in:       "SELECT @@socket",
 		expected: "SELECT :__vtsocket as `@@socket`",
@@ -304,6 +317,7 @@ func TestRewrites(in *testing.T) {
 		sessTrackGTID:               true,
 		socket:                      true,
 		queryTimeout:                true,
+		txIsolation:                 true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -323,6 +337,7 @@ func TestRewrites(in *testing.T) {
 		sessTrackGTID:               true,
 		socket:                      true,
 		queryTimeout:                true,
+		txIsolation:                 true,
 	}}
 
 	for _, tc := range tests {
@@ -361,6 +376,8 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
 			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
 			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
+			assert.Equal(tc.txIsolation, result.NeedsSysVar(sysvars.TxIsolation.Name) || result.NeedsSysVar(sysvars.TransactionIsolation.Name),
+				"should need :__vttx_isolation or :__vttransaction_isolation")
 		})
 	}
 }

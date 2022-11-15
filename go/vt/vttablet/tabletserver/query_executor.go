@@ -522,7 +522,15 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 	}
 
 	defer func() {
-		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
+		// Call se.Reload() with includeStats=false as obtaining table
+		// size stats involves joining `information_schema.tables`,
+		// which can be very costly on systems with a large number of
+		// tables.
+		//
+		// Instead of synchronously recalculating table size stats
+		// after every DDL, let them be outdated until the periodic
+		// schema reload fixes it.
+		if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
 			log.Errorf("failed to reload schema %v", err)
 		}
 	}()

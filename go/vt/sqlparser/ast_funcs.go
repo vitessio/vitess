@@ -687,6 +687,14 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 	}
 }
 
+// UpdateSetExprsScope updates the scope of the variables in SetExprs.
+func UpdateSetExprsScope(setExprs SetExprs, scope Scope) SetExprs {
+	for _, setExpr := range setExprs {
+		setExpr.Var.Scope = scope
+	}
+	return setExprs
+}
+
 // NewSetVariable returns a variable that can be used with SET.
 func NewSetVariable(str string, scope Scope) *Variable {
 	return &Variable{Name: createIdentifierCI(str), Scope: scope}
@@ -720,6 +728,8 @@ func NewVariableExpression(str string, at AtCount) *Variable {
 		case strings.HasPrefix(l, "vitess_metadata."):
 			v.Name = createIdentifierCI(str[16:])
 			v.Scope = VitessMetadataScope
+		case strings.HasSuffix(l, TransactionIsolationStr) || strings.HasSuffix(l, TransactionReadOnlyStr):
+			v.Scope = NextTxScope
 		default:
 			v.Scope = SessionScope
 		}
@@ -1145,7 +1155,7 @@ func (scope Scope) ToString() string {
 		return VitessMetadataStr
 	case VariableScope:
 		return VariableStr
-	case NoScope:
+	case NoScope, NextTxScope:
 		return ""
 	default:
 		return "Unknown Scope"

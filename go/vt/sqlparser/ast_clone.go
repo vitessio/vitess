@@ -23,8 +23,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return nil
 	}
 	switch in := in.(type) {
-	case AccessMode:
-		return in
 	case *AddColumns:
 		return CloneRefOfAddColumns(in)
 	case *AddConstraintDefinition:
@@ -211,8 +209,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
-	case IsolationLevel:
-		return in
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
 	case *JSONAttributesExpr:
@@ -399,8 +395,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSetExpr(in)
 	case SetExprs:
 		return CloneSetExprs(in)
-	case *SetTransaction:
-		return CloneRefOfSetTransaction(in)
 	case *Show:
 		return CloneRefOfShow(in)
 	case *ShowBasic:
@@ -2489,17 +2483,6 @@ func CloneSetExprs(n SetExprs) SetExprs {
 	return res
 }
 
-// CloneRefOfSetTransaction creates a deep clone of the input.
-func CloneRefOfSetTransaction(n *SetTransaction) *SetTransaction {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Characteristics = CloneSliceOfCharacteristic(n.Characteristics)
-	return &out
-}
-
 // CloneRefOfShow creates a deep clone of the input.
 func CloneRefOfShow(n *Show) *Show {
 	if n == nil {
@@ -3346,22 +3329,6 @@ func CloneCallable(in Callable) Callable {
 	}
 }
 
-// CloneCharacteristic creates a deep clone of the input.
-func CloneCharacteristic(in Characteristic) Characteristic {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case AccessMode:
-		return in
-	case IsolationLevel:
-		return in
-	default:
-		// this should never happen
-		return nil
-	}
-}
-
 // CloneColTuple creates a deep clone of the input.
 func CloneColTuple(in ColTuple) ColTuple {
 	if in == nil {
@@ -3822,8 +3789,6 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfSelect(in)
 	case *Set:
 		return CloneRefOfSet(in)
-	case *SetTransaction:
-		return CloneRefOfSetTransaction(in)
 	case *Show:
 		return CloneRefOfShow(in)
 	case *ShowMigrationLogs:
@@ -4203,18 +4168,6 @@ func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
 	res := make([]TableExpr, len(n))
 	for i, x := range n {
 		res[i] = CloneTableExpr(x)
-	}
-	return res
-}
-
-// CloneSliceOfCharacteristic creates a deep clone of the input.
-func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
-	if n == nil {
-		return nil
-	}
-	res := make([]Characteristic, len(n))
-	for i, x := range n {
-		res[i] = CloneCharacteristic(x)
 	}
 	return res
 }

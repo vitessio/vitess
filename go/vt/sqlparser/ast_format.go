@@ -181,22 +181,6 @@ func (node *Set) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *SetTransaction) Format(buf *TrackedBuffer) {
-	if node.Scope == NoScope {
-		buf.astPrintf(node, "set %vtransaction ", node.Comments)
-	} else {
-		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.ToString())
-	}
-
-	for i, char := range node.Characteristics {
-		if i > 0 {
-			buf.literal(", ")
-		}
-		buf.astPrintf(node, "%v", char)
-	}
-}
-
-// Format formats the node.
 func (node *DropDatabase) Format(buf *TrackedBuffer) {
 	exists := ""
 	if node.IfExists {
@@ -1947,32 +1931,6 @@ func (node IdentifierCS) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node IsolationLevel) Format(buf *TrackedBuffer) {
-	buf.literal("isolation level ")
-	switch node {
-	case ReadUncommitted:
-		buf.literal(ReadUncommittedStr)
-	case ReadCommitted:
-		buf.literal(ReadCommittedStr)
-	case RepeatableRead:
-		buf.literal(RepeatableReadStr)
-	case Serializable:
-		buf.literal(SerializableStr)
-	default:
-		buf.literal("Unknown Isolation level value")
-	}
-}
-
-// Format formats the node.
-func (node AccessMode) Format(buf *TrackedBuffer) {
-	if node == ReadOnly {
-		buf.literal(TxReadOnly)
-	} else {
-		buf.literal(TxReadWrite)
-	}
-}
-
-// Format formats the node.
 func (node *Load) Format(buf *TrackedBuffer) {
 	buf.literal("AST node missing for Load type")
 }
@@ -2765,9 +2723,17 @@ func (node *Variable) Format(buf *TrackedBuffer) {
 	case VariableScope:
 		buf.literal("@")
 	case SessionScope:
+		if node.Name.EqualString(TransactionIsolationStr) || node.Name.EqualString(TransactionReadOnlyStr) {
+			// @@ without session have `next transaction` scope for these system variables.
+			// so if they are in session scope it has to be printed explicitly.
+			buf.astPrintf(node, "@@%s.", node.Scope.ToString())
+			break
+		}
 		buf.literal("@@")
 	case GlobalScope, PersistSysScope, PersistOnlySysScope:
 		buf.astPrintf(node, "@@%s.", node.Scope.ToString())
+	case NextTxScope:
+		buf.literal("@@")
 	}
 	buf.astPrintf(node, "%v", node.Name)
 }
