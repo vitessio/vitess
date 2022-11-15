@@ -997,9 +997,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -1018,9 +1016,8 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 		"",
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err, "TLSServerConfig failed: %v", err)
+
 	l.TLSConfig.Store(serverConfig)
 	go func() {
 		l.Accept()
@@ -1044,16 +1041,14 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	ctx := context.Background()
 
 	conn, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("unexpected connection error: %v", err)
-	}
+	require.NoError(t, err, "unexpected connection error: %v", err)
+
 	defer conn.Close()
 
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)
-	if err != nil {
-		t.Fatalf("ExecuteFetch failed: %v", err)
-	}
+	require.NoError(t, err, "ExecuteFetch failed: %v", err)
+
 	utils.MustMatch(t, result, selectRowsResult)
 
 	// Send a ComQuit to avoid the error message on the server side.
@@ -1096,9 +1091,7 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -1117,9 +1110,8 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 		"",
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err, "TLSServerConfig failed: %v", err)
+
 	l.TLSConfig.Store(serverConfig)
 	go func() {
 		l.Accept()
@@ -1143,16 +1135,14 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 	ctx := context.Background()
 
 	conn, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("unexpected connection error: %v", err)
-	}
+	require.NoError(t, err, "unexpected connection error: %v", err)
+
 	defer conn.Close()
 
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)
-	if err != nil {
-		t.Fatalf("ExecuteFetch failed: %v", err)
-	}
+	require.NoError(t, err, "ExecuteFetch failed: %v", err)
+
 	utils.MustMatch(t, result, selectRowsResult)
 
 	// Send a ComQuit to avoid the error message on the server side.
@@ -1170,9 +1160,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 
 	// Create the listener.
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
