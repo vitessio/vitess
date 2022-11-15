@@ -444,6 +444,12 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				v = options.GetWorkload().String()
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.TxIsolation.Name, sysvars.TransactionIsolation.Name:
+			var v string
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.GetTransactionIsolation().String()
+			})
+			bindVars[key] = sqltypes.StringBindVariable(v)
 		case sysvars.DDLStrategy.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.DDLStrategy)
 		case sysvars.SessionUUID.Name:
