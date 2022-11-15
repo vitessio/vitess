@@ -254,6 +254,45 @@
     }
   },
   {
+    "comment": "select limit with timeout directive sets QueryTimeout in the route",
+    "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded where 1 != 1",
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
+        "QueryTimeout": 1000,
+        "Table": "unsharded"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded where 1 != 1",
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
+        "QueryTimeout": 1000,
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
     "comment": "select with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
     "v3-plan": {
