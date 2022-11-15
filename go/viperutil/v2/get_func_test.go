@@ -18,19 +18,24 @@ package viperutil
 
 import (
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetFuncForType(t *testing.T) {
+	now := time.Now()
+
 	v := viper.New()
 	v.Set("foo.bool", true)
 	v.Set("foo.int", 5)
+	v.Set("foo.duration", time.Second)
 	v.Set("foo.float", 5.1)
 	v.Set("foo.intslice", []int{1, 2, 3})
 	v.Set("foo.stringslice", []string{"a", "b", "c"})
 	v.Set("foo.string", "hello")
+	v.Set("foo.time", now)
 
 	assert := assert.New(t)
 
@@ -43,6 +48,9 @@ func TestGetFuncForType(t *testing.T) {
 	assert.Equal(int16(5), get[int16](t, v, "foo.int"), "GetFuncForType[int16](foo.int)")
 	assert.Equal(int32(5), get[int32](t, v, "foo.int"), "GetFuncForType[int32](foo.int)")
 	assert.Equal(int64(5), get[int64](t, v, "foo.int"), "GetFuncForType[int64](foo.int)")
+
+	// Duration types
+	assert.Equal(time.Second, get[time.Duration](t, v, "foo.duration"), "GetFuncForType[time.Duration](foo.duration)")
 
 	// Uint types
 	assert.Equal(uint(5), get[uint](t, v, "foo.int"), "GetFuncForType[uint](foo.int)")
@@ -62,6 +70,9 @@ func TestGetFuncForType(t *testing.T) {
 
 	// String types
 	assert.Equal("hello", get[string](t, v, "foo.string"), "GetFuncForType[string](foo.string)")
+
+	// Struct types
+	assert.Equal(now, get[time.Time](t, v, "foo.time"), "GetFuncForType[time.Time](foo.time)")
 }
 
 func get[T any](t testing.TB, v *viper.Viper, key string) T {

@@ -76,6 +76,7 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 			return v.GetUint64
 		}
 	case reflect.Uintptr:
+		// Unupported, fallthrough to `if f == nil` check below switch.
 	case reflect.Float32:
 		f = func(v *viper.Viper) func(key string) float32 {
 			return func(key string) float32 {
@@ -90,7 +91,9 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 	case reflect.Complex128:
 	case reflect.Array:
 	case reflect.Chan:
+		panic("GetFuncForType does not support channel types")
 	case reflect.Func:
+		panic("GetFuncForType does not support function types")
 	case reflect.Interface:
 		// TODO: unwrap to see if struct-ish
 	case reflect.Map:
