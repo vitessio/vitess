@@ -118,7 +118,10 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 			}
 		}
 	case reflect.Pointer:
-		// TODO: unwrap to see if struct-ish
+		switch typ.Elem().Kind() {
+		case reflect.Struct:
+			f = unmarshalFunc[T]()
+		}
 	case reflect.Slice:
 		switch typ.Elem().Kind() {
 		case reflect.Int:
@@ -159,10 +162,10 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 
 func unmarshalFunc[T any]() func(v *viper.Viper) func(key string) T {
 	return func(v *viper.Viper) func(key string) T {
-		var t T
 		return func(key string) T {
-			_ = v.UnmarshalKey(key, t)
-			return t
+			t := new(T)
+			_ = v.UnmarshalKey(key, t) // TODO: panic on this error
+			return *t
 		}
 	}
 }

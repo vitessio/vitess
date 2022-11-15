@@ -24,6 +24,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type myStruct struct {
+	Foo string
+	Bar int
+}
+
+type myNestedStruct struct {
+	MyStruct *myStruct
+	Baz      bool
+}
+
 func TestGetFuncForType(t *testing.T) {
 	now := time.Now()
 
@@ -73,6 +83,29 @@ func TestGetFuncForType(t *testing.T) {
 
 	// Struct types
 	assert.Equal(now, get[time.Time](t, v, "foo.time"), "GetFuncForType[time.Time](foo.time)")
+	{
+		s := &myStruct{
+			Foo: "hello",
+			Bar: 3,
+		}
+		v.Set("mystruct.foo", s.Foo)
+		v.Set("mystruct.bar", s.Bar)
+
+		assert.Equal(s, get[*myStruct](t, v, "mystruct"), "GetFuncForType[*myStruct](mystruct)")
+		assert.IsType(&myStruct{}, get[*myStruct](t, v, "mystruct"), "GetFuncForType[*myStruct](mystruct) should return a pointer")
+		assert.Equal(*s, get[myStruct](t, v, "mystruct"), "GetFuncForType[myStruct](mystruct)")
+		assert.IsType(myStruct{}, get[myStruct](t, v, "mystruct"), "GetFuncForType[myStruct](mystruct) should return a struct (not pointer to struct)")
+
+		s2 := &myNestedStruct{
+			MyStruct: s,
+			Baz:      true,
+		}
+		v.Set("mynestedstruct.mystruct.foo", s2.MyStruct.Foo)
+		v.Set("mynestedstruct.mystruct.bar", s2.MyStruct.Bar)
+		v.Set("mynestedstruct.baz", s2.Baz)
+		assert.Equal(*s2, get[myNestedStruct](t, v, "mynestedstruct"), "GetFuncForType[myNestedStruct](mynestedstruct)")
+		assert.IsType(myNestedStruct{}, get[myNestedStruct](t, v, "mynestedstruct"), "GetFuncForType[myNestedStruct](mynestedstruct) should return a struct (not pointer to struct)")
+	}
 }
 
 func get[T any](t testing.TB, v *viper.Viper, key string) T {
