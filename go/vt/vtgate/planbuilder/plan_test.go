@@ -29,6 +29,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -39,8 +40,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-
-	"github.com/google/go-cmp/cmp"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -716,19 +715,9 @@ type (
 	}
 )
 
-func compacted(in string) string {
-	if in != "" && in[0] != '{' {
-		return in
-	}
-	dst := bytes.NewBuffer(nil)
-	err := json.Compact(dst, []byte(in))
-	if err != nil {
-		panic(err)
-	}
-	return dst.String()
-}
-
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, render bool) {
+	opts := jsondiff.DefaultConsoleOptions()
+
 	t.Run(filename, func(t *testing.T) {
 		var expected []planTest
 		var outFirstPlanner string
@@ -756,10 +745,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 				}
 				out := getPlanOrErrorOutput(err, plan)
 
-				lft := compacted(out)
-				rgt := compacted(string(tcase.V3Plan))
-				if lft != rgt {
-					t.Errorf("V3 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, cmp.Diff(tcase.V3Plan, out), tcase.V3Plan, out)
+				compare, s := jsondiff.Compare(tcase.V3Plan, []byte(out), &opts)
+				if compare != jsondiff.FullMatch {
+					t.Errorf("V3 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.V3Plan, out)
 				}
 
 				outFirstPlanner = out
@@ -781,11 +769,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 			//       with this last expectation, it is an error if the Gen4 planner
 			//       produces the same plan as the V3 planner does
 			t.Run(fmt.Sprintf("Gen4: %s", testName), func(t *testing.T) {
-				x := string(tcase.Gen4Plan)
-				s := compacted(out)
-				s2 := compacted(x)
-				if s != s2 {
-					t.Errorf("Gen4 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, cmp.Diff(s, s2), tcase.Gen4Plan, out)
+				compare, s := jsondiff.Compare(tcase.Gen4Plan, []byte(out), &opts)
+				if compare != jsondiff.FullMatch {
+					t.Errorf("Gen4 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Gen4Plan, out)
 				}
 
 				if outFirstPlanner == out {

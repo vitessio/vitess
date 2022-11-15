@@ -117,6 +117,7 @@ require (
 
 require (
 	github.com/bndr/gotabulate v1.1.2
+	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
 	golang.org/x/exp v0.0.0-20221023144134-a1e5550cf13e
 )
