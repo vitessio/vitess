@@ -199,12 +199,9 @@ func TestBinlogEventFormat(t *testing.T) {
 		HeaderSizes:   googleFormatEvent[76 : len(googleFormatEvent)-5],
 	}
 	got, err := input.Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.Format() = %v, want %v", input, got, want)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
+
 }
 
 func TestBinlogEventFormatWrongVersion(t *testing.T) {
@@ -263,9 +260,8 @@ primary key(eid, id)
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.Query() = %v, want %v", input, got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.Query() = %v, want %v", input, got, want)
+
 }
 
 func TestBinlogEventQueryBadLength(t *testing.T) {
