@@ -218,7 +218,7 @@ func (se *Engine) Open() error {
 	}
 	se.notifiers = make(map[string]notifier)
 
-	if err := se.reload(ctx); err != nil {
+	if err := se.reload(ctx, true); err != nil {
 		return err
 	}
 	if !se.SkipMetaCheck {
@@ -309,6 +309,8 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
+// The includeStats argument controls whether table size statistics should be
+// emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
 	return se.ReloadAt(ctx, mysql.Position{})
 }
@@ -318,6 +320,16 @@ func (se *Engine) Reload(ctx context.Context) error {
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
+	return se.ReloadAtEx(ctx, pos, true)
+}
+
+// ReloadAtEx reloads the schema info from the db.
+// Any tables that have changed since the last load are updated.
+// It maintains the position at which the schema was reloaded and if the same position is provided
+// (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
+// The includeStats argument controls whether table size statistics should be
+// emitted, as they can be expensive to calculate for a large number of tables
+func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, includeStats bool) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
@@ -325,10 +337,10 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Infof("ReloadAt: found cached schema at %s", mysql.EncodePosition(pos))
+		log.V(2).Infof("ReloadAtEx: found cached schema at %s", mysql.EncodePosition(pos))
 		return nil
 	}
-	if err := se.reload(ctx); err != nil {
+	if err := se.reload(ctx, includeStats); err != nil {
 		return err
 	}
 	se.reloadAtPos = pos
@@ -336,7 +348,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 }
 
 // reload reloads the schema. It can also be used to initialize it.
-func (se *Engine) reload(ctx context.Context) error {
+func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	defer func() {
 		se.env.LogError()
 	}()
@@ -356,7 +368,14 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
-	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
+
+	var showTablesQuery string
+	if includeStats {
+		showTablesQuery = conn.BaseShowTablesWithSizes()
+	} else {
+		showTablesQuery = conn.BaseShowTables()
+	}
+	tableData, err := conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 	if err != nil {
 		return err
 	}
@@ -377,12 +396,15 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
-		fileSize, _ := evalengine.ToUint64(row[4])
-		allocatedSize, _ := evalengine.ToUint64(row[5])
+		var fileSize, allocatedSize uint64
 
-		// publish the size metrics
-		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
-		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
+		if includeStats {
+			fileSize, _ = evalengine.ToUint64(row[4])
+			allocatedSize, _ = evalengine.ToUint64(row[5])
+			// publish the size metrics
+			se.tableFileSizeGauge.Set(tableName, int64(fileSize))
+			se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
+		}
 
 		// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
 		// We also record the last time the schema was loaded (`se.lastChange`). Both are in seconds. We reload a table only when:
@@ -396,8 +418,10 @@ func (se *Engine) reload(ctx context.Context) error {
 		//      #1 will not identify the renamed table as a changed one.
 		tbl, isInTablesMap := se.tables[tableName]
 		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
-			tbl.FileSize = fileSize
-			tbl.AllocatedSize = allocatedSize
+			if includeStats {
+				tbl.FileSize = fileSize
+				tbl.AllocatedSize = allocatedSize
+			}
 			continue
 		}
 
@@ -407,8 +431,10 @@ func (se *Engine) reload(ctx context.Context) error {
 			rec.RecordError(err)
 			continue
 		}
-		table.FileSize = fileSize
-		table.AllocatedSize = allocatedSize
+		if includeStats {
+			table.FileSize = fileSize
+			table.AllocatedSize = allocatedSize
+		}
 		table.CreateTime = createTime
 		changedTables[tableName] = table
 		if isInTablesMap {

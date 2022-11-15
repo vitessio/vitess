@@ -331,6 +331,20 @@ export namespace vtadmin {
         public getTablets(request: vtadmin.IGetTabletsRequest): Promise<vtadmin.GetTabletsResponse>;
 
         /**
+         * Calls GetTopologyPath.
+         * @param request GetTopologyPathRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetTopologyPathResponse
+         */
+        public getTopologyPath(request: vtadmin.IGetTopologyPathRequest, callback: vtadmin.VTAdmin.GetTopologyPathCallback): void;
+
+        /**
+         * Calls GetTopologyPath.
+         * @param request GetTopologyPathRequest message or plain object
+         * @returns Promise
+         */
+        public getTopologyPath(request: vtadmin.IGetTopologyPathRequest): Promise<vtctldata.GetTopologyPathResponse>;
+
+        /**
          * Calls GetVSchema.
          * @param request GetVSchemaRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VSchema
@@ -850,6 +864,13 @@ export namespace vtadmin {
          * @param [response] GetTabletsResponse
          */
         type GetTabletsCallback = (error: (Error|null), response?: vtadmin.GetTabletsResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getTopologyPath}.
+         * @param error Error, if any
+         * @param [response] GetTopologyPathResponse
+         */
+        type GetTopologyPathCallback = (error: (Error|null), response?: vtctldata.GetTopologyPathResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getVSchema}.
@@ -6196,6 +6217,102 @@ export namespace vtadmin {
 
         /**
          * Converts this GetTabletsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetTopologyPathRequest. */
+    interface IGetTopologyPathRequest {
+
+        /** GetTopologyPathRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetTopologyPathRequest path */
+        path?: (string|null);
+    }
+
+    /** Represents a GetTopologyPathRequest. */
+    class GetTopologyPathRequest implements IGetTopologyPathRequest {
+
+        /**
+         * Constructs a new GetTopologyPathRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetTopologyPathRequest);
+
+        /** GetTopologyPathRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetTopologyPathRequest path. */
+        public path: string;
+
+        /**
+         * Creates a new GetTopologyPathRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTopologyPathRequest instance
+         */
+        public static create(properties?: vtadmin.IGetTopologyPathRequest): vtadmin.GetTopologyPathRequest;
+
+        /**
+         * Encodes the specified GetTopologyPathRequest message. Does not implicitly {@link vtadmin.GetTopologyPathRequest.verify|verify} messages.
+         * @param message GetTopologyPathRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetTopologyPathRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTopologyPathRequest message, length delimited. Does not implicitly {@link vtadmin.GetTopologyPathRequest.verify|verify} messages.
+         * @param message GetTopologyPathRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetTopologyPathRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTopologyPathRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTopologyPathRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetTopologyPathRequest;
+
+        /**
+         * Decodes a GetTopologyPathRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTopologyPathRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetTopologyPathRequest;
+
+        /**
+         * Verifies a GetTopologyPathRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTopologyPathRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTopologyPathRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetTopologyPathRequest;
+
+        /**
+         * Creates a plain object from a GetTopologyPathRequest message. Also converts values to other types if specified.
+         * @param message GetTopologyPathRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetTopologyPathRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTopologyPathRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -24874,6 +24991,9 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables */
         has_created_temp_tables?: (boolean|null);
+
+        /** ExecuteOptions consolidator */
+        consolidator?: (query.ExecuteOptions.Consolidator|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -24908,6 +25028,9 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables. */
         public has_created_temp_tables: boolean;
+
+        /** ExecuteOptions consolidator. */
+        public consolidator: query.ExecuteOptions.Consolidator;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -25017,6 +25140,14 @@ export namespace query {
             Gen4Left2Right = 4,
             Gen4WithFallback = 5,
             Gen4CompareV3 = 6
+        }
+
+        /** Consolidator enum. */
+        enum Consolidator {
+            CONSOLIDATOR_UNSPECIFIED = 0,
+            CONSOLIDATOR_DISABLED = 1,
+            CONSOLIDATOR_ENABLED = 2,
+            CONSOLIDATOR_ENABLED_REPLICAS = 3
         }
     }
 
@@ -33297,6 +33428,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings source_shards */
         source_shards?: (string[]|null);
+
+        /** MaterializeSettings on_ddl */
+        on_ddl?: (string|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -33343,6 +33477,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings source_shards. */
         public source_shards: string[];
+
+        /** MaterializeSettings on_ddl. */
+        public on_ddl: string;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -41939,6 +42076,294 @@ export namespace vtctldata {
 
         /**
          * Converts this GetTabletsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetTopologyPathRequest. */
+    interface IGetTopologyPathRequest {
+
+        /** GetTopologyPathRequest path */
+        path?: (string|null);
+    }
+
+    /** Represents a GetTopologyPathRequest. */
+    class GetTopologyPathRequest implements IGetTopologyPathRequest {
+
+        /**
+         * Constructs a new GetTopologyPathRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetTopologyPathRequest);
+
+        /** GetTopologyPathRequest path. */
+        public path: string;
+
+        /**
+         * Creates a new GetTopologyPathRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTopologyPathRequest instance
+         */
+        public static create(properties?: vtctldata.IGetTopologyPathRequest): vtctldata.GetTopologyPathRequest;
+
+        /**
+         * Encodes the specified GetTopologyPathRequest message. Does not implicitly {@link vtctldata.GetTopologyPathRequest.verify|verify} messages.
+         * @param message GetTopologyPathRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetTopologyPathRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTopologyPathRequest message, length delimited. Does not implicitly {@link vtctldata.GetTopologyPathRequest.verify|verify} messages.
+         * @param message GetTopologyPathRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetTopologyPathRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTopologyPathRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTopologyPathRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetTopologyPathRequest;
+
+        /**
+         * Decodes a GetTopologyPathRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTopologyPathRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetTopologyPathRequest;
+
+        /**
+         * Verifies a GetTopologyPathRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTopologyPathRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTopologyPathRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetTopologyPathRequest;
+
+        /**
+         * Creates a plain object from a GetTopologyPathRequest message. Also converts values to other types if specified.
+         * @param message GetTopologyPathRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetTopologyPathRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTopologyPathRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetTopologyPathResponse. */
+    interface IGetTopologyPathResponse {
+
+        /** GetTopologyPathResponse cell */
+        cell?: (vtctldata.ITopologyCell|null);
+    }
+
+    /** Represents a GetTopologyPathResponse. */
+    class GetTopologyPathResponse implements IGetTopologyPathResponse {
+
+        /**
+         * Constructs a new GetTopologyPathResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetTopologyPathResponse);
+
+        /** GetTopologyPathResponse cell. */
+        public cell?: (vtctldata.ITopologyCell|null);
+
+        /**
+         * Creates a new GetTopologyPathResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTopologyPathResponse instance
+         */
+        public static create(properties?: vtctldata.IGetTopologyPathResponse): vtctldata.GetTopologyPathResponse;
+
+        /**
+         * Encodes the specified GetTopologyPathResponse message. Does not implicitly {@link vtctldata.GetTopologyPathResponse.verify|verify} messages.
+         * @param message GetTopologyPathResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetTopologyPathResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTopologyPathResponse message, length delimited. Does not implicitly {@link vtctldata.GetTopologyPathResponse.verify|verify} messages.
+         * @param message GetTopologyPathResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetTopologyPathResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTopologyPathResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTopologyPathResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetTopologyPathResponse;
+
+        /**
+         * Decodes a GetTopologyPathResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTopologyPathResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetTopologyPathResponse;
+
+        /**
+         * Verifies a GetTopologyPathResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTopologyPathResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTopologyPathResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetTopologyPathResponse;
+
+        /**
+         * Creates a plain object from a GetTopologyPathResponse message. Also converts values to other types if specified.
+         * @param message GetTopologyPathResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetTopologyPathResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTopologyPathResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a TopologyCell. */
+    interface ITopologyCell {
+
+        /** TopologyCell name */
+        name?: (string|null);
+
+        /** TopologyCell path */
+        path?: (string|null);
+
+        /** TopologyCell data */
+        data?: (string|null);
+
+        /** TopologyCell children */
+        children?: (string[]|null);
+    }
+
+    /** Represents a TopologyCell. */
+    class TopologyCell implements ITopologyCell {
+
+        /**
+         * Constructs a new TopologyCell.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ITopologyCell);
+
+        /** TopologyCell name. */
+        public name: string;
+
+        /** TopologyCell path. */
+        public path: string;
+
+        /** TopologyCell data. */
+        public data: string;
+
+        /** TopologyCell children. */
+        public children: string[];
+
+        /**
+         * Creates a new TopologyCell instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TopologyCell instance
+         */
+        public static create(properties?: vtctldata.ITopologyCell): vtctldata.TopologyCell;
+
+        /**
+         * Encodes the specified TopologyCell message. Does not implicitly {@link vtctldata.TopologyCell.verify|verify} messages.
+         * @param message TopologyCell message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ITopologyCell, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TopologyCell message, length delimited. Does not implicitly {@link vtctldata.TopologyCell.verify|verify} messages.
+         * @param message TopologyCell message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ITopologyCell, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TopologyCell message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TopologyCell
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.TopologyCell;
+
+        /**
+         * Decodes a TopologyCell message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TopologyCell
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.TopologyCell;
+
+        /**
+         * Verifies a TopologyCell message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TopologyCell message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TopologyCell
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.TopologyCell;
+
+        /**
+         * Creates a plain object from a TopologyCell message. Also converts values to other types if specified.
+         * @param message TopologyCell
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.TopologyCell, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TopologyCell to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

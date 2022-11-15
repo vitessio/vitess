@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -40,7 +41,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -105,16 +105,6 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
-	// Tell Orchestrator we're stopped on purpose for some Vitess task.
-	// Do this in the background, as it's best-effort.
-	go func() {
-		if tm.orc == nil {
-			return
-		}
-		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to Restore"); err != nil {
-			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
-		}
-	}()
 
 	var (
 		err       error
@@ -155,17 +145,6 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 	if err != nil {
 		return err
 	}
-
-	// Tell Orchestrator we're no longer stopped on purpose.
-	// Do this in the background, as it's best-effort.
-	go func() {
-		if tm.orc == nil {
-			return
-		}
-		if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
-			log.Warningf("Orchestrator EndMaintenance failed: %v", err)
-		}
-	}()
 	return nil
 }
 

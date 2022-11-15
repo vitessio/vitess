@@ -10,6 +10,19 @@ interface Props {
     tablet: vtadmin.Tablet;
 }
 
+function stateReplacer(key: string, val: number) {
+    if (key === 'io_state' || key === 'sql_state') {
+        if (val === 3) {
+            return 'Running';
+        } else if (val === 2) {
+            return 'Connecting';
+        } else if (val === 1) {
+            return 'Stopped';
+        }
+    }
+    return val;
+}
+
 const FullStatus: React.FC<Props> = ({ tablet }) => {
     const { data, error } = useGetFullStatus({
         // Ok to use ? operator here; if params are null
@@ -31,7 +44,14 @@ const FullStatus: React.FC<Props> = ({ tablet }) => {
         );
     }
 
-    return <Code code={JSON.stringify(data, null, 2)} />;
+    if (data && data.status) {
+        data.status.semi_sync_primary_enabled = !!data.status.semi_sync_primary_enabled;
+        data.status.semi_sync_replica_enabled = !!data.status.semi_sync_replica_enabled;
+        data.status.semi_sync_primary_status = !!data.status.semi_sync_primary_status;
+        data.status.semi_sync_replica_status = !!data.status.semi_sync_replica_status;
+    }
+
+    return <Code code={JSON.stringify(data, stateReplacer, 2)} />;
 };
 
 export default FullStatus;

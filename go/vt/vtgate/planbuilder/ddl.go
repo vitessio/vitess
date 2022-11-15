@@ -107,29 +107,22 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 	var err error
 
 	switch ddl := ddlStatement.(type) {
-	case *sqlparser.AlterTable, *sqlparser.TruncateTable:
+	case *sqlparser.AlterTable, *sqlparser.CreateTable, *sqlparser.TruncateTable:
 		err = checkFKError(vschema, ddlStatement)
 		if err != nil {
 			return nil, nil, err
 		}
-		// For Alter Table and other statements, the table must already exist
-		// We should find the target of the query from this tables location
+		// For ALTER TABLE and TRUNCATE TABLE, the table must already exist
+		//
+		// For CREATE TABLE, the table may (in the case of --declarative)
+		// already exist.
+		//
+		// We should find the target of the query from this tables location.
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
 		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
-	case *sqlparser.CreateTable:
-		err = checkFKError(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
-		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
-		if err != nil {
-			return nil, nil, err
-		}
-		// Remove the keyspace name as the database name might be different.
-		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
 	case *sqlparser.DropView, *sqlparser.DropTable:
 		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
 	case *sqlparser.RenameTable:

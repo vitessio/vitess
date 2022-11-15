@@ -53,7 +53,7 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
-	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 // purgedGTIDSet is part of the Flavor interface.
@@ -66,7 +66,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
 	}
-	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 // serverUUID is part of the Flavor interface.
@@ -208,11 +208,11 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	}
 
 	var err error
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
-	relayLogGTIDSet, err := parseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
+	relayLogGTIDSet, err := ParseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
 	}
@@ -247,7 +247,7 @@ func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error)
 	status := parsePrimaryStatus(resultMap)
 
 	var err error
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
@@ -308,9 +308,24 @@ func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 	return ""
 }
 
+// baseShowTables is part of the Flavor interface.
+func (mysqlFlavor) baseShowTables() string {
+	return "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
+}
+
 // TablesWithSize56 is a query to select table along with size for mysql 5.6
-const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
-		FROM information_schema.tables WHERE table_schema = database() group by table_name`
+const TablesWithSize56 = `SELECT table_name,
+	table_type,
+	UNIX_TIMESTAMP(create_time) AS uts_create_time,
+	table_comment,
+	SUM(data_length + index_length),
+	SUM(data_length + index_length)
+FROM information_schema.tables
+WHERE table_schema = database()
+GROUP BY table_name,
+	table_type,
+	uts_create_time,
+	table_comment`
 
 // TablesWithSize57 is a query to select table along with size for mysql 5.7.
 //
@@ -390,6 +405,7 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	case InstantDDLFlavorCapability,
+		InstantExpandEnumCapability,
 		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
 		InstantChangeColumnDefaultFlavorCapability:
@@ -406,6 +422,8 @@ func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorC
 		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
 	case DynamicRedoLogCapacityFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
+	case DisableRedoLogFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 21)
 	default:
 		return false, nil
 	}

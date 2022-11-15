@@ -25,10 +25,11 @@ import (
 )
 
 type earlyRewriter struct {
-	binder  *binder
-	scoper  *scoper
-	clause  string
-	warning string
+	binder          *binder
+	scoper          *scoper
+	clause          string
+	warning         string
+	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -52,7 +53,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 			node.Join = sqlparser.NormalJoinType
 			r.warning = "straight join is converted to normal join"
 		}
-	case *sqlparser.Order:
+	case sqlparser.OrderBy:
 		r.clause = "order clause"
 		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.GroupBy:
@@ -78,6 +79,23 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		if newNode != nil {
 			node.Expr = newNode
 		}
+	case *sqlparser.ComparisonExpr:
+		lft, lftOK := node.Left.(sqlparser.ValTuple)
+		rgt, rgtOK := node.Right.(sqlparser.ValTuple)
+		if !lftOK || !rgtOK || len(lft) != len(rgt) || node.Operator != sqlparser.EqualOp {
+			return nil
+		}
+		var predicates []sqlparser.Expr
+		for i, l := range lft {
+			r := rgt[i]
+			predicates = append(predicates, &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left:     l,
+				Right:    r,
+				Escape:   node.Escape,
+			})
+		}
+		cursor.Replace(sqlparser.AndExpressions(predicates...))
 	}
 	return nil
 }
@@ -92,7 +110,7 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 			selExprs = append(selExprs, selectExpr)
 			continue
 		}
-		starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
+		starExpanded, colNames, err := r.expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
 		if err != nil {
 			return err
 		}
@@ -109,6 +127,15 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 	return nil
 }
 
+// rewriteHavingAndOrderBy rewrites columns on the ORDER BY/HAVING
+// clauses to use aliases from the SELECT expressions when available.
+// The scoping rules are:
+//   - A column identifier with no table qualifier that matches an alias introduced
+//     in SELECT points to that expression, and not at any table column
+//   - Except when expression aliased is an aggregation, and the column identifier in the
+//     HAVING/ORDER BY clause is inside an aggregation function
+//
+// This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
 func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 	sel, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
@@ -122,13 +149,31 @@ func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 			if !col.Qualifier.IsEmpty() {
 				return false
 			}
+			_, parentIsAggr := inner.Parent().(sqlparser.AggrFunc)
 			for _, e := range sel.SelectExprs {
 				ae, ok := e.(*sqlparser.AliasedExpr)
 				if !ok {
 					continue
 				}
 				if ae.As.Equal(col.Name) {
-					inner.Replace(ae.Expr)
+					_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
+					if parentIsAggr && aliasPointsToAggr {
+						return false
+					}
+
+					safeToRewrite := true
+					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
+						switch cursor.Node().(type) {
+						case *sqlparser.ColName:
+							safeToRewrite = false
+						case sqlparser.AggrFunc:
+							return false
+						}
+						return true
+					}, nil)
+					if safeToRewrite {
+						inner.Replace(ae.Expr)
+					}
 				}
 			}
 		}
@@ -254,7 +299,7 @@ func rewriteJoinUsing(
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
 }
 
-func expandTableColumns(
+func (r *earlyRewriter) expandTableColumns(
 	starExpr *sqlparser.StarExpr,
 	tables []TableInfo,
 	joinUsing map[TableSet]map[string]TableSet,
@@ -263,6 +308,7 @@ func expandTableColumns(
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
+	expandedColumns := map[sqlparser.TableName][]*sqlparser.ColName{}
 	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() && !tbl.matches(starExpr.TableName) {
 			continue
@@ -277,8 +323,9 @@ func expandTableColumns(
 			return false, nil, err
 		}
 
-		withAlias := len(tables) > 1
-		withQualifier := withAlias || !tbl.getExpr().As.IsEmpty()
+		needsQualifier := len(tables) > 1
+		tableAliased := !tbl.getExpr().As.IsEmpty()
+		withQualifier := needsQualifier || tableAliased
 		currTable := tbl.getTableSet(org)
 		usingCols := joinUsing[currTable]
 		if usingCols == nil {
@@ -293,10 +340,23 @@ func expandTableColumns(
 			} else {
 				colName = sqlparser.NewColName(col.Name)
 			}
-			if withAlias {
+			if needsQualifier {
 				alias = sqlparser.NewIdentifierCI(col.Name)
 			}
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+			vt := tbl.GetVindexTable()
+			if vt != nil {
+				keyspace := vt.Keyspace
+				var ks sqlparser.IdentifierCS
+				if keyspace != nil {
+					ks = sqlparser.NewIdentifierCS(keyspace.Name)
+				}
+				tblName := sqlparser.TableName{
+					Name:      tblName.Name,
+					Qualifier: ks,
+				}
+				expandedColumns[tblName] = append(expandedColumns[tblName], colName)
+			}
 		}
 
 		/*
@@ -337,6 +397,9 @@ func expandTableColumns(
 	if unknownTbl {
 		// This will only happen for case when starExpr has qualifier.
 		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+	}
+	if starExpanded {
+		r.expandedColumns = expandedColumns
 	}
 	return starExpanded, colNames, nil
 }

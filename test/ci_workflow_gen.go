@@ -73,13 +73,12 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"vtgate_general_heavy",
-		"vtbackup_transform",
+		"vtbackup",
 		"18",
 		"xb_backup",
 		"21",
 		"22",
 		"mysql_server_vault",
-		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
@@ -115,6 +114,7 @@ var (
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
+		"vtorc",
 		"xb_recovery",
 		"mysql80",
 		"vreplication_across_db_versions",
@@ -128,9 +128,7 @@ var (
 		"vttablet_prscomplex",
 	}
 
-	clusterSelfHostedList = []string{
-		"vtorc",
-	}
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",

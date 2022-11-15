@@ -80,6 +80,8 @@ type VTAdminClient interface {
 	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
+	// GetTopologyPath returns the cell located at the specified path in the topology server.
+	GetTopologyPath(ctx context.Context, in *GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error)
@@ -362,6 +364,15 @@ func (c *vTAdminClient) GetTablet(ctx context.Context, in *GetTabletRequest, opt
 func (c *vTAdminClient) GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error) {
 	out := new(GetTabletsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTablets", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetTopologyPath(ctx context.Context, in *GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error) {
+	out := new(vtctldata.GetTopologyPathResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTopologyPath", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -663,6 +674,8 @@ type VTAdminServer interface {
 	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
+	// GetTopologyPath returns the cell located at the specified path in the topology server.
+	GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error)
@@ -815,6 +828,9 @@ func (UnimplementedVTAdminServer) GetTablet(context.Context, *GetTabletRequest) 
 }
 func (UnimplementedVTAdminServer) GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
+}
+func (UnimplementedVTAdminServer) GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
 }
 func (UnimplementedVTAdminServer) GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
@@ -1299,6 +1315,24 @@ func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetTablets(ctx, req.(*GetTabletsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTopologyPathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetTopologyPath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetTopologyPath",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetTopologyPath(ctx, req.(*GetTopologyPathRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1865,6 +1899,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablets",
 			Handler:    _VTAdmin_GetTablets_Handler,
+		},
+		{
+			MethodName: "GetTopologyPath",
+			Handler:    _VTAdmin_GetTopologyPath_Handler,
 		},
 		{
 			MethodName: "GetVSchema",

@@ -91,6 +91,8 @@ message MaterializeSettings {
   // and to the SourceTimeZone in reverse workflows
   string target_time_zone = 11;
   repeated string source_shards = 12;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 13;
 }
 
 /* Data types for VtctldServer */
@@ -721,6 +723,23 @@ message GetTabletsRequest {
 
 message GetTabletsResponse {
   repeated topodata.Tablet tablets = 1;
+}
+
+message GetTopologyPathRequest {
+  string path = 1;
+}
+
+message GetTopologyPathResponse {
+  TopologyCell cell = 1;
+}
+
+message TopologyCell {
+  string name = 1;
+  string path = 2;
+  // Data is the file contents of the cell located at path.
+  // It is only populated if the cell is a terminal node.
+  string data = 3;
+  repeated string children = 4;
 }
 
 message GetVSchemaRequest {

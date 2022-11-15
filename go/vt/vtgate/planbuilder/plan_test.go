@@ -781,8 +781,11 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 			//       with this last expectation, it is an error if the Gen4 planner
 			//       produces the same plan as the V3 planner does
 			t.Run(fmt.Sprintf("Gen4: %s", testName), func(t *testing.T) {
-				if compacted(out) != compacted(string(tcase.Gen4Plan)) {
-					t.Errorf("Gen4 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, cmp.Diff(tcase.Gen4Plan, out), tcase.Gen4Plan, out)
+				x := string(tcase.Gen4Plan)
+				s := compacted(out)
+				s2 := compacted(x)
+				if s != s2 {
+					t.Errorf("Gen4 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, cmp.Diff(s, s2), tcase.Gen4Plan, out)
 				}
 
 				if outFirstPlanner == out {

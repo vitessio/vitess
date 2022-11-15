@@ -58,6 +58,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -67,9 +69,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Query rules from denylist
@@ -167,11 +166,6 @@ type TabletManager struct {
 	// like in the case of a restore. This semaphore must be obtained
 	// first before other mutexes.
 	actionSema *sync2.Semaphore
-
-	// orc is an optional client for Orchestrator HTTP API calls.
-	// If this is nil, those calls will be skipped.
-	// It's only set once in NewTabletManager() and never modified after that.
-	orc *orcClient
 
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
@@ -396,14 +390,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	// in any specific order.
 	tm.startShardSync()
 	tm.exportStats()
-	orc, err := newOrcClient()
-	if err != nil {
-		return err
-	}
-	if orc != nil {
-		tm.orc = orc
-		go tm.orc.DiscoverLoop(tm)
-	}
 	servenv.OnRun(tm.registerTabletManager)
 
 	restoring, err := tm.handleRestore(tm.BatchCtx)

@@ -361,7 +361,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		switch node.Scope {
 		case VariableScope:
 			er.udvRewrite(cursor, node)
-		case GlobalScope, SessionScope:
+		case GlobalScope, SessionScope, NextTxScope:
 			er.sysVarRewrite(cursor, node)
 		}
 	case *Subquery:
@@ -472,7 +472,9 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
 		sysvars.QueryTimeout.Name,
-		sysvars.Workload.Name:
+		sysvars.Workload.Name,
+		sysvars.TransactionIsolation.Name,
+		sysvars.TxIsolation.Name:
 		found = true
 	}
 

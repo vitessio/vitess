@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql"
@@ -42,6 +43,23 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 	return NewMySQLWithDetails(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
 }
 
+// CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
+// installation that hasn't been set up yet.
+func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf, error) {
+	mycnf := mysqlctl.NewMycnf(tabletUID, mysqlPort)
+	if err := mycnf.RandomizeMysqlServerID(); err != nil {
+		return nil, nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
+	}
+	if mysqlSocket != "" {
+		mycnf.SocketFile = mysqlSocket
+	}
+	var cfg dbconfigs.DBConfigs
+	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
+	cfg.Dba.User = "root"
+	cfg.InitWithSocket(mycnf.SocketFile)
+	return mysqlctl.NewMysqld(&cfg), mycnf, nil
+}
+
 func NewMySQLWithDetails(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
@@ -53,7 +71,7 @@ func NewMySQLWithDetails(port int, hostname, dbName string, schemaSQL ...string)
 	}
 
 	mysqlPort := port
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(0, "", int32(mysqlPort))
+	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", int32(mysqlPort))
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}

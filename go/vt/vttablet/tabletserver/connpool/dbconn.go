@@ -275,6 +275,24 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 	return err
 }
 
+// StreamOnce executes the query and streams the results. But, does not retry on connection errors.
+func (dbc *DBConn) StreamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+	resultSent := false
+	return dbc.streamOnce(
+		ctx,
+		query,
+		func(r *sqltypes.Result) error {
+			if !resultSent {
+				resultSent = true
+				r = r.StripMetadata(includedFields)
+			}
+			return callback(r)
+		},
+		alloc,
+		streamBufferSize,
+	)
+}
+
 var (
 	getModeSQL    = "select @@global.sql_mode"
 	getAutocommit = "select @@autocommit"
@@ -424,9 +442,14 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
-// BaseShowTables returns a query that shows tables and their sizes
+// BaseShowTables returns a query that shows tables
 func (dbc *DBConn) BaseShowTables() string {
 	return dbc.conn.BaseShowTables()
+}
+
+// BaseShowTablesWithSizes returns a query that shows tables and their sizes
+func (dbc *DBConn) BaseShowTablesWithSizes() string {
+	return dbc.conn.BaseShowTablesWithSizes()
 }
 
 func (dbc *DBConn) reconnect(ctx context.Context) error {

@@ -1368,6 +1368,7 @@ func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error 
 			return err
 		}
 		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, ts.reverseWorkflow)
+		ts.wr.optimizeCopyStateTable(source.GetPrimary().Tablet)
 		return nil
 	})
 }
@@ -1727,6 +1728,7 @@ func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) er
 			return err
 		}
 		ts.wr.deleteWorkflowVDiffData(ctx, target.GetPrimary().Tablet, ts.WorkflowName())
+		ts.wr.optimizeCopyStateTable(target.GetPrimary().Tablet)
 		return nil
 	})
 }
@@ -1739,6 +1741,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 			return err
 		}
 		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, workflow.ReverseWorkflowName(ts.WorkflowName()))
+		ts.wr.optimizeCopyStateTable(source.GetPrimary().Tablet)
 		return nil
 	})
 }

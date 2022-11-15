@@ -39,7 +39,7 @@ func (ttlv *TabletTypeListFlag) Set(v string) (err error) {
 
 // Type is part of the pflag.Value interface.
 func (ttlv *TabletTypeListFlag) Type() string {
-	return "[]topodatapb.TabletType"
+	return "strings"
 }
 
 // TabletTypeFlag implements the pflag.Value interface, for parsing a command-line value into a TabletType.

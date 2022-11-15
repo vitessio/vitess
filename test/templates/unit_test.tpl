@@ -9,6 +9,13 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
+    - name: Skip CI
+      run: |
+        if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
@@ -21,7 +28,7 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -44,9 +51,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: 1.18.5
+        go-version: 1.19.3
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -92,7 +99,7 @@ jobs:
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
         # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update

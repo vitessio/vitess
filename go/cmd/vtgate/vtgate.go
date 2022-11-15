@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -36,18 +37,17 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
-	cell                           = "test_nj"
-	tabletTypesToWait, plannerName string
+	cell              = ""
+	tabletTypesToWait []topodatapb.TabletType
+	plannerName       string
 )
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&cell, "cell", cell, "cell to use")
-	fs.StringVar(&tabletTypesToWait, "tablet_types_to_wait", tabletTypesToWait, "wait till connected for specified tablet types during Gateway initialization")
+	fs.Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 	fs.StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
 	acl.RegisterFlags(fs)
@@ -134,12 +134,7 @@ func main() {
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(tabletTypesToWait) != 0 {
-		for _, ttStr := range strings.Split(tabletTypesToWait, ",") {
-			tt, err := topoproto.ParseTabletType(ttStr)
-			if err != nil {
-				log.Errorf("unknown tablet type: %v", ttStr)
-				continue
-			}
+		for _, tt := range tabletTypesToWait {
 			if topoproto.IsServingType(tt) {
 				tabletTypes = append(tabletTypes, tt)
 			}

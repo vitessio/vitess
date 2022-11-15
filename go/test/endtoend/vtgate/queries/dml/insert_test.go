@@ -384,3 +384,13 @@ func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
 		})
 	}
 }
+
+func TestRedactDupError(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,100),(1,2,200),(1,3,300)")
+
+	// inserting same rows, throws error.
+	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `BindVars: {REDACTED}`)
+}

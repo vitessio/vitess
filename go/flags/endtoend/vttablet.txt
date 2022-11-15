@@ -10,7 +10,6 @@ Usage of vttablet:
       --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
-      --backup_storage_hook string                                       if set, we send the contents of the backup files through this hook.
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --binlog_host string                                               PITR restore parameter: hostname/IP of binlog server.
@@ -90,17 +89,16 @@ Usage of vttablet:
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
       --disable-replication-manager                                      Disable replication manager to prevent replication repairs.
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
+      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
       --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
       --enable-lag-throttler                                             Synonym to -enable_lag_throttler
-      --enable-query-plan-field-caching                                  Synonym to -enable_query_plan_field_caching (default true)
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
       --enable_consolidator                                              This option enables the query consolidator. (default true)
       --enable_consolidator_replicas                                     This option enables the query consolidator only on replicas.
       --enable_hot_row_protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
       --enable_hot_row_protection_dry_run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
       --enable_lag_throttler                                             If true, vttablet will run a throttler service, and will implicitly enable heartbeats
-      --enable_query_plan_field_caching                                  (DEPRECATED) This option fetches & caches fields (columns) when storing query plans (default true)
       --enable_replication_reporter                                      Use polling to track replication lag.
       --enable_transaction_limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
       --enable_transaction_limit_dry_run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
@@ -170,6 +168,7 @@ Usage of vttablet:
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
+      --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --migration_check_interval duration                                Interval between migration checks (default 1m0s)
       --mycnf-file string                                                path to my.cnf, if reading all config params from there
@@ -216,7 +215,6 @@ Usage of vttablet:
       --queryserver-config-message-postpone-cap int                      query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem. (default 4)
       --queryserver-config-olap-transaction-timeout float                query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed (default 30)
       --queryserver-config-passthrough-dmls                              query server pass through all dml statements without rewriting
-      --queryserver-config-pool-prefill-parallelism int                  (DEPRECATED) query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.
       --queryserver-config-pool-size int                                 query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction) (default 16)
       --queryserver-config-query-cache-lfu                               query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries (default true)
       --queryserver-config-query-cache-memory int                        query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
@@ -228,14 +226,12 @@ Usage of vttablet:
       --queryserver-config-schema-change-signal-interval float           query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate. (default 5)
       --queryserver-config-schema-reload-time float                      query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time. (default 1800)
       --queryserver-config-stream-buffer-size int                        query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size. (default 32768)
-      --queryserver-config-stream-pool-prefill-parallelism int           (DEPRECATED) query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism
       --queryserver-config-stream-pool-size int                          query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion (default 200)
       --queryserver-config-stream-pool-timeout float                     query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.
       --queryserver-config-stream-pool-waiter-cap int                    query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection
       --queryserver-config-strict-table-acl                              only allow queries that pass table acl checks
       --queryserver-config-terse-errors                                  prevent bind vars from escaping in client error messages
       --queryserver-config-transaction-cap int                           query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout) (default 20)
-      --queryserver-config-transaction-prefill-parallelism int           (DEPRECATED) query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.
       --queryserver-config-transaction-timeout float                     query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value (default 30)
       --queryserver-config-txpool-timeout float                          query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1)
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
@@ -271,6 +267,11 @@ Usage of vttablet:
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
+      --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
@@ -343,9 +344,10 @@ Usage of vttablet:
       --tx_throttler_healthcheck_cells strings                           A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.
       --unhealthy_threshold duration                                     replication lag after which a replica is considered unhealthy (default 2h0m0s)
       --use_super_read_only                                              Set super_read_only flag when performing planned failover.
-  -v, --v Level                                                          log level for V logs
-      --version                                                          print binary version
+      --v Level                                                          log level for V logs
+  -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
+      --vreplication-parallel-insert-workers int                         Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase. (default 1)
       --vreplication_copy_phase_duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication_copy_phase_max_innodb_history_list_length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
       --vreplication_copy_phase_max_mysql_replication_lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
@@ -367,11 +369,11 @@ Usage of vttablet:
       --vttablet_skip_buildinfo_tags string                              comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
       --wait_for_backup_interval duration                                (init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear
       --watch_replication_stream                                         When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.
-      --xbstream_restore_flags string                                    flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
-      --xtrabackup_backup_flags string                                   flags to pass to backup command. These should be space separated and will be added to the end of the command
-      --xtrabackup_prepare_flags string                                  flags to pass to prepare command. These should be space separated and will be added to the end of the command
-      --xtrabackup_root_path string                                      directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
-      --xtrabackup_stream_mode string                                    which mode to use if streaming, valid values are tar and xbstream (default "tar")
+      --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
+      --xtrabackup_backup_flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
+      --xtrabackup_prepare_flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
+      --xtrabackup_root_path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
+      --xtrabackup_stream_mode string                                    Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
       --xtrabackup_stripe_block_size uint                                Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
       --xtrabackup_stripes uint                                          If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
       --xtrabackup_user string                                           User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.

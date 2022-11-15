@@ -24,8 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -203,31 +202,17 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(selStmt, semTable)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = logical.CheckValid()
+	op, err := operators.PlanQuery(ctx, selStmt)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	plan = optimizePlan(plan)
-
-	plan, err = planHorizon(ctx, plan, selStmt, true)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
@@ -315,23 +300,14 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(updStmt, semTable)
-	if err != nil {
-		return nil, err
-	}
-	err = logical.CheckValid()
-	if err != nil {
-		return nil, err
-	}
-
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, err
 	}
@@ -403,23 +379,13 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	logical, err := abstract.CreateLogicalOperatorFromAST(deleteStmt, semTable)
-	if err != nil {
-		return nil, err
-	}
-	err = logical.CheckValid()
-	if err != nil {
-		return nil, err
-	}
-
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
-
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, physOp, true)
+	plan, err := transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +512,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 }
 
 func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := abstract.CreateQPFromUnion(union)
+	qp, err := operators.CreateQPFromUnion(union)
 	if err != nil {
 		return nil, err
 	}

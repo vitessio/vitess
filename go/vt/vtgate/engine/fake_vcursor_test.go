@@ -50,6 +50,15 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *noopVCursor) InTransaction() bool {
+	return false
+}
+
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
 	//TODO implement me
 	panic("implement me")
@@ -248,6 +257,10 @@ func (t *noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 }
 
 func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetConsolidator(querypb.ExecuteOptions_Consolidator) {
 	panic("implement me")
 }
 

@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -48,6 +49,7 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicatio
 		Cells:                           cells,
 		TabletTypes:                     tabletTypes,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
+		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)],
 	}
 	mtwf := &VReplicationWorkflow{
 		workflowType: MoveTablesWorkflow,
@@ -115,9 +117,9 @@ func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state 
 		db.addInvariant(streamExtInfoKs2, replicationResult)
 
 		if state == "Copying" {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1), copyStateResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), copyStateResult)
 		} else {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1), noResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), noResult)
 		}
 	}
 }
@@ -229,14 +231,14 @@ func TestCopyProgress(t *testing.T) {
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
 	db := tme.tmeDB
-	query := "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
+	query := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	rows := []string{"t1", "t2"}
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"table_name",
 		"varchar"),
 		rows...)
 	db.AddQuery(query, result)
-	query = "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2"
+	query = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2"
 	db.AddQuery(query, result)
 
 	query = "select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_ks2' and table_name in ('t1','t2')"
@@ -256,7 +258,7 @@ func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
 	db.AddQuery(query, result)
 
 	for _, id := range []int{1, 2} {
-		query = fmt.Sprintf("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d", id)
+		query = fmt.Sprintf("select distinct 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d", id)
 		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"dummy",
 			"int64"),
@@ -278,6 +280,7 @@ func TestMoveTablesV2(t *testing.T) {
 		TabletTypes:                     "REPLICA,RDONLY,PRIMARY",
 		Timeout:                         DefaultActionTimeout,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
+		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_STOP)],
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
@@ -470,6 +473,7 @@ func TestReshardV2(t *testing.T) {
 		TabletTypes:                     "replica,rdonly,primary",
 		Timeout:                         DefaultActionTimeout,
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
+		OnDDL:                           binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC_IGNORE)],
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
 	defer tme.stopTablets(t)
@@ -601,8 +605,8 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
 	}
-	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
-	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
+	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
+	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
 
 }
 
@@ -678,7 +682,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 	tme.tmeDB.AddQuery("drop table `vt_ks2`.`t2`", noResult)
 	tme.tmeDB.AddQuery("update _vt.vreplication set message='Picked source tablet: cell:\"cell1\" uid:10 ' where id=1", noResult)
 	tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
-	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
-	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
+	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
+	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
 
 }

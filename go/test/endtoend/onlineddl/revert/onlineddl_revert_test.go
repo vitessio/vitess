@@ -654,7 +654,7 @@ func TestSchemaChange(t *testing.T) {
 
 	// INSTANT DDL
 	t.Run("INSTANT DDL: add column", func(t *testing.T) {
-		uuid := testOnlineDDLStatementForTable(t, "alter table stress_test add column i_instant int not null default 0", ddlStrategy+" --fast-over-revertible", "vtgate", "i_instant")
+		uuid := testOnlineDDLStatementForTable(t, "alter table stress_test add column i_instant int not null default 0", ddlStrategy+" --prefer-instant-ddl", "vtgate", "i_instant")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)

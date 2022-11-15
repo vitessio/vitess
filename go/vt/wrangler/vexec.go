@@ -220,6 +220,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
 					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
+					vx.wr.optimizeCopyStateTable(primary.Tablet)
 				}
 				mu.Lock()
 				results[primary] = qr
@@ -371,6 +372,8 @@ type ReplicationStatusResult struct {
 	SourceTimeZone string
 	// TargetTimeZone is set to the original SourceTimeZone, in reverse streams, if it was provided to the workflow
 	TargetTimeZone string
+	// OnDDL specifies the action to be taken when a DDL is encountered.
+	OnDDL string `json:"OnDDL,omitempty"`
 }
 
 // ReplicationLocation represents a location that data is either replicating from, or replicating into.
@@ -592,6 +595,22 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			sourceShards.Insert(status.Bls.Shard)
 			rsrStatus = append(rsrStatus, status)
 
+			// Only show the OnDDL setting if it's not the default of 0/IGNORE.
+			if status.Bls.OnDdl != binlogdatapb.OnDDLAction_IGNORE {
+				rsr.OnDDL = binlogdatapb.OnDDLAction_name[int32(status.Bls.OnDdl)]
+				// Unset it in the proto so that we do not show the
+				// low-level enum int in the JSON marshalled output
+				// as e.g. `"on_ddl": 1` is not meaningful or helpful
+				// for the end user and we instead show the mapped
+				// string value using the top-level "OnDDL" json key.
+				// Note: this is done here only because golang does
+				// not currently support setting json tags in proto
+				// declarations so that I could request it always be
+				// ommitted from marshalled JSON output:
+				// https://github.com/golang/protobuf/issues/52
+				status.Bls.OnDdl = 0
+			}
+
 			if status.Message == workflow2.Frozen {
 				rsr.Frozen = true
 			}
@@ -729,7 +748,8 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 
 func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
 	var cs []copyState
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
+	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+		id, id)
 	qr, err := wr.VReplicationExec(ctx, tablet.Alias, query)
 	if err != nil {
 		return nil, err

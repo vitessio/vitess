@@ -11,8 +11,8 @@ Usage of zkctl:
       --pprof strings                    enable profiling
       --purge_logs_interval duration     how often try to remove old logs (default 1h0m0s)
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 1)
-  -v, --v Level                          log level for V logs
-      --version                          print binary version
+      --v Level                          log level for V logs
+  -v, --version                          print binary version
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
       --zk.cfg string                    zkid@server1:leaderPort1:electionPort1:clientPort1,...) (default "6@<hostname>:3801:3802:3803")
       --zk.myid uint                     which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname

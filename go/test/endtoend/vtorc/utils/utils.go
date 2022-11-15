@@ -29,21 +29,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	// This imports toposervers to register their implementations of TopoServer.
-	_ "vitess.io/vitess/go/vt/topo/consultopo"
-	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
-	_ "vitess.io/vitess/go/vt/topo/k8stopo"
-	_ "vitess.io/vitess/go/vt/topo/zk2topo"
-
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	_ "vitess.io/vitess/go/vt/topo/consultopo" //nolint
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"  //nolint
+	_ "vitess.io/vitess/go/vt/topo/k8stopo"    //nolint
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo" //nolint
 )
 
 const (
@@ -647,7 +644,7 @@ func PermanentlyRemoveVttablet(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vt
 		for i, vttablet := range cellInfo.RdonlyTablets {
 			if vttablet == tablet {
 				// remove this tablet since its mysql has stopped
-				cellInfo.ReplicaTablets = append(cellInfo.ReplicaTablets[:i], cellInfo.ReplicaTablets[i+1:]...)
+				cellInfo.RdonlyTablets = append(cellInfo.RdonlyTablets[:i], cellInfo.RdonlyTablets[i+1:]...)
 				KillTablets([]*cluster.Vttablet{tablet})
 				return
 			}
