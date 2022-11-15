@@ -210,7 +210,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation compled*/) + 1 /* fully copy operation completed*/
+	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation completed */) + 1 /* fully copy operation completed */
 	expectedCompletedEvents := []string{
 		`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
 		`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
