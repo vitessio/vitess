@@ -47,15 +47,14 @@ jobs:
             go_files:
               - '**/*.go'
               - '*.go'
-              - 'go.[sumod]'
-              - '.github/workflows/static_checks_etc.yml'
+              - 'go.sum'
+              - 'go.mod'
             parser_changes:
               - 'go/vt/sqlparser/**'
               - 'go.[sumod]'
               - 'build.env'
               - 'bootstrap.sh'
               - 'tools/**'
-              - '.github/workflows/static_checks_etc.yml'
             proto_changes:
               - 'bootstrap.sh'
               - 'tools/**'
@@ -64,7 +63,6 @@ jobs:
               - 'Makefile'
               - 'go/vt/proto/**'
               - 'proto/*.proto'
-              - '.github/workflows/static_checks_etc.yml'
             sizegen:
               - 'go/**/*.go'
               - 'test.go'
@@ -73,7 +71,6 @@ jobs:
               - 'go.[sumod]'
               - 'tools/**'
               - 'bootstrap.sh'
-              - '.github/workflows/static_checks_etc.yml'
             visitor:
               - 'go/tools/asthelpergen/**'
               - 'go/vt/sqlparser/**'
@@ -83,13 +80,11 @@ jobs:
               - 'tools/**'
               - 'bootstrap.sh'
               - 'misc/git/hooks/asthelpers'
-              - '.github/workflows/static_checks_etc.yml'
             end_to_end:
               - 'docker/**'
               - 'test.go'
               - 'Makefile'
               - 'bootstrap.sh'
-              - '.github/workflows/static_checks_etc.yml'
             ci_config:
               - 'test/config.json'
 
