@@ -49,7 +49,7 @@ jobs:
         # Setup MySQL 8.0
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
         echo 'selected version is: '
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0.25 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
         # Install everything else we need, and configure
@@ -66,8 +66,6 @@ jobs:
 
         # install JUnit report formatter
         go get -u github.com/vitessio/go-junit-report@HEAD
-
-        sudo apt-get install percona-xtrabackup-80 lz4
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
