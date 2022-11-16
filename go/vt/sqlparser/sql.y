@@ -4201,6 +4201,14 @@ deallocate_statement:
   {
     $$ = &Deallocate{Name: string($3)}
   }
+| DROP PREPARE ID
+  {
+    $$ = &Deallocate{Name: string($3)}
+  }
+| DROP PREPARE non_reserved_keyword
+  {
+    $$ = &Deallocate{Name: string($3)}
+  }
 
 show_statement:
   SHOW BINARY ID /* SHOW BINARY LOGS */

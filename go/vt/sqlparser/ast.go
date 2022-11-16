@@ -6252,8 +6252,12 @@ func (node *Execute) walkSubtree(visit Visit) error {
 }
 
 func (node *Execute) Format(buf *TrackedBuffer) {
-	varList := strings.Join(node.VarList, ", ")
-	buf.Myprintf("execute %s using %s", node.Name, varList)
+	if len(node.VarList) == 0 {
+		buf.Myprintf("execute %s", node.Name)
+	} else {
+		varList := strings.Join(node.VarList, ", ")
+		buf.Myprintf("execute %s using %s", node.Name, varList)
+	}
 }
 
 type Deallocate struct {

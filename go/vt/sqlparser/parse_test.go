@@ -1437,10 +1437,19 @@ var (
 			input:  "prepare stmt from 'select sqrt(pow(?,2) + pow(?,2)) as hypotenuse'",
 			output: "prepare stmt from 'select sqrt(pow(?,2) + pow(?,2)) as hypotenuse'",
 		}, {
+			input:  "execute stmt",
+			output: "execute stmt",
+		}, {
 			input:  "execute stmt using @a, @b",
 			output: "execute stmt using @a, @b",
 		}, {
+			input:  "execute action",
+			output: "execute action",
+		}, {
 			input:  "deallocate prepare stmt",
+			output: "deallocate prepare stmt",
+		}, {
+			input:  "drop prepare stmt",
 			output: "deallocate prepare stmt",
 		}, {
 			input:  "show character set",
