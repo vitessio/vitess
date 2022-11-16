@@ -98,6 +98,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--vtgate-config-terse-errors")
+
 		// Start vtgate
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		err = clusterInstance.StartVtgate()

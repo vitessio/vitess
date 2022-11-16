@@ -28,10 +28,15 @@ import (
 )
 
 func TestExpandStar(t *testing.T) {
+	ks := &vindexes.Keyspace{
+		Name:    "main",
+		Sharded: false,
+	}
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
 			"t1": {
-				Name: sqlparser.NewIdentifierCS("t1"),
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t1"),
 				Columns: []vindexes.Column{{
 					Name: sqlparser.NewIdentifierCI("a"),
 					Type: sqltypes.VarChar,
@@ -45,7 +50,8 @@ func TestExpandStar(t *testing.T) {
 				ColumnListAuthoritative: true,
 			},
 			"t2": {
-				Name: sqlparser.NewIdentifierCS("t2"),
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t2"),
 				Columns: []vindexes.Column{{
 					Name: sqlparser.NewIdentifierCI("c1"),
 					Type: sqltypes.VarChar,
@@ -56,7 +62,8 @@ func TestExpandStar(t *testing.T) {
 				ColumnListAuthoritative: true,
 			},
 			"t3": { // non authoritative table.
-				Name: sqlparser.NewIdentifierCS("t3"),
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t3"),
 				Columns: []vindexes.Column{{
 					Name: sqlparser.NewIdentifierCI("col"),
 					Type: sqltypes.VarChar,
@@ -64,7 +71,8 @@ func TestExpandStar(t *testing.T) {
 				ColumnListAuthoritative: false,
 			},
 			"t4": {
-				Name: sqlparser.NewIdentifierCS("t4"),
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t4"),
 				Columns: []vindexes.Column{{
 					Name: sqlparser.NewIdentifierCI("c1"),
 					Type: sqltypes.VarChar,
@@ -75,7 +83,8 @@ func TestExpandStar(t *testing.T) {
 				ColumnListAuthoritative: true,
 			},
 			"t5": {
-				Name: sqlparser.NewIdentifierCS("t5"),
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t5"),
 				Columns: []vindexes.Column{{
 					Name: sqlparser.NewIdentifierCI("a"),
 					Type: sqltypes.VarChar,
@@ -89,9 +98,10 @@ func TestExpandStar(t *testing.T) {
 	}
 	cDB := "db"
 	tcases := []struct {
-		sql    string
-		expSQL string
-		expErr string
+		sql               string
+		expSQL            string
+		expErr            string
+		colExpandedNumber int
 	}{{
 		sql:    "select * from t1",
 		expSQL: "select a, b, c from t1",
@@ -99,8 +109,9 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select t1.* from t1",
 		expSQL: "select a, b, c from t1",
 	}, {
-		sql:    "select *, 42, t1.* from t1",
-		expSQL: "select a, b, c, 42, a, b, c from t1",
+		sql:               "select *, 42, t1.* from t1",
+		expSQL:            "select a, b, c, 42, a, b, c from t1",
+		colExpandedNumber: 6,
 	}, {
 		sql:    "select 42, t1.* from t1",
 		expSQL: "select 42, a, b, c from t1",
@@ -111,8 +122,9 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select t1.* from t1, t2",
 		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1, t2",
 	}, {
-		sql:    "select *, t1.* from t1, t2",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t1.a as a, t1.b as b, t1.c as c from t1, t2",
+		sql:               "select *, t1.* from t1, t2",
+		expSQL:            "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t1.a as a, t1.b as b, t1.c as c from t1, t2",
+		colExpandedNumber: 6,
 	}, { // aliased table
 		sql:    "select * from t1 a, t2 b",
 		expSQL: "select a.a as a, a.b as b, a.c as c, b.c1 as c1, b.c2 as c2 from t1 as a, t2 as b",
@@ -145,7 +157,7 @@ func TestExpandStar(t *testing.T) {
 		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b",
 	}, {
 		sql:    "select * from t1 join t5 using (b) having b = 12",
-		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b having t1.b = 12",
+		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b having b = 12",
 	}, {
 		sql:    "select 1 from t1 join t5 using (b) having b = 12",
 		expSQL: "select 1 from t1 join t5 where t1.b = t5.b having t1.b = 12",
@@ -158,6 +170,30 @@ func TestExpandStar(t *testing.T) {
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
 			st, err := Analyze(selectStatement, cDB, schemaInfo)
 			if tcase.expErr == "" {
+				found := 0
+			outer:
+				for _, selExpr := range selectStatement.SelectExprs {
+					aliasedExpr, isAliased := selExpr.(*sqlparser.AliasedExpr)
+					if !isAliased {
+						continue
+					}
+					for _, tbl := range st.ExpandedColumns {
+						for _, col := range tbl {
+							if sqlparser.EqualsExpr(aliasedExpr.Expr, col) {
+								found++
+								continue outer
+							}
+						}
+					}
+				}
+				if tcase.colExpandedNumber == 0 {
+					for _, tbl := range st.ExpandedColumns {
+						found -= len(tbl)
+					}
+					require.Zero(t, found)
+				} else {
+					require.Equal(t, tcase.colExpandedNumber, found)
+				}
 				require.NoError(t, err)
 				require.NoError(t, st.NotUnshardedErr)
 				require.NoError(t, st.NotSingleRouteErr)
@@ -305,7 +341,7 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}
 }
 
-func TestHavingByColumnName(t *testing.T) {
+func TestHavingAndOrderByColumnName(t *testing.T) {
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{},
 	}
@@ -317,6 +353,12 @@ func TestHavingByColumnName(t *testing.T) {
 	}{{
 		sql:    "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
 		expSQL: "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+	}, {
+		sql:    "select id, sum(foo) as sumOfFoo from t1 order by sumOfFoo",
+		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by sum(foo) asc",
+	}, {
+		sql:    "select id, sum(foo) as foo from t1 having sum(foo) > 1",
+		expSQL: "select id, sum(foo) as foo from t1 having sum(foo) > 1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

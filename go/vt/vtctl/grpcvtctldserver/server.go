@@ -1813,6 +1813,39 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}, nil
 }
 
+// GetTopologyPath is part of the vtctlservicepb.VtctldServer interface.
+// It returns the cell located at the provided path in the topology server.
+func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.GetTopologyPathRequest) (*vtctldatapb.GetTopologyPathResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTopology")
+	defer span.Finish()
+
+	// handle toplevel display: global, then one line per cell.
+	if req.Path == "/" {
+		cells, err := s.ts.GetKnownCells(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp := vtctldatapb.GetTopologyPathResponse{
+			Cell: &vtctldatapb.TopologyCell{
+				Path: req.Path,
+				// the toplevel display has no name, just children
+				Children: append([]string{topo.GlobalCell}, cells...),
+			},
+		}
+		return &resp, nil
+	}
+
+	// otherwise, delegate to getTopologyCell to parse the path and return the cell there
+	cell, err := s.getTopologyCell(ctx, req.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetTopologyPathResponse{
+		Cell: cell,
+	}, nil
+}
+
 // GetVersion returns the version of a tablet from its debug vars
 func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersionRequest) (resp *vtctldatapb.GetVersionResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetVersion")
@@ -4093,6 +4126,61 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 	return resp, err
 }
 
+// ValidateVersionShard validates all versions are the same in all
+// tablets in a shard
+func (s *VtctldServer) ValidateVersionShard(ctx context.Context, req *vtctldatapb.ValidateVersionShardRequest) (resp *vtctldatapb.ValidateVersionShardResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateVersionShard")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	shard, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		err = fmt.Errorf("GetShard(%s) failed: %v", req.Shard, err)
+		return nil, err
+	}
+
+	if !shard.HasPrimary() {
+		err = fmt.Errorf("no primary in shard %v/%v", req.Keyspace, req.Shard)
+		return nil, err
+	}
+
+	log.Infof("Gathering version for primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	primaryVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: shard.PrimaryAlias,
+	})
+	if err != nil {
+		err = fmt.Errorf("GetVersion(%s) failed: %v", topoproto.TabletAliasString(shard.PrimaryAlias), err)
+		return nil, err
+	}
+
+	aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		err = fmt.Errorf("FindAllTabletAliasesInShard(%s, %s) failed: %v", req.Keyspace, req.Shard, err)
+		return nil, err
+	}
+
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for _, alias := range aliases {
+		if topoproto.TabletAliasEqual(alias, shard.PrimaryAlias) {
+			continue
+		}
+
+		wg.Add(1)
+		go s.diffVersion(ctx, primaryVersion.Version, shard.PrimaryAlias, alias, &wg, &er)
+	}
+
+	wg.Wait()
+
+	response := vtctldatapb.ValidateVersionShardResponse{}
+	if er.HasErrors() {
+		response.Results = append(response.Results, er.ErrorStrings()...)
+	}
+
+	return &response, nil
+}
+
 // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
 func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest) (resp *vtctldatapb.ValidateVSchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateVSchema")
@@ -4183,6 +4271,54 @@ func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
 }
 
+// getTopologyCell is a helper method that returns a topology cell given its path.
+func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*vtctldatapb.TopologyCell, error) {
+	// extract cell and relative path
+	parts := strings.Split(cellPath, "/")
+	if parts[0] != "" || len(parts) < 2 {
+		err := vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid path: %s", cellPath)
+		return nil, err
+	}
+	cell := parts[1]
+	relativePath := cellPath[len(cell)+1:]
+	topoCell := vtctldatapb.TopologyCell{Name: parts[len(parts)-1], Path: cellPath}
+
+	conn, err := s.ts.ConnForCell(ctx, cell)
+	if err != nil {
+		err := vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "error fetching connection to cell %s: %v", cell, err)
+		return nil, err
+	}
+
+	data, _, dataErr := conn.Get(ctx, relativePath)
+
+	if dataErr == nil {
+		result, err := topo.DecodeContent(relativePath, data, false)
+		if err != nil {
+			err := vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
+			return nil, err
+		}
+		topoCell.Data = result
+		// since there is data at this cell, it cannot be a directory cell
+		// so we can early return the topocell
+		return &topoCell, nil
+	}
+
+	children, childrenErr := conn.ListDir(ctx, relativePath, false /*full*/)
+
+	if childrenErr != nil && dataErr != nil {
+		err := vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
+		return nil, err
+	}
+
+	topoCell.Children = make([]string, len(children))
+
+	for i, c := range children {
+		topoCell.Children[i] = c.Name
+	}
+
+	return &topoCell, nil
+}
+
 // Helper function to get version of a tablet from its debug vars
 var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
@@ -4211,3 +4347,20 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 }
 
 var getVersionFromTablet = getVersionFromTabletDebugVars
+
+// helper method to asynchronously get and diff a version
+func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+	defer wg.Done()
+	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
+	replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		er.RecordError(fmt.Errorf("unable to get version for tablet %v: %v", alias, err))
+		return
+	}
+
+	if primaryVersion != replicaVersion.Version {
+		er.RecordError(fmt.Errorf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(primaryAlias), primaryVersion, topoproto.TabletAliasString(alias), replicaVersion))
+	}
+}

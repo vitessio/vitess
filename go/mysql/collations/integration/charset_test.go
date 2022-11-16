@@ -21,6 +21,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/remote"
@@ -85,9 +87,8 @@ func TestCJKStress(t *testing.T) {
 				t.Helper()
 				ours, _ := charset.ConvertFromUTF8(nil, local, block)
 				theirs, err := charset.ConvertFromUTF8(nil, remote, block)
-				if err != nil {
-					t.Fatalf("remote transcoding failed: %v", err)
-				}
+				require.NoError(t, err, "remote transcoding failed: %v", err)
+
 				return ours, theirs
 			}
 
@@ -95,9 +96,8 @@ func TestCJKStress(t *testing.T) {
 				t.Helper()
 				ours, _ := charset.Convert(nil, charset.Charset_utf8mb4{}, block, local)
 				theirs, err := charset.Convert(nil, remoteUtf8mb4, block, remote)
-				if err != nil {
-					t.Fatalf("remote transcoding failed: %v", err)
-				}
+				require.NoError(t, err, "remote transcoding failed: %v", err)
+
 				return ours, theirs
 			}
 
@@ -111,11 +111,8 @@ func TestCJKStress(t *testing.T) {
 					for _, cp := range string(block) {
 						input := string(cp)
 						ours, theirs := convert([]byte(input))
-						if !bytes.Equal(ours, theirs) {
-							t.Fatalf("%s: bad conversion for %q (U+%04X). ours: %#v, theirs: %#v",
-								local.Name(), input, cp, ours, theirs,
-							)
-						}
+						require.True(t, bytes.Equal(ours, theirs), "%s: bad conversion for %q (U+%04X). ours: %#v, theirs: %#v", local.Name(), input, cp, ours, theirs)
+
 					}
 					panic("???")
 				}
@@ -127,11 +124,8 @@ func TestCJKStress(t *testing.T) {
 						ours, _ := charset.ConvertFromUTF8(nil, local, []byte(input))
 
 						ours2, theirs2 := unconvert(ours)
-						if !bytes.Equal(ours2, theirs2) {
-							t.Fatalf("%s: bad return conversion for %q (U+%04X) %#v. ours: %#v, theirs: %#v",
-								local.Name(), input, cp, ours, ours2, theirs2,
-							)
-						}
+						require.True(t, bytes.Equal(ours2, theirs2), "%s: bad return conversion for %q (U+%04X) %#v. ours: %#v, theirs: %#v", local.Name(), input, cp, ours, ours2, theirs2)
+
 					}
 					panic("???")
 				}

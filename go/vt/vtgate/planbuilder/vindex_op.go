@@ -22,13 +22,13 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func transformVindexPlan(ctx *plancontext.PlanningContext, op *physical.Vindex) (logicalPlan, error) {
+func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex) (logicalPlan, error) {
 	single, ok := op.Vindex.(vindexes.SingleColumn)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")

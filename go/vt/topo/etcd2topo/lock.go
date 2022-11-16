@@ -131,6 +131,31 @@ type etcdLockDescriptor struct {
 	leaseID clientv3.LeaseID
 }
 
+// TryLock is part of the topo.Conn interface.
+func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	// We list all the entries under dirPath
+	entries, err := s.ListDir(ctx, dirPath, true)
+	if err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err, dirPath)
+	}
+
+	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
+	// Throw error in this case
+	for _, e := range entries {
+		if e.Name == locksPath && e.Type == topo.TypeDirectory && e.Ephemeral {
+			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
+		}
+	}
+
+	// everything is good let's acquire the lock.
+	return s.lock(ctx, dirPath, contents)
+}
+
 // Lock is part of the topo.Conn interface.
 func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.

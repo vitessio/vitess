@@ -139,6 +139,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetTopologyPath returns the topology cell at a given path.
+  rpc GetTopologyPath(vtctldata.GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
   rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.
@@ -285,6 +287,8 @@ service Vtctld {
   rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
   // ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
   rpc ValidateVersionKeyspace(vtctldata.ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+  // ValidateVersionShard validates that the version on the primary matches all of the replicas.
+  rpc ValidateVersionShard(vtctldata.ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
   // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
 }

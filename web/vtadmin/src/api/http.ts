@@ -749,8 +749,94 @@ export const createShard = async (params: CreateShardParams) => {
         method: 'post',
         body: JSON.stringify(params),
     });
-    const err = pb.CreateShardRequest.verify(result);
+    const err = vtctldata.CreateShardResponse.verify(result);
     if (err) throw Error(err);
 
     return vtctldata.CreateShardResponse.create(result);
+};
+
+export interface GetTopologyPathParams {
+    clusterID: string;
+    path: string;
+}
+
+export const getTopologyPath = async (params: GetTopologyPathParams) => {
+    const req = new URLSearchParams({ path: params.path });
+    const { result } = await vtfetch(`/api/cluster/${params.clusterID}/topology?${req}`);
+
+    const err = vtctldata.GetTopologyPathResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetTopologyPathResponse.create(result);
+};
+export interface ValidateParams {
+    clusterID: string;
+    pingTablets: boolean;
+}
+
+export const validate = async (params: ValidateParams) => {
+    const { result } = await vtfetch(`/api/cluster/${params.clusterID}/validate`, {
+        method: 'put',
+        body: JSON.stringify({ ping_tablets: params.pingTablets }),
+    });
+    const err = pb.ValidateRequest.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateResponse.create(result);
+};
+
+export interface ValidateShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+    pingTablets: boolean;
+}
+
+export const validateShard = async (params: ValidateShardParams) => {
+    const { result } = await vtfetch(`/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/validate`, {
+        method: 'put',
+        body: JSON.stringify({ ping_tablets: params.pingTablets }),
+    });
+
+    const err = vtctldata.ValidateShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateShardResponse.create(result);
+};
+
+export interface GetFullStatusParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const getFullStatus = async (params: GetFullStatusParams) => {
+    const req = new URLSearchParams();
+    req.append('cluster', params.clusterID);
+
+    const { result } = await vtfetch(`/api/tablet/${params.alias}/full_status?${req.toString()}`);
+
+    const err = vtctldata.GetFullStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetFullStatusResponse.create(result);
+};
+
+export interface ValidateVersionShardParams {
+    clusterID: string;
+    keyspace: string;
+    shard: string;
+}
+
+export const validateVersionShard = async (params: ValidateVersionShardParams) => {
+    const { result } = await vtfetch(
+        `/api/shard/${params.clusterID}/${params.keyspace}/${params.shard}/validate_version`,
+        {
+            method: 'put',
+        }
+    );
+
+    const err = vtctldata.ValidateVersionShardResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateVersionShardResponse.create(result);
 };

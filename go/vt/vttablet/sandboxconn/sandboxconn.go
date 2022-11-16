@@ -618,8 +618,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		sqlparser.DDLStatement,
 		*sqlparser.AlterVschema,
 		*sqlparser.Use,
-		*sqlparser.OtherAdmin,
-		*sqlparser.SetTransaction:
+		*sqlparser.OtherAdmin:
 		return &sqltypes.Result{}
 	}
 
@@ -657,7 +656,8 @@ func getSingleRowResult() *sqltypes.Result {
 		Rows:        SingleRowResult.Rows,
 	}
 
-	for _, field := range SingleRowResult.Fields {
+	fields := SingleRowResult.Fields
+	for _, field := range fields {
 		singleRowResult.Fields = append(singleRowResult.Fields, &querypb.Field{
 			Name: field.Name,
 			Type: field.Type,

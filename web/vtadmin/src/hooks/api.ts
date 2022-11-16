@@ -68,8 +68,18 @@ import {
     rebuildKeyspaceGraph,
     removeKeyspaceCell,
     createShard,
+    GetTopologyPathParams,
+    getTopologyPath,
+    validate,
+    ValidateParams,
+    validateShard,
+    ValidateShardParams,
+    getFullStatus,
+    GetFullStatusParams,
+    validateVersionShard,
+    ValidateVersionShardParams,
 } from '../api/http';
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -552,5 +562,60 @@ export const useCreateShard = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
         return createShard(params);
+    }, options);
+};
+
+/**
+ * useTopologyPath is a query hook that fetches a cell at the specified path in the topology server.
+ */
+export const useTopologyPath = (
+    params: GetTopologyPathParams,
+    options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
+) => {
+    return useQuery(['topology-path', params], () => getTopologyPath(params));
+};
+/**
+ * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
+ * as well as all tablets in discoverable cells, are consistent.
+ */
+export const useValidate = (
+    params: Parameters<typeof validate>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
+        return validate(params);
+    }, options);
+};
+
+/**
+ * useValidateShard is a mutate hook that validates that that all nodes
+ * reachable from the specified shard are consistent.
+ */
+export const useValidateShard = (
+    params: Parameters<typeof validateShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>(() => {
+        return validateShard(params);
+    }, options);
+};
+
+/**
+ * useGetFullStatus is a query hook that fetches the full status of a tablet
+ */
+export const useGetFullStatus = (
+    params: GetFullStatusParams,
+    options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
+) => useQuery(['full-status', params], () => getFullStatus(params), options);
+
+/**
+ * useValidateVersionShard is a mutate hook that validates that the version on the primary matches all of the replicas.
+ */
+export const useValidateVersionShard = (
+    params: Parameters<typeof validateVersionShard>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
+        return validateVersionShard(params);
     }, options);
 };

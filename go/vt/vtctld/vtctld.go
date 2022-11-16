@@ -60,11 +60,15 @@ func init() {
 
 func registerVtctldFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableRealtimeStats, "enable_realtime_stats", enableRealtimeStats, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
+	fs.MarkDeprecated("enable_realtime_stats", "It is used by old vtctl UI that is already deprecated.")
 	fs.BoolVar(&enableUI, "enable_vtctld_ui", enableUI, "If true, the vtctld web interface will be enabled. Default is true.")
+	fs.MarkDeprecated("enable_vtctld_ui", "It is used by old vtctl UI that is already deprecated.")
 	fs.StringVar(&durabilityPolicy, "durability_policy", durabilityPolicy, "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
 	fs.StringVar(&webDir, "web_dir", webDir, "NOT USED, here for backward compatibility")
+	fs.MarkDeprecated("web_dir", "it will be removed in a future releases.")
 	fs.StringVar(&webDir2, "web_dir2", webDir2, "NOT USED, here for backward compatibility")
+	fs.MarkDeprecated("web_dir2", "it will be removed in a future releases.")
 }
 
 // InitVtctld initializes all the vtctld functionality.

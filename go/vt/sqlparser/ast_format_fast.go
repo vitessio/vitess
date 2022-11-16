@@ -274,27 +274,6 @@ func (node *Set) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *SetTransaction) formatFast(buf *TrackedBuffer) {
-	if node.Scope == NoScope {
-		buf.WriteString("set ")
-		node.Comments.formatFast(buf)
-		buf.WriteString("transaction ")
-	} else {
-		buf.WriteString("set ")
-		node.Comments.formatFast(buf)
-		buf.WriteString(node.Scope.ToString())
-		buf.WriteString(" transaction ")
-	}
-
-	for i, char := range node.Characteristics {
-		if i > 0 {
-			buf.WriteString(", ")
-		}
-		char.formatFast(buf)
-	}
-}
-
-// formatFast formats the node.
 func (node *DropDatabase) formatFast(buf *TrackedBuffer) {
 	exists := ""
 	if node.IfExists {
@@ -2568,32 +2547,6 @@ func (node IdentifierCS) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node IsolationLevel) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("isolation level ")
-	switch node {
-	case ReadUncommitted:
-		buf.WriteString(ReadUncommittedStr)
-	case ReadCommitted:
-		buf.WriteString(ReadCommittedStr)
-	case RepeatableRead:
-		buf.WriteString(RepeatableReadStr)
-	case Serializable:
-		buf.WriteString(SerializableStr)
-	default:
-		buf.WriteString("Unknown Isolation level value")
-	}
-}
-
-// formatFast formats the node.
-func (node AccessMode) formatFast(buf *TrackedBuffer) {
-	if node == ReadOnly {
-		buf.WriteString(TxReadOnly)
-	} else {
-		buf.WriteString(TxReadWrite)
-	}
-}
-
-// formatFast formats the node.
 func (node *Load) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("AST node missing for Load type")
 }
@@ -3616,11 +3569,21 @@ func (node *Variable) formatFast(buf *TrackedBuffer) {
 	case VariableScope:
 		buf.WriteString("@")
 	case SessionScope:
+		if node.Name.EqualString(TransactionIsolationStr) || node.Name.EqualString(TransactionReadOnlyStr) {
+			// @@ without session have `next transaction` scope for these system variables.
+			// so if they are in session scope it has to be printed explicitly.
+			buf.WriteString("@@")
+			buf.WriteString(node.Scope.ToString())
+			buf.WriteByte('.')
+			break
+		}
 		buf.WriteString("@@")
 	case GlobalScope, PersistSysScope, PersistOnlySysScope:
 		buf.WriteString("@@")
 		buf.WriteString(node.Scope.ToString())
 		buf.WriteByte('.')
+	case NextTxScope:
+		buf.WriteString("@@")
 	}
 	node.Name.formatFast(buf)
 }

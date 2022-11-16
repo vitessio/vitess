@@ -309,10 +309,15 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		opt.Name = strings.ToLower(opt.Name)
 		switch opt.Name {
-		case "charset", "collate":
+		case "charset":
 			opt.String = strings.ToLower(opt.String)
 			if charset, ok := collationEnv.CharsetAlias(opt.String); ok {
 				opt.String = charset
+			}
+		case "collate":
+			opt.String = strings.ToLower(opt.String)
+			if collation, ok := collationEnv.CollationAlias(opt.String); ok {
+				opt.String = collation
 			}
 		case "engine":
 			opt.String = strings.ToUpper(opt.String)
@@ -414,6 +419,12 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			col.Type.Charset.Name = charset
 		}
 
+		// Map any collation aliases to the real collation. This applies mainly right
+		// now to utf8 being an alias for utf8mb3 collations.
+		if collation, ok := collationEnv.CollationAlias(col.Type.Options.Collate); ok {
+			col.Type.Options.Collate = collation
+		}
+
 		// Remove any lengths for integral types since it is deprecated there and
 		// doesn't mean anything anymore.
 		if _, ok := integralTypes[col.Type.Type]; ok {
@@ -471,6 +482,7 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 		idx.Info.Type = strings.ToLower(idx.Info.Type)
 		for _, opt := range idx.Options {
 			opt.Name = strings.ToLower(opt.Name)
+			opt.String = strings.ToLower(opt.String)
 		}
 	}
 }
@@ -803,7 +815,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			case "COLLATE":
 				// skip. the default collation is applied per CHARSET
 			case "COMMENT":
-				tableOption = &sqlparser.TableOption{String: ""}
+				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
 			case "COMPRESSION":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
 			case "CONNECTION":

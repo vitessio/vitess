@@ -104,6 +104,19 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 	return lock, err
 }
 
+// TryLock is part of the topo.Conn interface.
+// As of today it provides same functionality as Lock
+func (st *fakeConn) TryLock(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
+	if dirPath == "error" {
+		return lock, fmt.Errorf("dummy error")
+
+	}
+	return lock, err
+}
+
 // Watch is part of the Conn interface
 func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error) {
 	return current, changes, err

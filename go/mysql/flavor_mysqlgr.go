@@ -239,6 +239,10 @@ func (mysqlGRFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
 }
 
+func (mysqlGRFlavor) baseShowTables() string {
+	return mysqlFlavor{}.baseShowTables()
+}
+
 func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
@@ -247,6 +251,7 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	case InstantDDLFlavorCapability,
+		InstantExpandEnumCapability,
 		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
 		InstantChangeColumnDefaultFlavorCapability:

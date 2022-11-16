@@ -105,17 +105,17 @@ type xtraBackupManifest struct {
 }
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerXtraBackupEngineFlags)
 	}
 }
 
 func registerXtraBackupEngineFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&xtrabackupEnginePath, "xtrabackup_root_path", xtrabackupEnginePath, "directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
-	fs.StringVar(&xtrabackupBackupFlags, "xtrabackup_backup_flags", xtrabackupBackupFlags, "flags to pass to backup command. These should be space separated and will be added to the end of the command")
-	fs.StringVar(&xtrabackupPrepareFlags, "xtrabackup_prepare_flags", xtrabackupPrepareFlags, "flags to pass to prepare command. These should be space separated and will be added to the end of the command")
-	fs.StringVar(&xbstreamRestoreFlags, "xbstream_restore_flags", xbstreamRestoreFlags, "flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
-	fs.StringVar(&xtrabackupStreamMode, "xtrabackup_stream_mode", xtrabackupStreamMode, "which mode to use if streaming, valid values are tar and xbstream")
+	fs.StringVar(&xtrabackupEnginePath, "xtrabackup_root_path", xtrabackupEnginePath, "Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
+	fs.StringVar(&xtrabackupBackupFlags, "xtrabackup_backup_flags", xtrabackupBackupFlags, "Flags to pass to backup command. These should be space separated and will be added to the end of the command")
+	fs.StringVar(&xtrabackupPrepareFlags, "xtrabackup_prepare_flags", xtrabackupPrepareFlags, "Flags to pass to prepare command. These should be space separated and will be added to the end of the command")
+	fs.StringVar(&xbstreamRestoreFlags, "xbstream_restore_flags", xbstreamRestoreFlags, "Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
+	fs.StringVar(&xtrabackupStreamMode, "xtrabackup_stream_mode", xtrabackupStreamMode, "Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0")
 	fs.StringVar(&xtrabackupUser, "xtrabackup_user", xtrabackupUser, "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
 	fs.UintVar(&xtrabackupStripes, "xtrabackup_stripes", xtrabackupStripes, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
 	fs.UintVar(&xtrabackupStripeBlockSize, "xtrabackup_stripe_block_size", xtrabackupStripeBlockSize, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
@@ -451,7 +451,6 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, bm xtraBackupManifest, logger logutil.Logger) error {
 	// first download the file into a tmp dir
 	// and extract all the files
-
 	tempDir := fmt.Sprintf("%v/%v", cnf.TmpDir, time.Now().UTC().Format("xtrabackup-2006-01-02.150405"))
 	// create tempDir
 	if err := os.MkdirAll(tempDir, os.ModePerm); err != nil {
@@ -464,6 +463,16 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 			l.Errorf("error deleting tempDir(%v): %v", dir, err)
 		}
 	}(tempDir, logger)
+
+	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
+	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
+	if bm.CompressionEngine == PargzipCompressor {
+		logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		bm.CompressionEngine = PgzipCompressor
+		defer func() {
+			bm.CompressionEngine = PargzipCompressor
+		}()
+	}
 
 	if err := be.extractFiles(ctx, logger, bh, bm, tempDir); err != nil {
 		logger.Errorf("error extracting backup files: %v", err)

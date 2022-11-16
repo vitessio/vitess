@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.18
+go 1.19
 
 require (
 	cloud.google.com/go/storage v1.10.0
@@ -13,7 +13,7 @@ require (
 	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.34.2
-	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
+	github.com/buger/jsonparser v1.1.1
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
@@ -87,14 +87,14 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.0
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
-	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
+	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
-	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
-	golang.org/x/text v0.3.7
+	golang.org/x/text v0.3.8
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
-	golang.org/x/tools v0.1.10
+	golang.org/x/tools v0.1.12
 	google.golang.org/api v0.45.0
 	google.golang.org/genproto v0.0.0-20210701191553-46259e63a0a9 // indirect
 	google.golang.org/grpc v1.45.0
@@ -117,7 +117,9 @@ require (
 
 require (
 	github.com/bndr/gotabulate v1.1.2
+	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
+	golang.org/x/exp v0.0.0-20221023144134-a1e5550cf13e
 )
 
 require (

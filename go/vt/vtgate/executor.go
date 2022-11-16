@@ -268,8 +268,7 @@ func (e *Executor) StreamExecute(
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
-					qrfield := &sqltypes.Result{Fields: qr.Fields}
-					if err := callback(qrfield); err != nil {
+					if err := callback(qr.Metadata()); err != nil {
 						return err
 					}
 					seenResults.Set(true)
@@ -443,6 +442,12 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			var v string
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.GetWorkload().String()
+			})
+			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.TxIsolation.Name, sysvars.TransactionIsolation.Name:
+			var v string
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.GetTransactionIsolation().String()
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
 		case sysvars.DDLStrategy.Name:
@@ -987,6 +992,8 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
+	consolidator := sqlparser.Consolidator(stmt)
+	vcursor.SetConsolidator(consolidator)
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {

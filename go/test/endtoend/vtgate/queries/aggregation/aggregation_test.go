@@ -33,7 +33,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"aggr_test", "t3", "t7_xxhash", "aggr_test_dates", "t7_xxhash_idx", "t1", "t2"}
+		tables := []string{"t9", "aggr_test", "t3", "t7_xxhash", "aggr_test_dates", "t7_xxhash_idx", "t1", "t2"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -352,7 +352,7 @@ func TestEmptyTableAggr(t *testing.T) {
 		})
 	}
 
-	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (3,'a1','foo',100), (3,'b1','bar',200)")
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200)")
 
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
@@ -364,4 +364,23 @@ func TestEmptyTableAggr(t *testing.T) {
 		})
 	}
 
+}
+
+func TestOrderByCount(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t9(id1, id2, id3) values(1, '1', '1'), (2, '2', '2'), (3, '2', '2'), (4, '3', '3'), (5, '3', '3'), (6, '3', '3')")
+
+	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC", `[[VARCHAR("3")] [VARCHAR("2")] [VARCHAR("1")]]`)
+}
+
+func TestAggregateRandom(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(t1_id, name, value, shardKey) values (1, 'name 1', 'value 1', 1), (2, 'name 2', 'value 2', 2)")
+	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
+
+	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
 }

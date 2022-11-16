@@ -102,6 +102,9 @@ type Stats struct {
 
 	VReplicationLags     *stats.Timings
 	VReplicationLagRates *stats.Rates
+
+	TableCopyRowCounts *stats.CountersWithSingleLabel
+	TableCopyTimings   *stats.Timings
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -160,6 +163,8 @@ func NewStats() *Stats {
 	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
 	bps.VReplicationLags = stats.NewTimings("", "", "")
 	bps.VReplicationLagRates = stats.NewRates("", bps.VReplicationLags, 15*60/5, 5*time.Second)
+	bps.TableCopyRowCounts = stats.NewCountersWithSingleLabel("", "", "Table", "")
+	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	return bps
 }
 

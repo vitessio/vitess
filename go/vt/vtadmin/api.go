@@ -341,6 +341,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/cells", httpAPI.Adapt(vtadminhttp.GetCellInfos)).Name("API.GetCellInfos")
 	router.HandleFunc("/cells_aliases", httpAPI.Adapt(vtadminhttp.GetCellsAliases)).Name("API.GetCellsAliases")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
+	router.HandleFunc("/cluster/{cluster_id}/topology", httpAPI.Adapt(vtadminhttp.GetTopologyPath)).Name("API.GetTopologyPath")
+	router.HandleFunc("/cluster/{cluster_id}/validate", httpAPI.Adapt(vtadminhttp.Validate)).Name("API.Validate").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
@@ -358,6 +360,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_failover", httpAPI.Adapt(vtadminhttp.EmergencyFailoverShard)).Name("API.EmergencyFailoverShard").Methods("POST")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_failover", httpAPI.Adapt(vtadminhttp.PlannedFailoverShard)).Name("API.PlannedFailoverShard").Methods("POST")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/reload_schema_shard", httpAPI.Adapt(vtadminhttp.ReloadSchemaShard)).Name("API.ReloadSchemaShard").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/validate", httpAPI.Adapt(vtadminhttp.ValidateShard)).Name("API.ValidateShard").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/validate_version", httpAPI.Adapt(vtadminhttp.ValidateVersionShard)).Name("API.ValidateVersionShard").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -366,6 +370,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet").Methods("GET")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.DeleteTablet)).Name("API.DeleteTablet").Methods("DELETE", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/full_status", httpAPI.Adapt(vtadminhttp.GetFullStatus)).Name("API.GetFullStatus").Methods("GET")
 	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
@@ -771,6 +776,25 @@ func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersReque
 	}, nil
 }
 
+// GetFullStatus is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetFullStatus(ctx context.Context, req *vtadminpb.GetFullStatusRequest) (*vtctldatapb.GetFullStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetFullStatus")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletFullStatusResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetFullStatus(ctx, &vtctldatapb.GetFullStatusRequest{
+		TabletAlias: req.Alias,
+	})
+}
+
 // GetGates is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*vtadminpb.GetGatesResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetGates")
@@ -1145,6 +1169,25 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	return &vtadminpb.GetTabletsResponse{
 		Tablets: tablets,
 	}, nil
+}
+
+// GetTopologyPath is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyPathRequest) (*vtctldatapb.GetTopologyPathResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetTopologyPath")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.TopologyResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{Path: req.Path})
 }
 
 // GetVSchema is part of the vtadminpb.VTAdminServer interface.
@@ -1714,6 +1757,31 @@ func (api *API) TabletExternallyPromoted(ctx context.Context, req *vtadminpb.Tab
 	return c.TabletExternallyPromoted(ctx, tablet)
 }
 
+// Validate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) Validate(ctx context.Context, req *vtadminpb.ValidateRequest) (*vtctldatapb.ValidateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.Validate")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.Validate(ctx, &vtctldatapb.ValidateRequest{
+		PingTablets: req.PingTablets,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 // ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")
@@ -1765,6 +1833,33 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 	return res, nil
 }
 
+// ValidateShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ValidateShard(ctx context.Context, req *vtadminpb.ValidateShardRequest) (*vtctldatapb.ValidateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
+		Keyspace:    req.Keyspace,
+		Shard:       req.Shard,
+		PingTablets: req.PingTablets,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 // ValidateVersionKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionKeyspace")
@@ -1781,6 +1876,32 @@ func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.Vali
 
 	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
 		Keyspace: req.Keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ValidateVersionShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.ValidateVersionShardRequest) (*vtctldatapb.ValidateVersionShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.ValidateVersionShard(ctx, &vtctldatapb.ValidateVersionShardRequest{
+		Keyspace: req.Keyspace,
+		Shard:    req.Shard,
 	})
 
 	if err != nil {

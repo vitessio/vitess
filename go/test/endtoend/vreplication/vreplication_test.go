@@ -112,6 +112,97 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	return resp, respBody, err
 }
 
+// TestVReplicationDDLHandling tests the DDL handling in
+// VReplication for the values of IGNORE, STOP, and EXEC.
+// NOTE: this is a manual test. It is not executed in the
+// CI.
+func TestVReplicationDDLHandling(t *testing.T) {
+	workflow := "onddl_test"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+	table := "orders"
+	newColumn := "ddltest"
+	cell := "zone1"
+	shard := "0"
+	vc = NewVitessCluster(t, t.Name(), []string{cell}, mainClusterConfig)
+	defer vc.TearDown(t)
+	defaultCell = vc.Cells[cell]
+
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
+		t.Fatal(err)
+	}
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	verifyClusterHealth(t, vc)
+
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
+	targetTab := vc.getPrimaryTablet(t, targetKs, shard)
+
+	insertInitialData(t)
+
+	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", sourceKs), 1, false)
+	require.NoError(t, err)
+
+	addColDDL := fmt.Sprintf("alter table %s add column %s varchar(64)", table, newColumn)
+	dropColDDL := fmt.Sprintf("alter table %s drop column %s", table, newColumn)
+	checkColQuerySource := fmt.Sprintf("select count(column_name) from information_schema.columns where table_schema='vt_%s' and table_name='%s' and column_name='%s'",
+		sourceKs, table, newColumn)
+	checkColQueryTarget := fmt.Sprintf("select count(column_name) from information_schema.columns where table_schema='vt_%s' and table_name='%s' and column_name='%s'",
+		targetKs, table, newColumn)
+
+	// Test IGNORE behavior
+	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=IGNORE")
+	// Wait until we get through the copy phase...
+	catchup(t, targetTab, workflow, "MoveTables")
+	// Add new col on source
+	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
+	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
+	// Confirm workflow is still running fine
+	waitForWorkflowState(t, vc, ksWorkflow, "Running")
+	// Confirm new col does not exist on target
+	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
+	// Confirm new col does exist on source
+	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
+	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
+	// Drop the column on soruce to start fresh again
+	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
+	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
+
+	// Test STOP behavior (new col now exists nowhere)
+	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
+	// Wait until we get through the copy phase...
+	catchup(t, targetTab, workflow, "MoveTables")
+	// Add new col on the source
+	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
+	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
+	// Confirm that the worfklow stopped because of the DDL
+	waitForWorkflowState(t, vc, ksWorkflow, "Stopped", fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
+	// Confirm that the target does not have new col
+	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
+	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
+
+	// Test EXEC behavior (new col now exists on source)
+	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
+	// Wait until we get through the copy phase...
+	catchup(t, targetTab, workflow, "MoveTables")
+	// Confirm target has new col from copy phase
+	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(1)]]")
+	// Drop col on source
+	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
+	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
+	// Confirm workflow is still running fine
+	waitForWorkflowState(t, vc, ksWorkflow, "Running")
+	// Confirm new col was dropped on target
+	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
+	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
+}
+
 func TestVreplicationCopyThrottling(t *testing.T) {
 	workflow := "copy-throttling"
 	cell := "zone1"
@@ -127,6 +218,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		// to avoid flakiness when the CI is very slow.
 		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
+
+		parallelInsertWorkers,
 	}
 
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
@@ -160,6 +253,15 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	testBasicVreplicationWorkflow(t)
+}
+
+func TestVreplicationCopyParallel(t *testing.T) {
+	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
+	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	extraVTTabletArgs = []string{
+		parallelInsertWorkers,
+	}
 	testBasicVreplicationWorkflow(t)
 }
 
@@ -213,6 +315,15 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
 	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
+
+	t.Run("Verify CopyState Is Optimized Afterwards", func(t *testing.T) {
+		tabletMap := vc.getVttabletsInKeyspace(t, defaultCell, "customer", topodatapb.TabletType_PRIMARY.String())
+		require.NotNil(t, tabletMap)
+		require.Greater(t, len(tabletMap), 0)
+		for _, tablet := range tabletMap {
+			verifyCopyStateIsOptimized(t, tablet)
+		}
+	})
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
@@ -1173,9 +1284,16 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), maxWait)
 }
 
-func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-		"--tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
+	var err error
+	if len(extraFlags) > 0 {
+		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
+			"--tablet_types="+"primary,replica,rdonly", strings.Join(extraFlags, " "), sourceKs, targetKs, tables)
+	} else {
+		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
+			"--tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables)
+	}
+	if err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
@@ -1183,6 +1301,12 @@ func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs,
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
 		"--tablet_types="+tabletTypes, sourceKs, targetKs, tables); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
+	}
+}
+func cancelMoveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--cells="+cell, "--tables="+tables,
+		"--tablet_types="+"primary,replica,rdonly", "Cancel", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+		t.Fatalf("MoveTables Cancel command failed with %+v\n", err)
 	}
 }
 func applyVSchema(t *testing.T, vschema, keyspace string) {

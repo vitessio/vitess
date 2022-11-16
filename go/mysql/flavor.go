@@ -49,9 +49,11 @@ const (
 	InstantAddDropVirtualColumnFlavorCapability
 	InstantAddDropColumnFlavorCapability
 	InstantChangeColumnDefaultFlavorCapability
+	InstantExpandEnumCapability
 	MySQLJSONFlavorCapability
 	MySQLUpgradeInServerFlavorCapability
 	DynamicRedoLogCapacityFlavorCapability // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
+	DisableRedoLogFlavorCapability         // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
 )
 
 const (
@@ -155,6 +157,7 @@ type flavor interface {
 	enableBinlogPlaybackCommand() string
 	disableBinlogPlaybackCommand() string
 
+	baseShowTables() string
 	baseShowTablesWithSizes() string
 
 	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
@@ -571,8 +574,13 @@ func (c *Conn) DisableBinlogPlaybackCommand() string {
 	return c.flavor.disableBinlogPlaybackCommand()
 }
 
-// BaseShowTables returns a query that shows tables and their sizes
+// BaseShowTables returns a query that shows tables
 func (c *Conn) BaseShowTables() string {
+	return c.flavor.baseShowTables()
+}
+
+// BaseShowTablesWithSizes returns a query that shows tables and their sizes
+func (c *Conn) BaseShowTablesWithSizes() string {
 	return c.flavor.baseShowTablesWithSizes()
 }
 

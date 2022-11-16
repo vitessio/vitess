@@ -164,21 +164,24 @@ func TestUpdateFromSubQuery(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update user set a=(select count(*) from user where id = 3) where id = 1", 2)
 }
 
-func TestUpdateEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
+func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|wo_lu_col|lu_col|t2_lu_vdx", "int64|int64|int64|int64"),
-		"1|2|1|0",
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
+			"int64|int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|2|2|2|2|2|1|0",
 	)}
 	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
 
-	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2", nil)
+	_, err := executorExec(executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col, lu_col, lu_col = 5 from t2_wo_lookup where wo_lu_col = 2 for update",
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2",
+			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -199,7 +202,264 @@ func TestUpdateEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
 		},
 	}
-	lookWant := []*querypb.BoundQuery{bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2}
+	lookWant := []*querypb.BoundQuery{
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+	}
+	assertQueries(t, sbcLookup, lookWant)
+}
+
+func TestUpdateInTransactionLookupDefaultReadLock(t *testing.T) {
+	res := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
+			"int64|int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|2|2|2|2|2|1|0",
+	)}
+	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
+
+	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, err := executorExecSession(
+		executor,
+		"update t2_lookup set lu_col = 5 where nv_lu_col = 2",
+		nil,
+		safeSession.Session,
+	)
+
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where nv_lu_col = 2 and lu_col = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql:           "update t2_lookup set lu_col = 5 where nv_lu_col = 2",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+
+	assertQueries(t, sbc1, wantQueries)
+	assertQueries(t, sbc2, wantQueries)
+
+	vars, _ := sqltypes.BuildBindVariable([]any{
+		sqltypes.NewInt64(2),
+	})
+	bq1 := &querypb.BoundQuery{
+		Sql: "select nv_lu_col, keyspace_id from nv_lu_idx where nv_lu_col in ::nv_lu_col for update",
+		BindVariables: map[string]*querypb.BindVariable{
+			"nv_lu_col": vars,
+		},
+	}
+	bq2 := &querypb.BoundQuery{
+		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
+			"lu_col_0":      sqltypes.Int64BindVariable(5),
+		},
+	}
+	lookWant := []*querypb.BoundQuery{
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+	}
+
+	assertQueries(t, sbcLookup, lookWant)
+}
+
+func TestUpdateInTransactionLookupExclusiveReadLock(t *testing.T) {
+	res := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
+			"int64|int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|2|2|2|2|2|1|0",
+	)}
+	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
+
+	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, err := executorExecSession(
+		executor,
+		"update t2_lookup set lu_col = 5 where erl_lu_col = 2",
+		nil,
+		safeSession.Session,
+	)
+
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where nv_lu_col = 2 and lu_col = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql:           "update t2_lookup set lu_col = 5 where erl_lu_col = 2",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+
+	assertQueries(t, sbc1, wantQueries)
+	assertQueries(t, sbc2, wantQueries)
+
+	vars, _ := sqltypes.BuildBindVariable([]any{
+		sqltypes.NewInt64(2),
+	})
+	bq1 := &querypb.BoundQuery{
+		Sql: "select erl_lu_col, keyspace_id from erl_lu_idx where erl_lu_col in ::erl_lu_col for update",
+		BindVariables: map[string]*querypb.BindVariable{
+			"erl_lu_col": vars,
+		},
+	}
+	bq2 := &querypb.BoundQuery{
+		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
+			"lu_col_0":      sqltypes.Int64BindVariable(5),
+		},
+	}
+	lookWant := []*querypb.BoundQuery{
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+	}
+
+	assertQueries(t, sbcLookup, lookWant)
+}
+
+func TestUpdateInTransactionLookupSharedReadLock(t *testing.T) {
+	res := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
+			"int64|int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|2|2|2|2|2|1|0",
+	)}
+	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
+
+	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, err := executorExecSession(
+		executor,
+		"update t2_lookup set lu_col = 5 where srl_lu_col = 2",
+		nil,
+		safeSession.Session,
+	)
+
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where nv_lu_col = 2 and lu_col = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql:           "update t2_lookup set lu_col = 5 where srl_lu_col = 2",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+
+	assertQueries(t, sbc1, wantQueries)
+	assertQueries(t, sbc2, wantQueries)
+
+	vars, _ := sqltypes.BuildBindVariable([]any{
+		sqltypes.NewInt64(2),
+	})
+	bq1 := &querypb.BoundQuery{
+		Sql: "select srl_lu_col, keyspace_id from srl_lu_idx where srl_lu_col in ::srl_lu_col lock in share mode",
+		BindVariables: map[string]*querypb.BindVariable{
+			"srl_lu_col": vars,
+		},
+	}
+	bq2 := &querypb.BoundQuery{
+		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
+			"lu_col_0":      sqltypes.Int64BindVariable(5),
+		},
+	}
+	lookWant := []*querypb.BoundQuery{
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+	}
+
+	assertQueries(t, sbcLookup, lookWant)
+}
+
+func TestUpdateInTransactionLookupNoReadLock(t *testing.T) {
+	res := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
+			"int64|int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|2|2|2|2|2|1|0",
+	)}
+	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
+
+	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, err := executorExecSession(
+		executor,
+		"update t2_lookup set lu_col = 5 where nrl_lu_col = 2",
+		nil,
+		safeSession.Session,
+	)
+
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where nrl_lu_col = 2 and lu_col = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql:           "update t2_lookup set lu_col = 5 where nrl_lu_col = 2",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+
+	assertQueries(t, sbc1, wantQueries)
+	assertQueries(t, sbc2, wantQueries)
+
+	vars, _ := sqltypes.BuildBindVariable([]any{
+		sqltypes.NewInt64(2),
+	})
+	bq1 := &querypb.BoundQuery{
+		Sql: "select nrl_lu_col, keyspace_id from nrl_lu_idx where nrl_lu_col in ::nrl_lu_col",
+		BindVariables: map[string]*querypb.BindVariable{
+			"nrl_lu_col": vars,
+		},
+	}
+	bq2 := &querypb.BoundQuery{
+		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
+			"lu_col_0":      sqltypes.Int64BindVariable(5),
+		},
+	}
+	lookWant := []*querypb.BoundQuery{
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+		bq1, bq2,
+	}
+
 	assertQueries(t, sbcLookup, lookWant)
 }
 
@@ -338,10 +598,10 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err := executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :vtg1 where id = :vtg2 /* trailing */",
+		Sql: "/* leading */ update `user` set a = :a where id = :id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1": sqltypes.TestBindVariable(int64(2)),
-			"vtg2": sqltypes.TestBindVariable(int64(1)),
+			"a":  sqltypes.TestBindVariable(int64(2)),
+			"id": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -353,10 +613,10 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err = executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :vtg1 where id = :vtg2 /* trailing */",
+		Sql: "/* leading */ update `user` set a = :a where id = :id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1": sqltypes.TestBindVariable(int64(2)),
-			"vtg2": sqltypes.TestBindVariable(int64(1)),
+			"a":  sqltypes.TestBindVariable(int64(2)),
+			"id": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
 	assertQueries(t, sbc1, nil)
@@ -513,18 +773,21 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 	)})
 
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|wo_lu_col|lu_col|t2_lu_vdx", "int64|int64|int64|int64"),
-		"1|2|1|0",
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
+			"int64|int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|2|2|2|2|2|1|0",
 	)})
 
-	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1", nil)
+	_, err := executorExec(executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col, lu_col, lu_col = 5 from t2_wo_lookup where wo_lu_col = 2 and lu_col = 1 for update",
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 and lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1",
+			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -564,19 +827,22 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 	)})
 
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|wo_lu_col|lu_col|t2_lu_vdx", "int64|int64|int64|int64"),
-		"1|2|1|0",
-		"1|2|2|0",
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
+			"int64|int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|2|2|2|2|2|1|0",
+		"1|2|2|2|2|2|2|0",
 	)})
 
-	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)", nil)
+	_, err := executorExec(executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col, lu_col, lu_col = 5 from t2_wo_lookup where wo_lu_col = 2 and lu_col in (1, 2) for update",
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)",
+			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -619,21 +885,24 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 	assertQueries(t, sbc2, nil)
 }
 
-func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
+func TestDeleteEqualWithNoVerifyAndWriteOnlyLookupUniqueVindex(t *testing.T) {
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|wo_lu_col|lu_col", "int64|int64|int64"),
-		"1|1|1",
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col",
+			"int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|1|1|1|1|1|1",
 	)}
 	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
 
-	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1", nil)
+	_, err := executorExec(executor, "delete from t2_lookup where wo_lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col, lu_col from t2_wo_lookup where wo_lu_col = 1 for update",
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1",
+			Sql:           "delete from t2_lookup where wo_lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -645,13 +914,50 @@ func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
 		},
 	}
 	bq2 := &querypb.BoundQuery{
+		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"erl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}
+	bq3 := &querypb.BoundQuery{
+		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"srl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}
+	bq4 := &querypb.BoundQuery{
+		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}
+	bq5 := &querypb.BoundQuery{
+		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nv_lu_col":   sqltypes.Int64BindVariable(1),
+		},
+	}
+	bq6 := &querypb.BoundQuery{
 		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(1),
 		},
 	}
-	lookWant := []*querypb.BoundQuery{bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2}
+	lookWant := []*querypb.BoundQuery{
+		bq1, bq2, bq3, bq4, bq5, bq6,
+		bq1, bq2, bq3, bq4, bq5, bq6,
+		bq1, bq2, bq3, bq4, bq5, bq6,
+		bq1, bq2, bq3, bq4, bq5, bq6,
+		bq1, bq2, bq3, bq4, bq5, bq6,
+		bq1, bq2, bq3, bq4, bq5, bq6,
+		bq1, bq2, bq3, bq4, bq5, bq6,
+		bq1, bq2, bq3, bq4, bq5, bq6,
+	}
 	assertQueries(t, sbcLookup, lookWant)
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, wantQueries)
@@ -666,18 +972,21 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 	)})
 
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|wo_lu_col|lu_col", "int64|int64|int64"),
-		"1|1|1",
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col",
+			"int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|1|1|1|1|1|1",
 	)})
 
-	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1", nil)
+	_, err := executorExec(executor, "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col, lu_col from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1 for update",
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 and lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1",
+			Sql:           "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -694,6 +1003,30 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"wo_lu_col":   sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"erl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"srl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nv_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
 		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
@@ -718,19 +1051,22 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 	)})
 
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|wo_lu_col|lu_col", "int64|int64|int64"),
-		"1|1|1",
-		"1|1|2",
+		sqltypes.MakeTestFields(
+			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col",
+			"int64|int64|int64|int64|int64|int64|int64",
+		),
+		"1|1|1|1|1|1|1",
+		"1|1|1|1|1|1|2",
 	)})
 
-	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col in (1, 2)", nil)
+	_, err := executorExec(executor, "delete from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col, lu_col from t2_wo_lookup where wo_lu_col = 1 and lu_col in (1, 2) for update",
+			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col in (1, 2)",
+			Sql:           "delete from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2)",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -750,6 +1086,30 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 			"wo_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
+		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"erl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"srl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nv_lu_col":   sqltypes.Int64BindVariable(1),
+		},
+	}, {
 		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
@@ -760,6 +1120,30 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"wo_lu_col":   sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"erl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"srl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"nv_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
 		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
@@ -1952,10 +2336,10 @@ func TestUpdateLastInsertID(t *testing.T) {
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "update `user` set a = :__lastInsertId where id = :vtg1",
+		Sql: "update `user` set a = :__lastInsertId where id = :id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__lastInsertId": sqltypes.Uint64BindVariable(43),
-			"vtg1":           sqltypes.Int64BindVariable(1)},
+			"id":             sqltypes.Int64BindVariable(1)},
 	}}
 
 	assertQueries(t, sbc1, wantQueries)
