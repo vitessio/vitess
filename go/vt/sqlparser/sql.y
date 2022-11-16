@@ -318,6 +318,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
 %token <bytes> COMPACT LIST HASH PARTITIONS SUBPARTITION SUBPARTITIONS
 
+// Prepared statements
+%token <bytes> PREPARE DEALLOCATE
+
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
@@ -380,7 +383,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> alter_statement alter_table_statement alter_database_statement
 %type <ddl> create_table_prefix rename_list alter_table_statement_part
 %type <ddls> alter_table_statement_list
-%type <statement> analyze_statement show_statement use_statement
+%type <statement> analyze_statement show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes> work_opt no_opt chain_opt release_opt
@@ -444,6 +447,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <variables> variable_list
+%type <strs> system_variable_list
+%type <str> system_variable
 %type <into> into_opt
 %type <assignExprs> on_dup_opt assignment_list
 %type <setVarExprs> set_list transaction_chars
@@ -573,6 +578,9 @@ command:
 | drop_statement
 | truncate_statement
 | analyze_statement
+| prepare_statement
+| execute_statement
+| deallocate_statement
 | show_statement
 | use_statement
 | begin_statement
@@ -2195,6 +2203,9 @@ statement_list_statement:
 | if_statement
 | truncate_statement
 | analyze_statement
+| prepare_statement
+| execute_statement
+| deallocate_statement
 | show_statement
 | start_transaction_statement
 | commit_statement
@@ -4130,6 +4141,73 @@ analyze_statement:
   ANALYZE TABLE table_name_list
   {
     $$ = &Analyze{Tables: $3}
+  }
+
+prepare_statement:
+  PREPARE ID FROM STRING
+  {
+    $$ = &Prepare{Name: string($2), Expr: string($4)}
+  }
+| PREPARE non_reserved_keyword FROM STRING
+  {
+    $$ = &Prepare{Name: string($2), Expr: string($4)}
+  }
+
+system_variable_list:
+  system_variable
+  {
+    $$ = []string{$1}
+  }
+| system_variable_list ',' system_variable
+  {
+    $$ = append($1, $3)
+  }
+
+// TODO: ensure these start with '@'
+system_variable:
+  ID
+  {
+    $$ = string($1)
+  }
+| non_reserved_keyword
+  {
+    $$ = string($1)
+  }
+
+execute_statement:
+  EXECUTE ID
+  {
+    $$ = &Execute{Name: string($2)}
+  }
+| EXECUTE non_reserved_keyword
+  {
+    $$ = &Execute{Name: string($2)}
+  }
+| EXECUTE ID USING system_variable_list
+  {
+    $$ = &Execute{Name: string($2), VarList: $4}
+  }
+| EXECUTE non_reserved_keyword USING system_variable_list
+  {
+    $$ = &Execute{Name: string($2), VarList: $4}
+  }
+
+deallocate_statement:
+  DEALLOCATE PREPARE ID
+  {
+    $$ = &Deallocate{Name: string($3)}
+  }
+| DEALLOCATE PREPARE non_reserved_keyword
+  {
+    $$ = &Deallocate{Name: string($3)}
+  }
+| DROP PREPARE ID
+  {
+    $$ = &Deallocate{Name: string($3)}
+  }
+| DROP PREPARE non_reserved_keyword
+  {
+    $$ = &Deallocate{Name: string($3)}
   }
 
 show_statement:
@@ -7679,6 +7757,7 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DAY
+| DEALLOCATE
 | DEFINER
 | DEFINITION
 | DELAY_KEY_WRITE
@@ -7787,6 +7866,7 @@ non_reserved_keyword:
 | POLYGON
 | PRECEDES
 | PRECEDING
+| PREPARE
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
 | PROCESSLIST
