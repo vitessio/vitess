@@ -98,7 +98,7 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 	case reflect.Func:
 		panic("GetFuncForType does not support function types")
 	case reflect.Interface:
-		// TODO: unwrap to see if struct-ish
+		panic("GetFuncForType does not support interface types (specify a specific implementation type instead)")
 	case reflect.Map:
 		switch typ.Key().Kind() {
 		case reflect.String:

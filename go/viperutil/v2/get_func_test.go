@@ -18,6 +18,7 @@ package viperutil
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,6 +117,26 @@ func TestGetFuncForType(t *testing.T) {
 		assert.Equal(*s2, get[myNestedStruct](t, v, "mynestedstruct"), "GetFuncForType[myNestedStruct](mynestedstruct)")
 		assert.IsType(myNestedStruct{}, get[myNestedStruct](t, v, "mynestedstruct"), "GetFuncForType[myNestedStruct](mynestedstruct) should return a struct (not pointer to struct)")
 	}
+
+	// Map types.
+	v.Set("stringmap", map[string]string{
+		"a": "A",
+		"b": "B",
+	})
+	assert.Equal(map[string]string{"a": "A", "b": "B"}, get[map[string]string](t, v, "stringmap"), "GetFuncForType[map[string]string](stringmap)")
+
+	v.Set("stringslicemap", map[string][]string{
+		"uppers": strings.Split("ABCDEFG", ""),
+		"lowers": strings.Split("abcdefg", ""),
+	})
+	assert.Equal(map[string][]string{"uppers": strings.Split("ABCDEFG", ""), "lowers": strings.Split("abcdefg", "")}, get[map[string][]string](t, v, "stringslicemap"), "GetFuncForType[map[string][]string](stringslicemap)")
+
+	v.Set("anymap", map[string]any{
+		"int":    5,
+		"bool":   true,
+		"string": "hello",
+	})
+	assert.Equal(map[string]any{"int": 5, "bool": true, "string": "hello"}, get[map[string]any](t, v, "anymap"), "GetFuncForType[map[string]any](anymap)")
 }
 
 func get[T any](t testing.TB, v *viper.Viper, key string) T {
