@@ -67,17 +67,17 @@ jobs:
         
         # Download mysql8.0.25 (pin it)
         wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-server_8.0.25-1ubuntu20.04_amd64.deb-bundle.tar
-        sudo tar xf $(basename $LAST_BUILD) -v -C /usr
+        sudo tar xf mysql-server_8.0.25-1ubuntu20.04_amd64.deb-bundle.tar -v
         
-        # Untar the bundle. It will have all necessary deb
-        wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-common_8.0.25-1ubuntu20.04_amd64.deb  
+        # Untar the bundle. It will have all necessary deb  
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-common_8.0.25-1ubuntu20.04_amd64.deb
-        sudo apt-get install -f
+        #sudo apt-get install -f
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-client-plugins_8.0.25-1ubuntu20.04_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-client-core_8.0.25-1ubuntu20.04_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-client_8.0.25-1ubuntu20.04_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-client_8.0.25-1ubuntu20.04_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-server-core_8.0.25-1ubuntu20.04_amd64.deb
+        sudo apt-get install -f
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-server_8.0.25-1ubuntu20.04_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-server_8.0.25-1ubuntu20.04_amd64.deb
         
