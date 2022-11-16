@@ -113,7 +113,7 @@ var (
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
+	clustersRequiringXtraBackup = append([]string{}, []string{"xb_recovery", "20"}...)
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
