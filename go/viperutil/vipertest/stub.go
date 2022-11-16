@@ -22,8 +22,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/viperutil/v2"
-	"vitess.io/vitess/go/viperutil/v2/internal/value"
+	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/internal/value"
 )
 
 // Stub stubs out a given value to use the passed-in viper to retrieve its

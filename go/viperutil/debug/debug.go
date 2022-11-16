@@ -14,20 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package viperutil
+package debug
 
 import (
-	"vitess.io/vitess/go/viperutil/v2/internal/sync"
-	"vitess.io/vitess/go/viperutil/v2/internal/value"
+	"github.com/spf13/viper"
+
+	"vitess.io/vitess/go/viperutil/internal/registry"
 )
 
-var (
-	// ErrDuplicateWatch is returned when Watch is called multiple times on a
-	// single synced viper. Viper only supports reading/watching a single
-	// config file.
-	ErrDuplicateWatch = sync.ErrDuplicateWatch
-	// ErrNoFlagDefined is returned from Value's Flag method when the value was
-	// configured to bind to a given FlagName but the provided flag set does not
-	// define a flag with that name.
-	ErrNoFlagDefined = value.ErrNoFlagDefined
-)
+func Debug() {
+	v := viper.New()
+	_ = v.MergeConfigMap(registry.Static.AllSettings())
+	_ = v.MergeConfigMap(registry.Dynamic.AllSettings())
+
+	v.Debug()
+}

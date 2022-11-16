@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/viperutil/v2/vipertest"
+	"vitess.io/vitess/go/viperutil/vipertest"
 )
 
 func TestFakeSpan(t *testing.T) {

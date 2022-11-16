@@ -29,9 +29,9 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/viperutil/v2"
-	vipersync "vitess.io/vitess/go/viperutil/v2/internal/sync"
-	"vitess.io/vitess/go/viperutil/v2/internal/value"
+	"vitess.io/vitess/go/viperutil"
+	vipersync "vitess.io/vitess/go/viperutil/internal/sync"
+	"vitess.io/vitess/go/viperutil/internal/value"
 )
 
 func TestWatchConfig(t *testing.T) {

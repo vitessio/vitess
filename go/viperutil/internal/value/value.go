@@ -23,8 +23,8 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"vitess.io/vitess/go/viperutil/v2/internal/registry"
-	"vitess.io/vitess/go/viperutil/v2/internal/sync"
+	"vitess.io/vitess/go/viperutil/internal/registry"
+	"vitess.io/vitess/go/viperutil/internal/sync"
 )
 
 // Registerable is the subset of the interface exposed by Values (which is

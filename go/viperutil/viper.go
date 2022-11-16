@@ -23,7 +23,7 @@ variables that are the result of calling Configure, for example in package trace
 
 	package trace
 
-	import "vitess.io/vitess/go/viperutil/v2"
+	import "vitess.io/vitess/go/viperutil"
 
 	var (
 		modulePrefix = viperutil.KeyPrefixFunc("trace")
@@ -51,7 +51,7 @@ to those flags, as appropriate:
 	import (
 		"github.com/spf13/pflag"
 
-		"vitess.io/vitess/go/viperutil/v2"
+		"vitess.io/vitess/go/viperutil"
 		"vitess.io/vitess/go/vt/servenv"
 	)
 
@@ -80,7 +80,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"vitess.io/vitess/go/viperutil/v2/internal/value"
+	"vitess.io/vitess/go/viperutil/internal/value"
 )
 
 // Options represents the various options used to control how Values are
