@@ -452,12 +452,6 @@ var commands = []commandGroup{
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
-				name:   "DropSources",
-				method: commandDropSources,
-				params: "[--dry_run] [--rename_tables] <keyspace.workflow>",
-				help:   "After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and denylists",
-			},
-			{
 				name:   "CreateLookupVindex",
 				method: commandCreateLookupVindex,
 				params: "[--cells=<source_cells>] [--tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
@@ -2550,39 +2544,6 @@ func splitKeyspaceWorkflow(in string) (keyspace, workflow string, err error) {
 		return "", "", fmt.Errorf("invalid format for <keyspace.workflow>: %s", in)
 	}
 	return splits[0], splits[1], nil
-}
-
-func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** DropSources is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
-	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
-	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("<keyspace.workflow> is required")
-	}
-	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-
-	removalType := workflow.DropTable
-	if *renameTables {
-		removalType = workflow.RenameTable
-	}
-
-	_, _, _ = dryRun, keyspace, workflowName
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, false, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		wr.Logger().Printf("Dry Run results for commandDropSources run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
-	}
-	return nil
 }
 
 func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {

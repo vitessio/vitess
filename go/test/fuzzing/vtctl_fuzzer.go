@@ -95,7 +95,6 @@ func getCommandType(index int) string {
 		51: "ValidateKeyspace",
 		52: "Reshard",
 		53: "MoveTables",
-		54: "DropSources",
 		55: "CreateLookupVindex",
 		56: "ExternalizeVindex",
 		57: "Materialize",

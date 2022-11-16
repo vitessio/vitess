@@ -157,7 +157,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 		targetKs, table, newColumn)
 
 	// Test IGNORE behavior
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=IGNORE")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=IGNORE")
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on source
@@ -169,13 +169,13 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
 	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
-	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
-	// Drop the column on soruce to start fresh again
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 
 	// Test STOP behavior (new col now exists nowhere)
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on the source
@@ -185,10 +185,10 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForWorkflowState(t, vc, ksWorkflow, "Stopped", fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
-	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 
 	// Test EXEC behavior (new col now exists on source)
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Confirm target has new col from copy phase
@@ -200,7 +200,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForWorkflowState(t, vc, ksWorkflow, "Running")
 	// Confirm new col was dropped on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
-	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 }
 
 func TestVreplicationCopyThrottling(t *testing.T) {
@@ -243,7 +243,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	// We use a small timeout and ignore errors as we don't expect the MoveTables to start here
 	// because of the InnoDB History List length.
-	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 5*time.Second, true)
+	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 5*time.Second, true)
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
 	// The initial copy phase should be blocking on the history list
@@ -398,7 +398,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	insertInitialData(t)
 
 	tables := "product,customer,merchant,orders"
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, tables)
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, tables)
 	// Wait until we get through the copy phase...
 	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
 
@@ -692,7 +692,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
 		tables := "customer,Lead,Lead-1,db_order_test"
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
@@ -794,14 +794,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			//Go forward again
 			switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 			switchWrites(t, workflowType, ksWorkflow, false)
-			dropSourcesDryRun(t, ksWorkflow, false, dryRunResultsDropSourcesDropCustomerShard)
-			dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
 			var exists bool
 			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
-			dropSources(t, ksWorkflow)
+
+			moveTablesAction(t, "Complete", allCellNames, workflow, sourceKs, targetKs, tables)
 
 			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
@@ -959,7 +958,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		workflowType := "Reshard"
 		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
 			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Create", ksWorkflow); err != nil {
-			t.Fatalf("Reshard command failed with %+v\n", err)
+			t.Fatalf("Reshard Create command failed with %+v\n", err)
 		}
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
 		targetShards = "," + targetShards + ","
@@ -978,7 +977,10 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultSwitchWrites)
 		}
 		switchWrites(t, workflowType, ksWorkflow, false)
-		dropSources(t, ksWorkflow)
+		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
+			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Complete", ksWorkflow); err != nil {
+			t.Fatalf("Reshard Complete command failed with %+v\n", err)
+		}
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {
 				continue
@@ -997,7 +999,7 @@ func shardOrders(t *testing.T) {
 		tables := "orders"
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 		applyVSchema(t, ordersVSchema, targetKs)
-		moveTables(t, cell, workflow, sourceKs, targetKs, tables)
+		moveTablesAction(t, "Create", cell, workflow, sourceKs, targetKs, tables)
 
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -1008,7 +1010,7 @@ func shardOrders(t *testing.T) {
 		vdiff1(t, ksWorkflow, "")
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
-		dropSources(t, ksWorkflow)
+		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
 		waitForRowCountInTablet(t, customerTab1, "customer", "orders", 1)
 		waitForRowCountInTablet(t, customerTab2, "customer", "orders", 2)
 		waitForRowCount(t, vtgateConn, "customer", "orders", 3)
@@ -1047,7 +1049,7 @@ func shardMerchant(t *testing.T) {
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "80-"), 1); err != nil {
 			t.Fatal(err)
 		}
-		moveTables(t, cell, workflow, sourceKs, targetKs, tables)
+		moveTablesAction(t, "Create", cell, workflow, sourceKs, targetKs, tables)
 		merchantKs := vc.Cells[defaultCell.Name].Keyspaces[merchantKeyspace]
 		merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet
 		merchantTab2 := merchantKs.Shards["80-"].Tablets["zone1-500"].Vttablet
@@ -1066,7 +1068,7 @@ func shardMerchant(t *testing.T) {
 		if err != nil {
 			require.FailNow(t, output)
 		}
-		dropSources(t, ksWorkflow)
+		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
 
 		waitForRowCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
 		waitForRowCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
@@ -1292,34 +1294,29 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), maxWait)
 }
 
-func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
+func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
 	if len(extraFlags) > 0 {
 		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables,
 			"--cells="+cell, "--tablet_types=primary,replica,rdonly", strings.Join(extraFlags, " "),
-			"Create", fmt.Sprintf("%s.%s", targetKs, workflow))
+			action, fmt.Sprintf("%s.%s", targetKs, workflow))
 	} else {
 		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-			"--tablet_types=primary,replica,rdonly", "Create", fmt.Sprintf("%s.%s", targetKs, workflow))
+			"--tablet_types=primary,replica,rdonly", action, fmt.Sprintf("%s.%s", targetKs, workflow))
 	}
 	if err != nil {
-		t.Fatalf("MoveTables command failed with %+v\n", err)
+		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
 }
-func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, timeout time.Duration, ignoreErrors bool) {
+func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, timeout time.Duration, ignoreErrors bool) {
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-		"--tablet_types="+tabletTypes, "--timeout="+timeout.String(), "Create", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+		"--tablet_types="+tabletTypes, "--timeout="+timeout.String(), action, fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
 		if !ignoreErrors {
-			t.Fatalf("MoveTables Create command failed with %+v\n", err)
+			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 		}
 	}
 }
-func cancelMoveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-		"--tablet_types=primary,replica,rdonly", "Cancel", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
-		t.Fatalf("MoveTables Cancel command failed with %+v\n", err)
-	}
-}
+
 func applyVSchema(t *testing.T, vschema, keyspace string) {
 	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema", vschema, keyspace)
 	require.NoError(t, err)
@@ -1418,22 +1415,6 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	//printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug
 	require.NoError(t, err, fmt.Sprintf("Switch writes Error: %s: %s", err, output))
-}
-
-func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {
-	args := []string{"DropSources", "--", "--dry_run"}
-	if renameTables {
-		args = append(args, "--rename_tables")
-	}
-	args = append(args, ksWorkflow)
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
-	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
-	validateDryRunResults(t, output, dryRunResults)
-}
-
-func dropSources(t *testing.T, ksWorkflow string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
 }
 
 // generateInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.

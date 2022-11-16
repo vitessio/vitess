@@ -661,7 +661,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	workflowType := "MoveTables"
 
 	var moveTablesAndWait = func() {
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 		catchup(t, targetTab1, workflow, workflowType)
 		catchup(t, targetTab2, workflow, workflowType)
 		vdiff1(t, ksWorkflow, "")
