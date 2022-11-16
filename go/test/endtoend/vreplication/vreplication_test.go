@@ -241,7 +241,9 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// History should have been generated on the source primary tablet
 	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
-	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
+	// We use a small timeout and ignore errors as we don't expect the MoveTables to start here
+	// because of the InnoDB History List length.
+	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 5*time.Second, true)
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
 	// The initial copy phase should be blocking on the history list
@@ -1304,10 +1306,12 @@ func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string,
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
-func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string) {
+func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, timeout time.Duration, ignoreErrors bool) {
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-		"--tablet_types="+tabletTypes, "Create", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
-		t.Fatalf("MoveTables Create command failed with %+v\n", err)
+		"--tablet_types="+tabletTypes, "--timeout="+timeout.String(), "Create", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+		if !ignoreErrors {
+			t.Fatalf("MoveTables Create command failed with %+v\n", err)
+		}
 	}
 }
 func cancelMoveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
@@ -1327,8 +1331,8 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
 			"workflow type specified: %s", workflowType)
 	}
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica", "--dry_run",
-		"SwitchTraffic", ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica",
+		"--dry_run", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
