@@ -14,6 +14,65 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package viperutil provides a utility layer to streamline and standardize
+interacting with viper-backed configuration values across vitess components.
+
+The common pattern is for a given module to declare their values by declaring
+variables that are the result of calling Configure, for example in package trace:
+
+	package trace
+
+	import "vitess.io/vitess/go/viperutil/v2"
+
+	var (
+		modulePrefix = viperutil.KeyPrefixFunc("trace")
+
+		tracingServer = viperutil.Configure(
+			modulePrefix("service"),
+			viperutil.Options[string]{
+				Default: "noop",
+				FlagName: "tracer",
+			}
+		)
+		enableLogging = viperutil.Configure(
+			modulePrefix("enable-logging"),
+			viperutil.Options[bool]{
+				FlagName: "tracing-enable-logging",
+			}
+		)
+	)
+
+Then, in an OnParseFor or OnParse hook, declare any flags, and bind viper values
+to those flags, as appropriate:
+
+	package trace
+
+	import (
+		"github.com/spf13/pflag"
+
+		"vitess.io/vitess/go/viperutil/v2"
+		"vitess.io/vitess/go/vt/servenv"
+	)
+
+	func init() {
+		servenv.OnParse(func(fs *pflag.FlagSet) {
+			fs.String("tracer", tracingServer.Default(), "<usage for flag goes here>")
+			fs.Bool("tracing-enable-logging", enableLogging.Default(), "<usage for flag goes here>")
+
+			viperutil.BindFlags(fs, tracingServer, enableLogging)
+		})
+	}
+
+Finally, after a call to `viperutil.LoadConfig` (which is done as a part of
+`servenv.ParseFlags`), values may be accessed by calling their `.Get()` methods.
+
+For more details, refer to the package documentation, as well as the documents
+in doc/viper/.
+
+- TODO: remove original API and `git mv` v2 up a level, adjusting imports
+- TODO: markdown doc under doc/ tree giving an overview.
+*/
 package viperutil
 
 import (

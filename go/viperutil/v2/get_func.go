@@ -25,6 +25,21 @@ import (
 	"github.com/spf13/viper"
 )
 
+// GetFuncForType returns the default getter function for a given type T to. A
+// getter function is a function which takes a viper and returns a function that
+// takes a key and (finally!) returns a value of type T.
+//
+// For example, the default getter for a value of type string is a function that
+// takes a viper instance v and calls v.GetString with the provided key.
+//
+// In most cases, callers of Configure should be able to rely on the defaults
+// provided here (and may refer to get_func_test.go for an up-to-date example
+// of the provided functionalities), but if more fine-grained control is needed
+// (this should be an **exceptional** circumstance), they may provide their own
+// GetFunc as an option to Configure.
+//
+// This function may panic if called for an unsupported type. This is captured
+// in the test code as well.
 func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 	var (
 		t T
