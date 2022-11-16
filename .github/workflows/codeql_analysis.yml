@@ -83,12 +83,13 @@ jobs:
         timeout-minutes: 30
         run: |
           source build.env
-          make build
+          make buildtoto
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
 
       - name: Slack Workflow Notification
+        if: ${{ failure() }}
         uses: Gamesight/slack-workflow-status@master
         with:
           repo_token: ${{secrets.GITHUB_TOKEN}}
