@@ -50,6 +50,8 @@ Other aspects of the VReplication copy-phase logic are preserved:
 An issue in versions `<= v14.0.3` and `<= v15.0.0` that generated corrupted results for non-full-group-by queries with a JOIN
 is now fixed. The full issue can be found [here](https://github.com/vitessio/vitess/issues/11625), and its fix [here](https://github.com/vitessio/vitess/pull/11633).
 
-### Deprecations
+### Deprecations and Removals
 
 The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
+
+The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
