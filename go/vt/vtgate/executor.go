@@ -1346,6 +1346,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		vsm:                vsm,
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		ts:                 ts,
+		copyCompletedShard: make(map[string]struct{}),
 	}
 	_ = vs.stream(ctx)
 	return nil
