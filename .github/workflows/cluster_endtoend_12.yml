@@ -53,9 +53,10 @@ jobs:
         sudo service mysql stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-
+        sudo systemctl stop apparmor
+        
         # Uninstall any previously installed MySQL first
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common mysql-community-server
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common mysql-server-core-* mysql-client-core-* mysql-common-*
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
         sudo deluser mysql
