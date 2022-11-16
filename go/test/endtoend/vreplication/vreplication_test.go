@@ -1329,7 +1329,7 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 	}
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica", "--dry_run",
 		"SwitchTraffic", ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("SwitchReads DryRun Error: %s: %s", err, output))
+	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
 
@@ -1409,7 +1409,7 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary",
 		"--timeout="+SwitchWritesTimeout, command, ksWorkflow)
 	if output != "" {
-		fmt.Printf("Output of Switch writes for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
+		fmt.Printf("Output of switching writes for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
 	//printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug

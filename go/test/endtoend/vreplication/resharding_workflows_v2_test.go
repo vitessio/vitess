@@ -149,13 +149,13 @@ func tstWorkflowReverseWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "primary", ""))
 }
 
-// tstWorkflowSwitchReadsAndWrites tests that SwitchWrites w/o any user provided --tablet_types
+// tstWorkflowSwitchReadsAndWrites tests that switching traffic w/o any user provided --tablet_types
 // value switches all traffic
 func tstWorkflowSwitchReadsAndWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "", ""))
 }
 
-// tstWorkflowReversesReadsAndWrites tests that SwitchWrites w/o any user provided --tablet_types
+// tstWorkflowReversesReadsAndWrites tests that ReverseTraffic w/o any user provided --tablet_types
 // value switches all traffic in reverse
 func tstWorkflowReverseReadsAndWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "", ""))
@@ -703,13 +703,13 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 
 		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, true)
 		validateReadsRouteToSource(t, "replica")
-		printRoutingRules(t, vc, "After reversing SwitchReads")
+		printRoutingRules(t, vc, "After reversing read traffic")
 
 		validateWritesRouteToSource(t)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		printRoutingRules(t, vc, "After SwitchWrites and reversing SwitchReads")
+		printRoutingRules(t, vc, "After switching writes and reversing reads")
 		validateReadsRouteToSource(t, "replica")
 		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, false)
 		validateReadsRouteToTarget(t, "replica")
