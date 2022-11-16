@@ -56,3 +56,10 @@ package funcs
 // 	s.Set(data.(time.Duration))
 // 	return s, nil
 // }
+
+/* USAGE (similar to how ConfigFileNotFoundHandling is decoded in viperutil/config.go)
+// viper.DecoderConfigOption(viper.DecodeHook(mapstructure.DecodeHookFunc(decode.Seconds))),
+// viper.DecoderConfigOption(func(dc *mapstructure.DecoderConfig) {
+// 	dc
+// }),
+*/
