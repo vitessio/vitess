@@ -6224,3 +6224,48 @@ func (node *Analyze) walkSubtree(visit Visit) error {
 func (node *Analyze) Format(buf *TrackedBuffer) {
 	buf.Myprintf("analyze table %v", node.Tables)
 }
+
+type Prepare struct {
+	Name string
+	Expr string
+}
+
+func (*Prepare) iStatement() {}
+
+func (node *Prepare) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (node *Prepare) Format(buf *TrackedBuffer) {
+	buf.Myprintf("prepare %s from '%s'", node.Name, node.Expr)
+}
+
+type Execute struct {
+	Name    string
+	VarList []string
+}
+
+func (*Execute) iStatement() {}
+
+func (node *Execute) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (node *Execute) Format(buf *TrackedBuffer) {
+	varList := strings.Join(node.VarList, ", ")
+	buf.Myprintf("execute %s using %s", node.Name, varList)
+}
+
+type Deallocate struct {
+	Name string
+}
+
+func (*Deallocate) iStatement() {}
+
+func (node *Deallocate) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (node *Deallocate) Format(buf *TrackedBuffer) {
+	buf.Myprintf("deallocate prepare %s", node.Name)
+}

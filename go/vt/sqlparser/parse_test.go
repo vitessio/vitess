@@ -1434,6 +1434,15 @@ var (
 			input:  "analyze table a, b, c",
 			output: "analyze table a, b, c",
 		}, {
+			input:  "prepare stmt from 'select sqrt(pow(?,2) + pow(?,2)) as hypotenuse'",
+			output: "prepare stmt from 'select sqrt(pow(?,2) + pow(?,2)) as hypotenuse'",
+		}, {
+			input:  "execute stmt using @a, @b",
+			output: "execute stmt using @a, @b",
+		}, {
+			input:  "deallocate prepare stmt",
+			output: "deallocate prepare stmt",
+		}, {
 			input:  "show character set",
 			output: "show charset",
 		}, {
