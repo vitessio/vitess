@@ -67,7 +67,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
         # Uninstall any previously installed MySQL first
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common mysql-server-core-* mysql-client-core-*
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
         sudo deluser mysql
