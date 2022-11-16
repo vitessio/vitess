@@ -955,7 +955,8 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			}
 		}
 		workflowType := "Reshard"
-		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--v1", "--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", ksWorkflow, "--", sourceShards, targetShards); err != nil {
+		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
+			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Create", ksWorkflow); err != nil {
 			t.Fatalf("Reshard command failed with %+v\n", err)
 		}
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
@@ -1292,25 +1293,26 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
 	if len(extraFlags) > 0 {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-			"--tablet_types="+"primary,replica,rdonly", strings.Join(extraFlags, " "), sourceKs, targetKs, tables)
+		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables,
+			"--cells="+cell, "--tablet_types=primary,replica,rdonly", strings.Join(extraFlags, " "),
+			"Create", fmt.Sprintf("%s.%s", targetKs, workflow))
 	} else {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-			"--tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables)
+		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
+			"--tablet_types=primary,replica,rdonly", "Create", fmt.Sprintf("%s.%s", targetKs, workflow))
 	}
 	if err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
 func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-		"--tablet_types="+tabletTypes, sourceKs, targetKs, tables); err != nil {
-		t.Fatalf("MoveTables command failed with %+v\n", err)
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
+		"--tablet_types="+tabletTypes, "Create", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+		t.Fatalf("MoveTables Create command failed with %+v\n", err)
 	}
 }
 func cancelMoveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--cells="+cell, "--tables="+tables,
-		"--tablet_types="+"primary,replica,rdonly", "Cancel", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
+		"--tablet_types=primary,replica,rdonly", "Cancel", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
 		t.Fatalf("MoveTables Cancel command failed with %+v\n", err)
 	}
 }
