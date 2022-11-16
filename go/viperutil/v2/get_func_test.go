@@ -137,6 +137,36 @@ func TestGetFuncForType(t *testing.T) {
 		"string": "hello",
 	})
 	assert.Equal(map[string]any{"int": 5, "bool": true, "string": "hello"}, get[map[string]any](t, v, "anymap"), "GetFuncForType[map[string]any](anymap)")
+
+	// Unsupported types.
+	t.Run("uintptr", func(t *testing.T) {
+		testPanic(t, GetFuncForType[uintptr], "GetFuncForType[uintptr]")
+	})
+	t.Run("arrays", func(t *testing.T) {
+		testPanic(t, GetFuncForType[[5]int], "GetFuncForType[[5]int]")
+		testPanic(t, GetFuncForType[[3]string], "GetFuncForType[[3]string]")
+	})
+	t.Run("channels", func(t *testing.T) {
+		testPanic(t, GetFuncForType[chan struct{}], "GetFuncForType[chan struct{}]")
+		testPanic(t, GetFuncForType[chan bool], "GetFuncForType[chan bool]")
+		testPanic(t, GetFuncForType[chan int], "GetFuncForType[chan int]")
+		testPanic(t, GetFuncForType[chan chan string], "GetFuncForType[chan chan string]")
+	})
+	t.Run("funcs", func(t *testing.T) {
+		testPanic(t, GetFuncForType[func()], "GetFuncForType[func()]")
+	})
+}
+
+func testPanic[T any](t testing.TB, f func() func(v *viper.Viper) func(key string) T, fnName string) {
+	t.Helper()
+
+	defer func() {
+		err := recover()
+		assert.NotNil(t, err, "%s should panic", fnName)
+	}()
+
+	fn := f()
+	assert.Failf(t, fmt.Sprintf("%s should panic", fnName), "%s should panic; got %+v", fnName, fn)
 }
 
 func get[T any](t testing.TB, v *viper.Viper, key string) T {

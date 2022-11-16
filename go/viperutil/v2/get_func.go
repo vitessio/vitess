@@ -93,6 +93,11 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 	case reflect.Complex128:
 		f = getComplex[complex128](128)
 	case reflect.Array:
+		// Even though the code would be extremely similar to slice types, we
+		// cannot support arrays because there's no way to write a function that
+		// returns, say, [N]int, for some value of N which we only know at
+		// runtime.
+		panic("GetFuncForType does not support array types")
 	case reflect.Chan:
 		panic("GetFuncForType does not support channel types")
 	case reflect.Func:
