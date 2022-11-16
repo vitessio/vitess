@@ -57,11 +57,12 @@ jobs:
 
         # Uninstall any previously installed MySQL first
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common mysql-server-core-* mysql-client-core-* mysql-common-*
-        sudo apt-get -y autoremove
-        sudo apt-get -y autoclean
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        
 
         # install necessary tools
         sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata xz-utils libmecab2

@@ -49,19 +49,26 @@ jobs:
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
         sudo apt-get update
+        echo 'mysql version: '
+        mysql --version
         # stop any existing running instance of mysql
         sudo service mysql stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         sudo systemctl stop apparmor
-
+        
         # Uninstall any previously installed MySQL first
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common mysql-server-core-* mysql-client-core-* mysql-common-*
+        sudo ls /etc/mysql
+        sudo ls /var/lib/mysql
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
+        
+        echo 'mysql version: '
+        mysql --version
 
         # install necessary tools
         sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata xz-utils libmecab2
