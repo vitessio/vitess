@@ -103,6 +103,10 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 }
 
 func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
+	if containsScatter(plan) {
+		return true
+	}
+
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
 	var opcode engine.Opcode
 	var sysTableTableName map[string]evalengine.Expr

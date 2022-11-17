@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ stmtPlanner = gen4Planner("apa", 0)
+var _ = gen4Planner("apa", 0)
 
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
@@ -91,7 +91,8 @@ func gen4SelectStmtPlanner(
 	}
 
 	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error) {
-		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
+		in := sqlparser.CloneSelectStatement(selStatement)
+		return newBuildSelectPlan(in, reservedVars, vschema, plannerVersion)
 	}
 
 	plan, st, err := getPlan(stmt)

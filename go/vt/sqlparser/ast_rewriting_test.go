@@ -560,6 +560,18 @@ func TestRewriteToCNF(in *testing.T) {
 	}, {
 		in:       "A and (A or B)",
 		expected: "A",
+	}, {
+		in:       "(A and B) OR (A and C)",
+		expected: "A and (B or C)",
+	}, {
+		in:       "(A and B) OR (C and A)",
+		expected: "A and (B or C)",
+	}, {
+		in:       "(B and A) OR (A and C)",
+		expected: "A and (B or C)",
+	}, {
+		in:       "(B and A) OR (C and A)",
+		expected: "A and (B or C)",
 	}}
 
 	for _, tc := range tests {

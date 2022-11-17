@@ -54,7 +54,7 @@ type ReservedVars struct {
 }
 
 // ReserveAll tries to reserve all the given variable names. If they're all available,
-// they are reserved and the function returns true. Otherwise the function returns false.
+// they are reserved and the function returns true. Otherwise, the function returns false.
 func (r *ReservedVars) ReserveAll(names ...string) bool {
 	for _, name := range names {
 		if _, ok := r.reserved[name]; ok {
@@ -749,26 +749,48 @@ func rewriteToCNFExpr(expr Expr) (Expr, bool) {
 		}
 	case *OrExpr:
 		or := expr
-		if and, ok := or.Left.(*AndExpr); ok {
+		land, lok := or.Left.(*AndExpr)
+		rand, rok := or.Right.(*AndExpr)
+		switch {
+		case lok && rok:
+			var a, b, c Expr
+			switch {
+			// (A and B) or (A and C) => A AND (B OR C)
+			case EqualsExpr(land.Left, rand.Left):
+				a, b, c = land.Left, land.Right, rand.Right
+			// (A and B) or (C and A) => A AND (B OR C)
+			case EqualsExpr(land.Left, rand.Right):
+				a, b, c = land.Left, land.Right, rand.Left
+			// (B and A) or (A and C) => A AND (B OR C)
+			case EqualsExpr(land.Right, rand.Left):
+				a, b, c = land.Right, land.Left, rand.Right
+			// (B and A) or (C and A) => A AND (B OR C)
+			case EqualsExpr(land.Right, rand.Right):
+				a, b, c = land.Right, land.Left, rand.Left
+			default:
+				return expr, false
+			}
+			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, true
+		case lok:
 			// Simplification
 			// (A AND B) OR A => A
-			if EqualsExpr(or.Right, and.Left) || EqualsExpr(or.Right, and.Right) {
+			if EqualsExpr(or.Right, land.Left) || EqualsExpr(or.Right, land.Right) {
 				return or.Right, true
 			}
 			// Distribution Law
 			// (A AND B) OR C => (A OR C) AND (B OR C)
-			return &AndExpr{Left: &OrExpr{Left: and.Left, Right: or.Right}, Right: &OrExpr{Left: and.Right, Right: or.Right}}, true
-		}
-		if and, ok := or.Right.(*AndExpr); ok {
+			return &AndExpr{Left: &OrExpr{Left: land.Left, Right: or.Right}, Right: &OrExpr{Left: land.Right, Right: or.Right}}, true
+		case rok:
 			// Simplification
 			// A OR (A AND B) => A
-			if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Left, and.Right) {
+			if EqualsExpr(or.Left, rand.Left) || EqualsExpr(or.Left, rand.Right) {
 				return or.Left, true
 			}
 			// Distribution Law
 			// C OR (A AND B) => (C OR A) AND (C OR B)
-			return &AndExpr{Left: &OrExpr{Left: or.Left, Right: and.Left}, Right: &OrExpr{Left: or.Left, Right: and.Right}}, true
+			return &AndExpr{Left: &OrExpr{Left: or.Left, Right: rand.Left}, Right: &OrExpr{Left: or.Left, Right: rand.Right}}, true
 		}
+
 		// Try to make distinct
 		return distinctOr(expr)
 

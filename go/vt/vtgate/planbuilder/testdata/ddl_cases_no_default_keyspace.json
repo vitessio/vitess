@@ -116,7 +116,7 @@
   {
     "comment": "create view with select * from authoritative table",
     "query": "create view user.view_a as select * from authoritative",
-    "v3-plan": {
+    "plan": {
       "QueryType": "DDL",
       "Original": "create view user.view_a as select * from authoritative",
       "Instructions": {
@@ -130,27 +130,12 @@
       "TablesUsed": [
         "user.view_a"
       ]
-    },
-    "gen4-plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from authoritative",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select user_id, col1, col2 from authoritative"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
     }
   },
   {
     "comment": "create view with select * from join of authoritative tables",
     "query": "create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id",
-    "v3-plan": {
+    "plan": {
       "QueryType": "DDL",
       "Original": "create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id",
       "Instructions": {
@@ -164,27 +149,12 @@
       "TablesUsed": [
         "user.view_a"
       ]
-    },
-    "gen4-plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
     }
   },
   {
     "comment": "create view with select * from qualified authoritative table",
     "query": "create view user.view_a as select a.* from authoritative a",
-    "v3-plan": {
+    "plan": {
       "QueryType": "DDL",
       "Original": "create view user.view_a as select a.* from authoritative a",
       "Instructions": {
@@ -194,21 +164,6 @@
           "Sharded": true
         },
         "Query": "create view view_a as select a.* from authoritative as a"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    },
-    "gen4-plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select a.* from authoritative a",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select a.user_id, a.col1, a.col2 from authoritative as a"
       },
       "TablesUsed": [
         "user.view_a"
@@ -237,7 +192,7 @@
   {
     "comment": "create view with select authoritative.* with intermixing still expands",
     "query": "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
-    "v3-plan": {
+    "plan": {
       "QueryType": "DDL",
       "Original": "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
       "Instructions": {
@@ -247,21 +202,6 @@
           "Sharded": true
         },
         "Query": "create view view_a as select `user`.id, a.*, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    },
-    "gen4-plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
       },
       "TablesUsed": [
         "user.view_a"
