@@ -39,6 +39,10 @@ jobs:
           # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
           # queries: security-extended,security-and-quality
 
+      - name: toto
+        run: |
+          toto
+
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
@@ -83,7 +87,7 @@ jobs:
         timeout-minutes: 30
         run: |
           source build.env
-          make buildtoto
+          make build
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
@@ -96,3 +100,8 @@ jobs:
           slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
           channel: '#codeql'
           name: 'CodeQL Workflows'
+
+      - name: Fail if needed
+        if: ${{ failure() }}
+        run: |
+          exit 1
