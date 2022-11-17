@@ -25,6 +25,8 @@ import (
 	"flag"
 
 	"github.com/golang/glog"
+	"github.com/planetscale/log"
+	noglog "github.com/slok/noglog"
 )
 
 // Level is used with V() to test log verbosity.
@@ -71,8 +73,52 @@ var (
 	Fatalf = glog.Fatalf
 	// FatalDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
 	FatalDepth = glog.FatalDepth
+
+	// UsePlanetScaleLogger determines whether to use Planetscale's logging library instead of glog or not.
+	UsePlanetScaleLogger bool
 )
 
 func init() {
 	flag.Uint64Var(&glog.MaxSize, "log_rotate_max_size", glog.MaxSize, "size in bytes at which logs are rotated (glog.MaxSize)")
+	flag.BoolVar(&UsePlanetScaleLogger, "log_planetscale", UsePlanetScaleLogger, "use planetscale structured, leveled logger (false)")
+}
+
+// SetPlanetScaleLog overrides the logging functions with those provided by github.com/planetscale/log . This allows
+// to have structured, leveled logging built on top of Uber's zap logging library.
+func SetPlanetScaleLog() {
+	logger := log.NewPlanetScaleSugarLogger()
+	defer func(logger *log.SugaredLogger) {
+		_ = logger.Sync()
+	}(logger)
+
+	noglog.SetLogger(&noglog.LoggerFunc{
+		DebugfFunc: func(f string, a ...interface{}) { logger.Debugf(f, a...) },
+		InfofFunc:  func(f string, a ...interface{}) { logger.Infof(f, a...) },
+		WarnfFunc:  func(f string, a ...interface{}) { logger.Warnf(f, a...) },
+		ErrorfFunc: func(f string, a ...interface{}) { logger.Errorf(f, a...) },
+	})
+
+	V = vWrapper
+	Flush = noglog.Flush
+	Info = noglog.Info
+	Infof = noglog.Infof
+	InfoDepth = noglog.InfoDepth
+	Warning = noglog.Warning
+	Warningf = noglog.Warningf
+	WarningDepth = noglog.WarningDepth
+	Error = noglog.Error
+	Errorf = noglog.Errorf
+	ErrorDepth = noglog.ErrorDepth
+	Exit = noglog.Exit
+	Exitf = noglog.Exitf
+	ExitDepth = noglog.ExitDepth
+	Fatal = noglog.Fatal
+	Fatalf = noglog.Fatalf
+	FatalDepth = noglog.FatalDepth
+}
+
+// vWrapper wraps nolog's V() function so that it can replace glog's one. This is necessary because they define their own
+// Level and Verbose types, though they both are under the hood just int32 and bool.
+func vWrapper(level glog.Level) glog.Verbose {
+	return glog.Verbose(noglog.V(noglog.Level(level)))
 }
