@@ -165,6 +165,7 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 				os.Getenv("VTROOT"),
 				vtenvMysqlRoot,
 				os.Getenv("MYSQL_FLAVOR"))
+			log.Errorf(message)
 			panic(message)
 		}
 	}
