@@ -111,8 +111,16 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
-	// Start any pending VDiffs
-	rows, err := vde.getPendingVDiffs(ctx)
+	// This should never happen
+	if len(vde.controllers) > 0 {
+		log.Errorf("VDiff Engine invalid state detected: %d controllers existed when opening; resetting state", len(vde.controllers))
+		vde.resetControllers()
+	}
+
+	// At this point the tablet has no controllers running. So
+	// we want to start any VDiffs that have not been explicitly
+	// stopped or otherwise finished.
+	rows, err := vde.getVDiffsToRun(ctx)
 	if err != nil {
 		return err
 	}
@@ -219,10 +227,7 @@ func (vde *Engine) Close() {
 	vde.cancel()
 
 	// We still have to wait for all controllers to stop.
-	for _, ct := range vde.controllers {
-		ct.Stop()
-	}
-	vde.controllers = make(map[int64]*controller)
+	vde.resetControllers()
 
 	// Wait for long-running functions to exit.
 	vde.wg.Wait()
@@ -239,7 +244,7 @@ func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	return vde.dbClientFactoryFiltered()
 }
 
-func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, error) {
+func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error) {
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -248,7 +253,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 
 	// We have to use ExecIgnore here so as not to block quick tablet state
 	// transitions from primary to non-primary when starting the engine
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRun, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -342,4 +347,11 @@ func (vde *Engine) retryErroredVDiffs() {
 			log.Errorf("Error retrying vdiffs: %v", err)
 		}
 	}
+}
+
+func (vde *Engine) resetControllers() {
+	for _, ct := range vde.controllers {
+		ct.Stop()
+	}
+	vde.controllers = make(map[int64]*controller)
 }
