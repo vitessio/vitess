@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "vitess.io/vitess/go/vt/log"
+
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
 // This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
@@ -23,7 +25,8 @@ package sqlparser
 func RewritePredicate(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
-		ast = Rewrite(ast, func(cursor *Cursor) bool {
+		log.Errorf(String(ast))
+		ast = Rewrite(ast, nil, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
 				rewritten, didRewrite := simplifyExpression(e)
 				if didRewrite {
@@ -35,7 +38,7 @@ func RewritePredicate(ast SQLNode) SQLNode {
 				col.Metadata = nil
 			}
 			return true
-		}, nil)
+		})
 
 		if finishedRewrite {
 			return ast

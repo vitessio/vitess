@@ -30,9 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-//goland:noinspection GoVarAndConstTypeMayBeOmitted
-var _ stmtPlanner = gen4Planner("apa", 0)
-
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		switch stmt := stmt.(type) {

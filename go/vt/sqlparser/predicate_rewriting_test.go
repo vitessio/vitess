@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRewriteToCNF(in *testing.T) {
+func TestSimplifyExpression(in *testing.T) {
 	tests := []struct {
 		in       string
 		expected string
@@ -88,10 +88,9 @@ func TestRewriteToCNF(in *testing.T) {
 
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			stmt, err := Parse("SELECT * FROM T WHERE " + tc.in)
+			expr, err := ParseExpr(tc.in)
 			require.NoError(t, err)
 
-			expr := stmt.(*Select).Where.Expr
 			expr, didRewrite := simplifyExpression(expr)
 			assert.True(t, didRewrite)
 			assert.Equal(t, tc.expected, String(expr))
@@ -99,7 +98,7 @@ func TestRewriteToCNF(in *testing.T) {
 	}
 }
 
-func TestFixedPointRewriteToCNF(in *testing.T) {
+func TestRewritePredicate(in *testing.T) {
 	tests := []struct {
 		in       string
 		expected string
@@ -111,10 +110,13 @@ func TestFixedPointRewriteToCNF(in *testing.T) {
 		expected: "A and B",
 	}, {
 		in:       "((A and B) OR (A and C) OR (A and D)) and E and F",
-		expected: "A and ((A or D) and (B or C or D)) and E and F",
+		expected: "A and (B or C or D) and E and F",
 	}, {
 		in:       "(A and B) OR (A and C)",
 		expected: "A and (B or C)",
+	}, {
+		in:       "(A and B) or (A and C) or (A and D)",
+		expected: "A and (B or C or D)",
 	}, {
 		in:       "(a=1 or a IN (1,2)) or (a = 2 or a = 3)",
 		expected: "a in (1, 2, 3)",
@@ -122,11 +124,9 @@ func TestFixedPointRewriteToCNF(in *testing.T) {
 
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			require := require.New(t)
-			stmt, err := Parse("SELECT * FROM T WHERE " + tc.in)
-			require.NoError(err)
+			expr, err := ParseExpr(tc.in)
+			require.NoError(t, err)
 
-			expr := stmt.(*Select).Where.Expr
 			output := RewritePredicate(expr)
 			assert.Equal(t, tc.expected, String(output))
 		})
