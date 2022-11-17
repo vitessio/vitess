@@ -18,11 +18,11 @@ package tabletserver
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/pools"
-
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -40,13 +40,19 @@ import (
 
 const txLogInterval = 1 * time.Minute
 
-var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
-	querypb.ExecuteOptions_DEFAULT:                       {setIsolationLevel: "", openTransaction: "begin"},
-	querypb.ExecuteOptions_REPEATABLE_READ:               {setIsolationLevel: "REPEATABLE READ", openTransaction: "begin"},
-	querypb.ExecuteOptions_READ_COMMITTED:                {setIsolationLevel: "READ COMMITTED", openTransaction: "begin"},
-	querypb.ExecuteOptions_READ_UNCOMMITTED:              {setIsolationLevel: "READ UNCOMMITTED", openTransaction: "begin"},
-	querypb.ExecuteOptions_SERIALIZABLE:                  {setIsolationLevel: "SERIALIZABLE", openTransaction: "begin"},
-	querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY: {setIsolationLevel: "REPEATABLE READ", openTransaction: "start transaction with consistent snapshot, read only"},
+var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
+	querypb.ExecuteOptions_DEFAULT:                       "",
+	querypb.ExecuteOptions_REPEATABLE_READ:               "repeatable read",
+	querypb.ExecuteOptions_READ_COMMITTED:                "read committed",
+	querypb.ExecuteOptions_READ_UNCOMMITTED:              "read uncommitted",
+	querypb.ExecuteOptions_SERIALIZABLE:                  "serializable",
+	querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY: "repeatable read",
+}
+
+var txAccessMode = map[querypb.ExecuteOptions_TransactionAccessMode]string{
+	querypb.ExecuteOptions_CONSISTENT_SNAPSHOT: "with consistent snapshot",
+	querypb.ExecuteOptions_READ_WRITE:          "read write",
+	querypb.ExecuteOptions_READ_ONLY:           "read only",
 }
 
 type (
@@ -62,10 +68,6 @@ type (
 		logMu   sync.Mutex
 		lastLog time.Time
 		txStats *servenv.TimingsWrapper
-	}
-	queries struct {
-		setIsolationLevel string
-		openTransaction   string
 	}
 )
 
@@ -311,24 +313,28 @@ func createTransaction(
 		autocommitTransaction = true
 	case querypb.ExecuteOptions_REPEATABLE_READ, querypb.ExecuteOptions_READ_COMMITTED, querypb.ExecuteOptions_READ_UNCOMMITTED,
 		querypb.ExecuteOptions_SERIALIZABLE, querypb.ExecuteOptions_DEFAULT:
-		qrs := txIsolations[options.GetTransactionIsolation()]
+		isolationLevel := txIsolations[options.GetTransactionIsolation()]
 		var execSQL string
-		if qrs.setIsolationLevel != "" {
-			execSQL, err = setIsolationLevel(ctx, conn, qrs.setIsolationLevel)
+		if isolationLevel != "" {
+			execSQL, err = setIsolationLevel(ctx, conn, isolationLevel)
 			if err != nil {
 				return
 			}
 			beginQueries += execSQL
 		}
 
-		beginSQL := qrs.openTransaction
-		if readOnly {
-			beginSQL = "start transaction read only"
+		var beginSQL string
+		beginSQL, err = createStartTxStmt(options, readOnly)
+		if err != nil {
+			return "", false, "", err
 		}
+
 		execSQL, sessionStateChanges, err = startTransaction(ctx, conn, beginSQL)
 		if err != nil {
-			return
+			return "", false, "", err
 		}
+
+		// Add the begin statement to the list of queries.
 		beginQueries += execSQL
 	default:
 		return "", false, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
@@ -340,6 +346,50 @@ func createTransaction(
 		}
 	}
 	return
+}
+
+// createStartTxStmt - this method return the start transaction statement based on the TransactionAccessMode in options
+// and the readOnly flag passed in.
+// When readOnly is true, ReadWrite option should not have been passed, that will result in an error.
+// If no option is passed, the default on the connection will be used by just execution "begin" statement.
+func createStartTxStmt(options *querypb.ExecuteOptions, readOnly bool) (string, error) {
+	// default statement.
+	beginSQL := "begin"
+
+	// generate the access mode string
+	var modesStr strings.Builder
+	// to know if read only is already added to modeStr
+	// so that explicit addition of read only is not required in case of readOnly parameter is true.
+	var readOnlyAdded bool
+	for idx, accessMode := range options.GetTransactionAccessMode() {
+		txMode, ok := txAccessMode[accessMode]
+		if !ok {
+			return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] transaction access mode not known of this type: %v", accessMode)
+		}
+		if readOnly && accessMode == querypb.ExecuteOptions_READ_WRITE {
+			return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start read write transaction on a read only tablet")
+		}
+		if accessMode == querypb.ExecuteOptions_READ_ONLY {
+			readOnlyAdded = true
+		}
+		if idx == 0 {
+			modesStr.WriteString(txMode)
+			continue
+		}
+		modesStr.WriteString(", " + txMode)
+	}
+
+	if readOnly && !readOnlyAdded {
+		if modesStr.Len() != 0 {
+			modesStr.WriteString(", read only")
+		} else {
+			modesStr.WriteString("read only")
+		}
+	}
+	if modesStr.Len() != 0 {
+		beginSQL = "start transaction " + modesStr.String()
+	}
+	return beginSQL, nil
 }
 
 func handleConsistentSnapshotCase(ctx context.Context, conn *StatefulConnection) (beginSQL string, sessionStateChanges string, err error) {
@@ -354,15 +404,15 @@ func handleConsistentSnapshotCase(ctx context.Context, conn *StatefulConnection)
 		beginSQL = trackGtidQuery + "; "
 	}
 
-	qrs := txIsolations[querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY]
+	isolationLevel := txIsolations[querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY]
 
-	execSQL, err := setIsolationLevel(ctx, conn, qrs.setIsolationLevel)
+	execSQL, err := setIsolationLevel(ctx, conn, isolationLevel)
 	if err != nil {
 		return
 	}
 	beginSQL += execSQL
 
-	execSQL, sessionStateChanges, err = startTransaction(ctx, conn, qrs.openTransaction)
+	execSQL, sessionStateChanges, err = startTransaction(ctx, conn, "start transaction with consistent snapshot, read only")
 	if err != nil {
 		return
 	}

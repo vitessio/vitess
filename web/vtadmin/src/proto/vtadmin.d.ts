@@ -25158,10 +25158,9 @@ export namespace query {
 
         /** TransactionAccessMode enum. */
         enum TransactionAccessMode {
-            ACESS_MODE_UNSPECIFIED = 0,
-            CONSISTENT_SNAPSHOT = 1,
-            READ_WRITE = 2,
-            READ_ONLY = 3
+            CONSISTENT_SNAPSHOT = 0,
+            READ_WRITE = 1,
+            READ_ONLY = 2
         }
     }
 
