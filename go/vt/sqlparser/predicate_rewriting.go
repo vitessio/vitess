@@ -16,15 +16,16 @@ limitations under the License.
 
 package sqlparser
 
-// RewriteToCNF walks the input AST and rewrites any boolean logic into CNF
+// RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
+// This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
 // so ColName.Metadata will be nil:ed out as part of this rewrite
-func RewriteToCNF(ast SQLNode) SQLNode {
+func RewritePredicate(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
 		ast = Rewrite(ast, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
-				rewritten, didRewrite := rewriteToCNFExpr(e)
+				rewritten, didRewrite := simplifyExpression(e)
 				if didRewrite {
 					finishedRewrite = false
 					cursor.Replace(rewritten)
@@ -42,10 +43,10 @@ func RewriteToCNF(ast SQLNode) SQLNode {
 	}
 }
 
-func rewriteToCNFExpr(expr Expr) (Expr, bool) {
+func simplifyExpression(expr Expr) (Expr, bool) {
 	switch expr := expr.(type) {
 	case *NotExpr:
-		simplifyNot(expr)
+		return simplifyNot(expr)
 	case *OrExpr:
 		return simplifyOr(expr)
 	case *XorExpr:
@@ -75,6 +76,8 @@ func simplifyNot(expr *NotExpr) (Expr, bool) {
 
 func simplifyOr(expr *OrExpr) (Expr, bool) {
 	or := expr
+
+	// first we search for ANDs and see how they can be simplified
 	land, lok := or.Left.(*AndExpr)
 	rand, rok := or.Right.(*AndExpr)
 	switch {
@@ -117,8 +120,72 @@ func simplifyOr(expr *OrExpr) (Expr, bool) {
 		return &AndExpr{Left: &OrExpr{Left: or.Left, Right: rand.Left}, Right: &OrExpr{Left: or.Left, Right: rand.Right}}, true
 	}
 
+	// next, we want to try to turn multiple ORs into an IN when possible
+	lftCmp, lok := or.Left.(*ComparisonExpr)
+	rgtCmp, rok := or.Right.(*ComparisonExpr)
+	if lok && rok {
+		newExpr, rewritten := tryTurningOrIntoIn(lftCmp, rgtCmp)
+		if rewritten {
+			return newExpr, true
+		}
+	}
+
 	// Try to make distinct
 	return distinctOr(expr)
+}
+
+func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, bool) {
+	col, ok := l.Left.(*ColName)
+	if !ok || !EqualsExpr(col, r.Left) {
+		return nil, false
+	}
+
+	var tuple ValTuple
+
+	switch l.Operator {
+	case EqualOp:
+		tuple = ValTuple{l.Right}
+	case InOp:
+		lft, ok := l.Right.(ValTuple)
+		if !ok {
+			return nil, false
+		}
+		tuple = lft
+	default:
+		return nil, false
+	}
+
+	switch r.Operator {
+	case EqualOp:
+		tuple = append(tuple, r.Right)
+	case InOp:
+		lft, ok := r.Right.(ValTuple)
+		if !ok {
+			return nil, false
+		}
+		tuple = append(tuple, lft...)
+	default:
+		return nil, false
+	}
+
+	return &ComparisonExpr{
+		Operator: InOp,
+		Left:     col,
+		Right:    uniquefy(tuple),
+	}, true
+}
+
+func uniquefy(tuple ValTuple) (output ValTuple) {
+outer:
+	for _, expr := range tuple {
+		for _, seen := range output {
+			if EqualsExpr(expr, seen) {
+				continue outer
+			}
+		}
+		output = append(output, expr)
+	}
+	return
 }
 
 func simplifyXor(expr *XorExpr) (Expr, bool) {
@@ -150,69 +217,4 @@ func simplifyAnd(expr *AndExpr) (Expr, bool) {
 
 	return expr, false
 
-}
-
-func TryRewriteOrToIn(expr Expr) Expr {
-	rewrote := false
-	newPred := Rewrite(CloneExpr(expr), func(cursor *Cursor) bool {
-		_, ok := cursor.Node().(*OrExpr)
-		return ok
-	}, func(cursor *Cursor) bool {
-		// we are looking for the pattern WHERE c = 1 or c = 2
-		switch or := cursor.Node().(type) {
-		case *OrExpr:
-			lftCmp, ok := or.Left.(*ComparisonExpr)
-			if !ok {
-				return true
-			}
-			rgtCmp, ok := or.Right.(*ComparisonExpr)
-			if !ok {
-				return true
-			}
-
-			col, ok := lftCmp.Left.(*ColName)
-			if !ok || !EqualsExpr(lftCmp.Left, rgtCmp.Left) {
-				return true
-			}
-
-			var tuple ValTuple
-			switch lftCmp.Operator {
-			case EqualOp:
-				tuple = ValTuple{lftCmp.Right}
-			case InOp:
-				lft, ok := lftCmp.Right.(ValTuple)
-				if !ok {
-					return true
-				}
-				tuple = lft
-			default:
-				return true
-			}
-
-			switch rgtCmp.Operator {
-			case EqualOp:
-				tuple = append(tuple, rgtCmp.Right)
-			case InOp:
-				lft, ok := rgtCmp.Right.(ValTuple)
-				if !ok {
-					return true
-				}
-				tuple = append(tuple, lft...)
-			default:
-				return true
-			}
-
-			rewrote = true
-			cursor.Replace(&ComparisonExpr{
-				Operator: InOp,
-				Left:     col,
-				Right:    tuple,
-			})
-		}
-		return true
-	})
-	if rewrote {
-		return newPred.(Expr)
-	}
-	return nil
 }

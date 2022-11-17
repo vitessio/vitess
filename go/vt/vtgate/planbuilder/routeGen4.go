@@ -254,17 +254,3 @@ func (rb *routeGen4) exprIsValue(expr sqlparser.Expr) bool {
 	}
 	return sqlparser.IsValue(expr)
 }
-
-func containsScatter(plan logicalPlan) (scatter bool) {
-	_, _ = visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
-		rb, ok := plan.(*routeGen4)
-		if ok {
-			if rb.eroute.Opcode == engine.Scatter {
-				scatter = true
-			}
-		}
-		return !scatter, plan, nil
-	})
-
-	return
-}

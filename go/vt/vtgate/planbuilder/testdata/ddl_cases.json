@@ -251,7 +251,7 @@
   {
     "comment": "create view with subquery in unsharded keyspace",
     "query": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
-    "plan": {
+    "v3-plan": {
       "QueryType": "DDL",
       "Original": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
       "Instructions": {
@@ -261,6 +261,21 @@
           "Sharded": false
         },
         "Query": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a"
+      },
+      "TablesUsed": [
+        "main.view_a"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DDL",
+      "Original": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create view view_a as select a.col1, a.col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a"
       },
       "TablesUsed": [
         "main.view_a"

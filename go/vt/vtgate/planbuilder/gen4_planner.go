@@ -91,8 +91,7 @@ func gen4SelectStmtPlanner(
 	}
 
 	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error) {
-		in := sqlparser.CloneSelectStatement(selStatement)
-		return newBuildSelectPlan(in, reservedVars, vschema, plannerVersion)
+		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
 	plan, st, err := getPlan(stmt)
@@ -100,9 +99,9 @@ func gen4SelectStmtPlanner(
 		return nil, err
 	}
 
-	if shouldRetryWithCNFRewriting(plan) {
+	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
-		primitive, st := gen4CNFRewrite(stmt, getPlan)
+		primitive, st := gen4PredicateRewrite(stmt, getPlan)
 		if primitive != nil {
 			return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 		}
@@ -155,14 +154,14 @@ func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VS
 	return nil, plan, nil
 }
 
-func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (engine.Primitive, *semantics.SemTable) {
-	rewritten, isSel := sqlparser.RewriteToCNF(stmt).(sqlparser.SelectStatement)
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (engine.Primitive, *semantics.SemTable) {
+	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
 		return nil, nil
 	}
 	plan2, st, err := getPlan(rewritten)
-	if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+	if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
 		// we only use this new plan if it's better than the old one we got
 		return plan2.Primitive(), st
 	}
