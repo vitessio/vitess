@@ -101,6 +101,7 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql57",
+		"mysql80",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vtorc",

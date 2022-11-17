@@ -54,7 +54,11 @@ jobs:
 
         # Install everything else we need, and configure
         sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
-
+        echo 'mysql version: '
+        sudo mysql --version
+        sudo service mysql stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         {{else}}
 
         # Get key to latest MySQL repo
@@ -83,12 +87,11 @@ jobs:
         wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz
         # Untar the bundle. It will have all necessary deb
         sudo tar xf mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz -v -C /usr
-
+        echo 'mysql version: '
+        sudo /usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin/mysql --version
         {{end}}
 
         # configure rest
-        echo 'mysql version: '
-        sudo /usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin/mysql --version
         sudo service etcd stop
         go mod download
 
