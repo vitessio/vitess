@@ -231,6 +231,8 @@ func TestVStreamCopyBasic(t *testing.T) {
 				}
 			}
 
+			printEvents(evs) // for debugging ci failures
+
 			if len(evs) == numExpectedEvents {
 				sort.Sort(VEventShardSorter(completedEvs))
 				for i, ev := range completedEvs {
@@ -238,8 +240,9 @@ func TestVStreamCopyBasic(t *testing.T) {
 				}
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
+			} else if numExpectedEvents < len(evs) {
+				t.Fatalf("len(events)=%v are not expected\n", len(evs))
 			}
-			printEvents(evs) // for debugging ci failures
 		case io.EOF:
 			log.Infof("stream ended\n")
 			cancel()
