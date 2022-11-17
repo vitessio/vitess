@@ -294,54 +294,96 @@ func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOption
 	return conn, nil
 }
 
-func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool, savepointQueries []string) (string, bool, string, error) {
-	beginQueries := ""
-
-	autocommitTransaction := false
-	sessionStateChanges := ""
-	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
-		if options.GetTransactionIsolation() == querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY {
-			trackGtidQuery := "set session session_track_gtids = START_GTID"
-			_, err := conn.execWithRetry(ctx, trackGtidQuery, 1, false)
-			// We allow this to fail since this is a custom MySQL extension, but we return
-			// then if this query was executed or not.
-			//
-			// Callers also can know because the sessionStateChanges will be empty for a snapshot
-			// transaction and get GTID information in another (less efficient) way.
-			if err == nil {
-				beginQueries += trackGtidQuery + "; "
-			}
-		}
-		if queries.setIsolationLevel != "" {
-			txQuery := "set transaction isolation level " + queries.setIsolationLevel
-			if _, err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
-				return "", false, "", err
-			}
-			beginQueries += queries.setIsolationLevel + "; "
-		}
-		beginSQL := queries.openTransaction
-		if readOnly &&
-			options.GetTransactionIsolation() != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY {
-			beginSQL = "start transaction read only"
-		}
-		var err error
-		sessionStateChanges, err = conn.execWithRetry(ctx, beginSQL, 1, false)
+func createTransaction(
+	ctx context.Context,
+	options *querypb.ExecuteOptions,
+	conn *StatefulConnection,
+	readOnly bool,
+	savepointQueries []string,
+) (beginQueries string, autocommitTransaction bool, sessionStateChanges string, err error) {
+	switch options.GetTransactionIsolation() {
+	case querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY:
+		beginQueries, sessionStateChanges, err = handleConsistentSnapshotCase(ctx, conn)
 		if err != nil {
 			return "", false, "", err
 		}
-		beginQueries += beginSQL
-	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
+	case querypb.ExecuteOptions_AUTOCOMMIT:
 		autocommitTransaction = true
-	} else {
-		return "", false, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
+	case querypb.ExecuteOptions_REPEATABLE_READ, querypb.ExecuteOptions_READ_COMMITTED, querypb.ExecuteOptions_READ_UNCOMMITTED,
+		querypb.ExecuteOptions_SERIALIZABLE, querypb.ExecuteOptions_DEFAULT:
+		qrs := txIsolations[options.GetTransactionIsolation()]
+		var execSQL string
+		if qrs.setIsolationLevel != "" {
+			execSQL, err = setIsolationLevel(ctx, conn, qrs.setIsolationLevel)
+			if err != nil {
+				return
+			}
+			beginQueries += execSQL
+		}
+
+		beginSQL := qrs.openTransaction
+		if readOnly {
+			beginSQL = "start transaction read only"
+		}
+		execSQL, sessionStateChanges, err = startTransaction(ctx, conn, beginSQL)
+		if err != nil {
+			return
+		}
+		beginQueries += execSQL
+	default:
+		return "", false, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
 	for _, savepoint := range savepointQueries {
-		if _, err := conn.Exec(ctx, savepoint, 1, false); err != nil {
+		if _, err = conn.Exec(ctx, savepoint, 1, false); err != nil {
 			return "", false, "", err
 		}
 	}
-	return beginQueries, autocommitTransaction, sessionStateChanges, nil
+	return
+}
+
+func handleConsistentSnapshotCase(ctx context.Context, conn *StatefulConnection) (beginSQL string, sessionStateChanges string, err error) {
+	trackGtidQuery := "set session session_track_gtids = START_GTID"
+	_, err = conn.execWithRetry(ctx, trackGtidQuery, 1, false)
+	// We allow this to fail since this is a custom MySQL extension, but we return
+	// then if this query was executed or not.
+	//
+	// Callers also can know because the sessionStateChanges will be empty for a snapshot
+	// transaction and get GTID information in another (less efficient) way.
+	if err == nil {
+		beginSQL = trackGtidQuery + "; "
+	}
+
+	qrs := txIsolations[querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY]
+
+	execSQL, err := setIsolationLevel(ctx, conn, qrs.setIsolationLevel)
+	if err != nil {
+		return
+	}
+	beginSQL += execSQL
+
+	execSQL, sessionStateChanges, err = startTransaction(ctx, conn, qrs.openTransaction)
+	if err != nil {
+		return
+	}
+	beginSQL += execSQL
+	return
+}
+
+func startTransaction(ctx context.Context, conn *StatefulConnection, transaction string) (string, string, error) {
+	sessionStateChanges, err := conn.execWithRetry(ctx, transaction, 1, false)
+	if err != nil {
+		return "", "", err
+	}
+	return transaction, sessionStateChanges, nil
+}
+
+func setIsolationLevel(ctx context.Context, conn *StatefulConnection, level string) (string, error) {
+	txQuery := "set transaction isolation level " + level
+	if _, err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
+		return "", err
+	}
+	return txQuery + "; ", nil
 }
 
 // LogActive causes all existing transactions to be logged when they complete.
