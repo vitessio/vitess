@@ -324,7 +324,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		wr.Logger().Errorf(errorMsg)
 		return nil, fmt.Errorf(errorMsg)
 	}
-	log.Infof("Switching Reads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
+	log.Infof("Switching reads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
 	var switchReplicas, switchRdonly bool
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {

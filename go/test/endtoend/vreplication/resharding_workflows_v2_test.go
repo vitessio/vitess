@@ -206,7 +206,7 @@ func validateWritesRouteToTarget(t *testing.T) {
 }
 
 func revert(t *testing.T, workflowType string) {
-	switchWrites(t, workflowType, reverseKsWorkflow, false)
+	switchWrites(t, workflowType, ksWorkflow, true)
 	validateWritesRouteToSource(t)
 	switchReadsNew(t, workflowType, allCellNames, ksWorkflow, true)
 	validateReadsRouteToSource(t, "replica")
