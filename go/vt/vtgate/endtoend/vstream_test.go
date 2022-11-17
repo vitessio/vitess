@@ -169,7 +169,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
-	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
+	_, err := conn.ExecuteFetch("insert into t1_copy_basic(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 	qr := sqltypes.ResultToProto3(&lastPK)
 	tablePKs := []*binlogdatapb.TableLastPK{{
-		TableName: "t1",
+		TableName: "t1_copy_basic",
 		Lastpk:    qr,
 	}}
 	var shardGtids []*binlogdatapb.ShardGtid
@@ -200,8 +200,8 @@ func TestVStreamCopyBasic(t *testing.T) {
 	vgtid.ShardGtids = shardGtids
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select * from t1",
+			Match:  "t1_copy_basic",
+			Filter: "select * from t1_copy_basic",
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
