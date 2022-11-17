@@ -76,9 +76,7 @@ export const Workflows = () => {
                             <div className="text-secondary text-success-200">
                                 {row.workflowType}
                                 {row.workflowSubType && row.workflowSubType !== 'None' && (
-                                    <span className="text-sm">
-                                        {' (' + row.workflowSubType + ')'}
-                                    </span>
+                                    <span className="text-sm">{' (' + row.workflowSubType + ')'}</span>
                                 )}
                             </div>
                         )}
