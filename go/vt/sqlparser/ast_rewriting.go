@@ -616,32 +616,6 @@ func SystemSchema(schema string) bool {
 		strings.EqualFold(schema, "mysql")
 }
 
-// RewriteToCNF walks the input AST and rewrites any boolean logic into CNF
-// Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
-// so ColName.Metadata will be nil:ed out as part of this rewrite
-func RewriteToCNF(ast SQLNode) SQLNode {
-	for {
-		finishedRewrite := true
-		ast = Rewrite(ast, func(cursor *Cursor) bool {
-			if e, isExpr := cursor.node.(Expr); isExpr {
-				rewritten, didRewrite := rewriteToCNFExpr(e)
-				if didRewrite {
-					finishedRewrite = false
-					cursor.Replace(rewritten)
-				}
-			}
-			if col, isCol := cursor.node.(*ColName); isCol {
-				col.Metadata = nil
-			}
-			return true
-		}, nil)
-
-		if finishedRewrite {
-			return ast
-		}
-	}
-}
-
 func distinctOr(in *OrExpr) (Expr, bool) {
 	todo := []*OrExpr{in}
 	var leaves []Expr
@@ -686,6 +660,7 @@ outer1:
 	}
 	return result, true
 }
+
 func distinctAnd(in *AndExpr) (Expr, bool) {
 	todo := []*AndExpr{in}
 	var leaves []Expr
@@ -729,96 +704,4 @@ outer1:
 		result = &AndExpr{Left: result, Right: curr}
 	}
 	return result, true
-}
-
-func rewriteToCNFExpr(expr Expr) (Expr, bool) {
-	switch expr := expr.(type) {
-	case *NotExpr:
-		switch child := expr.Expr.(type) {
-		case *NotExpr:
-			// NOT NOT A => A
-			return child.Expr, true
-		case *OrExpr:
-			// DeMorgan Rewriter
-			// NOT (A OR B) => NOT A AND NOT B
-			return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
-		case *AndExpr:
-			// DeMorgan Rewriter
-			// NOT (A AND B) => NOT A OR NOT B
-			return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
-		}
-	case *OrExpr:
-		or := expr
-		land, lok := or.Left.(*AndExpr)
-		rand, rok := or.Right.(*AndExpr)
-		switch {
-		case lok && rok:
-			var a, b, c Expr
-			switch {
-			// (A and B) or (A and C) => A AND (B OR C)
-			case EqualsExpr(land.Left, rand.Left):
-				a, b, c = land.Left, land.Right, rand.Right
-			// (A and B) or (C and A) => A AND (B OR C)
-			case EqualsExpr(land.Left, rand.Right):
-				a, b, c = land.Left, land.Right, rand.Left
-			// (B and A) or (A and C) => A AND (B OR C)
-			case EqualsExpr(land.Right, rand.Left):
-				a, b, c = land.Right, land.Left, rand.Right
-			// (B and A) or (C and A) => A AND (B OR C)
-			case EqualsExpr(land.Right, rand.Right):
-				a, b, c = land.Right, land.Left, rand.Left
-			default:
-				return expr, false
-			}
-			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, true
-		case lok:
-			// Simplification
-			// (A AND B) OR A => A
-			if EqualsExpr(or.Right, land.Left) || EqualsExpr(or.Right, land.Right) {
-				return or.Right, true
-			}
-			// Distribution Law
-			// (A AND B) OR C => (A OR C) AND (B OR C)
-			return &AndExpr{Left: &OrExpr{Left: land.Left, Right: or.Right}, Right: &OrExpr{Left: land.Right, Right: or.Right}}, true
-		case rok:
-			// Simplification
-			// A OR (A AND B) => A
-			if EqualsExpr(or.Left, rand.Left) || EqualsExpr(or.Left, rand.Right) {
-				return or.Left, true
-			}
-			// Distribution Law
-			// C OR (A AND B) => (C OR A) AND (C OR B)
-			return &AndExpr{Left: &OrExpr{Left: or.Left, Right: rand.Left}, Right: &OrExpr{Left: or.Left, Right: rand.Right}}, true
-		}
-
-		// Try to make distinct
-		return distinctOr(expr)
-
-	case *XorExpr:
-		// DeMorgan Rewriter
-		// (A XOR B) => (A OR B) AND NOT (A AND B)
-		return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, true
-	case *AndExpr:
-		res, rewritten := distinctAnd(expr)
-		if rewritten {
-			return res, rewritten
-		}
-		and := expr
-		if or, ok := and.Left.(*OrExpr); ok {
-			// Simplification
-			// (A OR B) AND A => A
-			if EqualsExpr(or.Left, and.Right) || EqualsExpr(or.Right, and.Right) {
-				return and.Right, true
-			}
-		}
-		if or, ok := and.Right.(*OrExpr); ok {
-			// Simplification
-			// A OR (A AND B) => A
-			if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Right, and.Left) {
-				return or.Left, true
-			}
-		}
-
-	}
-	return expr, false
 }
