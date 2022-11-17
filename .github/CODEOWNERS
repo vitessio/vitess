@@ -70,7 +70,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /proto/vtadmin.proto @ajm188 @notfelineit
 /proto/vtctldata.proto @ajm188 @notfelineit
 /proto/vtctlservice.proto @ajm188 @notfelineit
-/test/ @GuptaManan100 @frouioui @rohit-nayak-ps
+/test/ @GuptaManan100 @frouioui @rohit-nayak-ps @deepthi @mattlord @harshit-gangal
 /tools/ @frouioui @rohit-nayak-ps
 /web/vtadmin @ajm188 @notfelineit
 /web/vtctld2 @notfelineit @rohit-nayak-ps
