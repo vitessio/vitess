@@ -16,8 +16,6 @@ limitations under the License.
 
 package sqlparser
 
-import "vitess.io/vitess/go/vt/log"
-
 const (
 	Changed  RewriteState = true
 	NoChange RewriteState = false
@@ -32,7 +30,6 @@ type RewriteState bool
 func RewritePredicate(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
-		log.Errorf(String(ast))
 		ast = Rewrite(ast, nil, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
 				rewritten, state := simplifyExpression(e)
