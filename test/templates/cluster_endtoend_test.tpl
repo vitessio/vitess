@@ -68,7 +68,7 @@ jobs:
         sudo systemctl stop apparmor
 
         # Uninstall any previously installed MySQL first
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common mysql-server-core-* mysql-client-core-* mysql-common-*
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-\*
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
         sudo deluser mysql
@@ -80,28 +80,16 @@ jobs:
         sudo service etcd stop
 
         # Download mysql8.0.25 (pin it)
-        wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-server_8.0.25-1ubuntu20.04_amd64.deb-bundle.tar
-        sudo tar xf mysql-server_8.0.25-1ubuntu20.04_amd64.deb-bundle.tar -v
-
+        wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz
         # Untar the bundle. It will have all necessary deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-common_8.0.25-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-client-plugins_8.0.25-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-client-core_8.0.25-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-client_8.0.25-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-client_8.0.25-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-server-core_8.0.25-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-community-server_8.0.25-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-server_8.0.25-1ubuntu20.04_amd64.deb
+        sudo tar xf mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz -v -C /usr
 
         {{end}}
 
         # configure rest
         echo 'mysql version: '
-        mysql --version
-        sudo service mysql stop
+        sudo /usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin/mysql --version
         sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
         # install JUnit report formatter
@@ -126,6 +114,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 45
       run: |
+        export VT_MYSQL_ROOT="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal"
         source build.env
 
         set -x

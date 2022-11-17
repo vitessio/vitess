@@ -9,48 +9,86 @@ concurrency:
 jobs:
   build:
     name: Run endtoend tests on Cluster (11)
-    runs-on: self-hosted
+    runs-on: ubuntu-20.04
 
     steps:
-      - name: Check if workflow needs to be skipped
-        id: skip-workflow
-        run: |
-          skip='false'
-          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-            skip='true'
-          fi
-          echo Skip ${skip}
-          echo "::set-output name=skip-workflow::${skip}"
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
 
-      - name: Check out code
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v2
+    - name: Set up Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17.13
 
-      - name: Build Docker Image
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        run: docker build -f ./.github/docker/cluster_test_11/Dockerfile -t cluster_test_11:$GITHUB_SHA  .
+    - name: Set up python
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/setup-python@v2
 
-      - name: Run test
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        timeout-minutes: 30
-        run: docker run --name "cluster_test_11_$GITHUB_SHA" cluster_test_11:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard 11 -- -- --keep-data=true'
+    - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
-      - name: Print Volume Used
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
-        run: |
-          docker inspect -f '{{ (index .Mounts 0).Name }}' cluster_test_11_$GITHUB_SHA
+    - name: Check out code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/checkout@v2
 
-      - name: Cleanup Docker Volume
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        run: |
-          docker rm -v cluster_test_11_$GITHUB_SHA
+    - name: Get dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: |
+        
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
-      - name: Cleanup Docker Container
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
-        run: |
-          docker rm -f cluster_test_11_$GITHUB_SHA
+        sudo apt-get update
+        # stop any existing running instance of mysql
+        sudo service mysql stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo systemctl stop apparmor
 
-      - name: Cleanup Docker Image
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        run: |
-          docker image rm cluster_test_11:$GITHUB_SHA
+        # Uninstall any previously installed MySQL first
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-\*
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # install necessary tools
+        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata xz-utils libmecab2
+        sudo service etcd stop
+
+        # Download mysql8.0.25 (pin it)
+        wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz
+        # Untar the bundle. It will have all necessary deb
+        sudo tar xf mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz -v -C /usr
+
+        # configure rest
+        echo 'mysql version: '
+        sudo /usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin/mysql --version
+        sudo service etcd stop
+        go mod download
+
+        # install JUnit report formatter
+        go get -u github.com/vitessio/go-junit-report@HEAD
+
+    - name: Run cluster endtoend test
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      timeout-minutes: 45
+      run: |
+        export VT_MYSQL_ROOT="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal"
+        source build.env
+
+        set -x
+
+        # run the tests however you normally do, then produce a JUnit XML file
+        eatmydata -- go run test.go -docker=false -follow -shard 11
