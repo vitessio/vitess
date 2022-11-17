@@ -46,6 +46,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestDerivedTableWithOrderByLimit(t *testing.T) {
+	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11763")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -89,6 +90,7 @@ func TestDerivedTableWithHaving(t *testing.T) {
 }
 
 func TestDerivedTableColumns(t *testing.T) {
+	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11763")
 	mcmp, closer := start(t)
 	defer closer()
 
