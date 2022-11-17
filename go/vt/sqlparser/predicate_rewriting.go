@@ -135,6 +135,7 @@ func simplifyOr(expr *OrExpr) (Expr, bool) {
 }
 
 func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, bool) {
+	// looks for A = X OR A = Y and turns them into A IN (X, Y)
 	col, ok := l.Left.(*ColName)
 	if !ok || !EqualsExpr(col, r.Left) {
 		return nil, false
