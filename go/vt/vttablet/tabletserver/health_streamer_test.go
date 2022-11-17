@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -85,7 +86,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			HealthError: "tabletserver uninitialized",
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	hs.ChangeState(topodatapb.TabletType_REPLICA, time.Time{}, 0, nil, false)
 	shr = <-ch
@@ -99,7 +100,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test primary and timestamp.
 	now := time.Now()
@@ -117,7 +118,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test non-serving, and 0 timestamp for non-primary.
 	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, nil, false)
@@ -133,7 +134,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test Health error.
 	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 0, errors.New("repl err"), false)
@@ -149,7 +150,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 }
 
 func TestReloadSchema(t *testing.T) {
