@@ -73,7 +73,6 @@ jobs:
         wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz
         # Untar the bundle. It will have all necessary deb
         sudo tar xf mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz -v -C /usr
-        export VT_MYSQL_ROOT="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal"
 
         # configure rest
         echo 'mysql version: '
@@ -91,6 +90,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 45
       run: |
+        export VT_MYSQL_ROOT="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal"
         source build.env
 
         set -x
