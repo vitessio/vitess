@@ -5,9 +5,8 @@ on:
     branches:
       - main
       - release-**.0
-  pull_request:
-#  schedule:
-#    - cron: '0 0 * * 1'
+  schedule:
+    - cron: '0 0 * * 1'
 
 jobs:
   analyze:
@@ -38,10 +37,6 @@ jobs:
 
           # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
           # queries: security-extended,security-and-quality
-
-      - name: toto
-        run: |
-          toto
 
       - name: Set up Go
         uses: actions/setup-go@v2
