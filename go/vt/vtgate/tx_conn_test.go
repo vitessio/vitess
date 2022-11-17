@@ -1248,6 +1248,60 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestTxConnAccessModeReset(t *testing.T) {
+	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+
+	tcases := []struct {
+		name  string
+		funcs [2]func(ctx context.Context, session *SafeSession) error
+	}{{
+		name: "begin-commit",
+		funcs: [2]func(ctx context.Context, session *SafeSession) error{
+			sc.txConn.Begin,
+			sc.txConn.Commit,
+		},
+	}, {
+		name: "begin-rollback",
+		funcs: [2]func(ctx context.Context, session *SafeSession) error{
+			sc.txConn.Begin,
+			sc.txConn.Rollback,
+		},
+	}, {
+		name: "begin-release",
+		funcs: [2]func(ctx context.Context, session *SafeSession) error{
+			sc.txConn.Begin,
+			sc.txConn.Release,
+		},
+	}, {
+		name: "begin-releaseAll",
+		funcs: [2]func(ctx context.Context, session *SafeSession) error{
+			sc.txConn.Begin,
+			sc.txConn.ReleaseAll,
+		},
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			safeSession := NewSafeSession(&vtgatepb.Session{
+				Options: &querypb.ExecuteOptions{
+					TransactionAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_READ_ONLY},
+				},
+			})
+
+			// begin transaction
+			require.NoError(t,
+				tcase.funcs[0](ctx, safeSession))
+
+			// resolve transaction
+			require.NoError(t,
+				tcase.funcs[1](ctx, safeSession))
+
+			// check that the access mode is reset
+			require.Nil(t, safeSession.Session.Options.TransactionAccessMode)
+		})
+	}
+}
+
 func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
 	t.Helper()
 	createSandbox(name)
