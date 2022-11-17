@@ -117,7 +117,10 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 45
       run: |
+        {{if not .InstallXtraBackup }}
         export VT_MYSQL_ROOT="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal"
+        export PATH="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin:$PATH"
+        {{end}}
         source build.env
 
         set -x
