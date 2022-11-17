@@ -18,6 +18,13 @@ package sqlparser
 
 import "vitess.io/vitess/go/vt/log"
 
+const (
+	Changed  RewriteState = true
+	NoChange RewriteState = false
+)
+
+type RewriteState bool
+
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
 // This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
@@ -28,8 +35,8 @@ func RewritePredicate(ast SQLNode) SQLNode {
 		log.Errorf(String(ast))
 		ast = Rewrite(ast, nil, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
-				rewritten, didRewrite := simplifyExpression(e)
-				if didRewrite {
+				rewritten, state := simplifyExpression(e)
+				if state == Changed {
 					finishedRewrite = false
 					cursor.Replace(rewritten)
 				}
@@ -46,7 +53,7 @@ func RewritePredicate(ast SQLNode) SQLNode {
 	}
 }
 
-func simplifyExpression(expr Expr) (Expr, bool) {
+func simplifyExpression(expr Expr) (Expr, RewriteState) {
 	switch expr := expr.(type) {
 	case *NotExpr:
 		return simplifyNot(expr)
@@ -57,27 +64,27 @@ func simplifyExpression(expr Expr) (Expr, bool) {
 	case *AndExpr:
 		return simplifyAnd(expr)
 	}
-	return expr, false
+	return expr, NoChange
 }
 
-func simplifyNot(expr *NotExpr) (Expr, bool) {
+func simplifyNot(expr *NotExpr) (Expr, RewriteState) {
 	switch child := expr.Expr.(type) {
 	case *NotExpr:
 		// NOT NOT A => A
-		return child.Expr, true
+		return child.Expr, Changed
 	case *OrExpr:
 		// DeMorgan Rewriter
 		// NOT (A OR B) => NOT A AND NOT B
-		return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
+		return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, Changed
 	case *AndExpr:
 		// DeMorgan Rewriter
 		// NOT (A AND B) => NOT A OR NOT B
-		return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
+		return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, Changed
 	}
-	return expr, false
+	return expr, NoChange
 }
 
-func simplifyOr(expr *OrExpr) (Expr, bool) {
+func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	or := expr
 
 	// first we search for ANDs and see how they can be simplified
@@ -100,27 +107,27 @@ func simplifyOr(expr *OrExpr) (Expr, bool) {
 		case EqualsExpr(land.Right, rand.Right):
 			a, b, c = land.Right, land.Left, rand.Left
 		default:
-			return expr, false
+			return expr, NoChange
 		}
-		return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, true
+		return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, Changed
 	case lok:
 		// Simplification
 		// (A AND B) OR A => A
 		if EqualsExpr(or.Right, land.Left) || EqualsExpr(or.Right, land.Right) {
-			return or.Right, true
+			return or.Right, Changed
 		}
 		// Distribution Law
 		// (A AND B) OR C => (A OR C) AND (B OR C)
-		return &AndExpr{Left: &OrExpr{Left: land.Left, Right: or.Right}, Right: &OrExpr{Left: land.Right, Right: or.Right}}, true
+		return &AndExpr{Left: &OrExpr{Left: land.Left, Right: or.Right}, Right: &OrExpr{Left: land.Right, Right: or.Right}}, Changed
 	case rok:
 		// Simplification
 		// A OR (A AND B) => A
 		if EqualsExpr(or.Left, rand.Left) || EqualsExpr(or.Left, rand.Right) {
-			return or.Left, true
+			return or.Left, Changed
 		}
 		// Distribution Law
 		// C OR (A AND B) => (C OR A) AND (C OR B)
-		return &AndExpr{Left: &OrExpr{Left: or.Left, Right: rand.Left}, Right: &OrExpr{Left: or.Left, Right: rand.Right}}, true
+		return &AndExpr{Left: &OrExpr{Left: or.Left, Right: rand.Left}, Right: &OrExpr{Left: or.Left, Right: rand.Right}}, Changed
 	}
 
 	// next, we want to try to turn multiple ORs into an IN when possible
@@ -129,7 +136,7 @@ func simplifyOr(expr *OrExpr) (Expr, bool) {
 	if lok && rok {
 		newExpr, rewritten := tryTurningOrIntoIn(lftCmp, rgtCmp)
 		if rewritten {
-			return newExpr, true
+			return newExpr, Changed
 		}
 	}
 
@@ -137,11 +144,11 @@ func simplifyOr(expr *OrExpr) (Expr, bool) {
 	return distinctOr(expr)
 }
 
-func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, bool) {
+func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, RewriteState) {
 	// looks for A = X OR A = Y and turns them into A IN (X, Y)
 	col, ok := l.Left.(*ColName)
 	if !ok || !EqualsExpr(col, r.Left) {
-		return nil, false
+		return nil, NoChange
 	}
 
 	var tuple ValTuple
@@ -152,11 +159,11 @@ func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, bool) {
 	case InOp:
 		lft, ok := l.Right.(ValTuple)
 		if !ok {
-			return nil, false
+			return nil, NoChange
 		}
 		tuple = lft
 	default:
-		return nil, false
+		return nil, NoChange
 	}
 
 	switch r.Operator {
@@ -165,18 +172,18 @@ func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, bool) {
 	case InOp:
 		lft, ok := r.Right.(ValTuple)
 		if !ok {
-			return nil, false
+			return nil, NoChange
 		}
 		tuple = append(tuple, lft...)
 	default:
-		return nil, false
+		return nil, NoChange
 	}
 
 	return &ComparisonExpr{
 		Operator: InOp,
 		Left:     col,
 		Right:    uniquefy(tuple),
-	}, true
+	}, Changed
 }
 
 func uniquefy(tuple ValTuple) (output ValTuple) {
@@ -192,13 +199,13 @@ outer:
 	return
 }
 
-func simplifyXor(expr *XorExpr) (Expr, bool) {
+func simplifyXor(expr *XorExpr) (Expr, RewriteState) {
 	// DeMorgan Rewriter
 	// (A XOR B) => (A OR B) AND NOT (A AND B)
-	return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, true
+	return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, Changed
 }
 
-func simplifyAnd(expr *AndExpr) (Expr, bool) {
+func simplifyAnd(expr *AndExpr) (Expr, RewriteState) {
 	res, rewritten := distinctAnd(expr)
 	if rewritten {
 		return res, rewritten
@@ -208,17 +215,106 @@ func simplifyAnd(expr *AndExpr) (Expr, bool) {
 		// Simplification
 		// (A OR B) AND A => A
 		if EqualsExpr(or.Left, and.Right) || EqualsExpr(or.Right, and.Right) {
-			return and.Right, true
+			return and.Right, Changed
 		}
 	}
 	if or, ok := and.Right.(*OrExpr); ok {
 		// Simplification
 		// A OR (A AND B) => A
 		if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Right, and.Left) {
-			return or.Left, true
+			return or.Left, Changed
 		}
 	}
 
-	return expr, false
+	return expr, NoChange
+}
 
+func distinctOr(in *OrExpr) (Expr, RewriteState) {
+	todo := []*OrExpr{in}
+	var leaves []Expr
+	for len(todo) > 0 {
+		curr := todo[0]
+		todo = todo[1:]
+		addAnd := func(in Expr) {
+			and, ok := in.(*OrExpr)
+			if ok {
+				todo = append(todo, and)
+			} else {
+				leaves = append(leaves, in)
+			}
+		}
+		addAnd(curr.Left)
+		addAnd(curr.Right)
+	}
+	original := len(leaves)
+	var predicates []Expr
+
+outer1:
+	for len(leaves) > 0 {
+		curr := leaves[0]
+		leaves = leaves[1:]
+		for _, alreadyIn := range predicates {
+			if EqualsExpr(alreadyIn, curr) {
+				continue outer1
+			}
+		}
+		predicates = append(predicates, curr)
+	}
+	if original == len(predicates) {
+		return in, NoChange
+	}
+	var result Expr
+	for i, curr := range predicates {
+		if i == 0 {
+			result = curr
+			continue
+		}
+		result = &OrExpr{Left: result, Right: curr}
+	}
+	return result, Changed
+}
+
+func distinctAnd(in *AndExpr) (Expr, RewriteState) {
+	todo := []*AndExpr{in}
+	var leaves []Expr
+	for len(todo) > 0 {
+		curr := todo[0]
+		todo = todo[1:]
+		addAnd := func(in Expr) {
+			and, ok := in.(*AndExpr)
+			if ok {
+				todo = append(todo, and)
+			} else {
+				leaves = append(leaves, in)
+			}
+		}
+		addAnd(curr.Left)
+		addAnd(curr.Right)
+	}
+	original := len(leaves)
+	var predicates []Expr
+
+outer1:
+	for len(leaves) > 0 {
+		curr := leaves[0]
+		leaves = leaves[1:]
+		for _, alreadyIn := range predicates {
+			if EqualsExpr(alreadyIn, curr) {
+				continue outer1
+			}
+		}
+		predicates = append(predicates, curr)
+	}
+	if original == len(predicates) {
+		return in, NoChange
+	}
+	var result Expr
+	for i, curr := range predicates {
+		if i == 0 {
+			result = curr
+			continue
+		}
+		result = &AndExpr{Left: result, Right: curr}
+	}
+	return result, Changed
 }
