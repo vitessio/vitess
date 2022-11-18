@@ -238,6 +238,11 @@ const (
 	RepeatableReadStr  = "repeatable-read"
 	SerializableStr    = "serializable"
 
+	// Transaction access mode
+	WithConsistentSnapshotStr = "with consistent snapshot"
+	ReadWriteStr              = "read write"
+	ReadOnlyStr               = "read only"
+
 	// Explain formats
 	EmptyStr       = ""
 	TreeStr        = "tree"

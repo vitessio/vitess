@@ -558,7 +558,9 @@ type (
 	}
 
 	// Begin represents a Begin statement.
-	Begin struct{}
+	Begin struct {
+		TxCharacteristics []string
+	}
 
 	// Commit represents a Commit statement.
 	Commit struct{}

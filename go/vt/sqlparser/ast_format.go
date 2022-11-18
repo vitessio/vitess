@@ -958,7 +958,19 @@ func (node *Commit) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Begin) Format(buf *TrackedBuffer) {
-	buf.literal("begin")
+	if node.TxCharacteristics == nil {
+		buf.literal("begin")
+		return
+	}
+	buf.literal("start transaction")
+	for idx, txChar := range node.TxCharacteristics {
+		if idx == 0 {
+			buf.astPrintf(node, " %s", txChar)
+			continue
+		}
+		buf.astPrintf(node, ", %s", txChar)
+	}
+
 }
 
 // Format formats the node.

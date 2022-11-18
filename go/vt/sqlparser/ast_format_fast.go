@@ -1275,7 +1275,21 @@ func (node *Commit) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Begin) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("begin")
+	if node.TxCharacteristics == nil {
+		buf.WriteString("begin")
+		return
+	}
+	buf.WriteString("start transaction")
+	for idx, txChar := range node.TxCharacteristics {
+		if idx == 0 {
+			buf.WriteByte(' ')
+			buf.WriteString(txChar)
+			continue
+		}
+		buf.WriteString(", ")
+		buf.WriteString(txChar)
+	}
+
 }
 
 // formatFast formats the node.

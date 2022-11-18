@@ -314,6 +314,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
+%token <str> CONSISTENT SNAPSHOT
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -455,8 +456,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> distinct_opt union_op replace_opt local_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
-%type <strs> select_options flush_option_list
-%type <str> select_option algorithm_view security_view security_view_opt
+%type <strs> select_options flush_option_list tx_chacteristics_opt tx_chars
+%type <str> select_option algorithm_view security_view security_view_opt tx_char
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
@@ -4257,10 +4258,44 @@ begin_statement:
   {
     $$ = &Begin{}
   }
-| START TRANSACTION
+| START TRANSACTION tx_chacteristics_opt
   {
-    $$ = &Begin{}
+    $$ = &Begin{TxCharacteristics: $3}
   }
+
+tx_chacteristics_opt:
+  {
+    $$ = nil
+  }
+| tx_chars
+  {
+    $$ = $1
+  }
+
+tx_chars:
+  tx_char
+  {
+    $$ = []string{$1}
+  }
+| tx_chars ',' tx_char
+  {
+    $$ = append($1, $3)
+  }
+
+tx_char:
+  WITH CONSISTENT SNAPSHOT
+  {
+    $$ = WithConsistentSnapshotStr
+  }
+| READ WRITE
+  {
+    $$ = ReadWriteStr
+  }
+| READ ONLY
+  {
+    $$ = ReadOnlyStr
+  }
+
 
 commit_statement:
   COMMIT
@@ -7495,6 +7530,7 @@ non_reserved_keyword:
 | COMPRESSED
 | COMPRESSION
 | CONNECTION
+| CONSISTENT
 | COPY
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV
@@ -7741,6 +7777,7 @@ non_reserved_keyword:
 | SKIP
 | SLOW
 | SMALLINT
+| SNAPSHOT
 | SQL
 | SRID
 | START

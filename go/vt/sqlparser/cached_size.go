@@ -359,6 +359,23 @@ func (cached *Avg) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Begin) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field TxCharacteristics []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.TxCharacteristics)) * int64(16))
+		for _, elem := range cached.TxCharacteristics {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	return size
+}
 func (cached *BetweenExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -1730,7 +1730,7 @@ func EqualsRefOfBegin(a, b *Begin) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return true
+	return EqualsSliceOfString(a.TxCharacteristics, b.TxCharacteristics)
 }
 
 // EqualsRefOfBetweenExpr does deep equals between the two objects.
@@ -6392,6 +6392,19 @@ func EqualsSliceOfIdentifierCI(a, b []IdentifierCI) bool {
 	return true
 }
 
+// EqualsSliceOfString does deep equals between the two objects.
+func EqualsSliceOfString(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // EqualsSliceOfRefOfWhen does deep equals between the two objects.
 func EqualsSliceOfRefOfWhen(a, b []*When) bool {
 	if len(a) != len(b) {
@@ -6446,19 +6459,6 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 func EqualsColumnCharset(a, b ColumnCharset) bool {
 	return a.Name == b.Name &&
 		a.Binary == b.Binary
-}
-
-// EqualsSliceOfString does deep equals between the two objects.
-func EqualsSliceOfString(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // EqualsSliceOfRefOfVariable does deep equals between the two objects.

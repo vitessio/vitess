@@ -720,6 +720,7 @@ func CloneRefOfBegin(n *Begin) *Begin {
 		return nil
 	}
 	out := *n
+	out.TxCharacteristics = CloneSliceOfString(n.TxCharacteristics)
 	return &out
 }
 
@@ -3880,6 +3881,16 @@ func CloneSliceOfIdentifierCI(n []IdentifierCI) []IdentifierCI {
 	return res
 }
 
+// CloneSliceOfString creates a deep clone of the input.
+func CloneSliceOfString(n []string) []string {
+	if n == nil {
+		return nil
+	}
+	res := make([]string, len(n))
+	copy(res, n)
+	return res
+}
+
 // CloneSliceOfRefOfWhen creates a deep clone of the input.
 func CloneSliceOfRefOfWhen(n []*When) []*When {
 	if n == nil {
@@ -3919,16 +3930,6 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 // CloneColumnCharset creates a deep clone of the input.
 func CloneColumnCharset(n ColumnCharset) ColumnCharset {
 	return *CloneRefOfColumnCharset(&n)
-}
-
-// CloneSliceOfString creates a deep clone of the input.
-func CloneSliceOfString(n []string) []string {
-	if n == nil {
-		return nil
-	}
-	res := make([]string, len(n))
-	copy(res, n)
-	return res
 }
 
 // CloneSliceOfRefOfVariable creates a deep clone of the input.
