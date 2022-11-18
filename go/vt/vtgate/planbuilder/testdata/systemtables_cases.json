@@ -860,7 +860,7 @@
           "Sharded": false
         },
         "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
+        "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or foobar = 'value')",
         "SysTableTableSchema": "[VARCHAR(\"ks\")]",
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }

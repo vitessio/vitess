@@ -791,10 +791,15 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 
 	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
 		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
-		for _, pred := range table.Predicates {
-			rewritten := tryRewriteOrToIn(pred)
-			if rewritten != nil {
-				err = plan.UpdateRoutingLogic(ctx, rewritten)
+		oldPredicates := table.Predicates
+		table.Predicates = nil
+		plan.SeenPredicates = nil
+		for _, pred := range oldPredicates {
+			rewritten := sqlparser.RewritePredicate(pred)
+			predicates := sqlparser.SplitAndExpression(nil, rewritten.(sqlparser.Expr))
+			for _, predicate := range predicates {
+				table.Predicates = append(table.Predicates, predicate)
+				err = plan.UpdateRoutingLogic(ctx, predicate)
 				if err != nil {
 					return nil, err
 				}
