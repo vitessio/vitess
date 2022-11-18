@@ -70,7 +70,6 @@ Finally, after a call to `viperutil.LoadConfig` (which is done as a part of
 For more details, refer to the package documentation, as well as the documents
 in doc/viper/.
 
-- TODO: remove original API and `git mv` v2 up a level, adjusting imports
 - TODO: markdown doc under doc/ tree giving an overview.
 */
 package viperutil
