@@ -141,7 +141,7 @@ func (ct *controller) run(ctx context.Context) {
 			}
 		}
 	default:
-		log.Infof("VDiff %s was not marked as runnable, doing nothing", state)
+		log.Infof("VDiff %s was not marked as runnable (state: %s), doing nothing", ct.uuid, state)
 	}
 }
 
@@ -277,37 +277,32 @@ func (ct *controller) validate() error {
 
 // saveErrorState saves the error state for the vdiff in the database.
 // It never gives up trying to save the error state, unless the context
-// has been cancelled or the done channel has been closed (indicating
-// that the engine is shutting down or the vdiff has been stopped).
+// has been cancelled or the done channel has been closed -- indicating
+// that the engine is closing or the vdiff has been explicitly stopped.
+// Note that when the engine is later opened the started vdiff will be
+// restarted even though we were unable to save the error state.
 // It uses exponential backoff with a factor of 1.5 to avoid creating
 // too many database connections.
-func (ct *controller) saveErrorState(ctx context.Context, err error) error {
-	minRetryDelay := 100 * time.Millisecond
+func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
+	retryDelay := 100 * time.Millisecond
 	maxRetryDelay := 60 * time.Second
-	retryDelay := minRetryDelay
-	save := func() bool {
+	save := func() error {
 		dbClient := ct.vde.dbClientFactoryFiltered()
 		if err := dbClient.Connect(); err != nil {
-			return false
+			return err
 		}
 		defer dbClient.Close()
 
-		insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
-		if err = ct.updateState(dbClient, ErrorState, err); err != nil {
-			return false
+		insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", saveErr))
+		if err := ct.updateState(dbClient, ErrorState, saveErr); err != nil {
+			return err
 		}
 
-		return true
+		return nil
 	}
 
 	for {
-		if !save() {
-			if retryDelay < maxRetryDelay {
-				retryDelay = time.Duration(float64(retryDelay) * 1.5)
-				if retryDelay > maxRetryDelay {
-					retryDelay = maxRetryDelay
-				}
-			}
+		if err := save(); err != nil {
 			log.Errorf("Failed to persist vdiff error state: %v. Will retry in %s", err, retryDelay.String())
 			select {
 			case <-ctx.Done():
@@ -315,6 +310,12 @@ func (ct *controller) saveErrorState(ctx context.Context, err error) error {
 			case <-ct.done:
 				return fmt.Errorf("vdiff was stopped")
 			case <-time.After(retryDelay):
+				if retryDelay < maxRetryDelay {
+					retryDelay = time.Duration(float64(retryDelay) * 1.5)
+					if retryDelay > maxRetryDelay {
+						retryDelay = maxRetryDelay
+					}
+				}
 				continue
 			}
 		}

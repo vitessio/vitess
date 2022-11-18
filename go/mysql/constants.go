@@ -325,7 +325,7 @@ const (
 
 // Error codes for server-side errors.
 // Originally found in include/mysql/mysqld_error.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-server.html
+// https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html
 // The below are in sorted order by value, grouped by vterror code they should be bucketed into.
 // See above reference for more information on each code.
 const (
@@ -543,6 +543,9 @@ const (
 	ERJSONDocumentTooDeep          = 3157
 	ERWrongValue                   = 1525
 
+	// max execution time exceeded
+	ERQueryTimeout = 3024
+
 	ErrCantCreateGeometryObject      = 1416
 	ErrGISDataWrongEndianess         = 3055
 	ErrNotImplementedForCartesianSRS = 3704
@@ -689,6 +692,7 @@ func IsEphemeralError(err error) bool {
 			ERInternalError,
 			ERLockDeadlock,
 			ERLockWaitTimeout,
+			ERQueryTimeout,
 			EROutOfMemory,
 			EROutOfResources,
 			EROutOfSortMemory,
