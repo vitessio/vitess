@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -38,7 +39,11 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const txLogInterval = 1 * time.Minute
+const (
+	txLogInterval  = 1 * time.Minute
+	beginWithCSRO  = "start transaction with consistent snapshot, read only"
+	trackGtidQuery = "set session session_track_gtids = START_GTID"
+)
 
 var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
 	querypb.ExecuteOptions_DEFAULT:                       "",
@@ -50,9 +55,9 @@ var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
 }
 
 var txAccessMode = map[querypb.ExecuteOptions_TransactionAccessMode]string{
-	querypb.ExecuteOptions_CONSISTENT_SNAPSHOT: "with consistent snapshot",
-	querypb.ExecuteOptions_READ_WRITE:          "read write",
-	querypb.ExecuteOptions_READ_ONLY:           "read only",
+	querypb.ExecuteOptions_CONSISTENT_SNAPSHOT: sqlparser.WithConsistentSnapshotStr,
+	querypb.ExecuteOptions_READ_WRITE:          sqlparser.ReadWriteStr,
+	querypb.ExecuteOptions_READ_ONLY:           sqlparser.ReadOnlyStr,
 }
 
 type (
@@ -393,7 +398,6 @@ func createStartTxStmt(options *querypb.ExecuteOptions, readOnly bool) (string, 
 }
 
 func handleConsistentSnapshotCase(ctx context.Context, conn *StatefulConnection) (beginSQL string, sessionStateChanges string, err error) {
-	trackGtidQuery := "set session session_track_gtids = START_GTID"
 	_, err = conn.execWithRetry(ctx, trackGtidQuery, 1, false)
 	// We allow this to fail since this is a custom MySQL extension, but we return
 	// then if this query was executed or not.
@@ -412,7 +416,7 @@ func handleConsistentSnapshotCase(ctx context.Context, conn *StatefulConnection)
 	}
 	beginSQL += execSQL
 
-	execSQL, sessionStateChanges, err = startTransaction(ctx, conn, "start transaction with consistent snapshot, read only")
+	execSQL, sessionStateChanges, err = startTransaction(ctx, conn, beginWithCSRO)
 	if err != nil {
 		return
 	}
