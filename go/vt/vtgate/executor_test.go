@@ -1676,7 +1676,7 @@ func assertCacheContains(t *testing.T, e *Executor, want []string) {
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-	plan, err := e.getPlan(context.Background(), vcursor, sql, comments, bindVars, &SafeSession{
+	plan, _, err := e.getPlan(context.Background(), vcursor, sql, comments, bindVars, &SafeSession{
 		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
 	}, logStats)
 	require.NoError(t, err)
@@ -1817,7 +1817,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 	assertCacheContains(t, r, want)
 
-	_, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
+	_, _, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
 	assert.EqualError(t, err, "syntax error at position 7 near 'syntax'")
 	assertCacheContains(t, r, want)
 }
@@ -2522,6 +2522,51 @@ func TestExecutorVtExplain(t *testing.T) {
 	require.NoError(t, err)
 	txt = fmt.Sprintf("%v\n", results)
 	require.Contains(t, txt, lookupQuery)
+}
+
+func TestExecutorStartTxnStmt(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	tcases := []struct {
+		beginSQL        string
+		expTxAccessMode []querypb.ExecuteOptions_TransactionAccessMode
+	}{{
+		beginSQL: "begin",
+	}, {
+		beginSQL: "start transaction",
+	}, {
+		beginSQL:        "start transaction with consistent snapshot",
+		expTxAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_CONSISTENT_SNAPSHOT},
+	}, {
+		beginSQL:        "start transaction read only",
+		expTxAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_READ_ONLY},
+	}, {
+		beginSQL:        "start transaction read write",
+		expTxAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_READ_WRITE},
+	}, {
+		beginSQL:        "start transaction with consistent snapshot, read only",
+		expTxAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_CONSISTENT_SNAPSHOT, querypb.ExecuteOptions_READ_ONLY},
+	}, {
+		beginSQL:        "start transaction with consistent snapshot, read write",
+		expTxAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_CONSISTENT_SNAPSHOT, querypb.ExecuteOptions_READ_WRITE},
+	}, {
+		beginSQL:        "start transaction read only, with consistent snapshot",
+		expTxAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_READ_ONLY, querypb.ExecuteOptions_CONSISTENT_SNAPSHOT},
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.beginSQL, func(t *testing.T) {
+			_, err := executor.Execute(ctx, "TestExecutorStartTxnStmt", session, tcase.beginSQL, nil)
+			require.NoError(t, err)
+
+			assert.Equal(t, tcase.expTxAccessMode, session.GetOrCreateOptions().TransactionAccessMode)
+
+			_, err = executor.Execute(ctx, "TestExecutorStartTxnStmt", session, "rollback", nil)
+			require.NoError(t, err)
+
+		})
+	}
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

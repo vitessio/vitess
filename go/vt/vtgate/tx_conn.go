@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -47,12 +48,28 @@ func NewTxConn(gw *TabletGateway, txMode vtgatepb.TransactionMode) *TxConn {
 	}
 }
 
+var txAccessMode = map[string]querypb.ExecuteOptions_TransactionAccessMode{
+	sqlparser.WithConsistentSnapshotStr: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+	sqlparser.ReadWriteStr:              querypb.ExecuteOptions_READ_WRITE,
+	sqlparser.ReadOnlyStr:               querypb.ExecuteOptions_READ_ONLY,
+}
+
 // Begin begins a new transaction. If one is already in progress, it commits it
 // and starts a new one.
-func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
+func (txc *TxConn) Begin(ctx context.Context, session *SafeSession, txCharacteristics []string) error {
 	if session.InTransaction() {
 		if err := txc.Commit(ctx, session); err != nil {
 			return err
+		}
+	}
+	if len(txCharacteristics) > 0 {
+		options := session.GetOrCreateOptions()
+		for _, characteristic := range txCharacteristics {
+			accessMode, ok := txAccessMode[characteristic]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] invalid transaction characteristic: %s", characteristic)
+			}
+			options.TransactionAccessMode = append(options.TransactionAccessMode, accessMode)
 		}
 	}
 	session.Session.InTransaction = true

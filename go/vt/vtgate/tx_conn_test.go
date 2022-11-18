@@ -48,7 +48,7 @@ func TestTxConnBegin(t *testing.T) {
 
 	// begin
 	safeSession := NewSafeSession(session)
-	err := sc.txConn.Begin(ctx, safeSession)
+	err := sc.txConn.Begin(ctx, safeSession, nil)
 	require.NoError(t, err)
 	wantSession := vtgatepb.Session{InTransaction: true}
 	utils.MustMatch(t, &wantSession, session, "Session")
@@ -57,7 +57,7 @@ func TestTxConnBegin(t *testing.T) {
 
 	// Begin again should cause a commit and a new begin.
 	require.NoError(t,
-		sc.txConn.Begin(ctx, safeSession))
+		sc.txConn.Begin(ctx, safeSession, nil))
 	utils.MustMatch(t, &wantSession, session, "Session")
 	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
 }
@@ -1252,32 +1252,20 @@ func TestTxConnAccessModeReset(t *testing.T) {
 	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	tcases := []struct {
-		name  string
-		funcs [2]func(ctx context.Context, session *SafeSession) error
+		name string
+		f    func(ctx context.Context, session *SafeSession) error
 	}{{
 		name: "begin-commit",
-		funcs: [2]func(ctx context.Context, session *SafeSession) error{
-			sc.txConn.Begin,
-			sc.txConn.Commit,
-		},
+		f:    sc.txConn.Commit,
 	}, {
 		name: "begin-rollback",
-		funcs: [2]func(ctx context.Context, session *SafeSession) error{
-			sc.txConn.Begin,
-			sc.txConn.Rollback,
-		},
+		f:    sc.txConn.Rollback,
 	}, {
 		name: "begin-release",
-		funcs: [2]func(ctx context.Context, session *SafeSession) error{
-			sc.txConn.Begin,
-			sc.txConn.Release,
-		},
+		f:    sc.txConn.Release,
 	}, {
 		name: "begin-releaseAll",
-		funcs: [2]func(ctx context.Context, session *SafeSession) error{
-			sc.txConn.Begin,
-			sc.txConn.ReleaseAll,
-		},
+		f:    sc.txConn.ReleaseAll,
 	}}
 
 	for _, tcase := range tcases {
@@ -1290,11 +1278,11 @@ func TestTxConnAccessModeReset(t *testing.T) {
 
 			// begin transaction
 			require.NoError(t,
-				tcase.funcs[0](ctx, safeSession))
+				sc.txConn.Begin(ctx, safeSession, nil))
 
 			// resolve transaction
 			require.NoError(t,
-				tcase.funcs[1](ctx, safeSession))
+				tcase.f(ctx, safeSession))
 
 			// check that the access mode is reset
 			require.Nil(t, safeSession.Session.Options.TransactionAccessMode)
