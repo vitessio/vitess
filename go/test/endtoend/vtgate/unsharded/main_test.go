@@ -462,7 +462,7 @@ func TestFloatValueDefault(t *testing.T) {
 	defer utils.Exec(t, conn, `drop table test_float_default`)
 
 	want57 := `[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`
-	want80 := `[[VARCHAR("test_float_default") VARCHAR("pos_f") BLOB("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") BLOB("-2.1")]]`
+	want80 := `[[VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")]]`
 
 	query := "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_default desc"
 	utils.AssertMatchesOneOf(t, conn, query, want57, want80)
