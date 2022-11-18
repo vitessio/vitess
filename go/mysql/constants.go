@@ -273,7 +273,7 @@ const (
 
 // Error codes for client-side errors.
 // Originally found in include/mysql/errmsg.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-client.html
+// https://dev.mysql.com/doc/mysql-errors/en/client-error-reference.html
 const (
 	// CRUnknownError is CR_UNKNOWN_ERROR
 	CRUnknownError = 2000
@@ -285,6 +285,10 @@ const (
 	// CRConnHostError is CR_CONN_HOST_ERROR
 	// This is returned if a connection via a TCP socket fails.
 	CRConnHostError = 2003
+
+	// CRUnknownHost is CR_UNKNOWN_HOST
+	// This is returned if the host name cannot be resolved.
+	CRUnknownHost = 2005
 
 	// CRServerGone is CR_SERVER_GONE_ERROR.
 	// This is returned if the client tries to send a command but it fails.
@@ -680,8 +684,12 @@ func IsEphemeralError(err error) bool {
 			CRConnHostError,
 			CRMalformedPacket,
 			CRNamedPipeStateError,
+			CRServerHandshakeErr,
+			CRServerGone,
 			CRServerLost,
 			CRSSLConnectionError,
+			CRUnknownError,
+			CRUnknownHost,
 			ERCantCreateThread,
 			ERDiskFull,
 			ERForcingClose,
