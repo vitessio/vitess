@@ -44,6 +44,7 @@ const (
 	XtraBackup = iota
 	Backup
 	Mysqlctld
+	timeout = time.Duration(60 * time.Second)
 )
 
 var (
@@ -214,8 +215,28 @@ func TearDownCluster() {
 }
 
 // TestBackup runs all the backup tests
-func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
-
+func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) error {
+	verStr, err := mysqlctl.GetVersionString()
+	require.NoError(t, err)
+	_, vers, err := mysqlctl.ParseVersionString(verStr)
+	require.NoError(t, err)
+	switch streamMode {
+	case "xbstream":
+		if vers.Major < 8 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=xbstream as those are only tested on XtraBackup/MySQL 8.0+")
+			return nil
+		}
+	case "", "tar": // streaming method of tar is the default for the vttablet --xtrabackup_stream_mode flag
+		// XtraBackup 8.0 must be used with MySQL 8.0 and it no longer supports tar as a stream method:
+		//    https://docs.percona.com/percona-xtrabackup/2.4/innobackupex/streaming_backups_innobackupex.html
+		//    https://docs.percona.com/percona-xtrabackup/8.0/xtrabackup_bin/backup.streaming.html
+		if vers.Major > 5 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=tar as tar is no longer a streaming option in XtraBackup 8.0")
+			return nil
+		}
+	default:
+		require.FailNow(t, fmt.Sprintf("Unsupported xtrabackup stream mode: %s", streamMode))
+	}
 	testMethods := []struct {
 		name   string
 		method func(t *testing.T)
@@ -268,7 +289,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	for _, test := range testMethods {
 		t.Run(test.name, test.method)
 	}
-
+	return nil
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
@@ -375,7 +396,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 
 	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
 	// check the new replica has the data
@@ -608,7 +629,7 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
@@ -671,7 +692,7 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	err := tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 	if status != "" {
-		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, 25*time.Second)
+		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, timeout)
 		require.Nil(t, err)
 	}
 	// We restart replication here because semi-sync will not be set correctly on tablet startup since

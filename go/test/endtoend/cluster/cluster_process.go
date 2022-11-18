@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -1155,11 +1154,11 @@ func getCoveragePath(fileName string) string {
 // PrintMysqlctlLogFiles prints all the log files associated with the mysqlctl binary
 func (cluster *LocalProcessCluster) PrintMysqlctlLogFiles() {
 	logDir := cluster.TmpDirectory
-	files, _ := ioutil.ReadDir(logDir)
+	files, _ := os.ReadDir(logDir)
 	for _, fileInfo := range files {
 		if !fileInfo.IsDir() && strings.Contains(fileInfo.Name(), "mysqlctl") {
 			log.Errorf("Printing the log file - " + fileInfo.Name())
-			logOut, _ := ioutil.ReadFile(path.Join(logDir, fileInfo.Name()))
+			logOut, _ := os.ReadFile(path.Join(logDir, fileInfo.Name()))
 			log.Errorf(string(logOut))
 		}
 	}

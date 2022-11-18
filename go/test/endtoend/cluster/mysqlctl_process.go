@@ -118,6 +118,10 @@ ssl_key={{.Dir}}/server-001-key.pem
 
 			tmpProcess.Env = append(tmpProcess.Env, "EXTRA_MY_CNF="+extraMyCNF)
 			tmpProcess.Env = append(tmpProcess.Env, "VTDATAROOT="+os.Getenv("VTDATAROOT"))
+			tmpProcess.Env = append(tmpProcess.Env, "VT_MYSQL_ROOT="+os.Getenv("VT_MYSQL_ROOT"))
+			tmpProcess.Env = append(tmpProcess.Env, "xtrabackup_root_path="+os.Getenv("xtrabackup_root_path"))
+			tmpProcess.Env = append(tmpProcess.Env, "MYSQL_FLAVOR="+os.Getenv("MYSQL_FLAVOR"))
+			tmpProcess.Env = append(tmpProcess.Env, "VT_ROOT="+os.Getenv("VT_ROOT"))
 		}
 
 		tmpProcess.Args = append(tmpProcess.Args, "init", "--",

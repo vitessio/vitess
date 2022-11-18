@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -313,7 +312,7 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := ioutil.ReadAll(resp.Body)
+	res, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
