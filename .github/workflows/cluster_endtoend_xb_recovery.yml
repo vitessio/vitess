@@ -97,7 +97,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
+        go install github.com/vitessio/go-junit-report@HEAD
 
         sudo apt-get install percona-xtrabackup-80 lz4
 

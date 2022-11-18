@@ -106,7 +106,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
+        go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
