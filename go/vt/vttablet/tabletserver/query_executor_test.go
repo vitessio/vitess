@@ -1262,11 +1262,6 @@ func TestReplaceSchemaName(t *testing.T) {
 }
 
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
-	type dbResponse struct {
-		query  string
-		result *sqltypes.Result
-	}
-
 	testcases := []struct {
 		consolidates  []bool
 		executorFlags executorFlags
