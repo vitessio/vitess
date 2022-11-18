@@ -53,3 +53,37 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 ### Deprecations
 
 The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
+
+### MySQL Compatibility
+
+#### Transaction Isolation Level
+Support added for `set [session] transaction isolation level <transaction_characteristic>`
+```json
+transaction_characteristic: {
+    ISOLATION LEVEL level
+  | access_mode
+}
+
+level: {
+     REPEATABLE READ
+   | READ COMMITTED
+   | READ UNCOMMITTED
+   | SERIALIZABLE
+}
+```
+This will set the transaction isolation level for the current session. 
+This will be applied to any shard where the session will open a transaction.
+
+#### Transaction Access Mode
+Support added for `start transaction` with transaction characteristic.
+```json
+START TRANSACTION
+    [transaction_characteristic [, transaction_characteristic] ...]
+
+transaction_characteristic: {
+    WITH CONSISTENT SNAPSHOT
+  | READ WRITE
+  | READ ONLY
+}
+```
+This will allow users to start a transaction with these characteristics.
