@@ -86,36 +86,55 @@ jobs:
 
         # Install everything else we need, and configure
         sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
-
+        echo 'mysql version: '
+        sudo mysql --version
+        sudo service mysql stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         {{else}}
 
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+
         sudo apt-get update
-        # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils
-
-        {{end}}
-
+        # stop any existing running instance of mysql
         sudo service mysql stop
-        sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo systemctl stop apparmor
+
+        # Uninstall any previously installed MySQL first
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-\*
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # install necessary tools
+        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata xz-utils libmecab2
+        sudo service etcd stop
+
+        # Download mysql8.0.25 (pin it)
+        wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz
+        # Untar the bundle. It will have all necessary deb
+        sudo tar xf mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz -v -C /usr
+        echo 'mysql version: '
+        sudo /usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin/mysql --version
+        {{end}}
+
+        # configure rest
+        sudo service etcd stop
         go mod download
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
+        go get -u github.com/vitessio/go-junit-report@HEAD
 
         {{if .InstallXtraBackup}}
 
         sudo apt-get install percona-xtrabackup-80 lz4
 
         {{end}}
-
 
     {{if .MakeTools}}
 
@@ -145,6 +164,10 @@ jobs:
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
+        {{if not .InstallXtraBackup }}
+        export VT_MYSQL_ROOT="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal"
+        export PATH="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin:$PATH"
+        {{end}}
         source build.env
 
         set -x
