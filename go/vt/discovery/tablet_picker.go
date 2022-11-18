@@ -46,6 +46,7 @@ var (
 	muTabletPickerRetryDelay sync.Mutex
 	globalTPStats            *tabletPickerStats
 	inOrderHint              = "in_order:"
+	localPreferenceHint      = "local:"
 )
 
 // GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
@@ -64,12 +65,13 @@ func SetTabletPickerRetryDelay(delay time.Duration) {
 
 // TabletPicker gives a simplified API for picking tablets.
 type TabletPicker struct {
-	ts          *topo.Server
-	cells       []string
-	keyspace    string
-	shard       string
-	tabletTypes []topodatapb.TabletType
-	inOrder     bool
+	ts              *topo.Server
+	cells           []string
+	keyspace        string
+	shard           string
+	tabletTypes     []topodatapb.TabletType
+	inOrder         bool
+	localPreference string
 }
 
 // NewTabletPicker returns a TabletPicker.
@@ -92,19 +94,56 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			fmt.Sprintf("Missing required field(s) for tablet picker: %s", strings.Join(missingFields, ", ")))
 	}
+
+	localPreference := ""
+	if strings.HasPrefix(cells[0], "local:") {
+		localPreference = cells[0][len(localPreferenceHint):]
+		cells = cells[1:]
+	}
+
 	return &TabletPicker{
-		ts:          ts,
-		cells:       cells,
-		keyspace:    keyspace,
-		shard:       shard,
-		tabletTypes: tabletTypes,
-		inOrder:     inOrder,
+		ts:              ts,
+		cells:           cells,
+		keyspace:        keyspace,
+		shard:           shard,
+		tabletTypes:     tabletTypes,
+		inOrder:         inOrder,
+		localPreference: localPreference,
 	}, nil
+}
+
+func (tp *TabletPicker) prioritizeTablets(candidates []*topo.TabletInfo) (sameCell, allOthers []*topo.TabletInfo) {
+	for _, c := range candidates {
+		if c.Alias.Cell == tp.localPreference {
+			sameCell = append(sameCell, c)
+		} else {
+			allOthers = append(allOthers, c)
+		}
+	}
+
+	return sameCell, allOthers
+}
+
+func (tp *TabletPicker) orderByTabletType(candidates []*topo.TabletInfo) []*topo.TabletInfo {
+	// Sort candidates slice such that tablets appear in same tablet type order as in tp.tabletTypes
+	orderMap := map[topodatapb.TabletType]int{}
+	for i, t := range tp.tabletTypes {
+		orderMap[t] = i
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if orderMap[candidates[i].Type] == orderMap[candidates[j].Type] {
+			// identical tablet types: randomize order of tablets for this type
+			return rand.Intn(2) == 0 // 50% chance
+		}
+		return orderMap[candidates[i].Type] < orderMap[candidates[j].Type]
+	})
+
+	return candidates
 }
 
 // PickForStreaming picks an available tablet.
 // All tablets that belong to tp.cells are evaluated and one is
-// chosen at random.
+// chosen at random, unless local preference is given
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
 	rand.Seed(time.Now().UnixNano())
 	// keep trying at intervals (tabletPickerRetryDelay) until a tablet is found
@@ -116,19 +155,19 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		default:
 		}
 		candidates := tp.GetMatchingTablets(ctx)
-		if tp.inOrder {
-			// Sort candidates slice such that tablets appear in same tablet type order as in tp.tabletTypes
-			orderMap := map[topodatapb.TabletType]int{}
-			for i, t := range tp.tabletTypes {
-				orderMap[t] = i
+		if tp.localPreference != "" {
+			sameCellCandidates, allOtherCandidates := tp.prioritizeTablets(candidates)
+
+			// order same cell and all others by tablet type separately
+			// combine with same cell in front
+			if tp.inOrder {
+				sameCellCandidates = tp.orderByTabletType(sameCellCandidates)
+				allOtherCandidates = tp.orderByTabletType(allOtherCandidates)
+
+				candidates = append(sameCellCandidates, allOtherCandidates...)
 			}
-			sort.Slice(candidates, func(i, j int) bool {
-				if orderMap[candidates[i].Type] == orderMap[candidates[j].Type] {
-					// identical tablet types: randomize order of tablets for this type
-					return rand.Intn(2) == 0 // 50% chance
-				}
-				return orderMap[candidates[i].Type] < orderMap[candidates[j].Type]
-			})
+		} else if tp.inOrder {
+			candidates = tp.orderByTabletType(candidates)
 		} else {
 			// Randomize candidates
 			rand.Shuffle(len(candidates), func(i, j int) {

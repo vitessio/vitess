@@ -411,12 +411,25 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 	}
 }
 
-func (vs *vstream) getCells() []string {
+func (vs *vstream) getCells(ctx context.Context) []string {
 	var cells []string
 	if vs.optCells != "" {
 		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
 			cells = append(cells, strings.TrimSpace(cell))
 		}
+	}
+
+	// if fallback requested in VTGate startup and no override provided in gRPC request,
+	// perform cell alias fallback
+	if vstreamCellAliasFallback && len(cells) == 0 {
+		// append the alias this cell belongs to, otherwise appends the vtgate's cell
+		alias := topo.GetAliasByCell(ctx, vs.ts, vs.vsm.cell)
+		// an alias was actually found
+		if alias != vs.vsm.cell {
+			// send in the vtgate's cell for local cell preference
+			alias = strings.Join([]string{"local:", vs.vsm.cell, alias}, ",")
+		}
+		cells = append(cells, alias)
 	}
 
 	if len(cells) == 0 {
@@ -447,7 +460,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
-		cells := vs.getCells()
+		cells := vs.getCells(ctx)
 		tp, err := discovery.NewTabletPicker(vs.ts, cells, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
 		if err != nil {
 			log.Errorf(err.Error())
