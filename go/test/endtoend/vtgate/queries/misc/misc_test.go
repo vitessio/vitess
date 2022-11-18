@@ -131,7 +131,8 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// the query usually takes more than 5ms to return. So this should fail.
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded (errno 1317) (sqlstate 70100)")
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
 
 	// sharded
 	for i := 0; i < 300000; i += 1000 {
@@ -152,5 +153,6 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// the query usually takes more than 5ms to return. So this should fail.
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1 */ count(*) from t1 where id1 > 31")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded (errno 1317) (sqlstate 70100)")
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
 }
