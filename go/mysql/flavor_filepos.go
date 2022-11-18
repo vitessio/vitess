@@ -287,3 +287,11 @@ func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
+
+// supportsCapability is part of the Flavor interface.
+func (*filePosFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
+}

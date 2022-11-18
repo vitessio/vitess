@@ -289,12 +289,38 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor56) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }
 
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor57) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor80) baseShowTablesWithSizes() string {
 	return TablesWithSize80
+}
+
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case DynamicRedoLogCapacityFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
+	default:
+		return false, nil
+	}
 }
