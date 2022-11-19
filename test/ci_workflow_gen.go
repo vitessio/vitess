@@ -279,7 +279,7 @@ func generateSelfHostedClusterWorkflows() error {
 			test := &selfHostedTest{
 				Name:              fmt.Sprintf("Cluster (%s)(%s)", cluster, mysqlVersion),
 				ImageName:         fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator),
-				Platform:          "mysql80",
+				Platform:          "mysql57",
 				directoryName:     directoryName,
 				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 				Shard:             cluster,
@@ -300,8 +300,8 @@ func generateSelfHostedClusterWorkflows() error {
 					break
 				}
 			}
-			if mysqlVersion == mysql57 {
-				test.Platform = string(mysql57)
+			if mysqlVersion == mysql80 {
+				test.Platform = string(mysql80)
 			}
 			err := setupTestDockerFile(test)
 			if err != nil {
