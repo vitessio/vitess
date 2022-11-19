@@ -111,6 +111,7 @@ var (
 		"vreplication_basic",
 		"vreplication_v2",
 	}
+	// this is test
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
