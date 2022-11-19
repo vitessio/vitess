@@ -95,12 +95,12 @@ func ExtractINFromOR(expr *OrExpr) []Expr {
 	var ins []Expr
 	for _, lft := range lftPredicates {
 		l, ok := lft.(*ComparisonExpr)
-		if !ok || l.Operator != EqualOp {
+		if !ok {
 			continue
 		}
 		for _, rgt := range rgtPredicates {
 			r, ok := rgt.(*ComparisonExpr)
-			if !ok || r.Operator != EqualOp {
+			if !ok {
 				continue
 			}
 			in, state := tryTurningOrIntoIn(l, r)

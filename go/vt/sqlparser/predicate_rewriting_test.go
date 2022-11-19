@@ -146,6 +146,12 @@ func TestExtractINFromOR(in *testing.T) {
 	}, {
 		in:       "(a = 5 and b = 1 or b = 2 and a = 6)",
 		expected: "a in (5, 6) and b in (1, 2)",
+	}, {
+		in:       "(a in (1,5) and B or C and a = 6)",
+		expected: "a in (1, 5, 6)",
+	}, {
+		in:       "(a in (1, 5) and B or C and a in (5, 7))",
+		expected: "a in (1, 5, 7)",
 	}}
 
 	for _, tc := range tests {
