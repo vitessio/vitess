@@ -81,6 +81,38 @@ func simplifyNot(expr *NotExpr) (Expr, RewriteState) {
 	return expr, NoChange
 }
 
+// ExtractINFromOR will add additional predicated to an OR.
+// this rewriter should not be used in a fixed point way, since it returns the original expression with additions,
+// and it will therefor OOM before it stops rewriting
+func ExtractINFromOR(expr *OrExpr) []Expr {
+	// finally, we check if we have two comparisons on either side of the OR,
+	// that we can add as an ANDed comparison.
+	// WHERE (a = 5 and B) or (a = 6 AND C) =>
+	// WHERE (a = 5 AND B) OR (a = 6 AND C) AND a IN (5,6)
+	// This rewrite makes it possible to find a better route than Scatter if the `a` column has a helpful vindex
+	lftPredicates := SplitAndExpression(nil, expr.Left)
+	rgtPredicates := SplitAndExpression(nil, expr.Right)
+	var ins []Expr
+	for _, lft := range lftPredicates {
+		l, ok := lft.(*ComparisonExpr)
+		if !ok || l.Operator != EqualOp {
+			continue
+		}
+		for _, rgt := range rgtPredicates {
+			r, ok := rgt.(*ComparisonExpr)
+			if !ok || r.Operator != EqualOp {
+				continue
+			}
+			in, state := tryTurningOrIntoIn(l, r)
+			if state == Changed {
+				ins = append(ins, in)
+			}
+		}
+	}
+
+	return ins
+}
+
 func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	or := expr
 
