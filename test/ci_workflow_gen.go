@@ -300,9 +300,9 @@ func generateSelfHostedClusterWorkflows() error {
 					break
 				}
 			}
-			if mysqlVersion == mysql80 {
+			/*if mysqlVersion == mysql80 {
 				test.Platform = string(mysql80)
-			}
+			}*/
 			err := setupTestDockerFile(test)
 			if err != nil {
 				return err
