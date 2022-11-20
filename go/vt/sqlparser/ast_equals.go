@@ -1184,6 +1184,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfShowThrottledApps(a, b)
+	case *ShowThrottlerStatus:
+		b, ok := inB.(*ShowThrottlerStatus)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottlerStatus(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -3857,6 +3863,17 @@ func EqualsRefOfShowThrottledApps(a, b *ShowThrottledApps) bool {
 	return EqualsComments(a.Comments, b.Comments)
 }
 
+// EqualsRefOfShowThrottlerStatus does deep equals between the two objects.
+func EqualsRefOfShowThrottlerStatus(a, b *ShowThrottlerStatus) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments)
+}
+
 // EqualsRefOfStarExpr does deep equals between the two objects.
 func EqualsRefOfStarExpr(a, b *StarExpr) bool {
 	if a == b {
@@ -6242,6 +6259,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfShowThrottledApps(a, b)
+	case *ShowThrottlerStatus:
+		b, ok := inB.(*ShowThrottlerStatus)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottlerStatus(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {
