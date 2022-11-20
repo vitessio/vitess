@@ -90,7 +90,8 @@ jobs:
               - 'Makefile'
               - 'bootstrap.sh'
               - '.github/workflows/static_checks_etc.yml'
-
+            ci_config:
+              - 'test/config.json'
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
@@ -101,7 +102,7 @@ jobs:
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: |
-          echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+          sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
       # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
       - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
@@ -195,3 +196,8 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
         run: |
           tools/check_make_proto.sh || exit 1
+
+      - name: Check test/config.json
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.ci_config == 'true')
+        run: |
+          go run ./go/tools/ci-config/main.go || exit 1

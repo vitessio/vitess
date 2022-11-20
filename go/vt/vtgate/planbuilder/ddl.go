@@ -45,7 +45,7 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 }
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
-// The two behave compeltely differently, and have two very different primitives.
+// The two behave completely differently, and have two very different primitives.
 // We want to be able to dynamically choose between normal/online plans according to Session settings.
 // However, due to caching of plans, we're unable to make that choice right now. In this function we don't have
 // a session context. It's only when we Execute() the primitive that we have that context.

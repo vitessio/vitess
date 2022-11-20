@@ -33785,6 +33785,12 @@ export namespace vtctldata {
 
         /** Workflow shard_streams */
         shard_streams?: ({ [k: string]: vtctldata.Workflow.IShardStream }|null);
+
+        /** Workflow workflow_type */
+        workflow_type?: (string|null);
+
+        /** Workflow workflow_sub_type */
+        workflow_sub_type?: (string|null);
     }
 
     /** Represents a Workflow. */
@@ -33810,6 +33816,12 @@ export namespace vtctldata {
 
         /** Workflow shard_streams. */
         public shard_streams: { [k: string]: vtctldata.Workflow.IShardStream };
+
+        /** Workflow workflow_type. */
+        public workflow_type: string;
+
+        /** Workflow workflow_sub_type. */
+        public workflow_sub_type: string;
 
         /**
          * Creates a new Workflow instance using the specified properties.

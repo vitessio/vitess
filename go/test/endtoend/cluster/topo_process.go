@@ -103,6 +103,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	topo.exit = make(chan error)
 	go func() {
 		topo.exit <- topo.proc.Wait()
+		close(topo.exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -227,6 +228,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	topo.exit = make(chan error)
 	go func() {
 		topo.exit <- topo.proc.Wait()
+		close(topo.exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -289,8 +291,9 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 
 		case <-time.After(10 * time.Second):
 			topo.proc.Process.Kill()
+			err := <-topo.exit
 			topo.proc = nil
-			return <-topo.exit
+			return err
 		}
 	}
 

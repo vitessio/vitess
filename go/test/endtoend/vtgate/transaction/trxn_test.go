@@ -18,6 +18,7 @@ package transaction
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -37,61 +38,12 @@ var (
 	keyspaceName    = "ks"
 	cell            = "zone1"
 	hostname        = "localhost"
-	sqlSchema       = `
-	create table twopc_user (
-		user_id bigint,
-		name varchar(128),
-		primary key (user_id)
-	) Engine=InnoDB;
 
-	create table twopc_lookup (
-		name varchar(128),
-		id bigint,
-		primary key (id)
-	) Engine=InnoDB;`
+	//go:embed schema.sql
+	SchemaSQL string
 
-	vSchema = `
-	{	
-		"sharded":true,
-		"vindexes": {
-			"hash_index": {
-				"type": "hash"
-			},
-			"twopc_lookup_vdx": {
-				"type": "lookup_hash_unique",
-				"params": {
-				  "table": "twopc_lookup",
-				  "from": "name",
-				  "to": "id",
-				  "autocommit": "true"
-				},
-				"owner": "twopc_user"
-			}
-		},	
-		"tables": {
-			"twopc_user":{
-				"column_vindexes": [
-					{
-						"column": "user_id",
-						"name": "hash_index"
-					},
-					{
-						"column": "name",
-						"name": "twopc_lookup_vdx"
-					}
-				]
-			},
-			"twopc_lookup": {
-				"column_vindexes": [
-					{
-						"column": "id",
-						"name": "hash_index"
-					}
-				]
-			}
-		}
-	}
-	`
+	//go:embed vschema.json
+	VSchema string
 )
 
 func TestMain(m *testing.M) {
@@ -119,15 +71,14 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
+			SchemaSQL: SchemaSQL,
+			VSchema:   VSchema,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1, err
 		}
 
-		// Starting Vtgate in SINGLE transaction mode
-		clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "SINGLE"}
+		// Starting Vtgate in default MULTI transaction mode
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1, err
 		}
@@ -146,50 +97,80 @@ func TestMain(m *testing.M) {
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
 	defer cluster.PanicHandler(t)
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
+	// set transaction mode to SINGLE.
+	utils.Exec(t, conn, "set transaction_mode = 'single'")
+
 	// Insert targeted to multiple tables should fail as Transaction mode is SINGLE
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
 	_, err = conn.ExecuteFetch("insert into twopc_user(user_id, name) values(6,'vick')", 1000, false)
-	utils.Exec(t, conn, "rollback")
 	want := "multi-db transaction attempted"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
+	utils.Exec(t, conn, "rollback")
 
-	// Enable TWOPC transaction mode
-	clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "TWOPC"}
+	// set transaction mode to TWOPC.
+	utils.Exec(t, conn, "set transaction_mode = 'twopc'")
 
-	// Restart VtGate
-	require.NoError(t, clusterInstance.RestartVtgate())
+	// Insert targeted to multiple db should PASS with TWOPC trx mode
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_user(user_id, name) values(3,'mark')")
+	utils.Exec(t, conn, "insert into twopc_user(user_id, name) values(4,'doug')")
+	utils.Exec(t, conn, "insert into twopc_lookup(name, id) values('Tim',7)")
+	utils.Exec(t, conn, "commit")
 
-	// Make a new mysql connection to vtGate
-	vtParams = clusterInstance.GetVTParams(keyspaceName)
+	// Verify the values are present
+	utils.AssertMatches(t, conn, "select user_id from twopc_user where name='mark'", `[[INT64(3)]]`)
+	utils.AssertMatches(t, conn, "select name from twopc_lookup where id=3", `[[VARCHAR("mark")]]`)
+
+	// DELETE from multiple tables using TWOPC transaction mode
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "delete from twopc_user where user_id = 3")
+	utils.Exec(t, conn, "delete from twopc_lookup where id = 3")
+	utils.Exec(t, conn, "commit")
+
+	// VERIFY that values are deleted
+	utils.AssertMatches(t, conn, "select user_id from twopc_user where user_id=3", `[]`)
+	utils.AssertMatches(t, conn, "select name from twopc_lookup where id=3", `[]`)
+}
+
+// TestTransactionIsolation tests transaction isolation level.
+func TestTransactionIsolation(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// inserting some data.
+	utils.Exec(t, conn, "insert into test(id, msg) values (1,'v1'), (2, 'v2')")
+	defer utils.Exec(t, conn, "delete from test")
+
+	conn1, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	// Insert targeted to multiple db should PASS with TWOPC trx mode
-	utils.Exec(t, conn2, "begin")
-	utils.Exec(t, conn2, "insert into twopc_user(user_id, name) values(3,'mark')")
-	utils.Exec(t, conn2, "insert into twopc_user(user_id, name) values(4,'doug')")
-	utils.Exec(t, conn2, "insert into twopc_lookup(name, id) values('Tim',7)")
-	utils.Exec(t, conn2, "commit")
+	// on connection 1 change the isolation level to read-committed.
+	// start a transaction and read the data for id = 1.
+	utils.Exec(t, conn1, "set transaction isolation level read committed")
+	utils.Exec(t, conn1, "begin")
+	utils.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("v1")]]`)
 
-	// Verify the values are present
-	utils.AssertMatches(t, conn2, "select user_id from twopc_user where name='mark'", `[[INT64(3)]]`)
-	utils.AssertMatches(t, conn2, "select name from twopc_lookup where id=3", `[[VARCHAR("mark")]]`)
+	// change the value of msg for id = 1 on connection 2.
+	utils.Exec(t, conn2, "update test set msg = 'foo' where id = 1")
 
-	// DELETE from multiple tables using TWOPC transaction mode
-	utils.Exec(t, conn2, "begin")
-	utils.Exec(t, conn2, "delete from twopc_user where user_id = 3")
-	utils.Exec(t, conn2, "delete from twopc_lookup where id = 3")
-	utils.Exec(t, conn2, "commit")
-
-	// VERIFY that values are deleted
-	utils.AssertMatches(t, conn2, "select user_id from twopc_user where user_id=3", `[]`)
-	utils.AssertMatches(t, conn2, "select name from twopc_lookup where id=3", `[]`)
+	// new value should be reflected on connection 1 within the open transaction.
+	utils.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("foo")]]`)
+	utils.Exec(t, conn1, "rollback")
 }

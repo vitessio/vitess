@@ -46,9 +46,8 @@ import (
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a listener.
 	listener, err := net.Listen("tcp", "127.0.0.1:")
-	if err != nil {
-		t.Fatalf("Listen failed: %v", err)
-	}
+	require.NoError(t, err, "Listen failed: %v", err)
+
 	addr := listener.Addr().String()
 	listener.(*net.TCPListener).SetDeadline(time.Now().Add(10 * time.Second))
 
@@ -72,13 +71,8 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	}()
 
 	wg.Wait()
-
-	if clientErr != nil {
-		t.Fatalf("Dial failed: %v", clientErr)
-	}
-	if serverErr != nil {
-		t.Fatalf("Accept failed: %v", serverErr)
-	}
+	require.Nil(t, clientErr, "Dial failed: %v", clientErr)
+	require.Nil(t, serverErr, "Accept failed: %v", serverErr)
 
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn)
@@ -746,9 +740,8 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		bytes := make([]byte, rand.Intn(16)+1)
 		_, err := crypto_rand.Read(bytes)
-		if err != nil {
-			t.Fatalf("error doing rand.Read")
-		}
+		require.NoError(t, err, "error doing rand.Read")
+
 		bytes[0] = 0xfe
 
 		_, _, isInt := readLenEncInt(bytes, 0)

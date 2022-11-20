@@ -442,9 +442,14 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
-// BaseShowTables returns a query that shows tables and their sizes
+// BaseShowTables returns a query that shows tables
 func (dbc *DBConn) BaseShowTables() string {
 	return dbc.conn.BaseShowTables()
+}
+
+// BaseShowTablesWithSizes returns a query that shows tables and their sizes
+func (dbc *DBConn) BaseShowTablesWithSizes() string {
+	return dbc.conn.BaseShowTablesWithSizes()
 }
 
 func (dbc *DBConn) reconnect(ctx context.Context) error {

@@ -77,6 +77,7 @@ func (vtgr *VtgrProcess) Start(alias string) (err error) {
 	go func() {
 		if vtgr.proc != nil {
 			vtgr.exit <- vtgr.proc.Wait()
+			close(vtgr.exit)
 		}
 	}()
 
@@ -97,8 +98,9 @@ func (vtgr *VtgrProcess) TearDown() error {
 		return nil
 
 	case <-time.After(10 * time.Second):
-		_ = vtgr.proc.Process.Kill()
+		vtgr.proc.Process.Kill()
+		err := <-vtgr.exit
 		vtgr.proc = nil
-		return <-vtgr.exit
+		return err
 	}
 }
