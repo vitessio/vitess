@@ -663,6 +663,7 @@ var keywords = []keyword{
 	{"vitess_tablets", VITESS_TABLETS},
 	{"vitess_target", VITESS_TARGET},
 	{"vitess_throttled_apps", VITESS_THROTTLED_APPS},
+	{"vitess_throttler", VITESS_THROTTLER},
 	{"vschema", VSCHEMA},
 	{"vstream", VSTREAM},
 	{"vtexplain", VTEXPLAIN},
