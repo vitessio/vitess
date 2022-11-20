@@ -92,6 +92,14 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		return
 	}
 
+	vtbackup.exit = make(chan error)
+	go func() {
+		if vtbackup.proc != nil {
+			vtbackup.exit <- vtbackup.proc.Wait()
+			close(vtbackup.exit)
+		}
+	}()
+
 	return nil
 }
 
@@ -111,8 +119,9 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 
 	case <-time.After(10 * time.Second):
 		vtbackup.proc.Process.Kill()
+		err := <-vtbackup.exit
 		vtbackup.proc = nil
-		return <-vtbackup.exit
+		return err
 	}
 }
 

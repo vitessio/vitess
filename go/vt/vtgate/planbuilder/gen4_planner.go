@@ -30,8 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ stmtPlanner = gen4Planner("apa", 0)
-
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		switch stmt := stmt.(type) {
@@ -99,9 +97,9 @@ func gen4SelectStmtPlanner(
 		return nil, err
 	}
 
-	if shouldRetryWithCNFRewriting(plan) {
+	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
-		primitive, st := gen4CNFRewrite(stmt, getPlan)
+		primitive, st := gen4PredicateRewrite(stmt, getPlan)
 		if primitive != nil {
 			return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 		}
@@ -154,14 +152,14 @@ func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VS
 	return nil, plan, nil
 }
 
-func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (engine.Primitive, *semantics.SemTable) {
-	rewritten, isSel := sqlparser.RewriteToCNF(stmt).(sqlparser.SelectStatement)
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (engine.Primitive, *semantics.SemTable) {
+	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
 		return nil, nil
 	}
 	plan2, st, err := getPlan(rewritten)
-	if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+	if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
 		// we only use this new plan if it's better than the old one we got
 		return plan2.Primitive(), st
 	}
@@ -173,12 +171,12 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (logicalPlan, *semantics.SemTable, error) {
+) (plan logicalPlan, semTable *semantics.SemTable, err error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
+	semTable, err = semantics.Analyze(selStmt, ksName, vschema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -188,7 +186,14 @@ func newBuildSelectPlan(
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan, err := unshardedShortcut(ctx, selStmt, ks)
+		plan, err = unshardedShortcut(ctx, selStmt, ks)
+		if err != nil {
+			return nil, nil, err
+		}
+		plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
+		if err != nil {
+			return nil, nil, err
+		}
 		return plan, semTable, err
 	}
 
@@ -207,7 +212,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err = transformToLogicalPlan(ctx, op, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,12 +221,12 @@ func newBuildSelectPlan(
 
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
-		if err := setMiscFunc(plan, sel); err != nil {
+		if err = setMiscFunc(plan, sel); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if err := plan.WireupGen4(ctx); err != nil {
+	if err = plan.WireupGen4(ctx); err != nil {
 		return nil, nil, err
 	}
 
