@@ -1,7 +1,5 @@
 # Vitess Viper Guidelines
 
-### Preface
-
 ## What is Viper?
 
 [`viper`][viper] is a configuration-management library for Go programs.
@@ -249,14 +247,47 @@ If no config file was used, then dynamic values behave exactly like static value
 
 ## Auto-Documentation
 
-<!-- old stuff starts here -->
+One of the benefits of all values being created through a single function is that we can pretty easily build tooling to generate documentation for the config values available to a given binary.
+The exact formatting can be tweaked, obviously, but as an example, something like:
+
+```
+{{ .BinaryName }}
+
+{{ range .Values }}
+{{ .Key }}:
+    - Aliases: {{ join .Aliases ", " }}
+    - Environment Variables: {{ join .EnvVars ", " }}
+    {{- if hasFlag $.BinaryName .FlagName }}
+    - Flag: {{ .FlagName }}
+    {{ end -}}
+    {{- if hasDefault . }}
+    - Default: {{ .Default }}
+    {{ end -}}
+{{ end }}
+```
+
+If/when we migrate other binaries to cobra, we can figure out how to combine this documntation with cobra's doc-generation tooling (which we use for `vtctldclient` and `vtadmin`).
 
 ## Caveats and Gotchas
 
-- [ ] case-(in)sensitivity.
-- [ ] `Sub` is split-brain
-- [ ] `Unmarshal*` functions rely on `mapstructure` tags, not `json|yaml|...` tags.
-- [ ] Any config files/paths added _after_ calling `WatchConfig` will not get picked up.
+- Config keys are case-insensitive.
+`Foo`, `foo`, `fOo`, and `FOO` will all have the same value.
+    - **Except** for environment variables, which, when read, are case-sensitive (but the config key they are _bound to_ remains case-insensitive).
+      For example, if you have `viper.BindEnv("foo", "VT_FOO")`, then `VT_FOO=1 ./myprogram` will set the value to `1`, but `Vt_FoO=1 ./myprogram will not`.
+      The value, though, can still be read _from_ viper as `Foo`, `foo`, `FOO`, and so on.
+    
+- `Sub` is a split-brain.
+  The viper docs discuss using the `Sub` method on a viper to extract a subtree of a config to pass to a submodule.
+  This seems like a good idea, but has some fun surprises.
+  Each viper maintains its own settings map, and extracting a sub-tree creates a second settings map that is now completely divorced from the parent.
+  If you were to `parent.Set(key, value)`, the sub-viper will still have the old value.
+  Furthermore, if the parent was watching a config file for changes, the sub-viper is _not_ watching that file.
+
+  For these reasons, we **strongly** discourage use of `v.Sub`.
+
+- The `Unmarshal*` functions rely on `mapstructure` tags, not `json|yaml|...` tags.
+
+- Any config files/paths added _after_ calling `WatchConfig` will not get picked up by that viper, and a viper can only watch a single config file.
 
 [viper]: https://github.com/spf13/viper
 [viper_read_in_config_docs]: https://github.com/spf13/viper#reading-config-files
