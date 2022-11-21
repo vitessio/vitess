@@ -100,7 +100,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
 		"vtgate_gen4",
