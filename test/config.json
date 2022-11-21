@@ -467,6 +467,17 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_throttler_topo": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "tabletmanager_throttler_topo",
+			"RetryMax": 1,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"tabletmanager_throttler_custom_config": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_custom_config"],

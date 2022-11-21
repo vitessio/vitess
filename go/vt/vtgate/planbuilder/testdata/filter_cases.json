@@ -2234,14 +2234,18 @@
       "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
-        "Table": "`user`"
+        "Query": "select id from `user` where (`user`.id = 1 or `user`.`name` = 'aa') and `user`.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user"
@@ -6246,7 +6250,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = 1 or id = 2",
+        "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(INT64(1), INT64(2))"
@@ -6287,7 +6291,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = 1 or id = 2 or id = 3",
+        "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(INT64(1), INT64(2), INT64(3))"
@@ -6328,7 +6332,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = 1 or id = 2 or (id = 3 or id = 4)",
+        "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(INT64(1), INT64(2), INT64(3), INT64(4))"
@@ -6493,6 +6497,47 @@
       },
       "TablesUsed": [
         "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "Single table unique vindex route hiding behind a silly OR",
+    "query": "select id from user where (id = 5 and name ='apa') or (id = 5 and foo = 'bar')",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='apa') or (id = 5 and foo = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and `name` = 'apa' or id = 5 and foo = 'bar'",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='apa') or (id = 5 and foo = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and (`name` = 'apa' or foo = 'bar')",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

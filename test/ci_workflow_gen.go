@@ -95,6 +95,7 @@ var (
 		"onlineddl_scheduler",
 		"onlineddl_revertible",
 		"tabletmanager_throttler",
+		"tabletmanager_throttler_topo",
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",

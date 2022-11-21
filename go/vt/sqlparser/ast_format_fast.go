@@ -446,6 +446,11 @@ func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *ShowThrottlerStatus) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_throttler status")
+}
+
+// formatFast formats the node.
 func (node *OptLike) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("like ")
 	node.LikeTable.formatFast(buf)

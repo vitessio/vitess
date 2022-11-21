@@ -1552,6 +1552,62 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 	}, nil
 }
 
+// UpdateThrottlerConfig updates throttler config for all cells
+func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldatapb.UpdateThrottlerConfigRequest) (resp *vtctldatapb.UpdateThrottlerConfigResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateThrottlerConfig")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	if req.Enable && req.Disable {
+		return nil, fmt.Errorf("--enable and --disable are mutually exclusive")
+	}
+	if req.CheckAsCheckSelf && req.CheckAsCheckShard {
+		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
+	}
+
+	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+		if throttlerConfig == nil {
+			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+		}
+		if req.CustomQuerySet {
+			// custom query provided
+			throttlerConfig.CustomQuery = req.CustomQuery
+			throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
+		} else {
+			// no custom query, throttler works by querying replication lag. We only allow positive values
+			if req.Threshold > 0 {
+				throttlerConfig.Threshold = req.Threshold
+			}
+		}
+		if req.Enable {
+			throttlerConfig.Enabled = true
+		}
+		if req.Disable {
+			throttlerConfig.Enabled = false
+		}
+		if req.CheckAsCheckSelf {
+			throttlerConfig.CheckAsCheckSelf = true
+		}
+		if req.CheckAsCheckShard {
+			throttlerConfig.CheckAsCheckSelf = false
+		}
+		return throttlerConfig
+	}
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateThrottlerConfig")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	_, err = s.ts.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
+	if err != nil {
+		return nil, err
+	}
+	return &vtctldatapb.UpdateThrottlerConfigResponse{}, nil
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (resp *vtctldatapb.GetSrvVSchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSrvVSchema")

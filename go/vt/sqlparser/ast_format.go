@@ -311,6 +311,11 @@ func (node *ShowThrottledApps) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *ShowThrottlerStatus) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show vitess_throttler status")
+}
+
+// Format formats the node.
 func (node *OptLike) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "like %v", node.LikeTable)
 }
