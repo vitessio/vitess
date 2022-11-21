@@ -17,18 +17,16 @@ limitations under the License.
 package tabletconntest
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -43,10 +41,11 @@ type FakeQueryService struct {
 	TestingGateway bool
 
 	// these fields are used to simulate and synchronize on errors
-	HasError      bool
-	HasBeginError bool
-	TabletError   error
-	ErrorWait     chan struct{}
+	HasError        bool
+	HasBeginError   bool
+	HasReserveError bool
+	TabletError     error
+	ErrorWait       chan struct{}
 
 	// these fields are used to simulate and synchronize on panics
 	Panics                   bool
@@ -567,7 +566,20 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 
 // BeginStreamExecute combines Begin and StreamExecute.
 func (f *FakeQueryService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
-	panic("FakeQueryService does not implement BeginStreamExecute")
+	transactionID, alias, err := f.Begin(ctx, target, options)
+	if err != nil {
+		return transactionID, alias, err
+	}
+
+	for _, preQuery := range preQueries {
+		_, err := f.Execute(ctx, target, preQuery, nil, transactionID, reservedID, options)
+		if err != nil {
+			return transactionID, alias, err
+		}
+	}
+
+	err = f.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
+	return transactionID, alias, err
 }
 
 var (
@@ -711,7 +723,23 @@ func (f *FakeQueryService) ReserveExecute(ctx context.Context, target *querypb.T
 
 // ReserveStreamExecute satisfies the Gateway interface
 func (f *FakeQueryService) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
-	panic("implement me")
+	reserveID, err := f.reserve(transactionID)
+	if err != nil {
+		return 0, nil, err
+	}
+	err = f.StreamExecute(ctx, target, sql, bindVariables, transactionID, reserveID, options, callback)
+	return reserveID, TestAlias, err
+}
+
+func (f *FakeQueryService) reserve(transactionID int64) (int64, error) {
+	reserveID := transactionID
+	if reserveID == 0 {
+		reserveID = beginTransactionID
+	}
+	if f.HasReserveError {
+		return 0, f.TabletError
+	}
+	return reserveID, nil
 }
 
 // Release implements the QueryService interface

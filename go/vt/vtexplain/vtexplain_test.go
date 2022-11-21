@@ -283,14 +283,14 @@ func TestJSONOutput(t *testing.T) {
 	}
 }
 
-func testShardInfo(ks, start, end string, t *testing.T) *topo.ShardInfo {
+func testShardInfo(ks, start, end string, primaryServing bool, t *testing.T) *topo.ShardInfo {
 	kr, err := key.ParseKeyRangeParts(start, end)
 	require.NoError(t, err)
 
 	return topo.NewShardInfo(
 		ks,
 		fmt.Sprintf("%s-%s", start, end),
-		&topodata.Shard{KeyRange: kr},
+		&topodata.Shard{KeyRange: kr, IsPrimaryServing: primaryServing},
 		&vtexplainTestTopoVersion{},
 	)
 }
@@ -304,14 +304,17 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 			testcase: "select-sharded-8",
 			ShardRangeMap: map[string]map[string]*topo.ShardInfo{
 				"ks_sharded": {
-					"-20":   testShardInfo("ks_sharded", "", "20", t),
-					"20-40": testShardInfo("ks_sharded", "20", "40", t),
-					"40-60": testShardInfo("ks_sharded", "40", "60", t),
-					"60-80": testShardInfo("ks_sharded", "60", "80", t),
-					"80-a0": testShardInfo("ks_sharded", "80", "a0", t),
-					"a0-c0": testShardInfo("ks_sharded", "a0", "c0", t),
-					"c0-e0": testShardInfo("ks_sharded", "c0", "e0", t),
-					"e0-":   testShardInfo("ks_sharded", "e0", "", t),
+					"-20":   testShardInfo("ks_sharded", "", "20", true, t),
+					"20-40": testShardInfo("ks_sharded", "20", "40", true, t),
+					"40-60": testShardInfo("ks_sharded", "40", "60", true, t),
+					"60-80": testShardInfo("ks_sharded", "60", "80", true, t),
+					"80-a0": testShardInfo("ks_sharded", "80", "a0", true, t),
+					"a0-c0": testShardInfo("ks_sharded", "a0", "c0", true, t),
+					"c0-e0": testShardInfo("ks_sharded", "c0", "e0", true, t),
+					"e0-":   testShardInfo("ks_sharded", "e0", "", true, t),
+					// Some non-serving shards below - these should never be in the output of vtexplain
+					"-80": testShardInfo("ks_sharded", "", "80", false, t),
+					"80-": testShardInfo("ks_sharded", "80", "", false, t),
 				},
 			},
 		},
@@ -321,11 +324,15 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 				// Have mercy on the poor soul that has this keyspace sharding.
 				// But, hey, vtexplain still works so they have that going for them.
 				"ks_sharded": {
-					"-80":   testShardInfo("ks_sharded", "", "80", t),
-					"80-90": testShardInfo("ks_sharded", "80", "90", t),
-					"90-a0": testShardInfo("ks_sharded", "90", "a0", t),
-					"a0-e8": testShardInfo("ks_sharded", "a0", "e8", t),
-					"e8-":   testShardInfo("ks_sharded", "e8", "", t),
+					"-80":   testShardInfo("ks_sharded", "", "80", true, t),
+					"80-90": testShardInfo("ks_sharded", "80", "90", true, t),
+					"90-a0": testShardInfo("ks_sharded", "90", "a0", true, t),
+					"a0-e8": testShardInfo("ks_sharded", "a0", "e8", true, t),
+					"e8-":   testShardInfo("ks_sharded", "e8", "", true, t),
+					// Plus some un-even shards that are not serving and which should never be in the output of vtexplain
+					"80-a0": testShardInfo("ks_sharded", "80", "a0", false, t),
+					"a0-a5": testShardInfo("ks_sharded", "a0", "a5", false, t),
+					"a5-":   testShardInfo("ks_sharded", "a5", "", false, t),
 				},
 			},
 		},

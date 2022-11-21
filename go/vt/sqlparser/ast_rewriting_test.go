@@ -97,6 +97,10 @@ func TestRewrites(in *testing.T) {
 		expected: "select :__vtdbname as `(select database() from dual)` from dual",
 		db:       true,
 	}, {
+		// don't unnest solo columns
+		in:       "select 1 as foobar, (select foobar)",
+		expected: "select 1 as foobar, (select foobar from dual) from dual",
+	}, {
 		in:       "select id from user where database()",
 		expected: "select id from user where database()",
 		// no bindvar needs

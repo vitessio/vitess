@@ -1653,7 +1653,7 @@ func VisitRefOfJSONAttributesExpr(in *JSONAttributesExpr, f Visit) error {
 	if err := VisitExpr(in.JSONDoc, f); err != nil {
 		return err
 	}
-	if err := VisitJSONPathParam(in.Path, f); err != nil {
+	if err := VisitExpr(in.Path, f); err != nil {
 		return err
 	}
 	return nil
@@ -1672,7 +1672,7 @@ func VisitRefOfJSONContainsExpr(in *JSONContainsExpr, f Visit) error {
 		return err
 	}
 	for _, el := range in.PathList {
-		if err := VisitJSONPathParam(el, f); err != nil {
+		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
 	}
@@ -1692,7 +1692,7 @@ func VisitRefOfJSONContainsPathExpr(in *JSONContainsPathExpr, f Visit) error {
 		return err
 	}
 	for _, el := range in.PathList {
-		if err := VisitJSONPathParam(el, f); err != nil {
+		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
 	}
@@ -1709,7 +1709,7 @@ func VisitRefOfJSONExtractExpr(in *JSONExtractExpr, f Visit) error {
 		return err
 	}
 	for _, el := range in.PathList {
-		if err := VisitJSONPathParam(el, f); err != nil {
+		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
 	}
@@ -1725,10 +1725,8 @@ func VisitRefOfJSONKeysExpr(in *JSONKeysExpr, f Visit) error {
 	if err := VisitExpr(in.JSONDoc, f); err != nil {
 		return err
 	}
-	for _, el := range in.PathList {
-		if err := VisitJSONPathParam(el, f); err != nil {
-			return err
-		}
+	if err := VisitExpr(in.Path, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1862,7 +1860,7 @@ func VisitRefOfJSONSearchExpr(in *JSONSearchExpr, f Visit) error {
 		return err
 	}
 	for _, el := range in.PathList {
-		if err := VisitJSONPathParam(el, f); err != nil {
+		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
 	}
@@ -1937,7 +1935,7 @@ func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	if err := VisitExpr(in.JSONDoc, f); err != nil {
 		return err
 	}
-	if err := VisitJSONPathParam(in.Path, f); err != nil {
+	if err := VisitExpr(in.Path, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfConvertType(in.ReturningType, f); err != nil {
@@ -4041,160 +4039,6 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return VisitRefOfUnion(in, f)
 	case Values:
 		return VisitValues(in, f)
-	default:
-		// this should never happen
-		return nil
-	}
-}
-func VisitJSONPathParam(in JSONPathParam, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *AndExpr:
-		return VisitRefOfAndExpr(in, f)
-	case Argument:
-		return VisitArgument(in, f)
-	case *ArgumentLessWindowExpr:
-		return VisitRefOfArgumentLessWindowExpr(in, f)
-	case *BetweenExpr:
-		return VisitRefOfBetweenExpr(in, f)
-	case *BinaryExpr:
-		return VisitRefOfBinaryExpr(in, f)
-	case BoolVal:
-		return VisitBoolVal(in, f)
-	case *CaseExpr:
-		return VisitRefOfCaseExpr(in, f)
-	case *CastExpr:
-		return VisitRefOfCastExpr(in, f)
-	case *ColName:
-		return VisitRefOfColName(in, f)
-	case *CollateExpr:
-		return VisitRefOfCollateExpr(in, f)
-	case *ComparisonExpr:
-		return VisitRefOfComparisonExpr(in, f)
-	case *ConvertExpr:
-		return VisitRefOfConvertExpr(in, f)
-	case *ConvertUsingExpr:
-		return VisitRefOfConvertUsingExpr(in, f)
-	case *CurTimeFuncExpr:
-		return VisitRefOfCurTimeFuncExpr(in, f)
-	case *Default:
-		return VisitRefOfDefault(in, f)
-	case *ExistsExpr:
-		return VisitRefOfExistsExpr(in, f)
-	case *ExtractFuncExpr:
-		return VisitRefOfExtractFuncExpr(in, f)
-	case *ExtractValueExpr:
-		return VisitRefOfExtractValueExpr(in, f)
-	case *ExtractedSubquery:
-		return VisitRefOfExtractedSubquery(in, f)
-	case *FirstOrLastValueExpr:
-		return VisitRefOfFirstOrLastValueExpr(in, f)
-	case *FuncExpr:
-		return VisitRefOfFuncExpr(in, f)
-	case *GroupConcatExpr:
-		return VisitRefOfGroupConcatExpr(in, f)
-	case *IntervalExpr:
-		return VisitRefOfIntervalExpr(in, f)
-	case *IntroducerExpr:
-		return VisitRefOfIntroducerExpr(in, f)
-	case *IsExpr:
-		return VisitRefOfIsExpr(in, f)
-	case *JSONArrayExpr:
-		return VisitRefOfJSONArrayExpr(in, f)
-	case *JSONAttributesExpr:
-		return VisitRefOfJSONAttributesExpr(in, f)
-	case *JSONContainsExpr:
-		return VisitRefOfJSONContainsExpr(in, f)
-	case *JSONContainsPathExpr:
-		return VisitRefOfJSONContainsPathExpr(in, f)
-	case *JSONExtractExpr:
-		return VisitRefOfJSONExtractExpr(in, f)
-	case *JSONKeysExpr:
-		return VisitRefOfJSONKeysExpr(in, f)
-	case *JSONObjectExpr:
-		return VisitRefOfJSONObjectExpr(in, f)
-	case *JSONOverlapsExpr:
-		return VisitRefOfJSONOverlapsExpr(in, f)
-	case *JSONPrettyExpr:
-		return VisitRefOfJSONPrettyExpr(in, f)
-	case *JSONQuoteExpr:
-		return VisitRefOfJSONQuoteExpr(in, f)
-	case *JSONRemoveExpr:
-		return VisitRefOfJSONRemoveExpr(in, f)
-	case *JSONSchemaValidFuncExpr:
-		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
-	case *JSONSchemaValidationReportFuncExpr:
-		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
-	case *JSONSearchExpr:
-		return VisitRefOfJSONSearchExpr(in, f)
-	case *JSONStorageFreeExpr:
-		return VisitRefOfJSONStorageFreeExpr(in, f)
-	case *JSONStorageSizeExpr:
-		return VisitRefOfJSONStorageSizeExpr(in, f)
-	case *JSONUnquoteExpr:
-		return VisitRefOfJSONUnquoteExpr(in, f)
-	case *JSONValueExpr:
-		return VisitRefOfJSONValueExpr(in, f)
-	case *JSONValueMergeExpr:
-		return VisitRefOfJSONValueMergeExpr(in, f)
-	case *JSONValueModifierExpr:
-		return VisitRefOfJSONValueModifierExpr(in, f)
-	case *LagLeadExpr:
-		return VisitRefOfLagLeadExpr(in, f)
-	case ListArg:
-		return VisitListArg(in, f)
-	case *Literal:
-		return VisitRefOfLiteral(in, f)
-	case *LockingFunc:
-		return VisitRefOfLockingFunc(in, f)
-	case *MatchExpr:
-		return VisitRefOfMatchExpr(in, f)
-	case *MemberOfExpr:
-		return VisitRefOfMemberOfExpr(in, f)
-	case *NTHValueExpr:
-		return VisitRefOfNTHValueExpr(in, f)
-	case *NamedWindow:
-		return VisitRefOfNamedWindow(in, f)
-	case *NotExpr:
-		return VisitRefOfNotExpr(in, f)
-	case *NtileExpr:
-		return VisitRefOfNtileExpr(in, f)
-	case *NullVal:
-		return VisitRefOfNullVal(in, f)
-	case *Offset:
-		return VisitRefOfOffset(in, f)
-	case *OrExpr:
-		return VisitRefOfOrExpr(in, f)
-	case *RegexpInstrExpr:
-		return VisitRefOfRegexpInstrExpr(in, f)
-	case *RegexpLikeExpr:
-		return VisitRefOfRegexpLikeExpr(in, f)
-	case *RegexpReplaceExpr:
-		return VisitRefOfRegexpReplaceExpr(in, f)
-	case *RegexpSubstrExpr:
-		return VisitRefOfRegexpSubstrExpr(in, f)
-	case *Subquery:
-		return VisitRefOfSubquery(in, f)
-	case *SubstrExpr:
-		return VisitRefOfSubstrExpr(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
-	case *TrimFuncExpr:
-		return VisitRefOfTrimFuncExpr(in, f)
-	case *UnaryExpr:
-		return VisitRefOfUnaryExpr(in, f)
-	case *UpdateXMLExpr:
-		return VisitRefOfUpdateXMLExpr(in, f)
-	case ValTuple:
-		return VisitValTuple(in, f)
-	case *ValuesFuncExpr:
-		return VisitRefOfValuesFuncExpr(in, f)
-	case *WeightStringFuncExpr:
-		return VisitRefOfWeightStringFuncExpr(in, f)
-	case *XorExpr:
-		return VisitRefOfXorExpr(in, f)
 	default:
 		// this should never happen
 		return nil

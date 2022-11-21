@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"sync/atomic"
@@ -290,7 +291,7 @@ func Exists(m Match, p Primitive) bool {
 	return Find(m, p) != nil
 }
 
-//MarshalJSON serializes the plan into a JSON representation.
+// MarshalJSON serializes the plan into a JSON representation.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	var instructions *PrimitiveDescription
 	if p.Instructions != nil {
@@ -319,7 +320,16 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
 		Errors:       atomic.LoadUint64(&p.Errors),
 	}
-	return json.Marshal(marshalPlan)
+
+	b := new(bytes.Buffer)
+	enc := json.NewEncoder(b)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(marshalPlan)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
 }
 
 // Inputs implements no inputs

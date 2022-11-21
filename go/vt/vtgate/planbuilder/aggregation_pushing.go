@@ -431,6 +431,10 @@ func isMinOrMax(in engine.AggregateOpcode) bool {
 	}
 }
 
+func isRandom(in engine.AggregateOpcode) bool {
+	return in == engine.AggregateRandom
+}
+
 func splitAggregationsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregations []abstract.Aggr,
@@ -445,8 +449,8 @@ func splitAggregationsToLeftAndRight(
 		} else {
 			deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 			var other *abstract.Aggr
-			// if we are sending down min/max, we don't have to multiply the results with anything
-			if !isMinOrMax(aggr.OpCode) {
+			// if we are sending down min/max/random, we don't have to multiply the results with anything
+			if !isMinOrMax(aggr.OpCode) && !isRandom(aggr.OpCode) {
 				other = countStarAggr()
 			}
 			switch {

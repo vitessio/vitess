@@ -270,15 +270,17 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.BeginStreamExecuteResponse{
-		TransactionId: transactionID,
-		TabletAlias:   alias,
-	})
-	if err != nil {
+
+	if err != nil && transactionID == 0 {
 		return vterrors.ToGRPC(err)
 	}
 
-	return vterrors.ToGRPC(errInLastPacket)
+	err = stream.Send(&querypb.BeginStreamExecuteResponse{
+		Error:         vterrors.ToVTRPC(err),
+		TransactionId: transactionID,
+		TabletAlias:   alias,
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // MessageStream is part of the queryservice.QueryServer interface
@@ -396,15 +398,16 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveStreamExecuteResponse{
-		ReservedId:  reservedID,
-		TabletAlias: alias,
-	})
-	if err != nil {
+	if err != nil && reservedID == 0 {
 		return vterrors.ToGRPC(err)
 	}
 
-	return vterrors.ToGRPC(errInLastPacket)
+	err = stream.Send(&querypb.ReserveStreamExecuteResponse{
+		Error:       vterrors.ToVTRPC(err),
+		ReservedId:  reservedID,
+		TabletAlias: alias,
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // ReserveBeginExecute implements the QueryServer interface
@@ -447,16 +450,17 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+	if err != nil && reservedID == 0 && transactionID == 0 {
+		return vterrors.ToGRPC(err)
+	}
+
+	err = stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+		Error:         vterrors.ToVTRPC(err),
 		ReservedId:    reservedID,
 		TransactionId: transactionID,
 		TabletAlias:   alias,
 	})
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
-
-	return vterrors.ToGRPC(errInLastPacket)
+	return vterrors.ToGRPC(err)
 }
 
 // Release implements the QueryServer interface
