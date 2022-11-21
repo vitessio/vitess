@@ -40,11 +40,12 @@ jobs:
             go_files:
               - '**/*.go'
               - '*.go'
-              - 'go.[sumod]'
-              - '.github/workflows/static_checks_etc.yml'
+              - 'go.sum'
+              - 'go.mod'
             parser_changes:
               - 'go/vt/sqlparser/**'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'build.env'
               - 'bootstrap.sh'
               - 'tools/**'
@@ -53,7 +54,8 @@ jobs:
               - 'bootstrap.sh'
               - 'tools/**'
               - 'build.env'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'Makefile'
               - 'go/vt/proto/**'
               - 'proto/*.proto'
@@ -63,7 +65,8 @@ jobs:
               - 'test.go'
               - 'Makefile'
               - 'build.env'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'tools/**'
               - 'bootstrap.sh'
               - '.github/workflows/static_checks_etc.yml'
@@ -72,7 +75,8 @@ jobs:
               - 'go/vt/sqlparser/**'
               - 'Makefile'
               - 'build.env'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'tools/**'
               - 'bootstrap.sh'
               - 'misc/git/hooks/asthelpers'
@@ -85,9 +89,10 @@ jobs:
               - '.github/workflows/static_checks_etc.yml'
             ci_config:
               - 'test/config.json'
+              - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: actions/setup-go@v2
         with:
           go-version: 1.18.7
@@ -111,7 +116,7 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.2
 
       - name: Install goimports
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true')
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
 
@@ -155,25 +160,25 @@ jobs:
 
       ## Parser
       - name: check_make_parser
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           tools/check_make_parser.sh || exit 1
 
       ## Sizegen
       - name: check_make_sizegen
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.sizegen == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.sizegen == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           tools/check_make_sizegen.sh || exit 1
 
       ## Visitor
       - name: check_make_visitor
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.visitor == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.visitor == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           misc/git/hooks/asthelpers || exit 1
 
       ## Docker
       - name: run ensure_bootstrap_version
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.docker == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
         run: |
           make ensure_bootstrap_version
           git status
