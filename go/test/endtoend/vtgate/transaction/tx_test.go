@@ -175,8 +175,10 @@ func TestTransactionIsolation(t *testing.T) {
 	utils.Exec(t, conn1, "rollback")
 }
 
-func TestTransactionCharacteristics(t *testing.T) {
-	defer cluster.PanicHandler(t)
+func TestTransactionAccessModes(t *testing.T) {
+	closer := start(t)
+	defer closer()
+
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -194,7 +196,7 @@ func TestTransactionCharacteristics(t *testing.T) {
 	utils.Exec(t, conn, "insert into test(id, msg) values (42,'foo')")
 
 	// target replica
-	utils.Exec(t, conn, "use `@replica`")
+	utils.Exec(t, conn, "use `ks@replica`")
 	// start a transaction with read-only characteristic.
 	utils.Exec(t, conn, "start transaction read only")
 	utils.Exec(t, conn, "select * from test")
@@ -205,5 +207,23 @@ func TestTransactionCharacteristics(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot start read write transaction on a read only tablet")
 	utils.Exec(t, conn, "rollback")
+}
 
+func start(t *testing.T) func() {
+	deleteAll := func() {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		tables := []string{"test", "twopc_user"}
+		for _, table := range tables {
+			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+		}
+		conn.Close()
+	}
+
+	deleteAll()
+
+	return func() {
+		deleteAll()
+		cluster.PanicHandler(t)
+	}
 }

@@ -58,7 +58,7 @@ The V3 planner is deprecated as of the V16 release, and will be removed in the V
 
 #### Transaction Isolation Level
 Support added for `set [session] transaction isolation level <transaction_characteristic>`
-```json
+```sql
 transaction_characteristic: {
     ISOLATION LEVEL level
   | access_mode
@@ -76,7 +76,7 @@ This will be applied to any shard where the session will open a transaction.
 
 #### Transaction Access Mode
 Support added for `start transaction` with transaction characteristic.
-```json
+```sql
 START TRANSACTION
     [transaction_characteristic [, transaction_characteristic] ...]
 

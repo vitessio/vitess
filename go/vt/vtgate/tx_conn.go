@@ -48,26 +48,26 @@ func NewTxConn(gw *TabletGateway, txMode vtgatepb.TransactionMode) *TxConn {
 	}
 }
 
-var txAccessMode = map[string]querypb.ExecuteOptions_TransactionAccessMode{
-	sqlparser.WithConsistentSnapshotStr: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
-	sqlparser.ReadWriteStr:              querypb.ExecuteOptions_READ_WRITE,
-	sqlparser.ReadOnlyStr:               querypb.ExecuteOptions_READ_ONLY,
+var txAccessModeToEOTxAccessMode = map[sqlparser.TxAccessMode]querypb.ExecuteOptions_TransactionAccessMode{
+	sqlparser.WithConsistentSnapshot: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+	sqlparser.ReadWrite:              querypb.ExecuteOptions_READ_WRITE,
+	sqlparser.ReadOnly:               querypb.ExecuteOptions_READ_ONLY,
 }
 
 // Begin begins a new transaction. If one is already in progress, it commits it
 // and starts a new one.
-func (txc *TxConn) Begin(ctx context.Context, session *SafeSession, txCharacteristics []string) error {
+func (txc *TxConn) Begin(ctx context.Context, session *SafeSession, txAccessModes []sqlparser.TxAccessMode) error {
 	if session.InTransaction() {
 		if err := txc.Commit(ctx, session); err != nil {
 			return err
 		}
 	}
-	if len(txCharacteristics) > 0 {
+	if len(txAccessModes) > 0 {
 		options := session.GetOrCreateOptions()
-		for _, characteristic := range txCharacteristics {
-			accessMode, ok := txAccessMode[characteristic]
+		for _, txAccessMode := range txAccessModes {
+			accessMode, ok := txAccessModeToEOTxAccessMode[txAccessMode]
 			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] invalid transaction characteristic: %s", characteristic)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] invalid transaction characteristic: %s", txAccessMode.ToString())
 			}
 			options.TransactionAccessMode = append(options.TransactionAccessMode, accessMode)
 		}

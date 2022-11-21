@@ -367,12 +367,9 @@ func (cached *Begin) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field TxCharacteristics []string
+	// field TxAccessModes []vitess.io/vitess/go/vt/sqlparser.TxAccessMode
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.TxCharacteristics)) * int64(16))
-		for _, elem := range cached.TxCharacteristics {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
+		size += hack.RuntimeAllocSize(int64(cap(cached.TxAccessModes)))
 	}
 	return size
 }

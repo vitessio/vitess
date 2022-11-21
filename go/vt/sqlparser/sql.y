@@ -187,6 +187,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
+  txAccessModes []TxAccessMode
+  txAccessMode TxAccessMode
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -456,8 +458,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> distinct_opt union_op replace_opt local_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
-%type <strs> select_options flush_option_list tx_chacteristics_opt tx_chars
-%type <str> select_option algorithm_view security_view security_view_opt tx_char
+%type <strs> select_options flush_option_list
+%type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
@@ -584,6 +586,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
+%type <txAccessModes> tx_chacteristics_opt tx_chars
+%type <txAccessMode> tx_char
 %start any_command
 
 %%
@@ -4260,7 +4264,7 @@ begin_statement:
   }
 | START TRANSACTION tx_chacteristics_opt
   {
-    $$ = &Begin{TxCharacteristics: $3}
+    $$ = &Begin{TxAccessModes: $3}
   }
 
 tx_chacteristics_opt:
@@ -4275,7 +4279,7 @@ tx_chacteristics_opt:
 tx_chars:
   tx_char
   {
-    $$ = []string{$1}
+    $$ = []TxAccessMode{$1}
   }
 | tx_chars ',' tx_char
   {
@@ -4285,15 +4289,15 @@ tx_chars:
 tx_char:
   WITH CONSISTENT SNAPSHOT
   {
-    $$ = WithConsistentSnapshotStr
+    $$ = WithConsistentSnapshot
   }
 | READ WRITE
   {
-    $$ = ReadWriteStr
+    $$ = ReadWrite
   }
 | READ ONLY
   {
-    $$ = ReadOnlyStr
+    $$ = ReadOnly
   }
 
 

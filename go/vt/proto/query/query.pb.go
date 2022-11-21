@@ -1278,8 +1278,10 @@ type ExecuteOptions struct {
 	// has_created_temp_tables signals whether plans created in this session should be cached or not
 	// if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
 	// The current session can still use other sessions cached plans.
-	HasCreatedTempTables  bool                                   `protobuf:"varint,12,opt,name=has_created_temp_tables,json=hasCreatedTempTables,proto3" json:"has_created_temp_tables,omitempty"`
-	Consolidator          ExecuteOptions_Consolidator            `protobuf:"varint,13,opt,name=consolidator,proto3,enum=query.ExecuteOptions_Consolidator" json:"consolidator,omitempty"`
+	HasCreatedTempTables bool                        `protobuf:"varint,12,opt,name=has_created_temp_tables,json=hasCreatedTempTables,proto3" json:"has_created_temp_tables,omitempty"`
+	Consolidator         ExecuteOptions_Consolidator `protobuf:"varint,13,opt,name=consolidator,proto3,enum=query.ExecuteOptions_Consolidator" json:"consolidator,omitempty"`
+	// TransactionAccessMode specifies the access modes to be used while starting the transaction i.e. READ WRITE/READ ONLY/WITH CONSISTENT SNAPSHOT
+	// If not specified, the transaction will be started with the default access mode on the connection.
 	TransactionAccessMode []ExecuteOptions_TransactionAccessMode `protobuf:"varint,14,rep,packed,name=transaction_access_mode,json=transactionAccessMode,proto3,enum=query.ExecuteOptions_TransactionAccessMode" json:"transaction_access_mode,omitempty"`
 }
 

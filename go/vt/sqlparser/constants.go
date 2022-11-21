@@ -864,3 +864,10 @@ const (
 	IntervalMinuteMicrosecond
 	IntervalSecondMicrosecond
 )
+
+// Transaction access mode
+const (
+	WithConsistentSnapshot TxAccessMode = iota
+	ReadWrite
+	ReadOnly
+)

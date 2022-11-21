@@ -540,7 +540,7 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, lo
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
 	begin := stmt.(*sqlparser.Begin)
-	err := e.txConn.Begin(ctx, safeSession, begin.TxCharacteristics)
+	err := e.txConn.Begin(ctx, safeSession, begin.TxAccessModes)
 	logStats.ExecuteTime = time.Since(execStart)
 
 	e.updateQueryCounts("Begin", "", "", 0)
