@@ -814,7 +814,6 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 					continue
 				}
 				for _, predicate := range sqlparser.ExtractINFromOR(or) {
-					table.Predicates = append(table.Predicates, predicate)
 					err = plan.UpdateRoutingLogic(ctx, predicate)
 					if err != nil {
 						return nil, err

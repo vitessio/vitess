@@ -85,7 +85,7 @@ func simplifyNot(expr *NotExpr) (Expr, RewriteState) {
 // this rewriter should not be used in a fixed point way, since it returns the original expression with additions,
 // and it will therefor OOM before it stops rewriting
 func ExtractINFromOR(expr *OrExpr) []Expr {
-	// finally, we check if we have two comparisons on either side of the OR,
+	// we check if we have two comparisons on either side of the OR
 	// that we can add as an ANDed comparison.
 	// WHERE (a = 5 and B) or (a = 6 AND C) =>
 	// WHERE (a = 5 AND B) OR (a = 6 AND C) AND a IN (5,6)
