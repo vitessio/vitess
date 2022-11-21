@@ -6540,5 +6540,46 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Single table IN vindex route hiding behind OR",
+    "query": "select id from user where (id = 5 and name ='foo') or (id = 12 and name = 'bar')",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='foo') or (id = 12 and name = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and `name` = 'foo' or id = 12 and `name` = 'bar'",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='foo') or (id = 12 and name = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and `name` = 'foo' or id = 12 and `name` = 'bar'",
+        "Table": "`user`",
+        "Values": [
+          "(INT64(5), INT64(12))"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
