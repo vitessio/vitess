@@ -206,30 +206,23 @@ func init() {
 }
 ```
 
-## Auto-Documentation
+## Config Files
 
-<!-- old stuff starts here -->
+`viperutil` provides a few flags that allow binaries to read values from config files in addition to defaults, environment variables and flags.
+They are:
 
-## Config File(s)
-
-All vitess components will support taking a single, static (i.e. not "watched" via `WatchConfig`) configuration file.
-
-The file will be loaded via `ReadInConfig`.
-We will log a warning if no file was found, but will not abort (see [docs][viper_read_in_config_docs]).
-
-Flags for all binaries:
 - `--config-path`
     - Default: `$(pwd)`
     - EnvVar: `VT_CONFIG_PATH` (parsed exactly like a `$PATH` style shell variable).
     - FlagType: `StringSlice`
     - Behavior: Paths for `ReadInConfig` to search.
-- `--config-type` (default: "")
+- `--config-type`
     - Default: `""`
     - EnvVar: `VT_CONFIG_TYPE`
     - FlagType: `flagutil.StringEnum`
         - Values: everything contained in `viper.SupportedExts`, case-insensitive.
     - Behavior: Force viper to use a particular unmarshalling strategy; required if the config file does not have an extension (by default, viper infers the config type from the file extension).
-- `--config-name` (default: "vtconfig")
+- `--config-name`
     - Default: `"vtconfig"`
     - EnvVar: `VT_CONFIG_NAME`
     - FlagType: `string`
@@ -239,6 +232,24 @@ Flags for all binaries:
     - EnvVar: `VT_CONFIG_FILE`
     - FlagType: `string`
     - Behavior: Instructs `ReadInConfig` to search in `ConfigPaths` for explicitly a file with this name. Takes precedence over `ConfigName`.
+- `--config-file-not-found-handling`
+    - Default: `WarnOnConfigFileNotFound`
+    - EnvVar: (none)
+    - FlagType: `string` (options: `IgnoreConfigFileNotFound`, `WarnOnConfigFileNotFound`, `ErrorOnConfigFileNotFound`, `ExitOnConfigFileNotFound`)
+    - Behavior: If viper is unable to locate a config file (based on the other flags here), then `LoadConfig` will:
+        - `Ignore` => do nothing, return no error. Program values will come entirely from defaults, environment variables and flags.
+        - `Warn` => log at the WARNING level, but return no error.
+        - `Error` => log at the ERROR level and return the error back to the caller (usually `servenv`.)
+        - `Exit` => log at the FATAL level, exiting immediately.
+
+For more information on how viper searches for config files, see the [documentation][viper_read_in_config_docs].
+
+If viper was able to locate and load a config file, `LoadConfig` will then configure the dynamic registry to set up a watch on that file, enabling all dynamic values to pick up changes to that file for the remainder of the program's execution.
+If no config file was used, then dynamic values behave exactly like static values (i.e. the dynamic registry copies in the settings loaded into the static registry, but does not set up a file watch).
+
+## Auto-Documentation
+
+<!-- old stuff starts here -->
 
 ## Caveats and Gotchas
 
