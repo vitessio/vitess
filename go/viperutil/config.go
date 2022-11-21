@@ -106,10 +106,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // config values to use.
 //
 // Config searching follows the behavior used by viper [1], namely:
-//	* --config-file (full path, including extension) if set will be used to the
-//	  exclusion of all other flags.
-//	* --config-type is required if the config file does not have one of viper's
-//	  supported extensions (.yaml, .yml, .json, and so on)
+//   - --config-file (full path, including extension) if set will be used to the
+//     exclusion of all other flags.
+//   - --config-type is required if the config file does not have one of viper's
+//     supported extensions (.yaml, .yml, .json, and so on)
 //
 // An additional --config-file-not-found-handling flag controls how to treat the
 // situation where viper cannot find any config files in any of the provided
