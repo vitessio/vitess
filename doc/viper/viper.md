@@ -154,6 +154,58 @@ This means that there's a potential throughput impact of using dynamic values, w
 
 ### A brief aside on flags
 
+In the name of "we will catch as many mistakes as possible in tests" ("mistakes" here referring to typos in flag names, deleting a flag in one place but forgetting to clean up another reference, and so on), `Values` will panic at bind-time if they are configured to bind to a flag name that does not exist.
+Then, **as long as every binary is at least invoked** (including just `mycmd --help`) in an end-to-end test, our CI will fail if we ever misconfigure a value in this way.
+
+However, since `Configure` handles the binding of defaults, aliases, and envirnomnent variables, and is usually called in `var` blocks, this binding can actually happen before the module registers its flags via the `servenv.{OnParse,OnParseFor}` hooks.
+If we were to also bind any named flags at the point of `Configure`, this would cause panics even if the module later registered a flag with that name.
+Therefore, we introduce a separate function, namely `viperutil.BindFlags`, which binds the flags on one or more values, which modules can call _after_ registering their flags, usually in the same `OnParse` hook function.
+For example:
+
+```go
+package azblobbackupstorage
+
+import (
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/vt/servenv"
+)
+
+var (
+	configKey = viperutil.KeyPrefixFunc("backup.storage.azblob")
+
+	accountName = viperutil.Configure(
+		configKey("account.name"),
+		viperutil.Options[string]{
+			EnvVars:  []string{"VT_AZBLOB_ACCOUNT_NAME"},
+			FlagName: "azblob_backup_account_name",
+		},
+	)
+
+	accountKeyFile = viperutil.Configure(
+		configKey("account.key_file"),
+		viperutil.Options[string]{
+			FlagName: "azblob_backup_account_key_file",
+		},
+	)
+)
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.String("azblob_backup_account_name", accountName.Default(), "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
+	fs.String("azblob_backup_account_key_file", accountKeyFile.Default(), "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
+
+    viperutil.BindFlags(fs, accountName, accountKeyFile)
+}
+
+func init() {
+	servenv.OnParseFor("vtbackup", registerFlags)
+	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
+```
+
 ## Auto-Documentation
 
 <!-- old stuff starts here -->
