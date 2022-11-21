@@ -2270,6 +2270,12 @@ var (
 			input:  "create procedure p1() language sql deterministic sql security invoker select 1+1",
 			output: "create procedure p1 () language sql deterministic sql security invoker select 1 + 1",
 		}, {
+			input:  "call p1()",
+			output: "call p1",
+		}, {
+			input:  "call mydb.p1()",
+			output: "call mydb.p1",
+		}, {
 			input:  "create definer = me procedure p1(v1 int) select now()",
 			output: "create definer = `me`@`%` procedure p1 (in v1 int) select now()",
 		}, {
