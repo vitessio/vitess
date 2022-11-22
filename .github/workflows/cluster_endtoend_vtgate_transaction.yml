@@ -9,7 +9,7 @@ concurrency:
 jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_transaction)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -44,27 +44,51 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
+        
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        # stop any existing running instance of mysql
         sudo service mysql stop
-        sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo systemctl stop apparmor
+
+        # Uninstall any previously installed MySQL first
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-\*
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # install necessary tools
+        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata xz-utils libmecab2
+        sudo service etcd stop
+
+        # Download mysql8.0.25 (pin it)
+        wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz
+        # Untar the bundle. It will have all necessary deb
+        sudo tar xf mysql-8.0.25-linux-glibc2.17-x86_64-minimal.tar.xz -v -C /usr
+        echo 'mysql version: '
+        sudo /usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin/mysql --version
+        
+        # configure rest
+        sudo service etcd stop
         go mod download
 
         # install JUnit report formatter
         go get -u github.com/vitessio/go-junit-report@HEAD
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
-
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
+        
+        export VT_MYSQL_ROOT="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal"
+        export PATH="/usr/mysql-8.0.25-linux-glibc2.17-x86_64-minimal/bin:$PATH"
+        
         source build.env
 
         set -x

@@ -7,7 +7,8 @@ concurrency:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    runs-on: ubuntu-20.04
+    timeout-minutes: 45
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -42,33 +43,52 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
+        sudo apt-get update
+
+        # Uninstall any previously installed MySQL first
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
+        sudo systemctl stop apparmor
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
+        # Bionic packages are still compatible for Focal since there's no MySQL 5.7
+        # packages for Focal.
+        echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7*
 
-        # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
         sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-        go mod download
 
         # install JUnit report formatter
         go get -u github.com/vitessio/go-junit-report@HEAD
 
         {{if .InstallXtraBackup}}
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        if [[ -n $XTRABACKUP_VERSION ]]; then
+          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
+          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
+          sudo apt install -y "./$debfile"
+        else
+          sudo apt-get install -y percona-xtrabackup-24
+        fi
 
         {{end}}
 
@@ -83,7 +103,7 @@ jobs:
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         source build.env
 

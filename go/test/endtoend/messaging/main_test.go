@@ -42,27 +42,43 @@ var (
 	userKeyspace         = "user"
 	lookupKeyspace       = "lookup"
 	createShardedMessage = `create table sharded_message(
-		id bigint,
-		priority bigint default 0,
-		time_next bigint default 0,
-		epoch bigint,
-		time_acked bigint,
-		message varchar(128),
+		# required columns
+		id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+		priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+		epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+		time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+		time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+		# add as many custom fields here as required
+		# optional - these are suggestions
+		tenant_id bigint,
+		message json,
+
+		# required indexes
 		primary key(id),
-		index next_idx(priority, time_next desc),
-		index ack_idx(time_acked)
-		) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+		index poller_idx(time_acked, priority, time_next desc)
+
+		# add any secondary indexes or foreign keys - no restrictions
+	) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 	createUnshardedMessage = `create table unsharded_message(
-		id bigint,
-		priority bigint default 0,
-		time_next bigint default 0,
-		epoch bigint,
-		time_acked bigint,
-		message varchar(128),
+		# required columns
+		id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+		priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+		epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+		time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+		time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+		# add as many custom fields here as required
+		# optional - these are suggestions
+		tenant_id bigint,
+		message json,
+
+		# required indexes
 		primary key(id),
-		index next_idx(priority, time_next desc),
-		index ack_idx(time_acked)
-		) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+		index poller_idx(time_acked, priority, time_next desc)
+
+		# add any secondary indexes or foreign keys - no restrictions
+	) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 	userVschema = `{
 	  "sharded": true,
 	  "vindexes": {

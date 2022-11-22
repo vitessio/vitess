@@ -104,6 +104,8 @@ jobs:
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
+        echo 'mysql version: '
+        mysql --version
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})

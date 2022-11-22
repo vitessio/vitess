@@ -6,7 +6,7 @@ on: [push, pull_request]
 jobs:
   build:
     name: Run endtoend tests on Cluster (vreplication_v2)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Check if workflow needs to be skipped

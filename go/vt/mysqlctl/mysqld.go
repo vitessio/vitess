@@ -165,6 +165,7 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 				os.Getenv("VTROOT"),
 				vtenvMysqlRoot,
 				os.Getenv("MYSQL_FLAVOR"))
+			log.Errorf(message)
 			panic(message)
 		}
 	}
@@ -184,17 +185,17 @@ versions should only matter if Vitess is managing the lifecycle of mysqld, in wh
 case we should have a local copy of the mysqld binary from which we can fetch
 the accurate version instead of falling back to this function (see GetVersionString).
 */
-func GetVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
+func GetVersionFromEnv() (flavor MySQLFlavor, ver ServerVersion, err error) {
 	env := os.Getenv("MYSQL_FLAVOR")
 	switch env {
 	case "MariaDB":
-		return FlavorMariaDB, serverVersion{10, 0, 10}, nil
+		return FlavorMariaDB, ServerVersion{10, 0, 10}, nil
 	case "MariaDB103":
-		return FlavorMariaDB, serverVersion{10, 3, 7}, nil
+		return FlavorMariaDB, ServerVersion{10, 3, 7}, nil
 	case "MySQL80":
-		return FlavorMySQL, serverVersion{8, 0, 11}, nil
+		return FlavorMySQL, ServerVersion{8, 0, 11}, nil
 	case "MySQL56":
-		return FlavorMySQL, serverVersion{5, 7, 10}, nil
+		return FlavorMySQL, ServerVersion{5, 7, 10}, nil
 	}
 	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
@@ -217,7 +218,7 @@ func GetVersionString() (string, error) {
 }
 
 // ParseVersionString parses the output of mysqld --version into a flavor and version
-func ParseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
+func ParseVersionString(version string) (flavor MySQLFlavor, ver ServerVersion, err error) {
 	if strings.Contains(version, "Percona") {
 		flavor = FlavorPercona
 	} else if strings.Contains(version, "MariaDB") {

@@ -94,6 +94,12 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	if root := os.Getenv("VT_MYSQL_ROOT"); root != "" {
+		fmt.Printf("Enviroment variable is %s\n", root)
+	} else {
+		fmt.Println("Enviroment variable is null")
+	}
+
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

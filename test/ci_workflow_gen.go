@@ -100,6 +100,7 @@ var (
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",
+		"mysql57",
 		"mysql80",
 		"vreplication_multicell",
 		"vreplication_cellalias",
@@ -113,15 +114,15 @@ var (
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
+	clustersRequiringXtraBackup = append([]string{}, []string{"xb_recovery", "20"}...)
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
-	clustersRequiringMySQL80 = []string{
-		"mysql80",
+	clustersRequiringMySQL57 = []string{
+		"mysql57",
 	}
 )
 
@@ -132,7 +133,6 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20                     bool
 }
 
 type selfHostedTest struct {
@@ -228,7 +228,7 @@ func generateSelfHostedClusterWorkflows() error {
 		test := &selfHostedTest{
 			Name:              fmt.Sprintf("Cluster (%s)", cluster),
 			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-			Platform:          "mysql57",
+			Platform:          "mysql80",
 			directoryName:     directoryName,
 			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 			Shard:             cluster,
@@ -249,10 +249,10 @@ func generateSelfHostedClusterWorkflows() error {
 				break
 			}
 		}
-		mysql80Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, mysql80Cluster := range mysql80Clusters {
-			if mysql80Cluster == cluster {
-				test.Platform = "mysql80"
+		mysql57Clusters := canonnizeList(clustersRequiringMySQL57)
+		for _, mysql57Cluster := range mysql57Clusters {
+			if mysql57Cluster == cluster {
+				test.Platform = "mysql57"
 				break
 			}
 		}
@@ -292,11 +292,10 @@ func generateClusterWorkflows(list []string, tpl string) {
 				break
 			}
 		}
-		ubuntu20Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, ubuntu20Cluster := range ubuntu20Clusters {
-			if ubuntu20Cluster == cluster {
-				test.Ubuntu20 = true
-				test.Platform = "mysql80"
+		ubuntu18Clusters := canonnizeList(clustersRequiringMySQL57)
+		for _, ubuntu18Cluster := range ubuntu18Clusters {
+			if ubuntu18Cluster == cluster {
+				test.Platform = "mysql57"
 				break
 			}
 		}

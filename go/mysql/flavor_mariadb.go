@@ -243,3 +243,11 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 	return NewMariadbBinlogEvent(result[1:]), nil
 }
+
+// supportsCapability is part of the Flavor interface.
+func (mariadbFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
+}

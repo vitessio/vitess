@@ -238,6 +238,16 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
+// supportsCapability is part of the Flavor interface.
+func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case DynamicRedoLogCapacityFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
+	default:
+		return false, nil
+	}
+}
+
 func init() {
 	flavors[GRFlavorID] = newMysqlGRFlavor
 }
