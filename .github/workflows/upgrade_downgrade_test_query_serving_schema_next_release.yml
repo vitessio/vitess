@@ -76,7 +76,8 @@ jobs:
             - 'test.go'
             - 'Makefile'
             - 'build.env'
-            - 'go.[sumod]'
+            - 'go.sum'
+            - 'go.mod'
             - 'proto/*.proto'
             - 'tools/**'
             - 'config/**'
@@ -96,7 +97,7 @@ jobs:
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     - name: Get base dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

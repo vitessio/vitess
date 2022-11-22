@@ -13938,6 +13938,9 @@ export namespace topodata {
 
         /** SrvKeyspace served_from */
         served_from?: (topodata.SrvKeyspace.IServedFrom[]|null);
+
+        /** SrvKeyspace throttler_config */
+        throttler_config?: (topodata.SrvKeyspace.IThrottlerConfig|null);
     }
 
     /** Represents a SrvKeyspace. */
@@ -13954,6 +13957,9 @@ export namespace topodata {
 
         /** SrvKeyspace served_from. */
         public served_from: topodata.SrvKeyspace.IServedFrom[];
+
+        /** SrvKeyspace throttler_config. */
+        public throttler_config?: (topodata.SrvKeyspace.IThrottlerConfig|null);
 
         /**
          * Creates a new SrvKeyspace instance using the specified properties.
@@ -14221,6 +14227,114 @@ export namespace topodata {
 
             /**
              * Converts this ServedFrom to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+        }
+
+        /** Properties of a ThrottlerConfig. */
+        interface IThrottlerConfig {
+
+            /** ThrottlerConfig enabled */
+            enabled?: (boolean|null);
+
+            /** ThrottlerConfig threshold */
+            threshold?: (number|null);
+
+            /** ThrottlerConfig custom_query */
+            custom_query?: (string|null);
+
+            /** ThrottlerConfig check_as_check_self */
+            check_as_check_self?: (boolean|null);
+        }
+
+        /** Represents a ThrottlerConfig. */
+        class ThrottlerConfig implements IThrottlerConfig {
+
+            /**
+             * Constructs a new ThrottlerConfig.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: topodata.SrvKeyspace.IThrottlerConfig);
+
+            /** ThrottlerConfig enabled. */
+            public enabled: boolean;
+
+            /** ThrottlerConfig threshold. */
+            public threshold: number;
+
+            /** ThrottlerConfig custom_query. */
+            public custom_query: string;
+
+            /** ThrottlerConfig check_as_check_self. */
+            public check_as_check_self: boolean;
+
+            /**
+             * Creates a new ThrottlerConfig instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ThrottlerConfig instance
+             */
+            public static create(properties?: topodata.SrvKeyspace.IThrottlerConfig): topodata.SrvKeyspace.ThrottlerConfig;
+
+            /**
+             * Encodes the specified ThrottlerConfig message. Does not implicitly {@link topodata.SrvKeyspace.ThrottlerConfig.verify|verify} messages.
+             * @param message ThrottlerConfig message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: topodata.SrvKeyspace.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified ThrottlerConfig message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.ThrottlerConfig.verify|verify} messages.
+             * @param message ThrottlerConfig message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: topodata.SrvKeyspace.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ThrottlerConfig message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ThrottlerConfig
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.ThrottlerConfig;
+
+            /**
+             * Decodes a ThrottlerConfig message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns ThrottlerConfig
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.ThrottlerConfig;
+
+            /**
+             * Verifies a ThrottlerConfig message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a ThrottlerConfig message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns ThrottlerConfig
+             */
+            public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace.ThrottlerConfig;
+
+            /**
+             * Creates a plain object from a ThrottlerConfig message. Also converts values to other types if specified.
+             * @param message ThrottlerConfig
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: topodata.SrvKeyspace.ThrottlerConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this ThrottlerConfig to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
@@ -33767,6 +33881,12 @@ export namespace vtctldata {
 
         /** Workflow shard_streams */
         shard_streams?: ({ [k: string]: vtctldata.Workflow.IShardStream }|null);
+
+        /** Workflow workflow_type */
+        workflow_type?: (string|null);
+
+        /** Workflow workflow_sub_type */
+        workflow_sub_type?: (string|null);
     }
 
     /** Represents a Workflow. */
@@ -33792,6 +33912,12 @@ export namespace vtctldata {
 
         /** Workflow shard_streams. */
         public shard_streams: { [k: string]: vtctldata.Workflow.IShardStream };
+
+        /** Workflow workflow_type. */
+        public workflow_type: string;
+
+        /** Workflow workflow_sub_type. */
+        public workflow_sub_type: string;
 
         /**
          * Creates a new Workflow instance using the specified properties.
@@ -41326,6 +41452,222 @@ export namespace vtctldata {
 
         /**
          * Converts this GetSrvKeyspacesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an UpdateThrottlerConfigRequest. */
+    interface IUpdateThrottlerConfigRequest {
+
+        /** UpdateThrottlerConfigRequest keyspace */
+        keyspace?: (string|null);
+
+        /** UpdateThrottlerConfigRequest enable */
+        enable?: (boolean|null);
+
+        /** UpdateThrottlerConfigRequest disable */
+        disable?: (boolean|null);
+
+        /** UpdateThrottlerConfigRequest threshold */
+        threshold?: (number|null);
+
+        /** UpdateThrottlerConfigRequest custom_query */
+        custom_query?: (string|null);
+
+        /** UpdateThrottlerConfigRequest custom_query_set */
+        custom_query_set?: (boolean|null);
+
+        /** UpdateThrottlerConfigRequest check_as_check_self */
+        check_as_check_self?: (boolean|null);
+
+        /** UpdateThrottlerConfigRequest check_as_check_shard */
+        check_as_check_shard?: (boolean|null);
+    }
+
+    /** Represents an UpdateThrottlerConfigRequest. */
+    class UpdateThrottlerConfigRequest implements IUpdateThrottlerConfigRequest {
+
+        /**
+         * Constructs a new UpdateThrottlerConfigRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateThrottlerConfigRequest);
+
+        /** UpdateThrottlerConfigRequest keyspace. */
+        public keyspace: string;
+
+        /** UpdateThrottlerConfigRequest enable. */
+        public enable: boolean;
+
+        /** UpdateThrottlerConfigRequest disable. */
+        public disable: boolean;
+
+        /** UpdateThrottlerConfigRequest threshold. */
+        public threshold: number;
+
+        /** UpdateThrottlerConfigRequest custom_query. */
+        public custom_query: string;
+
+        /** UpdateThrottlerConfigRequest custom_query_set. */
+        public custom_query_set: boolean;
+
+        /** UpdateThrottlerConfigRequest check_as_check_self. */
+        public check_as_check_self: boolean;
+
+        /** UpdateThrottlerConfigRequest check_as_check_shard. */
+        public check_as_check_shard: boolean;
+
+        /**
+         * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateThrottlerConfigRequest instance
+         */
+        public static create(properties?: vtctldata.IUpdateThrottlerConfigRequest): vtctldata.UpdateThrottlerConfigRequest;
+
+        /**
+         * Encodes the specified UpdateThrottlerConfigRequest message. Does not implicitly {@link vtctldata.UpdateThrottlerConfigRequest.verify|verify} messages.
+         * @param message UpdateThrottlerConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateThrottlerConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateThrottlerConfigRequest message, length delimited. Does not implicitly {@link vtctldata.UpdateThrottlerConfigRequest.verify|verify} messages.
+         * @param message UpdateThrottlerConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateThrottlerConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateThrottlerConfigRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateThrottlerConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateThrottlerConfigRequest;
+
+        /**
+         * Decodes an UpdateThrottlerConfigRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateThrottlerConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateThrottlerConfigRequest;
+
+        /**
+         * Verifies an UpdateThrottlerConfigRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateThrottlerConfigRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateThrottlerConfigRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateThrottlerConfigRequest;
+
+        /**
+         * Creates a plain object from an UpdateThrottlerConfigRequest message. Also converts values to other types if specified.
+         * @param message UpdateThrottlerConfigRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateThrottlerConfigRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateThrottlerConfigRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an UpdateThrottlerConfigResponse. */
+    interface IUpdateThrottlerConfigResponse {
+    }
+
+    /** Represents an UpdateThrottlerConfigResponse. */
+    class UpdateThrottlerConfigResponse implements IUpdateThrottlerConfigResponse {
+
+        /**
+         * Constructs a new UpdateThrottlerConfigResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateThrottlerConfigResponse);
+
+        /**
+         * Creates a new UpdateThrottlerConfigResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateThrottlerConfigResponse instance
+         */
+        public static create(properties?: vtctldata.IUpdateThrottlerConfigResponse): vtctldata.UpdateThrottlerConfigResponse;
+
+        /**
+         * Encodes the specified UpdateThrottlerConfigResponse message. Does not implicitly {@link vtctldata.UpdateThrottlerConfigResponse.verify|verify} messages.
+         * @param message UpdateThrottlerConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateThrottlerConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateThrottlerConfigResponse message, length delimited. Does not implicitly {@link vtctldata.UpdateThrottlerConfigResponse.verify|verify} messages.
+         * @param message UpdateThrottlerConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateThrottlerConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateThrottlerConfigResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateThrottlerConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateThrottlerConfigResponse;
+
+        /**
+         * Decodes an UpdateThrottlerConfigResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateThrottlerConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateThrottlerConfigResponse;
+
+        /**
+         * Verifies an UpdateThrottlerConfigResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateThrottlerConfigResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateThrottlerConfigResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateThrottlerConfigResponse;
+
+        /**
+         * Creates a plain object from an UpdateThrottlerConfigResponse message. Also converts values to other types if specified.
+         * @param message UpdateThrottlerConfigResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateThrottlerConfigResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateThrottlerConfigResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

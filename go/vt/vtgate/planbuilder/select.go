@@ -66,7 +66,7 @@ func buildSelectPlan(query string) stmtPlanner {
 			return nil, err
 		}
 
-		if shouldRetryWithCNFRewriting(plan) {
+		if shouldRetryAfterPredicateRewriting(plan) {
 			// by transforming the predicates to CNF, the planner will sometimes find better plans
 			primitive := rewriteToCNFAndReplan(stmt, getPlan)
 			if primitive != nil {
@@ -89,12 +89,12 @@ func buildSelectPlan(query string) stmtPlanner {
 }
 
 func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser.Select) (logicalPlan, error)) engine.Primitive {
-	rewritten := sqlparser.RewriteToCNF(stmt)
+	rewritten := sqlparser.RewritePredicate(stmt)
 	sel2, isSelect := rewritten.(*sqlparser.Select)
 	if isSelect {
 		log.Infof("retrying plan after cnf: %s", sqlparser.String(sel2))
 		plan2, err := getPlan(sel2)
-		if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+		if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
 			// we only use this new plan if it's better than the old one we got
 			return plan2.Primitive()
 		}
@@ -102,7 +102,7 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 	return nil
 }
 
-func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
+func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
 	var opcode engine.Opcode
 	var sysTableTableName map[string]evalengine.Expr

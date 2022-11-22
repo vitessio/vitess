@@ -115,6 +115,8 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
+  string workflow_type = 6;
+  string workflow_sub_type = 7;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -669,6 +671,27 @@ message GetSrvKeyspacesRequest {
 message GetSrvKeyspacesResponse {
   // SrvKeyspaces is a mapping of cell name to SrvKeyspace.
   map<string, topodata.SrvKeyspace> srv_keyspaces = 1;
+}
+
+message UpdateThrottlerConfigRequest {
+  string keyspace = 1;
+  // Enable instructs to enable the throttler
+  bool enable = 2;
+  // Disable instructs to disable the throttler
+  bool disable = 3;
+  // Threshold for throttler (with no custom query, ie using default query, only positive values are considered)
+  double threshold = 4;
+  // CustomQuery replaces the default replication lag query
+  string custom_query = 5;
+  // CustomQuerySet indicates that the value of CustomQuery has changed
+  bool custom_query_set = 6;
+  // CheckAsCheckSelf instructs the throttler to respond to /check requests by checking the tablet's own health
+  bool check_as_check_self=7;
+  // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
+  bool check_as_check_shard=8;
+}
+
+message UpdateThrottlerConfigResponse {
 }
 
 message GetSrvVSchemaRequest {

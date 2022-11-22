@@ -47,11 +47,12 @@ jobs:
             go_files:
               - '**/*.go'
               - '*.go'
-              - 'go.[sumod]'
-              - '.github/workflows/static_checks_etc.yml'
+              - 'go.sum'
+              - 'go.mod'
             parser_changes:
               - 'go/vt/sqlparser/**'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'build.env'
               - 'bootstrap.sh'
               - 'tools/**'
@@ -60,7 +61,8 @@ jobs:
               - 'bootstrap.sh'
               - 'tools/**'
               - 'build.env'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'Makefile'
               - 'go/vt/proto/**'
               - 'proto/*.proto'
@@ -70,7 +72,8 @@ jobs:
               - 'test.go'
               - 'Makefile'
               - 'build.env'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'tools/**'
               - 'bootstrap.sh'
               - '.github/workflows/static_checks_etc.yml'
@@ -79,7 +82,8 @@ jobs:
               - 'go/vt/sqlparser/**'
               - 'Makefile'
               - 'build.env'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'tools/**'
               - 'bootstrap.sh'
               - 'misc/git/hooks/asthelpers'
@@ -90,10 +94,12 @@ jobs:
               - 'Makefile'
               - 'bootstrap.sh'
               - '.github/workflows/static_checks_etc.yml'
-
+            ci_config:
+              - 'test/config.json'
+              - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: actions/setup-go@v3
         with:
           go-version: 1.19.3
@@ -101,7 +107,7 @@ jobs:
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: |
-          echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+          sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
       # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
       - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
@@ -116,7 +122,7 @@ jobs:
           gofmt -l . | grep -vF vendor/ && exit 1 || echo "All files formatted correctly"
 
       - name: Install goimports
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true')
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
 
@@ -127,7 +133,7 @@ jobs:
           echo $out | grep go > /dev/null && echo -e "The following files are malformatted:\n$out" && exit 1 || echo "All the files are formatted correctly"
 
       - name: Get dependencies
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd curl git wget
@@ -135,22 +141,22 @@ jobs:
           go mod download
 
       - name: Run make minimaltools
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           make minimaltools
 
       - name: check_make_parser
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           tools/check_make_parser.sh || exit 1
 
       - name: check_make_sizegen
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.sizegen == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.sizegen == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           tools/check_make_sizegen.sh || exit 1
 
       - name: check_make_visitor
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.visitor == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.visitor == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           misc/git/hooks/asthelpers || exit 1
 
@@ -195,3 +201,8 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
         run: |
           tools/check_make_proto.sh || exit 1
+
+      - name: Check test/config.json
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.ci_config == 'true')
+        run: |
+          go run ./go/tools/ci-config/main.go || exit 1

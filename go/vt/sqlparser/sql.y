@@ -311,6 +311,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Migration tokens
 %token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+// Throttler tokens
+%token <str> VITESS_THROTTLER
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -4057,6 +4059,10 @@ show_statement:
 | SHOW VITESS_REPLICATION_STATUS like_opt
   {
     $$ = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}}
+  }
+| SHOW VITESS_THROTTLER STATUS
+  {
+    $$ = &ShowThrottlerStatus{}
   }
 | SHOW VSCHEMA TABLES
   {
@@ -7813,6 +7819,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VITESS_TARGET
 | VITESS_THROTTLED_APPS
+| VITESS_THROTTLER
 | VSCHEMA
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD

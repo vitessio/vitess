@@ -36,11 +36,13 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
-	_ "vitess.io/vitess/go/vt/topo/consultopo" //nolint
-	_ "vitess.io/vitess/go/vt/topo/etcd2topo"  //nolint
-	_ "vitess.io/vitess/go/vt/topo/k8stopo"    //nolint
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	_ "vitess.io/vitess/go/vt/topo/zk2topo" //nolint
+
+	// Register topo implementations.
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	_ "vitess.io/vitess/go/vt/topo/k8stopo"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )
 
 const (
