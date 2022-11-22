@@ -51,6 +51,7 @@ import (
 
 const (
 	builtinBackupEngineName = "builtin"
+	autoIncrementalFromPos  = "auto"
 	writerBufferSize        = 2 * 1024 * 1024
 	dataDictionaryFile      = "mysql.ibd"
 )
@@ -192,7 +193,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 // - A valid position
 // - "auto", indicating the incremental backup should begin with last successful backup end position.
 func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
-	if params.IncrementalFromPos == "auto" {
+	if params.IncrementalFromPos == autoIncrementalFromPos {
 		params.Logger.Infof("auto evaluating incremental_from_pos")
 		bs, err := backupstorage.GetBackupStorage()
 		if err != nil {
