@@ -407,13 +407,13 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	}
 	// Anything taken before the full backup that we picked, is not of interest:
 	manifests = manifests[fullBackupIndex:]
-	path := &RestorePath{
+	restorePath := &RestorePath{
 		manifestHandleMap: manifestHandleMap,
 	}
 	if params.RestoreToPos.IsZero() {
 		// restoring from a single full backup:
-		path.Add(manifests[0])
-		return path, nil
+		restorePath.Add(manifests[0])
+		return restorePath, nil
 	}
 	// restore to a position (using incremental backups):
 	// we calculate a possible restore path based on the manifests. The resulting manifests are
@@ -422,8 +422,8 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	if err != nil {
 		return nil, err
 	}
-	path.manifests = manifests
-	return path, nil
+	restorePath.manifests = manifests
+	return restorePath, nil
 }
 
 func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
