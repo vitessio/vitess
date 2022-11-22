@@ -127,8 +127,9 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 
 // etcdLockDescriptor implements topo.LockDescriptor.
 type etcdLockDescriptor struct {
-	s       *Server
-	leaseID clientv3.LeaseID
+	s               *Server
+	leaseID         clientv3.LeaseID
+	keepAliveCancel context.CancelFunc
 }
 
 // TryLock is part of the topo.Conn interface.
@@ -180,7 +181,17 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.Lock
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}
-	leaseKA, err := s.cli.KeepAlive(ctx, lease.ID)
+
+	keepAliveContext, keepAliveCancel := context.WithCancel(context.Background())
+	defer func() {
+		// If we encounter an error while trying to take the lock, stop
+		// sending the keepAlive messages
+		if err != nil {
+			keepAliveCancel()
+		}
+	}()
+
+	leaseKA, err := s.cli.KeepAlive(keepAliveContext, lease.ID)
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}
@@ -211,8 +222,9 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.Lock
 		if done {
 			// No more older nodes, we're it!
 			return &etcdLockDescriptor{
-				s:       s,
-				leaseID: lease.ID,
+				s:               s,
+				leaseID:         lease.ID,
+				keepAliveCancel: keepAliveCancel,
 			}, nil
 		}
 	}
@@ -230,6 +242,7 @@ func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *etcdLockDescriptor) Unlock(ctx context.Context) error {
+	ld.keepAliveCancel()
 	_, err := ld.s.cli.Revoke(ctx, ld.leaseID)
 	if err != nil {
 		return convertError(err, "lease")

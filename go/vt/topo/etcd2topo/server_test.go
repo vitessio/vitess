@@ -290,4 +290,17 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	if err := lockDescriptor.Unlock(ctx); err != nil {
 		t.Fatalf("Unlock failed: %v", err)
 	}
+
+	cancellableCtx, cancel := context.WithCancel(ctx)
+	lockDescriptor, err = conn.Lock(cancellableCtx, keyspacePath, "short ttl with context canceled after lock was acquired")
+	if err != nil {
+		t.Fatalf("Lock failed: %v", err)
+	}
+
+	cancel()
+	time.Sleep(5 * time.Second)
+
+	if err := lockDescriptor.Unlock(ctx); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
+	}
 }
