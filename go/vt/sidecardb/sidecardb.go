@@ -81,9 +81,11 @@ func Init(ctx context.Context, exec Exec) error {
 		exec: exec,
 	}
 
+	log.Infof("CreateVTDatabase start...")
 	if err := si.CreateVTDatabase(); err != nil {
 		return err
 	}
+	log.Infof("CreateVTDatabase end...")
 
 	currentDatabase, err := si.setCurrentDatabase("_vt")
 	if err != nil {
@@ -106,8 +108,12 @@ func Init(ctx context.Context, exec Exec) error {
 }
 
 func (si *VTSchemaInit) CreateVTDatabase() error {
+	if si.ctx.Err() != nil {
+		log.Infof("context error CreateVTDatabase ... %v", si.ctx.Err())
+	}
 	rs, err := si.exec(si.ctx, "SHOW DATABASES LIKE '_vt'", 2, false)
 	if err != nil {
+		log.Infof("error CreateVTDatabase ... %v", err)
 		return err
 	}
 
@@ -185,9 +191,7 @@ func (si *VTSchemaInit) findTableSchemaDiff(current, desired string) (string, er
 		log.Infof("current schema %s", current)
 
 	} else {
-		if strings.Contains(tableAlterSQL, "CREATE TABLE") {
-			tableAlterSQL = strings.Replace(tableAlterSQL, "CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
-		}
+		tableAlterSQL = strings.Replace(tableAlterSQL, "CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
 	}
 
 	return tableAlterSQL, nil

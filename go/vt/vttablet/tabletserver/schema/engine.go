@@ -128,6 +128,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 }
 
 func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	log.Infof("inside syncVTDatabase %s", sidecardb.UseVTDatabaseQuery)
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
 		_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
 		if err != nil {
@@ -146,23 +147,30 @@ func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection) error {
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+	//time.Sleep(20 * time.Second)
+	log.Infof("inside EnsureConnectionAndDB with TabletType %v", tabletType)
 	ctx := tabletenv.LocalContext()
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	if err != nil {
+		log.Infof("error inside EnsureConnectionAndDB %v", err)
+	}
 	if err == nil {
-		conn.Close()
 		se.dbCreationFailed = false
 		if err := syncVTDatabase(ctx, conn); err != nil {
 			return err
 		}
+		conn.Close()
 		return nil
 	}
 	if tabletType != topodatapb.TabletType_PRIMARY {
+		log.Info("returning error...")
 		return err
 	}
 	if merr, isSQLErr := err.(*mysql.SQLError); !isSQLErr || merr.Num != mysql.ERBadDb {
+		log.Info("returning sql error...")
 		return err
 	}
-
+	log.Info("It is primary...")
 	// We are primary and db is not found. Let's create it.
 	// We use allprivs instead of DBA because we want db create to fail if we're read-only.
 	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsConnector())
