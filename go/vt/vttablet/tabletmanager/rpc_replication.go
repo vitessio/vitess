@@ -38,7 +38,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var setSuperReadOnly bool
+var setSuperReadOnly = true
 var disableReplicationManager bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
