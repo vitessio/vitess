@@ -79,6 +79,7 @@ Available Commands:
   TabletExternallyReparented  Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
   UpdateCellInfo              Updates the content of a CellInfo with the provided parameters, creating the CellInfo if it does not exist.
   UpdateCellsAlias            Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
+  UpdateThrottlerConfig       Update the table throttler configuration for all cells and tablets of a given keyspace
   Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
   ValidateKeyspace            Validates that all nodes reachable from the specified keyspace are consistent.
   ValidateSchemaKeyspace      Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.

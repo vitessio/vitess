@@ -132,3 +132,38 @@ func TestRewritePredicate(in *testing.T) {
 		})
 	}
 }
+
+func TestExtractINFromOR(in *testing.T) {
+	tests := []struct {
+		in       string
+		expected string
+	}{{
+		in:       "(A and B) or (B and A)",
+		expected: "<nil>",
+	}, {
+		in:       "(a = 5 and B) or A",
+		expected: "<nil>",
+	}, {
+		in:       "a = 5 and B or a = 6 and C",
+		expected: "a in (5, 6)",
+	}, {
+		in:       "(a = 5 and b = 1 or b = 2 and a = 6)",
+		expected: "a in (5, 6) and b in (1, 2)",
+	}, {
+		in:       "(a in (1,5) and B or C and a = 6)",
+		expected: "a in (1, 5, 6)",
+	}, {
+		in:       "(a in (1, 5) and B or C and a in (5, 7))",
+		expected: "a in (1, 5, 7)",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			expr, err := ParseExpr(tc.in)
+			require.NoError(t, err)
+
+			output := ExtractINFromOR(expr.(*OrExpr))
+			assert.Equal(t, tc.expected, String(AndExpressions(output...)))
+		})
+	}
+}

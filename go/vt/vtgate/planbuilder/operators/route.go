@@ -805,6 +805,22 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 				}
 			}
 		}
+
+		if plan.RouteOpCode == engine.Scatter {
+			// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
+			for _, expr := range table.Predicates {
+				or, ok := expr.(*sqlparser.OrExpr)
+				if !ok {
+					continue
+				}
+				for _, predicate := range sqlparser.ExtractINFromOR(or) {
+					err = plan.UpdateRoutingLogic(ctx, predicate)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
 	}
 
 	return plan, nil

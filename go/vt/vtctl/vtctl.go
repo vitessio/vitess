@@ -709,6 +709,12 @@ var commands = []commandGroup{
 				help:   "Outputs a JSON structure that contains information about the SrvKeyspace.",
 			},
 			{
+				name:   "UpdateThrottlerConfig",
+				method: commandUpdateThrottlerConfig,
+				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
+				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
+			},
+			{
 				name:   "GetSrvVSchema",
 				method: commandGetSrvVSchema,
 				params: "<cell>",
@@ -3666,6 +3672,69 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("missing keyspace %q in cell %q", keyspace, cell)
 	}
 	return printJSON(wr.Logger(), cellKs)
+}
+
+func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) (err error) {
+	enable := subFlags.Bool("enable", false, "Enable the throttler")
+	disable := subFlags.Bool("disable", false, "Disable the throttler")
+	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
+	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
+	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
+	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	customQuerySet := subFlags.Changed("custom-query")
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace> arguments are required for the SetThrottlerConfig command")
+	}
+	if *enable && *disable {
+		return fmt.Errorf("--enable and --disable are mutually exclusive")
+	}
+	if *checkAsCheckSelf && *checkAsCheckShard {
+		return fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
+	}
+
+	keyspace := subFlags.Arg(0)
+
+	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+		if throttlerConfig == nil {
+			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+		}
+		if customQuerySet {
+			// custom query provided
+			throttlerConfig.CustomQuery = *customQuery
+			throttlerConfig.Threshold = *threshold // allowed to be zero/negative because who knows what kind of custom query this is
+		} else {
+			// no custom query, throttler works by querying replication lag. We only allow positive values
+			if *threshold > 0 {
+				throttlerConfig.Threshold = *threshold
+			}
+		}
+		if *enable {
+			throttlerConfig.Enabled = true
+		}
+		if *disable {
+			throttlerConfig.Enabled = false
+		}
+		if *checkAsCheckSelf {
+			throttlerConfig.CheckAsCheckSelf = true
+		}
+		if *checkAsCheckShard {
+			throttlerConfig.CheckAsCheckSelf = false
+		}
+		return throttlerConfig
+	}
+
+	ctx, unlock, lockErr := wr.TopoServer().LockKeyspace(ctx, keyspace, "UpdateThrottlerConfig")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	_, err = wr.TopoServer().UpdateSrvKeyspaceThrottlerConfig(ctx, keyspace, []string{}, update)
+	return err
 }
 
 func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
