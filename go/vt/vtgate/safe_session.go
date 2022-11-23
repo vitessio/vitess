@@ -146,15 +146,44 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 func (session *SafeSession) ResetTx() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	if !session.Session.InReservedConn {
+		session.ShardSessions = nil
+		session.PreSessions = nil
+		session.PostSessions = nil
+	}
+}
+
+// Reset clears the session
+func (session *SafeSession) Reset() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+}
+
+// ResetAll resets the shard sessions and lock session.
+func (session *SafeSession) ResetAll() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.LockSession = nil
+	session.AdvisoryLock = nil
+}
+
+func (session *SafeSession) resetCommonLocked() {
 	session.mustRollback = false
 	session.autocommitState = notAutocommittable
 	session.Session.InTransaction = false
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
 	session.Savepoints = nil
-	if !session.Session.InReservedConn {
-		session.ShardSessions = nil
-		session.PreSessions = nil
-		session.PostSessions = nil
+	if session.Options != nil {
+		session.Options.TransactionAccessMode = nil
 	}
 }
 
@@ -170,20 +199,6 @@ func (session *SafeSession) GetQueryTimeout() int64 {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.QueryTimeout
-}
-
-// Reset clears the session
-func (session *SafeSession) Reset() {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.commitOrder = vtgatepb.CommitOrder_NORMAL
-	session.Savepoints = nil
-	session.ShardSessions = nil
-	session.PreSessions = nil
-	session.PostSessions = nil
 }
 
 // SavePoints returns the save points of the session. It's safe to use concurrently
@@ -617,22 +632,6 @@ func (session *SafeSession) InLockSession() bool {
 func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.LockSession = nil
-	session.AdvisoryLock = nil
-}
-
-// ResetAll resets the shard sessions and lock session.
-func (session *SafeSession) ResetAll() {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.commitOrder = vtgatepb.CommitOrder_NORMAL
-	session.Savepoints = nil
-	session.ShardSessions = nil
-	session.PreSessions = nil
-	session.PostSessions = nil
 	session.LockSession = nil
 	session.AdvisoryLock = nil
 }

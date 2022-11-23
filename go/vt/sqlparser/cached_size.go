@@ -359,6 +359,20 @@ func (cached *Avg) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Begin) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field TxAccessModes []vitess.io/vitess/go/vt/sqlparser.TxAccessMode
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.TxAccessModes)))
+	}
+	return size
+}
 func (cached *BetweenExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
