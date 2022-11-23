@@ -722,6 +722,7 @@ func CloneRefOfBegin(n *Begin) *Begin {
 		return nil
 	}
 	out := *n
+	out.TxAccessModes = CloneSliceOfTxAccessMode(n.TxAccessModes)
 	return &out
 }
 
@@ -3891,6 +3892,16 @@ func CloneSliceOfIdentifierCI(n []IdentifierCI) []IdentifierCI {
 	for i, x := range n {
 		res[i] = CloneIdentifierCI(x)
 	}
+	return res
+}
+
+// CloneSliceOfTxAccessMode creates a deep clone of the input.
+func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
+	if n == nil {
+		return nil
+	}
+	res := make([]TxAccessMode, len(n))
+	copy(res, n)
 	return res
 }
 

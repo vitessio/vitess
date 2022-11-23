@@ -562,8 +562,13 @@ type (
 		DBName IdentifierCS
 	}
 
+	// TxAccessMode is an enum for Transaction Access Mode
+	TxAccessMode int8
+
 	// Begin represents a Begin statement.
-	Begin struct{}
+	Begin struct {
+		TxAccessModes []TxAccessMode
+	}
 
 	// Commit represents a Commit statement.
 	Commit struct{}
