@@ -360,6 +360,11 @@ func TestOkPackets(t *testing.T) {
 		expectedErr: "invalid OK packet warnings: &{[0 0 0 2 0] 0}",
 	}, {
 		dataIn: `
+00000000  FE 00 00 22 40 00 00                              |.....|`,
+		dataOut: `00000000  00 00 00 22 40 00 00 00  04 03 02 00 00           |..."@........|`,
+		cc:      CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack | CapabilityClientDeprecateEOF,
+	}, {
+		dataIn: `
 00000000  00 00 00 02 40 00 00 00  2a 03 28 00 26 66 32 37  |....@...*.(.&f27|
 00000010  66 36 39 37 31 2d 30 33  65 37 2d 31 31 65 62 2d  |f6971-03e7-11eb-|
 00000020  38 35 63 35 2d 39 38 61  66 36 35 61 36 64 63 34  |85c5-98af65a6dc4|
