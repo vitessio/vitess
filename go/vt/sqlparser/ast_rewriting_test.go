@@ -437,16 +437,16 @@ func TestRewritesSysVar(in *testing.T) {
 		expected: "select @@session.transaction_isolation from dual",
 	}, {
 		in:       "SELECT @@tx_isolation",
-		expected: "select :__vttx_isolation as `@@tx_isolation` from dual",
 		sysVar:   map[string]string{"tx_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttx_isolation as `@@tx_isolation` from dual",
 	}, {
 		in:       "SELECT @@transaction_isolation",
-		expected: "select :__vttransaction_isolation as `@@transaction_isolation` from dual",
 		sysVar:   map[string]string{"transaction_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttransaction_isolation as `@@transaction_isolation` from dual",
 	}, {
 		in:       "SELECT @@session.transaction_isolation",
-		expected: "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
 		sysVar:   map[string]string{"transaction_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
 	}}
 
 	for _, tc := range tests {
