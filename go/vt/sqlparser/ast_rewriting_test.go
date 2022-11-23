@@ -166,18 +166,6 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT :__vtworkload as `@@workload`",
 		workload: true,
 	}, {
-		in:          "SELECT @@tx_isolation",
-		expected:    "select :__vttx_isolation as `@@tx_isolation` from dual",
-		txIsolation: true,
-	}, {
-		in:          "SELECT @@transaction_isolation",
-		expected:    "select :__vttransaction_isolation as `@@transaction_isolation` from dual",
-		txIsolation: true,
-	}, {
-		in:          "SELECT @@session.transaction_isolation",
-		expected:    "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
-		txIsolation: true,
-	}, {
 		in:       "SELECT @@socket",
 		expected: "SELECT :__vtsocket as `@@socket`",
 		socket:   true,
@@ -317,7 +305,6 @@ func TestRewrites(in *testing.T) {
 		sessTrackGTID:               true,
 		socket:                      true,
 		queryTimeout:                true,
-		txIsolation:                 true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -337,7 +324,6 @@ func TestRewrites(in *testing.T) {
 		sessTrackGTID:               true,
 		socket:                      true,
 		queryTimeout:                true,
-		txIsolation:                 true,
 	}}
 
 	for _, tc := range tests {
@@ -376,8 +362,6 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
 			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
 			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
-			assert.Equal(tc.txIsolation, result.NeedsSysVar(sysvars.TxIsolation.Name) || result.NeedsSysVar(sysvars.TransactionIsolation.Name),
-				"should need :__vttx_isolation or :__vttransaction_isolation")
 		})
 	}
 }
@@ -442,6 +426,27 @@ func TestRewritesSysVar(in *testing.T) {
 		in:       "select @x = @@sql_mode",
 		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
 		sysVar:   map[string]string{"sql_mode": "' '"},
+	}, {
+		in:       "SELECT @@tx_isolation",
+		expected: "select @@tx_isolation from dual",
+	}, {
+		in:       "SELECT @@transaction_isolation",
+		expected: "select @@transaction_isolation from dual",
+	}, {
+		in:       "SELECT @@session.transaction_isolation",
+		expected: "select @@session.transaction_isolation from dual",
+	}, {
+		in:       "SELECT @@tx_isolation",
+		sysVar:   map[string]string{"tx_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttx_isolation as `@@tx_isolation` from dual",
+	}, {
+		in:       "SELECT @@transaction_isolation",
+		sysVar:   map[string]string{"transaction_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttransaction_isolation as `@@transaction_isolation` from dual",
+	}, {
+		in:       "SELECT @@session.transaction_isolation",
+		sysVar:   map[string]string{"transaction_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
 	}}
 
 	for _, tc := range tests {
