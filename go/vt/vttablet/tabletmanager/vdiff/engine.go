@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -64,6 +65,9 @@ type Engine struct {
 	snapshotMu sync.Mutex
 
 	vdiffSchemaCreateOnce sync.Once
+
+	// a mock/fake TabletManagerClient for unit testing via NewTestEngine()
+	testingTMC tmclient.TabletManagerClient
 }
 
 func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet) *Engine {
@@ -71,6 +75,16 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata
 		controllers: make(map[int64]*controller),
 		ts:          ts,
 		thisTablet:  tablet,
+	}
+	return vde
+}
+
+func NewTestEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet, tmc tmclient.TabletManagerClient) *Engine {
+	vde := &Engine{
+		controllers: make(map[int64]*controller),
+		ts:          ts,
+		thisTablet:  tablet,
+		testingTMC:  tmc,
 	}
 	return vde
 }
@@ -175,7 +189,13 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 // addController creates a new controller using the given vdiff record and adds it to the engine.
 // You must already have the main engine mutex (mu) locked before calling this.
 func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletmanagerdata.VDiffOptions) error {
-	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options)
+	var tmc tmclient.TabletManagerClient
+	if vde.testingTMC != nil {
+		tmc = vde.testingTMC
+	} else {
+		tmc = tmclient.NewTabletManagerClient()
+	}
+	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options, tmc)
 	if err != nil {
 		return fmt.Errorf("controller could not be initialized for stream %+v on tablet %v",
 			row, vde.thisTablet.Alias)
@@ -235,13 +255,6 @@ func (vde *Engine) Close() {
 	vde.isOpen = false
 
 	log.Infof("VDiff Engine: closed")
-}
-
-func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
-	if isAdmin {
-		return vde.dbClientFactoryDba()
-	}
-	return vde.dbClientFactoryFiltered()
 }
 
 func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error) {
