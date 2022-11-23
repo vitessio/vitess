@@ -46,7 +46,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestDerivedTableWithOrderByLimit(t *testing.T) {
-	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11763")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -86,14 +85,6 @@ func TestDerivedTableWithHaving(t *testing.T) {
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
-	mcmp.AssertMatchesAnyNoCompare("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(4)]]")
-}
 
-func TestDerivedTableColumns(t *testing.T) {
-	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11763")
-	mcmp, closer := start(t)
-	defer closer()
-
-	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
-	mcmp.AssertMatches(`SELECT /*vt+ PLANNER=gen4 */ t.id FROM (SELECT id FROM user) AS t(id) ORDER BY t.id DESC`, `[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
+	mcmp.AssertMatchesAnyNoCompare("select /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(4)]]")
 }
