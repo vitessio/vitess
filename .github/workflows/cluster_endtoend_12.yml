@@ -39,7 +39,7 @@ jobs:
               - 'Makefile'
               - 'build.env'
               - 'go.sum'
-            - 'go.mod'
+              - 'go.mod'
               - 'proto/*.proto'
               - 'tools/**'
               - 'config/**'
