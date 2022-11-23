@@ -285,6 +285,7 @@ var keywords = map[string]int{
 	"expansion":                     EXPANSION,
 	"expire":                        EXPIRE,
 	"explain":                       EXPLAIN,
+	"extended":                      EXTENDED,
 	"failed_login_attempts":         FAILED_LOGIN_ATTEMPTS,
 	"false":                         FALSE,
 	"fetch":                         FETCH,

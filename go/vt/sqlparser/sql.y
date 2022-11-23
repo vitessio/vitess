@@ -244,7 +244,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER LAST
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT EXTENDED
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
 %token <bytes> SEQUENCE ENABLE DISABLE
@@ -465,7 +465,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
-%type <empty> to_opt to_or_as as_opt column_opt describe
+%type <empty> to_opt to_or_as as_opt column_opt
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
 %type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword non_reserved_keyword2 non_reserved_keyword3
@@ -4552,14 +4552,14 @@ release_savepoint_statement:
     $$ = &ReleaseSavepoint{Identifier: string($3)}
   }
 
-describe:
-  DESCRIBE { }
-| DESC { }
-
 explain_statement:
   explain_verb format_opt explainable_statement
   {
     $$ = &Explain{ExplainFormat: $2, Statement: $3}
+  }
+| explain_verb EXTENDED format_opt explainable_statement
+  {
+    $$ = &Explain{ExplainFormat: $3, Statement: $4}
   }
 | explain_verb ANALYZE select_statement_with_no_trailing_into
   {
@@ -4585,11 +4585,12 @@ format_opt:
   }
 
 explain_verb:
-  describe
-| EXPLAIN
+  EXPLAIN
+| DESCRIBE
+| DESC
 
 describe_statement:
-  describe table_name as_of_opt
+  explain_verb table_name as_of_opt
   // rewrite describe table as show columns from table
   {
     showTablesOpt := &ShowTablesOpt{AsOf:$3}
@@ -7781,6 +7782,7 @@ non_reserved_keyword:
 | EXCLUDE
 | EXPANSION
 | EXPIRE
+| EXTENDED
 | FIELDS
 | FIXED
 | FLUSH
