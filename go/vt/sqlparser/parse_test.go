@@ -1738,6 +1738,9 @@ var (
 			input:  "desc foobar",
 			output: "show columns from foobar",
 		}, {
+			input:  "explain foobar",
+			output: "show columns from foobar",
+		}, {
 			input:  "describe a as of 'foo'",
 			output: "show columns from a as of 'foo'",
 		}, {
@@ -1752,6 +1755,9 @@ var (
 			input: "explain format = tree select * from foobar",
 		}, {
 			input: "explain analyze select * from foobar",
+		}, {
+			input:  "explain extended select * from foobar",
+			output: "explain select * from foobar",
 		}, {
 			input: "explain update foobar set foo = bar",
 		}, {
