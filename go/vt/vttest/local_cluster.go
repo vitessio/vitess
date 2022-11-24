@@ -510,7 +510,7 @@ func (db *LocalCluster) createVTSchema() error {
 		return &sqltypes.Result{}, err
 	}
 
-	if err := sidecardb.Init(context.Background(), exec2); err != nil {
+	if err := sidecardb.Init(context.Background(), exec2, nil, nil); err != nil {
 		return err
 	}
 	return nil
