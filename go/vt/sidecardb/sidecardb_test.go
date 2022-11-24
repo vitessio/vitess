@@ -47,7 +47,7 @@ func TestAll(t *testing.T) {
 
 	// tests init on empty _vt
 	require.Equal(t, int64(0), GetDDLCount())
-	err = Init(ctx, exec)
+	err = Init(ctx, exec, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(vtTables)), GetDDLCount())
 
@@ -62,7 +62,7 @@ func TestAll(t *testing.T) {
 		tables...,
 	)
 	db.AddQuery(GetCurrentTablesQuery, result)
-	err = Init(ctx, exec)
+	err = Init(ctx, exec, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(vtTables)), GetDDLCount())
 
