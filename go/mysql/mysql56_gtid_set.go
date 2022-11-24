@@ -155,7 +155,7 @@ func (set Mysql56GTIDSet) String() string {
 		if i != 0 {
 			buf.WriteByte(',')
 		}
-		buf.WriteString(sid.String())
+		buf.Write(sid[:])
 
 		for _, interval := range set[sid] {
 			buf.WriteByte(':')

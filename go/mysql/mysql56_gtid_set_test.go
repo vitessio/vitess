@@ -151,6 +151,14 @@ func TestMysql56GTIDSetString(t *testing.T) {
 	}
 }
 
+func BenchmarkMysql56GTIDSetString(b *testing.B) {
+	sid := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	set := Mysql56GTIDSet{sid: []interval{{1, 5}}}
+	for n := 0; n < b.N; n++ {
+		set.String()
+	}
+}
+
 func TestMysql56GTIDSetFlavor(t *testing.T) {
 	input := Mysql56GTIDSet{}
 	if got, want := input.Flavor(), "MySQL56"; got != want {
