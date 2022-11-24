@@ -5076,23 +5076,12 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
+        "JoinColumnIndexes": "R:0",
         "JoinVars": {
-          "music_id": 0
+          "other_maxt": 0
         },
         "TableName": "music_music",
         "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music",
-            "Table": "music"
-          },
           {
             "OperatorType": "Route",
             "Variant": "EqualUnique",
@@ -5101,12 +5090,27 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
-            "Query": "select 1 from (select MAX(id) as maxt from music where music.user_id = 5 and MAX(id) = :music_id) as other",
+            "Query": "select 1 from (select MAX(id) as maxt from music where music.user_id = 5) as other",
             "Table": "music",
             "Values": [
               "INT64(5)"
             ],
             "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.id from music where 1 != 1",
+            "Query": "select music.id from music where music.id = :other_maxt",
+            "Table": "music",
+            "Values": [
+              ":other_maxt"
+            ],
+            "Vindex": "music_user_map"
           }
         ]
       }
@@ -5196,15 +5200,55 @@
       "QueryType": "SELECT",
       "Original": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_user_id": 0
         },
-        "FieldQuery": "select id from `user`, (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
-        "Query": "select id from `user`, (select user_id from user_extra limit 10) as ue where `user`.id = ue.user_id",
-        "Table": "`user`, user_extra"
+        "TableName": "user_extra_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(10)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select user_id from user_extra where 1 != 1",
+                    "Query": "select user_id from user_extra limit :__upper_limit",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where `user`.id = :ue_user_id",
+            "Table": "`user`",
+            "Values": [
+              ":ue_user_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
       }
     }
   },
@@ -5217,26 +5261,16 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,R:0",
+        "JoinColumnIndexes": "R:0,L:1",
         "JoinVars": {
-          "user_id": 0
+          "t_id": 0
         },
-        "TableName": "`user`_user_extra",
+        "TableName": "user_extra_`user`",
         "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id, `user`.a from `user` where 1 != 1",
-            "Query": "select `user`.id, `user`.a from `user`",
-            "Table": "`user`"
-          },
           {
             "OperatorType": "SimpleProjection",
             "Columns": [
+              0,
               1
             ],
             "Inputs": [
@@ -5255,12 +5289,27 @@
                     },
                     "FieldQuery": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra where 1 != 1 group by id, weight_string(id), req, weight_string(req)",
                     "OrderBy": "(0|3) ASC, (2|4) ASC",
-                    "Query": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra where id = :user_id group by id, weight_string(id), req, weight_string(req) order by id asc, req asc",
+                    "Query": "select id, count(*) as b, req, weight_string(id), weight_string(req) from user_extra group by id, weight_string(id), req, weight_string(req) order by id asc, req asc",
                     "Table": "user_extra"
                   }
                 ]
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a from `user` where 1 != 1",
+            "Query": "select `user`.a from `user` where `user`.id = :t_id",
+            "Table": "`user`",
+            "Values": [
+              ":t_id"
+            ],
+            "Vindex": "user_index"
           }
         ]
       }
@@ -5269,41 +5318,13 @@
   {
     "comment": "cant switch sides for outer joins",
     "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` left join (select user_id from user_extra where 1 != 1) as ue on `user`.id = ue.user_id where 1 != 1",
-        "Query": "select id from `user` left join (select user_id from user_extra limit 10) as ue on `user`.id = ue.user_id",
-        "Table": "`user`, user_extra"
-      }
-    }
+    "plan": "unsupported: LEFT JOIN not supported for derived tables"
   },
   {
     "comment": "limit on both sides means that we can't evaluate this at all",
     "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
     "v3-plan": "unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from (select id from `user` where 1 != 1) as u, (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
-        "Query": "select id from (select id from `user` limit 10) as u, (select user_id from user_extra limit 10) as ue where u.id = ue.user_id",
-        "Table": "`user`, user_extra"
-      }
-    }
+    "gen4-plan": "unsupported: JOIN not supported between derived tables"
   },
   {
     "query": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
