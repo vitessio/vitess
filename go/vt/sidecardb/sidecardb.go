@@ -108,12 +108,16 @@ func printCallerDetails() {
 type vtSchemaInit struct {
 	ctx            context.Context
 	exec           Exec
+	sroHook        SetSuperReadOnlyHook
+	rsroHook       ReSetSuperReadOnlyHook
 	existingTables map[string]bool
 	dbCreated      bool // the first upgrade/create query will be prefixed by a _vt creation script
 }
 
 // Exec is the prototype of a callback that has to be passed to Init() to execute the specified query in the database
 type Exec func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error)
+type SetSuperReadOnlyHook func(ctx context.Context) (needsReset bool, err error)
+type ReSetSuperReadOnlyHook func(ctx context.Context) (err error)
 
 // GetDDLCount metric returns the count of sidecardb ddls that have been run as part of this vttablet's init process.
 func GetDDLCount() int64 {
@@ -121,12 +125,31 @@ func GetDDLCount() int64 {
 }
 
 // Init creates or upgrades the _vt sidecar database based on declarative schema for all _vt tables
-func Init(ctx context.Context, exec Exec) error {
+func Init(ctx context.Context, exec Exec, sroHook SetSuperReadOnlyHook, rsroHook ReSetSuperReadOnlyHook) error {
 	printCallerDetails() // for debug purposes only, remove in v18
 	log.Infof("Starting sidecardb Init()")
 	si := &vtSchemaInit{
-		ctx:  ctx,
-		exec: exec,
+		ctx:      ctx,
+		exec:     exec,
+		sroHook:  sroHook,
+		rsroHook: rsroHook,
+	}
+
+	if si.sroHook != nil {
+		log.Infof("executing SetSuperReadOnlyHook ...")
+		needsReset, err := si.sroHook(ctx)
+		if err != nil {
+			log.Infof("executing SetSuperReadOnlyHook err ... %v", err)
+			return err
+		}
+		if needsReset {
+			log.Infof("executing ReSetSuperReadOnlyHook ...")
+			defer func() {
+				if err := si.rsroHook(ctx); err != nil {
+					log.Infof("executing ReSetSuperReadOnlyHook fail ... %v", err)
+				}
+			}()
+		}
 	}
 
 	dbExists, err := si.doesVTDatabaseExist()

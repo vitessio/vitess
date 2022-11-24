@@ -134,7 +134,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 // schema for the running Vitess version.
 // There is some extra logging in here which can be removed in a future version (>v16) once the new schema init
 // functionality is stable.
-func (se *Engine) syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection) error {
+func (se *Engine) syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn *dbconnpool.DBConnection) error {
 	log.Infof("In syncVTDatabase")
 	defer func(start time.Time) {
 		log.Infof("syncVTDatabase took %d ms", time.Since(start).Milliseconds())
@@ -149,8 +149,36 @@ func (se *Engine) syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnect
 		}
 		return conn.ExecuteFetch(query, maxRows, wantFields)
 	}
+	var rsroHook sidecardb.ReSetSuperReadOnlyHook = func(ctx context.Context) (err error) {
+		log.Infof("resetting hook for super read only...")
+		if _, err := dbaConn.ExecuteFetch("SET GLOBAL super_read_only='ON'", 1, false); err != nil {
+			log.Infof("Not able to set super_read_only user... This can cause errant GTIDs in future.")
+			return err
+		}
+		return nil
+	}
+	var sroHook sidecardb.SetSuperReadOnlyHook = func(ctx context.Context) (needsReset bool, err error) {
+		if !dbaConn.IsMariaDB() {
+			if err := dbaConn.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
+				log.Infof("Not able to select super_read_only.")
+				return false, err
+			}
+			res, _, _, err := dbaConn.ReadQueryResult(1, false)
+			if err == nil && len(res.Rows) == 1 {
+				sro := res.Rows[0][0].ToString()
+				if sro == "1" || sro == "ON" {
+					log.Infof("setting super read only to false...")
+					if _, err = dbaConn.ExecuteFetch("SET GLOBAL read_only='OFF'", 1, false); err != nil {
+						return false, err
+					}
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	}
 	log.Infof("before sidecardb.Init")
-	if err := sidecardb.Init(ctx, exec); err != nil {
+	if err := sidecardb.Init(ctx, exec, sroHook, rsroHook); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
 		// temporary logging, to be deleted in v17
 		if strings.Contains(err.Error(), "--read-only") {
@@ -179,7 +207,13 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		se.dbCreationFailed = false
 		// upgrade _vt if required, for a tablet with an existing database
 		if tabletType == topodatapb.TabletType_PRIMARY {
-			if err := se.syncVTDatabase(ctx, conn); err != nil {
+			dbaConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
+			if err != nil {
+				log.Info("Not able to get connection with all privileges...")
+				return err
+			}
+			defer dbaConn.Close()
+			if err := se.syncVTDatabase(ctx, conn, dbaConn); err != nil {
 				conn.Close()
 				return err
 			}
@@ -215,8 +249,14 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+	dbaConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
+	if err != nil {
+		log.Info("Not able to get connection with all privileges...")
+		return err
+	}
+	defer dbaConn.Close()
 	// creates _vt schema, the first time the database is created
-	if err := se.syncVTDatabase(ctx, conn); err != nil {
+	if err := se.syncVTDatabase(ctx, conn, dbaConn); err != nil {
 		return err
 	}
 	return nil
