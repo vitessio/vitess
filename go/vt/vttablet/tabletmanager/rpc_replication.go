@@ -305,7 +305,7 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	log.Infof("InitPrimary")
-	//time.Sleep(20 * time.Second)
+	//time.Sleep(10 * time.Second)
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}

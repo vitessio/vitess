@@ -62,14 +62,19 @@ func PrintCallerDetails() {
 type VTSchemaInit struct {
 	ctx            context.Context
 	exec           Exec
+	sroHook        SetSuperReadOnlyHook
+	rsroHook       ReSetSuperReadOnlyHook
 	existingTables map[string]bool
 }
 
 // Exec is a function prototype of callback passed to Init() which will execute the specified query
 type Exec func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error)
 
+type SetSuperReadOnlyHook func(ctx context.Context) (needsReset bool, err error)
+type ReSetSuperReadOnlyHook func(ctx context.Context) (err error)
+
 // Init creates or upgrades the _vt schema based on declarative schema for all _vt tables
-func Init(ctx context.Context, exec Exec) error {
+func Init(ctx context.Context, exec Exec, sroHook SetSuperReadOnlyHook, rsroHook ReSetSuperReadOnlyHook) error {
 	PrintCallerDetails()
 	if !InitVTSchemaOnTabletInit {
 		log.Infof("init-vt-schema-on-tablet-init NOT set, not updating _vt schema on tablet init")
@@ -77,8 +82,27 @@ func Init(ctx context.Context, exec Exec) error {
 	}
 	log.Infof("init-vt-schema-on-tablet-init SET, updating _vt schema on tablet init")
 	si := &VTSchemaInit{
-		ctx:  ctx,
-		exec: exec,
+		ctx:      ctx,
+		exec:     exec,
+		sroHook:  sroHook,
+		rsroHook: rsroHook,
+	}
+
+	if si.sroHook != nil {
+		log.Infof("executing SetSuperReadOnlyHook ...")
+		needsReset, err := si.sroHook(ctx)
+		if err != nil {
+			log.Infof("executing SetSuperReadOnlyHook err ... %v", err)
+			return err
+		}
+		if needsReset {
+			log.Infof("executing ReSetSuperReadOnlyHook ...")
+			defer func() {
+				if err := si.rsroHook(ctx); err != nil {
+					log.Infof("executing ReSetSuperReadOnlyHook fail ... %v", err)
+				}
+			}()
+		}
 	}
 
 	log.Infof("CreateVTDatabase start...")

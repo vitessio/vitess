@@ -127,7 +127,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
-func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection) error {
+func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn *dbconnpool.DBConnection) error {
 	log.Infof("inside syncVTDatabase %s", sidecardb.UseVTDatabaseQuery)
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
 		_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
@@ -136,7 +136,35 @@ func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection) error {
 		}
 		return conn.ExecuteFetch(query, maxRows, wantFields)
 	}
-	if err := sidecardb.Init(ctx, exec); err != nil {
+	var rsroHook sidecardb.ReSetSuperReadOnlyHook = func(ctx context.Context) (err error) {
+		log.Infof("resetting hook for super read only...")
+		if _, err := dbaConn.ExecuteFetch("SET GLOBAL super_read_only='ON'", 1, false); err != nil {
+			log.Infof("Not able to set super_read_only user... This can cause errant GTIDs in future.")
+			return err
+		}
+		return nil
+	}
+	var sroHook sidecardb.SetSuperReadOnlyHook = func(ctx context.Context) (needsReset bool, err error) {
+		if !dbaConn.IsMariaDB() {
+			if err := dbaConn.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
+				log.Infof("Not able to select super_read_only.")
+				return false, err
+			}
+			res, _, _, err := dbaConn.ReadQueryResult(1, false)
+			if err == nil && len(res.Rows) == 1 {
+				sro := res.Rows[0][0].ToString()
+				if sro == "1" || sro == "ON" {
+					log.Infof("setting super read only to false...")
+					if _, err = dbaConn.ExecuteFetch("SET GLOBAL read_only='OFF'", 1, false); err != nil {
+						return false, err
+					}
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	}
+	if err := sidecardb.Init(ctx, exec, sroHook, rsroHook); err != nil {
 		log.Error(err)
 		return err
 	}
@@ -156,7 +184,13 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	}
 	if err == nil {
 		se.dbCreationFailed = false
-		if err := syncVTDatabase(ctx, conn); err != nil {
+		dbaConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
+		if err != nil {
+			log.Info("Not able to get connection with all privileges...")
+			return err
+		}
+		defer dbaConn.Close()
+		if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
 			return err
 		}
 		conn.Close()
@@ -192,7 +226,13 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
-	if err := syncVTDatabase(ctx, conn); err != nil {
+	dbaConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
+	if err != nil {
+		log.Info("Not able to get connection with all privileges...")
+		return err
+	}
+	defer dbaConn.Close()
+	if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
 		return err
 	}
 	return nil
