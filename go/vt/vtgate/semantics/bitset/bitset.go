@@ -5,6 +5,9 @@ import (
 	"unsafe"
 )
 
+// A Bitset is an immutable collection of bits. You can perform logical operations
+// on it, but all mutable operations return a new Bitset.
+// It is safe to compare directly using the comparison operator and to use as a map key.
 type Bitset string
 
 const bitsetWidth = 8
@@ -27,6 +30,7 @@ func minlen(a, b Bitset) int {
 	return len(b)
 }
 
+// Overlaps returns whether this Bitset and the input have any bits in common
 func (bs Bitset) Overlaps(b2 Bitset) bool {
 	min := minlen(bs, b2)
 	for i := 0; i < min; i++ {
@@ -37,6 +41,7 @@ func (bs Bitset) Overlaps(b2 Bitset) bool {
 	return false
 }
 
+// Or returns the logical OR of the two Bitsets as a new Bitset
 func (bs Bitset) Or(b2 Bitset) Bitset {
 	if len(bs) == 0 {
 		return b2
@@ -64,6 +69,7 @@ func (bs Bitset) Or(b2 Bitset) Bitset {
 	return toBitset(merged)
 }
 
+// AndNot returns the logical AND NOT of the two Bitsets as a new Bitset
 func (bs Bitset) AndNot(b2 Bitset) Bitset {
 	if len(b2) == 0 {
 		return bs
@@ -87,6 +93,7 @@ func (bs Bitset) AndNot(b2 Bitset) Bitset {
 	return toBitset(merged[:m])
 }
 
+// And returns the logical AND of the two bitsets as a new Bitset
 func (bs Bitset) And(b2 Bitset) Bitset {
 	if len(bs) == 0 || len(b2) == 0 {
 		return ""
@@ -106,6 +113,7 @@ func (bs Bitset) And(b2 Bitset) Bitset {
 	return toBitset(merged[:m])
 }
 
+// Set returns a copy of this Bitset where the bit at `offset` is set
 func (bs Bitset) Set(offset int) Bitset {
 	alloc := len(bs)
 	if max := bitsetWordSize(offset); max > alloc {
@@ -118,6 +126,8 @@ func (bs Bitset) Set(offset int) Bitset {
 	return toBitset(words)
 }
 
+// SingleBit returns the position of the single bit that is set in this Bitset
+// If the Bitset is empty, or contains more than one set bit, it returns -1
 func (bs Bitset) SingleBit() int {
 	offset := -1
 	for i := 0; i < len(bs); i++ {
@@ -133,6 +143,7 @@ func (bs Bitset) SingleBit() int {
 	return offset
 }
 
+// IsContainedBy returns whether this Bitset is contained by the given Bitset
 func (bs Bitset) IsContainedBy(b2 Bitset) bool {
 	if len(bs) > len(b2) {
 		return false
@@ -147,6 +158,7 @@ func (bs Bitset) IsContainedBy(b2 Bitset) bool {
 	return true
 }
 
+// Popcount returns the number of bits that are set in this Bitset
 func (bs Bitset) Popcount() (count int) {
 	for i := 0; i < len(bs); i++ {
 		count += bits.OnesCount8(bs[i])
@@ -154,6 +166,7 @@ func (bs Bitset) Popcount() (count int) {
 	return
 }
 
+// ForEach calls the given callback with the position of each bit set in this Bitset
 func (bs Bitset) ForEach(yield func(int)) {
 	for i := 0; i < len(bs); i++ {
 		bitset := bs[i]
@@ -166,6 +179,7 @@ func (bs Bitset) ForEach(yield func(int)) {
 	}
 }
 
+// Build creates a new immutable Bitset where all the given bits are set
 func Build(bits ...int) Bitset {
 	if len(bits) == 0 {
 		return ""
@@ -187,6 +201,8 @@ func Build(bits ...int) Bitset {
 
 const singleton = "\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x04\x00\x00\x00\x08\x00\x00\x00\x10\x00\x00\x00\x20\x00\x00\x00\x40\x00\x00\x00\x80"
 
+// Single returns a new Bitset where only the given bit is set.
+// If the given bit is less than 32, Single does not allocate to create a new Bitset.
 func Single(bit int) Bitset {
 	switch {
 	case bit < 8:
