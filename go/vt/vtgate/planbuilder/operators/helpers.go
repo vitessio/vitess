@@ -71,7 +71,7 @@ type TableIDIntroducer interface {
 func TableID(op ops.Operator) (result semantics.TableSet) {
 	_ = rewrite.Visit(op, func(this ops.Operator) error {
 		if tbl, ok := this.(TableIDIntroducer); ok {
-			result.MergeInPlace(tbl.Introduces())
+			result = result.Merge(tbl.Introduces())
 		}
 		return nil
 	})

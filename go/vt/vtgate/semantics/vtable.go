@@ -138,7 +138,7 @@ func selectExprsToInfos(
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				ts.MergeInPlace(table.getTableSet(org))
+				ts = ts.Merge(table.getTableSet(org))
 			}
 		}
 	}
