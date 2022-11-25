@@ -713,6 +713,15 @@ func (client *gRPCVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctld
 	return client.c.UpdateCellsAlias(ctx, in, opts...)
 }
 
+// UpdateThrottlerConfig is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) UpdateThrottlerConfig(ctx context.Context, in *vtctldatapb.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldatapb.UpdateThrottlerConfigResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.UpdateThrottlerConfig(ctx, in, opts...)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	if client.c == nil {

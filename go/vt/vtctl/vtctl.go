@@ -108,6 +108,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -435,13 +436,13 @@ var commands = []commandGroup{
 			{
 				name:   "Reshard",
 				method: commandReshard,
-				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>]  [--skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
+				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--on-ddl=<ddl-action>] [--skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
 				help:   "Start a Resharding process. Example: Reshard --cells='zone1,alias1' --tablet_types='PRIMARY,REPLICA,RDONLY'  ks.workflow001 -- '0' '-80,80-'",
 			},
 			{
 				name:   "MoveTables",
 				method: commandMoveTables,
-				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
+				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--on-ddl=<ddl-action>] [--source_shards=<source_shards>] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
@@ -706,6 +707,12 @@ var commands = []commandGroup{
 				method: commandGetSrvKeyspace,
 				params: "<cell> <keyspace>",
 				help:   "Outputs a JSON structure that contains information about the SrvKeyspace.",
+			},
+			{
+				name:   "UpdateThrottlerConfig",
+				method: commandUpdateThrottlerConfig,
+				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
+				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
 			},
 			{
 				name:   "GetSrvVSchema",
@@ -2069,6 +2076,8 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+	onDDL := "IGNORE"
+	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	_ = subFlags.Bool("v1", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -2077,6 +2086,10 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 	if subFlags.NArg() != 3 {
 		return fmt.Errorf("three arguments are required: <keyspace.workflow>, source_shards, target_shards")
 	}
+	onDDL = strings.ToUpper(onDDL)
+	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
+		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
+	}
 	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
 		return err
@@ -2084,7 +2097,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
 	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells,
-		*tabletTypes, *autoStart, *stopAfterCopy)
+		*tabletTypes, onDDL, *autoStart, *stopAfterCopy)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -2103,10 +2116,16 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
+	onDDL := "IGNORE"
+	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	_ = subFlags.Bool("v1", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
+	}
+	onDDL = strings.ToUpper(onDDL)
+	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
+		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
 	}
 	if *workflow == "" {
 		return fmt.Errorf("a workflow name must be specified")
@@ -2128,7 +2147,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *autoStart, *stopAfterCopy, "", *dropForeignKeys, "", nil)
+		*excludes, *autoStart, *stopAfterCopy, "", *dropForeignKeys, "", onDDL, nil)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -2180,6 +2199,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
 	maxReplicationLagAllowed := subFlags.Duration("max_replication_lag_allowed", defaultMaxReplicationLagAllowed, "Allow traffic to be switched only if vreplication lag is below this (in seconds)")
 
+	onDDL := "IGNORE"
+	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
+
 	// MoveTables and Migrate params
 	tables := subFlags.String("tables", "", "MoveTables only. A table spec or a list of tables. Either table_specs or --all needs to be specified.")
 	allTables := subFlags.Bool("all", false, "MoveTables only. Move all tables from the source keyspace. Either table_specs or --all needs to be specified.")
@@ -2212,6 +2234,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("two arguments are needed: action, keyspace.workflow")
 	}
+
+	onDDL = strings.ToUpper(onDDL)
+	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
+		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
+	}
+
 	action := subFlags.Arg(0)
 	ksWorkflow := subFlags.Arg(1)
 	target, workflowName, err := splitKeyspaceWorkflow(ksWorkflow)
@@ -2230,6 +2258,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		DryRun:         *dryRun,
 		AutoStart:      *autoStart,
 		StopAfterCopy:  *stopAfterCopy,
+		OnDDL:          onDDL,
 	}
 
 	printDetails := func() error {
@@ -2333,11 +2362,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
+		vrwp.OnDDL = onDDL
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
-		if userPassedFlag(subFlags, "tablet_types") {
+		if subFlags.Changed("tablet_types") {
 			vrwp.TabletTypes = *tabletTypes
 		} else {
 			// When no tablet types are specified we are supposed to switch all traffic so
@@ -3644,6 +3674,69 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return printJSON(wr.Logger(), cellKs)
 }
 
+func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) (err error) {
+	enable := subFlags.Bool("enable", false, "Enable the throttler")
+	disable := subFlags.Bool("disable", false, "Disable the throttler")
+	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
+	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
+	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
+	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	customQuerySet := subFlags.Changed("custom-query")
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace> arguments are required for the SetThrottlerConfig command")
+	}
+	if *enable && *disable {
+		return fmt.Errorf("--enable and --disable are mutually exclusive")
+	}
+	if *checkAsCheckSelf && *checkAsCheckShard {
+		return fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
+	}
+
+	keyspace := subFlags.Arg(0)
+
+	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+		if throttlerConfig == nil {
+			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+		}
+		if customQuerySet {
+			// custom query provided
+			throttlerConfig.CustomQuery = *customQuery
+			throttlerConfig.Threshold = *threshold // allowed to be zero/negative because who knows what kind of custom query this is
+		} else {
+			// no custom query, throttler works by querying replication lag. We only allow positive values
+			if *threshold > 0 {
+				throttlerConfig.Threshold = *threshold
+			}
+		}
+		if *enable {
+			throttlerConfig.Enabled = true
+		}
+		if *disable {
+			throttlerConfig.Enabled = false
+		}
+		if *checkAsCheckSelf {
+			throttlerConfig.CheckAsCheckSelf = true
+		}
+		if *checkAsCheckShard {
+			throttlerConfig.CheckAsCheckSelf = false
+		}
+		return throttlerConfig
+	}
+
+	ctx, unlock, lockErr := wr.TopoServer().LockKeyspace(ctx, keyspace, "UpdateThrottlerConfig")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	_, err = wr.TopoServer().UpdateSrvKeyspaceThrottlerConfig(ctx, keyspace, []string{}, update)
+	return err
+}
+
 func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -4059,16 +4152,4 @@ func PrintAllCommands(logger logutil.Logger) {
 		}
 		logger.Printf("\n")
 	}
-}
-
-// userPassedFlag returns true if the flag name given was provided
-// as a command-line argument by the user.
-func userPassedFlag(flags *pflag.FlagSet, name string) bool {
-	passed := false
-	flags.Visit(func(f *pflag.Flag) {
-		if f.Name == name {
-			passed = true
-		}
-	})
-	return passed
 }

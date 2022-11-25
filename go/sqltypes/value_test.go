@@ -87,6 +87,14 @@ func TestNewValue(t *testing.T) {
 		inVal:  "1",
 		outVal: TestValue(Uint64, "1"),
 	}, {
+		inType: Uint64,
+		inVal:  "01",
+		outVal: TestValue(Uint64, "01"),
+	}, {
+		inType: Int64,
+		inVal:  "01",
+		outVal: TestValue(Int64, "01"),
+	}, {
 		inType: Float32,
 		inVal:  "1.00",
 		outVal: TestValue(Float32, "1.00"),

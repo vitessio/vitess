@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -41,6 +42,7 @@ type (
 		NoDeps sqlparser.Expr
 
 		noInputs
+		noColumns
 	}
 
 	innerJoin struct {
@@ -59,9 +61,9 @@ type (
 	}
 )
 
-var _ Operator = (*QueryGraph)(nil)
+var _ ops.Operator = (*QueryGraph)(nil)
 
-// Introduces implements the tableIDIntroducer interface
+// Introduces implements the TableIDIntroducer interface
 func (qg *QueryGraph) Introduces() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
@@ -174,8 +176,7 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 }
 
 // Clone implements the Operator interface
-func (qg *QueryGraph) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 0)
+func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
 	result := &QueryGraph{
 		Tables:     nil,
 		innerJoins: nil,
@@ -186,4 +187,14 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 	result.innerJoins = append([]*innerJoin{}, qg.innerJoins...)
 	result.NoDeps = qg.NoDeps
 	return result
+}
+
+func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
+		err := qg.collectPredicate(ctx, e)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return qg, nil
 }

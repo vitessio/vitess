@@ -218,7 +218,8 @@ func getQuery(tableName string, filter string) string {
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(tableName), sqlparser.NewStrLiteral(filter))
+		buf.Myprintf("select * from %v where in_keyrange(%v)",
+			sqlparser.NewIdentifierCS(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
 	}
 	return query
@@ -229,7 +230,40 @@ func (uvs *uvstreamer) Cancel() {
 	uvs.cancel()
 }
 
-// during copy phase only send streaming events (during catchup/fastforward) for pks already seen
+// We have not yet implemented the logic to check if an event is for a row that is already copied,
+// so we always return true so that we send all events for this table and so we don't miss events.
+func (uvs *uvstreamer) isRowCopied(tableName string, ev *binlogdatapb.VEvent) bool {
+	return true
+}
+
+// Only send catchup/fastforward events for tables whose copy phase is complete or in progress.
+// This ensures we fulfill the at-least-once delivery semantics for events.
+// TODO: filter out events for rows not yet copied. Note that we can only do this as a best-effort
+// for comparable PKs.
+func (uvs *uvstreamer) shouldSendEventForTable(tableName string, ev *binlogdatapb.VEvent) bool {
+	table, ok := uvs.plans[tableName]
+	// Event is for a table which is not in its copy phase.
+	if !ok {
+		return true
+	}
+
+	// if table copy was not started and no tablePK was specified we can ignore catchup/fastforward events for it
+	if table.tablePK == nil || table.tablePK.Lastpk == nil {
+		return false
+	}
+
+	// Table is currently in its copy phase. We have not yet implemented the logic to
+	// check if an event is for a row that is already copied, so we always return true
+	// there so that we don't miss events.
+	// We may send duplicate insert events or update/delete events for rows not yet seen
+	// to the client for the table being copied. This is ok as the client is expected to be
+	// idempotent: we only promise at-least-once semantics for VStream API (not exactly-once).
+	// Aside: vreplication workflows handle at-least-once by adding where clauses that render
+	// DML queries, related to events for rows not yet copied, as no-ops.
+	return uvs.isRowCopied(tableName, ev)
+}
+
+// Do not send internal heartbeat events. Filter out events for tables whose copy has not been started.
 func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.VEvent {
 	if len(uvs.plans) == 0 {
 		return evs
@@ -239,25 +273,21 @@ func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.
 	var shouldSend bool
 
 	for _, ev := range evs {
-		shouldSend = false
-		tableName = ""
 		switch ev.Type {
 		case binlogdatapb.VEventType_ROW:
 			tableName = ev.RowEvent.TableName
 		case binlogdatapb.VEventType_FIELD:
 			tableName = ev.FieldEvent.TableName
+		default:
+			tableName = ""
+		}
+		switch ev.Type {
 		case binlogdatapb.VEventType_HEARTBEAT:
 			shouldSend = false
 		default:
-			shouldSend = true
+			shouldSend = uvs.shouldSendEventForTable(tableName, ev)
 		}
-		if !shouldSend && tableName != "" {
-			shouldSend = true
-			_, ok := uvs.plans[tableName]
-			if ok {
-				shouldSend = false
-			}
-		}
+
 		if shouldSend {
 			evs2 = append(evs2, ev)
 		}
@@ -331,7 +361,9 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 	}
 	if !curPos.AtLeast(pos) {
 		uvs.vse.errorCounts.Add("GTIDSet Mismatch", 1)
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "GTIDSet Mismatch: requested source position:%v, current target vrep position: %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"GTIDSet Mismatch: requested source position:%v, current target vrep position: %v",
+			mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 	}
 	uvs.pos = pos
 	return nil
@@ -346,17 +378,22 @@ func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
 	return conn.PrimaryPosition()
 }
 
+// Possible states:
+// 1. TablePKs nil, startPos set to gtid or "current" => start replicating from pos
+// 2. TablePKs nil, startPos empty => full table copy of tables matching filter
+// 3. TablePKs not nil, startPos empty => table copy (for pks > lastPK)
+// 4. TablePKs not nil, startPos set => run catchup from startPos, then table copy  (for pks > lastPK)
 func (uvs *uvstreamer) init() error {
-	if uvs.startPos != "" {
-		if err := uvs.setStreamStartPosition(); err != nil {
-			return err
-		}
-	} else if uvs.startPos == "" || len(uvs.inTablePKs) > 0 {
+	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ {
 		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}
 	}
-
+	if uvs.startPos != "" {
+		if err := uvs.setStreamStartPosition(); err != nil {
+			return err
+		}
+	}
 	if uvs.pos.IsZero() && (len(uvs.plans) == 0) {
 		return fmt.Errorf("stream needs a position or a table to copy")
 	}
@@ -378,7 +415,8 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send, "replicate", uvs.vse)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos),
+		uvs.filter, uvs.getVSchema(), uvs.send, "replicate", uvs.vse)
 
 	uvs.setVs(vs)
 	return vs.Stream()

@@ -34,7 +34,11 @@ var (
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks_misc"
+	uks             = "uks"
 	cell            = "test_misc"
+
+	//go:embed uschema.sql
+	uschemaSQL string
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -53,6 +57,19 @@ func TestMain(m *testing.M) {
 
 		// Start topo server
 		err := clusterInstance.StartTopo()
+		if err != nil {
+			return 1
+		}
+
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-max-result-size", "1000000",
+			"--queryserver-config-query-timeout", "200",
+			"--queryserver-config-query-pool-timeout", "200")
+		// Start Unsharded keyspace
+		ukeyspace := &cluster.Keyspace{
+			Name:      uks,
+			SchemaSQL: uschemaSQL,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false)
 		if err != nil {
 			return 1
 		}

@@ -17,14 +17,19 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Derived struct {
-	Source Operator
+	Source ops.Operator
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -35,21 +40,21 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ PhysicalOperator = (*Derived)(nil)
+var _ ops.PhysicalOperator = (*Derived)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (d *Derived) IPhysical() {}
 
 // Clone implements the Operator interface
-func (d *Derived) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 1)
-	clone := *d
-	clone.Source = inputs[0]
-	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
-	clone.Columns = append([]*sqlparser.ColName{}, d.Columns...)
-	clone.ColumnsOffset = make([]int, 0, len(d.ColumnsOffset))
-	copy(clone.ColumnsOffset, d.ColumnsOffset)
-	return &clone
+func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
+	return &Derived{
+		Source:        inputs[0],
+		Query:         d.Query,
+		Alias:         d.Alias,
+		ColumnAliases: sqlparser.CloneColumns(d.ColumnAliases),
+		Columns:       slices.Clone(d.Columns),
+		ColumnsOffset: slices.Clone(d.ColumnsOffset),
+	}
 }
 
 // findOutputColumn returns the index on which the given name is found in the slice of
@@ -98,6 +103,66 @@ func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 }
 
 // Inputs implements the Operator interface
-func (d *Derived) Inputs() []Operator {
-	return []Operator{d.Source}
+func (d *Derived) Inputs() []ops.Operator {
+	return []ops.Operator{d.Source}
+}
+
+func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	if _, isUNion := d.Source.(*Union); isUNion {
+		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
+		var err error
+		d.Source, err = d.Source.AddPredicate(ctx, expr)
+		return d, err
+	}
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
+	if err != nil {
+		if err == semantics.ErrMultipleTables {
+			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		}
+		return nil, err
+	}
+
+	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if err != nil {
+		return nil, err
+	}
+	d.Source, err = d.Source.AddPredicate(ctx, newExpr)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
+	}
+
+	i, err := d.findOutputColumn(col)
+	if err != nil {
+		return 0, err
+	}
+	var pos int
+	d.ColumnsOffset, pos = addToIntSlice(d.ColumnsOffset, i)
+
+	// add it to the source if we were not already passing it through
+	if i <= -1 {
+		d.Columns = append(d.Columns, col)
+		_, err := d.Source.AddColumn(ctx, sqlparser.NewColName(col.Name.String()))
+		if err != nil {
+			return 0, err
+		}
+	}
+	return pos, nil
+}
+
+func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
+	for idx, val := range columnOffset {
+		if val == valToAdd {
+			return columnOffset, idx
+		}
+	}
+	columnOffset = append(columnOffset, valToAdd)
+	return columnOffset, len(columnOffset) - 1
 }

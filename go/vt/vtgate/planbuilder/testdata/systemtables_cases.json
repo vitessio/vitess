@@ -860,7 +860,7 @@
           "Sharded": false
         },
         "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
+        "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or foobar = 'value')",
         "SysTableTableSchema": "[VARCHAR(\"ks\")]",
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }
@@ -1431,28 +1431,6 @@
         "Query": "select id from information_schema.random as t where t.col in (select id from information_schema.`table` as t where t.schema_name = :__vtschemaname union select id from information_schema.`columns`)",
         "SysTableTableSchema": "[VARCHAR(\"a\")]",
         "Table": "information_schema.random"
-      }
-    }
-  },
-  {
-    "comment": "systable union query in derived table with constraint on outside (star projection)",
-    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-    "v3-plan": "symbol constraint_name not found in table or subquery",
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "DBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select * from (select * from information_schema.key_column_usage as kcu where 1 != 1 union select * from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
-        "Query": "select * from (select * from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and constraint_name = 'primary' union select * from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and constraint_name = 'primary') as kcu",
-        "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
-        "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
-        "Table": "information_schema.key_column_usage"
       }
     }
   },

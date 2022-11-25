@@ -546,7 +546,6 @@ func TestSchemaChange(t *testing.T) {
 				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", shards[0].Vttablets[reparentTabletIndex].Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
 			})
-
 			t.Run("unthrottle and expect completion", func(t *testing.T) {
 				for i := range shards {
 					var body string
@@ -627,14 +626,14 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("Online CREATE, vtctl, extra flags", func(t *testing.T) {
 		// the flags are meaningless to this migration. The test just validates that they don't get in the way.
-		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "vitess --fast-over-revertible --allow-zero-in-date", providedUUID, providedMigrationContext, "vtctl", "online_ddl_create_col", "", false)
+		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "vitess --prefer-instant-ddl --allow-zero-in-date", providedUUID, providedMigrationContext, "vtctl", "online_ddl_create_col", "", false)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online DROP TABLE IF EXISTS, vtgate, extra flags", func(t *testing.T) {
 		// the flags are meaningless to this migration. The test just validates that they don't get in the way.
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "vitess --fast-over-revertible --allow-zero-in-date", providedUUID, providedMigrationContext, "vtgate", "", "", false)
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "vitess --prefer-instant-ddl --allow-zero-in-date", providedUUID, providedMigrationContext, "vtgate", "", "", false)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)

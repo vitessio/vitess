@@ -42,7 +42,8 @@ jobs:
             - 'test.go'
             - 'Makefile'
             - 'build.env'
-            - 'go.[sumod]'
+            - 'go.sum'
+            - 'go.mod'
             - 'proto/*.proto'
             - 'tools/**'
             - 'config/**'
@@ -53,12 +54,12 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.7
+        go-version: 1.19.3
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
@@ -99,7 +100,7 @@ jobs:
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
         # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update

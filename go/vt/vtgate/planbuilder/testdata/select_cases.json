@@ -254,6 +254,45 @@
     }
   },
   {
+    "comment": "select limit with timeout directive sets QueryTimeout in the route",
+    "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded where 1 != 1",
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
+        "QueryTimeout": 1000,
+        "Table": "unsharded"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded where 1 != 1",
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
+        "QueryTimeout": 1000,
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
     "comment": "select with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
     "v3-plan": {
@@ -7868,6 +7907,88 @@
       },
       "TablesUsed": [
         "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "(OR 1 = 0) doesn't cause unnecessary scatter",
+    "query": "select * from user where id = 1 or 1 = 0",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user where id = 1 or 1 = 0",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` where id = 1 or 1 = 0",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user where id = 1 or 1 = 0",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "(OR 2 < 1) doesn't cause unnecessary scatter",
+    "query": "select * from user where id = 1 or 2 < 1",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user where id = 1 or 2 < 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` where id = 1 or 2 < 1",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user where id = 1 or 2 < 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

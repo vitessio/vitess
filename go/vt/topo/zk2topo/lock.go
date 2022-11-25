@@ -17,9 +17,9 @@ limitations under the License.
 package zk2topo
 
 import (
-	"path"
-
 	"context"
+	"fmt"
+	"path"
 
 	"github.com/z-division/go-zookeeper/zk"
 
@@ -39,7 +39,40 @@ type zkLockDescriptor struct {
 
 // Lock is part of the topo.Conn interface.
 func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	// Lock paths end in a trailing slash to that when we create
+	return zs.lock(ctx, dirPath, contents)
+}
+
+// TryLock is part of the topo.Conn interface.
+func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	// We list all the entries under dirPath
+	entries, err := zs.ListDir(ctx, dirPath, true)
+	if err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err, dirPath)
+	}
+
+	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
+	// Throw error in this case
+	for _, e := range entries {
+		// there is a bug where ListDir return ephemeral = false for locks. It is due
+		// https://github.com/vitessio/vitess/blob/main/go/vt/topo/zk2topo/utils.go#L55
+		// TODO: Fix/send ephemeral flag value recursively while creating ephemeral file
+		if e.Name == locksPath && e.Type == topo.TypeDirectory {
+			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
+		}
+	}
+
+	// everything is good let's acquire the lock.
+	return zs.lock(ctx, dirPath, contents)
+}
+
+// Lock is part of the topo.Conn interface.
+func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	// Lock paths end in a trailing slash so that when we create
 	// sequential nodes, they are created as children, not siblings.
 	locksDir := path.Join(zs.root, dirPath, locksPath) + "/"
 

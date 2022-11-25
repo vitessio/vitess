@@ -19,6 +19,7 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -32,9 +33,11 @@ type Update struct {
 	AST                 *sqlparser.Update
 
 	noInputs
+	noColumns
+	noPredicates
 }
 
-var _ PhysicalOperator = (*Update)(nil)
+var _ ops.PhysicalOperator = (*Update)(nil)
 
 // Introduces implements the PhysicalOperator interface
 func (u *Update) Introduces() semantics.TableSet {
@@ -45,8 +48,7 @@ func (u *Update) Introduces() semantics.TableSet {
 func (u *Update) IPhysical() {}
 
 // Clone implements the Operator interface
-func (u *Update) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 0)
+func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
 	return &Update{
 		QTable:              u.QTable,
 		VTable:              u.VTable,

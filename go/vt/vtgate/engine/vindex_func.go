@@ -99,7 +99,7 @@ func (vf *VindexFunc) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return err
 	}
-	if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
+	if err := callback(r.Metadata()); err != nil {
 		return err
 	}
 	return callback(&sqltypes.Result{Rows: r.Rows})

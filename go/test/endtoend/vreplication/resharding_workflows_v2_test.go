@@ -243,7 +243,14 @@ func getCurrentState(t *testing.T) string {
 
 func TestBasicV2Workflows(t *testing.T) {
 	defaultRdonly = 1
-	defer func() { defaultRdonly = 0 }()
+	extraVTTabletArgs = []string{
+		parallelInsertWorkers,
+	}
+	defer func() {
+		defaultRdonly = 0
+		extraVTTabletArgs = []string{}
+	}()
+
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)

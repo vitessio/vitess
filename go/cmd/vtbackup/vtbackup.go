@@ -118,6 +118,7 @@ var (
 	initDBSQLFile    string
 	detachedMode     bool
 	keepAliveTimeout = 0 * time.Second
+	disableRedoLog   = false
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -139,6 +140,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "path to .sql file to run after mysql_install_db")
 	fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run backups detached from the terminal")
 	fs.DurationVar(&keepAliveTimeout, "keep-alive-timeout", keepAliveTimeout, "Wait until timeout elapses after a successful backup before shutting down.")
+	fs.BoolVar(&disableRedoLog, "disable-redo-log", disableRedoLog, "Disable InnoDB redo log during replication-from-primary phase of backup.")
 
 	acl.RegisterFlags(fs)
 }
@@ -349,6 +351,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return fmt.Errorf("can't restore from backup: %v", err)
 	}
 
+	// Disable redo logging (if we can) before we start replication.
+	disabledRedoLog := false
+	if disableRedoLog {
+		if err := mysqld.DisableRedoLog(ctx); err != nil {
+			log.Warningf("Error disabling redo logging: %v", err)
+		} else {
+			disabledRedoLog = true
+		}
+	}
+
 	// We have restored a backup. Now start replication.
 	if err := resetReplication(ctx, restorePos, mysqld); err != nil {
 		return fmt.Errorf("error resetting replication: %v", err)
@@ -429,6 +441,13 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	log.Infof("Replication caught up to %v", status.Position)
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
+	}
+
+	// Re-enable redo logging.
+	if disabledRedoLog {
+		if err := mysqld.EnableRedoLog(ctx); err != nil {
+			return fmt.Errorf("failed to re-enable redo log: %v", err)
+		}
 	}
 
 	if restartBeforeBackup {

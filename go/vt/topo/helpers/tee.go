@@ -187,6 +187,16 @@ type teeTopoLockDescriptor struct {
 
 // Lock is part of the topo.Conn interface.
 func (c *TeeConn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return c.lock(ctx, dirPath, contents)
+}
+
+// TryLock is part of the topo.Conn interface. Its implementation is same as Lock
+func (c *TeeConn) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return c.Lock(ctx, dirPath, contents)
+}
+
+// Lock is part of the topo.Conn interface.
+func (c *TeeConn) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// Lock lockFirst.
 	fLD, err := c.lockFirst.Lock(ctx, dirPath, contents)
 	if err != nil {

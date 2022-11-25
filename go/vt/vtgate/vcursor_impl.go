@@ -789,9 +789,24 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
+// SetTransactionIsolation implements the SessionActions interface
+func (vc *vcursorImpl) SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation) {
+	vc.safeSession.GetOrCreateOptions().TransactionIsolation = isolation
+}
+
 // SetPlannerVersion implements the SessionActions interface
 func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
+}
+
+// SetConsolidator implements the SessionActions interface
+func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
+	// Avoid creating session Options when they do not yet exist and the
+	// consolidator is unspecified.
+	if consolidator == querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED && vc.safeSession.GetOptions() == nil {
+		return
+	}
+	vc.safeSession.GetOrCreateOptions().Consolidator = consolidator
 }
 
 // SetFoundRows implements the SessionActions interface

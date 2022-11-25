@@ -98,8 +98,18 @@ var sequenceFields = []*querypb.Field{
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
-	cm := qre.tsv.qe.consolidatorMode.Get()
-	return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
+	co := qre.options.GetConsolidator()
+	switch co {
+	case querypb.ExecuteOptions_CONSOLIDATOR_DISABLED:
+		return false
+	case querypb.ExecuteOptions_CONSOLIDATOR_ENABLED:
+		return true
+	case querypb.ExecuteOptions_CONSOLIDATOR_ENABLED_REPLICAS:
+		return qre.tabletType != topodatapb.TabletType_PRIMARY
+	default:
+		cm := qre.tsv.qe.consolidatorMode.Get()
+		return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
+	}
 }
 
 // Execute performs a non-streaming query execution.
@@ -184,6 +194,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
 		return qre.execShowThrottledApps()
+	case p.PlanShowThrottlerStatus:
+		return qre.execShowThrottlerStatus()
 	case p.PlanSet:
 		if qre.setting == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
@@ -510,7 +522,15 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 	}
 
 	defer func() {
-		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
+		// Call se.Reload() with includeStats=false as obtaining table
+		// size stats involves joining `information_schema.tables`,
+		// which can be very costly on systems with a large number of
+		// tables.
+		//
+		// Instead of synchronously recalculating table size stats
+		// after every DDL, let them be outdated until the periodic
+		// schema reload fixes it.
+		if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
 			log.Errorf("failed to reload schema %v", err)
 		}
 	}()
@@ -952,6 +972,45 @@ func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
 				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
 				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
 			})
+	}
+	return result, nil
+}
+
+func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
+	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottlerStatus); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLER STATUS plan")
+	}
+	var enabled int32
+	if err := qre.tsv.lagThrottler.CheckIsReady(); err == nil {
+		enabled = 1
+	}
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "shard",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "enabled",
+				Type: sqltypes.Int32,
+			},
+			{
+				Name: "threshold",
+				Type: sqltypes.Float64,
+			},
+			{
+				Name: "query",
+				Type: sqltypes.VarChar,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarChar(qre.tsv.sm.target.Shard),
+				sqltypes.NewInt32(enabled),
+				sqltypes.NewFloat64(qre.tsv.lagThrottler.MetricsThreshold.Get()),
+				sqltypes.NewVarChar(qre.tsv.lagThrottler.GetMetricsQuery()),
+			},
+		},
 	}
 	return result, nil
 }

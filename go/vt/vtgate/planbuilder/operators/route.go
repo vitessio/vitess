@@ -17,10 +17,14 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -29,7 +33,7 @@ import (
 
 type (
 	Route struct {
-		Source Operator
+		Source ops.Operator
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -83,7 +87,7 @@ type (
 	}
 )
 
-var _ PhysicalOperator = (*Route)(nil)
+var _ ops.PhysicalOperator = (*Route)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
@@ -114,8 +118,7 @@ func (r *Route) Cost() int {
 }
 
 // Clone implements the Operator interface
-func (r *Route) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 1)
+func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
@@ -128,8 +131,8 @@ func (r *Route) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (r *Route) Inputs() []Operator {
-	return []Operator{r.Source}
+func (r *Route) Inputs() []ops.Operator {
+	return []ops.Operator{r.Source}
 }
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
@@ -712,4 +715,130 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	}
 
 	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
+}
+
+func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves semantics.TableSet) (*Route, error) {
+	if table.IsInfSchema {
+		return createInfSchemaRoute(ctx, table)
+	}
+	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(table.Table)
+	if target != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if vschemaTable.Name.String() != table.Table.Name.String() {
+		// we are dealing with a routed table
+		name := table.Table.Name
+		table.Table.Name = vschemaTable.Name
+		astTable, ok := table.Alias.Expr.(sqlparser.TableName)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
+		}
+		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
+		astTable.Name = realTableName
+		if table.Alias.As.IsEmpty() {
+			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
+			table.Alias.As = sqlparser.NewIdentifierCS(name.String())
+		}
+	}
+	plan := &Route{
+		Source: &Table{
+			QTable: table,
+			VTable: vschemaTable,
+		},
+		Keyspace: vschemaTable.Keyspace,
+	}
+
+	for _, columnVindex := range vschemaTable.ColumnVindexes {
+		plan.VindexPreds = append(plan.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})
+	}
+
+	switch {
+	case vschemaTable.Type == vindexes.TypeSequence:
+		plan.RouteOpCode = engine.Next
+	case vschemaTable.Type == vindexes.TypeReference:
+		plan.RouteOpCode = engine.Reference
+	case !vschemaTable.Keyspace.Sharded:
+		plan.RouteOpCode = engine.Unsharded
+	case vschemaTable.Pinned != nil:
+		// Pinned tables have their keyspace ids already assigned.
+		// Use the Binary vindex, which is the identity function
+		// for keyspace id.
+		plan.RouteOpCode = engine.EqualUnique
+		vindex, _ := vindexes.NewBinary("binary", nil)
+		plan.Selected = &VindexOption{
+			Ready:       true,
+			Values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
+			ValueExprs:  nil,
+			Predicates:  nil,
+			OpCode:      engine.EqualUnique,
+			FoundVindex: vindex,
+			Cost: Cost{
+				OpCode: engine.EqualUnique,
+			},
+		}
+	default:
+		plan.RouteOpCode = engine.Scatter
+	}
+	for _, predicate := range table.Predicates {
+		err = plan.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
+		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
+		oldPredicates := table.Predicates
+		table.Predicates = nil
+		plan.SeenPredicates = nil
+		for _, pred := range oldPredicates {
+			rewritten := sqlparser.RewritePredicate(pred)
+			predicates := sqlparser.SplitAndExpression(nil, rewritten.(sqlparser.Expr))
+			for _, predicate := range predicates {
+				table.Predicates = append(table.Predicates, predicate)
+				err = plan.UpdateRoutingLogic(ctx, predicate)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		if plan.RouteOpCode == engine.Scatter {
+			// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
+			for _, expr := range table.Predicates {
+				or, ok := expr.(*sqlparser.OrExpr)
+				if !ok {
+					continue
+				}
+				for _, predicate := range sqlparser.ExtractINFromOR(or) {
+					err = plan.UpdateRoutingLogic(ctx, predicate)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+
+	return plan, nil
+}
+
+func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	err := r.UpdateRoutingLogic(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	newSrc, err := r.Source.AddPredicate(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	r.Source = newSrc
+	return r, err
+}
+
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
+	return r.Source.AddColumn(ctx, e)
 }

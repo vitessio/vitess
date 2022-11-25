@@ -1,5 +1,5 @@
 Usage of vtgate:
-      --allowed_tablet_types []topodatapb.TabletType                     Specifies the tablet types this vtgate is allowed to route queries to.
+      --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
       --buffer_drain_concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer_implementation string                                     Allowed values: healthcheck (legacy implementation), keyspace_events (default) (default "keyspace_events")
@@ -19,6 +19,7 @@ Usage of vtgate:
       --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
+      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
@@ -74,6 +75,7 @@ Usage of vtgate:
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
+      --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_memory_rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
@@ -143,6 +145,11 @@ Usage of vtgate:
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
+      --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
+      --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats_common_tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
+      --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
@@ -156,7 +163,7 @@ Usage of vtgate:
       --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
-      --tablet_types_to_wait string                                      wait till connected for specified tablet types during Gateway initialization
+      --tablet_types_to_wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
       --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")

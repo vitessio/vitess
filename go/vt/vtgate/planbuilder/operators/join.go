@@ -18,58 +18,24 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  Operator
+	LHS, RHS  ops.Operator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
+
+	noColumns
 }
 
-var _ Operator = (*Join)(nil)
-
-// When a predicate uses information from an outer table, we can convert from an outer join to an inner join
-// if the predicate is "null-intolerant".
-//
-// Null-intolerant in this context means that the predicate will not be true if the table columns are null.
-//
-// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
-// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
-// side did not match, we might as well turn the join into an inner join.
-//
-// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
-func (j *Join) tryConvertToInnerJoin(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
-	if !j.LeftJoin {
-		return
-	}
-
-	switch expr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if expr.Operator == sqlparser.NullSafeEqualOp {
-			return
-		}
-
-		if sqlparser.IsColName(expr.Left) && ctx.SemTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) ||
-			sqlparser.IsColName(expr.Right) && ctx.SemTable.RecursiveDeps(expr.Right).IsSolvedBy(TableID(j.RHS)) {
-			j.LeftJoin = false
-		}
-
-	case *sqlparser.IsExpr:
-		if expr.Right != sqlparser.IsNotNullOp {
-			return
-		}
-
-		if sqlparser.IsColName(expr.Left) && ctx.SemTable.RecursiveDeps(expr.Left).IsSolvedBy(TableID(j.RHS)) {
-			j.LeftJoin = false
-		}
-	}
-}
+var _ ops.Operator = (*Join)(nil)
 
 // Clone implements the Operator interface
-func (j *Join) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 2)
+func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	clone := *j
 	clone.LHS = inputs[0]
 	clone.RHS = inputs[1]
@@ -82,6 +48,101 @@ func (j *Join) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (j *Join) Inputs() []Operator {
-	return []Operator{j.LHS, j.RHS}
+func (j *Join) Inputs() []ops.Operator {
+	return []ops.Operator{j.LHS, j.RHS}
+}
+
+func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+	if j.LeftJoin {
+		// we can't merge outer joins into a single QG
+		return j, rewrite.SameTree, nil
+	}
+
+	lqg, lok := j.LHS.(*QueryGraph)
+	rqg, rok := j.RHS.(*QueryGraph)
+	if !lok || !rok {
+		return j, rewrite.SameTree, nil
+	}
+
+	newOp := &QueryGraph{
+		Tables:     append(lqg.Tables, rqg.Tables...),
+		innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
+		NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
+	}
+	if j.Predicate != nil {
+		err := newOp.collectPredicate(ctx, j.Predicate)
+		if err != nil {
+			return nil, rewrite.SameTree, err
+		}
+	}
+	return newOp, rewrite.NewTree, nil
+}
+
+func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
+	if tableExpr.Join == sqlparser.RightJoinType {
+		lhs, rhs = rhs, lhs
+	}
+	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
+}
+
+func createJoin(LHS, RHS ops.Operator) ops.Operator {
+	lqg, lok := LHS.(*QueryGraph)
+	rqg, rok := RHS.(*QueryGraph)
+	if lok && rok {
+		op := &QueryGraph{
+			Tables:     append(lqg.Tables, rqg.Tables...),
+			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
+			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
+		}
+		return op
+	}
+	return &Join{LHS: LHS, RHS: RHS}
+}
+
+func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
+	op := createJoin(lhs, rhs)
+	if tableExpr.Condition.On != nil {
+		var err error
+		predicate := sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)
+		op, err = op.AddPredicate(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return op, nil
+}
+
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	return AddPredicate(j, ctx, expr, false, newFilter)
+}
+
+var _ JoinOp = (*Join)(nil)
+
+func (j *Join) GetLHS() ops.Operator {
+	return j.LHS
+}
+
+func (j *Join) GetRHS() ops.Operator {
+	return j.RHS
+}
+
+func (j *Join) SetLHS(operator ops.Operator) {
+	j.LHS = operator
+}
+
+func (j *Join) SetRHS(operator ops.Operator) {
+	j.RHS = operator
+}
+
+func (j *Join) MakeInner() {
+	j.LeftJoin = false
+}
+
+func (j *Join) IsInner() bool {
+	return !j.LeftJoin
+}
+
+func (j *Join) AddJoinPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
+	return nil
 }
