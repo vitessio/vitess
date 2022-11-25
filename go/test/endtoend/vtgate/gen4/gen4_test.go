@@ -495,3 +495,23 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 
 	mcmp.AssertMatches(query, "[[INT32(22)] [INT32(33)]]")
 }
+
+func TestPercentageAndUnderscore(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// insert some data.
+	mcmp.Exec(`insert into t1(id, col) values (1, 123),(2, 12),(3, 13),(4, 1234)`)
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'And%res', 'And%res'),(2, 'Harsh_it', 'Florent'),(3, 'Andres', 'Harsh1it'),(4, 'Florent', 'And%res'),(5, 'And%res', 'Andres'),(6, 'Harsh1it', 'Florent'),(7, 'Harsh_it', 'And%res'),(8, 'Florent', 'Harsh_it')`)
+
+	// Verify that %, _ and their escaped counter-parts work in Vitess in the like clause as well as equality clause
+	mcmp.Exec(`select * from t2 where tcol1 like "And%res"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "And\%res"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "Harsh_it"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "Harsh\_it"`)
+
+	mcmp.Exec(`select * from t2 where tcol1 = "And%res"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "And\%res"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "Harsh_it"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "Harsh\_it"`)
+}
