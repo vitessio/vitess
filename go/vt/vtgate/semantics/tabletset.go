@@ -62,7 +62,7 @@ func (ts TableSet) IsEmpty() bool {
 
 // TableOffset returns the offset in the Tables array from TableSet
 func (ts TableSet) TableOffset() int {
-	return bitset.Bitset(ts).Single()
+	return bitset.Bitset(ts).SingleBit()
 }
 
 // ForEachTable calls the given callback with the indices for all tables in this TableSet

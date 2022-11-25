@@ -118,20 +118,19 @@ func (bs Bitset) Set(offset int) Bitset {
 	return toBitset(words)
 }
 
-func (bs Bitset) Single() (offset int) {
-	var found bool
+func (bs Bitset) SingleBit() int {
+	offset := -1
 	for i := 0; i < len(bs); i++ {
 		t := bs[i]
 		if t == 0 {
 			continue
 		}
-		if found || bits.OnesCount8(t) != 1 {
+		if offset >= 0 || bits.OnesCount8(t) != 1 {
 			return -1
 		}
 		offset = i*bitsetWidth + bits.TrailingZeros8(t)
-		found = true
 	}
-	return
+	return offset
 }
 
 func (bs Bitset) IsContainedBy(b2 Bitset) bool {
@@ -168,8 +167,12 @@ func (bs Bitset) ForEach(yield func(int)) {
 }
 
 func Build(bits ...int) Bitset {
-	var max int
-	for _, b := range bits {
+	if len(bits) == 0 {
+		return ""
+	}
+
+	max := bits[0]
+	for _, b := range bits[1:] {
 		if b > max {
 			max = b
 		}
