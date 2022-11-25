@@ -102,23 +102,5 @@ jobs:
 
         set -x
 
-        # Increase our open file descriptor limit as we could hit this
-        ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql80.cnf
-        innodb_buffer_pool_dump_at_shutdown=OFF
-        innodb_buffer_pool_in_core_file=OFF
-        innodb_buffer_pool_load_at_startup=OFF
-        innodb_buffer_pool_size=64M
-        innodb_doublewrite=OFF
-        innodb_flush_log_at_trx_commit=0
-        innodb_flush_method=O_DIRECT
-        innodb_numa_interleave=ON
-        innodb_adaptive_hash_index=OFF
-        sync_binlog=0
-        sync_relay_log=0
-        performance_schema=OFF
-        slow-query-log=OFF
-        EOF
-        
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard vreplication_multicell

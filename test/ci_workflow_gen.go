@@ -131,11 +131,10 @@ var (
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
-	}
-
-	clusterSelfHostedList = []string{
 		"vreplication_v2",
 	}
+
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
@@ -343,7 +342,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 			if mysqlVersion == mysql57 {
 				test.Platform = string(mysql57)
 			}
-			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
+			if strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true
 			}
 			mysqlVersionIndicator := ""
