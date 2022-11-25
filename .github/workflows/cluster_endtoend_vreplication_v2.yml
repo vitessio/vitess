@@ -15,7 +15,7 @@ jobs:
     name: Run endtoend tests on Cluster (vreplication_v2)
     runs-on: ubuntu-20.04
 
-  steps:
+    steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
@@ -25,9 +25,11 @@ jobs:
         fi
         echo Skip ${skip}
         echo "::set-output name=skip-workflow::${skip}"
+
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v2
+
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: frouioui/paths-filter@main
