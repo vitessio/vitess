@@ -127,14 +127,15 @@ var (
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vreplication_basic",
-		"vreplication_v2",
 		"vtorc",
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 	}
 
-	clusterSelfHostedList       = []string{}
+	clusterSelfHostedList = []string{
+		"vreplication_v2",
+	}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
