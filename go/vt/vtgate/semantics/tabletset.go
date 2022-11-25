@@ -56,6 +56,12 @@ func (ts TableSet) NumberOfTables() int {
 	return bitset.Bitset(ts).Popcount()
 }
 
+// NonEmpty returns true if there are tables in the tableset
+func (ts TableSet) NonEmpty() bool {
+	return !ts.IsEmpty()
+}
+
+// IsEmpty returns true if there are no tables in the tableset
 func (ts TableSet) IsEmpty() bool {
 	return len(ts) == 0
 }

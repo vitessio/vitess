@@ -119,7 +119,7 @@ func (dt *DerivedTable) getColumns() []ColumnInfo {
 }
 
 func (dt *DerivedTable) hasStar() bool {
-	return dt.tables.NumberOfTables() > 0
+	return dt.tables.NonEmpty()
 }
 
 // GetTables implements the TableInfo interface

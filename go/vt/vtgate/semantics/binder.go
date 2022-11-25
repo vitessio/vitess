@@ -94,7 +94,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		currentScope := b.scoper.currentScope()
 		deps, err := b.resolveColumn(node, currentScope, false)
 		if err != nil {
-			if deps.direct.NumberOfTables() == 0 ||
+			if deps.direct.IsEmpty() ||
 				!strings.HasSuffix(err.Error(), "is ambiguous") ||
 				!b.canRewriteUsingJoin(deps, node) {
 				return err
