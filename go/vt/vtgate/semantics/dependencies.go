@@ -113,8 +113,8 @@ func (c *certain) merge(d dependencies, allowMulti bool) dependencies {
 		if d.recursive == c.recursive {
 			return c
 		}
-		c.direct.MergeInPlace(d.direct)
-		c.recursive.MergeInPlace(d.recursive)
+		c.direct = c.direct.Merge(d.direct)
+		c.recursive = c.recursive.Merge(d.recursive)
 		if !allowMulti {
 			c.err = ambigousErr
 		}

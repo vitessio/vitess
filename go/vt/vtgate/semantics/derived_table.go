@@ -55,7 +55,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables.MergeInPlace(table.getTableSet(org))
+				vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
 			}
 		}
 	}

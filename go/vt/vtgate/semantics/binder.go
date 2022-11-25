@@ -127,14 +127,14 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 		case *vTableInfo:
 			for _, col := range tbl.cols {
 				if sqlparser.EqualsExpr(node, col) {
-					ts.MergeInPlace(b.recursive[col])
+					ts = ts.Merge(b.recursive[col])
 				}
 			}
 		default:
 			expr := tbl.getExpr()
 			if expr != nil {
 				setFor := b.tc.tableSetFor(expr)
-				ts.MergeInPlace(setFor)
+				ts = ts.Merge(setFor)
 			}
 		}
 	}
@@ -196,15 +196,13 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 	sco := currScope
 	for sco != nil {
 		for _, table := range sco.tables {
-			tablesToKeep.MergeInPlace(table.getTableSet(b.org))
+			tablesToKeep = tablesToKeep.Merge(table.getTableSet(b.org))
 		}
 		sco = sco.parent
 	}
 
-	subqDirectDeps.KeepOnly(tablesToKeep)
-	subqRecursiveDeps.KeepOnly(tablesToKeep)
-	b.recursive[subq] = subqRecursiveDeps
-	b.direct[subq] = subqDirectDeps
+	b.recursive[subq] = subqRecursiveDeps.KeepOnly(tablesToKeep)
+	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
 }
 
 func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {

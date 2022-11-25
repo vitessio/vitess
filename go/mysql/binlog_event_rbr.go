@@ -226,7 +226,7 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		l := int(data[pos])
 		return l + 1, nil
 	case TypeBit:
-		// bitmap length is in metadata, as:
+		// bitset length is in metadata, as:
 		// upper 8 bits: bytes length
 		// lower 8 bits: bit length
 		nbits := ((metadata >> 8) * 8) + (metadata & 0xFF)
@@ -966,12 +966,12 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 //	-- endif
 //
 // <var>      number of columns (var-len encoded)
-// <var>      identify bitmap
-// <var>      data bitmap
+// <var>      identify bitset
+// <var>      data bitset
 // -- for each row
-// <var>      null bitmap for identify for present rows
+// <var>      null bitset for identify for present rows
 // <var>      values for each identify field
-// <var>      null bitmap for data for present rows
+// <var>      null bitset for data for present rows
 // <var>      values for each data field
 // --
 func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {

@@ -217,13 +217,13 @@ type Rows struct {
 	Flags uint16
 
 	// IdentifyColumns describes which columns are included to
-	// identify the row. It is a bitmap indexed by the TableMap
+	// identify the row. It is a bitset indexed by the TableMap
 	// list of columns.
 	// Set for UPDATE and DELETE.
 	IdentifyColumns Bitmap
 
 	// DataColumns describes which columns are included. It is
-	// a bitmap indexed by the TableMap list of columns.
+	// a bitset indexed by the TableMap list of columns.
 	// Set for WRITE and UPDATE.
 	DataColumns Bitmap
 
@@ -267,7 +267,7 @@ func newBitmap(data []byte, pos int, count int) (Bitmap, int) {
 	}, pos + byteSize
 }
 
-// NewServerBitmap returns a bitmap that can hold 'count' bits.
+// NewServerBitmap returns a bitset that can hold 'count' bits.
 func NewServerBitmap(count int) Bitmap {
 	byteSize := (count + 7) / 8
 	return Bitmap{
@@ -299,7 +299,7 @@ func (b *Bitmap) Set(index int, value bool) {
 	}
 }
 
-// BitCount returns how many bits are set in the bitmap.
+// BitCount returns how many bits are set in the bitset.
 // Note values that are not used may be set to 0 or 1,
 // hence the non-efficient logic.
 func (b *Bitmap) BitCount() int {

@@ -35,7 +35,7 @@ import (
 type keyspaceIDResolver interface {
 	// keyspaceID takes a table row, and returns the keyspace id as bytes.
 	// It will return an error if no sharding key can be found.
-	// The bitmap describes which columns are present in the row.
+	// The bitset describes which columns are present in the row.
 	keyspaceID(value sqltypes.Value) ([]byte, error)
 }
 

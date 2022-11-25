@@ -105,10 +105,11 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	// this is needed to so that later when we try to push projections, we get the correct
 	// solved tableID from the route, since it also includes the tables from the subquery after merging
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch n := node.(type) {
+		// TODO@vmg
+		switch node.(type) {
 		case *sqlparser.AliasedTableExpr:
-			ts := TableID(outer)
-			ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
+			// ts := TableID(outer)
+			// ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
 		}
 		return true, nil
 	}, subq.ExtractedSubquery.Subquery)
@@ -374,11 +375,9 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(TableID(resultInnerOp))
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(TableID(resultInnerOp))
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
 
 	// return any error while rewriting
 	return resultInnerOp, rewriteError
