@@ -143,7 +143,7 @@ func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predica
 
 func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
 	for _, t := range qg.Tables {
-		if table == t.ID {
+		if table.Equals(t.ID) {
 			t.Predicates = append(t.Predicates, predicate)
 			return true
 		}
