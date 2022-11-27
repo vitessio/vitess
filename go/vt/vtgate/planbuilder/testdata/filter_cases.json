@@ -6581,5 +6581,82 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Like clause evaluated on the vtgate",
+    "query": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "Instructions": {
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "Inputs": [
+              {
+                "Aggregates": "sum(1) AS sum(a.id)",
+                "GroupBy": "0 COLLATE latin1_swedish_ci",
+                "Inputs": [
+                  {
+                    "Expressions": [
+                      "[COLUMN 0] as textcol1",
+                      "[COLUMN 1] * [COLUMN 2] as sum(a.id)"
+                    ],
+                    "Inputs": [
+                      {
+                        "Inputs": [
+                          {
+                            "FieldQuery": "select a.textcol1, sum(a.id) from `user` as a where 1 != 1 group by a.textcol1",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "OperatorType": "Route",
+                            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+                            "Query": "select a.textcol1, sum(a.id) from `user` as a group by a.textcol1 order by a.textcol1 asc",
+                            "Table": "`user`",
+                            "Variant": "Scatter"
+                          },
+                          {
+                            "FieldQuery": "select 1, count(*) from `user` as b where 1 != 1 group by 1",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "OperatorType": "Route",
+                            "Query": "select 1, count(*) from `user` as b where b.textcol2 = :a_textcol1 group by 1",
+                            "Table": "`user`",
+                            "Variant": "Scatter"
+                          }
+                        ],
+                        "JoinColumnIndexes": "L:0,L:1,R:1",
+                        "JoinVars": {
+                          "a_textcol1": 0
+                        },
+                        "OperatorType": "Join",
+                        "TableName": "`user`_`user`",
+                        "Variant": "Join"
+                      }
+                    ],
+                    "OperatorType": "Projection"
+                  }
+                ],
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered"
+              }
+            ],
+            "OperatorType": "Filter",
+            "Predicate": "repeat(a.textcol1, :1) like 'And%res'"
+          }
+        ],
+        "OperatorType": "SimpleProjection"
+      },
+      "Original": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
+      "QueryType": "SELECT",
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

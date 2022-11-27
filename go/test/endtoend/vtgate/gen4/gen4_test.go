@@ -22,9 +22,9 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -501,17 +501,26 @@ func TestPercentageAndUnderscore(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	mcmp.Exec(`insert into t1(id, col) values (1, 123),(2, 12),(3, 13),(4, 1234)`)
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'And%res', 'And%res'),(2, 'Harsh_it', 'Florent'),(3, 'Andres', 'Harsh1it'),(4, 'Florent', 'And%res'),(5, 'And%res', 'Andres'),(6, 'Harsh1it', 'Florent'),(7, 'Harsh_it', 'And%res'),(8, 'Florent', 'Harsh_it')`)
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A%B', 'A%B'),(2, 'C_D', 'E'),(3, 'AB', 'C1D'),(4, 'E', 'A%B'),(5, 'A%B', 'AB'),(6, 'C1D', 'E'),(7, 'C_D', 'A%B'),(8, 'E', 'C_D')`)
 
 	// Verify that %, _ and their escaped counter-parts work in Vitess in the like clause as well as equality clause
-	mcmp.Exec(`select * from t2 where tcol1 like "And%res"`)
-	mcmp.Exec(`select * from t2 where tcol1 like "And\%res"`)
-	mcmp.Exec(`select * from t2 where tcol1 like "Harsh_it"`)
-	mcmp.Exec(`select * from t2 where tcol1 like "Harsh\_it"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "A%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "A\%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "C_D"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "C\_D"`)
 
-	mcmp.Exec(`select * from t2 where tcol1 = "And%res"`)
-	mcmp.Exec(`select * from t2 where tcol1 = "And\%res"`)
-	mcmp.Exec(`select * from t2 where tcol1 = "Harsh_it"`)
-	mcmp.Exec(`select * from t2 where tcol1 = "Harsh\_it"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "A%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "A\%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "C_D"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "C\_D"`)
+
+	// Verify that %, _ and their escaped counter-parts work with filtering on VTGate level
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "A\%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "A%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "A\%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "A%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "C_D%" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "C\_D%" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C_DC_D" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C\_DC\_D" order by a.tcol1`)
 }
