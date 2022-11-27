@@ -83,7 +83,7 @@ func normalize(v sqltypes.Value, coll collations.ID) string {
 	return fmt.Sprintf("%v(%s)", typ, v.Raw())
 }
 
-var debugPrintAll = flag.Bool("print-all", true, "print all matching tests")
+var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
 var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
 var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
 var debugCheckTypes = flag.Bool("check-types", true, "check the TypeOf operator for all queries")
