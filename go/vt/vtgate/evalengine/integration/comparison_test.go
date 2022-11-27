@@ -83,7 +83,7 @@ func normalize(v sqltypes.Value, coll collations.ID) string {
 	return fmt.Sprintf("%v(%s)", typ, v.Raw())
 }
 
-var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
+var debugPrintAll = flag.Bool("print-all", true, "print all matching tests")
 var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
 var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
 var debugCheckTypes = flag.Bool("check-types", true, "check the TypeOf operator for all queries")
@@ -413,6 +413,34 @@ func TestTypes(t *testing.T) {
 		`X'444444'`,
 		`_binary "foobar"`,
 		`-0x0`,
+	}
+
+	for _, query := range queries {
+		compareRemoteExpr(t, conn, query)
+	}
+}
+
+func TestUnderscoreAndPercentage(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var queries = []string{
+		`'pokemon' LIKE 'poke%'`,
+		`'pokemon' LIKE 'poke\%'`,
+		`'poke%mon' LIKE 'poke\%mon'`,
+		`'pokemon' LIKE 'poke\%mon'`,
+		`'poke%mon' = 'poke%mon'`,
+		`'poke\%mon' = 'poke%mon'`,
+		`'poke%mon' = 'poke\%mon'`,
+		`'poke\%mon' = 'poke\%mon'`,
+		`'pokemon' LIKE 'poke_on'`,
+		`'pokemon' LIKE 'poke\_on'`,
+		`'poke_mon' LIKE 'poke\_mon'`,
+		`'pokemon' LIKE 'poke\_mon'`,
+		`'poke_mon' = 'poke_mon'`,
+		`'poke\_mon' = 'poke_mon'`,
+		`'poke_mon' = 'poke\_mon'`,
+		`'poke\_mon' = 'poke\_mon'`,
 	}
 
 	for _, query := range queries {
