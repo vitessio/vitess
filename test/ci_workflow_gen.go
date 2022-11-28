@@ -82,7 +82,6 @@ var (
 		"22",
 		"worker_vault_heavy",
 		"24",
-		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
