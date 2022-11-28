@@ -18,13 +18,10 @@ linters:
   disable-all: true
   enable:
     # Defaults
-    - deadcode
     - errcheck
     - govet
     - ineffassign
-    - structcheck
     - typecheck
-    - varcheck
     - staticcheck
     - gosimple
 
@@ -43,10 +40,6 @@ issues:
       linters:
       - errcheck
       - goimports
-
-    - path: '^go/vt/vtadmin/cache/'
-      linters:
-      - structcheck
 
     ### BEGIN: errcheck exclusion rules. Each rule should be considered
     #   a TODO for removal after adding error checks to that package/file/etc,
