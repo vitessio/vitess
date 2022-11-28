@@ -61,7 +61,7 @@ jobs:
       run: |
         # Limit local port range to not use ports that overlap with server side
         # ports that we listen on.
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
@@ -103,13 +103,15 @@ jobs:
 
         set -x
 
+        # Increase our local ephemeral port range as we could exhaust this
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
         cat <<-EOF>>./config/mycnf/mysql80.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
-        innodb_buffer_pool_size=64M
+        innodb_buffer_pool_size=16M
         innodb_doublewrite=OFF
         innodb_flush_log_at_trx_commit=0
         innodb_flush_method=O_DIRECT
@@ -120,6 +122,7 @@ jobs:
         performance_schema=OFF
         slow-query-log=OFF
         EOF
+        make embed_config
         
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard ers_prs_newfeatures_heavy
