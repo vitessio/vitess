@@ -78,6 +78,26 @@ import {
     GetFullStatusParams,
     validateVersionShard,
     ValidateVersionShardParams,
+    FetchKeyspaceParams,
+    DeleteTabletParams,
+    RefreshTabletReplicationSourceParams,
+    SetReadOnlyParams,
+    SetReadWriteParams,
+    FetchShardReplicationPositionsParams,
+    StartReplicationParams,
+    StopReplicationParams,
+    PingTabletParams,
+    RefreshStateParams,
+    RunHealthCheckParams,
+    DeleteShardParams,
+    RebuildKeyspaceGraphParams,
+    ReloadSchemaShardParams,
+    TabletExternallyPromotedParams,
+    PlannedFailoverShardParams,
+    EmergencyFailoverShardParams,
+    RemoveKeyspaceCellParams,
+    CreateShardParams,
+    ReloadSchemaParams,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -85,27 +105,28 @@ import { formatAlias } from '../util/tablets';
 /**
  * useBackups is a query hook that fetches all backups across every cluster.
  */
-export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
-    useQuery(['backups'], fetchBackups, options);
+export const useBackups = (
+    options?: UseQueryOptions<pb.ClusterBackup[], Error, pb.ClusterBackup[], string[]> | undefined
+) => useQuery(['backups'], fetchBackups, options);
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
  */
-export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error> | undefined) =>
+export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error, pb.Cluster[], string[]> | undefined) =>
     useQuery(['clusters'], fetchClusters, options);
 
 /**
  * useGates is a query hook that fetches all VTGates across every cluster.
  */
-export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefined) =>
+export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error, pb.VTGate[], string[]> | undefined) =>
     useQuery(['gates'], fetchGates, options);
 
 /**
  * useKeyspace is a query hook that fetches a single keyspace by name.
  */
 export const useKeyspace = (
-    params: Parameters<typeof fetchKeyspace>[0],
-    options?: UseQueryOptions<pb.Keyspace, Error>
+    params: FetchKeyspaceParams,
+    options?: UseQueryOptions<pb.Keyspace, Error, pb.Keyspace, (string | FetchKeyspaceParams)[]>
 ) => {
     const queryClient = useQueryClient();
     return useQuery(['keyspace', params], () => fetchKeyspace(params), {
@@ -134,31 +155,34 @@ export const useCreateKeyspace = (
 /**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
  */
-export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error> | undefined) =>
+export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error, pb.Keyspace[], string[]> | undefined) =>
     useQuery(['keyspaces'], fetchKeyspaces, options);
 
 /**
  * useSchemas is a query hook that fetches all schemas across every cluster.
  */
-export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undefined) =>
+export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error, pb.Schema[], string[]> | undefined) =>
     useQuery(['schemas'], fetchSchemas, options);
 
 /**
  * useTablets is a query hook that fetches all tablets across every cluster.
  */
-export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
+export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error, pb.Tablet[], string[]> | undefined) =>
     useQuery(['tablets'], fetchTablets, options);
 
 /**
  * useVtctlds is a query hook that fetches all vtctlds across every cluster.
  */
-export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
+export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error, pb.Vtctld[], string[]> | undefined) =>
     useQuery(['vtctlds'], fetchVtctlds, options);
 
 /**
  * useTablet is a query hook that fetches a single tablet by alias.
  */
-export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
+export const useTablet = (
+    params: FetchTabletParams,
+    options?: UseQueryOptions<pb.Tablet, Error, pb.Tablet, (string | FetchTabletParams)[]>
+) => {
     const queryClient = useQueryClient();
     return useQuery(['tablet', params], () => fetchTablet(params), {
         initialData: () => {
@@ -176,7 +200,7 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
  * useDeleteTablet is a mutate hook that deletes a tablet by alias and optionally, cluster id.
  */
 export const useDeleteTablet = (
-    params: Parameters<typeof deleteTablet>[0],
+    params: DeleteTabletParams,
     options: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>(() => {
@@ -189,7 +213,7 @@ export const useDeleteTablet = (
  * on a tablet to replicate from the current primary in the shard.
  */
 export const useRefreshTabletReplicationSource = (
-    params: Parameters<typeof refreshTabletReplicationSource>[0],
+    params: RefreshTabletReplicationSourceParams,
     options: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>(() => {
@@ -201,7 +225,7 @@ export const useRefreshTabletReplicationSource = (
  * useSetReadOnly sets the tablet to read only
  */
 export const useSetReadOnly = (
-    params: Parameters<typeof setReadOnly>[0],
+    params: SetReadOnlyParams,
     options: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof setReadOnly>>, Error>(() => {
@@ -213,7 +237,7 @@ export const useSetReadOnly = (
  * useSetReadWrite sets the tablet to read only
  */
 export const useSetReadWrite = (
-    params: Parameters<typeof setReadWrite>[0],
+    params: SetReadWriteParams,
     options: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>(() => {
@@ -226,15 +250,22 @@ export const useSetReadWrite = (
  * of each replica machine in the shard graph.
  */
 export const useShardReplicationPositions = (
-    params: Parameters<typeof fetchShardReplicationPositions>[0],
-    options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
+    params: FetchShardReplicationPositionsParams,
+    options?:
+        | UseQueryOptions<
+              pb.GetShardReplicationPositionsResponse,
+              Error,
+              pb.GetShardReplicationPositionsResponse,
+              (string | FetchShardReplicationPositionsParams)[]
+          >
+        | undefined
 ) => useQuery(['shard_replication_positions', params], () => fetchShardReplicationPositions(params), options);
 
 /**
  * useStartReplication starts replication on the specified tablet.
  */
 export const useStartReplication = (
-    params: Parameters<typeof startReplication>[0],
+    params: StartReplicationParams,
     options: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>(() => {
@@ -246,7 +277,7 @@ export const useStartReplication = (
  * useStopReplication stops replication on the specified tablet.
  */
 export const useStopReplication = (
-    params: Parameters<typeof stopReplication>[0],
+    params: StopReplicationParams,
     options: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>(() => {
@@ -258,8 +289,8 @@ export const useStopReplication = (
  * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
  */
 export const usePingTablet = (
-    params: Parameters<typeof pingTablet>[0],
-    options?: UseQueryOptions<pb.PingTabletResponse, Error>
+    params: PingTabletParams,
+    options?: UseQueryOptions<pb.PingTabletResponse, Error, pb.PingTabletResponse, (string | PingTabletParams)[]>
 ) => {
     return useQuery(['ping-tablet', params], () => pingTablet(params), options);
 };
@@ -268,8 +299,8 @@ export const usePingTablet = (
  * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
  */
 export const useRefreshState = (
-    params: Parameters<typeof refreshState>[0],
-    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
+    params: RefreshStateParams,
+    options?: UseQueryOptions<pb.RefreshStateResponse, Error, pb.RefreshStateResponse, (string | RefreshStateParams)[]>
 ) => {
     return useQuery(['refresh-state', params], () => refreshState(params), options);
 };
@@ -278,15 +309,20 @@ export const useRefreshState = (
  * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
  */
 export const useHealthCheck = (
-    params: Parameters<typeof runHealthCheck>[0],
-    options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
+    params: RunHealthCheckParams,
+    options?: UseQueryOptions<
+        pb.RunHealthCheckResponse,
+        Error,
+        pb.RunHealthCheckResponse,
+        (string | RunHealthCheckParams)[]
+    >
 ) => {
     return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
 };
 
 export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
-    options?: UseQueryOptions<TabletDebugVarsResponse, Error>
+    options?: UseQueryOptions<TabletDebugVarsResponse, Error, TabletDebugVarsResponse, (string | FetchTabletParams)[]>
 ) => {
     return useQuery(
         ['experimental/tablet/debug/vars', params],
@@ -314,8 +350,9 @@ export const useManyExperimentalTabletDebugVars = (
 /**
  * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.
  */
-export const useWorkflowsResponse = (options?: UseQueryOptions<pb.GetWorkflowsResponse, Error> | undefined) =>
-    useQuery(['workflows'], fetchWorkflows, options);
+export const useWorkflowsResponse = (
+    options?: UseQueryOptions<pb.GetWorkflowsResponse, Error, pb.GetWorkflowsResponse, string[]> | undefined
+) => useQuery(['workflows'], fetchWorkflows, options);
 
 /**
  * useWorkflows is a helper hook for when a flattened list of workflows
@@ -343,7 +380,10 @@ export const useWorkflows = (...args: Parameters<typeof useWorkflowsResponse>) =
 /**
  * useSchema is a query hook that fetches a single schema for the given parameters.
  */
-export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<pb.Schema, Error> | undefined) => {
+export const useSchema = (
+    params: FetchSchemaParams,
+    options?: UseQueryOptions<pb.Schema, Error, pb.Schema, (string | FetchSchemaParams)[]> | undefined
+) => {
     const queryClient = useQueryClient();
     return useQuery(['schema', params], () => fetchSchema(params), {
         initialData: () => {
@@ -404,7 +444,14 @@ export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions
 
 export const useVTExplain = (
     params: Parameters<typeof fetchVTExplain>[0],
-    options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
+    options?:
+        | UseQueryOptions<
+              pb.VTExplainResponse,
+              Error,
+              pb.VTExplainResponse,
+              (string | Parameters<typeof fetchVTExplain>[0])[]
+          >
+        | undefined
 ) => {
     return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
 };
@@ -414,7 +461,9 @@ export const useVTExplain = (
  */
 export const useWorkflow = (
     params: Parameters<typeof fetchWorkflow>[0],
-    options?: UseQueryOptions<pb.Workflow, Error> | undefined
+    options?:
+        | UseQueryOptions<pb.Workflow, Error, pb.Workflow, (string | Parameters<typeof fetchWorkflow>[0])[]>
+        | undefined
 ) => {
     const queryClient = useQueryClient();
     return useQuery(['workflow', params], () => fetchWorkflow(params), {
@@ -454,7 +503,7 @@ export const useWorkflow = (
  * keyspaces, shards, or tablets in the cluster, depending on the request parameters.
  */
 export const useReloadSchema = (
-    params: Parameters<typeof reloadSchema>[0],
+    params: ReloadSchemaParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchema>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
@@ -466,7 +515,7 @@ export const useReloadSchema = (
  * useDeleteShard is a mutate hook that deletes a shard in a keyspace.
  */
 export const useDeleteShard = (
-    params: Parameters<typeof deleteShard>[0],
+    params: DeleteShardParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof deleteShard>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof deleteShard>>, Error>(() => {
@@ -479,7 +528,7 @@ export const useDeleteShard = (
  * more cells in a keyspace.
  */
 export const useRebuildKeyspaceGraph = (
-    params: Parameters<typeof rebuildKeyspaceGraph>[0],
+    params: RebuildKeyspaceGraphParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>(() => {
@@ -491,7 +540,7 @@ export const useRebuildKeyspaceGraph = (
  * useReloadSchemaShard is a mutate hook that reloads the schema on all tablets in a shard. This is done on a best-effort basis.
  */
 export const useReloadSchemaShard = (
-    params: Parameters<typeof reloadSchemaShard>[0],
+    params: ReloadSchemaShardParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>(() => {
@@ -505,7 +554,7 @@ export const useReloadSchemaShard = (
  * orchestrator).
  */
 export const useTabletExternallyPromoted = (
-    params: Parameters<typeof tabletExternallyPromoted>[0],
+    params: TabletExternallyPromotedParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>(() => {
@@ -519,7 +568,7 @@ export const useTabletExternallyPromoted = (
  * See https://vitess.io/docs/reference/programs/vtctl/shards/#plannedreparentshard
  */
 export const usePlannedFailoverShard = (
-    params: Parameters<typeof plannedFailoverShard>[0],
+    params: PlannedFailoverShardParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>(() => {
@@ -533,7 +582,7 @@ export const usePlannedFailoverShard = (
  * See https://vitess.io/docs/reference/programs/vtctl/shards/#emergencyreparentshard
  */
 export const useEmergencyFailoverShard = (
-    params: Parameters<typeof emergencyFailoverShard>[0],
+    params: EmergencyFailoverShardParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>(() => {
@@ -545,7 +594,7 @@ export const useEmergencyFailoverShard = (
  * useRemoveKeyspaceCell is a mutate hook that removes a keyspace cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
  */
 export const useRemoveKeyspaceCell = (
-    params: Parameters<typeof removeKeyspaceCell>[0],
+    params: RemoveKeyspaceCellParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>(() => {
@@ -557,7 +606,7 @@ export const useRemoveKeyspaceCell = (
  * useCreateShard is a mutate hook that creates a shard in a keyspace
  */
 export const useCreateShard = (
-    params: Parameters<typeof createShard>[0],
+    params: CreateShardParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof createShard>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
@@ -579,7 +628,7 @@ export const useTopologyPath = (
  * as well as all tablets in discoverable cells, are consistent.
  */
 export const useValidate = (
-    params: Parameters<typeof validate>[0],
+    params: ValidateParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>
 ) => {
     return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
@@ -592,7 +641,7 @@ export const useValidate = (
  * reachable from the specified shard are consistent.
  */
 export const useValidateShard = (
-    params: Parameters<typeof validateShard>[0],
+    params: ValidateShardParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>
 ) => {
     return useMutation<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>(() => {
@@ -605,7 +654,14 @@ export const useValidateShard = (
  */
 export const useGetFullStatus = (
     params: GetFullStatusParams,
-    options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
+    options?:
+        | UseQueryOptions<
+              vtctldata.GetFullStatusResponse,
+              Error,
+              vtctldata.GetFullStatusResponse,
+              (string | GetFullStatusParams)[]
+          >
+        | undefined
 ) => useQuery(['full-status', params], () => getFullStatus(params), options);
 
 /**
