@@ -256,7 +256,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CONSTRAINT_NAME CATALOG_NAME SCHEMA_NAME TABLE_NAME COLUMN_NAME CURSOR_NAME SIGNAL RESIGNAL SQLSTATE
 
 // DECLARE Tokens
-%token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION
+%token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION FETCH OPEN CLOSE
 
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
@@ -329,7 +329,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CUBE
 %token <bytes> DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND DELAYED DISTINCTROW
 %token <bytes> EMPTY
-%token <bytes> FETCH FLOAT4 FLOAT8
+%token <bytes> FLOAT4 FLOAT8
 %token <bytes> GET
 %token <bytes> HIGH_PRIORITY HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND
 %token <bytes> INSENSITIVE INT1 INT2 INT3 INT4 INT8 IO_AFTER_GTIDS IO_BEFORE_GTIDS ITERATE
@@ -364,7 +364,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
-%type <statement> begin_end_block declare_statement resignal_statement
+%type <statement> begin_end_block declare_statement resignal_statement open_statement close_statement fetch_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
 %type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement
 %type <statements> statement_list
@@ -372,6 +372,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <caseStatementCase> case_statement_case
 %type <ifStatementConditions> elseif_list
 %type <ifStatementCondition> elseif_list_item
+%type <strs> fetch_variable_list
 %type <signalInfo> signal_information_item
 %type <signalInfos> signal_information_item_list
 %type <signalConditionItemName> signal_information_name
@@ -2037,6 +2038,40 @@ declare_handler_condition:
     $$ = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_ConditionName, String: string($1)}
   }
 
+open_statement:
+  OPEN ID
+  {
+    $$ = &OpenCursor{Name: string($2)}
+  }
+
+close_statement:
+  CLOSE ID
+  {
+    $$ = &CloseCursor{Name: string($2)}
+  }
+
+fetch_statement:
+  FETCH fetch_next_from_opt ID INTO fetch_variable_list
+  {
+    $$ = &FetchCursor{Name: string($3), Variables: $5}
+  }
+
+fetch_next_from_opt:
+  {}
+| FROM
+| NEXT FROM
+  {}
+
+fetch_variable_list:
+  ID
+  {
+    $$ = []string{string($1)}
+  }
+| fetch_variable_list ',' ID
+  {
+    $$ = append($$, string($3))
+  }
+
 signal_statement:
   SIGNAL signal_condition_value
   {
@@ -2213,6 +2248,9 @@ statement_list_statement:
 | explain_statement
 | describe_statement
 | declare_statement
+| open_statement
+| close_statement
+| fetch_statement
 | signal_statement
 | resignal_statement
 | call_statement
@@ -7738,6 +7776,7 @@ non_reserved_keyword:
 | CLASS_ORIGIN
 | CLIENT
 | CLONE
+| CLOSE
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
@@ -7854,6 +7893,7 @@ non_reserved_keyword:
 | OJ
 | OLD
 | ONLY
+| OPEN
 | OPTIONAL
 | ORDINALITY
 | ORGANIZATION

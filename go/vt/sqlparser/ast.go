@@ -401,6 +401,9 @@ func (*IfStatement) iStatement()       {}
 func (*Signal) iStatement()            {}
 func (*Resignal) iStatement()          {}
 func (*Declare) iStatement()           {}
+func (*OpenCursor) iStatement()        {}
+func (*CloseCursor) iStatement()       {}
+func (*FetchCursor) iStatement()       {}
 func (*Call) iStatement()              {}
 func (*Load) iStatement()              {}
 func (*Savepoint) iStatement()         {}
@@ -1151,6 +1154,52 @@ func (d *Declare) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// OpenCursor represents the OPEN statement
+type OpenCursor struct {
+	Name string
+}
+
+// Format implements the interface SQLNode.
+func (oc *OpenCursor) Format(buf *TrackedBuffer) {
+	buf.Myprintf("open %s", oc.Name)
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (oc *OpenCursor) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// CloseCursor represents the CLOSE statement
+type CloseCursor struct {
+	Name string
+}
+
+// Format implements the interface SQLNode.
+func (oc *CloseCursor) Format(buf *TrackedBuffer) {
+	buf.Myprintf("close %s", oc.Name)
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (oc *CloseCursor) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// FetchCursor represents the FETCH statement
+type FetchCursor struct {
+	Name string
+	Variables []string
+}
+
+// Format implements the interface SQLNode.
+func (oc *FetchCursor) Format(buf *TrackedBuffer) {
+	buf.Myprintf("fetch %s into %s", oc.Name, strings.Join(oc.Variables, ", "))
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (oc *FetchCursor) walkSubtree(visit Visit) error {
 	return nil
 }
 

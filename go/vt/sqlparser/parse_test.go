@@ -2859,6 +2859,47 @@ END`,
 			input:  "with a(j) as (select 1) ( with c(k) as (select 3) select (select k from c union select 6 limit 1) as b) union select k from c;",
 			output: "with a (j) as (select 1) (with c (k) as (select 3) select (select k from c union select 6 limit 1) as b) union select k from c",
 		},
+		{
+			input:  `CREATE PROCEDURE testproc() BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE a CHAR(16);
+  DECLARE b, c INT;
+  DECLARE cur1 CURSOR FOR SELECT id,data FROM test.t1;
+  DECLARE cur2 CURSOR FOR SELECT i FROM test.t2;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+  OPEN cur1;
+  OPEN cur2;
+
+  FETCH cur1 INTO a, b;
+  FETCH NEXT FROM cur2 INTO c;
+  IF b < c THEN
+    INSERT INTO test.t3 VALUES (a,b);
+  ELSE
+    INSERT INTO test.t3 VALUES (a,c);
+  END IF;
+
+  CLOSE cur1;
+  CLOSE cur2;
+END`,
+			output: `create procedure testproc () begin
+declare done INT default false;
+declare a CHAR(16);
+declare b, c INT;
+declare cur1 cursor for select id, `+"`data`"+` from test.t1;
+declare cur2 cursor for select i from test.t2;
+declare continue handler for not found set done = true;
+open cur1;
+open cur2;
+fetch cur1 into a, b;
+fetch cur2 into c;
+if b < c then insert into test.t3 values (a, b);
+else insert into test.t3 values (a, c);
+end if;
+close cur1;
+close cur2;
+end`,
+		},
 	}
 )
 
