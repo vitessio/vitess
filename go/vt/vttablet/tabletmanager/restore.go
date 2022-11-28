@@ -247,8 +247,8 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var pos mysql.Position
 	if backupManifest != nil {
 		pos = backupManifest.Position
+		params.Logger.Infof("Restore: pos=%v", mysql.EncodePosition(pos))
 	}
-	params.Logger.Infof("Restore: pos=%v", mysql.EncodePosition(pos))
 	// If SnapshotTime is set , then apply the incremental change
 	if keyspaceInfo.SnapshotTime != nil {
 		params.Logger.Infof("Restore: Restoring to time %v from binlog", keyspaceInfo.SnapshotTime)
@@ -258,8 +258,8 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return nil
 		}
 	}
-	switch err {
-	case nil:
+	switch {
+	case err == nil && backupManifest != nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
 		if params.IsIncrementalRecovery() && !params.DryRun {
@@ -277,13 +277,16 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 				return err
 			}
 		}
-	case mysqlctl.ErrNoBackup:
+	case err == mysqlctl.ErrNoBackup:
 		// Starting with empty database.
 		// We just need to initialize replication
 		_, err := tm.initializeReplication(ctx, originalType)
 		if err != nil {
 			return err
 		}
+	case err == nil && params.DryRun:
+		// Do nothing here, let the rest of code run
+		params.Logger.Infof("Dry run. No changes made")
 	default:
 		// If anything failed, we should reset the original tablet type
 		if err := tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone); err != nil {
