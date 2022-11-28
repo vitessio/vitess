@@ -51,6 +51,9 @@ Other aspects of the VReplication copy-phase logic are preserved:
 
  Other phases, catchup, fast-forward, and replicating/"running", are unchanged.
 
+#### VTTablet: --queryserver-config-pool-conn-max-lifetime
+`--queryserver-config-pool-conn-max-lifetime=[integer]` allows you to set a timeout on each connection in the query server connection pool. It chooses a random value between its value and twice its value, and when a connection has lived longer than the chosen value, it'll be removed from the pool the next time it's returned to the pool.
+
 ### vttablet --throttler-config-via-topo
 
 The flag `--throttler-config-via-topo` switches throttler configuration from `vttablet`-flags to the topo service. This flag is `false` by default, for backwards compatibility. It will default to `true` in future versions.
