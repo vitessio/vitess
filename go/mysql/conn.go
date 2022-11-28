@@ -818,6 +818,10 @@ func getLenEncInt(i uint64) []byte {
 	return data
 }
 
+func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
+	return c.writeErrorAndLog(ERUnknownComError, SSNetError, format, args...)
+}
+
 func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
 		log.Errorf("Error writing error to %s: %v", c, err)
