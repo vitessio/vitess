@@ -345,7 +345,7 @@ func BreakExpressionInLHSandRHS(
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := ctx.SemTable.RecursiveDeps(node)
-			if deps.NumberOfTables() == 0 {
+			if deps.IsEmpty() {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
 			}

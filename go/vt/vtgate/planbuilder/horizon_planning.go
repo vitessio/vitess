@@ -204,7 +204,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 		selectExprDep := semTable.RecursiveDeps(selectExpr.Expr)
 
 		// Check that the two expressions have the same dependencies
-		if !selectExprDep.Equals(exprDep) {
+		if selectExprDep != exprDep {
 			continue
 		}
 
