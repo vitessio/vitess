@@ -414,7 +414,13 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 func (vs *vstream) getCells(ctx context.Context) []string {
 	var cells []string
 	if vs.optCells != "" {
-		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+		for i, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+			// if the local tag is passed in, we must give local cell priority
+			// during tablet selection. Append the VTGate's local cell to the list of cells
+			if i == 0 && cell == "local" {
+				cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
+				continue
+			}
 			cells = append(cells, strings.TrimSpace(cell))
 		}
 	}
@@ -423,13 +429,13 @@ func (vs *vstream) getCells(ctx context.Context) []string {
 	// perform cell alias fallback
 	if vstreamCellAliasFallback && len(cells) == 0 {
 		// append the alias this cell belongs to, otherwise appends the vtgate's cell
-		alias := topo.GetAliasByCell(ctx, vs.ts, vs.vsm.cell)
+		alias := []string{topo.GetAliasByCell(ctx, vs.ts, vs.vsm.cell)}
 		// an alias was actually found
-		if alias != vs.vsm.cell {
+		if alias[0] != vs.vsm.cell {
 			// send in the vtgate's cell for local cell preference
-			alias = strings.Join([]string{"local:", vs.vsm.cell, alias}, ",")
+			cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
 		}
-		cells = append(cells, alias)
+		cells = append(cells, alias...)
 	}
 
 	if len(cells) == 0 {

@@ -96,9 +96,13 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 	}
 
 	localPreference := ""
-	if strings.HasPrefix(cells[0], "local:") {
+	if strings.HasPrefix(cells[0], localPreferenceHint) {
 		localPreference = cells[0][len(localPreferenceHint):]
 		cells = cells[1:]
+		// Add the local cell to the list of cells
+		// This may result in the local cell appearing twice,
+		// but cells will get deduped during tablet selection. See GetTabletsMatchingTablets -> tp.dedupeCells()
+		cells = append(cells, localPreference)
 	}
 
 	return &TabletPicker{
@@ -163,9 +167,8 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			if tp.inOrder {
 				sameCellCandidates = tp.orderByTabletType(sameCellCandidates)
 				allOtherCandidates = tp.orderByTabletType(allOtherCandidates)
-
-				candidates = append(sameCellCandidates, allOtherCandidates...)
 			}
+			candidates = append(sameCellCandidates, allOtherCandidates...)
 		} else if tp.inOrder {
 			candidates = tp.orderByTabletType(candidates)
 		} else {
@@ -243,6 +246,10 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				actualCells = append(actualCells, cell)
 			}
 		}
+		// Just in case a cell was passed in addition to its alias
+		// Can happen if localPreference is not "". See NewTabletPicker
+		actualCells = tp.dedupeCells(actualCells)
+
 		for _, cell := range actualCells {
 			shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
@@ -283,6 +290,19 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 		}
 	}
 	return tablets
+}
+
+func (tp *TabletPicker) dedupeCells(cells []string) []string {
+	keys := make(map[string]bool)
+	dedupedCells := []string{}
+
+	for _, c := range cells {
+		if _, value := keys[c]; !value {
+			keys[c] = true
+			dedupedCells = append(dedupedCells, c)
+		}
+	}
+	return dedupedCells
 }
 
 func init() {

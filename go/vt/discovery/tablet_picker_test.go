@@ -364,6 +364,102 @@ func TestPickUsingCellAlias(t *testing.T) {
 	assert.True(t, picked2)
 }
 
+func TestPickLocalPreference(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell1", "cell2"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want2)
+
+	tp, err := NewTabletPicker(te.topoServ, []string{"local:cell2", "cell1"}, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+	assert.Equal(t, tp.localPreference, "cell2")
+	assert.Equal(t, tp.cells, []string{"cell1", "cell2"})
+
+	// In 20 attempts, only the local tablet should be picked
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+	}
+	assert.False(t, picked1)
+	assert.True(t, picked2)
+}
+
+func TestPickLocalPreferenceWithCellAlias(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell1", "cell2"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want2)
+
+	tp, err := NewTabletPicker(te.topoServ, []string{"local:cell2", "cella"}, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+	assert.Equal(t, tp.localPreference, "cell2")
+	assert.Equal(t, tp.cells, []string{"cella", "cell2"})
+
+	// In 20 attempts, only the local tablet should be picked
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+	}
+	assert.False(t, picked1)
+	assert.True(t, picked2)
+}
+
+func TestPickLocalPreferenceWithTabletTypeOrdering(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell1", "cell2"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, want2)
+	want3 := addTablet(te, 102, topodatapb.TabletType_PRIMARY, "cell2", true, true)
+	defer deleteTablet(t, te, want3)
+	want4 := addTablet(te, 103, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want4)
+
+	tp, err := NewTabletPicker(te.topoServ, []string{"local:cell2", "cella"}, te.keyspace, te.shard, "in_order:replica,primary")
+	require.NoError(t, err)
+	assert.Equal(t, tp.localPreference, "cell2")
+	assert.Equal(t, tp.cells, []string{"cella", "cell2"})
+
+	// In 20 attempts, only the local tablet REPLICA should be picked
+	var picked1, picked2, picked3, picked4 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+		if proto.Equal(tablet, want3) {
+			picked3 = true
+		}
+		if proto.Equal(tablet, want4) {
+			picked4 = true
+		}
+	}
+	assert.False(t, picked1)
+	assert.False(t, picked2)
+	assert.False(t, picked3)
+	assert.True(t, picked4)
+}
+
 func TestTabletAppearsDuringSleep(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")

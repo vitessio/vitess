@@ -274,6 +274,138 @@ func TestVStreamChunks(t *testing.T) {
 	assert.Equal(t, int32(100), ddlCount.Get())
 }
 
+func TestVStreamManagerGetCells_DefaultLocal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(hc, st, "aa")
+	ts, _ := st.GetTopoServer()
+
+	vs := &vstream{
+		vgtid:              nil,
+		tabletType:         topodatapb.TabletType_PRIMARY,
+		optCells:           "",
+		filter:             nil,
+		send:               nil,
+		resolver:           nil,
+		journaler:          nil,
+		minimizeSkew:       false,
+		stopOnReshard:      true,
+		skewTimeoutSeconds: 0,
+		timestamps:         nil,
+		vsm:                vsm,
+		eventCh:            nil,
+		heartbeatInterval:  0,
+		ts:                 ts,
+	}
+
+	got := vs.getCells(ctx)
+	assert.Equal(t, len(got), 1)
+	assert.Equal(t, got[0], cell)
+}
+
+func TestVStreamManagerGetCells_DefaultLocalCellAlias(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(hc, st, "aa")
+	ts, _ := st.GetTopoServer()
+
+	vstreamCellAliasFallback = true
+
+	vs := &vstream{
+		vgtid:              nil,
+		tabletType:         topodatapb.TabletType_PRIMARY,
+		optCells:           "",
+		filter:             nil,
+		send:               nil,
+		resolver:           nil,
+		journaler:          nil,
+		minimizeSkew:       false,
+		stopOnReshard:      true,
+		skewTimeoutSeconds: 0,
+		timestamps:         nil,
+		vsm:                vsm,
+		eventCh:            nil,
+		heartbeatInterval:  0,
+		ts:                 ts,
+	}
+
+	// when no cell alias, just returns the local cell
+	got := vs.getCells(ctx)
+	assert.Equal(t, len(got), 1)
+	assert.Equal(t, got[0], cell)
+
+	cellsAlias := &topodatapb.CellsAlias{
+		Cells: []string{"aa", "bb"},
+	}
+	assert.Nil(t, ts.CreateCellsAlias(context.Background(), "region1", cellsAlias), "failed to create cell alias")
+	defer cleanupGetCellTests(t, ts, "region1")
+
+	// if cell alias exists, provide a local tag + the cell alias
+	got = vs.getCells(ctx)
+	assert.Equal(t, len(got), 2)
+	assert.Equal(t, got[0], "local:aa")
+	assert.Equal(t, got[1], "region1")
+}
+
+func TestVStreamManagerGetCells_WithOptCells(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(hc, st, "aa")
+	ts, _ := st.GetTopoServer()
+
+	vstreamCellAliasFallback = true
+	defer cleanupGetCellTests(t, ts, "")
+
+	vs := &vstream{
+		vgtid:              nil,
+		tabletType:         topodatapb.TabletType_PRIMARY,
+		optCells:           "local,bb,cc",
+		filter:             nil,
+		send:               nil,
+		resolver:           nil,
+		journaler:          nil,
+		minimizeSkew:       false,
+		stopOnReshard:      true,
+		skewTimeoutSeconds: 0,
+		timestamps:         nil,
+		vsm:                vsm,
+		eventCh:            nil,
+		heartbeatInterval:  0,
+		ts:                 ts,
+	}
+
+	// cells sent by the client should take precedence
+	got := vs.getCells(ctx)
+	assert.Equal(t, len(got), 3)
+	assert.Equal(t, got[0], "local:aa")
+	assert.Equal(t, got[1], "bb")
+	assert.Equal(t, got[2], "cc")
+}
+
+func cleanupGetCellTests(t *testing.T, ts *topo.Server, region string) {
+	if region != "" {
+		if err := ts.DeleteCellsAlias(context.Background(), region); err != nil {
+			t.Logf("DeleteCellsAlias(%s) failed: %v", region, err)
+		}
+	}
+	vstreamCellAliasFallback = false
+}
+
 func TestVStreamMulti(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
