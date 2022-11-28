@@ -32,10 +32,21 @@ func bitsetWordSize(max int) int {
 	return max/bitsetWidth + 1
 }
 
+// toBiset converts a slice of bytes into a Bitset without allocating memory.
+// Bitset is actually a type alias for `string`, which is the only native type in Go that is dynamic _and_
+// immutable, so it can be used as a key in maps or compared directly.
 func toBitset(words []byte) Bitset {
 	if len(words) == 0 {
 		return ""
 	}
+	if words[len(words)-1] == 0 {
+		panic("toBitset: did not truncate")
+	}
+	// to convert a byte slice into a bitset without cloning the slice, we use the same trick as
+	// the Go standard library's `strings.Builder`. A slice header is [data, len, cap] while a
+	// string header is [data, len], hence the first two words of a slice header can be reinterpreted
+	// as a string header simply by casting into it.
+	// This assumes that the `words` slice will never be written to after returning from this function.
 	return *(*Bitset)(unsafe.Pointer(&words))
 }
 
@@ -184,6 +195,8 @@ func (bs Bitset) Popcount() (count int) {
 
 // ForEach calls the given callback with the position of each bit set in this Bitset
 func (bs Bitset) ForEach(yield func(int)) {
+	// From Lemire, "Iterating over set bits quickly"
+	// https://lemire.me/blog/2018/02/21/iterating-over-set-bits-quickly/
 	for i := 0; i < len(bs); i++ {
 		bitset := bs[i]
 		for bitset != 0 {
