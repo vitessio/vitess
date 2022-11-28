@@ -100,8 +100,8 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 		localPreference = cells[0][len(localPreferenceHint):]
 		cells = cells[1:]
 		// Add the local cell to the list of cells
-		// This may result in the local cell appearing twice,
-		// but cells will get deduped during tablet selection. See GetTabletsMatchingTablets -> tp.dedupeCells()
+		// This may result in the local cell appearing twice if it already exists as part of an alias,
+		// but cells will get deduped during tablet selection. See GetMatchingTablets() -> tp.dedupeCells()
 		cells = append(cells, localPreference)
 	}
 
@@ -159,6 +159,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		default:
 		}
 		candidates := tp.GetMatchingTablets(ctx)
+		// we'd like to prioritize same cell tablets
 		if tp.localPreference != "" {
 			sameCellCandidates, allOtherCandidates := tp.prioritizeTablets(candidates)
 
@@ -246,7 +247,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				actualCells = append(actualCells, cell)
 			}
 		}
-		// Just in case a cell was passed in addition to its alias
+		// Just in case a cell was passed in addition to its alias.
 		// Can happen if localPreference is not "". See NewTabletPicker
 		actualCells = tp.dedupeCells(actualCells)
 
