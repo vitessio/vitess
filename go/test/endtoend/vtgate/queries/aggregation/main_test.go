@@ -63,14 +63,19 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+			"--enable_query_plan_field_caching=false",
+			"--queryserver-config-schema-change-signal",
+			"--queryserver-config-schema-change-signal-interval", "0.1")
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+			"--schema_change_signal",
+			"--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
