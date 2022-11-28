@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -30,10 +31,12 @@ import (
 )
 
 var (
-	_ SingleColumn = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Lookup       = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ SingleColumn = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ Lookup       = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ SingleColumn   = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ Lookup         = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ LookupPlanable = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ SingleColumn   = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ Lookup         = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ LookupPlanable = (*LookupUnicodeLooseMD5HashUnique)(nil)
 )
 
 func init() {
@@ -55,17 +58,19 @@ type LookupUnicodeLooseMD5Hash struct {
 
 // NewLookupUnicodeLooseMD5Hash creates a LookupUnicodeLooseMD5Hash vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupUnicodeLooseMD5Hash{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +80,7 @@ func NewLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, err
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
-	if err := lh.lkp.Init(m, autocommit, autocommit /* upsert */); err != nil {
+	if err := lh.lkp.Init(m, cc.autocommit, cc.autocommit || cc.multiShardAutocommit, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lh, nil
@@ -102,7 +107,7 @@ func (lh *LookupUnicodeLooseMD5Hash) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (lh *LookupUnicodeLooseMD5Hash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (lh *LookupUnicodeLooseMD5Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lh.writeOnly {
 		for range ids {
@@ -123,7 +128,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Map(vcursor VCursor, ids []sqltypes.Value) 
 	if err != nil {
 		return nil, err
 	}
-	results, err := lh.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
+	results, err := lh.lkp.Lookup(ctx, vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +152,53 @@ func (lh *LookupUnicodeLooseMD5Hash) Map(vcursor VCursor, ids []sqltypes.Value) 
 	return out, nil
 }
 
+// MapResult implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lh.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	for _, result := range results {
+		if len(result.Rows) == 0 {
+			out = append(out, key.DestinationNone{})
+			continue
+		}
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			num, err := evalengine.ToUint64(row[0])
+			if err != nil {
+				// A failure to convert is equivalent to not being
+				// able to map.
+				continue
+			}
+			ksids = append(ksids, vhash(num))
+		}
+		out = append(out, key.DestinationKeyspaceIDs(ksids))
+	}
+	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) Query() (selQuery string, arguments []string) {
+	return lh.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) AllowBatch() bool {
+	return lh.lkp.BatchLookup
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
+}
+
 // Verify returns true if ids maps to ksids.
-func (lh *LookupUnicodeLooseMD5Hash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lh *LookupUnicodeLooseMD5Hash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lh.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
@@ -165,11 +215,11 @@ func (lh *LookupUnicodeLooseMD5Hash) Verify(vcursor VCursor, ids []sqltypes.Valu
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lh.lkp.Verify(vcursor, ids, values)
+	return lh.lkp.Verify(ctx, vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lh *LookupUnicodeLooseMD5Hash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lh *LookupUnicodeLooseMD5Hash) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
@@ -178,11 +228,11 @@ func (lh *LookupUnicodeLooseMD5Hash) Create(vcursor VCursor, rowsColValues [][]s
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
+	return lh.lkp.Create(ctx, vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
-func (lh *LookupUnicodeLooseMD5Hash) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+func (lh *LookupUnicodeLooseMD5Hash) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
@@ -195,11 +245,11 @@ func (lh *LookupUnicodeLooseMD5Hash) Update(vcursor VCursor, oldValues []sqltype
 	if err != nil {
 		return fmt.Errorf("lookup.Update.convert: %v", err)
 	}
-	return lh.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lh.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
-func (lh *LookupUnicodeLooseMD5Hash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
+func (lh *LookupUnicodeLooseMD5Hash) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
@@ -208,7 +258,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Delete(vcursor VCursor, rowsColValues [][]s
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.convert: %v", err)
 	}
-	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
+	return lh.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -230,17 +280,19 @@ type LookupUnicodeLooseMD5HashUnique struct {
 
 // NewLookupUnicodeLooseMD5HashUnique creates a LookupUnicodeLooseMD5HashUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupUnicodeLooseMD5HashUnique{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +302,7 @@ func NewLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vinde
 	}
 
 	// Don't allow upserts for unique vindexes.
-	if err := lhu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
+	if err := lhu.lkp.Init(m, cc.autocommit, false, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lhu, nil
@@ -277,7 +329,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (lhu *LookupUnicodeLooseMD5HashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (lhu *LookupUnicodeLooseMD5HashUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lhu.writeOnly {
 		for range ids {
@@ -290,7 +342,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Map(vcursor VCursor, ids []sqltypes.
 	if err != nil {
 		return nil, err
 	}
-	results, err := lhu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
+	results, err := lhu.lkp.Lookup(ctx, vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
@@ -312,8 +364,51 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Map(vcursor VCursor, ids []sqltypes.
 	return out, nil
 }
 
+// MapResult implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lhu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			num, err := evalengine.ToUint64(result.Rows[0][0])
+			if err != nil {
+				out = append(out, key.DestinationNone{})
+				continue
+			}
+			out = append(out, key.DestinationKeyspaceID(vhash(num)))
+		default:
+			return nil, fmt.Errorf("LookupUnicodeLooseMD5HashUnique.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) Query() (selQuery string, arguments []string) {
+	return lhu.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) AllowBatch() bool {
+	return lhu.lkp.BatchLookup
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
+}
+
 // Verify returns true if ids maps to ksids.
-func (lhu *LookupUnicodeLooseMD5HashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lhu *LookupUnicodeLooseMD5HashUnique) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lhu.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
@@ -330,11 +425,11 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Verify(vcursor VCursor, ids []sqltyp
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lhu.lkp.Verify(vcursor, ids, values)
+	return lhu.lkp.Verify(ctx, vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lhu *LookupUnicodeLooseMD5HashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lhu *LookupUnicodeLooseMD5HashUnique) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
@@ -343,11 +438,11 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Create(vcursor VCursor, rowsColValue
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
+	return lhu.lkp.Create(ctx, vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
-func (lhu *LookupUnicodeLooseMD5HashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
+func (lhu *LookupUnicodeLooseMD5HashUnique) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
@@ -356,11 +451,11 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Delete(vcursor VCursor, rowsColValue
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.convert: %v", err)
 	}
-	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
+	return lhu.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // Update updates the entry in the vindex table.
-func (lhu *LookupUnicodeLooseMD5HashUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+func (lhu *LookupUnicodeLooseMD5HashUnique) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
@@ -373,7 +468,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Update(vcursor VCursor, oldValues []
 	if err != nil {
 		return fmt.Errorf("lookup.Update.convert: %v", err)
 	}
-	return lhu.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lhu.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

@@ -17,11 +17,8 @@ limitations under the License.
 package binlog
 
 import (
-	"flag"
 	"fmt"
 	"strings"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
 
@@ -30,11 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-var useV3ReshardingMode = flag.Bool("binlog_use_v3_resharding_mode", true, "True iff the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column.")
 
 // keyspaceIDResolver is constructed for a tableMap entry in RBR.  It
 // is used for each row, and passed in the value used for figuring out
@@ -55,68 +48,7 @@ type keyspaceIDResolverFactory func(*schema.Table) (int, keyspaceIDResolver, err
 // newKeyspaceIDResolverFactory creates a new
 // keyspaceIDResolverFactory for the provided keyspace and cell.
 func newKeyspaceIDResolverFactory(ctx context.Context, ts *topo.Server, keyspace string, cell string) (keyspaceIDResolverFactory, error) {
-	if *useV3ReshardingMode {
-		return newKeyspaceIDResolverFactoryV3(ctx, ts, keyspace, cell)
-	}
-
-	return newKeyspaceIDResolverFactoryV2(ctx, ts, keyspace)
-}
-
-// newKeyspaceIDResolverFactoryV2 finds the ShardingColumnName / Type
-// from the keyspace, and uses it to find the column name.
-func newKeyspaceIDResolverFactoryV2(ctx context.Context, ts *topo.Server, keyspace string) (keyspaceIDResolverFactory, error) {
-	ki, err := ts.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return nil, err
-	}
-	if ki.ShardingColumnName == "" {
-		return nil, fmt.Errorf("ShardingColumnName needs to be set for a v2 sharding key for keyspace %v", keyspace)
-	}
-	switch ki.ShardingColumnType {
-	case topodatapb.KeyspaceIdType_UNSET:
-		return nil, fmt.Errorf("ShardingColumnType needs to be set for a v2 sharding key for keyspace %v", keyspace)
-	case topodatapb.KeyspaceIdType_BYTES, topodatapb.KeyspaceIdType_UINT64:
-		// Supported values, we're good.
-	default:
-		return nil, fmt.Errorf("unknown ShardingColumnType %v for v2 sharding key for keyspace %v", ki.ShardingColumnType, keyspace)
-	}
-	return func(table *schema.Table) (int, keyspaceIDResolver, error) {
-		for i, col := range table.Fields {
-			if strings.EqualFold(col.Name, ki.ShardingColumnName) {
-				// We found the column.
-				return i, &keyspaceIDResolverFactoryV2{
-					shardingColumnType: ki.ShardingColumnType,
-				}, nil
-			}
-		}
-		// The column was not found.
-		return -1, nil, fmt.Errorf("cannot find column %v in table %v", ki.ShardingColumnName, table.Name)
-	}, nil
-}
-
-// keyspaceIDResolverFactoryV2 uses the KeyspaceInfo of the Keyspace
-// to find the sharding column name.
-type keyspaceIDResolverFactoryV2 struct {
-	shardingColumnType topodatapb.KeyspaceIdType
-}
-
-func (r *keyspaceIDResolverFactoryV2) keyspaceID(v sqltypes.Value) ([]byte, error) {
-	switch r.shardingColumnType {
-	case topodatapb.KeyspaceIdType_BYTES:
-		vBytes, err := v.ToBytes()
-		if err != nil {
-			return nil, err
-		}
-		return vBytes, nil
-	case topodatapb.KeyspaceIdType_UINT64:
-		i, err := evalengine.ToUint64(v)
-		if err != nil {
-			return nil, fmt.Errorf("non numerical value: %v", err)
-		}
-		return key.Uint64Key(i).Bytes(), nil
-	default:
-		panic("unreachable")
-	}
+	return newKeyspaceIDResolverFactoryV3(ctx, ts, keyspace, cell)
 }
 
 // newKeyspaceIDResolverFactoryV3 finds the SrvVSchema in the cell,
@@ -170,7 +102,7 @@ type keyspaceIDResolverFactoryV3 struct {
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {
-	destinations, err := r.vindex.Map(nil, []sqltypes.Value{v})
+	destinations, err := r.vindex.Map(context.TODO(), nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}

@@ -28,7 +28,7 @@ BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_CHROME=${BUILD_CHROME:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
-VITESS_RESOURCES_RELEASE="v1.0"
+VITESS_RESOURCES_RELEASE="v2.0"
 VITESS_RESOURCES_DOWNLOAD_URL="${VITESS_RESOURCES_DOWNLOAD_BASE_URL}/${VITESS_RESOURCES_RELEASE}"
 #
 # 0. Initialization and helper methods.
@@ -56,7 +56,7 @@ install_dep() {
     return
   fi
 
-  echo "installing $name $version"
+  echo "<<< Installing $name $version >>>"
 
   # shellcheck disable=SC2064
   trap "fail '$name build failed'; exit 1" ERR
@@ -100,48 +100,23 @@ install_protoc() {
   case $(uname) in
     Linux)  local platform=linux;;
     Darwin) local platform=osx;;
+    *) echo "ERROR: unsupported platform for protoc"; exit 1;;
   esac
 
   case $(get_arch) in
       aarch64)  local target=aarch_64;;
       x86_64)  local target=x86_64;;
       arm64) case "$platform" in
-          osx) local use_homebrew=1;;
-          *) echo "ERROR: unsupported architecture"; exit 1;;
+          osx) local target=aarch_64;;
+          *) echo "ERROR: unsupported architecture for protoc"; exit 1;;
       esac;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+      *)   echo "ERROR: unsupported architecture for protoc"; exit 1;;
   esac
 
-  # TODO (ajm188): remove this branch after protoc includes signed protoc binaries for M1 Macs.
-  if [[ "$use_homebrew" -eq 1 ]]; then
-    cat >&2 <<WARNING
-WARN: Protobuf does not have a protoc binary for arm64 macos.
-Checking for homebrew installation. Altertatively, you may install the x86-64
-version if you have Rosetta installed; your mileage may vary.
-
-See https://github.com/protocolbuffers/protobuf/issues/9397.
-WARNING
-
-    if [[ -z "$(command -v brew)" ]]; then
-      echo "Could not find \`brew\` command. Please install homebrew and retry." >&2;
-      exit 1;
-    fi
-
-    brew install protobuf;
-    protobuf_base="$(brew list protobuf | grep -E 'LICENSE$' | sed 's:/LICENSE$::')"
-    if [[ -z "$protobuf_base" ]]; then
-      echo "Could not find \`protobuf\` directory after installing. Please verify the output of \`brew info protobuf\`" >&2;
-      exit 1;
-    fi
-
-    ln -snf "${protobuf_base}/bin" "${dist}/bin"
-    ln -snf "${protobuf_base}/include" "${dist}/include"
-  else
-    # This is how we'd download directly from source:
-    # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-    $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
-    unzip "protoc-$version-$platform-${target}.zip"
-  fi
+  # This is how we'd download directly from source:
+  $VTROOT/tools/wget-retry https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  #$VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
+  unzip "protoc-$version-$platform-${target}.zip"
 
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
@@ -151,18 +126,17 @@ WARNING
 install_zookeeper() {
   local version="$1"
   local dist="$2"
-
   zk="zookeeper-$version"
+  vtzk="vt-zookeeper-$version"
   # This is how we'd download directly from source:
-  # wget "https://archive.apache.org/dist/zookeeper/$zk/$zk.tar.gz"
-  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${zk}.tar.gz"
-  tar -xzf "$zk.tar.gz"
-  ant -f "$zk/build.xml" package
-  ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
-  mkdir -p lib
-  cp "$zk/build/zookeeper-contrib/zookeeper-contrib-fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
-  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
-  rm -rf "$zk" "$zk.tar.gz"
+  # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
+  tar -xzf "$dist/apache-$zk.tar.gz"
+  mv $dist/apache-$zk $dist/$vtzk
+  mvn -f $dist/$vtzk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
+  mkdir -p $dist/$vtzk/lib
+  cp "$dist/$vtzk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/$vtzk/lib/$zk-fatjar.jar"
+  rm -rf "$zk.tar.gz"
 }
 
 
@@ -174,20 +148,21 @@ install_etcd() {
   case $(uname) in
     Linux)  local platform=linux; local ext=tar.gz;;
     Darwin) local platform=darwin; local ext=zip;;
+    *)   echo "ERROR: unsupported platform for etcd"; exit 1;;
   esac
 
   case $(get_arch) in
       aarch64)  local target=arm64;;
       x86_64)  local target=amd64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+      arm64)  local target=arm64;;
+      *)   echo "ERROR: unsupported architecture for etcd"; exit 1;;
   esac
 
   file="etcd-${version}-${platform}-${target}.${ext}"
 
   # This is how we'd download directly from source:
-  # download_url=https://github.com/etcd-io/etcd/releases/download
-  # wget "$download_url/$version/$file"
-  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  $VTROOT/tools/wget-retry "https://github.com/etcd-io/etcd/releases/download/$version/$file"
+  #$VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -203,7 +178,6 @@ install_etcd() {
 install_k3s() {
   local version="$1"
   local dist="$2"
-
   case $(uname) in
     Linux)  local platform=linux;;
     *)   echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology will not be available for local examples."; return;;
@@ -211,7 +185,8 @@ install_k3s() {
 
   case $(get_arch) in
       aarch64)  local target="-arm64";;
-      x86_64)  local target="";;
+      x86_64) local target="";;
+      arm64)  local target="-arm64";;
       *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
   esac
 
@@ -235,12 +210,14 @@ install_consul() {
   case $(uname) in
     Linux)  local platform=linux;;
     Darwin) local platform=darwin;;
+    *)   echo "ERROR: unsupported platform for consul"; exit 1;;
   esac
 
   case $(get_arch) in
-      aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+    aarch64)  local target=arm64;;
+    x86_64)  local target=amd64;;
+    arm64)  local target=arm64;;
+    *)   echo "ERROR: unsupported architecture for consul"; exit 1;;
   esac
 
   # This is how we'd download directly from source:
@@ -284,25 +261,27 @@ install_chromedriver() {
 }
 
 install_all() {
+  echo "##local system details..."
+  echo "##platform: $(uname) target:$(get_arch) OS: $os"
   # protoc
-  protoc_ver=3.19.4
+  protoc_ver=21.3
   install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
   # zk
-  zk_ver=${ZK_VERSION:-3.4.14}
+  zk_ver=${ZK_VERSION:-3.8.0}
   if [ "$BUILD_JAVA" == 1 ] ; then
-    install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+    install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist" install_zookeeper
   fi
 
   # etcd
-  command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+  install_dep "etcd" "v3.5.6" "$VTROOT/dist/etcd" install_etcd
 
   # k3s
-  command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
+  command -v k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
 
   # consul
   if [ "$BUILD_CONSUL" == 1 ] ; then
-    install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+    install_dep "Consul" "1.11.4" "$VTROOT/dist/consul" install_consul
   fi
 
   # chromedriver

@@ -33,8 +33,11 @@ const (
 	singletonFlag          = "singleton"
 	singletonContextFlag   = "singleton-context"
 	allowZeroInDateFlag    = "allow-zero-in-date"
+	postponeLaunchFlag     = "postpone-launch"
 	postponeCompletionFlag = "postpone-completion"
 	allowConcurrentFlag    = "allow-concurrent"
+	preferInstantDDL       = "prefer-instant-ddl"
+	fastRangeRotationFlag  = "fast-range-rotation"
 	vreplicationTestSuite  = "vreplication-test-suite"
 )
 
@@ -140,6 +143,11 @@ func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
 }
 
+// IsPostponeLaunch checks if strategy options include -postpone-launch
+func (setting *DDLStrategySetting) IsPostponeLaunch() bool {
+	return setting.hasFlag(postponeLaunchFlag)
+}
+
 // IsPostponeCompletion checks if strategy options include -postpone-completion
 func (setting *DDLStrategySetting) IsPostponeCompletion() bool {
 	return setting.hasFlag(postponeCompletionFlag)
@@ -150,15 +158,19 @@ func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
 	return setting.hasFlag(allowConcurrentFlag)
 }
 
+// IsPreferInstantDDL checks if strategy options include -prefer-instant-ddl
+func (setting *DDLStrategySetting) IsPreferInstantDDL() bool {
+	return setting.hasFlag(preferInstantDDL)
+}
+
+// IsFastRangeRotationFlag checks if strategy options include -fast-range-rotation
+func (setting *DDLStrategySetting) IsFastRangeRotationFlag() bool {
+	return setting.hasFlag(fastRangeRotationFlag)
+}
+
 // IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
-}
-
-// IsSkipTopoFlag returns 'true' if strategy options include `-skip-topo`. This flag is deprecated,
-// and this function is temporary in v14 so that we can print a deprecation message.
-func (setting *DDLStrategySetting) IsSkipTopoFlag() bool {
-	return setting.hasFlag(skipTopoFlag)
 }
 
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
@@ -172,8 +184,11 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
 		case isFlag(opt, allowZeroInDateFlag):
+		case isFlag(opt, postponeLaunchFlag):
 		case isFlag(opt, postponeCompletionFlag):
 		case isFlag(opt, allowConcurrentFlag):
+		case isFlag(opt, preferInstantDDL):
+		case isFlag(opt, fastRangeRotationFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		default:
 			validOpts = append(validOpts, opt)

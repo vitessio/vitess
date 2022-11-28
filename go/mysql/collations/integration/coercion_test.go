@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -58,13 +59,9 @@ func (tc *testConcat) Expression() string {
 }
 
 func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coercion1, coercion2 collations.Coercion) {
-	localCollation := defaultenv.LookupByID(local.Collation)
-	if localCollation.Name() != remote.Collation.Name() {
-		t.Errorf("bad collation resolved: local is %s, remote is %s", localCollation.Name(), remote.Collation.Name())
-	}
-	if local.Coercibility != remote.Coercibility {
-		t.Errorf("bad coercibility resolved: local is %d, remote is %d", local.Coercibility, remote.Coercibility)
-	}
+	localCollation := collations.Local().LookupByID(local.Collation)
+	assert.Equal(t, remote.Collation.Name(), localCollation.Name(), "bad collation resolved: local is %s, remote is %s", localCollation.Name(), remote.Collation.Name())
+	assert.Equal(t, remote.Coercibility, local.Coercibility, "bad coercibility resolved: local is %d, remote is %d", local.Coercibility, remote.Coercibility)
 
 	leftText, err := coercion1(nil, tc.left.Text)
 	if err != nil {
@@ -84,14 +81,10 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local col
 
 	rEBytes, err := remote.Expr.ToBytes()
 	require.NoError(t, err)
-	if !bytes.Equal(concat.Bytes(), rEBytes) {
-		t.Errorf("failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v",
-			tc.left.Text, tc.left.Collation.Name(),
-			tc.right.Text, tc.right.Collation.Name(),
-			leftText, rightText, localCollation.Name(),
-			concat.Bytes(), rEBytes,
-		)
-	}
+	assert.True(t, bytes.Equal(concat.Bytes(), rEBytes), "failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v", tc.left.Text, tc.left.Collation.Name(),
+		tc.right.Text, tc.right.Collation.Name(), leftText, rightText, localCollation.Name(),
+		concat.Bytes(), rEBytes)
+
 }
 
 type testComparison struct {
@@ -106,7 +99,7 @@ func (tc *testComparison) Expression() string {
 }
 
 func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion) {
-	localCollation := defaultenv.LookupByID(local.Collation)
+	localCollation := collations.Local().LookupByID(local.Collation)
 	leftText, err := coerce1(nil, tc.left.Text)
 	if err != nil {
 		t.Errorf("failed to transcode left: %v", err)
@@ -122,10 +115,8 @@ func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local
 	require.NoError(t, err)
 	remoteEquals := rEBytes[0] == '1'
 	localEquals := localCollation.Collate(leftText, rightText, false) == 0
-	if remoteEquals != localEquals {
-		t.Errorf("failed to collate %#v = %#v with collation %s (expected %v, got %v)",
-			leftText, rightText, localCollation.Name(), remoteEquals, localEquals)
-	}
+	assert.Equal(t, localEquals, remoteEquals, "failed to collate %#v = %#v with collation %s (expected %v, got %v)", leftText, rightText, localCollation.Name(), remoteEquals, localEquals)
+
 }
 
 func TestComparisonSemantics(t *testing.T) {
@@ -135,7 +126,11 @@ func TestComparisonSemantics(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	for _, coll := range defaultenv.AllCollations() {
+	if v, err := conn.ServerVersionAtLeast(8, 0, 31); err != nil || !v {
+		t.Skipf("The behavior of Coercion Semantics is not correct before 8.0.31")
+	}
+
+	for _, coll := range collations.Local().AllCollations() {
 		text := verifyTranscoding(t, coll, remote.NewCollation(conn, coll.Name()), []byte(BaseString))
 		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll})
 	}
@@ -175,7 +170,7 @@ func TestComparisonSemantics(t *testing.T) {
 						Coercibility: 0,
 						Repertoire:   collations.RepertoireASCII,
 					}
-					resultLocal, coercionLocal1, coercionLocal2, errLocal := defaultenv.MergeCollations(left, right,
+					resultLocal, coercionLocal1, coercionLocal2, errLocal := collations.Local().MergeCollations(left, right,
 						collations.CoercionOptions{
 							ConvertToSuperset:   true,
 							ConvertWithCoercion: true,
@@ -195,16 +190,14 @@ func TestComparisonSemantics(t *testing.T) {
 
 					resultRemote, errRemote := conn.ExecuteFetch(query, 1, false)
 					if errRemote != nil {
-						if !strings.Contains(errRemote.Error(), "Illegal mix of collations") {
-							t.Fatalf("query %s failed: %v", query, errRemote)
-						}
+						require.True(t, strings.Contains(errRemote.Error(), "Illegal mix of collations"), "query %s failed: %v", query, errRemote)
+
 						if errLocal == nil {
 							t.Errorf("expected %s vs %s to fail coercion: %v", collA.Collation.Name(), collB.Collation.Name(), errRemote)
 							continue
 						}
-						if !strings.HasPrefix(errRemote.Error(), errLocal.Error()) {
-							t.Fatalf("bad error message: expected %q, got %q", errRemote, errLocal)
-						}
+						require.True(t, strings.HasPrefix(normalizeCollationInError(errRemote.Error()), normalizeCollationInError(errLocal.Error())), "bad error message: expected %q, got %q", errRemote, errLocal)
+
 						continue
 					}
 
@@ -213,7 +206,7 @@ func TestComparisonSemantics(t *testing.T) {
 						continue
 					}
 
-					remoteCollation := defaultenv.LookupByName(resultRemote.Rows[0][1].ToString())
+					remoteCollation := collations.Local().LookupByName(resultRemote.Rows[0][1].ToString())
 					remoteCI, _ := resultRemote.Rows[0][2].ToInt64()
 					remoteTest.Test(t, &RemoteCoercionResult{
 						Expr:         resultRemote.Rows[0][0],
@@ -224,4 +217,14 @@ func TestComparisonSemantics(t *testing.T) {
 			}
 		})
 	}
+}
+
+// normalizeCollationInError normalizes the collation name in the error output.
+// Starting with mysql 8.0.30 collations prefixed with `utf8_` have been changed to use `utf8mb3_` instead
+// This is inconsistent with older MySQL versions and causes the tests to fail against it.
+// As a stop-gap solution, this functions normalizes the error messages so that the tests pass until we
+// have a fix for it.
+// TODO: Remove error normalization
+func normalizeCollationInError(errMessage string) string {
+	return strings.ReplaceAll(errMessage, "utf8_", "utf8mb3_")
 }

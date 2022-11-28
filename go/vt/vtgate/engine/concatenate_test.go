@@ -107,7 +107,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 		concatenate := NewConcatenate(sources, tc.ignoreTypes)
 
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
-			qr, err := concatenate.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
+			qr, err := concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 				require.Equal(t, tc.expectedResult, qr)
@@ -118,7 +118,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 		})
 
 		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
-			qr, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
+			qr, err := wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 				require.Equal(t, utils.SortString(fmt.Sprintf("%v", tc.expectedResult.Rows)), utils.SortString(fmt.Sprintf("%v", qr.Rows)))
@@ -141,11 +141,10 @@ func TestConcatenate_WithErrors(t *testing.T) {
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 		}, nil,
 	)
-	ctx := context.Background()
-	_, err := concatenate.TryExecute(&noopVCursor{ctx: ctx}, nil, true)
+	_, err := concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
 
-	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
+	_, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
 
 	concatenate = NewConcatenate(
@@ -155,8 +154,8 @@ func TestConcatenate_WithErrors(t *testing.T) {
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 		}, nil)
 
-	_, err = concatenate.TryExecute(&noopVCursor{ctx: ctx}, nil, true)
+	_, err = concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
-	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
+	_, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
 }

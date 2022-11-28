@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -29,6 +30,7 @@ import (
 func TestEmptyRows(outer *testing.T) {
 	testCases := []struct {
 		opcode      AggregateOpcode
+		origOpcode  AggregateOpcode
 		expectedVal string
 		expectedTyp string
 	}{{
@@ -47,6 +49,11 @@ func TestEmptyRows(outer *testing.T) {
 		opcode:      AggregateSum,
 		expectedVal: "null",
 		expectedTyp: "int64",
+	}, {
+		opcode:      AggregateSum,
+		expectedVal: "0",
+		expectedTyp: "int64",
+		origOpcode:  AggregateCount,
 	}, {
 		opcode:      AggregateMax,
 		expectedVal: "null",
@@ -73,14 +80,15 @@ func TestEmptyRows(outer *testing.T) {
 			oa := &ScalarAggregate{
 				PreProcess: true,
 				Aggregates: []*AggregateParams{{
-					Opcode: test.opcode,
-					Col:    0,
-					Alias:  test.opcode.String(),
+					Opcode:     test.opcode,
+					Col:        0,
+					Alias:      test.opcode.String(),
+					OrigOpcode: test.origOpcode,
 				}},
 				Input: fp,
 			}
 
-			result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+			result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			assert.NoError(err)
 
 			wantResult := sqltypes.MakeTestResult(
@@ -113,7 +121,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 
 	oa := &ScalarAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    0,
 		}},
 		Input:               fp,
@@ -122,7 +130,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})

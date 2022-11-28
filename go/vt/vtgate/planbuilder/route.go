@@ -329,7 +329,7 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
 	}
 	weightStringExpr := &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("weight_string"),
+		Name: sqlparser.NewIdentifierCI("weight_string"),
 		Exprs: []sqlparser.SelectExpr{
 			&sqlparser.AliasedExpr{
 				Expr: aliasExpr.Expr,
@@ -391,7 +391,13 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 			default:
 				return false
 			}
+		} else {
+			if rb.eroute.Opcode == engine.Reference {
+				rb.eroute.RoutingParameters = inner.eroute.RoutingParameters
+				rb.condition = inner.condition
+			}
 		}
+
 		rb.substitutions = append(rb.substitutions, inner.substitutions...)
 		inner.Redirect = rb
 		return true
@@ -411,11 +417,7 @@ func (rb *route) MergeUnion(right *route, isDistinct bool) bool {
 }
 
 func (rb *route) isSingleShard() bool {
-	switch rb.eroute.Opcode {
-	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
-		return true
-	}
-	return false
+	return rb.eroute.Opcode.IsSingleShard()
 }
 
 // JoinCanMerge, SubqueryCanMerge and unionCanMerge have subtly different behaviors.
@@ -466,9 +468,10 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 		return false
 	}
 
-	// if either side is a reference table, we can just merge it and use the opcode of the other side
+	// if either side is a reference table, and we know the other side will only run once,
+	// we can just merge them and use the opcode of the other side
 	if rb.eroute.Opcode == engine.Reference || inner.eroute.Opcode == engine.Reference {
-		return true
+		return rb.isSingleShard() && inner.isSingleShard()
 	}
 
 	switch rb.eroute.Opcode {
@@ -693,6 +696,10 @@ func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExp
 	if vindex == nil {
 		return engine.Scatter, nil, nil
 	}
+	if _, isLookup := vindex.(vindexes.Lookup); isLookup {
+		// the lookup table is keyed by the lookup value, so it does not support nulls
+		return engine.Scatter, nil, nil
+	}
 	if vindex.IsUnique() {
 		return engine.EqualUnique, vindex, &sqlparser.NullVal{}
 	}
@@ -843,11 +850,10 @@ func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
 }
 
 // queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
-func queryTimeout(d sqlparser.CommentDirectives) int {
-	if val, ok := d[sqlparser.DirectiveQueryTimeout]; ok {
-		if intVal, err := strconv.Atoi(val); err == nil {
-			return intVal
-		}
+func queryTimeout(d *sqlparser.CommentDirectives) int {
+	val, _ := d.GetString(sqlparser.DirectiveQueryTimeout, "0")
+	if intVal, err := strconv.Atoi(val); err == nil {
+		return intVal
 	}
 	return 0
 }

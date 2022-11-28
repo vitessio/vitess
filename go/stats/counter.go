@@ -167,3 +167,48 @@ func NewGaugeFunc(name string, help string, f func() int64) *GaugeFunc {
 	}
 	return i
 }
+
+// GaugeFloat64 tracks a cumulative count of a metric.
+// For a one-dimensional or multi-dimensional counter, please use
+// CountersWithSingleLabel or CountersWithMultiLabels instead.
+type GaugeFloat64 struct {
+	i    sync2.AtomicFloat64
+	help string
+}
+
+// NewCounter returns a new GaugeFloat64.
+func NewGaugeFloat64(name string, help string) *GaugeFloat64 {
+	v := &GaugeFloat64{help: help}
+	if name != "" {
+		publish(name, v)
+	}
+	return v
+}
+
+// Set overwrites the current value.
+// This should be used with caution for GaugeFloat64 values
+// only when we are certain that the underlying value we are setting
+// is increment only
+func (v *GaugeFloat64) Set(value float64) {
+	v.i.Set(value)
+}
+
+// Reset resets the counter value to 0.
+func (v *GaugeFloat64) Reset() {
+	v.i.Set(float64(0))
+}
+
+// Get returns the value.
+func (v *GaugeFloat64) Get() float64 {
+	return v.i.Get()
+}
+
+// String implements the expvar.Var interface.
+func (v *GaugeFloat64) String() string {
+	return strconv.FormatFloat(v.i.Get(), 'f', -1, 64)
+}
+
+// Help returns the help string.
+func (v *GaugeFloat64) Help() string {
+	return v.help
+}

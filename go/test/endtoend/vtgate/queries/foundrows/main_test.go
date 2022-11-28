@@ -17,6 +17,7 @@ limitations under the License.
 package foundrows
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -34,62 +35,14 @@ var (
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks_found_rows"
 	cell            = "test_found_rows"
-	schemaSQL       = `create table t2(
-	id3 bigint,
-	id4 bigint,
-	primary key(id3)
-) Engine=InnoDB;
+)
 
-create table t2_id4_idx(
-	id bigint not null auto_increment,
-	id4 bigint,
-	id3 bigint,
-	primary key(id),
-	key idx_id4(id4)
-) Engine=InnoDB;
-`
+var (
+	//go:embed schema.sql
+	schemaSQL string
 
-	vschema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    },
-    "t2_id4_idx": {
-      "type": "lookup_hash",
-      "params": {
-        "table": "t2_id4_idx",
-        "from": "id4",
-        "to": "id3",
-        "autocommit": "true"
-      },
-      "owner": "t2"
-    }
-  },
-  "tables": {
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id3",
-          "name": "hash"
-        },
-        {
-          "column": "id4",
-          "name": "t2_id4_idx"
-        }
-      ]
-    },
-    "t2_id4_idx": {
-      "column_vindexes": [
-        {
-          "column": "id4",
-          "name": "hash"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed vschema.json
+	vschema string
 )
 
 func TestMain(m *testing.M) {
@@ -114,7 +67,7 @@ func TestMain(m *testing.M) {
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
@@ -126,10 +79,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
 
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)

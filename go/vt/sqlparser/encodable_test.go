@@ -39,7 +39,7 @@ func TestEncodable(t *testing.T) {
 	}, {
 		// Single column.
 		in: &TupleEqualityList{
-			Columns: []ColIdent{NewColIdent("pk")},
+			Columns: []IdentifierCI{NewIdentifierCI("pk")},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt64(1)},
 				{sqltypes.NewVarBinary("aa")},
@@ -49,7 +49,7 @@ func TestEncodable(t *testing.T) {
 	}, {
 		// Multiple columns.
 		in: &TupleEqualityList{
-			Columns: []ColIdent{NewColIdent("pk1"), NewColIdent("pk2")},
+			Columns: []IdentifierCI{NewIdentifierCI("pk1"), NewIdentifierCI("pk2")},
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.NewInt64(1),

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -34,7 +35,7 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
@@ -66,13 +67,17 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
 
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertUnsharded,
 		table,
 		table.Keyspace,
 	)
+	applyCommentDirectives(ins, eins)
+
 	var rows sqlparser.Values
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		if eins.Table.AutoIncrement != nil {
@@ -82,13 +87,14 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		if err != nil {
 			return nil, err
 		}
-		if route, ok := plan.(*engine.Route); ok && !route.Keyspace.Sharded && table.Keyspace.Name == route.Keyspace.Name {
+		tc.addAllTables(plan.tables)
+		if route, ok := plan.primitive.(*engine.Route); ok && !route.Keyspace.Sharded && table.Keyspace.Name == route.Keyspace.Name {
 			eins.Query = generateQuery(ins)
-			return eins, nil
+		} else {
+			eins.Input = plan.primitive
+			generateInsertSelectQuery(ins, eins)
 		}
-		eins.Input = plan
-		generateInsertSelectQuery(ins, eins)
-		return eins, nil
+		return newPlanResult(eins, tc.getTables()...), nil
 	case sqlparser.Values:
 		rows = insertValues
 	default:
@@ -98,7 +104,9 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		eins.Query = generateQuery(ins)
 	} else {
 		// Table has auto-inc and has a VALUES clause.
-		if len(ins.Columns) == 0 {
+		// If the column list is nil then add all the columns
+		// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
+		if ins.Columns == nil {
 			if table.ColumnListAuthoritative {
 				populateInsertColumnlist(ins, table)
 			} else {
@@ -116,14 +124,16 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		eins.Query = generateQuery(ins)
 	}
 
-	return eins, nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
-func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	eins := &engine.Insert{
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 	eins.Ignore = bool(ins.Ignore)
 	if ins.OnDup != nil {
 		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
@@ -131,10 +141,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 		}
 		eins.Ignore = true
 	}
-	if len(ins.Columns) == 0 {
-		if table.ColumnListAuthoritative {
-			populateInsertColumnlist(ins, table)
-		}
+	if ins.Columns == nil && table.ColumnListAuthoritative {
+		populateInsertColumnlist(ins, table)
 	}
 
 	applyCommentDirectives(ins, eins)
@@ -187,12 +195,14 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	eins.VindexValues = routeValues
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
-	return eins, nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
 // buildInsertSelectPlan builds an insert using select plan.
-func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, eins *engine.Insert) (engine.Primitive, error) {
+func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, eins *engine.Insert) (*planResult, error) {
 	eins.Opcode = engine.InsertSelect
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 
 	// check if column list is provided if not, then vschema should be able to provide the column list.
 	if len(ins.Columns) == 0 {
@@ -207,9 +217,17 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	if err != nil {
 		return nil, err
 	}
-	eins.Input = plan
+	tc.addAllTables(plan.tables)
+	eins.Input = plan.primitive
 
-	// auto-increment column is added explicility if not provided.
+	// When the table you are steaming data from and table you are inserting from are same.
+	// Then due to locking of the index range on the table we might not be able to insert into the table.
+	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
+	if strings.Contains(plan.primitive.GetTableName(), table.Name.String()) {
+		eins.ForceNonStreaming = true
+	}
+
+	// auto-increment column is added explicitly if not provided.
 	if err := modifyForAutoinc(ins, eins); err != nil {
 		return nil, err
 	}
@@ -221,10 +239,10 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	}
 
 	generateInsertSelectQuery(ins, eins)
-	return eins, nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
-func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (engine.Primitive, error) {
+func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (*planResult, error) {
 	selectStmt, queryPlanner, err := getStatementAndPlanner(ins, vschema)
 	if err != nil {
 		return nil, err
@@ -247,7 +265,7 @@ func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, rese
 func getStatementAndPlanner(
 	ins *sqlparser.Insert,
 	vschema plancontext.VSchema,
-) (selectStmt sqlparser.SelectStatement, configuredPlanner selectPlanner, err error) {
+) (selectStmt sqlparser.SelectStatement, configuredPlanner stmtPlanner, err error) {
 	switch stmt := ins.Rows.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
@@ -295,7 +313,7 @@ func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
 
 func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vindexes.ColumnVindex) {
 	for _, colVindex := range allColVindexes {
-		if colVindex.IgnoreInDML() {
+		if colVindex.IsPartialVindex() {
 			continue
 		}
 		colVindexes = append(colVindexes, colVindex)
@@ -320,7 +338,7 @@ func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.Colu
 
 // findColumn returns the column index where it is placed on the insert column list.
 // Otherwise, return -1 when not found.
-func findColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
+func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	for i, column := range ins.Columns {
 		if col.Equal(column) {
 			return i
@@ -404,7 +422,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 
 // findOrAddColumn finds the position of a column in the insert. If it's
 // absent it appends it to the with NULL values and returns that position.
-func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
+func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	colNum := findColumn(ins, col)
 	if colNum >= 0 {
 		return colNum

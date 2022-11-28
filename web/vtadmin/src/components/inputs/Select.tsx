@@ -22,7 +22,9 @@ import style from './Select.module.scss';
 import { Icon, Icons } from '../Icon';
 
 interface Props<T> {
+    className?: string;
     disabled?: boolean;
+    inputClassName?: string;
     items: T[];
     itemToString?: (item: T | null) => string;
     label: string;
@@ -32,6 +34,8 @@ interface Props<T> {
     renderItem?: (item: T) => JSX.Element | string;
     selectedItem: T | null;
     size?: 'large';
+    description?: string;
+    required?: boolean;
 }
 
 /**
@@ -40,7 +44,9 @@ interface Props<T> {
  * and allows for fine-grained rendering control. :)
  */
 export const Select = <T,>({
+    className,
     disabled,
+    inputClassName,
     itemToString,
     items,
     label,
@@ -50,6 +56,8 @@ export const Select = <T,>({
     renderItem,
     selectedItem,
     size,
+    description,
+    required,
 }: Props<T>) => {
     const _itemToString = React.useCallback(
         (item: T | null): string => {
@@ -81,7 +89,7 @@ export const Select = <T,>({
         selectedItem,
     });
 
-    const containerClass = cx(style.container, {
+    const containerClass = cx(style.container, className, {
         [style.large]: size === 'large',
         [style.open]: isOpen,
         [style.placeholder]: !selectedItem,
@@ -122,7 +130,7 @@ export const Select = <T,>({
             emptyContent = <div className={style.emptyPlaceholder}>{emptyContent || 'No items'}</div>;
         }
         content = (
-            <div className={style.emptyContainer} {...getMenuProps()}>
+            <div className={style.emptyContainer} {...getMenuProps()} data-testid="select-empty">
                 {emptyContent}
             </div>
         );
@@ -130,8 +138,14 @@ export const Select = <T,>({
 
     return (
         <div className={containerClass}>
-            <Label {...getLabelProps()} label={label} />
-            <button type="button" {...getToggleButtonProps()} className={style.toggle} disabled={disabled}>
+            <Label {...getLabelProps()} label={label} required={required} />
+            {description && <div className="mt-[-4px] mb-4">{description}</div>}
+            <button
+                type="button"
+                {...getToggleButtonProps()}
+                className={cx(style.toggle, inputClassName)}
+                disabled={disabled}
+            >
                 {selectedItem ? _renderItem(selectedItem) : placeholder}
                 <Icon className={style.chevron} icon={isOpen ? Icons.chevronUp : Icons.chevronDown} />
             </button>

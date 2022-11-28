@@ -28,7 +28,7 @@ import (
 )
 
 func TestCreateUUID(t *testing.T) {
-	_, err := createUUID("_")
+	_, err := CreateUUIDWithDelimiter("_")
 	assert.NoError(t, err)
 }
 

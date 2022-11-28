@@ -17,11 +17,13 @@ limitations under the License.
 package vtsql
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
@@ -39,6 +41,24 @@ type Config struct {
 
 	Cluster         *vtadminpb.Cluster
 	ResolverOptions *resolver.Options
+
+	dialFunc func(c vitessdriver.Configuration) (*sql.DB, error)
+}
+
+// ConfigOption is a function that mutates a Config. It should return the same
+// Config structure, in a builder-pattern style.
+type ConfigOption func(cfg *Config) *Config
+
+// WithDialFunc returns a ConfigOption that applies the given dial function to
+// a Config.
+//
+// It is used to support dependency injection in tests, and needs to be exported
+// for higher-level tests (for example, package vtadmin/cluster).
+func WithDialFunc(f func(c vitessdriver.Configuration) (*sql.DB, error)) ConfigOption {
+	return func(cfg *Config) *Config {
+		cfg.dialFunc = f
+		return cfg
+	}
 }
 
 // Parse returns a new config with the given cluster ID and name, after

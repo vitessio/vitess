@@ -91,7 +91,52 @@ func TestSubqueryInINClause(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	defer mcmp.Exec(`delete from t1`)
 	mcmp.Exec("insert into t1(id1, id2) values(0,0),(1,1)")
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
+}
+
+func TestSubqueryInUpdate(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	conn := mcmp.VtConn
+
+	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)`)
+	utils.Exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
+	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(10) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+	utils.Exec(t, conn, `update /*vt+ PLANNER=gen4 */ t1 set id2 = (select count(*) from t2) where id1 = 1`)
+	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 = 1`, `[[INT64(2)]]`)
+	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(2) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+}
+
+func TestSubqueryInReference(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`insert into t1(id1, id2) values (1,10), (2, 20), (3, 30), (4, 40), (5, 50)`)
+	mcmp.AssertMatches(`select exists(select * from t1 where id1 = 3)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select exists(select * from t1 where id1 = 9)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select exists(select * from t1)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select exists(select * from t1 where id2 = 30)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select exists(select * from t1 where id2 = 9)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select count(*) from t1 where id2 = 9`, `[[INT64(0)]]`)
+
+	mcmp.AssertMatches(`select 1 in (select 1 from t1 where id1 = 3)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select 1 in (select 1 from t1 where id1 = 9)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select 1 in (select id1 from t1)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select 1 in (select 1 from t1 where id2 = 30)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select 1 in (select 1 from t1 where id2 = 9)`, `[[INT64(0)]]`)
+
+	mcmp.AssertMatches(`select 1 not in (select 1 from t1 where id1 = 3)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select 1 not in (select 1 from t1 where id1 = 9)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select 1 not in (select id1 from t1)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select 1 not in (select 1 from t1 where id2 = 30)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select 1 not in (select 1 from t1 where id2 = 9)`, `[[INT64(1)]]`)
+
+	mcmp.AssertMatches(`select (select id2 from t1 where id1 = 3)`, `[[INT64(30)]]`)
+	mcmp.AssertMatches(`select (select id2 from t1 where id1 = 9)`, `[[NULL]]`)
+	mcmp.AssertMatches(`select (select id1 from t1 where id2 = 30)`, `[[INT64(3)]]`)
+	mcmp.AssertMatches(`select (select id1 from t1 where id2 = 9)`, `[[NULL]]`)
 }

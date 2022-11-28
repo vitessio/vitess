@@ -73,6 +73,14 @@ Note: hook names may not contain slash (/) characters.
 		Args:                  cobra.MinimumNArgs(2),
 		RunE:                  commandExecuteHook,
 	}
+	// GetFullStatus makes a FullStatus gRPC call to a vttablet.
+	GetFullStatus = &cobra.Command{
+		Use:                   "GetFullStatus <alias>",
+		Short:                 "Outputs a JSON structure that contains full status of MySQL including the replication information, semi-sync information, GTID information among others.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetFullStatus,
+	}
 	// GetPermissions makes a GetPermissions gRPC call to a vtctld.
 	GetPermissions = &cobra.Command{
 		Use:                   "GetPermissions <tablet_alias>",
@@ -114,9 +122,9 @@ Valid output formats are "awk" and "json".`,
 	// GetTabletVersion makes a GetVersion RPC to a vtctld.
 	GetTabletVersion = &cobra.Command{
 		Use:                   "GetTabletVersion <alias>",
-		Aliases:               []string{"GetVersion"},
 		Short:                 "Print the version of a tablet from its debug vars.",
 		DisableFlagsInUseLine: true,
+		Aliases:               []string{"GetVersion"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetTabletVersion,
 	}
@@ -147,9 +155,9 @@ Valid output formats are "awk" and "json".`,
 	// RunHealthCheck makes a RunHealthCheck gRPC call to a vtctld.
 	RunHealthCheck = &cobra.Command{
 		Use:                   "RunHealthCheck <tablet_alias>",
-		Aliases:               []string{"RunHealthcheck"},
 		Short:                 "Runs a healthcheck on the remote tablet.",
 		DisableFlagsInUseLine: true,
+		Aliases:               []string{"RunHealthcheck"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandRunHealthCheck,
 	}
@@ -296,6 +304,30 @@ func commandExecuteHook(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandGetFullStatus(cmd *cobra.Command, args []string) error {
+	aliasStr := cmd.Flags().Arg(0)
+	alias, err := topoproto.ParseTabletAlias(aliasStr)
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetFullStatus(commandCtx, &vtctldatapb.GetFullStatusRequest{TabletAlias: alias})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp.Status)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
 	return nil
 }
 
@@ -589,21 +621,22 @@ func commandStopReplication(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
+	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it.")
 	Root.AddCommand(ChangeTabletType)
 
 	DeleteTablets.Flags().BoolVarP(&deleteTabletsOptions.AllowPrimary, "allow-primary", "p", false, "Allow the primary tablet of a shard to be deleted. Use with caution.")
 	Root.AddCommand(DeleteTablets)
 
 	Root.AddCommand(ExecuteHook)
+	Root.AddCommand(GetFullStatus)
 	Root.AddCommand(GetPermissions)
 	Root.AddCommand(GetTablet)
 
-	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by")
-	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "List of cells to filter tablets by")
-	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "Keyspace to filter tablets by")
-	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "Shard to filter tablets by")
-	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk)")
+	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by.")
+	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "List of cells to filter tablets by.")
+	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "Keyspace to filter tablets by.")
+	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "Shard to filter tablets by.")
+	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk).")
 	GetTablets.Flags().BoolVar(&getTabletsOptions.Strict, "strict", false, "Require all cells to return successful tablet data. Without --strict, tablet listings may be partial.")
 	Root.AddCommand(GetTablets)
 

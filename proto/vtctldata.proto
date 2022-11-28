@@ -85,6 +85,14 @@ message MaterializeSettings {
   string external_cluster = 8;
   // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
   MaterializationIntent materialization_intent = 9;
+  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTable
+  string source_time_zone =10;
+  // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
+  // and to the SourceTimeZone in reverse workflows
+  string target_time_zone = 11;
+  repeated string source_shards = 12;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 13;
 }
 
 /* Data types for VtctldServer */
@@ -107,6 +115,8 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
+  string workflow_type = 6;
+  string workflow_sub_type = 7;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -194,6 +204,21 @@ message ApplyRoutingRulesRequest {
 }
 
 message ApplyRoutingRulesResponse {
+}
+
+message ApplyShardRoutingRulesRequest {
+  vschema.ShardRoutingRules shard_routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyShardRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyShardRoutingRulesResponse {
 }
 
 message ApplySchemaRequest {
@@ -288,11 +313,11 @@ message CreateKeyspaceRequest {
   // AllowEmptyVSchema allows a keyspace to be created with no vschema.
   bool allow_empty_v_schema = 3;
 
-  // ShardingColumnName specifies the column to use for sharding operations.
-  string sharding_column_name = 4;
-  // ShardingColumnType specifies the type of the column to use for sharding
-  // operations.
-  topodata.KeyspaceIdType sharding_column_type = 5;
+  // OBSOLETE string sharding_column_name = 4;
+  reserved 4;
+
+  // OBSOLETE topodata.KeyspaceIdType sharding_column_type = 5;
+  reserved 5;
 
   // ServedFroms specifies a set of db_type:keyspace pairs used to serve
   // traffic for the keyspace.
@@ -306,6 +331,9 @@ message CreateKeyspaceRequest {
   // SnapshotTime specifies the snapshot time for this keyspace. It is required
   // to create a SNAPSHOT keyspace.
   vttime.Time snapshot_time = 9;
+  // DurabilityPolicy is the durability policy to be
+  // used for this keyspace.
+  string durability_policy = 10;
 }
 
 message CreateKeyspaceResponse {
@@ -537,7 +565,15 @@ message GetCellsAliasesRequest {
 }
 
 message GetCellsAliasesResponse {
-  map<string,topodata.CellsAlias> aliases = 1;
+  map<string, topodata.CellsAlias> aliases = 1;
+}
+
+message GetFullStatusRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetFullStatusResponse {
+  replicationdata.FullStatus status = 1;
 }
 
 message GetKeyspacesRequest {
@@ -587,6 +623,9 @@ message GetSchemaRequest {
   // rather than full schema information for each table. It is ignored if
   // TableNamesOnly is set to true.
   bool table_sizes_only = 6;
+  // TableSchemaOnly specifies whether to limit the results to just table/view
+  // schema definition (CREATE TABLE/VIEW statements) and skip column/field information
+  bool table_schema_only = 7;
 }
 
 message GetSchemaResponse {
@@ -602,17 +641,24 @@ message GetShardResponse {
   Shard shard = 1;
 }
 
+message GetShardRoutingRulesRequest {
+}
+
+message GetShardRoutingRulesResponse {
+  vschema.ShardRoutingRules shard_routing_rules = 1;
+}
+
 message GetSrvKeyspaceNamesRequest {
   repeated string cells = 1;
 }
 
 message GetSrvKeyspaceNamesResponse {
-    // Names is a mapping of cell name to a list of SrvKeyspace names.
-    map<string, NameList> names = 1;
+  // Names is a mapping of cell name to a list of SrvKeyspace names.
+  map<string, NameList> names = 1;
 
-    message NameList {
-      repeated string names = 1;
-    }
+  message NameList {
+    repeated string names = 1;
+  }
 }
 
 message GetSrvKeyspacesRequest {
@@ -627,6 +673,27 @@ message GetSrvKeyspacesResponse {
   map<string, topodata.SrvKeyspace> srv_keyspaces = 1;
 }
 
+message UpdateThrottlerConfigRequest {
+  string keyspace = 1;
+  // Enable instructs to enable the throttler
+  bool enable = 2;
+  // Disable instructs to disable the throttler
+  bool disable = 3;
+  // Threshold for throttler (with no custom query, ie using default query, only positive values are considered)
+  double threshold = 4;
+  // CustomQuery replaces the default replication lag query
+  string custom_query = 5;
+  // CustomQuerySet indicates that the value of CustomQuery has changed
+  bool custom_query_set = 6;
+  // CheckAsCheckSelf instructs the throttler to respond to /check requests by checking the tablet's own health
+  bool check_as_check_self=7;
+  // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
+  bool check_as_check_shard=8;
+}
+
+message UpdateThrottlerConfigResponse {
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }
@@ -639,7 +706,7 @@ message GetSrvVSchemasRequest {
   repeated string cells = 2;
 }
 
-message GetSrvVSchemasResponse {  
+message GetSrvVSchemasResponse {
   // SrvVSchemas is a mapping of cell name to SrvVSchema
   map<string, vschema.SrvVSchema> srv_v_schemas = 1;
 }
@@ -679,6 +746,23 @@ message GetTabletsRequest {
 
 message GetTabletsResponse {
   repeated topodata.Tablet tablets = 1;
+}
+
+message GetTopologyPathRequest {
+  string path = 1;
+}
+
+message GetTopologyPathResponse {
+  TopologyCell cell = 1;
+}
+
+message TopologyCell {
+  string name = 1;
+  string path = 2;
+  // Data is the file contents of the cell located at path.
+  // It is only populated if the cell is a terminal node.
+  string data = 3;
+  repeated string children = 4;
 }
 
 message GetVSchemaRequest {
@@ -798,6 +882,8 @@ message RefreshStateByShardRequest {
 
 message RefreshStateByShardResponse {
   bool is_partial_refresh = 1;
+  // This explains why we had a partial refresh (if we did)
+  string partial_refresh_details = 2;
 }
 
 message ReloadSchemaRequest {
@@ -915,6 +1001,16 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
+message SetKeyspaceDurabilityPolicyRequest {
+  string keyspace = 1;
+  string durability_policy = 2;
+}
+
+message SetKeyspaceDurabilityPolicyResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
 message SetKeyspaceServedFromRequest {
   string keyspace = 1;
   topodata.TabletType tablet_type = 2;
@@ -930,8 +1026,10 @@ message SetKeyspaceServedFromResponse {
 
 message SetKeyspaceShardingInfoRequest {
   string keyspace = 1;
-  string column_name = 2;
-  topodata.KeyspaceIdType column_type = 3;
+  // OBSOLETE string column_name = 2;
+  reserved 2;
+  // OBSOLETE topodata.KeyspaceIdType column_type = 3;
+  reserved 3;
   bool force = 4;
 }
 
@@ -1167,6 +1265,15 @@ message ValidateVersionKeyspaceRequest {
 message ValidateVersionKeyspaceResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message ValidateVersionShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message ValidateVersionShardResponse {
+  repeated string results = 1;
 }
 
 message ValidateVSchemaRequest {

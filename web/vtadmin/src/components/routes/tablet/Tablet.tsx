@@ -32,6 +32,8 @@ import { TabContainer } from '../../tabs/TabContainer';
 import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
+import { env } from '../../../util/env';
+import FullStatus from './FullStatus';
 
 interface RouteParams {
     alias: string;
@@ -46,6 +48,7 @@ export const Tablet = () => {
 
     const { data: tablet, ...tq } = useTablet({ alias, clusterID });
     const { data: debugVars } = useExperimentalTabletDebugVars({ alias, clusterID });
+
     if (tq.error) {
         return (
             <div className={style.placeholder}>
@@ -103,8 +106,8 @@ export const Tablet = () => {
             <ContentContainer>
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
+                    <Tab text="Full Status" to={`${url}/full-status`} />
                     <Tab text="JSON" to={`${url}/json`} />
-
                     <ReadOnlyGate>
                         <Tab text="Advanced" to={`${url}/advanced`} />
                     </ReadOnlyGate>
@@ -119,15 +122,17 @@ export const Tablet = () => {
                         <div>
                             <Code code={JSON.stringify(tablet, null, 2)} />
 
-                            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                            {env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                                 <Code code={JSON.stringify(debugVars, null, 2)} />
                             )}
                         </div>
                     </Route>
 
+                    <Route path={`${url}/full-status`}>{tablet && <FullStatus tablet={tablet} />}</Route>
+
                     {!isReadOnlyMode() && (
                         <Route path={`${path}/advanced`}>
-                            <Advanced tablet={tablet} />
+                            <Advanced alias={alias} clusterID={clusterID} tablet={tablet} />
                         </Route>
                     )}
 

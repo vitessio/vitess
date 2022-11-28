@@ -61,6 +61,11 @@ func (mysqlGRFlavor) startReplicationUntilAfter(pos Position) string {
 	return ""
 }
 
+// startSQLThreadUntilAfter is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return ""
+}
+
 // stopReplicationCommand returns the command to stop the replication.
 // we return empty here since `STOP GROUP_REPLICATION` should be called by
 // the external orchestrator
@@ -73,6 +78,11 @@ func (mysqlGRFlavor) stopIOThreadCommand() string {
 	return ""
 }
 
+// stopSQLThreadCommand is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) stopSQLThreadCommand() string {
+	return ""
+}
+
 // startSQLThreadCommand is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) startSQLThreadCommand() string {
 	return ""
@@ -80,6 +90,11 @@ func (mysqlGRFlavor) startSQLThreadCommand() string {
 
 // resetReplicationCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) resetReplicationCommands(c *Conn) []string {
+	return []string{}
+}
+
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mysqlGRFlavor) resetReplicationParametersCommands(c *Conn) []string {
 	return []string{}
 }
 
@@ -224,13 +239,38 @@ func (mysqlGRFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
 }
 
+func (mysqlGRFlavor) baseShowTables() string {
+	return mysqlFlavor{}.baseShowTables()
+}
+
 func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlGRFlavor) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case InstantDDLFlavorCapability,
+		InstantExpandEnumCapability,
+		InstantAddLastColumnFlavorCapability,
+		InstantAddDropVirtualColumnFlavorCapability,
+		InstantChangeColumnDefaultFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 0)
+	case InstantAddDropColumnFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case TransactionalGtidExecutedFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
+	case FastDropTableFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
+	case MySQLJSONFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 5, 7, 0)
+	case MySQLUpgradeInServerFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	case DynamicRedoLogCapacityFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
+	default:
+		return false, nil
+	}
 }
 
 func init() {

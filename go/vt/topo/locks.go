@@ -17,21 +17,21 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"encoding/json"
-	"flag"
 	"os"
 	"os/user"
 	"path"
 	"sync"
 	"time"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains utility methods and definitions to lock
@@ -46,7 +46,7 @@ var (
 	// RemoteOperationTimeout is used for operations where we have to
 	// call out to another process.
 	// Used for RPC calls (including topo server calls)
-	RemoteOperationTimeout = flag.Duration("remote_operation_timeout", 30*time.Second, "time to wait for a remote operation")
+	RemoteOperationTimeout = 30 * time.Second
 )
 
 // Lock describes a long-running lock on a keyspace or a shard.
@@ -60,6 +60,16 @@ type Lock struct {
 
 	// Status is the current status of the Lock.
 	Status string
+}
+
+func init() {
+	for _, cmd := range FlagBinaries {
+		servenv.OnParseFor(cmd, registerTopoLockFlags)
+	}
+}
+
+func registerTopoLockFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&RemoteOperationTimeout, "remote_operation_timeout", RemoteOperationTimeout, "time to wait for a remote operation")
 }
 
 // newLock creates a new Lock.
@@ -122,13 +132,14 @@ var locksKey locksKeyType
 // * changing a keyspace sharding info fields (is this one necessary?)
 // * changing a keyspace 'ServedFrom' field (is this one necessary?)
 // * resharding operations:
-//   * horizontal resharding: includes changing the shard's 'ServedType',
+//   - horizontal resharding: includes changing the shard's 'ServedType',
 //     as well as the associated horizontal resharding operations.
-//   * vertical resharding: includes changing the keyspace 'ServedFrom'
+//   - vertical resharding: includes changing the keyspace 'ServedFrom'
 //     field, as well as the associated vertical resharding operations.
-//   * 'vtctl SetShardIsPrimaryServing' emergency operations
-//   * 'vtctl SetShardTabletControl' emergency operations
-//   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
+//   - 'vtctl SetShardIsPrimaryServing' emergency operations
+//   - 'vtctl SetShardTabletControl' emergency operations
+//   - 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
+//
 // * keyspace-wide schema changes
 func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
@@ -208,12 +219,32 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	return nil
 }
 
+// CheckKeyspaceLockedAndRenew can be called on a context to make sure we have the lock
+// for a given keyspace. The function also attempts to renew the lock.
+func CheckKeyspaceLockedAndRenew(ctx context.Context, keyspace string) error {
+	// extract the locksInfo pointer
+	i, ok := ctx.Value(locksKey).(*locksInfo)
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no locksInfo)", keyspace)
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	// find the individual entry
+	entry, ok := i.info[keyspace]
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no lockInfo in map)", keyspace)
+	}
+	// try renewing lease:
+	return entry.lockDescriptor.Check(ctx)
+}
+
 // lockKeyspace will lock the keyspace in the topology server.
 // unlockKeyspace should be called if this returns no error.
 func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyspaceForAction")
@@ -266,13 +297,44 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 // UpdateShardFields, which is not locking the shard object. The
 // current list of actions that lock a shard are:
 // * all Vitess-controlled re-parenting operations:
-//   * InitShardPrimary
-//   * PlannedReparentShard
-//   * EmergencyReparentShard
-// * operations that we don't want to conflict with re-parenting:
-//   * DeleteTablet when it's the shard's current primary
+//   - InitShardPrimary
+//   - PlannedReparentShard
+//   - EmergencyReparentShard
 //
+// * any vtorc recovery e.g
+//   - RecoverDeadPrimary
+//   - ElectNewPrimary
+//   - FixPrimary
+//
+// * before any replication repair from replication manager
+//
+// * operations that we don't want to conflict with re-parenting:
+//   - DeleteTablet when it's the shard's current primary
 func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+	return ts.internalLockShard(ctx, keyspace, shard, action, true)
+}
+
+// TryLockShard will lock the shard, and return:
+// - a context with a locksInfo structure for future reference.
+// - an unlock method
+// - an error if anything failed.
+//
+// `TryLockShard` is different from `LockShard`. If there is already a lock on given shard,
+// then unlike `LockShard` instead of waiting and blocking the client it returns with
+// `Lock already exists` error. With current implementation it may not be able to fail-fast
+// for some scenarios. For example there is a possibility that a thread checks for lock for
+// a given shard but by the time it acquires the lock, some other thread has already acquired it,
+// in this case the client will block until the other caller releases the lock or the
+// client call times out (just like standard `LockShard' implementation). In short the lock checking
+// and acquiring is not under the same mutex in current implementation of `TryLockShard`.
+//
+// We are currently using `TryLockShard` during tablet discovery in Vtorc recovery
+func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+	return ts.internalLockShard(ctx, keyspace, shard, action, false)
+}
+
+// isBlocking is used to indicate whether the call should fail-fast or not.
+func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action string, isBlocking bool) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -291,7 +353,13 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 
 	// lock
 	l := newLock(action)
-	lockDescriptor, err := l.lockShard(ctx, ts, keyspace, shard)
+	var lockDescriptor LockDescriptor
+	var err error
+	if isBlocking {
+		lockDescriptor, err = l.lockShard(ctx, ts, keyspace, shard)
+	} else {
+		lockDescriptor, err = l.tryLockShard(ctx, ts, keyspace, shard)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -352,9 +420,19 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 // lockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
 func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
+	return l.internalLockShard(ctx, ts, keyspace, shard, true)
+}
+
+// tryLockShard will lock the shard in the topology server but unlike `lockShard` it fail-fast if not able to get lock
+// UnlockShard should be called if this returns no error.
+func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
+	return l.internalLockShard(ctx, ts, keyspace, shard, false)
+}
+
+func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
@@ -368,7 +446,10 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 	if err != nil {
 		return nil, err
 	}
-	return ts.globalCell.Lock(ctx, shardPath, j)
+	if isBlocking {
+		return ts.globalCell.Lock(ctx, shardPath, j)
+	}
+	return ts.globalCell.TryLock(ctx, shardPath, j)
 }
 
 // unlockShard unlocks a previously locked shard.

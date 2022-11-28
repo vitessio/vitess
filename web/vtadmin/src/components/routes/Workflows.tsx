@@ -33,14 +33,17 @@ import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
+import { UseQueryResult } from 'react-query';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
-    const { data } = useWorkflows();
+    const workflowsQuery = useWorkflows();
+
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const sortedData = React.useMemo(() => {
-        const mapped = (data || []).map((workflow) => ({
+        const mapped = (workflowsQuery.data || []).map((workflow) => ({
             clusterID: workflow.cluster?.id,
             clusterName: workflow.cluster?.name,
             keyspace: workflow.keyspace,
@@ -51,10 +54,12 @@ export const Workflows = () => {
             target: workflow.workflow?.target?.keyspace,
             targetShards: workflow.workflow?.target?.shards,
             timeUpdated: getTimeUpdated(workflow),
+            workflowType: workflow.workflow?.workflow_type,
+            workflowSubType: workflow.workflow?.workflow_sub_type,
         }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
-    }, [data, filter]);
+    }, [workflowsQuery.data, filter]);
 
     const renderRows = (rows: typeof sortedData) =>
         rows.map((row, idx) => {
@@ -67,6 +72,14 @@ export const Workflows = () => {
                 <tr key={idx}>
                     <DataCell>
                         <div className="font-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
+                        {row.workflowType && (
+                            <div className="text-secondary text-success-200">
+                                {row.workflowType}
+                                {row.workflowSubType && row.workflowSubType !== 'None' && (
+                                    <span className="text-sm">{' (' + row.workflowSubType + ')'}</span>
+                                )}
+                            </div>
+                        )}
                         <div className="text-sm text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>
@@ -150,6 +163,8 @@ export const Workflows = () => {
                     data={sortedData}
                     renderRows={renderRows}
                 />
+
+                <QueryLoadingPlaceholder query={workflowsQuery as UseQueryResult} />
             </ContentContainer>
         </div>
     );

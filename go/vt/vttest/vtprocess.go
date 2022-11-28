@@ -190,16 +190,16 @@ var QueryServerArgs = []string{
 // VtcomboProcess returns a VtProcess handle for a local `vtcombo` service,
 // configured with the given Config.
 // The process must be manually started by calling WaitStart()
-func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProcess {
+func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (*VtProcess, error) {
 	vt := &VtProcess{
 		Name:         "vtcombo",
-		Directory:    env.Directory(),
-		LogDirectory: env.LogDirectory(),
-		Binary:       env.BinaryPath("vtcombo"),
-		Port:         env.PortForProtocol("vtcombo", ""),
-		PortGrpc:     env.PortForProtocol("vtcombo", "grpc"),
-		HealthCheck:  env.ProcessHealthCheck("vtcombo"),
-		Env:          env.EnvVars(),
+		Directory:    environment.Directory(),
+		LogDirectory: environment.LogDirectory(),
+		Binary:       environment.BinaryPath("vtcombo"),
+		Port:         environment.PortForProtocol("vtcombo", ""),
+		PortGrpc:     environment.PortForProtocol("vtcombo", "grpc"),
+		HealthCheck:  environment.ProcessHealthCheck("vtcombo"),
+		Env:          environment.EnvVars(),
 	}
 
 	user, pass := mysql.Auth()
@@ -208,7 +208,6 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if charset == "" {
 		charset = DefaultCharset
 	}
-
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"--db_charset", charset,
@@ -223,14 +222,14 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
-		"--planner_version", args.PlannerVersion,
+		"--planner-version", args.PlannerVersion,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
 	}...)
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
-	vt.ExtraArgs = append(vt.ExtraArgs, env.VtcomboArguments()...)
+	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
 	if args.SchemaDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema_dir", args.SchemaDir}...)
@@ -244,8 +243,8 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.TabletHostName != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
 	}
-	if *servenv.GRPCAuth == "mtls" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", *servenv.GRPCAuth, "--grpc_key", *servenv.GRPCKey, "--grpc_cert", *servenv.GRPCCert, "--grpc_ca", *servenv.GRPCCA, "--grpc_auth_mtls_allowed_substrings", *servenv.ClientCertSubstrings}...)
+	if servenv.GRPCAuth() == "mtls" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", servenv.GRPCKey(), "--grpc_cert", servenv.GRPCCert(), "--grpc_ca", servenv.GRPCCertificateAuthority(), "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.InitWorkflowManager {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--workflow_manager_init"}...)
@@ -253,8 +252,8 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
-	if *servenv.MySQLServerVersion != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", *servenv.MySQLServerVersion)
+	if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", mySQLVersion)
 	}
 
 	if socket != "" {
@@ -271,7 +270,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		}...)
 	}
 
-	vtcomboMysqlPort := env.PortForProtocol("vtcombo_mysql_port", "")
+	vtcomboMysqlPort := environment.PortForProtocol("vtcombo_mysql_port", "")
 	vtcomboMysqlBindAddress := "localhost"
 	if args.MySQLBindHost != "" {
 		vtcomboMysqlBindAddress = args.MySQLBindHost
@@ -292,5 +291,5 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		}...)
 	}
 
-	return vt
+	return vt, nil
 }

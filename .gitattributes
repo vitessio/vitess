@@ -1,0 +1,6 @@
+web/vtadmin/src/proto/** linguist-generated=true
+web/vtadmin/src/proto/*.js -diff
+web/vtadmin/src/proto/*.ts -diff
+go/vt/proto/** linguist-generated=true
+go/vt/proto/*/*.pb.go -diff
+go/vt/sqlparser/sql.go linguist-generated=true -diff

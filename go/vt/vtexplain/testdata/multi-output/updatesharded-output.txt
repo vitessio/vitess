@@ -52,19 +52,19 @@ update user set name='alicia' where name='alice'
 8 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
-update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname=1 where nickname != ''
+update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info='apa' where name != 'hog'
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/-40: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/-40: commit
 1 ks_sharded/40-80: begin
-1 ks_sharded/40-80: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/40-80: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/40-80: commit
 1 ks_sharded/80-c0: begin
-1 ks_sharded/80-c0: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/80-c0: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/80-c0: commit
 1 ks_sharded/c0-: begin
-1 ks_sharded/c0-: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/c0-: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
@@ -85,19 +85,17 @@ begin
 update user set nickname='alice' where id=1
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: savepoint x1
 1 ks_sharded/-40: update `user` set nickname = 'alice' where id = 1 limit 10001
 
 ----------------------------------------------------------------------
 update user set nickname='bob' where id=1
 
-2 ks_sharded/-40: savepoint x2
-3 ks_sharded/-40: update `user` set nickname = 'bob' where id = 1 limit 10001
+2 ks_sharded/-40: update `user` set nickname = 'bob' where id = 1 limit 10001
 
 ----------------------------------------------------------------------
 commit
 
-4 ks_sharded/-40: commit
+3 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 begin
@@ -107,22 +105,38 @@ begin
 update user set nickname='alice' where id=1
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: savepoint x3
 1 ks_sharded/-40: update `user` set nickname = 'alice' where id = 1 limit 10001
 
 ----------------------------------------------------------------------
 update user set nickname='bob' where id=3
 
-2 ks_sharded/-40: savepoint x4
-3 ks_sharded/40-80: begin
-3 ks_sharded/40-80: savepoint x3
-3 ks_sharded/40-80: savepoint x4
-3 ks_sharded/40-80: update `user` set nickname = 'bob' where id = 3 limit 10001
+2 ks_sharded/40-80: begin
+2 ks_sharded/40-80: update `user` set nickname = 'bob' where id = 3 limit 10001
 
 ----------------------------------------------------------------------
 commit
 
-4 ks_sharded/-40: commit
-5 ks_sharded/40-80: commit
+3 ks_sharded/-40: commit
+4 ks_sharded/40-80: commit
+
+----------------------------------------------------------------------
+begin
+
+
+----------------------------------------------------------------------
+update user set nickname='alice' where id in (1,4)
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: savepoint x1
+1 ks_sharded/-40: update `user` set nickname = 'alice' where id in (1, 4) limit 10001
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: savepoint x1
+1 ks_sharded/c0-: update `user` set nickname = 'alice' where id in (1, 4) limit 10001
+
+----------------------------------------------------------------------
+commit
+
+2 ks_sharded/-40: commit
+3 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------

@@ -29,6 +29,8 @@ os.Rename
 (*github.com/spf13/cobra.Command).MarkFlagRequired
 (*github.com/spf13/cobra.Command).MarkPersistentFlagFilename
 
+(*github.com/spf13/pflag.FlagSet).MarkDeprecated
+
 (*google.golang.org/grpc.ClientConn).Close
 (*google.golang.org/grpc.Server).Serve
 

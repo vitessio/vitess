@@ -92,6 +92,17 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 	}
 }
 
+// CheckRetryPartialMigration attempts to retry a migration where a subset of shards failed
+func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectAtLeastRowsAffected uint64) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	assert.GreaterOrEqual(t, expectAtLeastRowsAffected, r.RowsAffected)
+}
+
 // CheckCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCancelPossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
@@ -133,11 +144,49 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	}
 }
 
+// CheckLaunchMigration attempts to launch a migration, and expects success by counting affected rows
+func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, launchShards string, expectLaunchPossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a launch vitess_shards %a",
+		sqltypes.StringBindVariable(uuid),
+		sqltypes.StringBindVariable(launchShards),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectLaunchPossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
+
+// CheckCompleteAllMigrations completes all pending migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
+	completeQuery := "alter vitess_migration complete all"
+	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
 // CheckCancelAllMigrations cancels all pending migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	cancelQuery := "alter vitess_migration cancel all"
 	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
+// CheckLaunchAllMigrations launches all queued posponed migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
+	completeQuery := "alter vitess_migration launch all"
+	r := VtgateExecQuery(t, vtParams, completeQuery, "")
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -172,6 +221,10 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 
 // WaitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
 func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -187,6 +240,11 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		countMatchedShards := 0
 		r := VtgateExecQuery(t, vtParams, query, "")
 		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				// irrelevant shard
+				continue
+			}
 			lastKnownStatus = row["migration_status"].ToString()
 			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
 				countMatchedShards++
@@ -234,4 +292,55 @@ func ReadMigrationLogs(t *testing.T, vtParams *mysql.ConnParams, uuid string) (l
 		logs = append(logs, migrationLog)
 	}
 	return logs
+}
+
+// ThrottleAllMigrations fully throttles online-ddl apps
+func ThrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
+	query := "alter vitess_migration throttle all expire '24h' ratio 1"
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
+// UnthrottleAllMigrations cancels migration throttling
+func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
+	query := "alter vitess_migration unthrottle all"
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
+// CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
+func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, appName string, expectFind bool) {
+	query := "show vitess_throttled_apps"
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	found := false
+	for _, row := range r.Named().Rows {
+		if row.AsString("app", "") == appName {
+			found = true
+		}
+	}
+	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", appName, found)
+}
+
+// WaitForThrottledTimestamp waits for a migration to have a non-empty last_throttled_timestamp
+func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid string, timeout time.Duration) (
+	row sqltypes.RowNamedValues,
+	startedTimestamp string,
+	lastThrottledTimestamp string,
+) {
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		rs := ReadMigrations(t, vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row = range rs.Named().Rows {
+			startedTimestamp = row.AsString("started_timestamp", "")
+			require.NotEmpty(t, startedTimestamp)
+			lastThrottledTimestamp = row.AsString("last_throttled_timestamp", "")
+			if lastThrottledTimestamp != "" {
+				// good. This is what we've been waiting for.
+				return row, startedTimestamp, lastThrottledTimestamp
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
+	return
 }

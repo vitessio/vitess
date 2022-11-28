@@ -153,7 +153,7 @@ func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.Lite
 	return ErrColumNotFound
 }
 
-// ReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
+// AddOrReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
 // into a given value
 func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser.Literal) error {
 	if err := e.ReplaceInsertColumnVal(colName, val); err != ErrColumNotFound {
@@ -165,7 +165,7 @@ func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser
 	insert, _ := e.Stmt.(*sqlparser.Insert)
 	rows, _ := insert.Rows.(sqlparser.Values)
 	rows[0] = append(rows[0], val)
-	insert.Columns = append(insert.Columns, sqlparser.NewColIdent(colName))
+	insert.Columns = append(insert.Columns, sqlparser.NewIdentifierCI(colName))
 	e.InsertCols[colName] = val
 	e.Query = sqlparser.String(e.Stmt)
 
@@ -174,14 +174,14 @@ func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser
 
 // analyzeStatement analyzes a given statement and produces the following ingredients, useful for
 // VExec interceptors:
-// - table name
-// - column names with values, for col=VAL in a WHERE expression
-//   e.g. in "UPDATE my_table SET ... WHERE keyspace='test' AND shard='-80' AND status > 2", the
-//   ValColumns are "keyspace" and "shard" with matching values. `status` is a range operator therefore
-//   not included.package vexec
-//   Equals operator is of special importance because it is known to filter results. An interceptor may
-//   require, for example, that a `DELETE` statement includes a WHERE with a UNIQUE KEY column with Equals operator
-//   to ensure we're not doing anything too risky.
+//   - table name
+//   - column names with values, for col=VAL in a WHERE expression
+//     e.g. in "UPDATE my_table SET ... WHERE keyspace='test' AND shard='-80' AND status > 2", the
+//     ValColumns are "keyspace" and "shard" with matching values. `status` is a range operator therefore
+//     not included.package vexec
+//     Equals operator is of special importance because it is known to filter results. An interceptor may
+//     require, for example, that a `DELETE` statement includes a WHERE with a UNIQUE KEY column with Equals operator
+//     to ensure we're not doing anything too risky.
 func (e *TabletVExec) analyzeStatement() error {
 	switch stmt := e.Stmt.(type) {
 	case *sqlparser.Update:
@@ -205,15 +205,15 @@ func (e *TabletVExec) analyzeStatement() error {
 
 // AnalyzeQuery analyzes a given statement and produces the following ingredients, useful for
 // VExec interceptors:
-// - parsed statement
-// - table name
-// - column names with values, for col=VAL in a WHERE expression
-//   e.g. in "UPDATE my_table SET ... WHERE keyspace='test' AND shard='-80' AND status > 2", the
-//   ValColumns are "keyspace" and "shard" with matching values. `status` is a range operator therefore
-//   not included.package vexec
-//   Equals operator is of special importance because it is known to filter results. An interceptor may
-//   require, for example, that a `DELETE` statement includes a WHERE with a UNIQUE KEY column with Equals operator
-//   to ensure we're not doing anything too risky.
+//   - parsed statement
+//   - table name
+//   - column names with values, for col=VAL in a WHERE expression
+//     e.g. in "UPDATE my_table SET ... WHERE keyspace='test' AND shard='-80' AND status > 2", the
+//     ValColumns are "keyspace" and "shard" with matching values. `status` is a range operator therefore
+//     not included.package vexec
+//     Equals operator is of special importance because it is known to filter results. An interceptor may
+//     require, for example, that a `DELETE` statement includes a WHERE with a UNIQUE KEY column with Equals operator
+//     to ensure we're not doing anything too risky.
 func (e *TabletVExec) AnalyzeQuery(ctx context.Context, query string) (err error) {
 	if e.Stmt, err = sqlparser.Parse(query); err != nil {
 		return err

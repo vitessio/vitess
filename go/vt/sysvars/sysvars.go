@@ -16,6 +16,8 @@ limitations under the License.
 
 package sysvars
 
+import "sync"
+
 // This information lives here, because it's needed from the vtgate planbuilder, the vtgate engine,
 // and the AST rewriter, that happens to live in sqlparser.
 
@@ -58,6 +60,9 @@ var (
 	TransactionReadOnly         = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
+	QueryTimeout                = SystemVariable{Name: "query_timeout"}
+	TransactionIsolation        = SystemVariable{Name: "transaction_isolation", Default: off}
+	TxIsolation                 = SystemVariable{Name: "tx_isolation", Default: off}
 
 	// Online DDL
 	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
@@ -86,6 +91,9 @@ var (
 		ReadAfterWriteGTID,
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
+		QueryTimeout,
+		TransactionIsolation,
+		TxIsolation,
 	}
 
 	ReadOnly = []SystemVariable{
@@ -183,8 +191,6 @@ var (
 		{Name: "optimizer_trace_features"},
 		{Name: "optimizer_trace_limit"},
 		{Name: "optimizer_trace_max_mem_size"},
-		{Name: "transaction_isolation"},
-		{Name: "tx_isolation"},
 		{Name: "optimizer_trace_offset"},
 		{Name: "parser_max_mem_size"},
 		{Name: "profiling", IsBoolean: true},
@@ -260,5 +266,25 @@ func GetInterestingVariables() []string {
 	res = append(res, Version.Name)
 	res = append(res, VersionComment.Name)
 	res = append(res, Socket.Name)
+
+	for _, variable := range UseReservedConn {
+		if variable.SupportSetVar {
+			res = append(res, variable.Name)
+		}
+	}
 	return res
+}
+
+var vitessAwareVariableNames map[string]struct{}
+var vitessAwareInit sync.Once
+
+func IsVitessAware(sysv string) bool {
+	vitessAwareInit.Do(func() {
+		vitessAwareVariableNames = make(map[string]struct{}, len(VitessAware))
+		for _, v := range VitessAware {
+			vitessAwareVariableNames[v.Name] = struct{}{}
+		}
+	})
+	_, found := vitessAwareVariableNames[sysv]
+	return found
 }

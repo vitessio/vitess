@@ -61,7 +61,7 @@ func TestZk2Topo(t *testing.T) {
 		}
 
 		return ts
-	})
+	}, []string{})
 }
 
 func TestHasObservers(t *testing.T) {

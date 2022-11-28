@@ -30,15 +30,15 @@ for i in 100 101 102; do
  CELL=test KEYSPACE=test_keyspace TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-vtctlclient -server localhost:15999 InitShardPrimary -force test_keyspace/0 test-100
+vtctlclient --server localhost:15999 InitShardPrimary -- --force test_keyspace/0 test-100
 
-vtctlclient -server localhost:15999 ApplySchema -sql-file create_test_table.sql test_keyspace
-vtctlclient -server localhost:15999 RebuildVSchemaGraph
+vtctlclient --server localhost:15999 ApplySchema -- --sql-file create_test_table.sql test_keyspace
+vtctlclient --server localhost:15999 RebuildVSchemaGraph
 
 CELL=test ./scripts/vtgate-up.sh
 
 echo "Run Go client script..."
-go run $VTROOT/test/client.go -server=localhost:15991
+go run $VTROOT/test/client/client.go --server=localhost:15991
 
 echo "Run Java client script..."
 $VTROOT/test/client_java.sh

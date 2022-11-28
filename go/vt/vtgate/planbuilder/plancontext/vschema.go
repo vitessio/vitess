@@ -3,6 +3,7 @@ package plancontext
 import (
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -58,12 +59,19 @@ type VSchema interface {
 
 	// GetSrvVschema returns the latest cached vschema.SrvVSchema
 	GetSrvVschema() *vschemapb.SrvVSchema
+	// FindRoutedShard looks up shard routing rules for a shard
+	FindRoutedShard(keyspace, shard string) (string, error)
+
+	// IsShardRoutingEnabled returns true if partial shard routing is enabled
+	IsShardRoutingEnabled() bool
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner
 func PlannerNameToVersion(s string) (PlannerVersion, bool) {
+	deprecationMessage := "The V3 planner is deprecated and will be removed in V17 of Vitess"
 	switch strings.ToLower(s) {
 	case "v3":
+		log.Warning(deprecationMessage)
 		return querypb.ExecuteOptions_V3, true
 	case "gen4":
 		return querypb.ExecuteOptions_Gen4, true
@@ -74,6 +82,7 @@ func PlannerNameToVersion(s string) (PlannerVersion, bool) {
 	case "gen4fallback":
 		return querypb.ExecuteOptions_Gen4WithFallback, true
 	case "gen4comparev3":
+		log.Warning(deprecationMessage)
 		return querypb.ExecuteOptions_Gen4CompareV3, true
 	}
 	return 0, false

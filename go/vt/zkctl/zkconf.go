@@ -1,3 +1,6 @@
+//go:build !codeanalysis
+// +build !codeanalysis
+
 /*
 Copyright 2019 The Vitess Authors.
 
@@ -35,7 +38,7 @@ import (
 )
 
 type zkServerAddr struct {
-	ServerId     uint32
+	ServerId     uint32 // nolint:revive
 	Hostname     string
 	LeaderPort   int
 	ElectionPort int
@@ -43,7 +46,7 @@ type zkServerAddr struct {
 }
 
 type ZkConfig struct {
-	ServerId   uint32
+	ServerId   uint32 // nolint:revive
 	ClientPort int
 	Servers    []zkServerAddr
 	Global     bool
@@ -94,7 +97,7 @@ func (cnf *ZkConfig) WriteMyid() error {
 }
 
 /*
-  Search for first existing file in cnfFiles and subsitute in the right values.
+Search for first existing file in cnfFiles and subsitute in the right values.
 */
 func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error) {
 	myTemplateSource := new(bytes.Buffer)
@@ -126,31 +129,31 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 	return cnfData.String(), nil
 }
 
-const GUESS_MYID = 0
+const GuessMyID = 0
 
 /*
-  Create a config for this instance.
+Create a config for this instance.
 
-  <server_id>@<hostname>:<leader_port>:<election_port>:<client_port>
+<server_id>@<hostname>:<leader_port>:<election_port>:<client_port>
 
-  If server_id > 1000, then we assume this is a global quorum.
-  server_id's must be 1-255, global id's are 1001-1255 mod 1000.
+If server_id > 1000, then we assume this is a global quorum.
+server_id's must be 1-255, global id's are 1001-1255 mod 1000.
 */
-func MakeZkConfigFromString(cmdLine string, myId uint32) *ZkConfig {
+func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 	zkConfig := NewZkConfig()
 	for _, zki := range strings.Split(cmdLine, ",") {
 		zkiParts := strings.SplitN(zki, "@", 2)
 		if len(zkiParts) != 2 {
 			panic("bad command line format for zk config")
 		}
-		zkId := zkiParts[0]
+		zkID := zkiParts[0]
 		zkAddrParts := strings.Split(zkiParts[1], ":")
-		serverId, _ := strconv.ParseUint(zkId, 10, 0)
+		serverId, _ := strconv.ParseUint(zkID, 10, 0) // nolint:revive
 		if serverId > 1000 {
 			serverId = serverId % 1000
 			zkConfig.Global = true
 		}
-		myId = myId % 1000
+		myID = myID % 1000
 
 		zkServer := zkServerAddr{ServerId: uint32(serverId), ClientPort: 2181,
 			LeaderPort: 2888, ElectionPort: 3888}
@@ -177,7 +180,7 @@ func MakeZkConfigFromString(cmdLine string, myId uint32) *ZkConfig {
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
 	log.Infof("Fully qualified machine hostname was detected as: %v", hostname)
 	for _, zkServer := range zkConfig.Servers {
-		if (myId > 0 && myId == zkServer.ServerId) || (myId == 0 && zkServer.Hostname == hostname) {
+		if (myID > 0 && myID == zkServer.ServerId) || (myID == 0 && zkServer.Hostname == hostname) {
 			zkConfig.ServerId = zkServer.ServerId
 			zkConfig.ClientPort = zkServer.ClientPort
 			break

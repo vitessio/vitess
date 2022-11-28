@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -38,27 +39,29 @@ func (*uvindex) String() string     { return "uvindex" }
 func (*uvindex) Cost() int          { return 1 }
 func (*uvindex) IsUnique() bool     { return true }
 func (*uvindex) NeedsVCursor() bool { return false }
-func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*uvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
 
-func (v *uvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	if v.matchkr {
-		return []key.Destination{
-			key.DestinationKeyRange{
-				KeyRange: &topodatapb.KeyRange{
-					Start: []byte{0x40},
-					End:   []byte{0x60},
-				},
-			},
-		}, nil
+func (v *uvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	destinations := make([]key.Destination, 0, len(ids))
+	dkid := []byte("foo")
+	for i := 0; i < len(ids); i++ {
+		if v.matchkr {
+			destinations = append(destinations,
+				key.DestinationKeyRange{
+					KeyRange: &topodatapb.KeyRange{
+						Start: []byte{0x40},
+						End:   []byte{0x60},
+					},
+				})
+		} else if v.matchid {
+			destinations = append(destinations, key.DestinationKeyspaceID(dkid))
+		} else {
+			destinations = append(destinations, key.DestinationNone{})
+		}
 	}
-	if v.matchid {
-		return []key.Destination{
-			key.DestinationKeyspaceID([]byte("foo")),
-		}, nil
-	}
-	return []key.Destination{key.DestinationNone{}}, nil
+	return destinations, nil
 }
 
 // nvindex is NonUnique.
@@ -68,36 +71,42 @@ func (*nvindex) String() string     { return "nvindex" }
 func (*nvindex) Cost() int          { return 1 }
 func (*nvindex) IsUnique() bool     { return false }
 func (*nvindex) NeedsVCursor() bool { return false }
-func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*nvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
 
-func (v *nvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	if v.matchid {
-		return []key.Destination{
-			key.DestinationKeyspaceIDs([][]byte{
-				[]byte("foo"),
-				[]byte("bar"),
-			}),
-		}, nil
+func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	destinations := make([]key.Destination, 0)
+	for i := 0; i < len(ids); i++ {
+		if v.matchid {
+			destinations = append(destinations,
+				[]key.Destination{
+					key.DestinationKeyspaceIDs([][]byte{
+						[]byte("foo"),
+						[]byte("bar"),
+					}),
+				}...)
+		} else if v.matchkr {
+			destinations = append(destinations,
+				[]key.Destination{
+					key.DestinationKeyRange{
+						KeyRange: &topodatapb.KeyRange{
+							Start: []byte{0x40},
+							End:   []byte{0x60},
+						},
+					},
+				}...)
+		} else {
+			destinations = append(destinations, []key.Destination{key.DestinationNone{}}...)
+		}
 	}
-	if v.matchkr {
-		return []key.Destination{
-			key.DestinationKeyRange{
-				KeyRange: &topodatapb.KeyRange{
-					Start: []byte{0x40},
-					End:   []byte{0x60},
-				},
-			},
-		}, nil
-	}
-	return []key.Destination{key.DestinationNone{}}, nil
+	return destinations, nil
 }
 
 func TestVindexFuncMap(t *testing.T) {
 	// Unique Vindex returning 0 rows.
 	vf := testVindexFunc(&uvindex{})
-	got, err := vf.TryExecute(&noopVCursor{}, nil, false)
+	got, err := vf.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -106,7 +115,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// Unique Vindex returning 1 row.
 	vf = testVindexFunc(&uvindex{matchid: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
+	got, err = vf.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -126,7 +135,7 @@ func TestVindexFuncMap(t *testing.T) {
 		Vindex: &uvindex{matchid: true},
 		Value:  evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2), evalengine.NewLiteralInt(3)},
 	}
-	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
+	got, err = vf.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -142,24 +151,26 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// Unique Vindex returning keyrange.
 	vf = testVindexFunc(&uvindex{matchkr: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
+	got, err = vf.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("1"),
-			sqltypes.NULL,
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x40}),
-			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x60}),
-			sqltypes.NULL,
-		}},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarBinary("1"),
+				sqltypes.NULL,
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x40}),
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x60}),
+				sqltypes.NULL,
+			},
+		},
 		RowsAffected: 0,
 	}
 	require.Equal(t, got, want)
 
 	// NonUnique Vindex returning 0 rows.
 	vf = testVindexFunc(&nvindex{})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
+	got, err = vf.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -168,7 +179,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning 2 rows.
 	vf = testVindexFunc(&nvindex{matchid: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
+	got, err = vf.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -184,7 +195,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning keyrange
 	vf = testVindexFunc(&nvindex{matchkr: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
+	got, err = vf.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -212,7 +223,7 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 		}},
 	}}
 	i := 0
-	err := vf.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := vf.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		if !reflect.DeepEqual(qr, want[i]) {
 			t.Errorf("callback(%d):\n%v, want\n%v", i, qr, want[i])
 		}
@@ -226,7 +237,7 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 
 func TestVindexFuncGetFields(t *testing.T) {
 	vf := testVindexFunc(&uvindex{matchid: true})
-	got, err := vf.GetFields(nil, nil)
+	got, err := vf.GetFields(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +253,7 @@ func TestFieldOrder(t *testing.T) {
 	vf := testVindexFunc(&nvindex{matchid: true})
 	vf.Fields = sqltypes.MakeTestFields("keyspace_id|id|keyspace_id", "varbinary|varbinary|varbinary")
 	vf.Cols = []int{1, 0, 1}
-	got, err := vf.TryExecute(&noopVCursor{}, nil, true)
+	got, err := vf.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}

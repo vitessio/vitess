@@ -33,9 +33,13 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+const (
+	charsetName = "utf8mb4"
+)
+
 func columnSize(cs collations.ID, size uint32) uint32 {
 	// utf8_general_ci results in smaller max column sizes because MySQL 5.7 is silly
-	if collations.Local().LookupByID(cs).Charset().Name() == "utf8" {
+	if collations.Local().LookupByID(cs).Charset().Name() == "utf8mb3" {
 		return size * 3 / 4
 	}
 	return size
@@ -57,27 +61,22 @@ func TestQueries(t *testing.T) {
 
 	// Try a simple DDL.
 	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)
-	if err != nil {
-		t.Fatalf("create table failed: %v", err)
-	}
-	if result.RowsAffected != 0 {
-		t.Errorf("create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
-	}
+	require.NoError(t, err, "create table failed: %v", err)
+	assert.Equal(t, uint64(0), result.RowsAffected, "create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
 
 	// Try a simple insert.
 	result, err = conn.ExecuteFetch("insert into a(id, name) values(10, 'nice name')", 1000, true)
-	if err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
+	require.NoError(t, err, "insert failed: %v", err)
+
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for insert: %v", result)
 	}
 
 	// And re-read what we inserted.
 	result, err = conn.ExecuteFetch("select * from a", 1000, true)
-	if err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
+	require.NoError(t, err, "insert failed: %v", err)
+
+	collID := getDefaultCollationID()
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -101,8 +100,8 @@ func TestQueries(t *testing.T) {
 				OrgTable:     "a",
 				Database:     "vttest",
 				OrgName:      "name",
-				ColumnLength: columnSize(conn.CharacterSet, 512),
-				Charset:      uint32(conn.CharacterSet),
+				ColumnLength: columnSize(collID, 512),
+				Charset:      uint32(collID),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -115,20 +114,16 @@ func TestQueries(t *testing.T) {
 	if !result.Equal(expectedResult) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
 		expectedResult.Fields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
-		if !result.Equal(expectedResult) {
-			t.Errorf("unexpected result for select, got:\n%v\nexpected:\n%v\n", result, expectedResult)
-		}
+		assert.True(t, result.Equal(expectedResult), "unexpected result for select, got:\n%v\nexpected:\n%v\n", result, expectedResult)
+
 	}
 
 	// Insert a few rows.
 	for i := 0; i < 100; i++ {
 		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
-		if err != nil {
-			t.Fatalf("ExecuteFetch(%v) failed: %v", i, err)
-		}
-		if result.RowsAffected != 1 {
-			t.Errorf("insert into returned RowsAffected %v, was expecting 1", result.RowsAffected)
-		}
+		require.NoError(t, err, "ExecuteFetch(%v) failed: %v", i, err)
+		assert.Equal(t, uint64(1), result.RowsAffected, "insert into returned RowsAffected %v, was expecting 1", result.RowsAffected)
+
 	}
 
 	// And use a streaming query to read them back.
@@ -138,12 +133,9 @@ func TestQueries(t *testing.T) {
 
 	// And drop the table.
 	result, err = conn.ExecuteFetch("drop table a", 0, false)
-	if err != nil {
-		t.Fatalf("drop table failed: %v", err)
-	}
-	if result.RowsAffected != 0 {
-		t.Errorf("insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
-	}
+	require.NoError(t, err, "drop table failed: %v", err)
+	assert.Equal(t, uint64(0), result.RowsAffected, "insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
+
 }
 
 func TestLargeQueries(t *testing.T) {
@@ -167,16 +159,14 @@ func TestLargeQueries(t *testing.T) {
 			expectedString := randString((i+1)*mysql.MaxPacketSize + j)
 
 			result, err := conn.ExecuteFetch(fmt.Sprintf("select \"%s\"", expectedString), -1, true)
-			if err != nil {
-				t.Fatalf("ExecuteFetch failed: %v", err)
-			}
+			require.NoError(t, err, "ExecuteFetch failed: %v", err)
+
 			if len(result.Rows) != 1 || len(result.Rows[0]) != 1 || result.Rows[0][0].IsNull() {
 				t.Fatalf("ExecuteFetch on large query returned poorly-formed result. " +
 					"Expected single row single column string.")
 			}
-			if result.Rows[0][0].ToString() != expectedString {
-				t.Fatalf("Result row was incorrect. Suppressing large string")
-			}
+			require.Equal(t, expectedString, result.Rows[0][0].ToString(), "Result row was incorrect. Suppressing large string")
+
 		}
 	}
 }
@@ -188,6 +178,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	}
 
 	// Check the fields.
+	collID := getDefaultCollationID()
 	expectedFields := []*querypb.Field{
 		{
 			Name:         "id",
@@ -210,41 +201,36 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			OrgTable:     "a",
 			Database:     "vttest",
 			OrgName:      "name",
-			ColumnLength: columnSize(conn.CharacterSet, 512),
-			Charset:      uint32(conn.CharacterSet),
+			ColumnLength: columnSize(collID, 512),
+			Charset:      uint32(collID),
 		},
 	}
 	fields, err := conn.Fields()
-	if err != nil {
-		t.Fatalf("Fields failed: %v", err)
-	}
+	require.NoError(t, err, "Fields failed: %v", err)
+
 	if !sqltypes.FieldsEqual(fields, expectedFields) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
 		expectedFields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
-		if !sqltypes.FieldsEqual(fields, expectedFields) {
-			t.Fatalf("fields are not right, got:\n%v\nexpected:\n%v", fields, expectedFields)
-		}
+		require.True(t, sqltypes.FieldsEqual(fields, expectedFields), "fields are not right, got:\n%v\nexpected:\n%v", fields, expectedFields)
+
 	}
 
 	// Read the rows.
 	count := 0
 	for {
 		row, err := conn.FetchNext(nil)
-		if err != nil {
-			t.Fatalf("FetchNext failed: %v", err)
-		}
+		require.NoError(t, err, "FetchNext failed: %v", err)
+
 		if row == nil {
 			// We're done.
 			break
 		}
-		if len(row) != 2 {
-			t.Fatalf("Unexpected row found: %v", row)
-		}
+		require.Equal(t, 2, len(row), "Unexpected row found: %v", row)
+
 		count++
 	}
-	if count != expectedCount {
-		t.Errorf("Got unexpected count %v for query, was expecting %v", count, expectedCount)
-	}
+	assert.Equal(t, expectedCount, count, "Got unexpected count %v for query, was expecting %v", count, expectedCount)
+
 	conn.CloseResult()
 }
 
@@ -258,35 +244,24 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 	defer conn.Close()
 
 	result, err := conn.ExecuteFetch("create table a(id int, val int not null, primary key(id))", 0, false)
-	if err != nil {
-		t.Fatalf("create table failed: %v", err)
-	}
-	if result.RowsAffected != 0 {
-		t.Errorf("create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
-	}
+	require.NoError(t, err, "create table failed: %v", err)
+	assert.Equal(t, uint64(0), result.RowsAffected, "create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
 
 	// Disable strict mode
 	_, err = conn.ExecuteFetch("set session sql_mode=''", 0, false)
-	if err != nil {
-		t.Fatalf("disable strict mode failed: %v", err)
-	}
+	require.NoError(t, err, "disable strict mode failed: %v", err)
 
 	// Try a simple insert with a null value
 	result, warnings, err := conn.ExecuteFetchWithWarningCount("insert into a(id) values(10)", 1000, true)
-	if err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
-	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
-	}
-	if warnings != 1 {
-		t.Errorf("unexpected result for warnings: %v", warnings)
-	}
+	require.NoError(t, err, "insert failed: %v", err)
+
+	assert.Equal(t, uint64(1), result.RowsAffected, "unexpected rows affected by insert; result: %v", result)
+	assert.Equal(t, 0, len(result.Rows), "unexpected row count in result for insert: %v", result)
+	assert.Equal(t, uint16(1), warnings, "unexpected result for warnings: %v", warnings)
 
 	_, err = conn.ExecuteFetch("drop table a", 0, false)
-	if err != nil {
-		t.Fatalf("create table failed: %v", err)
-	}
+	require.NoError(t, err, "create table failed: %v", err)
+
 }
 
 func TestWarningsDeprecateEOF(t *testing.T) {
@@ -306,7 +281,8 @@ func TestSysInfo(t *testing.T) {
 	_, err = conn.ExecuteFetch("drop table if exists `a`", 1000, true)
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", 1000, true)
+	_, err = conn.ExecuteFetch(fmt.Sprintf("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=%s",
+		charsetName), 1000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table `a`", 1000, true)
 
@@ -333,9 +309,18 @@ func TestSysInfo(t *testing.T) {
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
 
 	// table_name
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+	// This can be either a VARCHAR or a VARBINARY. On Linux and MySQL 8, the
+	// string is tagged with a binary encoding, so it is VARBINARY.
+	// On case-insensitive filesystems, it's a VARCHAR.
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[0][10].String())
+	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[1][10].String())
 
 	assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type)
 	assert.EqualValues(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+}
+
+func getDefaultCollationID() collations.ID {
+	collationHandler := collations.Local()
+	collation := collationHandler.DefaultCollationForCharset(charsetName)
+	return collation.ID()
 }

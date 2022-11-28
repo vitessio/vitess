@@ -33,17 +33,13 @@ import (
 // CreateReparentJournal returns the commands to execute to create
 // the _vt.reparent_journal table. It is safe to run these commands
 // even if the table already exists.
-//
-// If the table was created by Vitess version 2.0, the following command
-// may need to be run:
-// ALTER TABLE _vt.reparent_journal MODIFY COLUMN replication_position VARBINARY(64000);
 func CreateReparentJournal() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS _vt.reparent_journal (
   time_created_ns BIGINT UNSIGNED NOT NULL,
   action_name VARBINARY(250) NOT NULL,
-  master_alias VARBINARY(32) NOT NULL,
+  primary_alias VARBINARY(32) NOT NULL,
   replication_position VARBINARY(%v) DEFAULT NULL,
   PRIMARY KEY (time_created_ns))
 ENGINE=InnoDB`, mysql.MaximumPositionSize)}
@@ -51,13 +47,13 @@ ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 
 // AlterReparentJournal returns the commands to execute to change
 // column master_alias -> primary_alias or the other way
-// In 13.0.0 we introduce renaming of primary_alias -> master_alias.
-// This is to support in-place downgrade from a later version.
-// In 14.0.0 we will replace this with renaming of master_alias -> primary_alias.
+// In 13.0.0 we introduced renaming of primary_alias -> master_alias.
+// This was to support in-place downgrade from a later version.
+// In 14.0.0 we replace that with renaming of master_alias -> primary_alias.
 // This is to support in-place upgrades from 13.0.x to 14.0.x
 func AlterReparentJournal() []string {
 	return []string{
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
 	}
 }
 
@@ -70,7 +66,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 		posStr = posStr[:mysql.MaximumPositionSize]
 	}
 	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
-		"(time_created_ns, action_name, master_alias, replication_position) "+
+		"(time_created_ns, action_name, primary_alias, replication_position) "+
 		"VALUES (%v, '%v', '%v', '%v')",
 		timeCreatedNS, actionName, primaryAlias, posStr)
 }
@@ -78,7 +74,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 // queryReparentJournal returns the SQL query to use to query the database
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
-	return fmt.Sprintf("SELECT action_name, master_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns=%v", timeCreatedNS)
+	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns=%v", timeCreatedNS)
 }
 
 // WaitForReparentJournal will wait until the context is done for

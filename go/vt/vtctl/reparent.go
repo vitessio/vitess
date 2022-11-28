@@ -18,8 +18,9 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,21 +38,23 @@ func init() {
 		help:   "Reparent a tablet to the current primary in the shard. This only works if the current replication position matches the last known reparent action.",
 	})
 	addCommand("Shards", command{
-		name:   "InitShardPrimary",
-		method: commandInitShardPrimary,
-		params: "[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		help:   "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
+		name:         "InitShardPrimary",
+		method:       commandInitShardPrimary,
+		params:       "[--force] [--wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		help:         "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
+		deprecated:   true,
+		deprecatedBy: "PlannedReparentShard",
 	})
 	addCommand("Shards", command{
 		name:   "PlannedReparentShard",
 		method: commandPlannedReparentShard,
-		params: "-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-avoid_tablet=<tablet alias>] [-wait_replicas_timeout=<duration>]",
+		params: "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--avoid_tablet=<tablet alias>] [--wait_replicas_timeout=<duration>]",
 		help:   "Reparents the shard to the new primary, or away from old primary. Both old and new primary need to be up and running.",
 	})
 	addCommand("Shards", command{
 		name:   "EmergencyReparentShard",
 		method: commandEmergencyReparentShard,
-		params: "-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>] [-prevent_cross_cell_promotion=<true/false>]",
+		params: "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--wait_replicas_timeout=<duration>] [--ignore_replicas=<tablet alias list>] [--prevent_cross_cell_promotion=<true/false>]",
 		help:   "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
 	})
 	addCommand("Shards", command{
@@ -63,9 +66,9 @@ func init() {
 	})
 }
 
-func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
+func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	if mysqlctl.DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
 	if err := subFlags.Parse(args); err != nil {
@@ -81,13 +84,13 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return wr.ReparentTablet(ctx, tabletAlias)
 }
 
-func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
+func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	if mysqlctl.DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not writable or the shard primary")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -105,12 +108,12 @@ func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return wr.InitShardPrimary(ctx, keyspace, shard, tabletAlias, *force, *waitReplicasTimeout)
 }
 
-func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
+func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	if mysqlctl.DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "alias of a tablet that should be the new primary")
 	avoidTablet := subFlags.String("avoid_tablet", "", "alias of a tablet that should not be the primary, i.e. reparent to any other tablet if this one is the primary")
@@ -121,12 +124,12 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	if subFlags.NArg() == 2 {
 		// Legacy syntax: "<keyspace/shard> <tablet alias>".
 		if *keyspaceShard != "" || *newPrimary != "" {
-			return fmt.Errorf("cannot use legacy syntax and flags -keyspace_shard and -new_primary for action PlannedReparentShard at the same time")
+			return fmt.Errorf("cannot use legacy syntax and flags --keyspace_shard and --new_primary for action PlannedReparentShard at the same time")
 		}
 		*keyspaceShard = subFlags.Arg(0)
 		*newPrimary = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
-		return fmt.Errorf("action PlannedReparentShard requires -keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-avoid_tablet=<tablet alias>]")
+		return fmt.Errorf("action PlannedReparentShard requires --keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--avoid_tablet=<tablet alias>]")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
@@ -149,12 +152,12 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	return wr.PlannedReparentShard(ctx, keyspace, shard, newPrimaryAlias, avoidTabletAlias, *waitReplicasTimeout)
 }
 
-func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if *mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
+func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	if mysqlctl.DisableActiveReparents {
+		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
 	}
 
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
 	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
@@ -166,12 +169,12 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	if subFlags.NArg() == 2 {
 		// Legacy syntax: "<keyspace/shard> <tablet alias>".
 		if *newPrimary != "" {
-			return fmt.Errorf("cannot use legacy syntax and flag -new_primary for action EmergencyReparentShard at the same time")
+			return fmt.Errorf("cannot use legacy syntax and flag --new_primary for action EmergencyReparentShard at the same time")
 		}
 		*keyspaceShard = subFlags.Arg(0)
 		*newPrimary = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
-		return fmt.Errorf("action EmergencyReparentShard requires -keyspace_shard=<keyspace/shard>")
+		return fmt.Errorf("action EmergencyReparentShard requires --keyspace_shard=<keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
@@ -189,7 +192,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas, *preventCrossCellPromotion)
 }
 
-func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

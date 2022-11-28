@@ -22,19 +22,19 @@ package binlogplayer
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/withddl"
+	"github.com/spf13/pflag"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
@@ -42,10 +42,11 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/throttler"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/withddl"
 )
 
 var (
@@ -101,6 +102,9 @@ type Stats struct {
 
 	VReplicationLags     *stats.Timings
 	VReplicationLagRates *stats.Rates
+
+	TableCopyRowCounts *stats.CountersWithSingleLabel
+	TableCopyTimings   *stats.Timings
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -159,6 +163,8 @@ func NewStats() *Stats {
 	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
 	bps.VReplicationLags = stats.NewTimings("", "", "")
 	bps.VReplicationLagRates = stats.NewRates("", bps.VReplicationLags, 15*60/5, 5*time.Second)
+	bps.TableCopyRowCounts = stats.NewCountersWithSingleLabel("", "", "Table", "")
+	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	return bps
 }
 
@@ -298,9 +304,9 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		}
 	}
 
-	clientFactory, ok := clientFactories[*binlogPlayerProtocol]
+	clientFactory, ok := clientFactories[binlogPlayerProtocol]
 	if !ok {
-		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
+		return fmt.Errorf("no binlog player client factory named %v", binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
 	err = blplClient.Dial(blp.tablet)
@@ -471,12 +477,12 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // writeRecoveryPosition writes the current GTID as the recovery position
 // for the next transaction.
 // It also tries to get the timestamp for the transaction. Two cases:
-// - we have statements, and they start with a SET TIMESTAMP that we
-//   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set ReplicationLagSeconds to now() - transaction_timestamp
-// - otherwise (the statements are probably filtered out), we leave
-//   transaction_timestamp alone (keeping the old value), and we don't
-//   change ReplicationLagSeconds
+//   - we have statements, and they start with a SET TIMESTAMP that we
+//     can parse: then we update transaction_timestamp in vreplication
+//     with it, and set ReplicationLagSeconds to now() - transaction_timestamp
+//   - otherwise (the statements are probably filtered out), we leave
+//     transaction_timestamp alone (keeping the old value), and we don't
+//     change ReplicationLagSeconds
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
@@ -521,7 +527,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // CreateVReplicationTable returns the statements required to create
 // the _vt.vreplication table.
 // id: is an auto-increment column that identifies the stream.
-// workflow: documents the creator/manager of the stream. Example: 'SplitClone'.
+// workflow: documents the creator/manager of the stream. Example: 'MoveTables'.
 // source: contains a string proto representation of binlogpb.BinlogSource.
 // pos: initially, a start position, and is updated to the current position by the binlog player.
 // stop_pos: optional column that specifies the stop position.
@@ -560,7 +566,7 @@ func CreateVReplicationTable() []string {
 // AlterVReplicationTable adds new columns to vreplication table
 var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
-	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
+	"ALTER TABLE _vt.vreplication MODIFY source MEDIUMBLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
@@ -568,14 +574,19 @@ var AlterVReplicationTable = []string{
 	// records the time of the last heartbeat. Heartbeats are only received if the source has no recent events
 	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled BIGINT NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled VARCHAR(255) NOT NULL DEFAULT ''",
+	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_sub_type int NOT NULL DEFAULT 0",
 }
 
 // WithDDLInitialQueries contains the queries that:
-// - are to be expected by the mock db client during tests, or
-// - trigger some of the above _vt.vreplication schema changes to take effect
-//   when the binlogplayer starts up
+//   - are to be expected by the mock db client during tests, or
+//   - trigger some of the above _vt.vreplication schema changes to take effect
+//     when the binlogplayer starts up
+//
 // todo: cleanup here. QueryToTriggerWithDDL will be enough to ensure vreplication schema gets created/altered correctly.
-//   So do that explicitly and move queries required into the mock code.
+//
+//	So do that explicitly and move queries required into the mock code.
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
@@ -590,14 +601,15 @@ type VRSettings struct {
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
-	WorkflowType      int64
+	WorkflowType      int32
+	WorkflowSubType   int32
 	WorkflowName      string
 }
 
 // ReadVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
 func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=%v", uid)
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
@@ -624,9 +636,15 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
-	workflowType, err := vrRow.ToInt64("workflow_type")
+	workflowTypeTmp, err := vrRow.ToInt64("workflow_type")
+	workflowType := int32(workflowTypeTmp)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_type column: %v", err)
+	}
+	workflowSubTypeTmp, err := vrRow.ToInt64("workflow_sub_type")
+	workflowSubType := int32(workflowSubTypeTmp)
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse workflow_sub_type column: %v", err)
 	}
 	return VRSettings{
 		StartPos:          startPos,
@@ -636,24 +654,30 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 		State:             vrRow.AsString("state", ""),
 		WorkflowType:      workflowType,
 		WorkflowName:      vrRow.AsString("workflow", ""),
+		WorkflowSubType:   workflowSubType,
 	}, nil
 }
 
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
-func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string) string {
+func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string,
+	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v)",
-		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning, encodeString(dbName))
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v)",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
+		timeUpdated, BlpRunning, encodeString(dbName), int64(workflowType), int64(workflowSubType))
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.
-func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string, dbName string) string {
+func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string, dbName string,
+	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v)",
-		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName))
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v)",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
+		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName),
+		int64(workflowType), int64(workflowSubType))
 }
 
 // GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.
@@ -682,6 +706,14 @@ func GenerateUpdateHeartbeat(uid uint32, timeUpdated int64) (string, error) {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_heartbeat=%v where id=%v", timeUpdated, timeUpdated, uid), nil
+}
+
+// GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the _vt.vreplication table.
+func GenerateUpdateTimeThrottled(uid uint32, timeThrottledUnix int64, componentThrottled string) (string, error) {
+	if timeThrottledUnix == 0 {
+		return "", fmt.Errorf("timeUpdated cannot be zero")
+	}
+	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
 }
 
 // StartVReplication returns a statement to start the replication.
@@ -788,4 +820,44 @@ type StatsHistoryRecord struct {
 // IsDuplicate implements history.Deduplicable
 func (r *StatsHistoryRecord) IsDuplicate(other any) bool {
 	return false
+}
+
+const binlogPlayerProtocolFlagName = "binlog_player_protocol"
+
+// SetProtocol is a helper function to set the binlogplayer --binlog_player_protocol
+// flag value for tests. If successful, it returns a function that, when called,
+// returns the flag to its previous value.
+//
+// Note that because this variable is bound to a flag, the effects of this
+// function are global, not scoped to the calling test-case. Therefore, it should
+// not be used in conjunction with t.Parallel.
+func SetProtocol(name string, protocol string) (reset func()) {
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{name}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(name, func(fs *pflag.FlagSet) {
+		if fs.Lookup(binlogPlayerProtocolFlagName) != nil {
+			return
+		}
+
+		registerFlags(fs)
+	})
+	servenv.ParseFlags(name)
+
+	switch oldVal, err := pflag.CommandLine.GetString(binlogPlayerProtocolFlagName); err {
+	case nil:
+		reset = func() { SetProtocol(name, oldVal) }
+	default:
+		log.Errorf("failed to get string value for flag %q: %v", binlogPlayerProtocolFlagName, err)
+		reset = func() {}
+	}
+
+	if err := pflag.Set(binlogPlayerProtocolFlagName, protocol); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, binlogPlayerProtocolFlagName, protocol, err)
+		reset = func() {}
+	}
+
+	return reset
 }

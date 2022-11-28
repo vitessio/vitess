@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -52,8 +54,8 @@ func (f *Filter) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := f.Input.TryExecute(vcursor, bindVars, wantfields)
+func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	result, err := vcursor.ExecutePrimitive(ctx, f.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +81,7 @@ func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (f *Filter) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
@@ -101,12 +103,13 @@ func (f *Filter) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		results.Rows = rows
 		return callback(results)
 	}
-	return f.Input.TryStreamExecute(vcursor, bindVars, wantfields, filter)
+
+	return vcursor.StreamExecutePrimitive(ctx, f.Input, bindVars, wantfields, filter)
 }
 
 // GetFields implements the Primitive interface.
-func (f *Filter) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return f.Input.GetFields(vcursor, bindVars)
+func (f *Filter) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return f.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input to limit

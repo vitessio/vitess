@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -31,9 +32,6 @@ type Options struct {
 	// CORSOrigins is the list of origins to allow via CORS. An empty or nil
 	// slice disables CORS entirely.
 	CORSOrigins []string
-	// EnableDynamicClusters makes it so that clients can pass clusters dynamically
-	// in a session-like way
-	EnableDynamicClusters bool
 	// EnableTracing specifies whether to install a tracing middleware on the
 	// API subrouter.
 	EnableTracing bool
@@ -80,6 +78,10 @@ func (api *API) Adapt(handler VTAdminHandler) http.HandlerFunc {
 		actor, _ := rbac.FromContext(r.Context())
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		if cache.ShouldRefreshFromRequest(r) {
+			ctx = cache.NewIncomingRefreshContext(ctx)
 		}
 
 		handler(ctx, Request{r}, api).Write(w)

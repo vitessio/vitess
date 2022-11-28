@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
@@ -145,8 +146,10 @@ func TestConfigParse(t *testing.T) {
 				Name: "testcluster",
 			},
 			ResolverOptions: &resolver.Options{
-				DiscoveryTags:    expectedTags,
-				DiscoveryTimeout: 100 * time.Millisecond,
+				DiscoveryTags:        expectedTags,
+				DiscoveryTimeout:     100 * time.Millisecond,
+				MinDiscoveryInterval: time.Second * 30,
+				BackoffConfig:        backoff.DefaultConfig,
 			},
 			Credentials:     expectedCreds,
 			CredentialsPath: path,

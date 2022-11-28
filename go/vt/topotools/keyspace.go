@@ -18,6 +18,8 @@ package topotools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,9 +37,12 @@ import (
 // any tablets without a .Hostname set in the topology are skipped.
 //
 // However, on partial errors from the topology, or errors from a RefreshState
-// RPC will cause a boolean flag to be returned indicating only partial success.
-func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, si *topo.ShardInfo, cells []string, logger logutil.Logger) (isPartialRefresh bool, err error) {
+// RPC will cause a boolean flag to be returned indicating only partial success
+// along with a string detailing why we had a partial refresh.
+func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, si *topo.ShardInfo, cells []string, logger logutil.Logger) (isPartialRefresh bool, partialRefreshDetails string, err error) {
 	logger.Infof("RefreshTabletsByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
+	// Causes and details if we have a partial refresh
+	prd := strings.Builder{}
 
 	tabletMap, err := ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
 	switch {
@@ -45,16 +50,27 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 		// keep going
 	case topo.IsErrType(err, topo.PartialResult):
 		logger.Warningf("RefreshTabletsByShard: got partial result for shard %v/%v, may not refresh all tablets everywhere", si.Keyspace(), si.ShardName())
+		prd.WriteString(fmt.Sprintf("got partial results from topo server for shard %v/%v: %v", si.Keyspace(), si.ShardName(), err))
 		isPartialRefresh = true
 	default:
-		return false, err
+		return false, "", err
 	}
 
 	// Any errors from this point onward are ignored.
 	var (
-		m  sync.Mutex
-		wg sync.WaitGroup
+		m              sync.Mutex
+		wg             sync.WaitGroup
+		refreshTimeout = 60 * time.Second
 	)
+
+	// If there's a timeout set on the context, use what's left of it instead of the 60s default.
+	if deadline, ok := ctx.Deadline(); ok {
+		timeLeft := time.Until(deadline)
+		if timeLeft > 0 {
+			refreshTimeout = time.Until(deadline)
+		}
+	}
+
 	for _, ti := range tabletMap {
 		if ti.Hostname == "" {
 			// The tablet is not running, we don't have the host
@@ -66,22 +82,22 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer wg.Done()
-			logger.Infof("Calling RefreshState on tablet %v", ti.AliasString())
+			grctx, grcancel := context.WithTimeout(ctx, refreshTimeout)
+			defer grcancel()
+			logger.Infof("Calling RefreshState on tablet %v with a timeout of %v", ti.AliasString(), refreshTimeout)
 
-			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			defer cancel()
-
-			if err := tmc.RefreshState(ctx, ti.Tablet); err != nil {
+			if err := tmc.RefreshState(grctx, ti.Tablet); err != nil {
 				logger.Warningf("RefreshTabletsByShard: failed to refresh %v: %v", ti.AliasString(), err)
 				m.Lock()
+				prd.WriteString(fmt.Sprintf("failed to refresh tablet %v: %v", ti.AliasString(), err))
 				isPartialRefresh = true
 				m.Unlock()
 			}
 		}(ti)
 	}
-
 	wg.Wait()
-	return isPartialRefresh, nil
+
+	return isPartialRefresh, prd.String(), err
 }
 
 // UpdateShardRecords updates the shard records based on 'from' or 'to'
@@ -121,11 +137,38 @@ func UpdateShardRecords(
 		// For 'to' shards, refresh to make them serve. The 'from' shards will
 		// be refreshed after traffic has migrated.
 		if !isFrom {
-			if _, err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
+			if _, _, err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
 				logger.Warningf("RefreshTabletsByShard(%v/%v, cells=%v) failed with %v; continuing ...", si.Keyspace(), si.ShardName(), cells, err)
 			}
 		}
 	}
 
 	return nil
+}
+
+// KeyspaceEquality returns true iff two KeyspaceInformations are identical for testing purposes
+func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
+	if left.KeyspaceType != right.KeyspaceType {
+		return false
+	}
+	if len(left.ServedFroms) != len(right.ServedFroms) {
+		return false
+	}
+	for i := range left.ServedFroms {
+		if left.ServedFroms[i] != right.ServedFroms[i] {
+			return false
+		}
+	}
+	if left.KeyspaceType != right.KeyspaceType {
+		return false
+	}
+	if left.BaseKeyspace != right.BaseKeyspace {
+		return false
+	}
+
+	if left.SnapshotTime != right.SnapshotTime {
+		return false
+	}
+
+	return left.DurabilityPolicy == right.DurabilityPolicy
 }

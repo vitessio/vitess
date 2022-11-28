@@ -56,6 +56,15 @@ func TestPrometheusGauge(t *testing.T) {
 	checkHandlerForMetrics(t, name, 0)
 }
 
+func TestPrometheusGaugeFloat64(t *testing.T) {
+	name := "blah_gauge_f64"
+	c := stats.NewGaugeFloat64(name, "help")
+	c.Set(3.14)
+	checkHandlerForMetrics(t, name, 3)
+	c.Reset()
+	checkHandlerForMetrics(t, name, 0)
+}
+
 func TestPrometheusCounterFunc(t *testing.T) {
 	name := "blah_counterfunc"
 	stats.NewCounterFunc(name, "help", func() int64 {

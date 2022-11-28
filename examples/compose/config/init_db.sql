@@ -39,8 +39,8 @@ GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';
 CREATE USER 'vt_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
-  LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+  LOCK TABLES, EXECUTE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW,
+  CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_app'@'localhost';
 # User for app debug traffic, with global read access.
 CREATE USER 'vt_appdebug'@'localhost';
@@ -57,21 +57,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
 # TODO: Should we set a password on this since it allows remote connections?
 CREATE USER 'vt_repl'@'%';
 GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
-# User for Vitess filtered replication (binlog player).
-# Same permissions as vt_app.
+# User for Vitess VReplication (base vstreamers and vplayer).
 CREATE USER 'vt_filtered'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_filtered'@'localhost';
-# User for Orchestrator (https://github.com/openark/orchestrator).
-# TODO: Reenable when the password is randomly generated.
-CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
-GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
-  ON *.* TO 'orc_client_user'@'%';
-GRANT SELECT
-  ON _vt.* TO 'orc_client_user'@'%';
 FLUSH PRIVILEGES;
 RESET SLAVE ALL;
 RESET MASTER;

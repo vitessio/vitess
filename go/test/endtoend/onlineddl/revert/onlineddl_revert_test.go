@@ -85,6 +85,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
+	mysqlVersion    string
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -93,6 +94,7 @@ var (
 	tableName             = `stress_test`
 	viewBaseTableName     = `view_base_table_test`
 	viewName              = `view_test`
+	partitionedTableName  = `part_test`
 	createStatement       = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
@@ -155,6 +157,24 @@ var (
 	dropViewIfExistsStatement = `
 		DROP VIEW IF EXISTS view_test
 	`
+	createPartitionedTableStatement = `
+		CREATE TABLE part_test (
+			id INT NOT NULL,
+			ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			primary key (id)
+		)
+		PARTITION BY RANGE (id) (
+				PARTITION p1 VALUES LESS THAN (10),
+				PARTITION p2 VALUES LESS THAN (20),
+				PARTITION p3 VALUES LESS THAN (30),
+				PARTITION p4 VALUES LESS THAN (40),
+				PARTITION p5 VALUES LESS THAN (50),
+				PARTITION p6 VALUES LESS THAN (60)
+		)
+	`
+	populatePartitionedTableStatement = `
+		INSERT INTO part_test (id) VALUES (2),(11),(23),(37),(41),(53)
+	`
 
 	writeMetrics WriteMetrics
 )
@@ -189,7 +209,10 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
+			"--queryserver-config-schema-change-signal-interval", "0.1",
+			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -236,6 +259,11 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	require.NotEmpty(t, mysqlVersion)
+
+	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
 
 	var uuids []string
 	ddlStrategy := "online"
@@ -624,6 +652,44 @@ func TestSchemaChange(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
+	// INSTANT DDL
+	t.Run("INSTANT DDL: add column", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table stress_test add column i_instant int not null default 0", ddlStrategy+" --prefer-instant-ddl", "vtgate", "i_instant")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		specialPlan := row.AsString("special_plan", "")
+		artifacts := row.AsString("artifacts", "")
+		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		assert.NoError(t, err)
+		if instantDDLCapable {
+			// instant DDL expected to apply in 8.0
+			assert.Contains(t, specialPlan, "instant-ddl")
+			assert.Empty(t, artifacts)
+		} else {
+			// instant DDL not possible, this is a normal vrepl migration
+			assert.Empty(t, specialPlan)
+			assert.NotEmpty(t, artifacts)
+		}
+	})
+	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		assert.NoError(t, err)
+		if instantDDLCapable {
+			// instant DDL expected to apply in 8.0, therefore revert is impossible
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		} else {
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		}
+	})
+
 	// DROP
 	t.Run("online DROP TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, dropStatement, "online", "vtgate", "")
@@ -675,6 +741,52 @@ func TestSchemaChange(t *testing.T) {
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
+	})
+
+	// PARTITIONS
+	checkPartitionedTableCountRows := func(t *testing.T, expectRows int64) {
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, "select count(*) as c from part_test", "")
+		require.NotNil(t, rs)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		count, err := row.ToInt64("c")
+		require.NoError(t, err)
+		assert.Equal(t, expectRows, count)
+	}
+	t.Run("partitions: create partitioned table", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, createPartitionedTableStatement, ddlStrategy, "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+
+		populatePartitionedTable(t)
+		checkPartitionedTableCountRows(t, 6)
+	})
+	t.Run("partitions: drop first partition", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: fail revert drop first partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: add new partition", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+	})
+	t.Run("partitions: fail revert add new partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 	})
 
 	// FAILURES
@@ -943,11 +1055,11 @@ func testSelectTableMetrics(t *testing.T) {
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
@@ -962,4 +1074,8 @@ func testSelectTableMetrics(t *testing.T) {
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
 	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
+}
+
+func populatePartitionedTable(t *testing.T) {
+	onlineddl.VtgateExecQuery(t, &vtParams, populatePartitionedTableStatement, "")
 }

@@ -17,23 +17,27 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -41,28 +45,25 @@ import (
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	"vitess.io/vitess/go/vt/mysqlctl"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
-	localCell        = flag.String("cell", "", "cell to use")
-	showTopologyCRUD = flag.Bool("vtctld_show_topology_crud", true, "Controls the display of the CRUD topology actions in the vtctld UI.")
-	proxyTablets     = flag.Bool("proxy_tablets", false, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
+	localCell        string
+	showTopologyCRUD = true
+	proxyTablets     bool
 )
 
 // This file implements a REST-style API for the vtctld web interface.
 
 const (
-	apiPrefix = "/api/"
-
+	apiPrefix       = "/api/"
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-// TabletStats represents realtime stats from a discovery.LegacyTabletStats struct.
+// TabletStats represents realtime stats from a discovery.TabletHealth struct.
 type TabletStats struct {
 	LastError string                 `json:"last_error,omitempty"`
 	Realtime  *querypb.RealtimeStats `json:"realtime,omitempty"`
@@ -88,7 +89,19 @@ type TabletWithStatsAndURL struct {
 	URL                  string                  `json:"url,omitempty"`
 }
 
-func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) *TabletWithStatsAndURL {
+func init() {
+	for _, cmd := range []string{"vtcombo", "vtctld"} {
+		servenv.OnParseFor(cmd, registerVtctldAPIFlags)
+	}
+}
+
+func registerVtctldAPIFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&localCell, "cell", localCell, "cell to use")
+	fs.BoolVar(&showTopologyCRUD, "vtctld_show_topology_crud", showTopologyCRUD, "Controls the display of the CRUD topology actions in the vtctld UI.")
+	fs.BoolVar(&proxyTablets, "proxy_tablets", proxyTablets, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
+}
+
+func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.HealthCheck) *TabletWithStatsAndURL {
 	tablet := &TabletWithStatsAndURL{
 		Alias:                t.Alias,
 		Hostname:             t.Hostname,
@@ -104,21 +117,21 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 		PrimaryTermStartTime: t.PrimaryTermStartTime,
 	}
 
-	if *proxyTablets {
+	if proxyTablets {
 		tablet.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
 	} else {
 		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 	}
 
-	if realtimeStats != nil {
-		if stats, err := realtimeStats.tabletStats(tablet.Alias); err == nil {
+	if healthcheck != nil {
+		if health, err := healthcheck.GetTabletHealth(discovery.KeyFromTablet(t), tablet.Alias); err == nil {
 			tablet.Stats = &TabletStats{
-				Realtime: stats.Stats,
-				Serving:  stats.Serving,
-				Up:       stats.Up,
+				Realtime: health.Stats,
+				Serving:  health.Serving,
+				Up:       true,
 			}
-			if stats.LastError != nil {
-				tablet.Stats.LastError = stats.LastError.Error()
+			if health.LastError != nil {
+				tablet.Stats.LastError = health.LastError.Error()
 			}
 		}
 	}
@@ -192,7 +205,7 @@ func unmarshalRequest(r *http.Request, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, realtimeStats *realtimeStats) {
+func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, healthcheck discovery.HealthCheck) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -292,7 +305,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				if err != nil {
 					return nil, err
 				}
-				tablet := newTabletWithStatsAndURL(t.Tablet, realtimeStats)
+				tablet := newTabletWithStatsAndURL(t.Tablet, healthcheck)
 				tablets = append(tablets, tablet)
 			}
 		}
@@ -349,7 +362,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		keyspace := parts[1]
 
 		if cell == "local" {
-			if *localCell == "" {
+			if localCell == "" {
 				cells, err := ts.GetCellInfoNames(ctx)
 				if err != nil {
 					return nil, fmt.Errorf("could not fetch cell info: %v", err)
@@ -359,7 +372,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				}
 				cell = cells[0]
 			} else {
-				cell = *localCell
+				cell = localCell
 			}
 		}
 
@@ -501,11 +514,11 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				metric = "health"
 			}
 
-			if realtimeStats == nil {
-				return nil, fmt.Errorf("realtimeStats not initialized")
+			if healthcheck == nil {
+				return nil, fmt.Errorf("healthcheck not initialized")
 			}
 
-			heatmap, err := realtimeStats.heatmapData(keyspace, cell, tabletType, metric)
+			heatmap, err := heatmapData(healthcheck, keyspace, cell, tabletType, metric)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get heatmap data: %v", err)
 			}
@@ -524,8 +537,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			return nil, fmt.Errorf("invalid tablet_health path: %q  expected path: /tablet_health/<cell>/<uid>", tabletPath)
 		}
 
-		if realtimeStats == nil {
-			return nil, fmt.Errorf("realtimeStats not initialized")
+		if healthcheck == nil {
+			return nil, fmt.Errorf("healthcheck not initialized")
 		}
 
 		cell := parts[0]
@@ -539,7 +552,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			Cell: cell,
 			Uid:  uid,
 		}
-		tabletStat, err := realtimeStats.tabletStats(&tabletAlias)
+		tabletStat, err := healthcheck.GetTabletHealthByAlias(&tabletAlias)
 		if err != nil {
 			return nil, fmt.Errorf("could not get tabletStats: %v", err)
 		}
@@ -565,11 +578,11 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				cell = "all"
 			}
 
-			if realtimeStats == nil {
+			if healthcheck == nil {
 				return nil, fmt.Errorf("realtimeStats not initialized")
 			}
 
-			return realtimeStats.topologyInfo(keyspace, cell), nil
+			return getTopologyInfo(healthcheck, keyspace, cell), nil
 		}
 		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>", targetPath)
 	})
@@ -653,10 +666,10 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 
 		resp := make(map[string]any)
-		resp["activeReparents"] = !*mysqlctl.DisableActiveReparents
-		resp["showStatus"] = *enableRealtimeStats
-		resp["showTopologyCRUD"] = *showTopologyCRUD
-		resp["showWorkflows"] = *workflowManagerInit
+		resp["activeReparents"] = !mysqlctl.DisableActiveReparents
+		resp["showStatus"] = enableRealtimeStats
+		resp["showTopologyCRUD"] = showTopologyCRUD
+		resp["showWorkflows"] = workflowManagerInit
 		resp["workflows"] = workflow.AvailableFactories()
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {

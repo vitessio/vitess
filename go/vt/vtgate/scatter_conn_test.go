@@ -45,7 +45,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
@@ -108,7 +108,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
 	sbc0_1 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc0_2 := hc.AddTestTablet("aa", "2", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	//	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
@@ -117,7 +117,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 	sbc0_1.SetResults([]*sqltypes.Result{{}})
 	sbc0_2.SetResults([]*sqltypes.Result{{}})
 
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
@@ -253,7 +253,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 		keyspace := "keyspace"
 		createSandbox(keyspace)
 		hc := discovery.NewFakeHealthCheck(nil)
-		sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+		sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
 		sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 		sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -261,7 +261,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 		sbc0.SetResults([]*sqltypes.Result{{}})
 		sbc1.SetResults([]*sqltypes.Result{{}})
 
-		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+		res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
 
 		t.Run(test.name, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{})
@@ -290,10 +290,10 @@ func TestReservedConnFail(t *testing.T) {
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	_ = hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
@@ -319,6 +319,14 @@ func TestReservedConnFail(t *testing.T) {
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 ended at 2020-01-20")
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	oldRId = session.Session.ShardSessions[0].ReservedId
+
+	sbc0.Queries = nil
+	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 in use: for tx killer rollback")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -420,6 +428,10 @@ func TestIsConnClosed(t *testing.T) {
 		"tx not found missing tx id",
 		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction not found"),
 		false,
+	}, {
+		"tx getting killed by tx killer",
+		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 in use: for tx killer rollback"),
+		true,
 	}}
 
 	for _, tCase := range testCases {

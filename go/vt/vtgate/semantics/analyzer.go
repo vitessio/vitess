@@ -53,14 +53,20 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	}
 	s.org = a
 	a.tables.org = a
-	a.binder = newBinder(s, a, a.tables, a.typer)
-	a.rewriter = &earlyRewriter{scoper: s}
 
+	b := newBinder(s, a, a.tables, a.typer)
+	a.binder = b
+	a.rewriter = &earlyRewriter{
+		scoper:          s,
+		binder:          b,
+		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
+	}
+	s.binder = b
 	return a
 }
 
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
+func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 
 	// Analysis for initial scope
@@ -75,7 +81,13 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	return semTable, nil
 }
 
-func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collations.ID) *SemTable {
+func (a analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
+	var comments *sqlparser.ParsedComments
+	commentedStmt, isCommented := statement.(sqlparser.Commented)
+	if isCommented {
+		comments = commentedStmt.GetParsedComments()
+	}
+
 	return &SemTable{
 		Recursive:         a.binder.recursive,
 		Direct:            a.binder.direct,
@@ -85,11 +97,12 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 		NotSingleRouteErr: a.projErr,
 		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
-		Comments:          statement.GetParsedComments(),
+		Comments:          comments,
 		SubqueryMap:       a.binder.subqueryMap,
 		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
 		Collation:         coll,
+		ExpandedColumns:   a.rewriter.expandedColumns,
 	}
 }
 
@@ -196,8 +209,8 @@ func checkUnionColumns(union *sqlparser.Union) error {
 }
 
 /*
-	errors that happen when we are evaluating SELECT expressions are saved until we know
-	if we can merge everything into a single route or not
+errors that happen when we are evaluating SELECT expressions are saved until we know
+if we can merge everything into a single route or not
 */
 func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
 	_, ok := cursor.Node().(sqlparser.SelectExprs)
@@ -246,6 +259,18 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Update:
+		if len(node.TableExprs) != 1 {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !isAlias {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
+		if isDerived {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the UPDATE is not updatable", alias.As.String())
+		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
@@ -284,25 +309,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
 		}
 	case *sqlparser.JoinTableExpr:
-		if node.Condition != nil && node.Condition.Using != nil {
-			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")}
-		}
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
 		}
-	case *sqlparser.FuncExpr:
-		if sqlparser.IsLockingFunc(node) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
-		}
-
-		if node.Distinct {
-			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
-			if len(node.Exprs) < 1 {
-				return err
-			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
-				return err
-			}
-		}
+	case *sqlparser.LockingFunc:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
 	case *sqlparser.Union:
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {

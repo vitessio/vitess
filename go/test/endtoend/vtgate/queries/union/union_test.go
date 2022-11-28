@@ -49,35 +49,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	}
 }
 
-func TestUnionAll(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
-
-	mcmp.Exec("insert into t1(id1, id2) values(1, 1), (2, 2)")
-	mcmp.Exec("insert into t2(id3, id4) values(3, 3), (4, 4)")
-
-	// union all between two selectuniqueequal
-	mcmp.AssertMatches("select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4", "[[INT64(1)]]")
-
-	// union all between two different tables
-	mcmp.AssertMatches("(select id1,id2 from t1 order by id1) union all (select id3,id4 from t2 order by id3)",
-		"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
-
-	// union all between two different tables
-	result := mcmp.Exec("(select id1,id2 from t1) union all (select id3,id4 from t2)")
-	assert.Equal(t, 4, len(result.Rows))
-
-	// union all between two different tables
-	mcmp.AssertMatches("select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
-		"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
-
-	mcmp.Exec("insert into t1(id1, id2) values(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)")
-
-	// union all between two select unique in tables
-	mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
-		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
-}
-
 func TestUnionDistinct(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -107,39 +78,41 @@ func TestUnionDistinct(t *testing.T) {
 	}
 }
 
-func TestUnionAllOlap(t *testing.T) {
+func TestUnionAll(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
 	mcmp.Exec("insert into t1(id1, id2) values(1, 1), (2, 2)")
 	mcmp.Exec("insert into t2(id3, id4) values(3, 3), (4, 4)")
 
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			// union all between two selectuniqueequal
+			mcmp.AssertMatches("select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4", "[[INT64(1)]]")
 
-	// union all between two selectuniqueequal
-	mcmp.AssertMatches("select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4", "[[INT64(1)]]")
+			// union all between two different tables
+			mcmp.AssertMatchesNoOrder("(select id1,id2 from t1 order by id1) union all (select id3,id4 from t2 order by id3)",
+				"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
 
-	// union all between two different tables
-	// union all between two different tables
-	result := mcmp.Exec("(select id1,id2 from t1 order by id1) union all (select id3,id4 from t2 order by id3)")
-	assert.Equal(t, 4, len(result.Rows))
+			// union all between two different tables
+			result := mcmp.Exec("(select id1,id2 from t1) union all (select id3,id4 from t2)")
+			assert.Equal(t, 4, len(result.Rows))
 
-	// union all between two different tables
-	result = mcmp.Exec("(select id1,id2 from t1) union all (select id3,id4 from t2)")
-	assert.Equal(t, 4, len(result.Rows))
+			// union all between two different tables
+			mcmp.AssertMatchesNoOrder("select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
+				"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
 
-	// union all between two different tables
-	result = mcmp.Exec("select tbl2.id1 FROM ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1")
-	assert.Equal(t, 4, len(result.Rows))
+			// union all between two select unique in tables
+			mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
+				"[[INT64(1)] [INT64(2)] [INT64(1)] [INT64(2)]]")
 
-	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
-	mcmp.Exec("insert into t1(id1, id2) values(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)")
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+			// 4 tables union all
+			mcmp.AssertMatchesNoOrder("select id1, id2 from t1 where id1 = 1 union all select id3,id4 from t2 where id3 = 3 union all select id1, id2 from t1 where id1 = 2 union all select id3,id4 from t2 where id3 = 4",
+				"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
+		})
 
-	// union all between two selectuniquein tables
-	mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
-		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
-
+	}
 }
 
 func TestUnion(t *testing.T) {

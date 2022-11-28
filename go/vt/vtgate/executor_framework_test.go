@@ -18,22 +18,19 @@ package vtgate
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-
-	"context"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
@@ -122,9 +119,49 @@ var executorVSchema = `
         		"table": "TestUnsharded.wo_lu_idx",
         		"from": "wo_lu_col",
         		"to": "keyspace_id",
-				"write_only": "true"
+        		"write_only": "true"
       		},
-      		"owner": "t2_wo_lookup"
+      		"owner": "t2_lookup"
+    	},
+		"t2_erl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.erl_lu_idx",
+        		"from": "erl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "exclusive"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_srl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.srl_lu_idx",
+        		"from": "srl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "shared"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_nrl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.nrl_lu_idx",
+        		"from": "nrl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "none"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_nv_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.nv_lu_idx",
+        		"from": "nv_lu_col",
+        		"to": "keyspace_id",
+        		"no_verify": "true"
+      		},
+      		"owner": "t2_lookup"
     	},
 		"t2_lu_vdx": {
       		"type": "lookup_hash_unique",
@@ -133,22 +170,14 @@ var executorVSchema = `
         		"from": "lu_col",
         		"to": "keyspace_id"
       		},
-      		"owner": "t2_wo_lookup"
+		"owner": "t2_lookup"
     	},
 		"regional_vdx": {
 			"type": "region_experimental",
 			"params": {
 				"region_bytes": "1"
 			}
-    	},
-		"multicol_vdx": {
-			"type": "multicol",
-			"params": {
-				"column_count": "3",
-				"column_bytes": "1,3,4",
-				"column_vindex": "hash,binary,unicode_loose_xxhash"
-			}
-        }
+    	}
 	},
 	"tables": {
 		"user": {
@@ -305,15 +334,31 @@ var executorVSchema = `
 				}
 			]
 		},
-		"t2_wo_lookup": {
+		"t2_lookup": {
       		"column_vindexes": [
 				{
 				  	"column": "id",
 				  	"name": "hash_index"
 				},
 				{
-				  	"column": "wo_lu_col",
-				  	"name": "t2_wo_lu_vdx"
+					"column": "wo_lu_col",
+					"name": "t2_wo_lu_vdx"
+				},
+				{
+					"column": "erl_lu_col",
+					"name": "t2_erl_lu_vdx"
+				},
+				{
+					"column": "srl_lu_col",
+					"name": "t2_srl_lu_vdx"
+				},
+				{
+					"column": "nrl_lu_col",
+					"name": "t2_nrl_lu_vdx"
+				},
+				{
+					"column": "nv_lu_col",
+					"name": "t2_nv_lu_vdx"
 				},
 				{
 				  	"column": "lu_col",
@@ -328,15 +373,7 @@ var executorVSchema = `
 					"name": "regional_vdx"
 				}
 			]
-    	},
-		"multicoltbl": {
-			"column_vindexes": [
-				{
-					"columns": ["cola","colb","colc"],
-					"name": "multicol_vdx"
-				}
-			]
-		}
+    	}
 	}
 }
 `
@@ -369,6 +406,10 @@ var unshardedVSchema = `
 			}
 		},
 		"wo_lu_idx": {},
+		"erl_lu_idx": {},
+		"srl_lu_idx": {},
+		"nrl_lu_idx": {},
+		"nv_lu_idx": {},
 		"lu_idx": {},
 		"simple": {}
 	}
@@ -393,10 +434,10 @@ func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuper) Cost() int          { return 0 }
 func (*keyRangeLookuper) IsUnique() bool     { return false }
 func (*keyRangeLookuper) NeedsVCursor() bool { return false }
-func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*keyRangeLookuper) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuper) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
@@ -418,10 +459,10 @@ func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" 
 func (*keyRangeLookuperUnique) Cost() int          { return 0 }
 func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
 func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
-func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*keyRangeLookuperUnique) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
@@ -441,10 +482,9 @@ func init() {
 }
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
-	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -461,32 +501,15 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	_ = hc.AddTestTablet(cell, "random", 1, "TestXBadVSchema", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	createSandbox(KsTestUnsharded)
-	_ = topo.NewShardInfo(KsTestUnsharded, "0", &topodatapb.Shard{}, nil)
-	if err := serv.topoServer.CreateKeyspace(ctx, KsTestUnsharded, &topodatapb.Keyspace{}); err != nil {
-		log.Errorf("CreateKeyspace() failed: %v", err)
-	}
-	if err := serv.topoServer.CreateShard(ctx, KsTestUnsharded, "0"); err != nil {
-		log.Errorf("CreateShard(0) failed: %v", err)
-	}
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	tablet := topo.NewTablet(sbclookup.Tablet().Alias.Uid, cell, "0")
-	tablet.Type = topodatapb.TabletType_PRIMARY
-	tablet.Keyspace = KsTestUnsharded
-	tablet.Shard = "0"
-	serv.topoServer.UpdateShardFields(ctx, KsTestUnsharded, "0", func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = tablet.Alias
-		return nil
-	})
-	if err := serv.topoServer.CreateTablet(ctx, tablet); err != nil {
-		log.Errorf("CreateShard(0) failed: %v", err)
-	}
+
 	// Ues the 'X' in the name to ensure it's not alphabetically first.
 	// Otherwise, it would become the default keyspace for the dual table.
 	bad := createSandbox("TestXBadSharding")
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	// create a new session each time so that ShardSessions don't get re-used across tests
@@ -499,7 +522,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -510,7 +533,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -521,7 +544,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -539,7 +562,7 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -607,11 +630,11 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 		if len(wantQueries) < idx {
 			t.Errorf("got more queries than expected")
 		}
-		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
 		got := query.Sql
 		expected := wantQueries[idx].Sql
-		idx++
 		assert.Equal(t, expected, got)
+		assert.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
+		idx++
 	}
 }
 
@@ -627,7 +650,11 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 			if !strings.HasPrefix(expected, "savepoint") {
 				t.Fatal("savepoint expected")
 			}
-			savepointStore[expected[10:]] = got[10:]
+			if sp, exists := savepointStore[expected[10:]]; exists {
+				assert.Equal(t, sp, got[10:])
+			} else {
+				savepointStore[expected[10:]] = got[10:]
+			}
 			continue
 		}
 		if strings.HasPrefix(got, "rollback to") {
@@ -656,12 +683,12 @@ func testNonZeroDuration(t *testing.T, what, d string) {
 	}
 }
 
-func getQueryLog(logChan chan any) *LogStats {
+func getQueryLog(logChan chan any) *logstats.LogStats {
 	var log any
 
 	select {
 	case log = <-logChan:
-		return log.(*LogStats)
+		return log.(*logstats.LogStats)
 	default:
 		return nil
 	}
@@ -674,29 +701,11 @@ func getQueryLog(logChan chan any) *LogStats {
 // is a repeat query.
 var testPlannedQueries = map[string]bool{}
 
-func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
+func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *logstats.LogStats {
 	t.Helper()
 
-	return testQueryLogWithSavepoint(t, logChan, method, stmtType, sql, shardQueries, false /* checkSavepoint */)
-}
-
-func testQueryLogWithSavepoint(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int, checkSavepoint bool) *LogStats {
-	t.Helper()
-
-	var logStats *LogStats
-
-	if checkSavepoint {
-		logStats = getQueryLog(logChan)
-		require.NotNil(t, logStats)
-	} else {
-		for {
-			logStats = getQueryLog(logChan)
-			require.NotNil(t, logStats)
-			if logStats.Method != "MarkSavepoint" {
-				break
-			}
-		}
-	}
+	logStats := getQueryLog(logChan)
+	require.NotNil(t, logStats)
 
 	var log bytes.Buffer
 	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
@@ -710,11 +719,9 @@ func testQueryLogWithSavepoint(t *testing.T, logChan chan any, method, stmtType,
 	checkEqualQuery := true
 	// The internal savepoints are created with uuids so the value of it not known to assert.
 	// Therefore, the equal query check is ignored.
-	if checkSavepoint {
-		switch stmtType {
-		case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
-			checkEqualQuery = false
-		}
+	switch stmtType {
+	case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+		checkEqualQuery = false
 	}
 	// only test the durations if there is no error (fields[16])
 	if fields[16] == "\"\"" {

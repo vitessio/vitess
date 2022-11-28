@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/utils"
@@ -106,7 +109,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set global @@session.client_found_rows = 1",
-		err: "cannot use scope and @@",
+		err: "syntax error at position 39 near 'session.client_found_rows'",
 	}, {
 		in:  "set client_found_rows = 'aa'",
 		err: "variable 'client_found_rows' can't be set to the value: 'aa' is not a boolean",
@@ -153,6 +156,26 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set workload = 1",
 		err: "incorrect argument type to variable 'workload': INT64",
 	}, {
+		in: "set tx_isolation = 'read-committed'",
+		out: &vtgatepb.Session{
+			Autocommit:      true,
+			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED},
+			SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'", "tx_isolation": "'READ-COMMITTED'"},
+		},
+	}, {
+		in: "set transaction_isolation = 'read-committed'",
+		out: &vtgatepb.Session{
+			Autocommit:      true,
+			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED},
+			SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'", "tx_isolation": "'READ-COMMITTED'"},
+		},
+	}, {
+		in:  "set transaction_isolation = 'read_committed'",
+		err: "Variable 'transaction_isolation' can't be set to the value of 'read_committed'",
+	}, {
+		in:  "set transaction_isolation = 'read committed'",
+		err: "Variable 'transaction_isolation' can't be set to the value of 'read committed'",
+	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
@@ -175,7 +198,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set foo = 1",
-		err: "Unknown system variable 'session foo = 1'",
+		err: "Unknown system variable '@@foo = 1'",
 	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -204,26 +227,47 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set transaction_read_only = 2",
 		err: "variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
-		in:  "set session transaction isolation level repeatable read",
-		out: &vtgatepb.Session{Autocommit: true},
+		in: "set session transaction isolation level repeatable read",
+		out: &vtgatepb.Session{
+			Autocommit:      true,
+			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_REPEATABLE_READ},
+			SystemVariables: map[string]string{"transaction_isolation": "'REPEATABLE-READ'", "tx_isolation": "'REPEATABLE-READ'"},
+		},
 	}, {
-		in:  "set session transaction isolation level read committed",
-		out: &vtgatepb.Session{Autocommit: true},
+		in: "set session transaction isolation level read committed",
+		out: &vtgatepb.Session{
+			Autocommit:      true,
+			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED},
+			SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'", "tx_isolation": "'READ-COMMITTED'"},
+		},
 	}, {
-		in:  "set session transaction isolation level read uncommitted",
-		out: &vtgatepb.Session{Autocommit: true},
+		in: "set session transaction isolation level read uncommitted",
+		out: &vtgatepb.Session{
+			Autocommit:      true,
+			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_UNCOMMITTED},
+			SystemVariables: map[string]string{"transaction_isolation": "'READ-UNCOMMITTED'", "tx_isolation": "'READ-UNCOMMITTED'"},
+		},
 	}, {
-		in:  "set session transaction isolation level serializable",
-		out: &vtgatepb.Session{Autocommit: true},
+		in: "set session transaction isolation level serializable",
+		out: &vtgatepb.Session{
+			Autocommit:      true,
+			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE},
+			SystemVariables: map[string]string{"transaction_isolation": "'SERIALIZABLE'", "tx_isolation": "'SERIALIZABLE'"},
+		},
 	}, {
-		in:  "set transaction isolation level serializable",
-		out: &vtgatepb.Session{Autocommit: true},
+		in: "set transaction isolation level serializable",
+		out: &vtgatepb.Session{
+			Autocommit:      true,
+			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE},
+			SystemVariables: map[string]string{"transaction_isolation": "'SERIALIZABLE'", "tx_isolation": "'SERIALIZABLE'"},
+			Warnings:        []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}},
+		},
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -248,6 +292,12 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set @@socket = '/tmp/change.sock'",
 		err: "variable 'socket' is a read only variable",
+	}, {
+		in:  "set @@query_timeout = 50",
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 50},
+	}, {
+		in:  "set @@query_timeout = 50, query_timeout = 75",
+		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 75},
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
@@ -265,7 +315,7 @@ func TestExecutorSet(t *testing.T) {
 
 func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
-	*sysVarSetEnabled = true
+	sysVarSetEnabled = true
 
 	returnResult := func(columnName, typ, value string) *sqltypes.Result {
 		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ), value)
@@ -297,10 +347,6 @@ func TestExecutorSetOp(t *testing.T) {
 		in:      "set sql_safe_updates = 1",
 		sysVars: map[string]string{"sql_safe_updates": "1"},
 		result:  returnResult("sql_safe_updates", "int64", "1"),
-	}, {
-		in:      "set tx_isolation = 'read-committed'",
-		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
-		result:  returnResult("tx_isolation", "varchar", "read-committed"),
 	}, {
 		in:      "set sql_quote_show_create = 0",
 		sysVars: map[string]string{"sql_quote_show_create": "0"},
@@ -373,9 +419,9 @@ func TestExecutorSetMetadata(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
 	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
 
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
 	executor, _, _, _ = createExecutorEnv()
@@ -484,4 +530,125 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 		result[key] = variable
 	}
 	return result
+}
+
+func TestSetVar(t *testing.T) {
+	executor, _, _, sbc := createExecutorEnv()
+	executor.normalize = true
+
+	oldVersion := sqlparser.MySQLVersion
+	sqlparser.MySQLVersion = "80000"
+	defer func() {
+		sqlparser.MySQLVersion = oldVersion
+	}()
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+
+	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+		"|only_full_group_by")})
+
+	_, err := executor.Execute(context.Background(), "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	tcases := []struct {
+		sql string
+		rc  bool
+	}{
+		{sql: "select 1 from user"},
+		{sql: "update user set col = 2"},
+		{sql: "delete from user"},
+		{sql: "insert into user (id) values (1)"},
+		{sql: "replace into user(id, col) values (1, 'new')"},
+		{sql: "set autocommit = 0"},
+		{sql: "show create table user"}, // reserved connection should not be set.
+		{sql: "create table foo(bar bigint)", rc: true},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			// reset reserved conn need.
+			session.SetReservedConn(false)
+
+			_, err = executor.Execute(context.Background(), "TestSetVar", session, tc.sql, map[string]*querypb.BindVariable{})
+			require.NoError(t, err)
+			assert.Equal(t, tc.rc, session.InReservedConn())
+		})
+	}
+}
+
+func TestSetVarShowVariables(t *testing.T) {
+	executor, _, _, sbc := createExecutorEnv()
+	executor.normalize = true
+
+	oldVersion := sqlparser.MySQLVersion
+	sqlparser.MySQLVersion = "80000"
+	defer func() {
+		sqlparser.MySQLVersion = oldVersion
+	}()
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+
+	sbc.SetResults([]*sqltypes.Result{
+		// select query result for checking any change in system settings
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|only_full_group_by"),
+		// show query result
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE")})
+
+	_, err := executor.Execute(context.Background(), "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	// this should return the updated value of sql_mode.
+	qr, err := executor.Execute(context.Background(), "TestSetVar", session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
+	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("only_full_group_by")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+func TestExecutorSetAndSelect(t *testing.T) {
+	e, _, _, sbc := createExecutorEnv()
+	e.normalize = true
+
+	testcases := []struct {
+		sysVar        string
+		val           string
+		exp           string
+		expShardCount int
+	}{{
+		sysVar:        "transaction_isolation",
+		exp:           `[[VARCHAR("REPEATABLE-READ")]]`,
+		expShardCount: 1, // query should reach the shard only in case of unset transaction isolation level.
+	}, {
+		sysVar: "transaction_isolation",
+		val:    "READ-COMMITTED",
+		exp:    `[[VARCHAR("READ-COMMITTED")]]`,
+	}, {
+		sysVar: "tx_isolation",
+		val:    "READ-UNCOMMITTED",
+		exp:    `[[VARCHAR("READ-UNCOMMITTED")]]`,
+	}, {
+		sysVar: "tx_isolation",
+		exp:    `[[VARCHAR("READ-UNCOMMITTED")]]`, // this returns the value set in previous query.
+	}}
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	for _, tcase := range testcases {
+		t.Run(fmt.Sprintf("%s-%s", tcase.sysVar, tcase.val), func(t *testing.T) {
+			sbc.ExecCount.Set(0) // reset the value
+
+			if tcase.val != "" {
+				setQ := fmt.Sprintf("set %s = '%s'", tcase.sysVar, tcase.val)
+				_, err := e.Execute(context.Background(), "TestExecutorSetAndSelect", session, setQ, nil)
+				require.NoError(t, err)
+			}
+
+			selectQ := fmt.Sprintf("select @@%s", tcase.sysVar)
+			// if the query reaches the shard, it will return REPEATABLE-READ isolation level.
+			sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), "REPEATABLE-READ")})
+
+			qr, err := e.Execute(context.Background(), "TestExecutorSetAndSelect", session, selectQ, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.exp, fmt.Sprintf("%v", qr.Rows))
+			assert.EqualValues(t, tcase.expShardCount, sbc.ExecCount.Get())
+		})
+	}
 }

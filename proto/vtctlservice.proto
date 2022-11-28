@@ -45,6 +45,8 @@ service Vtctld {
   rpc ApplyRoutingRules(vtctldata.ApplyRoutingRulesRequest) returns (vtctldata.ApplyRoutingRulesResponse) {};
   // ApplySchema applies a schema to a keyspace.
   rpc ApplySchema(vtctldata.ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
+  // ApplyShardRoutingRules applies the VSchema shard routing rules.
+  rpc ApplyShardRoutingRules(vtctldata.ApplyShardRoutingRulesRequest) returns (vtctldata.ApplyShardRoutingRulesResponse) {};
   // ApplyVSchema applies a vschema to a keyspace.
   rpc ApplyVSchema(vtctldata.ApplyVSchemaRequest) returns (vtctldata.ApplyVSchemaResponse) {};
   // Backup uses the BackupEngine and BackupStorage services on the specified
@@ -105,6 +107,8 @@ service Vtctld {
   // GetCellsAliases returns a mapping of cell alias to cells identified by that
   // alias.
   rpc GetCellsAliases(vtctldata.GetCellsAliasesRequest) returns (vtctldata.GetCellsAliasesResponse) {};
+  // GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+  rpc GetFullStatus(vtctldata.GetFullStatusRequest) returns (vtctldata.GetFullStatusResponse) {};
   // GetKeyspace reads the given keyspace from the topo and returns it.
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
@@ -118,12 +122,16 @@ service Vtctld {
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
+  // GetShardRoutingRules returns the VSchema shard routing rules.
+  rpc GetShardRoutingRules(vtctldata.GetShardRoutingRulesRequest) returns (vtctldata.GetShardRoutingRulesResponse) {};
   // GetSrvKeyspaceNames returns a mapping of cell name to the keyspaces served
   // in that cell.
   rpc GetSrvKeyspaceNames(vtctldata.GetSrvKeyspaceNamesRequest) returns (vtctldata.GetSrvKeyspaceNamesResponse) {};
   // GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
   // cells.
   rpc GetSrvKeyspaces (vtctldata.GetSrvKeyspacesRequest) returns (vtctldata.GetSrvKeyspacesResponse) {};
+  // UpdateThrottlerConfig updates the tablet throttler configuration
+  rpc UpdateThrottlerConfig(vtctldata.UpdateThrottlerConfigRequest) returns (vtctldata.UpdateThrottlerConfigResponse) {};
   // GetSrvVSchema returns the SrvVSchema for a cell.
   rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
   // GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
@@ -133,6 +141,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetTopologyPath returns the topology cell at a given path.
+  rpc GetTopologyPath(vtctldata.GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
   rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.
@@ -197,13 +207,8 @@ service Vtctld {
   rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
-  // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
-  // only for emergency fixes. This does not rebuild the serving graph.
-  //
-  // The ServedFromMap is automatically updated as a part of MigrateServedFrom.
-  rpc SetKeyspaceServedFrom(vtctldata.SetKeyspaceServedFromRequest) returns (vtctldata.SetKeyspaceServedFromResponse) {};
-  // SetKeyspaceShardingInfo updates the sharding information for a keyspace.
-  rpc SetKeyspaceShardingInfo(vtctldata.SetKeyspaceShardingInfoRequest) returns (vtctldata.SetKeyspaceShardingInfoResponse) {};
+  // SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+  rpc SetKeyspaceDurabilityPolicy(vtctldata.SetKeyspaceDurabilityPolicyRequest) returns (vtctldata.SetKeyspaceDurabilityPolicyResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving
@@ -284,6 +289,8 @@ service Vtctld {
   rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
   // ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
   rpc ValidateVersionKeyspace(vtctldata.ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+  // ValidateVersionShard validates that the version on the primary matches all of the replicas.
+  rpc ValidateVersionShard(vtctldata.ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
   // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
 }

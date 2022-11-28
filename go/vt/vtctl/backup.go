@@ -18,10 +18,10 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"time"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/protoutil"
@@ -46,7 +46,7 @@ func init() {
 	addCommand("Shards", command{
 		name:   "BackupShard",
 		method: commandBackupShard,
-		params: "[-allow_primary=false] <keyspace/shard>",
+		params: "[--allow_primary=false] <keyspace/shard>",
 		help:   "Chooses a tablet and creates a backup for a shard.",
 	})
 	addCommand("Shards", command{
@@ -59,18 +59,18 @@ func init() {
 	addCommand("Tablets", command{
 		name:   "Backup",
 		method: commandBackup,
-		params: "[-concurrency=4] [-allow_primary=false] <tablet alias>",
+		params: "[--concurrency=4] [--allow_primary=false] <tablet alias>",
 		help:   "Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes.",
 	})
 	addCommand("Tablets", command{
 		name:   "RestoreFromBackup",
 		method: commandRestoreFromBackup,
-		params: "[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
+		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
 		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time.",
 	})
 }
 
-func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 
@@ -108,7 +108,7 @@ func (b *backupEventStreamLogger) Send(resp *vtctldatapb.BackupResponse) error {
 	return nil
 }
 
-func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 
@@ -132,7 +132,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
-func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	return nil
 }
 
-func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (b *backupRestoreEventStreamLogger) Send(resp *vtctldatapb.RestoreFromBacku
 	return nil
 }
 
-func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	if err := subFlags.Parse(args); err != nil {
 		return err

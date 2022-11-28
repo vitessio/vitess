@@ -93,7 +93,7 @@ type Buffer struct {
 	// In particular, it is used to serialize the following Go routines:
 	// - 1. Requests which may buffer (RLock, can be run in parallel)
 	// - 2. Request which starts buffering (based on the seen error)
-	// - 3. LegacyHealthCheck listener ("StatsUpdate") which stops buffering
+	// - 3. HealthCheck subscriber ("StatsUpdate") which stops buffering
 	// - 4. Timer which may stop buffering after -buffer_max_failover_duration
 	mu sync.RWMutex
 	// buffers holds a shardBuffer object per shard, even if no failover is in
@@ -169,29 +169,6 @@ func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
 			sb.recordKeyspaceEvent(shard.Tablet, shard.Serving)
 		}
 	}
-}
-
-// StatsUpdate keeps track of the "tablet_externally_reparented_timestamp" of
-// each primary. This way we can detect the end of a failover.
-// It is part of the discovery.LegacyHealthCheckStatsListener interface.
-func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_PRIMARY {
-		panic(fmt.Sprintf("BUG: non-PRIMARY LegacyTabletStats object must not be forwarded: %#v", ts))
-	}
-
-	timestamp := ts.TabletExternallyReparentedTimestamp
-	if timestamp == 0 {
-		// Primarys where TabletExternallyReparented was never called will return 0.
-		// Ignore them.
-		return
-	}
-
-	sb := b.getOrCreateBuffer(ts.Target.Keyspace, ts.Target.Shard)
-	if sb == nil {
-		// Buffer is shut down. Ignore all calls.
-		return
-	}
-	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias)
 }
 
 // getOrCreateBuffer returns the ShardBuffer for the given keyspace and shard.

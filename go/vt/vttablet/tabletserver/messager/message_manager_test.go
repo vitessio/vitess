@@ -64,7 +64,7 @@ var (
 
 func newMMTable() *schema.Table {
 	return &schema.Table{
-		Name: sqlparser.NewTableIdent("foo"),
+		Name: sqlparser.NewIdentifierCS("foo"),
 		Type: schema.Message,
 		MessageInfo: &schema.MessageInfo{
 			Fields:             testFields,
@@ -80,7 +80,7 @@ func newMMTable() *schema.Table {
 
 func newMMTableWithBackoff() *schema.Table {
 	return &schema.Table{
-		Name: sqlparser.NewTableIdent("foo"),
+		Name: sqlparser.NewIdentifierCS("foo"),
 		Type: schema.Message,
 		MessageInfo: &schema.MessageInfo{
 			Fields:             testFields,
@@ -148,7 +148,7 @@ func TestReceiverCancel(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		if mm.receiverCount() != 0 {
+		if len(mm.receivers) != 0 {
 			continue
 		}
 		return
@@ -216,7 +216,7 @@ func TestMessageManagerSend(t *testing.T) {
 	want := &sqltypes.Result{
 		Fields: testFields,
 	}
-	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+	if got := <-r1.ch; !got.Equal(want) {
 		t.Errorf("Received: %v, want %v", got, want)
 	}
 	// Set the channel to verify call to Postpone.
@@ -230,7 +230,7 @@ func TestMessageManagerSend(t *testing.T) {
 			sqltypes.NULL,
 		}},
 	}
-	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+	if got := <-r1.ch; !got.Equal(want) {
 		t.Errorf("Received: %v, want %v", got, want)
 	}
 
@@ -415,7 +415,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 			sqltypes.NULL,
 		}},
 	}
-	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+	if got := <-r1.ch; !got.Equal(want) {
 		t.Errorf("Received: %v, want %v", got, row1)
 	}
 	mm.mu.Lock()
@@ -432,7 +432,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 			sqltypes.NULL,
 		}},
 	}
-	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+	if got := <-r1.ch; !got.Equal(want) {
 		t.Errorf("Received: %+v, want %+v", got, row1)
 	}
 }
@@ -481,7 +481,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+	if got := <-r1.ch; !got.Equal(want) {
 		t.Errorf("Received: %v, want %v", got, want)
 	}
 }
@@ -503,9 +503,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	for {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		mm.streamMu.Lock()
-		pos := mm.lastPollPosition
-		mm.streamMu.Unlock()
+		pos := mm.getLastPollPosition()
 		if pos != nil {
 			break
 		}
@@ -571,7 +569,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 			sqltypes.NewVarBinary("3"),
 		}},
 	}
-	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+	if got := <-r1.ch; !got.Equal(want) {
 		t.Errorf("Received: %v, want %v", got, want)
 	}
 }

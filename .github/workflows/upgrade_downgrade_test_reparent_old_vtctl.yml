@@ -11,65 +11,93 @@ concurrency:
 # (vtctl, vttablet, etc) built on different versions.
 
 jobs:
-  get_upgrade_downgrade_label:
-    if: github.repository == 'vitessio/vitess'
-    name: Get the Upgrade Downgrade pull request label
-    runs-on: ubuntu-latest
-    outputs:
-      hasLabel: ${{ steps.check_label.outputs.hasLabel }}
-
-    steps:
-      - name: Check Label for PR
-        if: github.event_name == 'pull_request'
-        uses: Dreamcodeio/pr-has-label-action@master
-        id: check_label
-        with:
-          label: Skip Upgrade Downgrade
-
-  get_latest_release:
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
+  get_previous_release:
+    if: always()
     name: Get latest release
     runs-on: ubuntu-latest
-    needs:
-      - get_upgrade_downgrade_label
     outputs:
-      latest_release: ${{ steps.output-latest-release-branch.outputs.latest_release_branch }}
+      previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
     steps:
       - name: Check out to HEAD
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Set output with latest release branch
-        id: output-latest-release-branch
+        id: output-previous-release-ref
         run: |
-          latest_release_branch=$(./tools/get_latest_release.sh ${{github.base_ref}})
-          echo $latest_release_branch
-          echo "::set-output name=latest_release_branch::${latest_release_branch}"
+          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+          echo $previous_release_ref
+          echo "::set-output name=previous_release_ref::${previous_release_ref}"
 
   upgrade_downgrade_test:
-    if: always() && (needs.get_latest_release.result == 'success')
+    if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
     needs:
-      - get_upgrade_downgrade_label
-      - get_latest_release
+      - get_previous_release
 
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v2
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
+    - name: Check out commit's code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/checkout@v3
+
+    - name: Check for changes in relevant files
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: frouioui/paths-filter@main
+      id: changes
       with:
-        go-version: 1.18
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**'
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.sum'
+            - 'go.mod'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/upgrade_downgrade_test_reparent_old_vtctl.yml'
+
+    - name: Set up Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19.3
 
     - name: Set up python
-      uses: actions/setup-python@v2
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-python@v4
 
     - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     - name: Get base dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
         # Uninstall any previously installed MySQL first
@@ -96,7 +124,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report@latest
+        go install github.com/vitessio/go-junit-report@HEAD
 
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
@@ -105,16 +133,19 @@ jobs:
         sudo apt-get install percona-xtrabackup-24
 
     # Checkout to the last release of Vitess
-    - name: Check out other version's code (${{ needs.get_latest_release.outputs.latest_release }})
-      uses: actions/checkout@v2
+    - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@v3
       with:
-        ref: ${{ needs.get_latest_release.outputs.latest_release }}
+        ref: ${{ needs.get_previous_release.outputs.previous_release }}
 
     - name: Get dependencies for the last release
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building last release's binaries
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -125,13 +156,16 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
-      uses: actions/checkout@v2
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@v3
 
     - name: Get dependencies for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building the binaries for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -141,6 +175,7 @@ jobs:
 
     # Swap the binaries in the bin. Use vtctl version n-1 and keep vttablet at version n
     - name: Use last release's Vtctl
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -154,6 +189,7 @@ jobs:
 
     # Running a test with vtctl at version n-1 and vttablet at version n
     - name: Run reparent tests (vtctl=N-1, vttablet=N)
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot

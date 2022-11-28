@@ -18,9 +18,10 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -34,9 +35,22 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
+	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/filelock"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	// Ensure dialers are registered (needed by ExecOnTablet and ExecOnVTGate).
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )
 
 // DefaultCell : If no cell name is passed, then use following
@@ -52,6 +66,7 @@ var (
 	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
 	forcePortStart     = flag.Int("force-port-start", 0, "force assigning ports based on this seed")
 	forceBaseTabletUID = flag.Int("force-base-tablet-uid", 0, "force assigning tablet ports based on this seed")
+	partialKeyspace    = flag.Bool("partial-keyspace", false, "add a second keyspace for sharded tests and mark first shard as moved to this keyspace in the shard routing rules")
 
 	// PerfTest controls whether to run the slower end-to-end tests that check the system's performance
 	PerfTest = flag.Bool("perf-test", false, "include end-to-end performance tests")
@@ -80,16 +95,16 @@ type LocalProcessCluster struct {
 	VtctlMajorVersion    int
 
 	// standalone executable
-	VtctlclientProcess VtctlClientProcess
-	VtctlProcess       VtctlProcess
+	VtctlclientProcess  VtctlClientProcess
+	VtctldClientProcess VtctldClientProcess
+	VtctlProcess        VtctlProcess
 
 	// background executable processes
 	TopoProcess     TopoProcess
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
-	VtworkerProcess VtworkerProcess
 	VtbackupProcess VtbackupProcess
-	VtorcProcess    *VtorcProcess
+	VTOrcProcesses  []*VTOrcProcess
 
 	nextPortForProcess int
 
@@ -110,6 +125,8 @@ type LocalProcessCluster struct {
 
 	context.Context
 	context.CancelFunc
+
+	HasPartialKeyspaces bool
 }
 
 // Vttablet stores the properties needed to start a vttablet process
@@ -240,6 +257,44 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly)
 }
 
+func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+
+	cluster.HasPartialKeyspaces = true
+	routedKeyspace := &Keyspace{
+		Name:      fmt.Sprintf("%s_routed", keyspace.Name),
+		SchemaSQL: keyspace.SchemaSQL,
+		VSchema:   keyspace.VSchema,
+	}
+
+	err = cluster.startKeyspace(*routedKeyspace, shardNames, replicaCount, rdonly, customizers...)
+	if err != nil {
+		return err
+	}
+	shardRoutingRulesTemplate := `{"rules":[{"from_keyspace":"%s","to_keyspace":"%s","shards":"%s"}]}`
+	shardRoutingRules := fmt.Sprintf(shardRoutingRulesTemplate, keyspace.Name, routedKeyspace.Name, movedShard)
+	cmd := exec.Command("vtctldclient", "--server",
+		net.JoinHostPort("localhost", strconv.Itoa(cluster.VtctldProcess.GrpcPort)),
+		"ApplyShardRoutingRules", "--rules", shardRoutingRules)
+	_, err = cmd.Output()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+	err = cluster.startKeyspace(keyspace, shardNames, replicaCount, rdonly, customizers...)
+	if err != nil {
+		return err
+	}
+
+	if *partialKeyspace && len(shardNames) > 1 {
+		movedShard := shardNames[0]
+		return cluster.startPartialKeyspace(keyspace, shardNames, movedShard, replicaCount, rdonly, customizers...)
+	}
+	return nil
+}
+
 // StartKeyspace starts required number of shard and the corresponding tablets
 // keyspace : struct containing keyspace name, Sqlschema to apply, VSchema to apply
 // shardName : list of shard names
@@ -247,7 +302,7 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 // rdonly: whether readonly tablets needed
 // customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
 // after they're created.
-func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
 	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
@@ -529,7 +584,6 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 // This does not start any process and user have to explicitly start all
 // the required services (ex topo, vtgate, mysql and vttablet)
 func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Shard) (err error) {
-
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
 	if !cluster.ReusingVTDATAROOT {
@@ -544,7 +598,6 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 	// Create shard
 	for _, shard := range shards {
 		for _, tablet := range shard.Vttablets {
-
 			// Setup MysqlctlProcess
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
 			// Setup VttabletProcess
@@ -586,6 +639,9 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
+	if cluster.HasPartialKeyspaces {
+		cluster.VtGateExtraArgs = append(cluster.VtGateExtraArgs, "--enable-partial-keyspace-migration")
+	}
 	vtgateInstance := *cluster.NewVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
 	log.Infof("Starting vtgate on port %d", vtgateInstance.Port)
@@ -617,6 +673,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
 	go cluster.CtrlCHandler()
+
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
 	cluster.VtGatePlannerVersion = defaultVtGatePlannerVersion
@@ -683,25 +740,32 @@ func (cluster *LocalProcessCluster) RestartVtgate() (err error) {
 	return err
 }
 
-// WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be healthy as per vtgate
+// WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be seen as
+// healthy and serving in vtgate.
+// For each shard:
+//   - It must have 1 (and only 1) healthy primary tablet so we always wait for that
+//   - For replica and rdonly tablets, which are optional, we wait for as many as we
+//     should have based on how the cluster was defined.
 func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error) {
-	var isRdOnlyPresent bool
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
-			isRdOnlyPresent = false
+			rdonlyTabletCount, replicaTabletCount := 0, 0
+			for _, tablet := range shard.Vttablets {
+				switch strings.ToLower(tablet.Type) {
+				case "replica":
+					replicaTabletCount++
+				case "rdonly":
+					rdonlyTabletCount++
+				}
+			}
 			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
 				return err
 			}
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), 1); err != nil {
-				return err
+			if replicaTabletCount > 0 {
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), replicaTabletCount)
 			}
-			for _, tablet := range shard.Vttablets {
-				if tablet.Type == "rdonly" {
-					isRdOnlyPresent = true
-				}
-			}
-			if isRdOnlyPresent {
-				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), 1)
+			if rdonlyTabletCount > 0 {
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), rdonlyTabletCount)
 			}
 			if err != nil {
 				return err
@@ -709,6 +773,103 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 		}
 	}
 	return nil
+}
+
+// ExecOnTablet executes a query on the local cluster Vttablet and returns the
+// result.
+func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *Vttablet, sql string, binds map[string]any, opts *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	bindvars, err := sqltypes.BuildBindVariables(binds)
+	if err != nil {
+		return nil, err
+	}
+
+	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(ctx)
+
+	txID, reservedID := 0, 0
+
+	return conn.Execute(ctx, &querypb.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}, sql, bindvars, int64(txID), int64(reservedID), opts)
+}
+
+// ExecOnVTGate executes a query on a local cluster VTGate with the provided
+// target, bindvars, and execute options.
+func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr string, target string, sql string, binds map[string]any, opts *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	bindvars, err := sqltypes.BuildBindVariables(binds)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := vtgateconn.Dial(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	session := conn.Session(target, opts)
+	defer conn.Close()
+
+	return session.Execute(ctx, sql, bindvars)
+}
+
+// StreamTabletHealth invokes a HealthStream on a local cluster Vttablet and
+// returns the responses. It returns an error if the stream ends with fewer than
+// `count` responses.
+func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vttablet *Vttablet, count int) (responses []*querypb.StreamHealthResponse, err error) {
+	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, err
+	}
+
+	i := 0
+	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		responses = append(responses, shr)
+
+		i++
+		if i >= count {
+			return io.EOF
+		}
+
+		return nil
+	})
+
+	switch {
+	case err != nil:
+		return nil, err
+	case len(responses) < count:
+		return nil, errors.New("stream ended early")
+	}
+
+	return responses, nil
+}
+
+func (cluster *LocalProcessCluster) vtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
+	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", "--", tablet.Alias)
+	if err != nil {
+		return nil, err
+	}
+
+	var ti topodatapb.Tablet
+	if err := json2.Unmarshal([]byte(result), &ti); err != nil {
+		return nil, err
+	}
+
+	return &ti, nil
 }
 
 // Teardown brings down the cluster by invoking teardown for individual processes
@@ -726,8 +887,8 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtgate teardown: %v", err)
 	}
 
-	if cluster.VtorcProcess != nil {
-		if err := cluster.VtorcProcess.TearDown(); err != nil {
+	for _, vtorcProcess := range cluster.VTOrcProcesses {
+		if err := vtorcProcess.TearDown(); err != nil {
 			log.Errorf("Error in vtorc teardown: %v", err)
 		}
 	}
@@ -821,24 +982,8 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 	wg.Wait()
 }
 
-// StartVtworker starts a vtworker
-func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...string) error {
-	httpPort := cluster.GetAndReservePort()
-	grpcPort := cluster.GetAndReservePort()
-	log.Infof("Starting vtworker with http_port=%d, grpc_port=%d", httpPort, grpcPort)
-	cluster.VtworkerProcess = *VtworkerProcessInstance(
-		httpPort,
-		grpcPort,
-		cluster.TopoPort,
-		cluster.Hostname,
-		cluster.TmpDirectory)
-	cluster.VtworkerProcess.ExtraArgs = extraArgs
-	return cluster.VtworkerProcess.Setup(cell)
-
-}
-
 // StartVtbackup starts a vtbackup
-func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBackup bool,
+func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
 	keyspace string, shard string, cell string, extraArgs ...string) error {
 	log.Info("Starting vtbackup")
 	cluster.VtbackupProcess = *VtbackupProcessInstance(
@@ -851,7 +996,7 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBa
 		cluster.Hostname,
 		cluster.TmpDirectory,
 		cluster.TopoPort,
-		initalBackup)
+		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
 
@@ -883,24 +1028,49 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	return cluster.nextPortForProcess
 }
 
+// portFileTimeout determines when we see the content of a port file as
+// stale. After this time, we assume we can start with the default base
+// port again.
+const portFileTimeout = 1 * time.Hour
+
 // getPort checks if we have recent used port info in /tmp/todaytime.port
 // If no, then use a random port and save that port + 200 in the above file
 // If yes, then return that port, and save port + 200 in the same file
 // here, assumptions is 200 ports might be consumed for all tests in a package
 func getPort() int {
-	tmpPortFileName := path.Join(os.TempDir(), time.Now().Format("01022006.port"))
+	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	filelock.Lock(portFile)
+	defer filelock.Unlock(portFile)
+
+	fileInfo, err := portFile.Stat()
+	if err != nil {
+		panic(err)
+	}
+
+	portBytes, err := io.ReadAll(portFile)
+	if err != nil {
+		panic(err)
+	}
+
 	var port int
-	if _, err := os.Stat(tmpPortFileName); os.IsNotExist(err) {
+	if len(portBytes) == 0 || time.Now().After(fileInfo.ModTime().Add(portFileTimeout)) {
 		port = getVtStartPort()
 	} else {
-		result, _ := os.ReadFile(tmpPortFileName)
-		cport, err := strconv.Atoi(string(result))
-		if err != nil || cport > 60000 || cport == 0 {
-			cport = getVtStartPort()
+		parsedPort, err := strconv.ParseInt(string(portBytes), 10, 64)
+		if err != nil {
+			panic(err)
 		}
-		port = cport
+		port = int(parsedPort)
 	}
-	os.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
+
+	portFile.Truncate(0)
+	portFile.Seek(0, 0)
+	portFile.WriteString(fmt.Sprintf("%v", port+200))
+	portFile.Close()
 	return port
 }
 
@@ -924,7 +1094,7 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 func getVtStartPort() int {
 	osVtPort := os.Getenv("VTPORTSTART")
 	if osVtPort != "" {
-		cport, err := strconv.Atoi(string(osVtPort))
+		cport, err := strconv.Atoi(osVtPort)
 		if err == nil {
 			return cport
 		}
@@ -951,14 +1121,16 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 	}
 }
 
-// NewOrcProcess creates a new VtorcProcess object
-func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProcess {
+// NewVTOrcProcess creates a new VTOrcProcess object
+func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *VTOrcProcess {
 	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	base.Binary = "vtorc"
-	return &VtorcProcess{
+	return &VTOrcProcess{
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
-		Config:       configFile,
+		Config:       config,
+		WebPort:      cluster.GetAndReservePort(),
+		Port:         cluster.GetAndReservePort(),
 	}
 }
 
@@ -1037,12 +1209,25 @@ func getCoveragePath(fileName string) string {
 // PrintMysqlctlLogFiles prints all the log files associated with the mysqlctl binary
 func (cluster *LocalProcessCluster) PrintMysqlctlLogFiles() {
 	logDir := cluster.TmpDirectory
-	files, _ := ioutil.ReadDir(logDir)
+	files, _ := os.ReadDir(logDir)
 	for _, fileInfo := range files {
 		if !fileInfo.IsDir() && strings.Contains(fileInfo.Name(), "mysqlctl") {
 			log.Errorf("Printing the log file - " + fileInfo.Name())
-			logOut, _ := ioutil.ReadFile(path.Join(logDir, fileInfo.Name()))
+			logOut, _ := os.ReadFile(path.Join(logDir, fileInfo.Name()))
 			log.Errorf(string(logOut))
 		}
 	}
+}
+
+// GetVTParams returns mysql.ConnParams with host and port only for regular tests enabling global routing,
+// and also dbname if we are testing for a cluster with a partially moved keyspace
+func (cluster *LocalProcessCluster) GetVTParams(dbname string) mysql.ConnParams {
+	params := mysql.ConnParams{
+		Host: cluster.Hostname,
+		Port: cluster.VtgateMySQLPort,
+	}
+	if cluster.HasPartialKeyspaces {
+		params.DbName = dbname
+	}
+	return params
 }

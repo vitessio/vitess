@@ -37,7 +37,7 @@ func (cached *AutoIncrement) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Column vitess.io/vitess/go/vt/sqlparser.ColIdent
+	// field Column vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Column.CachedSize(false)
 	// field Sequence *vitess.io/vitess/go/vt/vtgate/vindexes.Table
 	size += cached.Sequence.CachedSize(true)
@@ -95,7 +95,7 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
 	// field CollationName string
 	size += hack.RuntimeAllocSize(int64(len(cached.CollationName)))
@@ -109,9 +109,9 @@ func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(112)
 	}
-	// field Columns []vitess.io/vitess/go/vt/sqlparser.ColIdent
+	// field Columns []vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(40))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(32))
 		for _, elem := range cached.Columns {
 			size += elem.CachedSize(false)
 		}
@@ -180,7 +180,7 @@ func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -194,7 +194,7 @@ func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -208,7 +208,7 @@ func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -222,7 +222,7 @@ func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -236,7 +236,7 @@ func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -250,7 +250,7 @@ func (cached *LookupUnique) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(176)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -410,7 +410,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	}
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
-	// field Name vitess.io/vitess/go/vt/sqlparser.TableIdent
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.Name.CachedSize(false)
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -439,7 +439,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	size += cached.AutoIncrement.CachedSize(true)
 	// field Columns []vitess.io/vitess/go/vt/vtgate/vindexes.Column
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(64))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(56))
 		for _, elem := range cached.Columns {
 			size += elem.CachedSize(false)
 		}
@@ -492,7 +492,7 @@ func (cached *clCommon) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(256)
+		size += int64(288)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -525,7 +525,7 @@ func (cached *lookupInternal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(144)
 	}
 	// field Table string
 	size += hack.RuntimeAllocSize(int64(len(cached.Table)))
@@ -538,8 +538,12 @@ func (cached *lookupInternal) CachedSize(alloc bool) int64 {
 	}
 	// field To string
 	size += hack.RuntimeAllocSize(int64(len(cached.To)))
+	// field ReadLock string
+	size += hack.RuntimeAllocSize(int64(len(cached.ReadLock)))
 	// field sel string
 	size += hack.RuntimeAllocSize(int64(len(cached.sel)))
+	// field selTxDml string
+	size += hack.RuntimeAllocSize(int64(len(cached.selTxDml)))
 	// field ver string
 	size += hack.RuntimeAllocSize(int64(len(cached.ver)))
 	// field del string

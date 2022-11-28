@@ -18,9 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -34,7 +32,7 @@ import (
 
 type horizonPlanning struct {
 	sel *sqlparser.Select
-	qp  *abstract.QueryProjection
+	qp  *operators.QueryProjection
 }
 
 func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, truncateColumns bool) (logicalPlan, error) {
@@ -52,8 +50,25 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return plan, nil
 	}
 
+	// If the current plan is a simpleProjection, we want to rewrite derived expression.
+	// In transformDerivedPlan (operator_transformers.go), derived tables that are not
+	// a simple route are put behind a simpleProjection. In this simple projection,
+	// every Route will represent the original derived table. Thus, pushing new expressions
+	// to those Routes require us to rewrite them.
+	// On the other hand, when a derived table is a simple Route, we do not put it under
+	// a simpleProjection. We create a new Route that contains the derived table in the
+	// FROM clause. Meaning that, when we push expressions to the select list of this
+	// new Route, we do not want them to rewrite them.
+	if _, isSimpleProj := plan.(*simpleProjection); isSimpleProj {
+		oldRewriteDerivedExpr := ctx.RewriteDerivedExpr
+		defer func() {
+			ctx.RewriteDerivedExpr = oldRewriteDerivedExpr
+		}()
+		ctx.RewriteDerivedExpr = true
+	}
+
 	var err error
-	hp.qp, err = abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
+	hp.qp, err = operators.CreateQPFromSelect(hp.sel)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +123,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	return plan, nil
 }
 
-func pushProjections(ctx *plancontext.PlanningContext, plan logicalPlan, selectExprs []abstract.SelectExpr) error {
+func pushProjections(ctx *plancontext.PlanningContext, plan logicalPlan, selectExprs []operators.SelectExpr) error {
 	for _, e := range selectExprs {
 		aliasExpr, err := e.GetAliasedExpr()
 		if err != nil {
@@ -122,18 +137,18 @@ func pushProjections(ctx *plancontext.PlanningContext, plan logicalPlan, selectE
 }
 
 func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	if len(plan.OutputColumns()) == hp.sel.GetColumnCount() {
+	if len(plan.OutputColumns()) == hp.qp.GetColumnCount() {
 		return plan, nil
 	}
 	switch p := plan.(type) {
 	case *routeGen4:
-		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
+		p.eroute.SetTruncateColumnCount(hp.qp.GetColumnCount())
 	case *joinGen4, *semiJoin, *hashJoin:
 		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
-		p.truncateColumnCount = hp.sel.GetColumnCount()
+		p.truncateColumnCount = hp.qp.GetColumnCount()
 	case *memorySort:
-		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
+		p.truncater.SetTruncateColumnCount(hp.qp.GetColumnCount())
 	case *pulloutSubquery:
 		newUnderlyingPlan, err := hp.truncateColumnsIfNeeded(ctx, p.underlying)
 		if err != nil {
@@ -146,7 +161,8 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 			eSimpleProj:       &engine.SimpleProjection{},
 		}
 
-		err := pushProjections(ctx, plan, hp.qp.SelectExprs)
+		exprs := hp.qp.SelectExprs[0:hp.qp.GetColumnCount()]
+		err := pushProjections(ctx, plan, exprs)
 		if err != nil {
 			return nil, err
 		}
@@ -154,266 +170,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 	return plan, nil
 }
 
-// pushProjection pushes a projection to the plan.
-func pushProjection(
-	ctx *plancontext.PlanningContext,
-	expr *sqlparser.AliasedExpr,
-	plan logicalPlan,
-	inner, reuseCol, hasAggregation bool,
-) (offset int, added bool, err error) {
-	switch node := plan.(type) {
-	case *routeGen4:
-		_, isColName := expr.Expr.(*sqlparser.ColName)
-		if !isColName {
-			_, err := evalengine.Translate(expr.Expr, ctx.SemTable)
-			if err != nil {
-				if vterrors.Code(err) != vtrpcpb.Code_UNIMPLEMENTED {
-					return 0, false, err
-				} else if !inner {
-					return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
-				}
-			}
-		}
-		return addExpressionToRoute(ctx, node, expr, reuseCol)
-	case *hashJoin:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		deps := ctx.SemTable.RecursiveDeps(expr.Expr)
-		var column int
-		var appended bool
-		passDownReuseCol := reuseCol
-		if !reuseCol {
-			passDownReuseCol = expr.As.IsEmpty()
-		}
-		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, added, err := pushProjection(ctx, expr, node.Left, inner, passDownReuseCol, hasAggregation)
-			if err != nil {
-				return 0, false, err
-			}
-			column = -(offset + 1)
-			appended = added
-		case deps.IsSolvedBy(rhsSolves):
-			offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, hasAggregation)
-			if err != nil {
-				return 0, false, err
-			}
-			column = offset + 1
-			appended = added
-		default:
-			// if an expression has aggregation, then it should not be split up and pushed to both sides,
-			// for example an expression like count(*) will have dependencies on both sides, but we should not push it
-			// instead we should return an error
-			if hasAggregation {
-				return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
-			}
-			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: hash join with projection from both sides of the join")
-		}
-		if reuseCol && !appended {
-			for idx, col := range node.Cols {
-				if column == col {
-					return idx, false, nil
-				}
-			}
-			// the column was not appended to either child, but we could not find it in out cols list,
-			// so we'll still add it
-		}
-		node.Cols = append(node.Cols, column)
-		return len(node.Cols) - 1, true, nil
-	case *joinGen4:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		deps := ctx.SemTable.RecursiveDeps(expr.Expr)
-		var column int
-		var appended bool
-		passDownReuseCol := reuseCol
-		if !reuseCol {
-			passDownReuseCol = expr.As.IsEmpty()
-		}
-		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, added, err := pushProjection(ctx, expr, node.Left, inner, passDownReuseCol, hasAggregation)
-			if err != nil {
-				return 0, false, err
-			}
-			column = -(offset + 1)
-			appended = added
-		case deps.IsSolvedBy(rhsSolves):
-			offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, hasAggregation)
-			if err != nil {
-				return 0, false, err
-			}
-			column = offset + 1
-			appended = added
-		default:
-			// if an expression has aggregation, then it should not be split up and pushed to both sides,
-			// for example an expression like count(*) will have dependencies on both sides, but we should not push it
-			// instead we should return an error
-			if hasAggregation {
-				return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
-			}
-			// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
-			bvName, cols, rewrittenExpr, err := physical.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
-			if err != nil {
-				return 0, false, err
-			}
-			// go over all the columns coming from the left side of the tree and push them down. While at it, also update the bind variable map.
-			// It is okay to reuse the columns on the left side since
-			// the final expression which will be selected will be pushed into the right side.
-			for i, col := range cols {
-				colOffset, _, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: col}, node.Left, inner, true, false)
-				if err != nil {
-					return 0, false, err
-				}
-				node.Vars[bvName[i]] = colOffset
-			}
-			// push the rewritten expression on the right side of the tree. Here we should take care whether we want to reuse the expression or not.
-			expr.Expr = rewrittenExpr
-			offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, false)
-			if err != nil {
-				return 0, false, err
-			}
-			column = offset + 1
-			appended = added
-		}
-		if reuseCol && !appended {
-			for idx, col := range node.Cols {
-				if column == col {
-					return idx, false, nil
-				}
-			}
-			// the column was not appended to either child, but we could not find it in out cols list,
-			// so we'll still add it
-		}
-		node.Cols = append(node.Cols, column)
-		return len(node.Cols) - 1, true, nil
-	case *simpleProjection:
-		offset, _, err := pushProjection(ctx, expr, node.input, inner, true, hasAggregation)
-		if err != nil {
-			return 0, false, err
-		}
-		for i, value := range node.eSimpleProj.Cols {
-			// we return early if we already have the column in the simple projection's
-			// output list so we do not add it again.
-			if reuseCol && value == offset {
-				return i, false, nil
-			}
-		}
-		node.eSimpleProj.Cols = append(node.eSimpleProj.Cols, offset)
-		return len(node.eSimpleProj.Cols) - 1, true, nil
-	case *orderedAggregate:
-		colName, isColName := expr.Expr.(*sqlparser.ColName)
-		for _, aggregate := range node.aggregates {
-			if sqlparser.EqualsExpr(aggregate.Expr, expr.Expr) {
-				return aggregate.Col, false, nil
-			}
-			if isColName && colName.Name.EqualString(aggregate.Alias) {
-				return aggregate.Col, false, nil
-			}
-		}
-		for _, key := range node.groupByKeys {
-			if sqlparser.EqualsExpr(key.Expr, expr.Expr) {
-				return key.KeyCol, false, nil
-			}
-		}
-		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
-	case *vindexFunc:
-		colsBefore := len(node.eVindexFunc.Cols)
-		i, err := node.SupplyProjection(expr, reuseCol)
-		if err != nil {
-			return 0, false, err
-		}
-		return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
-	case *limit, *projection, *pulloutSubquery, *distinct, *filter:
-		// All of these either push to the single source, or push to the LHS
-		src := node.Inputs()[0]
-		return pushProjection(ctx, expr, src, inner, reuseCol, hasAggregation)
-	case *semiJoin:
-		passDownReuseCol := reuseCol
-		if !reuseCol {
-			passDownReuseCol = expr.As.IsEmpty()
-		}
-		offset, added, err := pushProjection(ctx, expr, node.lhs, inner, passDownReuseCol, hasAggregation)
-		if err != nil {
-			return 0, false, err
-		}
-		column := -(offset + 1)
-		if reuseCol && !added {
-			for idx, col := range node.cols {
-				if column == col {
-					return idx, false, nil
-				}
-			}
-		}
-		node.cols = append(node.cols, column)
-		return len(node.cols) - 1, true, nil
-	case *concatenateGen4:
-		if hasAggregation {
-			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: aggregation on unions")
-		}
-		offset, added, err := pushProjection(ctx, expr, node.sources[0], inner, reuseCol, hasAggregation)
-		if err != nil {
-			return 0, false, err
-		}
-		if added && ctx.SemTable.DirectDeps(expr.Expr).NumberOfTables() > 0 {
-			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
-		}
-		if added {
-			for _, source := range node.sources[1:] {
-				_, _, err := pushProjection(ctx, expr, source, inner, reuseCol, hasAggregation)
-				if err != nil {
-					return 0, false, err
-				}
-			}
-		}
-		return offset, added, nil
-	default:
-		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
-	}
-}
-
-func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
-	if reuseCol {
-		if i := checkIfAlreadyExists(expr, rb.Select, ctx.SemTable); i != -1 {
-			return i, false, nil
-		}
-	}
-	expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
-	sel, isSel := rb.Select.(*sqlparser.Select)
-	if !isSel {
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "unsupported: pushing projection '%s' on %T", sqlparser.String(expr), rb.Select)
-	}
-
-	// if we are trying to push a projection that belongs to a DerivedTable
-	// we rewrite that expression, so it matches the column name used inside
-	// that derived table.
-	err := rewriteProjectionOfDerivedTable(expr, ctx.SemTable)
-	if err != nil {
-		return 0, false, err
-	}
-
-	offset := len(sel.SelectExprs)
-	sel.SelectExprs = append(sel.SelectExprs, expr)
-	return offset, true, nil
-}
-
-func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
-	ti, err := semTable.TableInfoForExpr(expr.Expr)
-	if err != nil && err != semantics.ErrMultipleTables {
-		return err
-	}
-	_, isDerivedTable := ti.(*semantics.DerivedTable)
-	if isDerivedTable {
-		expr.Expr, err = semantics.RewriteDerivedExpression(expr.Expr, ti)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
-	exprDep := semTable.RecursiveDeps(expr.Expr)
 	// Here to find if the expr already exists in the SelectStatement, we have 3 cases
 	// input is a Select -> In this case we want to search in the select
 	// input is a Union -> In this case we want to search in the First Select of the Union
@@ -442,21 +199,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 			continue
 		}
 
-		selectExprCol, isSelectExprCol := selectExpr.Expr.(*sqlparser.ColName)
-		selectExprDep := semTable.RecursiveDeps(selectExpr.Expr)
-
-		// Check that the two expressions have the same dependencies
-		if !selectExprDep.Equals(exprDep) {
-			continue
-		}
-
-		if isSelectExprCol && isExprCol && exprCol.Name.Equal(selectExprCol.Name) {
-			// the expressions are ColName, we compare their name
-			return i
-		}
-
-		if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
-			// the expressions are not ColName, so we just compare the expressions
+		if semTable.EqualsExpr(expr.Expr, selectExpr.Expr) {
 			return i
 		}
 	}
@@ -466,7 +209,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
 	isPushable := !isJoin(plan)
 	grouping := hp.qp.GetGrouping()
-	vindexOverlapWithGrouping := hasUniqueVindex(ctx.VSchema, ctx.SemTable, grouping)
+	vindexOverlapWithGrouping := hasUniqueVindex(ctx.SemTable, grouping)
 	if isPushable && vindexOverlapWithGrouping {
 		// If we have a plan that we can push the group by and aggregation through, we don't need to do aggregation
 		// at the vtgate level at all
@@ -487,23 +230,19 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return newPlan, nil
 	}
 
-	if hp.qp.ProjectionError != nil {
-		return nil, hp.qp.ProjectionError
-	}
-
 	return hp.planAggrUsingOA(ctx, plan, grouping)
 }
 
 func (hp *horizonPlanning) planAggrUsingOA(
 	ctx *plancontext.PlanningContext,
 	plan logicalPlan,
-	grouping []abstract.GroupBy,
+	grouping []operators.GroupBy,
 ) (logicalPlan, error) {
 	oa := &orderedAggregate{
 		groupByKeys: make([]*engine.GroupByParams, 0, len(grouping)),
 	}
 
-	var order []abstract.OrderBy
+	var order []operators.OrderBy
 	if hp.qp.CanPushDownSorting {
 		hp.qp.AlignGroupByAndOrderBy()
 		// the grouping order might have changed, so we reload the grouping expressions
@@ -525,6 +264,14 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		})
 	}
 
+	if hp.sel.Having != nil {
+		rewriter := hp.qp.AggrRewriter()
+		sqlparser.Rewrite(hp.sel.Having.Expr, rewriter.Rewrite(), nil)
+		if rewriter.Err != nil {
+			return nil, rewriter.Err
+		}
+	}
+
 	aggregationExprs, err := hp.qp.AggregationExpressions()
 	if err != nil {
 		return nil, err
@@ -544,10 +291,16 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		oa.preProcess = true
 	}
 
-	groupingOffsets, aggrParamOffsets, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
+	newPlan, groupingOffsets, aggrParamOffsets, pushed, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
 	if err != nil {
 		return nil, err
 	}
+	if !pushed {
+		oa.preProcess = true
+		oa.aggrOnEngine = true
+	}
+
+	plan = newPlan
 
 	_, isRoute := plan.(*routeGen4)
 	needsProj := !isRoute
@@ -563,7 +316,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		aggPlan = proj
 	}
 
-	aggrParams, err := generateAggregateParams(aggrs, aggrParamOffsets, proj)
+	aggrParams, err := generateAggregateParams(aggrs, aggrParamOffsets, proj, pushed)
 	if err != nil {
 		return nil, err
 	}
@@ -591,16 +344,17 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	return hp.planHaving(ctx, oa)
 }
 
-func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstract.GroupBy) (projGrpOffsets []offsets, err error) {
+func passGroupingColumns(proj *projection, groupings []offsets, grouping []operators.GroupBy) (projGrpOffsets []offsets, err error) {
 	for idx, grp := range groupings {
 		origGrp := grouping[idx]
 		var offs offsets
-		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.Offset(grp.col), "")
+		expr := origGrp.AsAliasedExpr()
+		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.NewOffset(grp.col, expr.Expr), expr.ColumnName())
 		if err != nil {
 			return nil, err
 		}
 		if grp.wsCol != -1 {
-			offs.wsCol, err = proj.addColumn(nil, sqlparser.Offset(grp.wsCol), "")
+			offs.wsCol, err = proj.addColumn(nil, sqlparser.NewOffset(grp.wsCol, weightStringFor(expr.Expr)), "")
 			if err != nil {
 				return nil, err
 			}
@@ -610,7 +364,7 @@ func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstr
 	return projGrpOffsets, nil
 }
 
-func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets, proj *projection) ([]*engine.AggregateParams, error) {
+func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offsets, proj *projection, pushed bool) ([]*engine.AggregateParams, error) {
 	aggrParams := make([]*engine.AggregateParams, len(aggrs))
 	for idx, paramOffset := range aggrParamOffsets {
 		aggr := aggrs[idx]
@@ -619,7 +373,7 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
 			for _, ofs := range paramOffset {
-				curr := sqlparser.Offset(ofs.col)
+				curr := &sqlparser.Offset{V: ofs.col}
 				if aggrExpr == nil {
 					aggrExpr = curr
 				} else {
@@ -641,16 +395,22 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		}
 
 		opcode := engine.AggregateSum
-		if aggr.OpCode == engine.AggregateMin ||
-			aggr.OpCode == engine.AggregateMax {
+		switch aggr.OpCode {
+		case engine.AggregateMin, engine.AggregateMax, engine.AggregateRandom:
 			opcode = aggr.OpCode
+		case engine.AggregateCount, engine.AggregateCountStar, engine.AggregateCountDistinct, engine.AggregateSumDistinct:
+			if !pushed {
+				opcode = aggr.OpCode
+			}
 		}
 
 		aggrParams[idx] = &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    offset,
-			Alias:  aggr.Alias,
-			Expr:   aggr.Func,
+			Opcode:     opcode,
+			Col:        offset,
+			Alias:      aggr.Alias,
+			Expr:       aggr.Original.Expr,
+			Original:   aggr.Original,
+			OrigOpcode: aggr.OpCode,
 		}
 	}
 	return aggrParams, nil
@@ -660,7 +420,7 @@ func addColumnsToOA(
 	ctx *plancontext.PlanningContext,
 	oa *orderedAggregate,
 	// these are the group by expressions that where added because we have unique aggregations
-	distinctGroupBy []abstract.GroupBy,
+	distinctGroupBy []operators.GroupBy,
 	// these are the aggregate params we already have for non-distinct aggregations
 	aggrParams []*engine.AggregateParams,
 	// distinctOffsets mark out where we need to use the distinctGroupBy offsets
@@ -669,7 +429,7 @@ func addColumnsToOA(
 	// these are the offsets for the group by params
 	groupings []offsets,
 	// aggregationExprs are all the original aggregation expressions the query requested
-	aggregationExprs []abstract.Aggr,
+	aggregationExprs []operators.Aggr,
 ) {
 	if len(distinctGroupBy) == 0 {
 		// no distinct aggregations
@@ -681,7 +441,7 @@ func addColumnsToOA(
 			o := groupings[count]
 			count++
 			a := aggregationExprs[offset]
-			collID := ctx.SemTable.CollationForExpr(a.Func.Exprs[0].(*sqlparser.AliasedExpr).Expr)
+			collID := ctx.SemTable.CollationForExpr(a.Func.GetArg())
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 				Opcode:      a.OpCode,
 				Col:         o.col,
@@ -689,7 +449,7 @@ func addColumnsToOA(
 				WAssigned:   o.wsCol >= 0,
 				WCol:        o.wsCol,
 				Alias:       a.Alias,
-				Expr:        a.Func,
+				Original:    a.Original,
 				CollationID: collID,
 			})
 		}
@@ -719,36 +479,32 @@ func addColumnsToOA(
 // handleDistinctAggr takes in a slice of aggregations and returns GroupBy elements that replace
 // the distinct aggregations in the input, along with a slice of offsets and the non-distinct aggregations left,
 // so we can later reify the original aggregations
-func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, exprs []abstract.Aggr) (
-	distincts []abstract.GroupBy, offsets []int, aggrs []abstract.Aggr, err error) {
+func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, exprs []operators.Aggr) (
+	distincts []operators.GroupBy, offsets []int, aggrs []operators.Aggr, err error) {
 	var distinctExpr sqlparser.Expr
 	for i, expr := range exprs {
 		if !expr.Distinct {
 			aggrs = append(aggrs, expr)
 			continue
 		}
-		aliasedExpr, ok := expr.Func.Exprs[0].(*sqlparser.AliasedExpr)
-		if !ok {
-			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
-			return
-		}
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr, ctx.SemTable)
+
+		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func.GetArg())
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		if exprHasVindex(ctx.VSchema, ctx.SemTable, innerWS, false) {
+		if exprHasVindex(ctx.SemTable, innerWS, false) {
 			aggrs = append(aggrs, expr)
 			continue
 		}
 		if distinctExpr == nil {
 			distinctExpr = innerWS
 		} else {
-			if !sqlparser.EqualsExpr(distinctExpr, innerWS) {
+			if !ctx.SemTable.EqualsExpr(distinctExpr, innerWS) {
 				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
 				return nil, nil, nil, err
 			}
 		}
-		distincts = append(distincts, abstract.GroupBy{
+		distincts = append(distincts, operators.GroupBy{
 			Inner:         inner,
 			WeightStrExpr: innerWS,
 			InnerIndex:    expr.Index,
@@ -788,18 +544,15 @@ func newOffset(col int) offsets {
 	return offsets{col: col, wsCol: -1}
 }
 
-func (hp *horizonPlanning) createGroupingsForColumns(
-	ctx *plancontext.PlanningContext,
-	columns []*sqlparser.ColName,
-) ([]abstract.GroupBy, error) {
-	var lhsGrouping []abstract.GroupBy
+func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColName) ([]operators.GroupBy, error) {
+	var lhsGrouping []operators.GroupBy
 	for _, lhsColumn := range columns {
-		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn, ctx.SemTable)
+		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn)
 		if err != nil {
 			return nil, err
 		}
 
-		lhsGrouping = append(lhsGrouping, abstract.GroupBy{
+		lhsGrouping = append(lhsGrouping, operators.GroupBy{
 			Inner:         expr,
 			WeightStrExpr: wsExpr,
 		})
@@ -807,21 +560,16 @@ func (hp *horizonPlanning) createGroupingsForColumns(
 	return lhsGrouping, nil
 }
 
-func isCountStar(f *sqlparser.FuncExpr) bool {
-	_, isStar := f.Exprs[0].(*sqlparser.StarExpr)
-	return isStar
-}
-
-func hasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
+func hasUniqueVindex(semTable *semantics.SemTable, groupByExprs []operators.GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
-		if exprHasUniqueVindex(vschema, semTable, groupByExpr.WeightStrExpr) {
+		if exprHasUniqueVindex(semTable, groupByExpr.WeightStrExpr) {
 			return true
 		}
 	}
 	return false
 }
 
-func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan logicalPlan) (logicalPlan, error) {
+func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan logicalPlan) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
 		newPlan, err := planOrderByForRoute(ctx, orderExprs, plan, hp.qp.HasStar)
@@ -845,7 +593,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 		return newPlan, nil
 	case *orderedAggregate:
 		// remove ORDER BY NULL from the list of order by expressions since we will be doing the ordering on vtgate level so NULL is not useful
-		var orderExprsWithoutNils []abstract.OrderBy
+		var orderExprsWithoutNils []operators.OrderBy
 		for _, expr := range orderExprs {
 			if sqlparser.IsNull(expr.Inner.Expr) {
 				continue
@@ -895,7 +643,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 }
 
-func isSpecialOrderBy(o abstract.OrderBy) bool {
+func isSpecialOrderBy(o operators.OrderBy) bool {
 	if sqlparser.IsNull(o.Inner.Expr) {
 		return true
 	}
@@ -903,7 +651,7 @@ func isSpecialOrderBy(o abstract.OrderBy) bool {
 	return isFunction && f.Name.Lowered() == "rand"
 }
 
-func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, error) {
+func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, error) {
 	for _, order := range orderExprs {
 		err := checkOrderExprCanBePlannedInScatter(plan, order, hasStar)
 		if err != nil {
@@ -934,7 +682,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []abstract
 
 // checkOrderExprCanBePlannedInScatter verifies that the given order by expression can be planned.
 // It checks if the expression exists in the plan's select list when the query is a scatter.
-func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order abstract.OrderBy, hasStar bool) error {
+func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order operators.OrderBy, hasStar bool) error {
 	if !hasStar {
 		return nil
 	}
@@ -964,10 +712,13 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 		return offset, -1, nil
 	}
 	if !sqlparser.IsColName(expr) {
-		unary, ok := expr.(*sqlparser.ConvertExpr)
-		if ok && sqlparser.IsColName(unary.Expr) {
+		switch unary := expr.(type) {
+		case *sqlparser.CastExpr:
 			expr = unary.Expr
-		} else {
+		case *sqlparser.ConvertExpr:
+			expr = unary.Expr
+		}
+		if !sqlparser.IsColName(expr) {
 			return 0, 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 		}
 	}
@@ -989,18 +740,10 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 }
 
 func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
-	return &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("weight_string"),
-		Exprs: []sqlparser.SelectExpr{
-			&sqlparser.AliasedExpr{
-				Expr: expr,
-			},
-		},
-	}
-
+	return &sqlparser.WeightStringFuncExpr{Expr: expr}
 }
 
-func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan *hashJoin) (logicalPlan, error) {
+func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *hashJoin) (logicalPlan, error) {
 	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
 		rhs, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
 		if err != nil {
@@ -1024,7 +767,7 @@ func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningConte
 	return sortPlan, nil
 }
 
-func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
+func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *joinGen4) (logicalPlan, error) {
 	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
 		lhs, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {
@@ -1055,7 +798,7 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, 
 	return sortPlan, nil
 }
 
-func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *orderedAggregate, orderExprs []abstract.OrderBy) (logicalPlan, error) {
+func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *orderedAggregate, orderExprs []operators.OrderBy) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -1084,7 +827,7 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	return ms, nil
 }
 
-func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, found bool) {
+func findExprInOrderedAggr(plan *orderedAggregate, order operators.OrderBy) (keyCol int, weightStringCol int, found bool) {
 	for _, key := range plan.groupByKeys {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) ||
 			sqlparser.EqualsExpr(order.Inner.Expr, key.Expr) {
@@ -1092,15 +835,15 @@ func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyC
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Expr) {
+		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
 	}
 	return 0, 0, false
 }
 
-func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext, plan logicalPlan, orderExprs []abstract.OrderBy, useWeightStr bool) (logicalPlan, error) {
+func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext, plan logicalPlan, orderExprs []operators.OrderBy, useWeightStr bool) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -1131,7 +874,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext
 	return ms, nil
 }
 
-func orderExprsDependsOnTableSet(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, ts semantics.TableSet) bool {
+func orderExprsDependsOnTableSet(orderExprs []operators.OrderBy, semTable *semantics.SemTable, ts semantics.TableSet) bool {
 	for _, expr := range orderExprs {
 		exprDependencies := semTable.RecursiveDeps(expr.Inner.Expr)
 		if !exprDependencies.IsSolvedBy(ts) {
@@ -1150,7 +893,7 @@ func (hp *horizonPlanning) planDistinct(ctx *plancontext.PlanningContext, plan l
 		// we always make the underlying query distinct,
 		// and then we might also add a distinct operator on top if it is needed
 		p.Select.MakeDistinct()
-		if p.isSingleShard() || selectHasUniqueVindex(ctx.VSchema, ctx.SemTable, hp.qp.SelectExprs) {
+		if p.isSingleShard() || selectHasUniqueVindex(ctx.SemTable, hp.qp.SelectExprs) {
 			return plan, nil
 		}
 
@@ -1178,7 +921,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 		}
 		found := false
 		for _, grpParam := range currPlan.groupByKeys {
-			if sqlparser.EqualsExpr(expr, grpParam.Expr) {
+			if semTable.EqualsExpr(expr, grpParam.Expr) {
 				found = true
 				oa.groupByKeys = append(oa.groupByKeys, grpParam)
 				break
@@ -1188,7 +931,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 			continue
 		}
 		for _, aggrParam := range currPlan.aggregates {
-			if sqlparser.EqualsExpr(expr, aggrParam.Expr) {
+			if semTable.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
 				oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationForExpr(expr)})
 				break
@@ -1202,7 +945,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 }
 
 func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	var orderExprs []abstract.OrderBy
+	var orderExprs []operators.OrderBy
 	var groupByKeys []*engine.GroupByParams
 	for index, sExpr := range hp.qp.SelectExprs {
 		aliasExpr, err := sExpr.GetAliasedExpr()
@@ -1230,7 +973,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 		grpParam.WeightStringCol = wOffset
 		groupByKeys = append(groupByKeys, grpParam)
 
-		orderExprs = append(orderExprs, abstract.OrderBy{
+		orderExprs = append(orderExprs, operators.OrderBy{
 			Inner:         &sqlparser.Order{Expr: inner},
 			WeightStrExpr: aliasExpr.Expr},
 		)
@@ -1249,7 +992,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 	return oa, nil
 }
 
-func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.SelectExpr) bool {
+func isAmbiguousOrderBy(index int, col sqlparser.IdentifierCI, exprs []operators.SelectExpr) bool {
 	if col.String() == "" {
 		return false
 	}
@@ -1275,50 +1018,18 @@ func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.Sele
 	return false
 }
 
-func selectHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
+func selectHasUniqueVindex(semTable *semantics.SemTable, sel []operators.SelectExpr) bool {
 	for _, expr := range sel {
 		exp, err := expr.GetExpr()
 		if err != nil {
 			// TODO: handle star expression error
 			return false
 		}
-		if exprHasUniqueVindex(vschema, semTable, exp) {
+		if exprHasUniqueVindex(semTable, exp) {
 			return true
 		}
 	}
 	return false
-}
-
-// needDistinctHandling returns true if oa needs to handle the distinct clause.
-// If true, it will also return the aliased expression that needs to be pushed
-// down into the underlying route.
-func (hp *horizonPlanning) needDistinctHandling(
-	ctx *plancontext.PlanningContext,
-	funcExpr *sqlparser.FuncExpr,
-	opcode engine.AggregateOpcode,
-	input logicalPlan,
-) (bool, *sqlparser.AliasedExpr, error) {
-	if !funcExpr.Distinct {
-		return false, nil, nil
-	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
-		return false, nil, nil
-	}
-	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
-	if !ok {
-		return false, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(funcExpr))
-	}
-	_, ok = input.(*routeGen4)
-	if !ok {
-		// Unreachable
-		return true, innerAliased, nil
-	}
-	if exprHasUniqueVindex(ctx.VSchema, ctx.SemTable, innerAliased.Expr) {
-		// if we can see a unique vindex on this table/column,
-		// we know the results will be unique, and we don't need to DISTINCTify them
-		return false, nil, nil
-	}
-	return true, innerAliased, nil
 }
 
 func (hp *horizonPlanning) planHaving(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
@@ -1353,11 +1064,11 @@ func isJoin(plan logicalPlan) bool {
 	}
 }
 
-func exprHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
-	return exprHasVindex(vschema, semTable, expr, true)
+func exprHasUniqueVindex(semTable *semantics.SemTable, expr sqlparser.Expr) bool {
+	return exprHasVindex(semTable, expr, true)
 }
 
-func exprHasVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUnique bool) bool {
+func exprHasVindex(semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUnique bool) bool {
 	col, isCol := expr.(*sqlparser.ColName)
 	if !isCol {
 		return false
@@ -1367,14 +1078,7 @@ func exprHasVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, ex
 	if err != nil {
 		return false
 	}
-	tableName, err := tableInfo.Name()
-	if err != nil {
-		return false
-	}
-	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(tableName)
-	if err != nil {
-		return false
-	}
+	vschemaTable := tableInfo.GetVindexTable()
 	for _, vindex := range vschemaTable.ColumnVindexes {
 		if len(vindex.Columns) > 1 || hasToBeUnique && !vindex.IsUnique() {
 			return false
@@ -1405,7 +1109,7 @@ func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	case *sqlparser.AliasedExpr:
 		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	case *sqlparser.StarExpr:
-		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
+		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
 }
 
@@ -1447,7 +1151,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	return nil
 }
 
-func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupBy, plan logicalPlan, wsAdded bool) error {
+func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr operators.GroupBy, plan logicalPlan, wsAdded bool) error {
 	switch node := plan.(type) {
 	case *routeGen4:
 		sel := node.Select.(*sqlparser.Select)
@@ -1468,7 +1172,7 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupB
 	}
 }
 
-func getLengthOfProjection(groupingOffsets []offsets, aggregations []abstract.Aggr) int {
+func getLengthOfProjection(groupingOffsets []offsets, aggregations []operators.Aggr) int {
 	length := 0
 	for _, groupBy := range groupingOffsets {
 		if groupBy.wsCol != -1 {

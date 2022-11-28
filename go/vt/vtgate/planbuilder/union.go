@@ -28,11 +28,10 @@ import (
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(string) selectPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildUnionPlan(string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		union := stmt.(*sqlparser.Union)
 		if union.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
@@ -45,7 +44,7 @@ func buildUnionPlan(string) selectPlanner {
 		if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
 			return nil, err
 		}
-		return pb.plan.Primitive(), nil
+		return newPlanResult(pb.plan.Primitive()), nil
 	}
 }
 

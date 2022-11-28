@@ -20,10 +20,12 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"os"
 	"path"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
@@ -31,26 +33,26 @@ import (
 
 const clientCertUsername = "Client Cert"
 
+func init() {
+	// These tests do not invoke the servenv.Parse codepaths, so this default
+	// does not get set by the OnParseFor hook.
+	clientcertAuthMethod = string(MysqlClearPassword)
+}
+
 func TestValidCert(t *testing.T) {
 	th := &testHandler{}
 
 	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestSSLConnection")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", clientCertUsername)
@@ -64,9 +66,8 @@ func TestValidCert(t *testing.T) {
 		path.Join(root, "ca-crl.pem"),
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err, "TLSServerConfig failed: %v", err)
+
 	l.TLSConfig.Store(serverConfig)
 	go func() {
 		l.Accept()
@@ -88,29 +89,20 @@ func TestValidCert(t *testing.T) {
 
 	ctx := context.Background()
 	conn, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("Connect failed: %v", err)
-	}
+	require.NoError(t, err, "Connect failed: %v", err)
+
 	defer conn.Close()
 
 	// Make sure this went through SSL.
 	result, err := conn.ExecuteFetch("ssl echo", 10000, true)
-	if err != nil {
-		t.Fatalf("ExecuteFetch failed: %v", err)
-	}
-	if result.Rows[0][0].ToString() != "ON" {
-		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
-	}
+	require.NoError(t, err, "ExecuteFetch failed: %v", err)
+	assert.Equal(t, "ON", result.Rows[0][0].ToString(), "Got wrong result from ExecuteFetch(ssl echo): %v", result)
 
 	userData := th.LastConn().UserData.Get()
-	if userData.Username != clientCertUsername {
-		t.Errorf("userdata username is %v, expected %v", userData.Username, clientCertUsername)
-	}
+	assert.Equal(t, clientCertUsername, userData.Username, "userdata username is %v, expected %v", userData.Username, clientCertUsername)
 
 	expectedGroups := []string{"localhost", clientCertUsername}
-	if !reflect.DeepEqual(userData.Groups, expectedGroups) {
-		t.Errorf("userdata groups is %v, expected %v", userData.Groups, expectedGroups)
-	}
+	assert.True(t, reflect.DeepEqual(userData.Groups, expectedGroups), "userdata groups is %v, expected %v", userData.Groups, expectedGroups)
 
 	// Send a ComQuit to avoid the error message on the server side.
 	conn.writeComQuit()
@@ -122,20 +114,14 @@ func TestNoCert(t *testing.T) {
 	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
+	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestSSLConnection")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateCRL(root, tlstest.CA)
@@ -148,9 +134,8 @@ func TestNoCert(t *testing.T) {
 		path.Join(root, "ca-crl.pem"),
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err, "TLSServerConfig failed: %v", err)
+
 	l.TLSConfig.Store(serverConfig)
 	go func() {
 		l.Accept()
@@ -169,9 +154,8 @@ func TestNoCert(t *testing.T) {
 
 	ctx := context.Background()
 	conn, err := Connect(ctx, params)
-	if err == nil {
-		t.Errorf("Connect() should have errored due to no client cert")
-	}
+	assert.Error(t, err, "Connect() should have errored due to no client cert")
+
 	if conn != nil {
 		conn.Close()
 	}

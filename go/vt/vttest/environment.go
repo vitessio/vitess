@@ -203,7 +203,6 @@ func (env *LocalTestEnv) VtcomboArguments() []string {
 		"--service_map", strings.Join(
 			[]string{"grpc-vtgateservice", "grpc-vtctl", "grpc-vtctld"}, ",",
 		),
-		"--enable_queries",
 	}
 }
 

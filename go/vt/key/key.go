@@ -50,32 +50,6 @@ func (i Uint64Key) Bytes() []byte {
 }
 
 //
-// KeyspaceIdType helper methods
-//
-
-// ParseKeyspaceIDType parses the keyspace id type into the enum
-func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
-	if param == "" {
-		return topodatapb.KeyspaceIdType_UNSET, nil
-	}
-	value, ok := topodatapb.KeyspaceIdType_value[strings.ToUpper(param)]
-	if !ok {
-		return topodatapb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
-	}
-	return topodatapb.KeyspaceIdType(value), nil
-}
-
-// KeyspaceIDTypeString returns the string representation of a keyspace id type.
-func KeyspaceIDTypeString(id topodatapb.KeyspaceIdType) string {
-	s, ok := topodatapb.KeyspaceIdType_name[int32(id)]
-	if !ok {
-		return KeyspaceIDTypeString(topodatapb.KeyspaceIdType_UNSET)
-	}
-
-	return s
-}
-
-//
 // KeyRange helper methods
 //
 

@@ -142,7 +142,7 @@ func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (pl
 // respectively, and (b) db_name and workflow do not appear in the original
 // query's WHERE clause:
 //
-// 		WHERE (db_name = {{ .DBName }} AND)? (workflow = {{ .Workflow }} AND)? {{ .OriginalWhere }}
+//	WHERE (db_name = {{ .DBName }} AND)? (workflow = {{ .Workflow }} AND)? {{ .OriginalWhere }}
 func (planner *VReplicationQueryPlanner) QueryParams() QueryParams {
 	return QueryParams{
 		DBName:         planner.dbname,
@@ -330,7 +330,7 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 			expr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left: &sqlparser.ColName{
-					Name: sqlparser.NewColIdent("vrepl_id"),
+					Name: sqlparser.NewIdentifierCI("vrepl_id"),
 				},
 				Right: sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamIDs[0])),
 			}
@@ -344,7 +344,7 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 			expr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.InOp,
 				Left: &sqlparser.ColName{
-					Name: sqlparser.NewColIdent("vrepl_id"),
+					Name: sqlparser.NewIdentifierCI("vrepl_id"),
 				},
 				Right: tuple,
 			}
@@ -395,7 +395,7 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 	if !hasDBNameCol {
 		expr := &sqlparser.ComparisonExpr{
 			Left: &sqlparser.ColName{
-				Name: sqlparser.NewColIdent(params.DBNameColumn),
+				Name: sqlparser.NewIdentifierCI(params.DBNameColumn),
 			},
 			Operator: sqlparser.EqualOp,
 			Right:    sqlparser.NewStrLiteral(params.DBName),
@@ -418,7 +418,7 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 	if !hasWorkflowCol && params.Workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
 			Left: &sqlparser.ColName{
-				Name: sqlparser.NewColIdent(params.WorkflowColumn),
+				Name: sqlparser.NewIdentifierCI(params.WorkflowColumn),
 			},
 			Operator: sqlparser.EqualOp,
 			Right:    sqlparser.NewStrLiteral(params.Workflow),

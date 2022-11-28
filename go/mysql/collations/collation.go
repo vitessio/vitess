@@ -22,6 +22,13 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
+// CaseAwareCollation implements lowercase and uppercase conventions for collations.
+type CaseAwareCollation interface {
+	Collation
+	ToUpper(dst []byte, src []byte) []byte
+	ToLower(dst []byte, src []byte) []byte
+}
+
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
@@ -186,10 +193,10 @@ func Validate(collation Collation, input []byte) bool {
 // into a byte slice encoded in `dstCollation`'s charset. The resulting byte slice is
 // appended to `dst` and returned.
 func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
-	switch srcCollation.(type) {
-	case *Collation_binary:
-		return charset.ConvertFromBinary(dst, dstCollation.Charset(), src)
-	default:
-		return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
-	}
+	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
+}
+
+// Length returns the number of codepoints in the input based on the given collation
+func Length(collation Collation, input []byte) int {
+	return charset.Length(collation.Charset(), input)
 }

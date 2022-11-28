@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -91,8 +92,8 @@ var (
 	}
 	createStatement = `
 		CREATE TABLE stress_test (
-			id bigint(20) not null,
-			id_negative bigint(20) not null,
+			id bigint not null,
+			id_negative bigint not null,
 			rand_text varchar(40) not null default '',
 			rand_num bigint unsigned not null,
 			nullable_num int default null,
@@ -371,6 +372,8 @@ const (
 	maxTableRows                  = 4096
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
+	periodicSleepPercent          = 10 // in the range (0,100). 10 means 10% sleep time throught the stress load.
+	waitForStatusTimeout          = 180 * time.Second
 )
 
 func resetOpOrder() {
@@ -430,8 +433,10 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
+			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -522,6 +527,8 @@ func TestSchemaChange(t *testing.T) {
 				if testcase.expectFailure {
 					expectStatus = schema.OnlineDDLStatusFailed
 				}
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
@@ -573,7 +580,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	status := schema.OnlineDDLStatusComplete
 	if !strategySetting.Strategy.IsDirect() {
-		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
@@ -593,9 +600,24 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	rowcount := 0
+	for {
+		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		require.Nil(t, err)
+		rowcount = len(queryResult.Rows)
+		if rowcount > 0 {
+			break
+		}
+
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			break
+		}
+	}
+	assert.Equal(t, expectCount, rowcount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -657,11 +679,15 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	require.Nil(t, err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
+	_, err = conn.ExecuteFetch("set autocommit=1", 1, false)
 	require.Nil(t, err)
-	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
+	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1, false)
+	require.Nil(t, err)
+	_, err = conn.ExecuteFetch("set innodb_lock_wait_timeout=1", 1, false)
 	require.Nil(t, err)
 
+	periodicRest := timer.NewRateLimiter(time.Second)
+	defer periodicRest.Stop()
 	for {
 		if atomic.LoadInt64(done) == 1 {
 			log.Infof("Terminating single connection")
@@ -680,9 +706,27 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}
+			if sqlErr, ok := err.(*mysql.SQLError); ok {
+				switch sqlErr.Number() {
+				case mysql.ERLockDeadlock:
+					// That's fine. We create a lot of contention; some transactions will deadlock and
+					// rollback. It happens, and we can ignore those and keep on going.
+					err = nil
+				}
+			}
 		}
 		assert.Nil(t, err)
 		time.Sleep(singleConnectionSleepInterval)
+		// Most o fthe time, we want the load to be high, so as to create real stress and potentially
+		// expose bugs in vreplication (the objective of this test!).
+		// However, some platforms (GitHub CI) can suffocate from this load. We choose to keep the load
+		// high, when it runs, but then also take a periodic break and let the system recover.
+		// We prefer this over reducing the load in general. In our method here, we have full load 90% of
+		// the time, then relaxation 10% of the time.
+		periodicRest.Do(func() error {
+			time.Sleep(time.Second * periodicSleepPercent / 100)
+			return nil
+		})
 	}
 }
 

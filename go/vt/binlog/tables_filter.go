@@ -30,11 +30,11 @@ const (
 	space         = " "
 )
 
-// TablesFilterFunc returns a function that calls callback only if statements
+// tablesFilterFunc returns a function that calls callback only if statements
 // in the transaction match the specified tables. The resulting function can be
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
-// bls.Stream(file, pos, TablesFilterFunc(sendTransaction))
-func TablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc {
+// bls.Stream(file, pos, tablesFilterFunc(sendTransaction))
+func tablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc {
 	return func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		matched := false
 		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(statements))

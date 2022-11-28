@@ -63,13 +63,19 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			Columns:           []string{"c1", "c2", "c3", "c4"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|int64|int64"),
+		}, {
+			Name:              "datze",
+			Columns:           []string{"id", "dt"},
+			PrimaryKeyColumns: []string{"id"},
+			Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
 		}},
 	}
 
 	testcases := []struct {
-		input *binlogdatapb.Rule
-		table string
-		td    *tableDiffer
+		input          *binlogdatapb.Rule
+		table          string
+		td             *tableDiffer
+		sourceTimeZone string
 	}{{
 		input: &binlogdatapb.Rule{
 			Match: "t1",
@@ -389,7 +395,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
 				Aggregates: []*engine.AggregateParams{{
-					Opcode: engine.AggregateCount,
+					Opcode: engine.AggregateSum,
 					Col:    2,
 				}, {
 					Opcode: engine.AggregateSum,
@@ -400,12 +406,29 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			},
 			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
+	}, {
+		input: &binlogdatapb.Rule{
+			Match: "datze",
+		},
+		sourceTimeZone: "US/Pacific",
+		table:          "datze",
+		td: &tableDiffer{
+			targetTable:      "datze",
+			sourceExpression: "select id, dt from datze order by id asc",
+			targetExpression: "select id, convert_tz(dt, 'UTC', 'US/Pacific') as dt from datze order by id asc",
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+		},
 	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input.Filter, func(t *testing.T) {
 			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-			df := &vdiff{}
+			df := &vdiff{sourceTimeZone: tcase.sourceTimeZone, targetTimeZone: "UTC"}
 			err := df.buildVDiffPlan(context.Background(), filter, schm, nil)
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(df.differs), tcase.input)
@@ -988,8 +1011,8 @@ func TestVDiffFindPKs(t *testing.T) {
 			},
 			targetSelect: &sqlparser.Select{
 				SelectExprs: sqlparser.SelectExprs{
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c1")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c2")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
 				},
 			},
 			tdIn: &tableDiffer{
@@ -1013,10 +1036,10 @@ func TestVDiffFindPKs(t *testing.T) {
 			},
 			targetSelect: &sqlparser.Select{
 				SelectExprs: sqlparser.SelectExprs{
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c1")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c2")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("c3")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c4")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewIdentifierCI("c3")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c4")}},
 				},
 			},
 			tdIn: &tableDiffer{

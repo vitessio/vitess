@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/credentials/insecure"
+
 	"google.golang.org/grpc"
 	grpcresolver "google.golang.org/grpc/resolver"
 
@@ -40,14 +42,10 @@ import (
 // Proxy defines the connection interface of a proxied vtctldclient used by
 // VTAdmin clusters.
 type Proxy interface {
-	// Dial opens a gRPC connection to a vtctld in the cluster. If the Proxy
-	// already has a valid connection, this is a no-op.
-	Dial(ctx context.Context) error
-
 	// Close closes the underlying vtctldclient connection. This is a no-op if
 	// the Proxy has no current, valid connection. It is safe to call repeatedly.
-	// Users may call Dial on a previously-closed Proxy to create a new
-	// connection, but that connection may not be to the same particular vtctld.
+	//
+	// Once closed, a proxy is not safe for reuse.
 	Close() error
 
 	vtctlservicepb.VtctldClient
@@ -65,7 +63,7 @@ type ClientProxy struct {
 	// DialFunc is called to open a new vtctdclient connection. In production,
 	// this should always be grpcvtctldclient.NewWithDialOpts, but it is
 	// exported for testing purposes.
-	DialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
+	dialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
 	resolver grpcresolver.Builder
 
 	m        sync.Mutex
@@ -80,50 +78,44 @@ type ClientProxy struct {
 //
 // It does not open a connection to a vtctld; users must call Dial before first
 // use.
-func New(cfg *Config) *ClientProxy {
-	return &ClientProxy{
+func New(ctx context.Context, cfg *Config) (*ClientProxy, error) {
+	dialFunc := cfg.dialFunc
+	if dialFunc == nil {
+		dialFunc = grpcvtctldclient.NewWithDialOpts
+	}
+
+	proxy := ClientProxy{
 		cfg:      cfg,
 		cluster:  cfg.Cluster,
 		creds:    cfg.Credentials,
-		DialFunc: grpcvtctldclient.NewWithDialOpts,
+		dialFunc: dialFunc,
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 		closed:   true,
 	}
+
+	if err := proxy.dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return &proxy, nil
 }
 
-// Dial is part of the Proxy interface.
-func (vtctld *ClientProxy) Dial(ctx context.Context) error {
+// dial invokes a grpc.Dial call with the discovery-backed resolver for vtctlds
+// in the proxy's cluster.
+//
+// it is called once at ClientProxy instantiation (in New()).
+func (vtctld *ClientProxy) dial(ctx context.Context) error {
 	span, _ := trace.NewSpan(ctx, "VtctldClientProxy.Dial")
 	defer span.Finish()
 
 	vtadminproto.AnnotateClusterSpan(vtctld.cluster, span)
-
-	vtctld.m.Lock()
-	defer vtctld.m.Unlock()
-
-	if vtctld.VtctldClient != nil {
-		if !vtctld.closed {
-			span.Annotate("is_noop", true)
-			return nil
-		}
-
-		span.Annotate("is_stale", true)
-
-		if err := vtctld.closeLocked(); err != nil {
-			// Even if the client connection does not shut down cleanly, we don't want to block
-			// Dial from discovering a new vtctld. This makes VTAdmin's dialer more resilient,
-			// but, as a caveat, it _can_ potentially leak improperly-closed gRPC connections.
-			log.Errorf("error closing possibly-stale connection before re-dialing: %w", err)
-		}
-	}
-
 	span.Annotate("is_using_credentials", vtctld.creds != nil)
 
 	opts := []grpc.DialOption{
 		// TODO: make configurable. right now, omitting this and attempting
 		// to not use TLS results in:
 		//		grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
 	if vtctld.creds != nil {
@@ -132,13 +124,17 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 	opts = append(opts, grpc.WithResolvers(vtctld.resolver))
 
-	// TODO: update DialFunc to take ctx as first arg.
-	client, err := vtctld.DialFunc(resolver.DialAddr(vtctld.resolver, "vtctld"), grpcclient.FailFast(false), opts...)
+	// TODO: update dialFunc to take ctx as first arg.
+	client, err := vtctld.dialFunc(resolver.DialAddr(vtctld.resolver, "vtctld"), grpcclient.FailFast(false), opts...)
 	if err != nil {
 		return err
 	}
 
 	log.Infof("Established gRPC connection to vtctld\n")
+
+	vtctld.m.Lock()
+	defer vtctld.m.Unlock()
+
 	vtctld.dialedAt = time.Now()
 	vtctld.VtctldClient = client
 	vtctld.closed = false
@@ -151,28 +147,19 @@ func (vtctld *ClientProxy) Close() error {
 	vtctld.m.Lock()
 	defer vtctld.m.Unlock()
 
-	return vtctld.closeLocked()
-}
-
-func (vtctld *ClientProxy) closeLocked() error {
 	if vtctld.VtctldClient == nil {
 		vtctld.closed = true
 
 		return nil
 	}
 
-	err := vtctld.VtctldClient.Close()
-
+	// TODO: (ajm188) Figure out if this comment is still accurate.
 	// Mark the vtctld connection as "closed" from the proxy side even if
 	// the client connection does not shut down cleanly. This makes VTAdmin's dialer more resilient,
 	// but, as a caveat, it _can_ potentially leak improperly-closed gRPC connections.
-	vtctld.closed = true
+	defer func() { vtctld.closed = true }()
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return vtctld.VtctldClient.Close()
 }
 
 // Debug implements debug.Debuggable for ClientProxy.

@@ -19,17 +19,18 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/spf13/pflag"
 )
 
 type (
@@ -70,26 +71,22 @@ type (
 	}
 
 	releaseNote struct {
-		Version       string
-		Announcement  string
-		KnownIssues   string
-		AddDetails    string
-		ChangeLog     string
-		ChangeMetrics string
+		Version, VersionUnderscore                        string
+		Announcement                                      string
+		KnownIssues                                       string
+		AddDetails                                        string
+		PathToChangeLogFileOnGH, ChangeLog, ChangeMetrics string
 	}
 )
 
 const (
+	releaseNotesPath       = `doc/releasenotes/`
+	releaseNotesPathGitHub = `https://github.com/vitessio/vitess/blob/main/` + releaseNotesPath
+
 	markdownTemplate = `# Release of Vitess {{.Version}}
 
 {{- if or .Announcement .AddDetails }}
-## Announcement
 {{ .Announcement }}
-{{- end }}
-
-{{- if .AddDetails }}
-> TODO: please detail these pull requests.
-{{ .AddDetails }}
 {{- end }}
 
 {{- if and (or .Announcement .AddDetails) (or .KnownIssues .ChangeLog) }}
@@ -99,17 +96,19 @@ const (
 {{- if .KnownIssues }}
 ## Known Issues
 {{ .KnownIssues }}
-
-{{- if .ChangeLog }}
-------------
-{{- end }}
 {{- end }}
 
 {{- if .ChangeLog }}
-## Changelog
-{{ .ChangeLog }}
+The entire changelog for this release can be found [here]({{ .PathToChangeLogFileOnGH }}).
+{{- end }}
+
+{{- if .ChangeLog }}
 {{ .ChangeMetrics }}
 {{- end }}
+`
+
+	markdownTemplateChangelog = `# Changelog of Vitess {{.Version}}
+{{ .ChangeLog }}
 `
 
 	markdownTemplatePR = `
@@ -118,7 +117,7 @@ const (
 {{- range $component := $type.Components }} 
 #### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
- * {{ $prInfo.Title }} #{{ $prInfo.Number }}
+ * {{ $prInfo.Title }} [#{{ $prInfo.Number }}](https://github.com/vitessio/vitess/pull/{{ $prInfo.Number }})
 {{- end }}
 {{- end }}
 {{- end }}
@@ -136,27 +135,32 @@ const (
 	lengthOfSingleSHA = 40
 )
 
-func (l labels) needsToList() bool {
-	for _, label := range l {
-		if label.Name == "release notes" {
-			return true
+func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
+	var err error
+	// Generate the release notes
+	rn.PathToChangeLogFileOnGH = fmt.Sprintf(releaseNotesPathGitHub+"%s_changelog.md", rn.VersionUnderscore)
+	if rnFile == nil {
+		rnFile, err = os.OpenFile(fmt.Sprintf(path.Join(releaseNotesPath, "%s_release_notes.md"), rn.VersionUnderscore), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			return err
 		}
 	}
-	return false
-}
 
-func (l labels) needsDetails() bool {
-	for _, label := range l {
-		if label.Name == "release notes (needs details)" {
-			return true
-		}
-	}
-	return false
-}
-
-func (rn *releaseNote) generate(writeTo io.Writer) error {
 	t := template.Must(template.New("release_notes").Parse(markdownTemplate))
-	err := t.ExecuteTemplate(writeTo, "release_notes", rn)
+	err = t.ExecuteTemplate(rnFile, "release_notes", rn)
+	if err != nil {
+		return err
+	}
+
+	// Generate the changelog
+	if changelogFile == nil {
+		changelogFile, err = os.OpenFile(fmt.Sprintf(path.Join(releaseNotesPath, "%s_changelog.md"), rn.VersionUnderscore), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			return err
+		}
+	}
+	t = template.Must(template.New("release_notes_changelog").Parse(markdownTemplateChangelog))
+	err = t.ExecuteTemplate(changelogFile, "release_notes_changelog", rn)
 	if err != nil {
 		return err
 	}
@@ -283,7 +287,7 @@ type req struct {
 	key  string
 }
 
-func loadAllPRs(prs, authorCommits []string) ([]prInfo, []prInfo, []string, error) {
+func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 	errChan := make(chan error)
 	wgDone := make(chan bool)
 	prChan := make(chan req, len(prs)+len(authorCommits))
@@ -296,7 +300,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []prInfo, []string, erro
 	}
 	close(prChan)
 
-	var prInfos, prNeedsDetails []prInfo
+	var prInfos []prInfo
 	var authors []string
 	fmt.Printf("Found %d merged PRs. Loading PR info", len(prs))
 	wg := sync.WaitGroup{}
@@ -324,11 +328,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []prInfo, []string, erro
 	addPR := func(in prInfo) {
 		mu.Lock()
 		defer mu.Unlock()
-		if in.Labels.needsDetails() {
-			prNeedsDetails = append(prNeedsDetails, in)
-		} else if in.Labels.needsToList() {
-			prInfos = append(prInfos, in)
-		}
+		prInfos = append(prInfos, in)
 	}
 
 	for i := 0; i < numberOfThreads; i++ {
@@ -339,7 +339,6 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []prInfo, []string, erro
 
 			for b := range prChan {
 				fmt.Print(".")
-
 				if b.isPR {
 					prInfo, err := loadPRInfo(b.key)
 					if err != nil {
@@ -380,7 +379,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []prInfo, []string, erro
 
 	sort.Strings(authors)
 
-	return prInfos, prNeedsDetails, authors, err
+	return prInfos, authors, err
 }
 
 func groupPRs(prInfos []prInfo) prsByType {
@@ -453,14 +452,6 @@ func releaseSummary(summaryFile string) (string, error) {
 	return string(contentSummary), nil
 }
 
-func getOutput(fileout string) (*os.File, error) {
-	if fileout == "" {
-		return os.Stdout, nil
-	}
-
-	return os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-}
-
 func getStringForPullRequestInfos(prPerType prsByType) (string, error) {
 	data := createSortedPrTypeSlice(prPerType)
 
@@ -497,20 +488,32 @@ func groupAndStringifyPullRequest(pr []prInfo) (string, error) {
 }
 
 func main() {
-	from := flag.String("from", "", "from sha/tag/branch")
-	to := flag.String("to", "HEAD", "to sha/tag/branch")
-	versionName := flag.String("version", "", "name of the version (has to be the following format: v11.0.0)")
-	summaryFile := flag.String("summary", "", "readme file on which there is a summary of the release")
-	fileout := flag.String("file", "", "file on which to write release notes, stdout if empty")
-	flag.Parse()
+	var (
+		from, versionName, summaryFile string
+		to                             = "HEAD"
+	)
+	pflag.StringVarP(&from, "from", "f", "", "from sha/tag/branch")
+	pflag.StringVarP(&to, "to", "t", to, "to sha/tag/branch")
+	pflag.StringVarP(&versionName, "version", "v", "", "name of the version (has to be the following format: v11.0.0)")
+	pflag.StringVarP(&summaryFile, "summary", "s", "", "readme file on which there is a summary of the release")
+	pflag.Parse()
+
+	// The -version flag must be of a valid format.
+	rx := regexp.MustCompile(`v([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
+	versionMatch := rx.FindStringSubmatch(versionName)
+	if len(versionMatch) != 4 {
+		log.Fatal("The --version flag must be set using a valid format. Format: 'vX.X.X'.")
+	}
 
 	releaseNotes := releaseNote{
-		Version: *versionName,
+		Version:           versionName,
+		VersionUnderscore: fmt.Sprintf("%s_%s_%s", versionMatch[1], versionMatch[2], versionMatch[3]), // v14.0.0 -> 14_0_0, this is used to format filenames.
 	}
 
 	// summary of the release
-	if *summaryFile != "" {
-		summary, err := releaseSummary(*summaryFile)
+	if summaryFile != "" {
+		summary, err := releaseSummary(summaryFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -518,32 +521,26 @@ func main() {
 	}
 
 	// known issues
-	if *versionName != "" {
-		knownIssues, err := loadKnownIssues(*versionName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		knownIssuesStr, err := getStringForKnownIssues(knownIssues)
-		if err != nil {
-			log.Fatal(err)
-		}
-		releaseNotes.KnownIssues = knownIssuesStr
-	}
-
-	// changelog with pull requests
-	prs, authorCommits, commits, err := loadMergedPRs(*from, *to)
+	knownIssues, err := loadKnownIssues(versionName)
 	if err != nil {
 		log.Fatal(err)
 	}
-	prInfos, prNeedsDetails, authors, err := loadAllPRs(prs, authorCommits)
+	knownIssuesStr, err := getStringForKnownIssues(knownIssues)
+	if err != nil {
+		log.Fatal(err)
+	}
+	releaseNotes.KnownIssues = knownIssuesStr
+
+	// changelog with pull requests
+	prs, authorCommits, commits, err := loadMergedPRs(from, to)
+	if err != nil {
+		log.Fatal(err)
+	}
+	prInfos, authors, err := loadAllPRs(prs, authorCommits)
 	if err != nil {
 		log.Fatal(err)
 	}
 	releaseNotes.ChangeLog, err = groupAndStringifyPullRequest(prInfos)
-	if err != nil {
-		log.Fatal(err)
-	}
-	releaseNotes.AddDetails, err = groupAndStringifyPullRequest(prNeedsDetails)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -557,12 +554,7 @@ Thanks to all our contributors: @%s
 `, commits, strings.Join(authors, ", @"))
 	}
 
-	out, err := getOutput(*fileout)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer out.Close()
-	if err := releaseNotes.generate(out); err != nil {
+	if err := releaseNotes.generate(nil, nil); err != nil {
 		log.Fatal(err)
 	}
 }

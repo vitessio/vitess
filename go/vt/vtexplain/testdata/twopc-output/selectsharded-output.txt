@@ -87,3 +87,9 @@ select * from (select id from user) s /* scatter paren select */
 1 ks_sharded/c0-: select * from (select id from user) as s limit 10001 /* scatter paren select */
 
 ----------------------------------------------------------------------
+SELECT id FROM orders WHERE id IN (1, "1", 1)
+
+1 ks_sharded/-40: select id, keyspace_id from orders_id_lookup where id in (1, '1', 1) limit 10001
+2 ks_sharded/40-80: select id from orders where id in (1, '1', 1) limit 10001
+
+----------------------------------------------------------------------

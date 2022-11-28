@@ -21,6 +21,9 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestParseNextValid concatenates all the valid SQL test cases and check it can read
@@ -41,10 +44,7 @@ func TestParseNextValid(t *testing.T) {
 		}
 
 		tree, err := ParseNext(tokens)
-		if err != nil {
-			t.Fatalf("[%d] ParseNext(%q) err: %q, want nil", i, input, err)
-			continue
-		}
+		require.NoError(t, err)
 
 		if got := String(tree); got != want {
 			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
@@ -63,19 +63,11 @@ func TestIgnoreSpecialComments(t *testing.T) {
 	tokenizer := NewStringTokenizer(input)
 	tokenizer.SkipSpecialComments = true
 	one, err := ParseNextStrictDDL(tokenizer)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "select 1 from dual", String(one))
 	two, err := ParseNextStrictDDL(tokenizer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := String(one), "select 1 from dual"; got != want {
-		t.Fatalf("got %s want %s", got, want)
-	}
-	if got, want := String(two), "select 2 from dual"; got != want {
-		t.Fatalf("got %s want %s", got, want)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "select 2 from dual", String(two))
 }
 
 // TestParseNextErrors tests all the error cases, and ensures a valid
@@ -86,33 +78,25 @@ func TestParseNextErrors(t *testing.T) {
 			// Skip tests which leave unclosed strings, or comments.
 			continue
 		}
+		t.Run(tcase.input, func(t *testing.T) {
+			sql := tcase.input + "; select 1 from t"
+			tokens := NewStringTokenizer(sql)
 
-		sql := tcase.input + "; select 1 from t"
-		tokens := NewStringTokenizer(sql)
+			// The first statement should be an error
+			_, err := ParseNextStrictDDL(tokens)
+			require.EqualError(t, err, tcase.output)
 
-		// The first statement should be an error
-		_, err := ParseNext(tokens)
-		if err == nil || err.Error() != tcase.output {
-			t.Fatalf("[0] ParseNext(%q) err: %q, want %q", sql, err, tcase.output)
-			continue
-		}
+			// The second should be valid
+			tree, err := ParseNextStrictDDL(tokens)
+			require.NoError(t, err)
 
-		// The second should be valid
-		tree, err := ParseNext(tokens)
-		if err != nil {
-			t.Fatalf("[1] ParseNext(%q) err: %q, want nil", sql, err)
-			continue
-		}
+			want := "select 1 from t"
+			assert.Equal(t, want, String(tree))
 
-		want := "select 1 from t"
-		if got := String(tree); got != want {
-			t.Fatalf("[1] ParseNext(%q) = %q, want %q", sql, got, want)
-		}
-
-		// Read once more and it should be EOF.
-		if tree, err := ParseNext(tokens); err != io.EOF {
-			t.Errorf("ParseNext(tokens) = (%q, %v) want io.EOF", String(tree), err)
-		}
+			// Read once more and it should be EOF.
+			_, err = ParseNextStrictDDL(tokens)
+			require.Same(t, io.EOF, err)
+		})
 	}
 }
 
@@ -161,10 +145,7 @@ func TestParseNextEdgeCases(t *testing.T) {
 
 		for i, want := range test.want {
 			tree, err := ParseNext(tokens)
-			if err != nil {
-				t.Fatalf("[%d] ParseNext(%q) err = %q, want nil", i, test.input, err)
-				continue
-			}
+			require.NoError(t, err)
 
 			if got := String(tree); got != want {
 				t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, test.input, got, want)

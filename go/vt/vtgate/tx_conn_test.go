@@ -17,13 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 
@@ -48,7 +48,7 @@ func TestTxConnBegin(t *testing.T) {
 
 	// begin
 	safeSession := NewSafeSession(session)
-	err := sc.txConn.Begin(ctx, safeSession)
+	err := sc.txConn.Begin(ctx, safeSession, nil)
 	require.NoError(t, err)
 	wantSession := vtgatepb.Session{InTransaction: true}
 	utils.MustMatch(t, &wantSession, session, "Session")
@@ -57,9 +57,66 @@ func TestTxConnBegin(t *testing.T) {
 
 	// Begin again should cause a commit and a new begin.
 	require.NoError(t,
-		sc.txConn.Begin(ctx, safeSession))
+		sc.txConn.Begin(ctx, safeSession, nil))
 	utils.MustMatch(t, &wantSession, session, "Session")
 	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+}
+
+func TestTxConnCommitFailure(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	wantSession := vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	wantSession = vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc1.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	sbc1.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 1
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_DEADLINE_EXCEEDED,
+		fmt.Sprintf("%v error", vtrpcpb.Code_DEADLINE_EXCEEDED)),
+		rss1[0].Target)
+
+	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
+	wantSession = vtgatepb.Session{}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
@@ -467,9 +524,14 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 		sc.txConn.Commit(ctx, session))
 
 	// The last failed commit must generate a warning.
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_INVALID_ARGUMENT,
+		fmt.Sprintf("%v error", vtrpcpb.Code_INVALID_ARGUMENT)),
+		rss1[0].Target)
+
 	wantSession := vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{
-			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n",
+			Message: fmt.Sprintf("post-operation transaction had an error: %v", expectErr),
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -894,7 +956,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -903,10 +965,16 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	assert.Error(t,
 		sc.txConn.Rollback(ctx, session))
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_INVALID_ARGUMENT,
+		fmt.Sprintf("%v error", vtrpcpb.Code_INVALID_ARGUMENT)),
+		rss1[0].Target)
+
 	wantSession := vtgatepb.Session{
 		InReservedConn: true,
 		Warnings: []*querypb.QueryWarning{{
-			Message: "rollback encountered an error and connection to all shard for this session is released: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n",
+			Message: fmt.Sprintf("rollback encountered an error and connection to all shard for this session is released: %v", expectErr),
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -1121,7 +1189,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "0",
 		},
 	}}
-	err := txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err := txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want := "err 0"
@@ -1136,7 +1204,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "1",
 		},
 	}}
-	err = txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want = "err 0\nerr 1"
@@ -1144,7 +1212,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 	wantCode := vtrpcpb.Code_INTERNAL
 	assert.Equal(t, wantCode, vterrors.Code(err), "error code")
 
-	err = txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -1180,14 +1248,56 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestTxConnAccessModeReset(t *testing.T) {
+	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+
+	tcases := []struct {
+		name string
+		f    func(ctx context.Context, session *SafeSession) error
+	}{{
+		name: "begin-commit",
+		f:    sc.txConn.Commit,
+	}, {
+		name: "begin-rollback",
+		f:    sc.txConn.Rollback,
+	}, {
+		name: "begin-release",
+		f:    sc.txConn.Release,
+	}, {
+		name: "begin-releaseAll",
+		f:    sc.txConn.ReleaseAll,
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			safeSession := NewSafeSession(&vtgatepb.Session{
+				Options: &querypb.ExecuteOptions{
+					TransactionAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_READ_ONLY},
+				},
+			})
+
+			// begin transaction
+			require.NoError(t,
+				sc.txConn.Begin(ctx, safeSession, nil))
+
+			// resolve transaction
+			require.NoError(t,
+				tcase.f(ctx, safeSession))
+
+			// check that the access mode is reset
+			require.Nil(t, safeSession.Session.Options.TransactionAccessMode)
+		})
+	}
+}
+
 func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
 	t.Helper()
 	createSandbox(name)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
 	var err error
 	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)

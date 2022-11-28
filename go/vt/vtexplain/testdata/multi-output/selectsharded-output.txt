@@ -128,7 +128,7 @@ select name from user where id not in (select id from t1) /* non-correlated subq
 ----------------------------------------------------------------------
 select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */
 
-1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery as EXISTS */
+1 ks_unsharded/-: select 1 from t1 limit 1 /* non-correlated subquery as EXISTS */
 2 ks_sharded/-40: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
 2 ks_sharded/40-80: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
 2 ks_sharded/80-c0: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
@@ -199,5 +199,11 @@ SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id
 3 ks_sharded/80-c0: select name_info.info from name_info where name_info.`name` = 'name_val_1' limit 10001
 4 ks_sharded/80-c0: select name_info.info from name_info where name_info.`name` = 'name_val_1' limit 10001
 5 ks_sharded/80-c0: select name_info.info from name_info where name_info.`name` = 'name_val_1' limit 10001
+
+----------------------------------------------------------------------
+SELECT id FROM orders WHERE id IN (1, "1", 1)
+
+1 ks_sharded/-40: select id, keyspace_id from orders_id_lookup where id in (1, '1', 1) limit 10001
+2 ks_sharded/40-80: select id from orders where id in (1, '1', 1) limit 10001
 
 ----------------------------------------------------------------------

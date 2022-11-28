@@ -64,3 +64,12 @@ func SplitUnescape(s string, sep string) ([]string, error) {
 	}
 	return unescapedElems, nil
 }
+
+// SingleWordCamel takes a single word and returns is in Camel case; basically
+// just capitalizing the first letter and making sure the rest are lower case.
+func SingleWordCamel(w string) string {
+	if w == "" {
+		return w
+	}
+	return strings.ToUpper(w[0:1]) + strings.ToLower(w[1:])
+}

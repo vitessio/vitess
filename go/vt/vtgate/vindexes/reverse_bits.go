@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -67,7 +68,7 @@ func (vind *ReverseBits) NeedsVCursor() bool {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *ReverseBits) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *ReverseBits) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		num, err := vind.Hash(id)
@@ -81,7 +82,7 @@ func (vind *ReverseBits) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destin
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *ReverseBits) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *ReverseBits) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, 0, len(ids))
 	for i, id := range ids {
 		num, err := vind.Hash(id)

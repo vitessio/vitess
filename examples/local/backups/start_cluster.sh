@@ -42,8 +42,8 @@ done
 vtctldclient InitShardPrimary --force commerce/0 zone1-100
 
 # create the schema for commerce
-vtctlclient ApplySchema -sql-file backups/create_commerce_schema.sql commerce
-vtctlclient ApplyVSchema -vschema_file ./vschema_commerce_seq.json commerce
+vtctlclient ApplySchema -- --sql-file backups/create_commerce_schema.sql commerce
+vtctlclient ApplyVSchema -- --vschema_file ./vschema_commerce_seq.json commerce
 
 
 # start vttablets for keyspace customer
@@ -61,8 +61,8 @@ vtctldclient InitShardPrimary --force customer/-80 zone1-200
 vtctldclient InitShardPrimary --force customer/80- zone1-300
 
 # create the schema for customer
-vtctlclient ApplySchema -sql-file backups/create_customer_schema.sql customer
-vtctlclient ApplyVSchema -vschema_file ./vschema_customer_sharded.json customer
+vtctlclient ApplySchema -- --sql-file backups/create_customer_schema.sql customer
+vtctlclient ApplyVSchema -- --vschema_file ./vschema_customer_sharded.json customer
 
 
 # start vtgate

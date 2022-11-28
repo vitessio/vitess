@@ -17,10 +17,9 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"fmt"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -105,9 +104,27 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 	return lock, err
 }
 
+// TryLock is part of the topo.Conn interface.
+// As of today it provides same functionality as Lock
+func (st *fakeConn) TryLock(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
+	if dirPath == "error" {
+		return lock, fmt.Errorf("dummy error")
+
+	}
+	return lock, err
+}
+
 // Watch is part of the Conn interface
-func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc) {
-	return current, changes, cancel
+func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error) {
+	return current, changes, err
+}
+
+// WatchRecursive is part of the Conn interface
+func (st *fakeConn) WatchRecursive(ctx context.Context, path string) (current []*WatchDataRecursive, changes <-chan *WatchDataRecursive, err error) {
+	return current, changes, err
 }
 
 // NewLeaderParticipation is part of the Conn interface
@@ -133,7 +150,7 @@ func (st *fakeConn) IsReadOnly() bool {
 	return st.readOnly
 }
 
-//TestStatsConnTopoListDir emits stats on ListDir
+// TestStatsConnTopoListDir emits stats on ListDir
 func TestStatsConnTopoListDir(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
@@ -160,7 +177,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 	}
 }
 
-//TestStatsConnTopoCreate emits stats on Create
+// TestStatsConnTopoCreate emits stats on Create
 func TestStatsConnTopoCreate(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
@@ -187,7 +204,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 	}
 }
 
-//TestStatsConnTopoUpdate emits stats on Update
+// TestStatsConnTopoUpdate emits stats on Update
 func TestStatsConnTopoUpdate(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
@@ -214,7 +231,7 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 	}
 }
 
-//TestStatsConnTopoGet emits stats on Get
+// TestStatsConnTopoGet emits stats on Get
 func TestStatsConnTopoGet(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
@@ -241,7 +258,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 	}
 }
 
-//TestStatsConnTopoDelete emits stats on Delete
+// TestStatsConnTopoDelete emits stats on Delete
 func TestStatsConnTopoDelete(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
@@ -268,7 +285,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 	}
 }
 
-//TestStatsConnTopoLock emits stats on Lock
+// TestStatsConnTopoLock emits stats on Lock
 func TestStatsConnTopoLock(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
@@ -295,7 +312,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 	}
 }
 
-//TestStatsConnTopoWatch emits stats on Watch
+// TestStatsConnTopoWatch emits stats on Watch
 func TestStatsConnTopoWatch(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
@@ -309,40 +326,24 @@ func TestStatsConnTopoWatch(t *testing.T) {
 
 }
 
-//TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
+// TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
 func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
 
 	_, _ = statsConn.NewLeaderParticipation("", "")
-	// TODO(deepthi): delete "Master" stats after v13.0
-	timingCounts := topoStatsConnTimings.Counts()["NewMasterParticipation.global"]
-	if got, want := timingCounts, int64(1); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
-	timingCounts = topoStatsConnTimings.Counts()["NewLeaderParticipation.global"]
+	timingCounts := topoStatsConnTimings.Counts()["NewLeaderParticipation.global"]
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error is zero before getting an error
-	errorCount := topoStatsConnErrors.Counts()["NewMasterParticipation.global"]
-	if got, want := errorCount, int64(0); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
-	// error is zero before getting an error
-	errorCount = topoStatsConnErrors.Counts()["NewLeaderParticipation.global"]
+	errorCount := topoStatsConnErrors.Counts()["NewLeaderParticipation.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	_, _ = statsConn.NewLeaderParticipation("error", "")
-
-	// error stats gets emitted
-	errorCount = topoStatsConnErrors.Counts()["NewMasterParticipation.global"]
-	if got, want := errorCount, int64(1); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
 
 	// error stats gets emitted
 	errorCount = topoStatsConnErrors.Counts()["NewLeaderParticipation.global"]
@@ -351,7 +352,7 @@ func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 	}
 }
 
-//TestStatsConnTopoClose emits stats on Close
+// TestStatsConnTopoClose emits stats on Close
 func TestStatsConnTopoClose(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)

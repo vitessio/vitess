@@ -20,46 +20,59 @@ package vtctld
 
 import (
 	"context"
-	"flag"
 	"net/http"
 	"strings"
-	"time"
 
-	rice "github.com/GeertJohan/go.rice"
+	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/wrangler"
+	"vitess.io/vitess/web/vtctld2"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
-	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
-	enableUI            = flag.Bool("enable_vtctld_ui", true, "If true, the vtctld web interface will be enabled. Default is true.")
-	durabilityPolicy    = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
-	sanitizeLogMessages = flag.Bool("vtctld_sanitize_log_messages", false, "When true, vtctld sanitizes logging.")
-
-	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
-	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
+	enableRealtimeStats = false
+	enableUI            = true
+	durabilityPolicy    = "none"
+	sanitizeLogMessages = false
+	webDir              string
+	webDir2             string
 )
 
 const (
 	appPrefix = "/app/"
 )
 
+func init() {
+	for _, cmd := range []string{"vtcombo", "vtctld"} {
+		servenv.OnParseFor(cmd, registerVtctldFlags)
+	}
+}
+
+func registerVtctldFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&enableRealtimeStats, "enable_realtime_stats", enableRealtimeStats, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
+	fs.MarkDeprecated("enable_realtime_stats", "It is used by old vtctl UI that is already deprecated.")
+	fs.BoolVar(&enableUI, "enable_vtctld_ui", enableUI, "If true, the vtctld web interface will be enabled. Default is true.")
+	fs.MarkDeprecated("enable_vtctld_ui", "It is used by old vtctl UI that is already deprecated.")
+	fs.StringVar(&durabilityPolicy, "durability_policy", durabilityPolicy, "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
+	fs.StringVar(&webDir, "web_dir", webDir, "NOT USED, here for backward compatibility")
+	fs.MarkDeprecated("web_dir", "it will be removed in a future releases.")
+	fs.StringVar(&webDir2, "web_dir2", webDir2, "NOT USED, here for backward compatibility")
+	fs.MarkDeprecated("web_dir2", "it will be removed in a future releases.")
+}
+
 // InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) error {
-	err := reparentutil.SetDurabilityPolicy(*durabilityPolicy)
-	if err != nil {
-		log.Errorf("error in setting durability policy: %v", err)
-		return err
-	}
-
 	actionRepo := NewActionRepository(ts)
 
 	// keyspace actions
@@ -141,20 +154,21 @@ func InitVtctld(ts *topo.Server) error {
 		http.Redirect(w, r, appPrefix, http.StatusFound)
 	})
 
-	// Serve the static files for the vtctld2 web app
-	http.HandleFunc(appPrefix, webAppHandler)
+	http.Handle(appPrefix, staticContentHandler(enableUI))
 
-	var realtimeStats *realtimeStats
-	if *enableRealtimeStats {
-		var err error
-		realtimeStats, err = newRealtimeStats(ts)
+	var healthCheck discovery.HealthCheck
+	if enableRealtimeStats {
+		ctx := context.Background()
+		cells, err := ts.GetKnownCells(ctx)
 		if err != nil {
-			log.Errorf("Failed to instantiate RealtimeStats at startup: %v", err)
+			log.Errorf("Failed to get the list of known cells, failed to instantiate the healthcheck at startup: %v", err)
+		} else {
+			healthCheck = discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, localCell, strings.Join(cells, ","))
 		}
 	}
 
 	// Serve the REST API for the vtctld web app.
-	initAPI(context.Background(), ts, actionRepo, realtimeStats)
+	initAPI(context.Background(), ts, actionRepo, healthCheck)
 
 	// Init redirects for explorers
 	initExplorer(ts)
@@ -168,40 +182,13 @@ func InitVtctld(ts *topo.Server) error {
 	return nil
 }
 
-func webAppHandler(w http.ResponseWriter, r *http.Request) {
-	if !*enableUI {
-		http.NotFound(w, r)
-		return
+func staticContentHandler(enabled bool) http.Handler {
+	if enabled {
+		return http.FileServer(http.FS(vtctld2.Content))
 	}
 
-	// Strip the prefix.
-	parts := strings.SplitN(r.URL.Path, "/", 3)
-	if len(parts) != 3 {
-		http.NotFound(w, r)
-		return
-	}
-	rest := parts[2]
-	if rest == "" {
-		rest = "index.html"
-	}
-
-	riceBox, err := rice.FindBox("../../../web/vtctld2/app")
-	if err != nil {
-		log.Errorf("Unable to open rice box %s", err)
+	fn := func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}
-	fileToServe, err := riceBox.Open(rest)
-	if err != nil {
-		if !strings.ContainsAny(rest, "/.") {
-			//This is a virtual route so pass index.html
-			fileToServe, err = riceBox.Open("index.html")
-		}
-		if err != nil {
-			log.Errorf("Unable to open file from rice box %s : %s", rest, err)
-			http.NotFound(w, r)
-		}
-	}
-	if fileToServe != nil {
-		http.ServeContent(w, r, rest, time.Now(), fileToServe)
-	}
+	return http.HandlerFunc(fn)
 }

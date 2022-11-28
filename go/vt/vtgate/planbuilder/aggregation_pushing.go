@@ -17,57 +17,117 @@ limitations under the License.
 package planbuilder
 
 import (
-	"sort"
+	"strconv"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // pushAggregation pushes grouping and aggregation as far down in the tree as possible
+// the output `outputAggrsOffset` needs a little explaining: this is the offsets for aggregation - remember
+// that aggregation can be broken down into multiple expressions that are later combined.
+// this is why this output is a slice of slices
 func (hp *horizonPlanning) pushAggregation(
 	ctx *plancontext.PlanningContext,
 	plan logicalPlan,
-	grouping []abstract.GroupBy,
-	aggregations []abstract.Aggr,
+	grouping []operators.GroupBy,
+	aggregations []operators.Aggr,
 	ignoreOutputOrder bool,
-) (groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
+) (output logicalPlan,
+	groupingOffsets []offsets,
+	outputAggrsOffset [][]offsets,
+	pushed bool,
+	err error) {
+	pushed = true
 	switch plan := plan.(type) {
 	case *routeGen4:
-		groupingOffsets, outputAggrsOffset, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
-		if err != nil {
-			return nil, nil, err
-		}
+		output = plan
+		groupingOffsets, outputAggrsOffset, _, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
 		return
 
 	case *joinGen4:
-		return hp.pushAggrOnJoin(ctx, grouping, aggregations, plan)
+		output = plan
+		groupingOffsets, outputAggrsOffset, err = hp.pushAggrOnJoin(ctx, plan, grouping, aggregations)
+		return
 
 	case *semiJoin:
-		return hp.pushAggrOnSemiJoin(ctx, grouping, aggregations, plan, ignoreOutputOrder)
+		output = plan
+		groupingOffsets, outputAggrsOffset, pushed, err = hp.pushAggrOnSemiJoin(ctx, plan, grouping, aggregations, ignoreOutputOrder)
+		return
 
+	case *simpleProjection:
+		// we just remove the simpleProjection. We are doing an OA on top anyway, so no need to clean up the output columns
+		return hp.pushAggregation(ctx, plan.input, grouping, aggregations, ignoreOutputOrder)
+
+	case *limit:
+		// if we are seeing a limit, it's because we are building on top of a derived table.
+		output = plan
+		pushed = false
+
+		for _, grp := range grouping {
+			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, plan.input)
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+			groupingOffsets = append(groupingOffsets, offsets{
+				col:   offset,
+				wsCol: wOffset,
+			})
+		}
+
+		for _, aggr := range aggregations {
+			var offset int
+			aggrExpr, ok := aggr.Original.Expr.(sqlparser.AggrFunc)
+			if !ok {
+				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggr.Original)
+			}
+
+			switch aggrExpr.(type) {
+			case *sqlparser.CountStar:
+				offset = 0
+			default:
+				if len(aggrExpr.GetArgs()) != 1 {
+					return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggrExpr)
+				}
+				offset, _, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: aggrExpr.GetArg() /*As: expr.As*/}, plan.input, true, true, false)
+			}
+
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+
+			outputAggrsOffset = append(outputAggrsOffset, []offsets{newOffset(offset)})
+		}
+
+		return
 	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "using aggregation on top of a %T plan is not yet supported", plan)
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "using aggregation on top of a %T plan is not yet supported", plan)
+		return
 	}
 }
 
 func pushAggrOnRoute(
 	ctx *plancontext.PlanningContext,
 	plan *routeGen4,
-	aggregations []abstract.Aggr,
-	grouping []abstract.GroupBy,
+	aggregations []operators.Aggr,
+	grouping []operators.GroupBy,
 	ignoreOutputOrder bool,
-) ([]offsets, [][]offsets, error) {
+) (
+	groupingOffsets []offsets,
+	vtgateAggregation [][]offsets,
+	nonAggrOffsets []offsets,
+	err error,
+) {
 	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
 	}
 
-	var vtgateAggregation [][]offsets
 	var groupingCols []int
 	var reorg = passThrough
 
@@ -81,7 +141,7 @@ func pushAggrOnRoute(
 		grouping, reorg, it = sortOffsets(grouping, aggregations)
 		vtgateAggregation, groupingCols, err = pushAggrsAndGroupingInOrder(ctx, plan, it, sel, vtgateAggregation, groupingCols)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	} else {
 		// if we haven't already pushed the aggregations, now is the time
@@ -91,7 +151,7 @@ func pushAggrOnRoute(
 		}
 	}
 
-	groupingOffsets := make([]offsets, 0, len(grouping))
+	groupingOffsets = make([]offsets, 0, len(grouping))
 	for idx, expr := range grouping {
 		sel.AddGroupBy(expr.Inner)
 		var pos offsets
@@ -99,18 +159,18 @@ func pushAggrOnRoute(
 			// we have not yet pushed anything, so we need to push the expression first
 			col, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: expr.Inner}, true)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			pos = newOffset(col)
 		} else {
 			pos = newOffset(groupingCols[idx])
 		}
 
-		if ctx.SemTable.NeedsWeightString(expr.Inner) {
+		if expr.WeightStrExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
 			wsExpr := weightStringFor(expr.WeightStrExpr)
 			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			pos.wsCol = wsCol
 			sel.AddGroupBy(wsExpr)
@@ -119,7 +179,7 @@ func pushAggrOnRoute(
 	}
 
 	groupingOffsets, vtgateAggregation = reorg(groupingOffsets, vtgateAggregation)
-	return groupingOffsets, vtgateAggregation, nil
+	return groupingOffsets, vtgateAggregation, nil, nil
 }
 
 func pushAggrsAndGroupingInOrder(
@@ -150,14 +210,14 @@ func pushAggrsAndGroupingInOrder(
 }
 
 // addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
-func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) offsets {
+func addAggregationToSelect(sel *sqlparser.Select, aggregation operators.Aggr) offsets {
 	// TODO: removing duplicated aggregation expression should also be done at the join level
 	for i, expr := range sel.SelectExprs {
 		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
 		if !isAliasedExpr {
 			continue
 		}
-		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Func) {
+		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Original.Expr) {
 			return newOffset(i)
 		}
 	}
@@ -166,17 +226,12 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) of
 	return newOffset(len(sel.SelectExprs) - 1)
 }
 
-func countStarAggr() *abstract.Aggr {
-	f := &sqlparser.FuncExpr{
-		Name:     sqlparser.NewColIdent("count"),
-		Distinct: false,
-		Exprs:    []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-	}
+func countStarAggr() *operators.Aggr {
+	f := &sqlparser.CountStar{}
 
-	return &abstract.Aggr{
+	return &operators.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
-		Func:     f,
-		OpCode:   engine.AggregateCount,
+		OpCode:   engine.AggregateCountStar,
 		Alias:    "count(*)",
 	}
 }
@@ -195,9 +250,9 @@ vtgate level, we can offload most of the work to MySQL, and at the vtgate just s
 */
 func (hp *horizonPlanning) pushAggrOnJoin(
 	ctx *plancontext.PlanningContext,
-	grouping []abstract.GroupBy,
-	aggregations []abstract.Aggr,
 	join *joinGen4,
+	grouping []operators.GroupBy,
+	aggregations []operators.Aggr,
 ) ([]offsets, [][]offsets, error) {
 	// First we separate aggregations according to which side the dependencies are coming from
 	lhsAggrs, rhsAggrs, err := splitAggregationsToLeftAndRight(ctx, aggregations, join)
@@ -207,7 +262,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 
 	// We need to group by the columns used in the join condition.
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
+	lhsCols, err := hp.createGroupingsForColumns(join.LHSColumns)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -219,16 +274,33 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		return nil, nil, err
 	}
 
+	// If the rhs has no grouping column then a count(*) will return 0 from the query and will get mapped to the record from left hand side.
+	// This is an incorrect behaviour as the join condition has not matched, so we add a literal 1 to the select query and also group by on it.
+	// So that only if join condition matches the records will be mapped and returned.
+	if len(rhsGrouping) == 0 && len(rhsAggrs) != 0 {
+		l := sqlparser.NewIntLiteral("1")
+		aExpr := &sqlparser.AliasedExpr{
+			Expr: l,
+		}
+		offset, _, err := pushProjection(ctx, aExpr, join.Right, true, true, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		l = sqlparser.NewIntLiteral(strconv.Itoa(offset + 1))
+		rhsGrouping = append(rhsGrouping, operators.GroupBy{Inner: l})
+	}
+
 	// Next we push the aggregations to both sides
-	lhsOffsets, lhsAggrOffsets, err := hp.filteredPushAggregation(ctx, join.Left, lhsGrouping, lhsAggrs, true)
+	newLHS, lhsOffsets, lhsAggrOffsets, _, err := hp.filteredPushAggregation(ctx, join.Left, lhsGrouping, lhsAggrs, true)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rhsOffsets, rhsAggrOffsets, err := hp.filteredPushAggregation(ctx, join.Right, rhsGrouping, rhsAggrs, true)
+	newRHS, rhsOffsets, rhsAggrOffsets, _, err := hp.filteredPushAggregation(ctx, join.Right, rhsGrouping, rhsAggrs, true)
 	if err != nil {
 		return nil, nil, err
 	}
+	join.Left, join.Right = newLHS, newRHS
 
 	// Next, we have to pass through the grouping values through the join and the projection we add on top
 	// We added new groupings to the LHS because of the join condition, so we don't want to pass through everything,
@@ -283,30 +355,31 @@ That way we get the aggregation grouped by the column we need to use to decide i
 */
 func (hp *horizonPlanning) pushAggrOnSemiJoin(
 	ctx *plancontext.PlanningContext,
-	grouping []abstract.GroupBy,
-	aggregations []abstract.Aggr,
 	join *semiJoin,
+	grouping []operators.GroupBy,
+	aggregations []operators.Aggr,
 	ignoreOutputOrder bool,
-) ([]offsets, [][]offsets, error) {
+) ([]offsets, [][]offsets, bool, error) {
 	// We need to group by the columns used in the join condition.
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
+	lhsCols, err := hp.createGroupingsForColumns(join.LHSColumns)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 
 	totalGrouping := append(grouping, lhsCols...)
-	groupingOffsets, aggrParams, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, ignoreOutputOrder)
+	newLeft, groupingOffsets, aggrParams, pushed, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, ignoreOutputOrder)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
+	join.lhs = newLeft
 
 	outputGroupings := make([]offsets, 0, len(grouping))
 	for idx := range grouping {
 		outputGroupings = append(outputGroupings, groupingOffsets[idx])
 	}
 
-	return outputGroupings, aggrParams, nil
+	return outputGroupings, aggrParams, pushed, nil
 }
 
 // this method takes a slice of aggregations that can have missing spots in the form of `nil`,
@@ -318,12 +391,12 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 func (hp *horizonPlanning) filteredPushAggregation(
 	ctx *plancontext.PlanningContext,
 	plan logicalPlan,
-	grouping []abstract.GroupBy,
-	aggregations []*abstract.Aggr,
+	grouping []operators.GroupBy,
+	aggregations []*operators.Aggr,
 	ignoreOutputOrder bool,
-) (groupingOffsets []offsets, outputAggrs [][]offsets, err error) {
+) (out logicalPlan, groupingOffsets []offsets, outputAggrs [][]offsets, pushed bool, err error) {
 	used := make([]bool, len(aggregations))
-	var aggrs []abstract.Aggr
+	var aggrs []operators.Aggr
 
 	for idx, aggr := range aggregations {
 		if aggr != nil {
@@ -331,9 +404,9 @@ func (hp *horizonPlanning) filteredPushAggregation(
 			aggrs = append(aggrs, *aggr)
 		}
 	}
-	groupingOffsets, pushedAggrs, err := hp.pushAggregation(ctx, plan, grouping, aggrs, ignoreOutputOrder)
+	newplan, groupingOffsets, pushedAggrs, pushed, err := hp.pushAggregation(ctx, plan, grouping, aggrs, ignoreOutputOrder)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, pushed, err
 	}
 	idx := 0
 	for _, b := range used {
@@ -344,7 +417,7 @@ func (hp *horizonPlanning) filteredPushAggregation(
 		outputAggrs = append(outputAggrs, pushedAggrs[idx])
 		idx++
 	}
-	return groupingOffsets, outputAggrs, nil
+	return newplan, groupingOffsets, outputAggrs, pushed, nil
 }
 
 func isMinOrMax(in engine.AggregateOpcode) bool {
@@ -356,22 +429,26 @@ func isMinOrMax(in engine.AggregateOpcode) bool {
 	}
 }
 
+func isRandom(in engine.AggregateOpcode) bool {
+	return in == engine.AggregateRandom
+}
+
 func splitAggregationsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
-	aggregations []abstract.Aggr,
+	aggregations []operators.Aggr,
 	join *joinGen4,
-) ([]*abstract.Aggr, []*abstract.Aggr, error) {
-	var lhsAggrs, rhsAggrs []*abstract.Aggr
+) ([]*operators.Aggr, []*operators.Aggr, error) {
+	var lhsAggrs, rhsAggrs []*operators.Aggr
 	for _, aggr := range aggregations {
 		newAggr := aggr
-		if isCountStar(aggr.Func) {
+		if _, ok := aggr.Original.Expr.(*sqlparser.CountStar); ok {
 			lhsAggrs = append(lhsAggrs, &newAggr)
 			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {
-			deps := ctx.SemTable.RecursiveDeps(aggr.Func)
-			var other *abstract.Aggr
-			// if we are sending down min/max, we don't have to multiply the results with anything
-			if !isMinOrMax(aggr.OpCode) {
+			deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
+			var other *operators.Aggr
+			// if we are sending down min/max/random, we don't have to multiply the results with anything
+			if !isMinOrMax(aggr.OpCode) && !isRandom(aggr.OpCode) {
 				other = countStarAggr()
 			}
 			switch {
@@ -392,9 +469,9 @@ func splitAggregationsToLeftAndRight(
 func splitGroupingsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	join *joinGen4,
-	grouping, lhsGrouping []abstract.GroupBy,
-) ([]abstract.GroupBy, []abstract.GroupBy, []int, error) {
-	var rhsGrouping []abstract.GroupBy
+	grouping, lhsGrouping []operators.GroupBy,
+) ([]operators.GroupBy, []operators.GroupBy, []int, error) {
+	var rhsGrouping []operators.GroupBy
 
 	lhsTS := join.Left.ContainsTables()
 	rhsTS := join.Right.ContainsTables()
@@ -420,16 +497,16 @@ func splitGroupingsToLeftAndRight(
 type (
 	reorgFunc      = func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets)
 	sortedIterator struct {
-		grouping     []abstract.GroupBy
-		aggregations []abstract.Aggr
-		valueGB      *abstract.GroupBy
-		valueA       *abstract.Aggr
+		grouping     []operators.GroupBy
+		aggregations []operators.Aggr
+		valueGB      *operators.GroupBy
+		valueA       *operators.Aggr
 		groupbyIdx   int
 		aggrIdx      int
 	}
 )
 
-func (it *sortedIterator) current() (*abstract.GroupBy, *abstract.Aggr) {
+func (it *sortedIterator) current() (*operators.GroupBy, *operators.Aggr) {
 	return it.valueGB, it.valueA
 }
 
@@ -437,7 +514,7 @@ func (it *sortedIterator) next() bool {
 	if it.aggrIdx < len(it.aggregations) && it.groupbyIdx < len(it.grouping) {
 		aggregation := it.aggregations[it.aggrIdx]
 		groupBy := it.grouping[it.groupbyIdx]
-		if abstract.CompareRefInt(aggregation.Index, groupBy.InnerIndex) {
+		if operators.CompareRefInt(aggregation.Index, groupBy.InnerIndex) {
 			it.aggrIdx++
 			it.valueA, it.valueGB = &aggregation, nil
 			return true
@@ -466,13 +543,13 @@ func passThrough(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, 
 	return groupByOffsets, aggrOffsets
 }
 
-func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]abstract.GroupBy, reorgFunc, *sortedIterator) {
-	originalGrouping := make([]abstract.GroupBy, len(grouping))
-	originalAggr := make([]abstract.Aggr, len(aggregations))
+func sortOffsets(grouping []operators.GroupBy, aggregations []operators.Aggr) ([]operators.GroupBy, reorgFunc, *sortedIterator) {
+	originalGrouping := make([]operators.GroupBy, len(grouping))
+	originalAggr := make([]operators.Aggr, len(aggregations))
 	copy(originalAggr, aggregations)
 	copy(originalGrouping, grouping)
-	sort.Sort(abstract.Aggrs(aggregations))
-	sort.Sort(abstract.GroupBys(grouping))
+	operators.SortAggregations(aggregations)
+	operators.SortGrouping(grouping)
 
 	reorg := func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
 		orderedGroupingOffsets := make([]offsets, 0, len(originalGrouping))
@@ -488,7 +565,7 @@ func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]a
 		orderedAggrs := make([][]offsets, 0, len(originalAggr))
 		for _, og := range originalAggr {
 			for i, g := range aggregations {
-				if og.Func == g.Func {
+				if og.Original.Expr == g.Original.Expr {
 					orderedAggrs = append(orderedAggrs, aggrOffsets[i])
 					break
 				}

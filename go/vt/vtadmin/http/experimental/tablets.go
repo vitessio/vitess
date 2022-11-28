@@ -35,8 +35,13 @@ import (
 func TabletDebugVarsPassthrough(ctx context.Context, r vtadminhttp.Request, api *vtadminhttp.API) *vtadminhttp.JSONResponse {
 	vars := r.Vars()
 
+	alias, err := vars.GetTabletAlias("tablet")
+	if err != nil {
+		return vtadminhttp.NewJSONResponse(nil, err)
+	}
+
 	tablet, err := api.Server().GetTablet(ctx, &vtadminpb.GetTabletRequest{
-		Alias:      vars["tablet"],
+		Alias:      alias,
 		ClusterIds: r.URL.Query()["cluster"],
 	})
 

@@ -17,16 +17,16 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -36,7 +36,7 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error {
+func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) error {
 	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
@@ -46,7 +46,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
-	if !allowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
+	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
 		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 	engine, err := mysqlctl.GetBackupEngine()
@@ -58,7 +58,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	if err != nil {
 		return err
 	}
-	if !allowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
+	if !req.AllowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
 		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
@@ -88,16 +88,6 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
 			return err
 		}
-		// Tell Orchestrator we're stopped on purpose for some Vitess task.
-		// Do this in the background, as it's best-effort.
-		go func() {
-			if tm.orc == nil {
-				return
-			}
-			if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to run an offline backup"); err != nil {
-				logger.Warningf("Orchestrator BeginMaintenance failed: %v", err)
-			}
-		}()
 	}
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
@@ -107,7 +97,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		Cnf:          tm.Cnf,
 		Mysqld:       tm.MysqlDaemon,
 		Logger:       l,
-		Concurrency:  concurrency,
+		Concurrency:  int(req.Concurrency),
 		HookExtraEnv: tm.hookExtraEnv(),
 		TopoServer:   tm.TopoServer,
 		Keyspace:     tablet.Keyspace,
@@ -133,17 +123,6 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 				l.Errorf("mysql backup command returned error: %v", returnErr)
 			}
 			returnErr = err
-		} else {
-			// Tell Orchestrator we're no longer stopped on purpose.
-			// Do this in the background, as it's best-effort.
-			go func() {
-				if tm.orc == nil {
-					return
-				}
-				if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
-					logger.Warningf("Orchestrator EndMaintenance failed: %v", err)
-				}
-			}()
 		}
 	}
 

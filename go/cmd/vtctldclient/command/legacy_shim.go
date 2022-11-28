@@ -18,13 +18,13 @@ package command
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
@@ -37,9 +37,10 @@ var (
 	// RPCs. This allows users to use a single binary to make RPCs against both
 	// the new and old vtctld gRPC APIs.
 	LegacyVtctlCommand = &cobra.Command{
-		Use:   "LegacyVtctlCommand -- <command> [flags ...] [args ...]",
-		Short: "Invoke a legacy vtctlclient command. Flag parsing is best effort.",
-		Args:  cobra.ArbitraryArgs,
+		Use:                   "LegacyVtctlCommand -- <command> [flags ...] [args ...]",
+		Short:                 "Invoke a legacy vtctlclient command. Flag parsing is best effort.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.FinishedParsing(cmd)
 			return runLegacyCommand(args)

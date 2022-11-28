@@ -293,7 +293,7 @@ func TestVersion(t *testing.T) {
 			`commit`}},
 	}}
 	runCases(t, nil, testcases, "", nil)
-	mt, err := env.SchemaEngine.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid)
+	mt, err := env.SchemaEngine.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid)
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(mt, dbSchema.Tables[0]))
 }
@@ -542,6 +542,9 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		engine.Stream(ctx2, "", nil, filter, func(evs []*binlogdatapb.VEvent) error {
 			for _, ev := range evs {
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
+				if ev.Throttled {
 					continue
 				}
 				allEvents = append(allEvents, ev)
@@ -2126,6 +2129,9 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.
 					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+						continue
+					}
+					if ev.Throttled {
 						continue
 					}
 					evs = append(evs, ev)

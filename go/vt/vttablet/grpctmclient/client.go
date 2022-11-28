@@ -18,21 +18,22 @@ package grpctmclient
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/callerid"
-
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -45,13 +46,34 @@ import (
 )
 
 var (
-	concurrency = flag.Int("tablet_manager_grpc_concurrency", 8, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App})")
-	cert        = flag.String("tablet_manager_grpc_cert", "", "the cert to use to connect")
-	key         = flag.String("tablet_manager_grpc_key", "", "the key to use to connect")
-	ca          = flag.String("tablet_manager_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	crl         = flag.String("tablet_manager_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
-	name        = flag.String("tablet_manager_grpc_server_name", "", "the server name to use to validate server certificate")
+	concurrency = 8
+	cert        string
+	key         string
+	ca          string
+	crl         string
+	name        string
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&concurrency, "tablet_manager_grpc_concurrency", concurrency, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App})")
+	fs.StringVar(&cert, "tablet_manager_grpc_cert", cert, "the cert to use to connect")
+	fs.StringVar(&key, "tablet_manager_grpc_key", key, "the key to use to connect")
+	fs.StringVar(&ca, "tablet_manager_grpc_ca", ca, "the server ca to use to validate servers when connecting")
+	fs.StringVar(&crl, "tablet_manager_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
+	fs.StringVar(&name, "tablet_manager_grpc_server_name", name, "the server name to use to validate server certificate")
+}
+
+var _binaries = []string{ // binaries that require the flags in this package
+	"vtbackup",
+	"vtcombo",
+	"vtctl",
+	"vtctld",
+	"vtctldclient",
+	"vtgr",
+	"vtorc",
+	"vttablet",
+	"vttestserver",
+}
 
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
@@ -60,6 +82,10 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc-oneshot", func() tmclient.TabletManagerClient {
 		return NewClient()
 	})
+
+	for _, cmd := range _binaries {
+		servenv.OnParseFor(cmd, registerFlags)
+	}
 }
 
 type tmc struct {
@@ -95,7 +121,9 @@ type poolDialer interface {
 //
 // In order to more efficiently use the underlying tcp connections, you can
 // instead use the cachedConnDialer implementation by specifying
-//		-tablet_manager_protocol "grpc-cached"
+//
+//	-tablet_manager_protocol "grpc-cached"
+//
 // The cachedConnDialer keeps connections to up to -tablet_manager_grpc_connpool_size distinct
 // tablets open at any given time, for faster per-RPC call time, and less
 // connection churn.
@@ -113,7 +141,7 @@ func NewClient() *Client {
 // dial returns a client to use
 func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -127,7 +155,7 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 
 func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +166,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 	}
 	c, ok := client.rpcClientMap[addr]
 	if !ok {
-		c = make(chan *tmc, *concurrency)
+		c = make(chan *tmc, concurrency)
 		client.rpcClientMap[addr] = c
 		client.mu.Unlock()
 
@@ -233,17 +261,13 @@ func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.GetSchema(ctx, &tabletmanagerdatapb.GetSchemaRequest{
-		Tables:        tables,
-		ExcludeTables: excludeTables,
-		IncludeViews:  includeViews,
-	})
+	response, err := c.GetSchema(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -406,18 +430,23 @@ func (client *Client) UnlockTables(ctx context.Context, tablet *topodatapb.Table
 }
 
 // ExecuteQuery is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
 
+	cid := req.CallerId
+	if cid == nil {
+		cid = callerid.EffectiveCallerIDFromContext(ctx)
+	}
+
 	response, err := c.ExecuteQuery(ctx, &tabletmanagerdatapb.ExecuteQueryRequest{
-		Query:    query,
+		Query:    req.Query,
 		DbName:   topoproto.TabletDbName(tablet),
-		MaxRows:  uint64(maxrows),
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		MaxRows:  req.MaxRows,
+		CallerId: cid,
 	})
 	if err != nil {
 		return nil, err
@@ -426,7 +455,7 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
 	if usePool {
@@ -448,11 +477,11 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 	}
 
 	response, err := c.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-		Query:          query,
+		Query:          req.Query,
 		DbName:         topoproto.TabletDbName(tablet),
-		MaxRows:        uint64(maxRows),
-		DisableBinlogs: disableBinlogs,
-		ReloadSchema:   reloadSchema,
+		MaxRows:        req.MaxRows,
+		DisableBinlogs: req.DisableBinlogs,
+		ReloadSchema:   req.DisableBinlogs,
 	})
 	if err != nil {
 		return nil, err
@@ -461,7 +490,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 }
 
 // ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -469,10 +498,10 @@ func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topoda
 	defer closer.Close()
 
 	response, err := c.ExecuteFetchAsAllPrivs(ctx, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
-		Query:        query,
+		Query:        req.Query,
 		DbName:       topoproto.TabletDbName(tablet),
-		MaxRows:      uint64(maxRows),
-		ReloadSchema: reloadSchema,
+		MaxRows:      req.MaxRows,
+		ReloadSchema: req.ReloadSchema,
 	})
 	if err != nil {
 		return nil, err
@@ -481,7 +510,7 @@ func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topoda
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
 	if usePool {
@@ -502,10 +531,7 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 		defer closer.Close()
 	}
 
-	response, err := c.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
-		Query:   query,
-		MaxRows: uint64(maxRows),
-	})
+	response, err := c.ExecuteFetchAsApp(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -530,14 +556,14 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 	return response.Status, nil
 }
 
-// MasterStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.MasterStatus(ctx, &tabletmanagerdatapb.PrimaryStatusRequest{})
+	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -556,20 +582,6 @@ func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tabl
 		return nil, err
 	}
 	return response.Status, nil
-}
-
-// MasterPosition is part of the tmclient.TabletManagerClient interface.
-func (client *Client) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return "", err
-	}
-	defer closer.Close()
-	response, err := c.MasterPosition(ctx, &tabletmanagerdatapb.PrimaryPositionRequest{})
-	if err != nil {
-		return "", err
-	}
-	return response.Position, nil
 }
 
 // PrimaryPosition is part of the tmclient.TabletManagerClient interface.
@@ -708,6 +720,21 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 	return nil
 }
 
+// VDiff is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	log.Infof("VDiff for tablet %s, request %+v", tablet.Alias.String(), req)
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.VDiff(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 //
 // Reparenting related functions
 //
@@ -721,23 +748,6 @@ func (client *Client) ResetReplication(ctx context.Context, tablet *topodatapb.T
 	defer closer.Close()
 	_, err = c.ResetReplication(ctx, &tabletmanagerdatapb.ResetReplicationRequest{})
 	return err
-}
-
-// InitMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) InitMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return "", err
-	}
-	defer closer.Close()
-
-	response, err := c.InitMaster(ctx, &tabletmanagerdatapb.InitPrimaryRequest{
-		SemiSync: semiSync,
-	})
-	if err != nil {
-		return "", err
-	}
-	return response.Position, nil
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.
@@ -789,29 +799,6 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 	return err
 }
 
-// DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer closer.Close()
-	response, err := c.DemoteMaster(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
-	if err != nil {
-		return nil, err
-	}
-	status := response.PrimaryStatus
-	if status == nil {
-		// We are assuming this means a response came from an older server.
-		status = &replicationdatapb.PrimaryStatus{
-			Position:     response.DeprecatedPosition, //nolint
-			FilePosition: "",
-		}
-	}
-	return status, nil
-
-}
-
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
 func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
@@ -823,28 +810,7 @@ func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tabl
 	if err != nil {
 		return nil, err
 	}
-	status := response.PrimaryStatus
-	if status == nil {
-		// We are assuming this means a response came from an older server.
-		status = &replicationdatapb.PrimaryStatus{
-			Position:     response.DeprecatedPosition, //nolint
-			FilePosition: "",
-		}
-	}
-	return status, nil
-}
-
-// UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return err
-	}
-	defer closer.Close()
-	_, err = c.UndoDemoteMaster(ctx, &tabletmanagerdatapb.UndoDemotePrimaryRequest{
-		SemiSync: semiSync,
-	})
-	return err
+	return response.PrimaryStatus, nil
 }
 
 // UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
@@ -871,20 +837,14 @@ func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb
 	return err
 }
 
-// SetMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+// ResetReplicationParameters is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	_, err = c.SetMaster(ctx, &tabletmanagerdatapb.SetReplicationSourceRequest{
-		Parent:                parent,
-		TimeCreatedNs:         timeCreatedNS,
-		WaitPosition:          waitPosition,
-		ForceStartReplication: forceStartReplication,
-		SemiSync:              semiSync,
-	})
+	_, err = c.ResetReplicationParameters(ctx, &tabletmanagerdatapb.ResetReplicationParametersRequest{})
 	return err
 }
 
@@ -919,19 +879,19 @@ func (client *Client) ReplicaWasRestarted(ctx context.Context, tablet *topodatap
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (hybridStatus *replicationdatapb.Status, status *replicationdatapb.StopReplicationStatus, err error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (status *replicationdatapb.StopReplicationStatus, err error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer closer.Close()
 	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{
 		StopReplicationMode: stopReplicationMode,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{ //nolint
+	return &replicationdatapb.StopReplicationStatus{ //nolint
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil
@@ -954,9 +914,7 @@ func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tab
 	return response.Position, nil
 }
 
-//
 // Backup related methods
-//
 type backupStreamAdapter struct {
 	stream tabletmanagerservicepb.TabletManager_BackupClient
 	closer io.Closer
@@ -972,16 +930,13 @@ func (e *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 
-	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
-		Concurrency:  int64(concurrency),
-		AllowPrimary: allowPrimary,
-	})
+	stream, err := c.Backup(ctx, req)
 	if err != nil {
 		closer.Close()
 		return nil, err

@@ -17,15 +17,16 @@ limitations under the License.
 package tmclient
 
 import (
-	"flag"
+	"context"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/servenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -33,9 +34,31 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TabletManagerProtocol is the implementation to use for tablet
-// manager protocol. It is exported for tests only.
-var TabletManagerProtocol = flag.String("tablet_manager_protocol", "grpc", "the protocol to use to talk to vttablet")
+// tabletManagerProtocol is the implementation to use for tablet
+// manager protocol.
+var tabletManagerProtocol = "grpc"
+
+// RegisterFlags registers the tabletconn flags on a given flagset. It is
+// exported for tests that need to inject a particular TabletManagerProtocol.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&tabletManagerProtocol, "tablet_manager_protocol", tabletManagerProtocol, "Protocol to use to make tabletmanager RPCs to vttablets.")
+}
+
+func init() {
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctld",
+		"vtctldclient",
+		"vtgr",
+		"vtorc",
+		"vttablet",
+		"vttestserver",
+	} {
+		servenv.OnParseFor(cmd, RegisterFlags)
+	}
+}
 
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
@@ -47,7 +70,7 @@ type TabletManagerClient interface {
 	Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error)
@@ -90,33 +113,39 @@ type TabletManagerClient interface {
 
 	UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error)
+	// ExecuteQuery executes a query remotely on the tablet.
+	// req.DbName is ignored in favor of using the tablet's DbName field, and,
+	// if req.CallerId is nil, the effective callerid will be extracted from
+	// the context.
+	ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool.
+	// req.DbName is ignored in favor of using the tablet's DbName field.
 	// If usePool is set, a connection pool may be used to make the
 	// query faster. Close() should close the pool in that case.
-	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsAllPrivs executes a query remotely using the allprivs user.
-	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error)
+	// req.DbName is ignored in favor of using the tablet's DbName field.
+	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsApp executes a query remotely using the App pool
 	// If usePool is set, a connection pool may be used to make the
 	// query faster. Close() should close the pool in that case.
-	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
 	//
 	// Replication related methods
 	//
-
-	// Deprecated MasterStatus returns the tablet's mysql primary status.
-	MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
 
 	// PrimaryStatus returns the tablet's mysql primary status.
 	PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
 
 	// ReplicationStatus returns the tablet's mysql replication status.
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
+
+	// FullStatus returns the tablet's mysql replication status.
+	FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error)
 
 	// StopReplication stops the mysql replication
 	StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error
@@ -134,9 +163,6 @@ type TabletManagerClient interface {
 	// GetReplicas returns the addresses of the replicas
 	GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
-	// Deprecated MasterPosition returns the tablet's primary position
-	MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
-
 	// PrimaryPosition returns the tablet's primary position
 	PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
@@ -150,6 +176,8 @@ type TabletManagerClient interface {
 	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error
 
+	VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error)
+
 	//
 	// Reparenting related functions
 	//
@@ -158,11 +186,6 @@ type TabletManagerClient interface {
 	// replication.  All binary and relay logs are flushed. All
 	// replication positions are reset.
 	ResetReplication(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// Deprecated InitMaster tells a tablet to make itself the new primary,
-	// and return the replication position the replicas should use to
-	// reparent to it.
-	InitMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error)
 
 	// InitPrimary tells a tablet to make itself the new primary,
 	// and return the replication position the replicas should use to
@@ -178,14 +201,6 @@ type TabletManagerClient interface {
 	// reparent_journal table.
 	InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error
 
-	// Deprecated DemoteMaster tells the soon-to-be-former primary it's going to change,
-	// and it should go read-only and return its current position.
-	DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
-
-	// Deprecated UndoDemoteMaster reverts all changes made by DemoteMaster
-	// To be used if we are unable to promote the chosen new primary
-	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
-
 	// DemotePrimary tells the soon-to-be-former primary it's going to change,
 	// and it should go read-only and return its current position.
 	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
@@ -197,10 +212,8 @@ type TabletManagerClient interface {
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// Deprecated SetMaster tells a tablet to start replicating from the
-	// passed in primary tablet alias, and wait for the row in the
-	// reparent_journal table (if timeCreatedNS is non-zero).
-	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
+	// ResetReplicationParameters resets the replica replication parameters
+	ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// SetReplicationSource tells a tablet to start replicating from the
 	// passed in tablet alias, and wait for the row in the
@@ -212,7 +225,7 @@ type TabletManagerClient interface {
 
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
-	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error)
+	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error)
 
 	// PromoteReplica makes the tablet the new primary
 	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error)
@@ -222,7 +235,7 @@ type TabletManagerClient interface {
 	//
 
 	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error)
+	Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error)
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error)
@@ -254,9 +267,9 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 // NewTabletManagerClient creates a new TabletManagerClient. Should be
 // called after flags are parsed.
 func NewTabletManagerClient() TabletManagerClient {
-	f, ok := tabletManagerClientFactories[*TabletManagerProtocol]
+	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
-		log.Exitf("No TabletManagerProtocol registered with name %s", *TabletManagerProtocol)
+		log.Exitf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
 	}
 
 	return f()

@@ -53,7 +53,45 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
-	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
+}
+
+// purgedGTIDSet is part of the Flavor interface.
+func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	qr, err := c.ExecuteFetch("SELECT @@global.gtid_purged", 1, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
+	}
+	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
+}
+
+// serverUUID is part of the Flavor interface.
+func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
+	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	qr, err := c.ExecuteFetch("SELECT @@global.server_uuid", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
+// gtidMode is part of the Flavor interface.
+func (mysqlFlavor) gtidMode(c *Conn) (string, error) {
+	qr, err := c.ExecuteFetch("select @@global.gtid_mode", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
 }
 
 func (mysqlFlavor) startReplicationCommand() string {
@@ -72,12 +110,20 @@ func (mysqlFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }
 
+func (mysqlFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return fmt.Sprintf("START SLAVE SQL_THREAD UNTIL SQL_AFTER_GTIDS = '%s'", pos)
+}
+
 func (mysqlFlavor) stopReplicationCommand() string {
 	return "STOP SLAVE"
 }
 
 func (mysqlFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
+}
+
+func (mysqlFlavor) stopSQLThreadCommand() string {
+	return "STOP SLAVE SQL_THREAD"
 }
 
 func (mysqlFlavor) startSQLThreadCommand() string {
@@ -105,6 +151,14 @@ func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 	}
 	if c.SemiSyncExtensionLoaded() {
 		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when replica is started.
+	}
+	return resetCommands
+}
+
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mysqlFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	resetCommands := []string{
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 	}
 	return resetCommands
 }
@@ -154,11 +208,11 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	}
 
 	var err error
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
-	relayLogGTIDSet, err := parseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
+	relayLogGTIDSet, err := ParseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
 	}
@@ -193,7 +247,7 @@ func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error)
 	status := parsePrimaryStatus(resultMap)
 
 	var err error
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
@@ -254,9 +308,24 @@ func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 	return ""
 }
 
+// baseShowTables is part of the Flavor interface.
+func (mysqlFlavor) baseShowTables() string {
+	return "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
+}
+
 // TablesWithSize56 is a query to select table along with size for mysql 5.6
-const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length) 
-		FROM information_schema.tables WHERE table_schema = database() group by table_name`
+const TablesWithSize56 = `SELECT table_name,
+	table_type,
+	UNIX_TIMESTAMP(create_time) AS uts_create_time,
+	table_comment,
+	SUM(data_length + index_length),
+	SUM(data_length + index_length)
+FROM information_schema.tables
+WHERE table_schema = database()
+GROUP BY table_name,
+	table_type,
+	uts_create_time,
+	table_comment`
 
 // TablesWithSize57 is a query to select table along with size for mysql 5.7.
 //
@@ -280,24 +349,36 @@ LEFT OUTER JOIN (
 	GROUP BY space, file_size, allocated_size, name
 ) i ON i.name = CONCAT(t.table_schema, '/', t.table_name) or i.name LIKE CONCAT(t.table_schema, '/', t.table_name, '#p#%')
 WHERE t.table_schema = database()
-GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment
-`
+GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
 
 // TablesWithSize80 is a query to select table along with size for mysql 8.0
-const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, sum(i.file_size), sum(i.allocated_size) 
-		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
-		WHERE t.table_schema = database() and 
-		(i.name = concat(t.table_schema,'/',t.table_name) or i.name like concat(t.table_schema,'/',t.table_name, '#p#%')) 
-		group by t.table_name, t.table_type, t.create_time, t.table_comment, i.file_size`
+//
+// We join with a subquery that materializes the data from `information_schema.innodb_sys_tablespaces`
+// early for performance reasons. This effectively causes only a single read of `information_schema.innodb_tablespaces`
+// per query.
+const TablesWithSize80 = `SELECT t.table_name,
+	t.table_type,
+	UNIX_TIMESTAMP(t.create_time),
+	t.table_comment,
+	SUM(i.file_size),
+	SUM(i.allocated_size)
+FROM information_schema.tables t
+INNER JOIN information_schema.innodb_tablespaces i
+	ON i.name LIKE CONCAT(database(), '/%') AND (i.name = CONCAT(t.table_schema, '/', t.table_name) OR i.name LIKE CONCAT(t.table_schema, '/', t.table_name, '#p#%'))
+WHERE t.table_schema = database()
+GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor56) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor56) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor56) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -305,9 +386,14 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor57) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor57) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case MySQLJSONFlavorCapability:
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -315,7 +401,30 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor80) supportsFastDropTable(c *Conn) (bool, error) {
-	return c.ServerVersionAtLeast(8, 0, 23)
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case InstantDDLFlavorCapability,
+		InstantExpandEnumCapability,
+		InstantAddLastColumnFlavorCapability,
+		InstantAddDropVirtualColumnFlavorCapability,
+		InstantChangeColumnDefaultFlavorCapability:
+		return true, nil
+	case InstantAddDropColumnFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case TransactionalGtidExecutedFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
+	case FastDropTableFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
+	case MySQLJSONFlavorCapability:
+		return true, nil
+	case MySQLUpgradeInServerFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	case DynamicRedoLogCapacityFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
+	case DisableRedoLogFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 21)
+	default:
+		return false, nil
+	}
 }

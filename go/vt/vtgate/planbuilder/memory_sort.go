@@ -20,9 +20,9 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -67,6 +67,12 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 			}
 		case *sqlparser.ColName:
 			colNumber = findColNumber(ms, expr)
+		case *sqlparser.CastExpr:
+			colName, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
+			}
+			colNumber = findColNumber(ms, colName)
 		case *sqlparser.ConvertExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
@@ -132,6 +138,6 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *memorySort) WireupGen4(semTable *semantics.SemTable) error {
-	return ms.input.WireupGen4(semTable)
+func (ms *memorySort) WireupGen4(ctx *plancontext.PlanningContext) error {
+	return ms.input.WireupGen4(ctx)
 }
