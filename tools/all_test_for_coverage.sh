@@ -25,7 +25,7 @@ source build.env
 make tools
 make build
 echo "--------- executing unit testcases ---------"
-packages_with_all_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
+packages_with_all_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
 all_except_endtoend_tests=$(echo "$packages_with_all_tests" | grep -v "endtoend" | cut -d" " -f1 )
 
 counter=0

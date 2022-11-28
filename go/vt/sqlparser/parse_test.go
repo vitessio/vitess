@@ -2319,6 +2319,14 @@ var (
 		input:  "start transaction",
 		output: "begin",
 	}, {
+		input: "start transaction with consistent snapshot",
+	}, {
+		input: "start transaction read write",
+	}, {
+		input: "start transaction read only",
+	}, {
+		input: "start transaction read only, with consistent snapshot",
+	}, {
 		input: "commit",
 	}, {
 		input: "rollback",

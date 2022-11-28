@@ -187,6 +187,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
+  txAccessModes []TxAccessMode
+  txAccessMode TxAccessMode
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -316,6 +318,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
+%token <str> CONSISTENT SNAPSHOT
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -585,6 +588,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
+%type <txAccessModes> tx_chacteristics_opt tx_chars
+%type <txAccessMode> tx_char
 %start any_command
 
 %%
@@ -4263,10 +4268,44 @@ begin_statement:
   {
     $$ = &Begin{}
   }
-| START TRANSACTION
+| START TRANSACTION tx_chacteristics_opt
   {
-    $$ = &Begin{}
+    $$ = &Begin{TxAccessModes: $3}
   }
+
+tx_chacteristics_opt:
+  {
+    $$ = nil
+  }
+| tx_chars
+  {
+    $$ = $1
+  }
+
+tx_chars:
+  tx_char
+  {
+    $$ = []TxAccessMode{$1}
+  }
+| tx_chars ',' tx_char
+  {
+    $$ = append($1, $3)
+  }
+
+tx_char:
+  WITH CONSISTENT SNAPSHOT
+  {
+    $$ = WithConsistentSnapshot
+  }
+| READ WRITE
+  {
+    $$ = ReadWrite
+  }
+| READ ONLY
+  {
+    $$ = ReadOnly
+  }
+
 
 commit_statement:
   COMMIT
@@ -7501,6 +7540,7 @@ non_reserved_keyword:
 | COMPRESSED
 | COMPRESSION
 | CONNECTION
+| CONSISTENT
 | COPY
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV
@@ -7747,6 +7787,7 @@ non_reserved_keyword:
 | SKIP
 | SLOW
 | SMALLINT
+| SNAPSHOT
 | SQL
 | SRID
 | START

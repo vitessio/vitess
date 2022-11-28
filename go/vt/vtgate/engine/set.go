@@ -102,10 +102,10 @@ type (
 var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
 
 var isolationLevelToExecuteOptionIsolationLevel = map[string]querypb.ExecuteOptions_TransactionIsolation{
-	"repeatable-read":  querypb.ExecuteOptions_REPEATABLE_READ,
-	"read-committed":   querypb.ExecuteOptions_READ_COMMITTED,
-	"read-uncommitted": querypb.ExecuteOptions_READ_UNCOMMITTED,
-	"serializable":     querypb.ExecuteOptions_SERIALIZABLE,
+	"REPEATABLE-READ":  querypb.ExecuteOptions_REPEATABLE_READ,
+	"READ-COMMITTED":   querypb.ExecuteOptions_READ_COMMITTED,
+	"READ-UNCOMMITTED": querypb.ExecuteOptions_READ_UNCOMMITTED,
+	"SERIALIZABLE":     querypb.ExecuteOptions_SERIALIZABLE,
 }
 
 var _ Primitive = (*Set)(nil)
@@ -472,11 +472,14 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		if err != nil {
 			return err
 		}
-		out, ok := isolationLevelToExecuteOptionIsolationLevel[strings.ToLower(str)]
+		upperStr := strings.ToUpper(str)
+		out, ok := isolationLevelToExecuteOptionIsolationLevel[upperStr]
 		if !ok {
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value of '%s'", svss.Name, str)
 		}
-		vcursor.Session().SetTransactionIsolation(querypb.ExecuteOptions_TransactionIsolation(out))
+		vcursor.Session().SetTransactionIsolation(out)
+		vcursor.Session().SetSysVar(sysvars.TxIsolation.Name, fmt.Sprintf("'%s'", upperStr))
+		vcursor.Session().SetSysVar(sysvars.TransactionIsolation.Name, fmt.Sprintf("'%s'", upperStr))
 	case sysvars.SQLSelectLimit.Name:
 		intValue, err := svss.evalAsInt64(env)
 		if err != nil {

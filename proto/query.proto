@@ -334,6 +334,16 @@ message ExecuteOptions {
   }
 
   Consolidator consolidator = 13;
+
+  enum TransactionAccessMode {
+    CONSISTENT_SNAPSHOT = 0;
+    READ_WRITE = 1;
+    READ_ONLY = 2;
+  }
+
+  // TransactionAccessMode specifies the access modes to be used while starting the transaction i.e. READ WRITE/READ ONLY/WITH CONSISTENT SNAPSHOT
+  // If not specified, the transaction will be started with the default access mode on the connection.
+  repeated TransactionAccessMode transaction_access_mode = 14;
 }
 
 // Field describes a single column returned by a query
