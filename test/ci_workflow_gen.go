@@ -154,6 +154,7 @@ type clusterTest struct {
 	Docker                       bool
 	LimitResourceUsage           bool
 	PartialKeyspace              bool
+	OnlineDDL                    bool
 }
 
 type selfHostedTest struct {
@@ -324,8 +325,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
 			test := &clusterTest{
-				Name:  fmt.Sprintf("Cluster (%s)", cluster),
-				Shard: cluster,
+				Name:      fmt.Sprintf("Cluster (%s)", cluster),
+				Shard:     cluster,
+				OnlineDDL: strings.Contains(cluster, "onlineddl"),
 			}
 			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
 			for _, makeToolCluster := range makeToolClusters {

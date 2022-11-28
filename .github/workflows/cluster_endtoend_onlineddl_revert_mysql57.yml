@@ -57,6 +57,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/cluster_endtoend_onlineddl_revert_mysql57.yml'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
