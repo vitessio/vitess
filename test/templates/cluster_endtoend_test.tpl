@@ -55,7 +55,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/{{.FileName}}'
-            {{- if .OnlineDDL}}
+            {{- if or (contains .Name "onlineddl") (contains .Name "schemadiff") }}
             - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
             {{- end}}
 

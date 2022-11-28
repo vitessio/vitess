@@ -154,7 +154,6 @@ type clusterTest struct {
 	Docker                       bool
 	LimitResourceUsage           bool
 	PartialKeyspace              bool
-	OnlineDDL                    bool
 }
 
 type selfHostedTest struct {
@@ -325,9 +324,8 @@ func generateClusterWorkflows(list []string, tpl string) {
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
 			test := &clusterTest{
-				Name:      fmt.Sprintf("Cluster (%s)", cluster),
-				Shard:     cluster,
-				OnlineDDL: strings.Contains(cluster, "onlineddl"),
+				Name:  fmt.Sprintf("Cluster (%s)", cluster),
+				Shard: cluster,
 			}
 			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
 			for _, makeToolCluster := range makeToolClusters {
@@ -412,8 +410,12 @@ func setupTestDockerFile(test *selfHostedTest) error {
 	return nil
 }
 
-func writeFileFromTemplate(templateFile, path string, test any) error {
-	tpl, err := template.ParseFiles(templateFile)
+func writeFileFromTemplate(templateFile, filePath string, test any) error {
+	tpl := template.New(path.Base(templateFile))
+	tpl.Funcs(template.FuncMap{
+		"contains": strings.Contains,
+	})
+	tpl, err := tpl.ParseFiles(templateFile)
 	if err != nil {
 		return fmt.Errorf("Error: %s\n", err)
 	}
@@ -424,7 +426,7 @@ func writeFileFromTemplate(templateFile, path string, test any) error {
 		return fmt.Errorf("Error: %s\n", err)
 	}
 
-	f, err := os.Create(path)
+	f, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("Error creating file: %s\n", err)
 	}
@@ -434,6 +436,6 @@ func writeFileFromTemplate(templateFile, path string, test any) error {
 	if _, err := f.WriteString(mergeBlankLines(buf)); err != nil {
 		return err
 	}
-	fmt.Printf("Generated %s\n", path)
+	fmt.Printf("Generated %s\n", filePath)
 	return nil
 }
