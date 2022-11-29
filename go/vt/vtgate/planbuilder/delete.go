@@ -28,7 +28,7 @@ func buildDeletePlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		del := stmt.(*sqlparser.Delete)
 		if del.With != nil {
-			return nil, vterrors.VT12001("with expression in delete statement")
+			return nil, vterrors.VT12001("with expression in DELETE statement")
 		}
 		var err error
 		if len(del.TableExprs) == 1 && len(del.Targets) == 1 {
@@ -47,7 +47,7 @@ func buildDeletePlan(string) stmtPlanner {
 		}
 
 		if len(del.Targets) > 1 {
-			return nil, vterrors.VT12001("multi-table delete statement in not supported in sharded database")
+			return nil, vterrors.VT12001("multi-table DELETE statement is not supported in a sharded database")
 		}
 
 		edelTable, err := edel.GetSingleTable()
@@ -61,7 +61,7 @@ func buildDeletePlan(string) stmtPlanner {
 		if len(edelTable.Owned) > 0 {
 			aTblExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 			if !ok {
-				return nil, vterrors.VT12001("delete on complex table expression")
+				return nil, vterrors.VT12001("deleting from a complex table expression")
 			}
 			tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edelTable.Name}, As: aTblExpr.As}
 			edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edelTable, ksidVindex.Columns)

@@ -341,7 +341,7 @@ func buildDMLPlan(
 	edml.QueryTimeout = queryTimeout(directives)
 
 	if len(pb.st.tables) != 1 {
-		return nil, nil, nil, vterrors.VT12001(fmt.Sprintf("multi-table %s statement in sharded database", dmlType))
+		return nil, nil, nil, vterrors.VT12001(fmt.Sprintf("multi-table %s statement in a sharded database", dmlType))
 	}
 	edmlTable, err := edml.GetSingleTable()
 	if err != nil {
@@ -364,7 +364,7 @@ func buildDMLPlan(
 	edml.Opcode = routingType
 	if routingType == engine.Scatter {
 		if limit != nil {
-			return nil, nil, nil, vterrors.VT12001(fmt.Sprintf("multi shard %s with limit", dmlType))
+			return nil, nil, nil, vterrors.VT12001(fmt.Sprintf("multi-shard %s with limit", dmlType))
 		}
 	} else {
 		edml.Vindex = vindex

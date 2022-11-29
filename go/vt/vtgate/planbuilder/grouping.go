@@ -76,7 +76,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 				}
 				colNumber = num
 			default:
-				return nil, vterrors.VT12001("in scatter query: only simple references allowed")
+				return nil, vterrors.VT12001("in scatter query: only simple references are allowed")
 			}
 			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: colNumber, WeightStringCol: -1, FromGroupBy: true})
 		}

@@ -581,36 +581,22 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	if len(del.TableExprs) != 1 {
 		return multiShardErr
 	}
-	aliasedTableExpr, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	_, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !isAliasedExpr {
 		return multiShardErr
 	}
 
 	if len(del.Targets) > 1 {
-		return vterrors.VT12001("multi-table delete statement in not supported in sharded database")
+		return vterrors.VT12001("multi-table DELETE statement is not supported in sharded database")
 	}
 
-	// Get the table information and the vindex table from it
-	ti, err := semTable.TableInfoFor(semTable.TableSetFor(aliasedTableExpr))
-	if err != nil {
-		return err
-	}
-	isSharded := false
-	vt := ti.GetVindexTable()
-	if vt != nil && vt.Keyspace != nil {
-		isSharded = vt.Keyspace.Sharded
-	}
-
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
 		case *sqlparser.Subquery, *sqlparser.DerivedTable:
 			// We have a subquery, so we must fail the planning.
 			// If this subquery and the table expression were all belonging to the same unsharded keyspace,
 			// we would have already created a plan for them before doing these checks.
-			if isSharded {
-				return false, vterrors.VT12001("subqueries in sharded DML")
-			}
-			return false, vterrors.VT12001("sharded subqueries in DML")
+			return false, vterrors.VT12001("subqueries in DML")
 		}
 		return true, nil
 	}, del)

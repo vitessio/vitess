@@ -37,7 +37,7 @@ type RenameFields struct {
 // NewRenameField creates a new rename field
 func NewRenameField(cols []string, indices []int, input Primitive) (*RenameFields, error) {
 	if len(cols) != len(indices) {
-		return nil, vterrors.VT13001("Unequal length of columns and indices in RenameField primitive")
+		return nil, vterrors.VT13001("number of columns does not match number of indices in RenameField primitive")
 	}
 	return &RenameFields{
 		Cols:    cols,

@@ -80,7 +80,7 @@ func (j *joinGen4) Inputs() []logicalPlan {
 // Rewrite implements the logicalPlan interface
 func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.VT13001(fmt.Sprintf("wrong number of children, got: %d, expect: 2", len(inputs)))
+		return vterrors.VT13001(fmt.Sprintf("wrong number of children in joinGen4 rewrite, got: %d, expect: 2", len(inputs)))
 	}
 	j.Left = inputs[0]
 	j.Right = inputs[1]

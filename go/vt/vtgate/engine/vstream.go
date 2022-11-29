@@ -62,7 +62,7 @@ func (v *VStream) GetTableName() string {
 
 // TryExecute implements the Primitive interface
 func (v *VStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("'Execute' called for VStream")
+	return nil, vterrors.VT13001("Execute is not supported by VStream")
 }
 
 // TryStreamExecute implements the Primitive interface
@@ -154,7 +154,7 @@ func addRowChangeIndicatorColumn(change *binlogdatapb.RowChange, eventFields []*
 
 // GetFields implements the Primitive interface
 func (v *VStream) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("'GetFields' called for VStream")
+	return nil, vterrors.VT13001("GetFields is not supported by VStream")
 }
 
 func (v *VStream) description() PrimitiveDescription {
