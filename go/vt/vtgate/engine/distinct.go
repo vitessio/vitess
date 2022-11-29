@@ -115,7 +115,7 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode
 	code := evalengine.HashCode(17)
 	for i, checkCol := range pt.checkCols {
 		if i >= len(inputRow) {
-			return 0, vterrors.VT13001("distinct check colls is larger than its input row")
+			return 0, vterrors.VT13001("distinct checkCol is larger than its input row")
 		}
 		col := inputRow[checkCol.Col]
 		hashcode, err := evalengine.NullsafeHashcode(col, checkCol.Collation, col.Type())
