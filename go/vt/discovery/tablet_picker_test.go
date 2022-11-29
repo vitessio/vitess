@@ -370,14 +370,16 @@ func TestPickLocalPreference(t *testing.T) {
 	defer deleteTablet(t, te, want1)
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
 	defer deleteTablet(t, te, want2)
+	want3 := addTablet(te, 103, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want3)
 
 	tp, err := NewTabletPicker(te.topoServ, []string{"local:cell2", "cell1"}, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
 	assert.Equal(t, tp.localPreference, "cell2")
 	assert.Equal(t, tp.cells, []string{"cell1", "cell2"})
 
-	// In 20 attempts, only the local tablet should be picked
-	var picked1, picked2 bool
+	// In 20 attempts, only the local tablets should be picked
+	var picked1, picked2, picked3 bool
 	for i := 0; i < 20; i++ {
 		tablet, err := tp.PickForStreaming(context.Background())
 		require.NoError(t, err)
@@ -387,9 +389,13 @@ func TestPickLocalPreference(t *testing.T) {
 		if proto.Equal(tablet, want2) {
 			picked2 = true
 		}
+		if proto.Equal(tablet, want3) {
+			picked3 = true
+		}
 	}
 	assert.False(t, picked1)
 	assert.True(t, picked2)
+	assert.True(t, picked3)
 }
 
 func TestPickLocalPreferenceWithCellAlias(t *testing.T) {
