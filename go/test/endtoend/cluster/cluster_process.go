@@ -669,8 +669,8 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	return vtgateProcInstance
 }
 
-// NewCluster instantiates a new cluster
-func NewCluster(cell string, hostname string) *LocalProcessCluster {
+// NewBareCluster instantiates a new cluster and does not assume existence of any of the binaries
+func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
 	go cluster.CtrlCHandler()
 
@@ -689,12 +689,18 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
 
+	rand.Seed(time.Now().UTC().UnixNano())
+	return cluster
+}
+
+// NewCluster instantiates a new cluster
+func NewCluster(cell string, hostname string) *LocalProcessCluster {
+	cluster := NewBareCluster(cell, hostname)
+
 	err := cluster.populateVersionInfo()
 	if err != nil {
 		log.Errorf("Error populating version information - %v", err)
 	}
-
-	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
 }
 
