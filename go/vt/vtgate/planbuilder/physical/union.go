@@ -37,7 +37,7 @@ var _ abstract.PhysicalOperator = (*Union)(nil)
 func (u *Union) TableID() semantics.TableSet {
 	ts := semantics.EmptyTableSet()
 	for _, source := range u.Sources {
-		ts.MergeInPlace(source.TableID())
+		ts = ts.Merge(source.TableID())
 	}
 	return ts
 }

@@ -142,7 +142,7 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 			return SingleTableSet(idx)
 		}
 	}
-	return TableSet{}
+	return EmptyTableSet()
 }
 
 // ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
@@ -287,12 +287,12 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
 			if extracted.OtherSide != nil {
 				set := d.dependencies(extracted.OtherSide)
-				deps.MergeInPlace(set)
+				deps = deps.Merge(set)
 			}
 			return false, nil
 		}
 		set, found := d[expr]
-		deps.MergeInPlace(set)
+		deps = deps.Merge(set)
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
