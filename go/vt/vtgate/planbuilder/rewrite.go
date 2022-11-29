@@ -113,7 +113,7 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 
 	semTableSQ, found := r.semTable.SubqueryRef[subq]
 	if !found {
-		return vterrors.VT13001("came across subquery that was not in the subq map")
+		return vterrors.VT13001("got subquery that was not in the subq map")
 	}
 
 	r.inSubquery++
@@ -127,7 +127,7 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) error {
 	semTableSQ, found := r.semTable.SubqueryRef[node]
 	if !found {
-		return vterrors.VT13001("came across subquery that was not in the subq map")
+		return vterrors.VT13001("got subquery that was not in the subq map")
 	}
 	if semTableSQ.GetArgName() != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
 		return nil
@@ -142,7 +142,7 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) error {
 	semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
 	if !found {
-		return vterrors.VT13001("came across subquery that was not in the subq map")
+		return vterrors.VT13001("got subquery that was not in the subq map")
 	}
 
 	r.inSubquery++

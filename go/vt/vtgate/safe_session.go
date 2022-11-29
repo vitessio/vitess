@@ -386,7 +386,7 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	}
 	if !(session.Session.InTransaction || session.Session.InReservedConn) {
 		// Should be unreachable
-		return vterrors.VT13001("current session neither in transaction nor in reserved connection")
+		return vterrors.VT13001("current session is neither in transaction nor in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
