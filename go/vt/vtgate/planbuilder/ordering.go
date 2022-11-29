@@ -55,12 +55,12 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy v3OrderBy) (l
 	case *orderedAggregate:
 		return planOAOrdering(pb, orderBy, node)
 	case *mergeSort:
-		return nil, vterrors.VT12001("can't do ORDER BY on top of ORDER BY")
+		return nil, vterrors.VT12001("cannot do ORDER BY on top of ORDER BY")
 	case *concatenate:
 		if len(orderBy) == 0 {
 			return input, nil
 		}
-		return nil, vterrors.VT12001("can't do ORDER BY on top of UNION")
+		return nil, vterrors.VT12001("cannot do ORDER BY on top of UNION")
 	}
 	return nil, vterrors.VT13001(fmt.Sprintf("unreachable %T.ordering", input))
 }
@@ -103,17 +103,17 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 		case *sqlparser.CastExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex order by expression: %s", sqlparser.String(expr)))
+				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 			}
 			orderByCol = col.Metadata.(*column)
 		case *sqlparser.ConvertExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex order by expression: %s", sqlparser.String(expr)))
+				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 			}
 			orderByCol = col.Metadata.(*column)
 		default:
-			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex order by expression: %v", sqlparser.String(expr)))
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %v", sqlparser.String(expr)))
 		}
 
 		// Match orderByCol against the group by columns.
@@ -142,7 +142,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 		// Build a brand new reference for the key.
 		col, err := BuildColName(oa.input.ResultColumns(), groupByKey.KeyCol)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "generating order by clause")
+			return nil, vterrors.Wrapf(err, "generating ORDER BY clause")
 		}
 		selOrderBy = append(selOrderBy, &v3Order{
 			Order:       &sqlparser.Order{Expr: col, Direction: sqlparser.AscOrder},
@@ -219,11 +219,11 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy v3OrderBy, node *join) (logi
 				switch e := in.(type) {
 				case *sqlparser.ColName:
 					if e.Metadata.(*column).Origin().Order() > node.Left.Order() {
-						return false, vterrors.VT12001("order by spans across shards")
+						return false, vterrors.VT12001("ORDER BY spans across shards")
 					}
 				case *sqlparser.Subquery:
 					// Unreachable because ResolveSymbols perfoms this check up above.
-					return false, vterrors.VT12001("order by has subquery")
+					return false, vterrors.VT12001("ORDER BY has subquery")
 				}
 				return true, nil
 			}, order.Expr)
@@ -294,7 +294,7 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 		case *sqlparser.UnaryExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex order by expression: %s", sqlparser.String(expr)))
+				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 			}
 			c := col.Metadata.(*column)
 			for i, rc := range node.resultColumns {
@@ -304,12 +304,12 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 				}
 			}
 		default:
-			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex order by expression: %s", sqlparser.String(expr)))
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 		}
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
 		if colNumber == -1 {
-			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order)))
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: ORDER BY must reference a column in the select list: %s", sqlparser.String(order)))
 		}
 		starColFixedIndex := colNumber
 		if selectStatement, ok := node.Select.(*sqlparser.Select); ok {
@@ -327,7 +327,7 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 							tableMeta = tableMap[tableName]
 						}
 						if tableMeta == nil || !tableMeta.isAuthoritative {
-							return nil, vterrors.VT12001("in scatter query, can't order by a column that comes after `*` expressions in the SELECT list")
+							return nil, vterrors.VT12001("in scatter query, cannot ORDER BY a column that comes after `*` expressions in the SELECT list")
 						}
 						starColFixedIndex += len(tableMeta.columnNames) - 1
 					}

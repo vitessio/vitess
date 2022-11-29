@@ -67,7 +67,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 					}
 				}
 				if colNumber == -1 {
-					return nil, vterrors.VT12001("in scatter query: group by column must reference column in SELECT list")
+					return nil, vterrors.VT12001("in scatter query: GROUP BY column must reference column in SELECT list")
 				}
 			case *sqlparser.Literal:
 				num, err := ResultFromNumber(node.resultColumns, e, "group statement")
