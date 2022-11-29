@@ -21,12 +21,14 @@ package vreplication
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
 // The customer table also tests two important things:
-//   1. Composite or multi-column primary keys
-//   2. PKs that contain an ENUM column
+//  1. Composite or multi-column primary keys
+//  2. PKs that contain an ENUM column
+//
 // The Lead and Lead-1 tables also allows us to test several things:
-//   1. Mixed case identifiers
-//   2. Column and table names with special characters in them, namely a dash
-//   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
+//  1. Mixed case identifiers
+//  2. Column and table names with special characters in them, namely a dash
+//  3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
+//
 // The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
 // The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
 var (

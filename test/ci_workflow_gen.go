@@ -130,11 +130,10 @@ var (
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
-	}
-
-	clusterSelfHostedList = []string{
 		"vreplication_v2",
 	}
+
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
