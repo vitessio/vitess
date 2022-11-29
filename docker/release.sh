@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-vt_base_version='v13.0.0'
+vt_base_version='14.0.4'
 debian_versions='buster  bullseye'
 default_debian_version='bullseye'
 
