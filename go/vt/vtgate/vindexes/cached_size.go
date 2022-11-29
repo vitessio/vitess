@@ -73,17 +73,13 @@ func (cached *CFC) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field offsets []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.offsets)) * int64(8))
-	}
-	// field prefixVindex vitess.io/vitess/go/vt/vtgate/vindexes.SingleColumn
-	if cc, ok := cached.prefixVindex.(cachedObject); ok {
-		size += cc.CachedSize(true)
 	}
 	return size
 }

@@ -87,10 +87,9 @@ import (
 // Specifically, offsets[0] is the byte offset of the first component,
 // offsets[1] is the byte offset of the second component, etc.
 type CFC struct {
-	name         string
-	hash         func([]byte) []byte
-	offsets      []int
-	prefixVindex SingleColumn
+	name    string
+	hash    func([]byte) []byte
+	offsets []int
 }
 
 // NewCFC creates a new CFC vindex
@@ -99,8 +98,6 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 	ss := &CFC{
 		name: name,
 	}
-	// prefixCFC is only used in 'LIKE' compare expressions.
-	ss.prefixVindex = &prefixCFC{CFC: ss}
 
 	if params == nil {
 		return ss, nil
@@ -244,7 +241,8 @@ func (vind *CFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value)
 
 // PrefixVindex switches the vindex to prefix mode
 func (vind *CFC) PrefixVindex() SingleColumn {
-	return vind.prefixVindex
+	// prefixCFC is only used in 'LIKE' compare expressions.
+	return &prefixCFC{CFC: vind}
 }
 
 // NewKeyRangeFromPrefix creates a keyspace range from a prefix of keyspace id.
