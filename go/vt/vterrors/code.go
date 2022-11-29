@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	VT03001 = errorWithState("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "The planner accepts aggregate functions that take a single argument only.")
+	VT03001 = errorWithState("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "The planner only accepts aggregate functions that take a single argument.")
 	VT03002 = errorWithState("VT03002", vtrpcpb.Code_INVALID_ARGUMENT, ForbidSchemaChange, "changing schema from '%s' to '%s' is not allowed", "This schema change is not allowed. You cannot change the keyspace of a table.")
 	VT03003 = errorWithState("VT03003", vtrpcpb.Code_INVALID_ARGUMENT, UnknownTable, "unknown table '%s' in MULTI DELETE", "The specified table in this DELETE statement is unknown.")
 	VT03004 = errorWithState("VT03004", vtrpcpb.Code_INVALID_ARGUMENT, NonUpdateableTable, "the target table %s of the DELETE is not updatable", "You cannot delete something that is not a real MySQL table.")
