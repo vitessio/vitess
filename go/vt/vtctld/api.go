@@ -51,9 +51,7 @@ import (
 )
 
 var (
-	localCell        string
-	showTopologyCRUD = true
-	proxyTablets     bool
+	localCell string
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -97,8 +95,6 @@ func init() {
 
 func registerVtctldAPIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&localCell, "cell", localCell, "cell to use")
-	fs.BoolVar(&showTopologyCRUD, "vtctld_show_topology_crud", showTopologyCRUD, "Controls the display of the CRUD topology actions in the vtctld UI.")
-	fs.BoolVar(&proxyTablets, "proxy_tablets", proxyTablets, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
 }
 
 func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.HealthCheck) *TabletWithStatsAndURL {
@@ -117,11 +113,7 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.Health
 		PrimaryTermStartTime: t.PrimaryTermStartTime,
 	}
 
-	if proxyTablets {
-		tablet.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
-	} else {
-		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
-	}
+	tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 
 	if healthcheck != nil {
 		if health, err := healthcheck.GetTabletHealth(discovery.KeyFromTablet(t), tablet.Alias); err == nil {
@@ -668,7 +660,6 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		resp := make(map[string]any)
 		resp["activeReparents"] = !mysqlctl.DisableActiveReparents
 		resp["showStatus"] = enableRealtimeStats
-		resp["showTopologyCRUD"] = showTopologyCRUD
 		resp["showWorkflows"] = workflowManagerInit
 		resp["workflows"] = workflow.AvailableFactories()
 		data, err := json.MarshalIndent(resp, "", "  ")
