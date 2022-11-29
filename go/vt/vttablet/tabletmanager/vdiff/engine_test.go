@@ -141,10 +141,7 @@ func TestEngineOpen(t *testing.T) {
 			), nil)
 
 			// Now let's short circuit the vdiff as we know that the open has worked as expected.
-			dbClient.ExpectRequest("update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'", singleRowAffected, fmt.Errorf("This is far enough, yo"))
-			dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: This is far enough, yo')", singleRowAffected, nil)
-			dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = 'This is far enough, yo'  where id = 1", singleRowAffected, nil)
-			dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: error')", singleRowAffected, nil)
+			shortCircuitTestAfterQuery(dbClient, "update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'")
 
 			vde.Open(context.Background(), vreplEngine)
 			defer vde.Close()
@@ -184,7 +181,8 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|pending|%s|Query execution was interrupted, maximum statement execution time exceeded (errno 3024) (sqlstate HY000) during query: select * from foo", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS),
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|pending|%s|%v", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS,
+					mysql.NewSQLError(mysql.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")),
 			),
 			expectRetry: true,
 		},
@@ -235,10 +233,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 					), nil)
 
 					// At this point we know that we kicked off the expected retry so we can short circit the vdiff.
-					dbClient.ExpectRequest(fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = %s", id), nil, fmt.Errorf("This is far enough, yo"))
-					dbClient.ExpectRequest(fmt.Sprintf("insert into _vt.vdiff_log(vdiff_id, message) values (%s, 'Error: This is far enough, yo')", id), singleRowAffected, nil)
-					dbClient.ExpectRequest(fmt.Sprintf("update _vt.vdiff set state = 'error', last_error = 'This is far enough, yo'  where id = %s", id), singleRowAffected, nil)
-					dbClient.ExpectRequest(fmt.Sprintf("insert into _vt.vdiff_log(vdiff_id, message) values (%s, 'State changed to: error')", id), singleRowAffected, nil)
+					shortCircuitTestAfterQuery(dbClient, fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = %s", id))
 
 					expectedControllerCnt++
 				}

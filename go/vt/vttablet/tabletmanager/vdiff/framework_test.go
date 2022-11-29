@@ -125,6 +125,16 @@ func resetBinlogClient() {
 	globalFBC = &fakeBinlogClient{}
 }
 
+// shortCircuitTestAfterQuery is used to short circuit a test after a specific query is executed.
+// This can be used to end a vdiff, by returning an error from a the specified query, once the test
+// has verified the necessary behavior.
+func shortCircuitTestAfterQuery(dbClient *binlogplayer.MockDBClient, query string) {
+	dbClient.ExpectRequest(query, singleRowAffected, fmt.Errorf("Short circuiting test"))
+	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
+	dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = 'Short circuiting test'  where id = 1", singleRowAffected, nil)
+	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: error')", singleRowAffected, nil)
+}
+
 //--------------------------------------
 // Topos and tablets
 
