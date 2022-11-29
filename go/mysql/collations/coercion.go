@@ -208,8 +208,15 @@ func (env *Environment) MergeCollations(left, right TypedCollation, opt Coercion
 	if leftColl == nil || rightColl == nil {
 		return TypedCollation{}, nil, nil, fmt.Errorf("unsupported TypeCollationID: %v / %v", left.Collation, right.Collation)
 	}
+
 	leftCS := leftColl.Charset()
 	rightCS := rightColl.Charset()
+
+	if left.Coercibility == CoerceExplicit && right.Coercibility == CoerceExplicit {
+		if left.Collation != right.Collation {
+			goto cannotCoerce
+		}
+	}
 
 	if leftCS.Name() == rightCS.Name() {
 		switch {
