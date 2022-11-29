@@ -69,11 +69,13 @@ var (
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"vtctlbackup_sharded_clustertest_heavy",
+		"12",
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"shardedrecovery_stress_verticalsplit_heavy",
 		"vtgate_general_heavy",
+		"18",
 		"19",
 		"xb_backup",
 		"21",
@@ -131,10 +133,7 @@ var (
 		"topo_connection_cache",
 	}
 
-	clusterSelfHostedList = []string{
-		"12",
-		"18",
-	}
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
