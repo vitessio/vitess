@@ -52,7 +52,7 @@ func TestTableSet_Constituents(t *testing.T) {
 	assert.Equal(t, []TableSet{F1, F2}, (F12).Constituents())
 	assert.Equal(t, []TableSet{F1, F3}, (F1.Merge(F3)).Constituents())
 	assert.Equal(t, []TableSet{F2, F3}, (F2.Merge(F3)).Constituents())
-	assert.Empty(t, TableSet{}.Constituents())
+	assert.Empty(t, EmptyTableSet().Constituents())
 }
 
 func TestTableSet_TableOffset(t *testing.T) {
@@ -71,7 +71,7 @@ func TestTableSet_LargeTablesConstituents(t *testing.T) {
 	for t := 0; t < 256; t++ {
 		table += rand.Intn(GapSize) + 1
 		expected = append(expected, SingleTableSet(table))
-		ts.AddTable(table)
+		ts = ts.WithTable(table)
 	}
 
 	assert.Equal(t, expected, ts.Constituents())
@@ -84,17 +84,15 @@ func TestTabletSet_LargeMergeInPlace(t *testing.T) {
 	var tablesets = make([]TableSet, 64)
 
 	for i := range tablesets {
-		ts := &tablesets[i]
 		setrng := i * SetRange
-
 		for tid := 0; tid < SetRange; tid++ {
-			ts.AddTable(setrng + tid)
+			tablesets[i] = tablesets[i].WithTable(setrng + tid)
 		}
 	}
 
 	var result TableSet
 	for _, ts := range tablesets {
-		result.MergeInPlace(ts)
+		result = result.Merge(ts)
 	}
 
 	var expected = make([]TableSet, SetRange*Blocks)
@@ -112,11 +110,9 @@ func TestTabletSet_LargeMerge(t *testing.T) {
 	var tablesets = make([]TableSet, 64)
 
 	for i := range tablesets {
-		ts := &tablesets[i]
 		setrng := i * SetRange
-
 		for tid := 0; tid < SetRange; tid++ {
-			ts.AddTable(setrng + tid)
+			tablesets[i] = tablesets[i].WithTable(setrng + tid)
 		}
 	}
 
@@ -172,8 +168,8 @@ func TestTableSet_KeepOnly(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			testcase.ts1.KeepOnly(testcase.ts2)
-			assert.Equal(t, testcase.result, testcase.ts1)
+			keep := testcase.ts1.KeepOnly(testcase.ts2)
+			assert.Equal(t, testcase.result, keep)
 		})
 	}
 }
@@ -210,8 +206,8 @@ func TestTableSet_RemoveInPlace(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			testcase.ts1.RemoveInPlace(testcase.ts2)
-			assert.Equal(t, testcase.result, testcase.ts1)
+			remove := testcase.ts1.Remove(testcase.ts2)
+			assert.Equal(t, testcase.result, remove)
 		})
 	}
 }

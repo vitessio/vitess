@@ -27,7 +27,7 @@ func BenchmarkGetPut(b *testing.B) {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
 			b.Run(rName, func(b *testing.B) {
-				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				pool := NewResourcePool(testResourceFactory, size, size, 0, 0, nil, nil, 0)
 				defer pool.Close()
 
 				b.ReportAllocs()
@@ -56,7 +56,7 @@ func BenchmarkGetPutWithSettings(b *testing.B) {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
 			b.Run(rName, func(b *testing.B) {
-				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				pool := NewResourcePool(testResourceFactory, size, size, 0, 0, nil, nil, 0)
 				defer pool.Close()
 
 				b.ReportAllocs()
@@ -85,7 +85,7 @@ func BenchmarkGetPutMixed(b *testing.B) {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
 			b.Run(rName, func(b *testing.B) {
-				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				pool := NewResourcePool(testResourceFactory, size, size, 0, 0, nil, nil, 0)
 				defer pool.Close()
 
 				b.ReportAllocs()
@@ -116,7 +116,7 @@ func BenchmarkGetPutMixedMulti(b *testing.B) {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
 			b.Run(rName, func(b *testing.B) {
-				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				pool := NewResourcePool(testResourceFactory, size, size, 0, 0, nil, nil, 0)
 				defer pool.Close()
 
 				b.ReportAllocs()
