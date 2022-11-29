@@ -174,6 +174,11 @@ func TestBinlogEventIsNotRotate(t *testing.T) {
 	}
 }
 
+func TestBinlogEventIsNotHeartbeat(t *testing.T) {
+	input := binlogEvent(googleFormatEvent)
+	assert.False(t, input.IsHeartbeat())
+}
+
 func TestBinlogEventIsXID(t *testing.T) {
 	input := binlogEvent(googleXIDEvent)
 	want := true
@@ -201,6 +206,7 @@ func TestBinlogEventFormat(t *testing.T) {
 	got, err := input.Format()
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
+	assert.False(t, input.IsHeartbeat())
 
 }
 

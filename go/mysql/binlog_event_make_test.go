@@ -325,6 +325,7 @@ func TestRowsEvent(t *testing.T) {
 	require.NoError(t, err, "NewRowsEvent().Rows() returned error: %v", err)
 	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
 
+	assert.NotZero(t, event.Timestamp())
 }
 
 func TestHeartbeatEvent(t *testing.T) {
@@ -334,6 +335,7 @@ func TestHeartbeatEvent(t *testing.T) {
 	event := NewHeartbeatEvent(f, s)
 	require.NotNil(t, event)
 	assert.True(t, event.IsHeartbeat())
+	assert.Zero(t, event.Timestamp())
 }
 
 func TestRotateRotateEvent(t *testing.T) {
