@@ -20,13 +20,17 @@ package vtctld
 
 import (
 	"context"
+	"strings"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -127,6 +131,20 @@ func InitVtctld(ts *topo.Server) error {
 			})
 			return "", err
 		})
+
+	var healthCheck discovery.HealthCheck
+	if enableRealtimeStats {
+		ctx := context.Background()
+		cells, err := ts.GetKnownCells(ctx)
+		if err != nil {
+			log.Errorf("Failed to get the list of known cells, failed to instantiate the healthcheck at startup: %v", err)
+		} else {
+			healthCheck = discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, localCell, strings.Join(cells, ","))
+		}
+	}
+
+	// Serve the REST API for the vtctld web app.
+	initAPI(context.Background(), ts, actionRepo, healthCheck)
 
 	// Init workflow manager.
 	initWorkflowManager(ts)
