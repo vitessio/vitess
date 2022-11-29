@@ -158,7 +158,7 @@
     "comment": "scatter update with limit clause",
     "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
     "v3-plan": "VT12001: unsupported: multi shard update with limit",
-    "gen4-plan": "VT12001: unsupported: multi shard update with limit is not supported"
+    "gen4-plan": "VT12001: unsupported: multi-shard UPDATE with LIMIT is not supported"
   },
   {
     "comment": "multi delete multi table",

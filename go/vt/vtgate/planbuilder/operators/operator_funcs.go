@@ -97,7 +97,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op O
 		return op, nil
 
 	default:
-		return nil, vterrors.VT13001("this should not happen - tried to remove predicate from table op")
+		return nil, vterrors.VT13001("this should not happen - tried to remove predicate from the operator table")
 	}
 }
 

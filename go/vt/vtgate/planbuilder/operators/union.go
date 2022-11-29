@@ -77,7 +77,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	for i, selectExpr := range u.SelectStmts[0].SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, vterrors.VT12001("can't push predicates on UNION where the first SELECT contains star or next")
+			return nil, vterrors.VT12001("cannot push predicates on UNION where the first SELECT contains * or NEXT")
 		}
 		if !ae.As.IsEmpty() {
 			offsets[ae.As.String()] = i

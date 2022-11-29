@@ -393,7 +393,7 @@ func mergeRoutes(ctx *plancontext.PlanningContext, qg *QueryGraph, physicalOps [
 			physicalOps = append(physicalOps, bestTree)
 		} else {
 			if crossJoinsOK {
-				return nil, vterrors.VT13001("should not happen")
+				return nil, vterrors.VT13001("should not happen: we should be able to merge cross joins")
 			}
 			// we will only fail to find a join plan when there are only cross joins left
 			// when that happens, we switch over to allow cross joins as well.

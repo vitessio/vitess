@@ -904,7 +904,7 @@
         ]
       }
     },
-    "gen4-plan": "VT12001: unsupported: nesting of unions at the right-hand side is not yet supported"
+    "gen4-plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side is not yet supported"
   },
   {
     "comment": "multi-shard union",
@@ -966,7 +966,7 @@
         ]
       }
     },
-    "gen4-plan": "VT12001: unsupported: nesting of unions at the right-hand side is not yet supported"
+    "gen4-plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side is not yet supported"
   },
   {
     "comment": "union with the same target shard because of vindex",

@@ -121,7 +121,7 @@ func isTableNameCol(col *sqlparser.ColName) bool {
 type notImplementedSchemaInfoConverter struct{}
 
 func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, vterrors.VT12001("Comparing table schema name with a column name is not yet supported")
+	return 0, vterrors.VT12001("comparing table schema name with a column name is not yet supported")
 }
 
 func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {

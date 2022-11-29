@@ -98,13 +98,13 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		}
 
 		if update.Limit != nil && len(update.OrderBy) == 0 {
-			return nil, "", vterrors.VT12001(fmt.Sprintf("Need to provide order by clause when using limit. Invalid update on vindex: %v", vindex.Name))
+			return nil, "", vterrors.VT12001(fmt.Sprintf("you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name))
 		}
 		if i == 0 {
-			return nil, "", vterrors.VT12001(fmt.Sprintf("You can't update primary vindex columns. Invalid update on vindex: %v", vindex.Name))
+			return nil, "", vterrors.VT12001(fmt.Sprintf("you can't UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name))
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
-			return nil, "", vterrors.VT12001(fmt.Sprintf("You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name))
+			return nil, "", vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name))
 		}
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			PvMap:  vindexValueMap,
@@ -118,7 +118,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 	// generate rest of the owned vindex query.
 	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", vterrors.VT12001("update on complex table expression")
+		return nil, "", vterrors.VT12001("UPDATE on complex table expression")
 	}
 	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
 	buf.Myprintf(" from %v%v%v%v for update", tblExpr, update.Where, update.OrderBy, update.Limit)
@@ -167,5 +167,5 @@ func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) 
 }
 
 func invalidUpdateExpr(upd *sqlparser.UpdateExpr, expr sqlparser.Expr) error {
-	return vterrors.VT12001(fmt.Sprintf("Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(expr)))
+	return vterrors.VT12001(fmt.Sprintf("only values are supported; invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(expr)))
 }
