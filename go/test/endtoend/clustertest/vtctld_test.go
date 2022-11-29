@@ -62,13 +62,15 @@ func TestVtctldProcess(t *testing.T) {
 
 func testTopoDataAPI(t *testing.T, url string) {
 	resp, err := http.Get(url)
-	require.Nil(t, err)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	assert.Equal(t, resp.StatusCode, 200)
 
 	resultMap := make(map[string]any)
-	respByte, _ := io.ReadAll(resp.Body)
+	respByte, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	err = json.Unmarshal(respByte, &resultMap)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	errorValue := reflect.ValueOf(resultMap["Error"])
 	assert.Empty(t, errorValue.String())
@@ -83,7 +85,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 func testListAllTablets(t *testing.T) {
 	// first w/o any filters, aside from cell
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", clusterInstance.Cell)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tablets := getAllTablets()
 
@@ -104,7 +106,7 @@ func testListAllTablets(t *testing.T) {
 		"ListAllTablets", "--", "--keyspace", clusterInstance.Keyspaces[0].Name,
 		"--tablet_type", "primary",
 		clusterInstance.Cell)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// We should only return a single primary tablet per shard in the first keyspace
 	tabletsFromCMD = strings.Split(result, "\n")
@@ -115,9 +117,10 @@ func testListAllTablets(t *testing.T) {
 
 func testTabletStatus(t *testing.T) {
 	resp, err := http.Get(fmt.Sprintf("http://%s:%d", clusterInstance.Hostname, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort))
-	require.Nil(t, err)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	respByte, err := io.ReadAll(resp.Body)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	result := string(respByte)
 	log.Infof("Tablet status response: %v", result)
 	assert.True(t, strings.Contains(result, `Alias: <a href="http://localhost:`))
@@ -126,13 +129,13 @@ func testTabletStatus(t *testing.T) {
 
 func testExecuteAsDba(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, result, oneTableOutput)
 }
 
 func testExecuteAsApp(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, result, oneTableOutput)
 }
 
