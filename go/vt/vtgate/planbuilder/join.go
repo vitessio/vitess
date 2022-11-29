@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -226,7 +228,7 @@ func (jb *join) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weight
 // Rewrite implements the logicalPlan interface
 func (jb *join) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.VT13001("join: wrong number of inputs")
+		return vterrors.VT13001(fmt.Sprintf("join: wrong number of inputs, got: %d, expect: 2", len(inputs)))
 	}
 	jb.Left = inputs[0]
 	jb.Right = inputs[1]

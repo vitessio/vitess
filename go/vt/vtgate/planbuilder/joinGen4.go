@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -78,7 +80,7 @@ func (j *joinGen4) Inputs() []logicalPlan {
 // Rewrite implements the logicalPlan interface
 func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.VT13001("wrong number of children")
+		return vterrors.VT13001(fmt.Sprintf("wrong number of children, got: %d, expect: 2", len(inputs)))
 	}
 	j.Left = inputs[0]
 	j.Right = inputs[1]

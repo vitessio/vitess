@@ -49,7 +49,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 
 	if len(pb.st.tables) != 1 {
 		// Unreachable.
-		return nil, vterrors.VT12001("multi-table insert statement in not supported in sharded keyspace")
+		return nil, vterrors.VT12001("multi-table INSERT statement is not supported in a sharded keyspace")
 	}
 	var vschemaTable *vindexes.Table
 	for _, tval := range pb.st.tables {
@@ -77,7 +77,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		if eins.Table.AutoIncrement != nil {
-			return nil, vterrors.VT12001("auto-inc and select in insert")
+			return nil, vterrors.VT12001("auto-increment and SELECT in INSERT")
 		}
 		plan, err := subquerySelectPlan(ins, vschema, reservedVars, false)
 		if err != nil {
@@ -94,7 +94,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 	case sqlparser.Values:
 		rows = insertValues
 	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("unexpected construct in insert: %T", insertValues))
+		return nil, vterrors.VT13001(fmt.Sprintf("unexpected construct in INSERT: %T", insertValues))
 	}
 	if eins.Table.AutoIncrement == nil {
 		eins.Query = generateQuery(ins)
@@ -133,7 +133,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	eins.Ignore = bool(ins.Ignore)
 	if ins.OnDup != nil {
 		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
-			return nil, vterrors.VT12001("DML cannot change vindex column")
+			return nil, vterrors.VT12001("DML cannot update vindex column")
 		}
 		eins.Ignore = true
 	}
@@ -154,7 +154,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 
 	for _, value := range rows {
 		if len(ins.Columns) != len(value) {
-			return nil, vterrors.VT13001("column list doesn't match values")
+			return nil, vterrors.VT13001("column list does not match values")
 		}
 	}
 
@@ -413,7 +413,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 		eins.Generate.Values = evalengine.NewTupleExpr(autoIncValues...)
 		return nil
 	}
-	return vterrors.VT13001(fmt.Sprintf("unexpected construct in insert: %T", ins.Rows))
+	return vterrors.VT13001(fmt.Sprintf("unexpected construct in INSERT: %T", ins.Rows))
 }
 
 // findOrAddColumn finds the position of a column in the insert. If it's

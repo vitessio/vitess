@@ -101,7 +101,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 			return nil, "", vterrors.VT12001(fmt.Sprintf("you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name))
 		}
 		if i == 0 {
-			return nil, "", vterrors.VT12001(fmt.Sprintf("you can't UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name))
+			return nil, "", vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name))
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
 			return nil, "", vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name))

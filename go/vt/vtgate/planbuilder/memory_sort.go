@@ -71,22 +71,22 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		case *sqlparser.CastExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex order by expression: %s", sqlparser.String(expr)))
+				return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex ORDER BY expression: %s", sqlparser.String(expr)))
 			}
 			colNumber = findColNumber(ms, colName)
 		case *sqlparser.ConvertExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex order by expression: %s", sqlparser.String(expr)))
+				return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex ORDER BY expression: %s", sqlparser.String(expr)))
 			}
 			colNumber = findColNumber(ms, colName)
 		default:
-			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex order by expression: %s", sqlparser.String(expr)))
+			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex ORDER BY expression: %s", sqlparser.String(expr)))
 		}
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
 		if colNumber == -1 {
-			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: order by must reference a column in the select list: %s", sqlparser.String(order)))
+			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: ORDER BY must reference a column in the select list: %s", sqlparser.String(order)))
 		}
 		// TODO(king-11) need to pass in collation here
 		ob := engine.OrderByParams{

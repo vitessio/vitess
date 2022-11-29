@@ -335,7 +335,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		result = src
 	} else {
 		if len(op.Ordering) > 0 {
-			return nil, vterrors.VT12001("can't do ORDER BY on top of UNION")
+			return nil, vterrors.VT12001("cannot do ORDER BY on top of UNION")
 		}
 		result = &concatenateGen4{sources: sources}
 	}
@@ -354,7 +354,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 func getWeightStringForSelectExpr(selectExpr sqlparser.SelectExpr) (*sqlparser.AliasedExpr, error) {
 	expr, isAliased := selectExpr.(*sqlparser.AliasedExpr)
 	if !isAliased {
-		return nil, vterrors.VT12001("cannot convert select expression to an aliased expression")
+		return nil, vterrors.VT12001("cannot convert SELECT expression to an aliased expression")
 	}
 	return &sqlparser.AliasedExpr{Expr: weightStringFor(expr.Expr)}, nil
 }
@@ -412,7 +412,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		expr := node.OutputColumns()[offset]
 		aliasedExpr, isAliased := expr.(*sqlparser.AliasedExpr)
 		if !isAliased {
-			return 0, vterrors.VT12001("cannot convert select expression to an aliased expression")
+			return 0, vterrors.VT12001("cannot convert SELECT expression to an aliased expression")
 		}
 		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
 		switch {
@@ -423,11 +423,11 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 			offset, err = pushWeightStringForDistinct(ctx, node.Right, offset)
 			node.Cols = append(node.Cols, offset+1)
 		default:
-			return 0, vterrors.VT12001("cannot push distinct weight string to both sides of the join")
+			return 0, vterrors.VT12001("cannot push DISTINCT WEIGHT_STRING to both sides of the join")
 		}
 		newOffset = len(node.Cols) - 1
 	default:
-		return 0, vterrors.VT13001(fmt.Sprintf("not supported pushWeightStringForDistinct on %T", plan))
+		return 0, vterrors.VT13001(fmt.Sprintf("pushWeightStringForDistinct on %T", plan))
 	}
 	return
 }

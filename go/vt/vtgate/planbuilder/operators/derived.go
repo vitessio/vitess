@@ -19,7 +19,6 @@ package operators
 import (
 	"fmt"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -115,7 +114,7 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrMultipleTables {
-			return nil, semantics.ProjError{Inner: vterrors.VT12001(fmt.Sprintf("unable to split predicates to derived table: %s", sqlparser.String(expr)))}
+			return nil, semantics.ProjError{Inner: vterrors.VT12001(fmt.Sprintf("unable to push predicates to derived table: %s", sqlparser.String(expr)))}
 		}
 		return nil, err
 	}
@@ -134,7 +133,7 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't push this expression to a table")
+		return 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
 	}
 
 	i, err := d.findOutputColumn(col)
