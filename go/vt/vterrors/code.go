@@ -27,7 +27,7 @@ var (
 	VT03002 = errorWithState("VT03002", vtrpcpb.Code_INVALID_ARGUMENT, ForbidSchemaChange, "changing schema from '%s' to '%s' is not allowed", "This schema change is not allowed. You cannot change the keyspace of a table.")
 	VT03003 = errorWithState("VT03003", vtrpcpb.Code_INVALID_ARGUMENT, UnknownTable, "unknown table '%s' in MULTI DELETE", "The specified table in this DELETE statement is unknown.")
 	VT03004 = errorWithState("VT03004", vtrpcpb.Code_INVALID_ARGUMENT, NonUpdateableTable, "the target table %s of the DELETE is not updatable", "You cannot delete something that is not a real MySQL table.")
-	VT03005 = errorWithState("VT03005", vtrpcpb.Code_INVALID_ARGUMENT, WrongGroupField, "can't group on '%s'", "The planner does not allow grouping on such field.")
+	VT03005 = errorWithState("VT03005", vtrpcpb.Code_INVALID_ARGUMENT, WrongGroupField, "cannot group on '%s'", "The planner does not allow grouping on certain field. For instance, aggregation function.")
 	VT03006 = errorWithState("VT03006", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueCountOnRow, "column count doesn't match value count at row 1", "The number of columns you want to insert do not match the number of columns of your SELECT query.")
 	VT03007 = errorWithoutState("VT03007", vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified", "You need to explicitly add a keyspace qualifier.")
 	VT03008 = errorWithState("VT03008", vtrpcpb.Code_INVALID_ARGUMENT, CantUseOptionHere, "incorrect usage/placement of '%s'", "The given token is not usable in this situation. Please refer to the MySQL documentation to learn more about your token's syntax.")
