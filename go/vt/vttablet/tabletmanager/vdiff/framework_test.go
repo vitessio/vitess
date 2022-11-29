@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 	"vitess.io/vitess/go/vt/withddl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -49,6 +50,7 @@ var (
 	vstreamerEngine   *vstreamer.Engine
 	vreplEngine       *vreplication.Engine
 	env               *testenv.Env
+	tmc               = newFakeTMClient()
 	globalFBC         = &fakeBinlogClient{}
 	globalDBQueries   = make(chan string, 1000)
 	vdiffdb           = "vdiff_test"
@@ -70,6 +72,9 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vdiff.framework_test", "test")
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
+
+	tmclient.RegisterTabletManagerClientFactory("test", func() tmclient.TabletManagerClient { return tmc })
+	tmclienttest.SetProtocol("go.vt.vttablet.tabletmanager.vdiff.framework_test", "test")
 }
 
 func TestMain(m *testing.M) {
@@ -88,33 +93,22 @@ func TestMain(m *testing.M) {
 		vstreamerEngine.Open()
 		defer vstreamerEngine.Close()
 
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vdiffdb)); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
+		ddls := binlogplayer.CreateVReplicationTable()
+		ddls = append(ddls, binlogplayer.AlterVReplicationTable...)
+		ddls = append(ddls, withDDL.DDLs()...)
+		ddls = append(ddls, fmt.Sprintf("create database %s", vdiffdb))
 
-		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-
-		for _, query := range binlogplayer.AlterVReplicationTable {
-			env.Mysqld.ExecuteSuperQuery(context.Background(), query)
-		}
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), sqlCreateVDiffTable); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), sqlCreateVDiffTableTable); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
+		for _, ddl := range ddls {
+			if err := env.Mysqld.ExecuteSuperQuery(context.Background(), ddl); err != nil {
+				fmt.Fprintf(os.Stderr, "%v", err)
+			}
 		}
 
 		vreplEngine = vreplication.NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vdiffdb, nil)
 		vreplEngine.Open(context.Background())
 		defer vreplEngine.Close()
+
+		tmc.schema = testSchema
 
 		return m.Run()
 	}()
@@ -126,13 +120,13 @@ func resetBinlogClient() {
 }
 
 // shortCircuitTestAfterQuery is used to short circuit a test after a specific query is executed.
-// This can be used to end a vdiff, by returning an error from a the specified query, once the test
+// This can be used to end a vdiff, by returning an error from the specified query, once the test
 // has verified the necessary behavior.
-func shortCircuitTestAfterQuery(dbClient *binlogplayer.MockDBClient, query string) {
+func shortCircuitTestAfterQuery(query string, dbClient *binlogplayer.MockDBClient) {
 	dbClient.ExpectRequest(query, singleRowAffected, fmt.Errorf("Short circuiting test"))
-	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
 	dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = 'Short circuiting test'  where id = 1", singleRowAffected, nil)
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: error')", singleRowAffected, nil)
+	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
 }
 
 //--------------------------------------

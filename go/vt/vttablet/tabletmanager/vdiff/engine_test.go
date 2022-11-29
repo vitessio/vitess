@@ -71,6 +71,7 @@ func TestEngineOpen(t *testing.T) {
 			state: StartedState,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tablet := addTablet(100)
@@ -79,8 +80,6 @@ func TestEngineOpen(t *testing.T) {
 			resetBinlogClient()
 			dbClient := binlogplayer.NewMockDBClient(t)
 			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-			tmc := newFakeTMClient()
-			tmc.schema = testSchema
 			vde := &Engine{
 				controllers:             make(map[int64]*controller),
 				ts:                      env.TopoServ,
@@ -88,7 +87,6 @@ func TestEngineOpen(t *testing.T) {
 				dbClientFactoryFiltered: dbClientFactory,
 				dbClientFactoryDba:      dbClientFactory,
 				dbName:                  vdiffdb,
-				testingTMC:              tmc,
 			}
 			require.False(t, vde.IsOpen())
 
@@ -105,7 +103,7 @@ func TestEngineOpen(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|pending|%s|", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS),
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, tt.state, optionsJS),
 			), nil)
 
 			dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", wfName, vdiffdb), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -141,7 +139,7 @@ func TestEngineOpen(t *testing.T) {
 			), nil)
 
 			// Now let's short circuit the vdiff as we know that the open has worked as expected.
-			shortCircuitTestAfterQuery(dbClient, "update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'")
+			shortCircuitTestAfterQuery("update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'", dbClient)
 
 			vde.Open(context.Background(), vreplEngine)
 			defer vde.Close()
@@ -181,12 +179,13 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|pending|%s|%v", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS,
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS,
 					mysql.NewSQLError(mysql.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")),
 			),
 			expectRetry: true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tablet := addTablet(100)
@@ -195,8 +194,6 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			resetBinlogClient()
 			dbClient := binlogplayer.NewMockDBClient(t)
 			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-			tmc := newFakeTMClient()
-			tmc.schema = testSchema
 			vde := &Engine{
 				controllers:             make(map[int64]*controller),
 				ts:                      env.TopoServ,
@@ -204,7 +201,6 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				dbClientFactoryFiltered: dbClientFactory,
 				dbClientFactoryDba:      dbClientFactory,
 				dbName:                  vdiffdb,
-				testingTMC:              tmc,
 			}
 			require.False(t, vde.IsOpen())
 
@@ -215,6 +211,13 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			assert.Equal(t, 0, len(vde.controllers))
 
 			dbClient.ExpectRequest("select * from _vt.vdiff where state = 'error' and options->>'$.core_options.auto_retry' = 'true'", tt.retryQueryResults, nil)
+			// Right now this only supports a single row as with multiple rows we have
+			// multiple controllers in separate goroutines and the order is not
+			// guaranteed. If we want to support multiple rows here then we'll need to
+			// switch to using the queryhistory package. That will also require building
+			// out that package to support MockDBClient and its Expect* functions
+			// (query+results+err) as right now it only supports a real DBClient and
+			// checks for query execution.
 			for _, row := range tt.retryQueryResults.Rows {
 				id := row[0].ToString()
 				if tt.expectRetry {
@@ -223,7 +226,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 						vdiffTestCols,
 						vdiffTestColTypes,
 					),
-						fmt.Sprintf("1|%s|%s|%s|%s|%s|pending|%s|", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS),
+						fmt.Sprintf("%s|%s|%s|%s|%s|%s|pending|%s|", id, UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS),
 					), nil)
 					dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", wfName, vdiffdb), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"id|workflow|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type",
@@ -233,15 +236,15 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 					), nil)
 
 					// At this point we know that we kicked off the expected retry so we can short circit the vdiff.
-					shortCircuitTestAfterQuery(dbClient, fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = %s", id))
+					shortCircuitTestAfterQuery(fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = %s", id), dbClient)
 
 					expectedControllerCnt++
 				}
 			}
+
 			err := vde.retryVDiffs(vde.ctx)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedControllerCnt, len(vde.controllers))
-
 			dbClient.Wait()
 		})
 	}

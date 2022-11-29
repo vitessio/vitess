@@ -78,7 +78,7 @@ type controller struct {
 }
 
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
-	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions, tmc tmclient.TabletManagerClient) (*controller, error) {
+	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions) (*controller, error) {
 
 	log.Infof("VDiff controller initializing for %+v", row)
 	id, _ := row["id"].ToInt64()
@@ -91,7 +91,7 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		ts:              ts,
 		vde:             vde,
 		done:            make(chan struct{}),
-		tmc:             tmc,
+		tmc:             tmclient.NewTabletManagerClient(),
 		sources:         make(map[string]*migrationSource),
 		options:         options,
 	}
@@ -293,10 +293,10 @@ func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
 		}
 		defer dbClient.Close()
 
-		insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", saveErr))
 		if err := ct.updateState(dbClient, ErrorState, saveErr); err != nil {
 			return err
 		}
+		insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", saveErr))
 
 		return nil
 	}
