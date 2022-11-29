@@ -149,8 +149,7 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 }
 
 func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*http.Response, error) {
-	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?s=%t", tablet.HTTPPort, checkAPIPath, skipRequestHeartbeats))
-	return resp, err
+	return httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?s=%t", tablet.HTTPPort, checkAPIPath, skipRequestHeartbeats))
 }
 
 func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
@@ -161,8 +160,9 @@ func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
 	// Let's warm it up.
 	resp, err := throttleCheck(primaryTablet, false)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	time.Sleep(time.Second)
-	assert.NoError(t, err)
 	return resp.StatusCode
 }
 
@@ -175,21 +175,23 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 	for {
 		resp, err := throttleCheck(tablet, true)
 		require.NoError(t, err)
-		require.NotNil(t, resp)
 
 		if wantCode == resp.StatusCode {
 			// Wait for any cached check values to be cleared and the new
 			// status value to be in effect everywhere before returning.
+			resp.Body.Close()
 			return
 		}
 		select {
 		case <-ctx.Done():
 			b, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
+			resp.Body.Close()
 
 			assert.Equal(t, wantCode, resp.StatusCode, "body: %v", string(b))
 			return
 		default:
+			resp.Body.Close()
 			time.Sleep(time.Second)
 		}
 	}
@@ -213,29 +215,34 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	t.Run("expect OK once heartbeats lease renewed", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		resp, err := throttleCheck(primaryTablet, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("expect OK once heartbeats lease renewed, still", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		resp, err := throttleCheck(primaryTablet, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("validate throttled-apps", func(t *testing.T) {
 		resp, body, err := throttledApps(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, body, "always-throttled-app")
 	})
 	t.Run("validate check-self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("validate check-self, again", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 }
@@ -251,18 +258,21 @@ func TestLag(t *testing.T) {
 		time.Sleep(2 * throttlerThreshold)
 
 		resp, err := throttleCheck(primaryTablet, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
 	t.Run("primary self-check should still be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		// self (on primary) is unaffected by replication lag
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("replica self-check should show error", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
 	t.Run("starting replication", func(t *testing.T) {
@@ -274,13 +284,15 @@ func TestLag(t *testing.T) {
 	})
 	t.Run("primary self-check should be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		// self (on primary) is unaffected by replication lag
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("replica self-check should be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 }
