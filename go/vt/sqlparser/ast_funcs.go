@@ -1895,6 +1895,20 @@ func (columnFormat ColumnFormat) ToString() string {
 	}
 }
 
+// ToString returns the TxAccessMode type as a string
+func (ty TxAccessMode) ToString() string {
+	switch ty {
+	case WithConsistentSnapshot:
+		return WithConsistentSnapshotStr
+	case ReadWrite:
+		return ReadWriteStr
+	case ReadOnly:
+		return ReadOnlyStr
+	default:
+		return "Unknown Transaction Access Mode"
+	}
+}
+
 // CompliantName is used to get the name of the bind variable to use for this column name
 func (node *ColName) CompliantName() string {
 	if !node.Qualifier.IsEmpty() {

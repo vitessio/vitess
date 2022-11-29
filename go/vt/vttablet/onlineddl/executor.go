@@ -4507,7 +4507,7 @@ func (e *Executor) SubmitMigration(
 				for _, pendingUUID := range pendingUUIDs {
 					pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
 					if err != nil {
-						return err
+						return vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
 					}
 					if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
 						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
@@ -4520,7 +4520,7 @@ func (e *Executor) SubmitMigration(
 			return err
 		}
 		if err := validateSingleton(); err != nil {
-			return nil, err
+			return nil, vterrors.Wrapf(err, "SubmitMigration %v", onlineDDL.UUID)
 		}
 		// mutex aquired and released within validateSingleton(). We are now mutex free
 	} else {
@@ -4537,6 +4537,9 @@ func (e *Executor) SubmitMigration(
 	// The query was a INSERT IGNORE because we allow a recurring submission of same migration.
 	// However, let's validate that the duplication (identified via UUID) was intentional.
 	storedMigration, _, err := e.readMigration(ctx, onlineDDL.UUID)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "unexpected error reading written migration %v", onlineDDL.UUID)
+	}
 	if storedMigration.MigrationContext != onlineDDL.MigrationContext {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "migration rejected: found migration %s with different context: %s than submmitted migration's context: %s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.MigrationContext)
 	}

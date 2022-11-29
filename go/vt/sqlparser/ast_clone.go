@@ -409,6 +409,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowOther(in)
 	case *ShowThrottledApps:
 		return CloneRefOfShowThrottledApps(in)
+	case *ShowThrottlerStatus:
+		return CloneRefOfShowThrottlerStatus(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Std:
@@ -720,6 +722,7 @@ func CloneRefOfBegin(n *Begin) *Begin {
 		return nil
 	}
 	out := *n
+	out.TxAccessModes = CloneSliceOfTxAccessMode(n.TxAccessModes)
 	return &out
 }
 
@@ -2552,6 +2555,16 @@ func CloneRefOfShowThrottledApps(n *ShowThrottledApps) *ShowThrottledApps {
 	return &out
 }
 
+// CloneRefOfShowThrottlerStatus creates a deep clone of the input.
+func CloneRefOfShowThrottlerStatus(n *ShowThrottlerStatus) *ShowThrottlerStatus {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneComments(n.Comments)
+	return &out
+}
+
 // CloneRefOfStarExpr creates a deep clone of the input.
 func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	if n == nil {
@@ -3783,6 +3796,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfShowMigrationLogs(in)
 	case *ShowThrottledApps:
 		return CloneRefOfShowThrottledApps(in)
+	case *ShowThrottlerStatus:
+		return CloneRefOfShowThrottlerStatus(in)
 	case *Stream:
 		return CloneRefOfStream(in)
 	case *TruncateTable:
@@ -3877,6 +3892,16 @@ func CloneSliceOfIdentifierCI(n []IdentifierCI) []IdentifierCI {
 	for i, x := range n {
 		res[i] = CloneIdentifierCI(x)
 	}
+	return res
+}
+
+// CloneSliceOfTxAccessMode creates a deep clone of the input.
+func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
+	if n == nil {
+		return nil
+	}
+	res := make([]TxAccessMode, len(n))
+	copy(res, n)
 	return res
 }
 

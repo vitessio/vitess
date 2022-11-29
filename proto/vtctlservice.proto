@@ -130,6 +130,8 @@ service Vtctld {
   // GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
   // cells.
   rpc GetSrvKeyspaces (vtctldata.GetSrvKeyspacesRequest) returns (vtctldata.GetSrvKeyspacesResponse) {};
+  // UpdateThrottlerConfig updates the tablet throttler configuration
+  rpc UpdateThrottlerConfig(vtctldata.UpdateThrottlerConfigRequest) returns (vtctldata.UpdateThrottlerConfigResponse) {};
   // GetSrvVSchema returns the SrvVSchema for a cell.
   rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
   // GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,

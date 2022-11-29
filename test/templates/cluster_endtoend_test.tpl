@@ -48,12 +48,16 @@ jobs:
             - 'test.go'
             - 'Makefile'
             - 'build.env'
-            - 'go.[sumod]'
+            - 'go.sum'
+            - 'go.mod'
             - 'proto/*.proto'
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/{{.FileName}}'
+            {{- if or (contains .Name "onlineddl") (contains .Name "schemadiff") }}
+            - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
+            {{- end}}
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

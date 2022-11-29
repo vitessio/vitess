@@ -32,7 +32,7 @@ trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
 
 # All endtoend Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
 packages_with_tests=$(echo "$packages_with_tests" |  grep -vE "go/test/endtoend" | cut -d" " -f1)
 
 # endtoend tests should be in a directory called endtoend

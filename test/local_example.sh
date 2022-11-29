@@ -45,7 +45,7 @@ done;
 
 ./202_move_tables.sh
 sleep 3 # required for now
-
+exit
 ./203_switch_reads.sh
 
 ./204_switch_writes.sh
