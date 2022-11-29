@@ -1184,6 +1184,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfShowThrottledApps(a, b)
+	case *ShowThrottlerStatus:
+		b, ok := inB.(*ShowThrottlerStatus)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottlerStatus(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -1730,7 +1736,7 @@ func EqualsRefOfBegin(a, b *Begin) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return true
+	return EqualsSliceOfTxAccessMode(a.TxAccessModes, b.TxAccessModes)
 }
 
 // EqualsRefOfBetweenExpr does deep equals between the two objects.
@@ -3848,6 +3854,17 @@ func EqualsRefOfShowOther(a, b *ShowOther) bool {
 
 // EqualsRefOfShowThrottledApps does deep equals between the two objects.
 func EqualsRefOfShowThrottledApps(a, b *ShowThrottledApps) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments)
+}
+
+// EqualsRefOfShowThrottlerStatus does deep equals between the two objects.
+func EqualsRefOfShowThrottlerStatus(a, b *ShowThrottlerStatus) bool {
 	if a == b {
 		return true
 	}
@@ -6242,6 +6259,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfShowThrottledApps(a, b)
+	case *ShowThrottlerStatus:
+		b, ok := inB.(*ShowThrottlerStatus)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottlerStatus(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {
@@ -6386,6 +6409,19 @@ func EqualsSliceOfIdentifierCI(a, b []IdentifierCI) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsIdentifierCI(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfTxAccessMode does deep equals between the two objects.
+func EqualsSliceOfTxAccessMode(a, b []TxAccessMode) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
 			return false
 		}
 	}

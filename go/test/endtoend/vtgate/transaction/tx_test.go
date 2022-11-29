@@ -174,3 +174,56 @@ func TestTransactionIsolation(t *testing.T) {
 	utils.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("foo")]]`)
 	utils.Exec(t, conn1, "rollback")
 }
+
+func TestTransactionAccessModes(t *testing.T) {
+	closer := start(t)
+	defer closer()
+
+	ctx := context.Background()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// start a transaction with read-only characteristic.
+	utils.Exec(t, conn, "start transaction read only")
+	_, err = utils.ExecAllowError(t, conn, "insert into test(id, msg) values (42,'foo')")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot execute statement in a READ ONLY transaction")
+	utils.Exec(t, conn, "rollback")
+
+	// trying autocommit, this should pass as transaction characteristics are limited to single transaction.
+	utils.Exec(t, conn, "insert into test(id, msg) values (42,'foo')")
+
+	// target replica
+	utils.Exec(t, conn, "use `ks@replica`")
+	// start a transaction with read-only characteristic.
+	utils.Exec(t, conn, "start transaction read only")
+	utils.Exec(t, conn, "select * from test")
+
+	// start a transaction with read-write characteristic. This should fail
+	utils.Exec(t, conn, "start transaction read write")
+	_, err = utils.ExecAllowError(t, conn, "select connection_id()")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot start read write transaction on a read only tablet")
+	utils.Exec(t, conn, "rollback")
+}
+
+func start(t *testing.T) func() {
+	deleteAll := func() {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		tables := []string{"test", "twopc_user"}
+		for _, table := range tables {
+			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+		}
+		conn.Close()
+	}
+
+	deleteAll()
+
+	return func() {
+		deleteAll()
+		cluster.PanicHandler(t)
+	}
+}

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -41,38 +43,25 @@ var (
 // assertSQLError makes sure we get the right error.
 func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string, query string) {
 	t.Helper()
+	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 
-	if err == nil {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
-	}
 	serr, ok := err.(*mysql.SQLError)
-	if !ok {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
-	}
-	if serr.Num != code {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
-	}
-	if serr.State != sqlState {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
-	}
-	if subtext != "" && !strings.Contains(serr.Message, subtext) {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
-	}
-	if serr.Query != query {
-		t.Fatalf("was expecting SQLError %v / %v / %v with Query '%v' but got query '%v'", code, sqlState, subtext, query, serr.Query)
-	}
+	require.True(t, ok, "was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
+	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
+	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
+	require.True(t, subtext == "" || strings.Contains(serr.Message, subtext), "was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
+	require.Equal(t, query, serr.Query, "was expecting SQLError %v / %v / %v with Query '%v' but got query '%v'", code, sqlState, subtext, query, serr.Query)
+
 }
 
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, bool) {
 	dir, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
-	}
+	require.NoError(t, err, "vtenv.VtMysqlRoot failed: %v", err)
+
 	name, err := binaryPath(dir, "mysql")
-	if err != nil {
-		t.Fatalf("binaryPath failed: %v", err)
-	}
+	require.NoError(t, err, "binaryPath failed: %v", err)
+
 	// The args contain '-v' 3 times, to switch to very verbose output.
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)

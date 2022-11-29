@@ -242,6 +242,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildShowMigrationLogsPlan(query, vschema, enableOnlineDDL)
 	case *sqlparser.ShowThrottledApps:
 		return buildShowThrottledAppsPlan(query, vschema)
+	case *sqlparser.ShowThrottlerStatus:
+		return buildShowThrottlerStatusPlan(query, vschema)
 	case *sqlparser.AlterVschema:
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:

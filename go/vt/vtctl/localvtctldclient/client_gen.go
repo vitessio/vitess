@@ -547,6 +547,11 @@ func (client *localVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctl
 	return client.s.UpdateCellsAlias(ctx, in)
 }
 
+// UpdateThrottlerConfig is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) UpdateThrottlerConfig(ctx context.Context, in *vtctldatapb.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldatapb.UpdateThrottlerConfigResponse, error) {
+	return client.s.UpdateThrottlerConfig(ctx, in)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	return client.s.Validate(ctx, in)

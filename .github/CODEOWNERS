@@ -1,7 +1,10 @@
 * @deepthi
 bootstrap.sh @ajm188 @deepthi @frouioui @vmg
+go.mod @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
+go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
+/.github/ @deepthi @mattlord @rohit-nayak-ps @frouioui
 /.github/ISSUE_TEMPLATE/ @deepthi @frouioui @mattlord
-/.github/workflows/ @deepthi @frouioui @mattlord
+/.github/workflows/ @deepthi @frouioui @mattlord @rohit-nayak-ps
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
 /doc/ @deepthi @frouioui @GuptaManan100 @rsajwani
 /docker/ @deepthi @derekperkins @dkhenry @mattlord
@@ -33,10 +36,10 @@ bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 /go/vt/schema @mattlord @shlomi-noach
 /go/vt/servenv @deepthi @ajm188
 /go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
-/go/vt/srvtopo @deepthi @rafael @mattlord
+/go/vt/srvtopo @deepthi @mattlord
 /go/vt/sysvars @harshit-gangal @systay
-/go/vt/topo @deepthi @rafael @mattlord @rsajwani
-/go/vt/topotools @deepthi @rafael @mattlord @rsajwani
+/go/vt/topo @deepthi @mattlord @rsajwani
+/go/vt/topotools @deepthi @mattlord @rsajwani
 /go/vt/vitessdriver @harshit-gangal
 /go/vt/vtadmin @ajm188 @notfelineit @rohit-nayak-ps
 /go/vt/vtctl @ajm188 @deepthi @rohit-nayak-ps
@@ -68,7 +71,7 @@ bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 /proto/vtadmin.proto @ajm188 @notfelineit
 /proto/vtctldata.proto @ajm188 @notfelineit
 /proto/vtctlservice.proto @ajm188 @notfelineit
-/test/ @GuptaManan100 @frouioui @rohit-nayak-ps
+/test/ @GuptaManan100 @frouioui @rohit-nayak-ps @deepthi @mattlord @harshit-gangal
 /tools/ @frouioui @rohit-nayak-ps
 /web/vtadmin @ajm188 @notfelineit
 /web/vtctld2 @notfelineit @rohit-nayak-ps
