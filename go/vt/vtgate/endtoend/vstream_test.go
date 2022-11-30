@@ -212,8 +212,8 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation completed */) + 1 /* fully copy operation completed */
 	expectedCompletedEvents := []string{
-		`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
 		`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
+		`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
 		`type:COPY_COMPLETED`,
 	}
 	require.NotNil(t, reader)
@@ -234,8 +234,11 @@ func TestVStreamCopyBasic(t *testing.T) {
 			printEvents(evs) // for debugging ci failures
 
 			if len(evs) == numExpectedEvents {
-				sort.Slice(completedEvs, func(i, j int) bool {
-					return completedEvs[i].GetShard() > completedEvs[j].GetShard()
+				// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
+				// On the other hand, the last event should always be a fully COPY_COMPLETED event.
+				// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
+				sort.Slice(completedEvs[:len(completedEvs)-1], func(i, j int) bool {
+					return completedEvs[i].GetShard() < completedEvs[j].GetShard()
 				})
 				for i, ev := range completedEvs {
 					require.Regexp(t, expectedCompletedEvents[i], ev.String())
