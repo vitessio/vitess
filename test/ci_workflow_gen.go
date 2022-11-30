@@ -126,11 +126,11 @@ var (
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vreplication_basic",
+		"vreplication_v2",
 		"vtorc",
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
-		"vreplication_v2",
 	}
 
 	clusterSelfHostedList       = []string{}
