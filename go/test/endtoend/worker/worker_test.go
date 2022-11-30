@@ -125,6 +125,9 @@ func TestWebInterface(t *testing.T) {
 	startTime := time.Now()
 	for {
 		resp, err := http.Get(baseURL + "/status")
+		if err == nil {
+			resp.Body.Close()
+		}
 		if err != nil && !time.Now().After(startTime.Add(10*time.Second)) {
 			time.Sleep(10 * time.Millisecond)
 			continue
@@ -142,30 +145,34 @@ func TestWebInterface(t *testing.T) {
 			return http.ErrUseLastResponse
 		}
 		resp, err := http.Post(baseURL+"/Debugging/Ping", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
-		assert.Nil(t, err)
+		require.NoError(t, err)
+		resp.Body.Close()
 		assert.Equal(t, 307, resp.StatusCode)
 
 		// Wait for the Ping command to finish.
 		pollForVars(t, "done")
 		// Verify that the command logged something and it's available at /status.
 		resp, err = http.Get(baseURL + "/status")
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		if resp.StatusCode == 200 {
 			respByte, _ := io.ReadAll(resp.Body)
 			respStr := string(respByte)
 			assert.Contains(t, respStr, "Ping command was called with message: 'pong'", fmt.Sprintf("Command did not log output to /status: %s", respStr))
 		}
+		resp.Body.Close()
 
 		// Reset the job.
-		_, err = http.Get(baseURL + "/reset")
-		assert.Nil(t, err)
+		resp, err = http.Get(baseURL + "/reset")
+		require.NoError(t, err)
+		resp.Body.Close()
 		resp, err = http.Get(baseURL + "/status")
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		if resp.StatusCode == 200 {
 			respByte, _ := io.ReadAll(resp.Body)
 			statusAfterReset := string(respByte)
 			assert.Contains(t, statusAfterReset, "This worker is idle.", "/status does not indicate that the reset was successful")
 		}
+		resp.Body.Close()
 		i++
 	}
 

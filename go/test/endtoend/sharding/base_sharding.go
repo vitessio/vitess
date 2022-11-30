@@ -92,7 +92,8 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
 	tabletURL := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
 	resp, err := http.Get(tabletURL)
-	require.Nil(t, err)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	assert.Equal(t, resp.StatusCode, 200)
 }
 

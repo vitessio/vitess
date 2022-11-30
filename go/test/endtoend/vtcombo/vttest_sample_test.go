@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	mysql "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -123,12 +123,13 @@ func TestMain(m *testing.M) {
 func TestStandalone(t *testing.T) {
 	// validate debug vars
 	resp, err := http.Get(fmt.Sprintf("http://%s/debug/vars", vtctldAddr))
-	require.Nil(t, err)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.Equal(t, 200, resp.StatusCode)
 	resultMap := make(map[string]any)
 	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	cmd := resultMap["cmdline"]
 	require.NotNil(t, cmd, "cmdline is not available in debug vars")
 	tmp, _ := cmd.([]any)
@@ -136,7 +137,7 @@ func TestStandalone(t *testing.T) {
 
 	ctx := context.Background()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	cfg := mysql.NewConfig()
@@ -155,9 +156,9 @@ func TestStandalone(t *testing.T) {
 	assertTabletsPresent(t)
 
 	err = localCluster.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = localCluster.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assertInsertedRowsExist(ctx, t, conn, idStart, rowCount)
 	assertTabletsPresent(t)
@@ -169,7 +170,7 @@ func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn
 		"id_start": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(idStart), 10))},
 	}
 	res, err := cur.Execute(ctx, "select * from test_table where id >= :id_start", bindVariables)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, rowCount, len(res.Rows))
 
@@ -178,7 +179,7 @@ func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn
 		"id_start": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(idStart), 10))},
 	}
 	res, err = cur.Execute(ctx, "select * from test_table where id = :id_start", bindVariables)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Rows))
 	assert.Equal(t, "VARCHAR(\"test1000\")", res.Rows[0][1].String())
 }
@@ -199,7 +200,7 @@ func assertRouting(ctx context.Context, t *testing.T, db *sql.DB) {
 func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn) {
 	cur := conn.Session(ks1+":80-@primary", nil)
 	_, err := cur.Execute(ctx, "begin", nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	i := 0x810000000000000
 	bindVariables := map[string]*querypb.BindVariable{
@@ -209,10 +210,10 @@ func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGa
 	}
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
 	_, err = cur.Execute(ctx, query, bindVariables)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = cur.Execute(ctx, "commit", nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {
@@ -220,7 +221,7 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
 	_, err := cur.Execute(ctx, "begin", nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	for i := idStart; i < idStart+rowCount; i++ {
 		bindVariables := map[string]*querypb.BindVariable{
@@ -229,11 +230,11 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 			"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 		}
 		_, err = cur.Execute(ctx, query, bindVariables)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	_, err = cur.Execute(ctx, "commit", nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func assertTabletsPresent(t *testing.T) {
@@ -242,7 +243,7 @@ func assertTabletsPresent(t *testing.T) {
 	log.Infof("Running vtctlclient with command: %v", tmpCmd.Args)
 
 	output, err := tmpCmd.CombinedOutput()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	numPrimary, numReplica, numRdonly, numDash80, num80Dash, numRouted := 0, 0, 0, 0, 0, 0
 	lines := strings.Split(string(output), "\n")

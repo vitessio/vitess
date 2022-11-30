@@ -18,19 +18,17 @@ linters:
   disable-all: true
   enable:
     # Defaults
-    - deadcode
     - errcheck
     - govet
     - ineffassign
-    - structcheck
     - typecheck
-    - varcheck
     - staticcheck
     - gosimple
 
     # Extras
     - gofmt
     - goimports
+    - bodyclose
 
     # revive is a replacement for golint, but we do not run it in CI for now.
     # This is only enabled as a post-commit hook
