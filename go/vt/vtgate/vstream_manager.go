@@ -555,8 +555,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					sendevents = nil
 				case binlogdatapb.VEventType_COPY_COMPLETED:
 					sendevents = append(sendevents, event)
-					if fullyCopied := vs.generateFullyCopyCompleted(ctx, sgtid, event); fullyCopied != nil {
-						sendevents = append(sendevents, fullyCopied)
+					if fullyCopied, doneEvent := vs.isCopyFullyCompleted(ctx, sgtid, event); fullyCopied {
+						sendevents = append(sendevents, doneEvent)
 					}
 					eventss = append(eventss, sendevents)
 
@@ -696,9 +696,10 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 	return nil
 }
 
-// generateFullyCopyCompleted returns a new copy_completed event only if all stream has received a copy_completed event.
+// isCopyFullyCompleted returns true if all stream has received a copy_completed event.
+// If true, it will also return a new copy_completed event that needs to be sent.
 // This new event represents the completion of all the copy operations.
-func (vs *vstream) generateFullyCopyCompleted(ctx context.Context, sgtid *binlogdatapb.ShardGtid, event *binlogdatapb.VEvent) *binlogdatapb.VEvent {
+func (vs *vstream) isCopyFullyCompleted(ctx context.Context, sgtid *binlogdatapb.ShardGtid, event *binlogdatapb.VEvent) (bool, *binlogdatapb.VEvent) {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
@@ -706,10 +707,10 @@ func (vs *vstream) generateFullyCopyCompleted(ctx context.Context, sgtid *binlog
 
 	for _, shard := range vs.vgtid.ShardGtids {
 		if _, ok := vs.copyCompletedShard[fmt.Sprintf("%s/%s", shard.Keyspace, shard.Shard)]; !ok {
-			return nil
+			return false, nil
 		}
 	}
-	return &binlogdatapb.VEvent{
+	return true, &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_COPY_COMPLETED,
 	}
 }
