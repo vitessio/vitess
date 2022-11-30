@@ -303,7 +303,7 @@ func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
 
 	for {
 		if err := save(); err != nil {
-			log.Errorf("Failed to persist vdiff error state: %v. Will retry in %s", err, retryDelay.String())
+			log.Warningf("Failed to persist vdiff error state: %v. Will retry in %s", err, retryDelay.String())
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("engine is shutting down")

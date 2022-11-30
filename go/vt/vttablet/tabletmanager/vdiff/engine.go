@@ -113,7 +113,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 func (vde *Engine) openLocked(ctx context.Context) error {
 	// This should never happen
 	if len(vde.controllers) > 0 {
-		log.Errorf("VDiff Engine invalid state detected: %d controllers existed when opening; resetting state", len(vde.controllers))
+		log.Warningf("VDiff Engine invalid state detected: %d controllers existed when opening; resetting state", len(vde.controllers))
 		vde.resetControllers()
 	}
 
