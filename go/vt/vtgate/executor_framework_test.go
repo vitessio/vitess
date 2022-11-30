@@ -179,7 +179,7 @@ var executorVSchema = `
 			}
     	},
 		"cfc": {
-          "type": "cfc"
+			"type": "cfc"
 		}
 	},
 	"tables": {
