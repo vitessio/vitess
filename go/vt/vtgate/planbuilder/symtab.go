@@ -454,14 +454,14 @@ func BuildColName(rcs []*resultColumn, index int) (*sqlparser.ColName, error) {
 // If a symbol cannot be resolved or if the expression contains
 // a subquery, an error is returned.
 func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
+	return sqlparser.Walk(func(currNode sqlparser.SQLNode) (kontinue bool, err error) {
+		switch currNode := currNode.(type) {
 		case *sqlparser.ColName:
-			if _, _, err := st.Find(node); err != nil {
+			if _, _, err := st.Find(currNode); err != nil {
 				return false, err
 			}
 		case *sqlparser.Subquery:
-			return false, vterrors.VT12001("subqueries disallowed in GROUP or ORDER BY")
+			return false, vterrors.VT12001(fmt.Sprintf("subqueries disallowed in %T", node))
 		}
 		return true, nil
 	}, node)
