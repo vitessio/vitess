@@ -295,6 +295,10 @@ enum VEventType {
   VERSION = 17;
   LASTPK = 18;
   SAVEPOINT = 19;
+  // COPY_COMPLETED is sent when VTGate's VStream copy operation is done.
+  // If a client experiences some disruptions before receiving the event,
+  // the client should restart the copy operation.
+  COPY_COMPLETED = 20;
 }
 
 // RowChange represents one row change.

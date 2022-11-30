@@ -413,7 +413,9 @@ func (uvs *uvstreamer) Stream() error {
 			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}
-		uvs.sendTestEvent("Copy Done")
+		if err := uvs.allCopyComplete(); err != nil {
+			return err
+		}
 	}
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos),
 		uvs.filter, uvs.getVSchema(), uvs.send, "replicate", uvs.vse)
@@ -454,6 +456,17 @@ func (uvs *uvstreamer) getVSchema() *localVSchema {
 
 func (uvs *uvstreamer) setCopyState(tableName string, qr *querypb.QueryResult) {
 	uvs.plans[tableName].tablePK.Lastpk = qr
+}
+
+func (uvs *uvstreamer) allCopyComplete() error {
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_COPY_COMPLETED,
+	}
+
+	if err := uvs.send([]*binlogdatapb.VEvent{ev}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // dummy event sent only in test mode
