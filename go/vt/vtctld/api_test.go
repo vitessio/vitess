@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -464,29 +466,19 @@ func TestAPI(t *testing.T) {
 			switch in.method {
 			case "GET":
 				resp, err = http.Get(server.URL + apiPrefix + in.path)
+				require.NoError(t, err)
+				defer resp.Body.Close()
 			case "POST":
 				resp, err = http.Post(server.URL+apiPrefix+in.path, "application/json", strings.NewReader(in.body))
+				require.NoError(t, err)
+				defer resp.Body.Close()
 			default:
 				t.Fatalf("[%v] unknown method: %v", in.path, in.method)
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("[%v] http error: %v", in.path, err)
-				return
 			}
 
 			body, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-
-			if err != nil {
-				t.Fatalf("[%v] io.ReadAll(resp.Body) error: %v", in.path, err)
-				return
-			}
-
-			if resp.StatusCode != in.statusCode {
-				t.Fatalf("[%v] got unexpected status code %d, want %d", in.path, resp.StatusCode, in.statusCode)
-			}
+			require.NoError(t, err)
+			require.Equal(t, in.statusCode, resp.StatusCode)
 
 			got := compactJSON(body)
 			want := compactJSON([]byte(in.want))

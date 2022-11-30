@@ -19,7 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -726,7 +726,8 @@ func MakeAPICall(t *testing.T, url string) (status int, response string) {
 	t.Helper()
 	res, err := http.Get(url)
 	require.NoError(t, err)
-	bodyBytes, err := ioutil.ReadAll(res.Body)
+	defer res.Body.Close()
+	bodyBytes, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 	body := string(bodyBytes)
 	return res.StatusCode, body
@@ -799,7 +800,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
 
-	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=semi_sync"))
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
 	// create topo server connection
@@ -877,7 +878,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	}
 
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInfo.ClusterInstance.VtctldProcess.GrpcPort, clusterInfo.ClusterInstance.TmpDirectory)
-	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceSemiSyncName, fmt.Sprintf("--durability-policy=semi_sync"))
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceSemiSyncName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 }
 

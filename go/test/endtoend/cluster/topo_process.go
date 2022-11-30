@@ -299,10 +299,8 @@ func (topo *TopoProcess) IsHealthy() bool {
 	if err != nil {
 		return false
 	}
-	if resp.StatusCode == 200 {
-		return true
-	}
-	return false
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 func (topo *TopoProcess) removeTopoDirectories(Cell string) {
@@ -321,11 +319,17 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 	if command == "mkdir" {
 		req, _ := http.NewRequest("PUT", url, payload)
 		req.Header.Add("content-type", "application/json")
-		_, err = http.DefaultClient.Do(req)
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+		}
 		return err
 	} else if command == "rmdir" {
 		req, _ := http.NewRequest("DELETE", url+"?dir=true", payload)
-		_, err = http.DefaultClient.Do(req)
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+		}
 		return err
 	} else {
 		return nil
