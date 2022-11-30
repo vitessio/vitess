@@ -234,7 +234,9 @@ func TestVStreamCopyBasic(t *testing.T) {
 			printEvents(evs) // for debugging ci failures
 
 			if len(evs) == numExpectedEvents {
-				sort.Sort(VEventShardSorter(completedEvs))
+				sort.Slice(completedEvs, func(i, j int) bool {
+					return completedEvs[i].GetShard() > completedEvs[j].GetShard()
+				})
 				for i, ev := range completedEvs {
 					require.Regexp(t, expectedCompletedEvents[i], ev.String())
 				}
@@ -557,18 +559,4 @@ func (v VEventSorter) Less(i, j int) bool {
 		return v[i].Timestamp < v[j].Timestamp
 	}
 	return valI < valJ
-}
-
-// Sort the VEvents by a shard. Note that fully copy completed event does not have
-// a shard and the value will be empty.
-type VEventShardSorter []*binlogdatapb.VEvent
-
-func (v VEventShardSorter) Len() int {
-	return len(v)
-}
-func (v VEventShardSorter) Swap(i, j int) {
-	v[i], v[j] = v[j], v[i]
-}
-func (v VEventShardSorter) Less(i, j int) bool {
-	return v[i].GetShard() > v[j].GetShard()
 }
