@@ -619,9 +619,11 @@ type TestStats struct {
 func sendStats(values url.Values) {
 	if *remoteStats != "" {
 		log.Printf("Sending remote stats to %v", *remoteStats)
-		if _, err := http.PostForm(*remoteStats, values); err != nil {
+		resp, err := http.PostForm(*remoteStats, values)
+		if err != nil {
 			log.Printf("Can't send remote stats: %v", err)
 		}
+		defer resp.Body.Close()
 	}
 }
 

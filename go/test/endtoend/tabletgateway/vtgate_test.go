@@ -45,7 +45,7 @@ func TestVtgateHealthCheck(t *testing.T) {
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	qr := utils.Exec(t, conn, "show vitess_tablets")
@@ -59,7 +59,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
@@ -72,10 +72,12 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 func verifyVtgateVariables(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.Equal(t, 200, resp.StatusCode, "Vtgate api url response not found")
 
 	resultMap := make(map[string]any)
-	respByte, _ := io.ReadAll(resp.Body)
+	respByte, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
 	assert.Contains(t, resultMap, "VtgateVSchemaCounts", "Vschema count should be present in variables")
@@ -203,7 +205,7 @@ func TestReplicaTransactions(t *testing.T) {
 	// been restarted and the session lost
 	replicaTablet.VttabletProcess.ServingStatus = "SERVING"
 	err = replicaTablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
 	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
 	utils.AssertContainsError(t, readConn, fetchAllCustomers, "not found")

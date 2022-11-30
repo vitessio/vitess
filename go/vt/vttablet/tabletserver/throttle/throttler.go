@@ -491,6 +491,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 			mySQLThrottleMetric.Err = err
 			return mySQLThrottleMetric
 		}
+		defer resp.Body.Close()
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
 			mySQLThrottleMetric.Err = err
