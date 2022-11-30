@@ -456,13 +456,6 @@ func printShardPositions(vc *VitessCluster, ksShards []string) {
 	}
 }
 
-func clearRoutingRules(t *testing.T, vc *VitessCluster) error {
-	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "--", "--rules={}"); err != nil {
-		return err
-	}
-	return nil
-}
-
 func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	var output string
 	var err error
@@ -567,16 +560,32 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
 	require.NoError(t, err)
 
-	// Verify that there's no delete marked rows and we reset the auto-inc value
-	res, err := tablet.QueryTablet("select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'",
-		"", false)
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.Equal(t, 1, len(res.Rows))
-	dataFree, err := res.Rows[0][0].ToInt64()
-	require.NoError(t, err)
-	require.Equal(t, int64(0), dataFree, "data_free should be 0")
-	autoIncrement, err := res.Rows[0][1].ToInt64()
-	require.NoError(t, err)
-	require.Equal(t, int64(1), autoIncrement, "auto_increment should be 1")
+	// Verify that there's no delete marked rows and we reset the auto-inc value.
+	// MySQL doesn't always immediately update information_schema so we wait.
+	tmr := time.NewTimer(defaultTimeout)
+	defer tmr.Stop()
+	query := "select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'"
+	var dataFree, autoIncrement int64
+	for {
+		res, err := tablet.QueryTablet(query, "", false)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.Equal(t, 1, len(res.Rows))
+		dataFree, err = res.Rows[0][0].ToInt64()
+		require.NoError(t, err)
+		autoIncrement, err = res.Rows[0][1].ToInt64()
+		require.NoError(t, err)
+		if dataFree == 0 && autoIncrement == 1 {
+			return
+		}
+
+		select {
+		case <-tmr.C:
+			require.FailNowf(t, "timed out waiting for copy_state table to be optimized",
+				"data_free should be 0 and auto_increment should be 1, last seen values were %d and %d respectively",
+				dataFree, autoIncrement)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }
