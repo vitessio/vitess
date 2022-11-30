@@ -177,7 +177,10 @@ var executorVSchema = `
 			"params": {
 				"region_bytes": "1"
 			}
-    	}
+    	},
+		"cfc": {
+			"type": "cfc"
+		}
 	},
 	"tables": {
 		"user": {
@@ -371,6 +374,20 @@ var executorVSchema = `
 				{
 					"columns": ["cola","colb"],
 					"name": "regional_vdx"
+				}
+			]
+    	},
+		"tbl_cfc": {
+			"column_vindexes": [
+                {
+                    "column": "c1",
+                    "name": "cfc"
+                }
+			],
+			"columns": [
+				{
+					"name": "c2",
+					"type": "VARCHAR"
 				}
 			]
     	}
