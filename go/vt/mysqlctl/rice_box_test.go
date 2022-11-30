@@ -18,7 +18,6 @@ package mysqlctl
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +54,7 @@ func TestMySQLCtlRiceBox(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, riceContents)
 
-			diskBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", mySQLCtlRiceBoxLocation, fileName))
+			diskBytes, err := os.ReadFile(fmt.Sprintf("%s/%s", mySQLCtlRiceBoxLocation, fileName))
 			diskContents := string(diskBytes)
 			require.NoError(t, err)
 			require.Equal(t, riceContents, diskContents)

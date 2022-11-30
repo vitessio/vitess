@@ -646,7 +646,7 @@ func writeInitDBFile() {
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDbFile = path.Join(ClusterInstance.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + GetPasswordUpdateSQL(ClusterInstance) + `
+	sql = sql + GetPasswordUpdateSQL() + `
 # connecting through a port requires 127.0.0.1
 # --host=localhost will connect through socket
 CREATE USER 'vt_dba'@'127.0.0.1' IDENTIFIED BY 'VtDbaPass';
@@ -695,45 +695,17 @@ func WriteDbCredentialToTmp(tmpDir string) string {
 }
 
 // GetPasswordUpdateSQL returns the sql for password update
-func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
+func GetPasswordUpdateSQL() string {
 	pwdChangeCmd := `
 					# Set real passwords for all users.
-					UPDATE mysql.user SET %s = PASSWORD('RootPass')
-					  WHERE User = 'root' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
-					  WHERE User = 'vt_dba' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
-					  WHERE User = 'vt_app' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
-					  WHERE User = 'vt_allprivs' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
-					  WHERE User = 'vt_repl' AND Host = '%%';
-					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
-					  WHERE User = 'vt_filtered' AND Host = 'localhost';
+					# Set real passwords for all users.
+					ALTER USER 'root'@'localhost' IDENTIFIED BY 'RootPass';
+					ALTER USER 'vt_dba'@'localhost' IDENTIFIED BY 'VtDbaPass';
+					ALTER USER 'vt_app'@'localhost' IDENTIFIED BY 'VtAppPass';
+					ALTER USER 'vt_allprivs'@'localhost' IDENTIFIED BY 'VtAllprivsPass';
+					ALTER USER 'vt_repl'@'%' IDENTIFIED BY 'VtReplPass';
+					ALTER USER 'vt_filtered'@'localhost' IDENTIFIED BY 'VtFilteredPass';
 					FLUSH PRIVILEGES;
 					`
-	pwdCol, _ := getPasswordField(localCluster)
-	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
-}
-
-// getPasswordField Determines which column is used for user passwords in this MySQL version.
-func getPasswordField(localCluster *cluster.LocalProcessCluster) (pwdCol string, err error) {
-	tablet := &cluster.Vttablet{
-		Type:            "relpica",
-		TabletUID:       100,
-		MySQLPort:       15000,
-		MysqlctlProcess: *cluster.MysqlCtlProcessInstance(100, 15000, localCluster.TmpDirectory),
-	}
-	if err = tablet.MysqlctlProcess.Start(); err != nil {
-		return "", err
-	}
-	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0, tablet.Type, localCluster.TopoPort, "", "", nil, false, localCluster.DefaultCharset)
-	result, err := tablet.VttabletProcess.QueryTablet("select password from mysql.user limit 0", "", false)
-	if err == nil && len(result.Rows) > 0 {
-		return "password", nil
-	}
-	tablet.MysqlctlProcess.Stop()
-	os.RemoveAll(path.Join(tablet.VttabletProcess.Directory))
-	return "authentication_string", nil
-
+	return pwdChangeCmd
 }

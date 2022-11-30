@@ -22,5 +22,5 @@ import (
 
 // TestBackupMain - main tests backup using vtctl commands
 func TestBackupMain(t *testing.T) {
-	TestBackup(t, Backup, "", 0)
+	TestBackup(t, Backup, "xbstream", 0)
 }

@@ -18,7 +18,7 @@ package vtctld
 
 import (
 	"flag"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,7 +37,7 @@ func TestWebApp(t *testing.T) {
 
 	defer res.Body.Close()
 
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), "<!doctype html>")
 }
@@ -56,7 +56,7 @@ func TestWebAppDisabled(t *testing.T) {
 
 	defer res.Body.Close()
 
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, "404 page not found\n", string(data))
 }

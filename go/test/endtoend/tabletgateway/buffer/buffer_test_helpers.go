@@ -67,7 +67,7 @@ const (
 	updateRowID       = 2
 )
 
-//threadParams is set of params passed into read and write threads
+// threadParams is set of params passed into read and write threads
 type threadParams struct {
 	quit                       bool
 	rpcs                       int        // Number of queries successfully executed.

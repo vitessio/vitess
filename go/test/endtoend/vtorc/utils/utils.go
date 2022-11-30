@@ -19,7 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -727,7 +727,7 @@ func MakeAPICall(t *testing.T, url string) (status int, response string) {
 	res, err := http.Get(url)
 	require.NoError(t, err)
 	defer res.Body.Close()
-	bodyBytes, err := ioutil.ReadAll(res.Body)
+	bodyBytes, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 	body := string(bodyBytes)
 	return res.StatusCode, body

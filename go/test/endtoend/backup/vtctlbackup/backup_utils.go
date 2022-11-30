@@ -44,6 +44,7 @@ const (
 	XtraBackup = iota
 	Backup
 	Mysqlctld
+	timeout = time.Duration(60 * time.Second)
 )
 
 var (
@@ -107,7 +108,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+	sql = sql + initialsharding.GetPasswordUpdateSQL()
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err
@@ -214,8 +215,28 @@ func TearDownCluster() {
 }
 
 // TestBackup runs all the backup tests
-func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
-
+func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) error {
+	verStr, err := mysqlctl.GetVersionString()
+	require.NoError(t, err)
+	_, vers, err := mysqlctl.ParseVersionString(verStr)
+	require.NoError(t, err)
+	switch streamMode {
+	case "xbstream":
+		if vers.Major < 8 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=xbstream as those are only tested on XtraBackup/MySQL 8.0+")
+			return nil
+		}
+	case "", "tar": // streaming method of tar is the default for the vttablet --xtrabackup_stream_mode flag
+		// XtraBackup 8.0 must be used with MySQL 8.0 and it no longer supports tar as a stream method:
+		//    https://docs.percona.com/percona-xtrabackup/2.4/innobackupex/streaming_backups_innobackupex.html
+		//    https://docs.percona.com/percona-xtrabackup/8.0/xtrabackup_bin/backup.streaming.html
+		if vers.Major > 5 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=tar as tar is no longer a streaming option in XtraBackup 8.0")
+			return nil
+		}
+	default:
+		require.FailNow(t, fmt.Sprintf("Unsupported xtrabackup stream mode: %s", streamMode))
+	}
 	testMethods := []struct {
 		name   string
 		method func(t *testing.T)
@@ -268,7 +289,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	for _, test := range testMethods {
 		t.Run(test.name, test.method)
 	}
-
+	return nil
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
@@ -282,12 +303,12 @@ type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 //  7. insert more data on the primary
 //  8. take another backup
 //  9. verify that we now have 2 backups
-// 10. do a PRS to make the original primary a replica so that we can do a restore there
-// 11. Delete+teardown the new primary so that we can restore the first backup on the original
+//  10. do a PRS to make the original primary a replica so that we can do a restore there
+//  11. Delete+teardown the new primary so that we can restore the first backup on the original
 //     primary to confirm we don't have the data from #7
-// 12. restore first backup on the original primary tablet using the first backup timstamp
-// 13. verify that don't have the data added after the first backup
-// 14. remove the backups
+//  12. restore first backup on the original primary tablet using the first backup timstamp
+//  13. verify that don't have the data added after the first backup
+//  14. remove the backups
 func primaryBackup(t *testing.T) {
 	verifyInitialReplication(t)
 
@@ -301,7 +322,7 @@ func primaryBackup(t *testing.T) {
 	require.Nil(t, err)
 
 	// We'll restore this on the primary later to test restores using a backup timestamp
-	firstBackupTimestamp := time.Now().Format(mysqlctl.BackupTimestampFormat)
+	firstBackupTimestamp := time.Now().UTC().Format(mysqlctl.BackupTimestampFormat)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 	assert.Contains(t, backups[0], primary.Alias)
@@ -357,10 +378,10 @@ func primaryBackup(t *testing.T) {
 	require.Nil(t, err)
 }
 
-//    Test a primary and replica from the same backup.
+// Test a primary and replica from the same backup.
 //
-//    Check that a replica and primary both restored from the same backup
-//    can replicate successfully.
+// Check that a replica and primary both restored from the same backup
+// can replicate successfully.
 func primaryReplicaSameBackup(t *testing.T) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
@@ -375,7 +396,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 
 	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
 	// check the new replica has the data
@@ -428,14 +449,13 @@ func restoreOldPrimaryInPlace(t *testing.T) {
 
 // Test that a former primary replicates correctly after being restored.
 //
-//- Take a backup.
+// - Take a backup.
 // - Reparent from old primary to new primary.
 // - Force old primary to restore from a previous backup using restore_method.
 //
-//Args:
-//restore_method: function accepting one parameter of type tablet.Tablet,
-//this function is called to force a restore on the provided tablet
-//
+// Args:
+// restore_method: function accepting one parameter of type tablet.Tablet,
+// this function is called to force a restore on the provided tablet
 func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
@@ -584,21 +604,19 @@ func terminatedRestore(t *testing.T) {
 	stopAllTablets()
 }
 
-//test_backup will:
+// test_backup will:
 // - create a shard with primary and replica1 only
-//- run InitShardPrimary
-//- bring up tablet_replica2 concurrently, telling it to wait for a backup
-//- insert some data
-//- take a backup
+// - run InitShardPrimary
+// - bring up tablet_replica2 concurrently, telling it to wait for a backup
+// - insert some data
+// - take a backup
 // - insert more data on the primary
-//- wait for tablet_replica2 to become SERVING
-//- check all data is right (before+after backup data)
-//- list the backup, remove it
+// - wait for tablet_replica2 to become SERVING
+// - check all data is right (before+after backup data)
+// - list the backup, remove it
 //
-//Args:
-//tablet_type: 'replica' or 'rdonly'.
-//
-//
+// Args:
+// tablet_type: 'replica' or 'rdonly'.
 func vtctlBackup(t *testing.T, tabletType string) {
 	restoreWaitForBackup(t, tabletType)
 	verifyInitialReplication(t)
@@ -611,7 +629,7 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
@@ -674,7 +692,7 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	err := tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 	if status != "" {
-		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, 25*time.Second)
+		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, timeout)
 		require.Nil(t, err)
 	}
 	// We restart replication here because semi-sync will not be set correctly on tablet startup since

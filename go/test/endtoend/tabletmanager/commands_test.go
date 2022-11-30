@@ -21,23 +21,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
-	getSchemaT1Results = "CREATE TABLE `t1` (\n  `id` bigint(20) NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	getSchemaV1Results = fmt.Sprintf("CREATE ALGORITHM=UNDEFINED DEFINER=`%s`@`%s` SQL SECURITY DEFINER VIEW {{.DatabaseName}}.`v1` AS select {{.DatabaseName}}.`t1`.`id` AS `id`,{{.DatabaseName}}.`t1`.`value` AS `value` from {{.DatabaseName}}.`t1`", username, hostname)
+	getSchemaT1Results57 = "CREATE TABLE `t1` (\n  `id` bigint(20) NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+	getSchemaT1Results80 = "CREATE TABLE `t1` (\n  `id` bigint NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3"
+	getSchemaV1Results   = fmt.Sprintf("CREATE ALGORITHM=UNDEFINED DEFINER=`%s`@`%s` SQL SECURITY DEFINER VIEW {{.DatabaseName}}.`v1` AS select {{.DatabaseName}}.`t1`.`id` AS `id`,{{.DatabaseName}}.`t1`.`value` AS `value` from {{.DatabaseName}}.`t1`", username, hostname)
 )
 
 // TabletCommands tests the basic tablet commands
@@ -232,10 +235,45 @@ func TestGetSchema(t *testing.T) {
 		fmt.Sprintf("%s-%d", clusterInstance.Cell, primaryTablet.TabletUID))
 	require.Nil(t, err)
 
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
+	require.Nil(t, err)
+	fmt.Printf("%s", conn.ServerVersion)
+	major, _, _ := parseVersionString(conn.ServerVersion)
+	require.LessOrEqual(t, 0, major)
+
 	t1Create := gjson.Get(res, "table_definitions.#(name==\"t1\").schema")
-	assert.Equal(t, getSchemaT1Results, t1Create.String())
+	if major <= 5 {
+		assert.Equal(t, getSchemaT1Results57, t1Create.String())
+	} else {
+		assert.Equal(t, getSchemaT1Results80, t1Create.String())
+	}
 	v1Create := gjson.Get(res, "table_definitions.#(name==\"v1\").schema")
 	assert.Equal(t, getSchemaV1Results, v1Create.String())
+
+}
+
+// ParseVersionString parses the output of mysqld --version into a flavor and version
+func parseVersionString(version string) (int, int, int) {
+	versionRegex := regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	v := versionRegex.FindStringSubmatch(version)
+	if len(v) != 4 {
+		return 0, 0, 0
+	}
+	major, err := strconv.Atoi(string(v[1]))
+	if err != nil {
+		return 0, 0, 0
+	}
+	minor, err := strconv.Atoi(string(v[2]))
+	if err != nil {
+		return 0, 0, 0
+	}
+	patch, err := strconv.Atoi(string(v[3]))
+	if err != nil {
+		return 0, 0, 0
+	}
+
+	return major, minor, patch
 }
 
 func assertNodeCount(t *testing.T, result string, want int) {
