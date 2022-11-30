@@ -26,7 +26,7 @@ jobs:
         run: |
           next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
           echo $next_release_ref
-          echo "::set-output name=next_release_ref::${next_release_ref}"
+          echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
@@ -49,7 +49,7 @@ jobs:
           skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     # Checkout to this build's commit
     - name: Checkout to commit's code
