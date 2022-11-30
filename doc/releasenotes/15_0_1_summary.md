@@ -7,7 +7,7 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 ### VtAdmin web folder is missing while installing Vitess with local method
 
-When we try to install Vitess with local method (https://vitess.io/docs/15.0/get-started/local/#install-vitess) for release 15.0, we are getting following error
+When we try to install Vitess locally (https://vitess.io/docs/15.0/get-started/local/#install-vitess) on `v15.0`, we are getting the following error
 ```
 npm ERR! enoent ENOENT: no such file or directory, open '/home/web/vtadmin/package.json'
 ```
