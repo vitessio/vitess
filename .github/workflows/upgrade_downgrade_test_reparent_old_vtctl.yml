@@ -29,7 +29,7 @@ jobs:
         run: |
           previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
           echo $previous_release_ref
-          echo "::set-output name=previous_release_ref::${previous_release_ref}"
+          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
@@ -47,7 +47,7 @@ jobs:
           skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
