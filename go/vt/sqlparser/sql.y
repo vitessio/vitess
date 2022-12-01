@@ -4287,9 +4287,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
   }
-| SHOW DATABASES
+| SHOW DATABASES like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Filter: $3}
   }
 | SHOW SCHEMAS
   {

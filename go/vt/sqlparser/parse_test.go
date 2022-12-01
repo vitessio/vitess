@@ -1502,6 +1502,12 @@ var (
 			input:  "show databases",
 			output: "show databases",
 		}, {
+			input:  "show databases like 'something'",
+			output: "show databases like 'something'",
+		}, {
+			input:  "show databases where `database` = 'something'",
+			output: "show databases where `database` = 'something'",
+		}, {
 			input:  "show schemas",
 			output: "show schemas",
 		}, {
