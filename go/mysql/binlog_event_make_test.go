@@ -367,3 +367,94 @@ func TestRowsEvent(t *testing.T) {
 	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
 
 }
+func TestLargeRowsEvent(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+
+	/*
+		    Reason for nolint
+		    Used in line 384 to 387
+		    tableID = event.ID(f)
+				if tableID != 0x102030405060 {
+					t.Fatalf("NewRowsEvent().ID returned %x", tableID)
+				}
+	*/
+	tableID := uint64(0x102030405060) //nolint
+
+	colLen := 256
+	types := make([]byte, 0, colLen)
+	metadata := make([]uint16, 0, colLen)
+
+	for i := 0; i < colLen; i++ {
+		types = append(types, TypeLong)
+		metadata = append(metadata, 0)
+	}
+
+	tm := &TableMap{
+		Flags:     0x8090,
+		Database:  "my_database",
+		Name:      "my_table",
+		Types:     types,
+		CanBeNull: NewServerBitmap(colLen),
+		Metadata:  metadata,
+	}
+	tm.CanBeNull.Set(1, true)
+
+	identify := make([]byte, 0, colLen*4)
+	data := make([]byte, 0, colLen*4)
+	for i := 0; i < colLen; i++ {
+		identify = append(identify, 0x10, 0x20, 0x30, 0x40)
+		data = append(data, 0x10, 0x20, 0x30, 0x40)
+	}
+
+	// Do an update packet with all fields set.
+	rows := Rows{
+		Flags:           0x1234,
+		IdentifyColumns: NewServerBitmap(colLen),
+		DataColumns:     NewServerBitmap(colLen),
+		Rows: []Row{
+			{
+				NullIdentifyColumns: NewServerBitmap(colLen),
+				NullColumns:         NewServerBitmap(colLen),
+				Identify:            identify,
+				Data:                data,
+			},
+		},
+	}
+
+	// All rows are included, none are NULL.
+	for i := 0; i < colLen; i++ {
+		rows.IdentifyColumns.Set(i, true)
+		rows.DataColumns.Set(i, true)
+	}
+
+	// Test the Rows we just created, to be sure.
+	// 1076895760 is 0x40302010.
+	identifies, _ := rows.StringIdentifiesForTests(tm, 0)
+	expected := make([]string, 0, colLen)
+	for i := 0; i < colLen; i++ {
+		expected = append(expected, "1076895760")
+	}
+	if !reflect.DeepEqual(identifies, expected) {
+		t.Fatalf("bad Rows identify, got %v expected %v", identifies, expected)
+	}
+	values, _ := rows.StringValuesForTests(tm, 0)
+	if !reflect.DeepEqual(values, expected) {
+		t.Fatalf("bad Rows data, got %v expected %v", values, expected)
+	}
+
+	event := NewUpdateRowsEvent(f, s, 0x102030405060, rows)
+	require.True(t, event.IsValid(), "NewRowsEvent().IsValid() is false")
+	require.True(t, event.IsUpdateRows(), "NewRowsEvent().IsUpdateRows() if false")
+
+	event, _, err := event.StripChecksum(f)
+	require.NoError(t, err, "StripChecksum failed: %v", err)
+
+	tableID = event.TableID(f)
+	require.Equal(t, uint64(0x102030405060), tableID, "NewRowsEvent().ID returned %x", tableID)
+
+	gotRows, err := event.Rows(f, tm)
+	require.NoError(t, err, "NewRowsEvent().Rows() returned error: %v", err)
+	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
+
+}
