@@ -195,7 +195,6 @@ Usage of vtgate:
   -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
-      --vstream_cell_alias_fallback                                      By default, when no tablets can be found in the local cell for a VStream, also look for tablets in a cell alias which includes the local cell
       --vtctld_addr string                                               address of a vtctld instance
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)

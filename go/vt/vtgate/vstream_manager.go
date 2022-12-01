@@ -439,18 +439,17 @@ func (vs *vstream) getCells(ctx context.Context) []string {
 		}
 	}
 
-	// if fallback requested in VTGate startup and no override provided in gRPC request,
-	// perform cell alias fallback
-	if vstreamCellAliasFallback && len(cells) == 0 {
+	// if no override provided in gRPC request, perform cell alias fallback
+	if len(cells) == 0 {
 		log.Info("No cells provided by client, falling back to local cell and alias...\n")
 		// append the alias this cell belongs to, otherwise appends the vtgate's cell
-		alias := []string{topo.GetAliasByCell(ctx, vs.ts, vs.vsm.cell)}
+		alias := topo.GetAliasByCell(ctx, vs.ts, vs.vsm.cell)
 		// an alias was actually found
-		if alias[0] != vs.vsm.cell {
+		if alias != vs.vsm.cell {
 			// send in the vtgate's cell for local cell preference
 			cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
 		}
-		cells = append(cells, alias...)
+		cells = append(cells, alias)
 	}
 
 	if len(cells) == 0 {

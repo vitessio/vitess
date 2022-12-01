@@ -102,8 +102,6 @@ var (
 	enableSchemaChangeSignal = true
 	schemaChangeUser         string
 	queryTimeout             int
-
-	vstreamCellAliasFallback = false
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -134,7 +132,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
-	fs.BoolVar(&vstreamCellAliasFallback, "vstream_cell_alias_fallback", vstreamCellAliasFallback, "By default, when no tablets can be found in the local cell for a VStream, also look for tablets in a cell alias which includes the local cell")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
