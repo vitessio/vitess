@@ -124,7 +124,7 @@ func compareValueType(t types.Type, a, b *jen.Statement, eq bool, spi generatorS
 	if eq {
 		neg = ""
 	}
-	return jen.Id(neg+equalsName+printableTypeName(t)+"S").Call(a, b, jen.Id("f"))
+	return jen.Id(neg+equalsName+printableTypeName(t)).Call(a, b, jen.Id("f"))
 }
 
 func (e *equalsGen) structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
@@ -221,9 +221,9 @@ func (e *equalsGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 
 	if typeString == "*ColName" {
 		stmts = append(stmts,
-			jen.Id("res").Op(":=").Id("f").Dot("ColNames").Call(jen.Id("a"), jen.Id("b")),
-			jen.If(jen.Id("res").Op("!=").Nil()).Block(jen.Return(jen.Op("*").Id("res"))),
-		)
+			jen.If(jen.Id("f").Op("!=").Nil()).Block(
+				jen.Return(jen.Id("f").Dot("ColNames").Call(jen.Id("a"), jen.Id("b"))),
+			))
 	}
 
 	stmts = append(stmts, jen.Return(compareAllStructFields(strct, spi)))
@@ -262,17 +262,8 @@ func (e *equalsGen) declareFunc(t types.Type, aArg, bArg string) (*jen.Statement
 	typeString := types.TypeString(t, noQualifier)
 	funcName := equalsName + printableTypeName(t)
 
-	sfunc := funcName + "S"
-
-	// func EqualsFuncName(a, b *bool) bool {
-	// 	return EqualsFuncNameS(a, b, DefaultEquality)
-	// }
-	e.addFunc(funcName, jen.Func().Id(funcName).Call(jen.Id(aArg), jen.Id(bArg).Id(typeString)).Bool().Block(
-		jen.Return(jen.Id(sfunc).Call(jen.Id(aArg), jen.Id(bArg), jen.Id("DefaultEquality"))),
-	))
-
-	// func EqualsFunNameS(a, b *bool, f ASTComparison) bool
-	return jen.Func().Id(sfunc).Call(jen.Id(aArg), jen.Id(bArg).Id(typeString), jen.Id("f").Id("ASTComparison")).Bool(), sfunc
+	// func EqualsFunNameS(a, b <T>, f ASTComparison) bool
+	return jen.Func().Id(funcName).Call(jen.Id(aArg), jen.Id(bArg).Id(typeString), jen.Id("f").Id("ASTComparison")).Bool(), funcName
 }
 
 func (e *equalsGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {

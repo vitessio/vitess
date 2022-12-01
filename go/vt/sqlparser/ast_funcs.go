@@ -56,15 +56,7 @@ type Visit func(node SQLNode) (kontinue bool, err error)
 
 // ASTComparison is used to compare AST trees and override the normal comparison logic
 type ASTComparison interface {
-	ColNames(a, b *ColName) *bool
-}
-
-type DefaultComparison struct{}
-
-var DefaultEquality = DefaultComparison{}
-
-func (DefaultComparison) ColNames(*ColName, *ColName) *bool {
-	return nil
+	ColNames(a, b *ColName) bool
 }
 
 // Append appends the SQLNode to the buffer.
@@ -1019,7 +1011,7 @@ func (node *Select) AddHaving(expr Expr) {
 // AddGroupBy adds a grouping expression, unless it's already present
 func (node *Select) AddGroupBy(expr Expr) {
 	for _, gb := range node.GroupBy {
-		if EqualsExpr(gb, expr) {
+		if EqualsExpr(gb, expr, nil) {
 			// group by columns are sets - duplicates don't add anything, so we can just skip these
 			return
 		}

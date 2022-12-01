@@ -104,6 +104,8 @@ type (
 
 		// ExpandedColumns is a map of all the added columns for a given table.
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
+
+		comparer *comparer
 	}
 
 	columnName struct {
@@ -332,7 +334,7 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser
 // FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
 func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlparser.ExtractedSubquery {
 	for foundSubq, extractedSubquery := range st.SubqueryRef {
-		if sqlparser.EqualsRefOfSubquery(subquery, foundSubq) {
+		if sqlparser.EqualsRefOfSubquery(subquery, foundSubq, nil) {
 			return extractedSubquery
 		}
 	}
@@ -415,8 +417,16 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // The expression in the select list is not equal to the one in the ORDER BY,
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
-	c := comparer{st: st}
-	return sqlparser.EqualsExprS(a, b, c)
+	return sqlparser.EqualsExpr(a, b, st.ASTComparison())
+}
+
+// ASTComparison returns a struct that implements the interface with the same name in the `sqlparser` package,
+// that overrides how comparisons between two ColNames is performed.
+func (st *SemTable) ASTComparison() sqlparser.ASTComparison {
+	if st.comparer == nil {
+		st.comparer = &comparer{st: st}
+	}
+	return st.comparer
 }
 
 type comparer struct {
@@ -424,7 +434,12 @@ type comparer struct {
 }
 
 // ColNames implements the ASTComparison interface
-func (c comparer) ColNames(a, b *sqlparser.ColName) *bool {
-	res := a.Name.Equal(b.Name) && c.st.RecursiveDeps(a) == c.st.RecursiveDeps(b)
-	return &res
+func (c comparer) ColNames(a, b *sqlparser.ColName) bool {
+	aDeps := c.st.RecursiveDeps(a)
+	bDeps := c.st.RecursiveDeps(b)
+	if aDeps != bDeps && (aDeps.IsEmpty() || bDeps.IsEmpty()) {
+		// if we don't know, we don't know
+		return sqlparser.EqualsRefOfColName(a, b, nil)
+	}
+	return a.Name.Equal(b.Name) && aDeps == bDeps
 }

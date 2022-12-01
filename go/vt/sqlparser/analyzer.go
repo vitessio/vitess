@@ -359,7 +359,7 @@ func AndExpressions(exprs ...Expr) Expr {
 			}
 
 			for j := 0; j < i; j++ {
-				if EqualsExpr(expr, exprs[j]) {
+				if EqualsExpr(expr, exprs[j], nil) {
 					continue outer
 				}
 			}
