@@ -391,7 +391,7 @@ func createCorrelatedSubqueryOp(
 				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
-					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
+					// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
 					for colName, bindVar := range bindVars {
 						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))

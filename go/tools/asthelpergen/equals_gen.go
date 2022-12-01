@@ -191,8 +191,10 @@ func (e *equalsGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 	}
 
 	if typeString == "*ColName" {
-		jen.Id("res").Op(":=").Id("f").Dot("ColNames").Call(jen.Id("a"), jen.Id("b"))
-		jen.If(jen.Id("res").Op("!=").Nil()).Block(jen.Return(jen.Op("*").Id("res")))
+		stmts = append(stmts,
+			jen.Id("res").Op(":=").Id("f").Dot("ColNames").Call(jen.Id("a"), jen.Id("b")),
+			jen.If(jen.Id("res").Op("!=").Nil()).Block(jen.Return(jen.Op("*").Id("res"))),
+		)
 	}
 
 	stmts = append(stmts, jen.Return(compareAllStructFields(strct, spi)))

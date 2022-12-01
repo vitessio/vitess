@@ -415,14 +415,16 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // The expression in the select list is not equal to the one in the ORDER BY,
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
-	switch a := a.(type) {
-	case *sqlparser.ColName:
-		colB, ok := b.(*sqlparser.ColName)
-		if !ok {
-			return false
-		}
-		return a.Name.Equal(colB.Name) && st.RecursiveDeps(a) == st.RecursiveDeps(b)
-	default:
-		return sqlparser.EqualsExpr(a, b)
-	}
+	c := comparer{st: st}
+	return sqlparser.EqualsExprS(a, b, c)
+}
+
+type comparer struct {
+	st *SemTable
+}
+
+// ColNames implements the ASTComparison interface
+func (c comparer) ColNames(a, b *sqlparser.ColName) *bool {
+	res := a.Name.Equal(b.Name) && c.st.RecursiveDeps(a) == c.st.RecursiveDeps(b)
+	return &res
 }

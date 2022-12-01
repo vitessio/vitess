@@ -2043,6 +2043,10 @@ func EqualsRefOfColNameS(a, b *ColName, f ASTComparison) bool {
 	if a == nil || b == nil {
 		return false
 	}
+	res := f.ColNames(a, b)
+	if res != nil {
+		return *res
+	}
 	return EqualsIdentifierCIS(a.Name, b.Name, f) &&
 		EqualsTableNameS(a.Qualifier, b.Qualifier, f)
 }
