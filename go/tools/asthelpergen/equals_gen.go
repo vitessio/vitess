@@ -54,6 +54,10 @@ func (e *equalsGen) genFile() (string, *jen.File) {
 func (e *equalsGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
 	/*
 		func EqualsAST(inA, inB AST) bool {
+			return EqualASTS(inA, inB, DefaultEquality)
+		}
+
+		func EqualsASTS(inA, inB AST, f ASTComparison) bool {
 			if inA == inB {
 				return true
 			}
@@ -66,7 +70,7 @@ func (e *equalsGen) interfaceMethod(t types.Type, iface *types.Interface, spi ge
 				if !ok {
 					return false
 				}
-				return EqualsSubImpl(a, b)
+				return EqualsSubImplS(a, b, f)
 			}
 			return false
 		}
@@ -126,10 +130,13 @@ func compareValueType(t types.Type, a, b *jen.Statement, eq bool, spi generatorS
 func (e *equalsGen) structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
 	/*
 		func EqualsRefOfRefContainer(inA RefContainer, inB RefContainer) bool {
-			return EqualsRefOfLeaf(inA.ASTImplementationType, inB.ASTImplementationType) &&
-				EqualsAST(inA.ASTType, inB.ASTType) && inA.NotASTType == inB.NotASTType
+			return EqualsRefOfRefContainerS(inA, inB, DefaultEquality)
 		}
 
+		func EqualsRefOfRefContainerS(inA RefContainer, inB RefContainer, f ASTComparison) bool {
+			return EqualsRefOfLeafS(inA.ASTImplementationType, inB.ASTImplementationType, f ASTComparison) &&
+				EqualsASTS(inA.ASTType, inB.ASTType, f ASTComparison) && inA.NotASTType == inB.NotASTType
+		}
 	*/
 
 	funcDecl, funcName := e.declareFunc(t, "a", "b")
@@ -183,6 +190,28 @@ func compareAllStructFields(strct *types.Struct, spi generatorSPI) jen.Code {
 func (e *equalsGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
 	typeString := types.TypeString(t, noQualifier)
 
+	/*
+		func EqualsRefOfType(a, b *Type) *Type {
+			return EqualsRefOfTypeS(a, b, DefaultEquality)
+		}
+
+		func EqualsRefOfTypeS(a, b *Type, f ASTComparison) *Type {
+			if a == b {
+				return true
+			}
+			if a == nil || b == nil {
+				return false
+			}
+
+			// only if it is a *ColName
+			res := f.ColNames(a, b)
+			if res != nil {
+				return *res
+			}
+
+			return compareAllStructFields
+		}
+	*/
 	// func EqualsRefOfType(a,b  *Type) *Type
 	funcDeclaration, funcName := e.declareFunc(t, "a", "b")
 	stmts := []jen.Code{
@@ -206,6 +235,10 @@ func (e *equalsGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 func (e *equalsGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
 	/*
 		func EqualsRefOfBool(a, b *bool) bool {
+			return EqualsRefOfBoolS(a, b, DefaultEquality)
+		}
+
+		func EqualsRefOfBoolS(a, b *bool, f ASTComparison) bool {
 			if a == b {
 				return true
 			}
@@ -215,7 +248,6 @@ func (e *equalsGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generator
 			return *a == *b
 		}
 	*/
-	// func EqualsRefOfType(a,b  *Type) *Type
 	funcDeclaration, funcName := e.declareFunc(t, "a", "b")
 	stmts := []jen.Code{
 		jen.If(jen.Id("a == b")).Block(jen.Return(jen.True())),
@@ -231,10 +263,15 @@ func (e *equalsGen) declareFunc(t types.Type, aArg, bArg string) (*jen.Statement
 	funcName := equalsName + printableTypeName(t)
 
 	sfunc := funcName + "S"
+
+	// func EqualsFuncName(a, b *bool) bool {
+	// 	return EqualsFuncNameS(a, b, DefaultEquality)
+	// }
 	e.addFunc(funcName, jen.Func().Id(funcName).Call(jen.Id(aArg), jen.Id(bArg).Id(typeString)).Bool().Block(
 		jen.Return(jen.Id(sfunc).Call(jen.Id(aArg), jen.Id(bArg), jen.Id("DefaultEquality"))),
 	))
 
+	// func EqualsFunNameS(a, b *bool, f ASTComparison) bool
 	return jen.Func().Id(sfunc).Call(jen.Id(aArg), jen.Id(bArg).Id(typeString), jen.Id("f").Id("ASTComparison")).Bool(), sfunc
 }
 
