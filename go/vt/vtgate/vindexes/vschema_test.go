@@ -279,7 +279,7 @@ func TestUnshardedVSchema(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -341,7 +341,7 @@ func TestVSchemaColumns(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -405,7 +405,7 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -484,7 +484,7 @@ func TestVSchemaPinned(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -590,7 +590,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -836,7 +836,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t2 not found"),
 			},
 		},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"t2":   t2,
 			"dual": dual1,
@@ -1267,7 +1267,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -1369,7 +1369,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -1501,7 +1501,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -1574,7 +1574,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -1712,7 +1712,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -2033,7 +2033,7 @@ func TestSequence(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"seq":  seq,
 			"t1":   t1,
 			"t2":   t2,
@@ -2204,6 +2204,7 @@ func TestFindTable(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"ta": {},
 					"t1": {},
+					"t2": {},
 				},
 			},
 			"ksb": {
@@ -2233,6 +2234,10 @@ func TestFindTable(t *testing.T) {
 							},
 						},
 					},
+					"t2": {
+						Type:   "reference",
+						Source: "ksa.t2",
+					},
 				},
 			},
 		},
@@ -2253,6 +2258,27 @@ func TestFindTable(t *testing.T) {
 	got, err := vschema.FindTable("", "ta")
 	require.NoError(t, err)
 	require.Equal(t, ta, got)
+
+	t2 := &Table{
+		Name: sqlparser.NewIdentifierCS("t2"),
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+	}
+	t2.ReferencedBy = map[string]*Table{
+		"ksb": {
+			Type: "reference",
+			Name: sqlparser.NewIdentifierCS("t2"),
+			Keyspace: &Keyspace{
+				Sharded: true,
+				Name:    "ksb",
+			},
+			Source: t2,
+		},
+	}
+	got, err = vschema.FindTable("", "t2")
+	require.NoError(t, err)
+	require.Equal(t, t2, got)
 
 	got, _ = vschema.FindTable("ksa", "ta")
 	require.Equal(t, ta, got)

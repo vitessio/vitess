@@ -83,7 +83,7 @@ func tablesFromSemantics(semTable *semantics.SemTable) []string {
 		if vindexTable == nil {
 			continue
 		}
-		tables[vindexTable.ToString()] = nil
+		tables[vindexTable.String()] = nil
 	}
 
 	names := make([]string, 0, len(tables))
