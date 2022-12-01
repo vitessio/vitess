@@ -118,8 +118,12 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
+	// Since password update is DML we need to insert it before we disable
+	// super-read-only therefore doing the split below.
+	splitString := strings.Split(sql, "# add custom sql here")
+	firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+	sql = firstPart + splitString[1]
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err
@@ -207,9 +211,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	}
 
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-			return 1, err
-		}
 		if err := tablet.VttabletProcess.Setup(); err != nil {
 			return 1, err
 		}
