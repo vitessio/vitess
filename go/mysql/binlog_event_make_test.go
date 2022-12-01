@@ -240,6 +240,48 @@ func TestTableMapEvent(t *testing.T) {
 
 }
 
+func TestLargeTableMapEvent(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+
+	colLen := 256
+	types := make([]byte, 0, colLen)
+	metadata := make([]uint16, 0, colLen)
+
+	for i := 0; i < colLen; i++ {
+		types = append(types, TypeLongLong)
+		metadata = append(metadata, 0)
+	}
+
+	tm := &TableMap{
+		Flags:     0x8090,
+		Database:  "my_database",
+		Name:      "my_table",
+		Types:     types,
+		CanBeNull: NewServerBitmap(colLen),
+		Metadata:  metadata,
+	}
+	tm.CanBeNull.Set(1, true)
+	tm.CanBeNull.Set(2, true)
+	tm.CanBeNull.Set(5, true)
+	tm.CanBeNull.Set(9, true)
+
+	event := NewTableMapEvent(f, s, 0x102030405060, tm)
+	require.True(t, event.IsValid(), "NewTableMapEvent().IsValid() is false")
+	require.True(t, event.IsTableMap(), "NewTableMapEvent().IsTableMap() if false")
+
+	event, _, err := event.StripChecksum(f)
+	require.NoError(t, err, "StripChecksum failed: %v", err)
+
+	tableID := event.TableID(f)
+	require.Equal(t, uint64(0x102030405060), tableID, "NewTableMapEvent().ID returned %x", tableID)
+
+	gotTm, err := event.TableMap(f)
+	require.NoError(t, err, "NewTableMapEvent().TableMapEvent() returned error: %v", err)
+	require.True(t, reflect.DeepEqual(gotTm, tm), "NewTableMapEvent().TableMapEvent() got TableMap:\n%v\nexpected:\n%v", gotTm, tm)
+
+}
+
 func TestRowsEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
 	s := NewFakeBinlogStream()
