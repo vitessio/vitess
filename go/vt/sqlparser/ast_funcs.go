@@ -54,6 +54,19 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 // returning an error will abort the visitation and return the error
 type Visit func(node SQLNode) (kontinue bool, err error)
 
+// ASTComparison is used to compare AST trees and override the normal comparison logic
+type ASTComparison interface {
+	ColNames(a, b *ColName) *bool
+}
+
+type DefaultComparison struct{}
+
+var DefaultEquality = DefaultComparison{}
+
+func (DefaultComparison) ColNames(*ColName, *ColName) *bool {
+	return nil
+}
+
 // Append appends the SQLNode to the buffer.
 func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
