@@ -105,11 +105,3 @@ func Rewrite(node AST, pre, post ApplyFunc) AST {
 type ASTComparison interface {
 	ColNames(a, b *sqlparser.ColName) *bool
 }
-
-type DefaultComparison struct{}
-
-var DefaultEquality = DefaultComparison{}
-
-func (DefaultComparison) ColNames(*sqlparser.ColName, *sqlparser.ColName) *bool {
-	return nil
-}

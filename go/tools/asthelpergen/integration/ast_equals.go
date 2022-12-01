@@ -19,7 +19,7 @@ package integration
 
 // EqualsAST does deep equals between the two objects.
 func EqualsAST(inA, inB AST) bool {
-	return EqualsASTS(inA, inB, DefaultEquality)
+	return EqualsASTS(inA, inB, nil)
 }
 
 // EqualsASTS does deep equals between the two objects.
@@ -111,7 +111,7 @@ func EqualsASTS(inA, inB AST, f ASTComparison) bool {
 
 // EqualsBytes does deep equals between the two objects.
 func EqualsBytes(a, b Bytes) bool {
-	return EqualsBytesS(a, b, DefaultEquality)
+	return EqualsBytesS(a, b, nil)
 }
 
 // EqualsBytesS does deep equals between the two objects.
@@ -129,7 +129,7 @@ func EqualsBytesS(a, b Bytes, f ASTComparison) bool {
 
 // EqualsInterfaceContainer does deep equals between the two objects.
 func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
-	return EqualsInterfaceContainerS(a, b, DefaultEquality)
+	return EqualsInterfaceContainerS(a, b, nil)
 }
 
 // EqualsInterfaceContainerS does deep equals between the two objects.
@@ -139,7 +139,7 @@ func EqualsInterfaceContainerS(a, b InterfaceContainer, f ASTComparison) bool {
 
 // EqualsInterfaceSlice does deep equals between the two objects.
 func EqualsInterfaceSlice(a, b InterfaceSlice) bool {
-	return EqualsInterfaceSliceS(a, b, DefaultEquality)
+	return EqualsInterfaceSliceS(a, b, nil)
 }
 
 // EqualsInterfaceSliceS does deep equals between the two objects.
@@ -157,7 +157,7 @@ func EqualsInterfaceSliceS(a, b InterfaceSlice, f ASTComparison) bool {
 
 // EqualsRefOfLeaf does deep equals between the two objects.
 func EqualsRefOfLeaf(a, b *Leaf) bool {
-	return EqualsRefOfLeafS(a, b, DefaultEquality)
+	return EqualsRefOfLeafS(a, b, nil)
 }
 
 // EqualsRefOfLeafS does deep equals between the two objects.
@@ -173,7 +173,7 @@ func EqualsRefOfLeafS(a, b *Leaf, f ASTComparison) bool {
 
 // EqualsLeafSlice does deep equals between the two objects.
 func EqualsLeafSlice(a, b LeafSlice) bool {
-	return EqualsLeafSliceS(a, b, DefaultEquality)
+	return EqualsLeafSliceS(a, b, nil)
 }
 
 // EqualsLeafSliceS does deep equals between the two objects.
@@ -191,7 +191,7 @@ func EqualsLeafSliceS(a, b LeafSlice, f ASTComparison) bool {
 
 // EqualsRefOfNoCloneType does deep equals between the two objects.
 func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
-	return EqualsRefOfNoCloneTypeS(a, b, DefaultEquality)
+	return EqualsRefOfNoCloneTypeS(a, b, nil)
 }
 
 // EqualsRefOfNoCloneTypeS does deep equals between the two objects.
@@ -207,7 +207,7 @@ func EqualsRefOfNoCloneTypeS(a, b *NoCloneType, f ASTComparison) bool {
 
 // EqualsRefOfRefContainer does deep equals between the two objects.
 func EqualsRefOfRefContainer(a, b *RefContainer) bool {
-	return EqualsRefOfRefContainerS(a, b, DefaultEquality)
+	return EqualsRefOfRefContainerS(a, b, nil)
 }
 
 // EqualsRefOfRefContainerS does deep equals between the two objects.
@@ -225,7 +225,7 @@ func EqualsRefOfRefContainerS(a, b *RefContainer, f ASTComparison) bool {
 
 // EqualsRefOfRefSliceContainer does deep equals between the two objects.
 func EqualsRefOfRefSliceContainer(a, b *RefSliceContainer) bool {
-	return EqualsRefOfRefSliceContainerS(a, b, DefaultEquality)
+	return EqualsRefOfRefSliceContainerS(a, b, nil)
 }
 
 // EqualsRefOfRefSliceContainerS does deep equals between the two objects.
@@ -243,7 +243,7 @@ func EqualsRefOfRefSliceContainerS(a, b *RefSliceContainer, f ASTComparison) boo
 
 // EqualsRefOfSubImpl does deep equals between the two objects.
 func EqualsRefOfSubImpl(a, b *SubImpl) bool {
-	return EqualsRefOfSubImplS(a, b, DefaultEquality)
+	return EqualsRefOfSubImplS(a, b, nil)
 }
 
 // EqualsRefOfSubImplS does deep equals between the two objects.
@@ -260,7 +260,7 @@ func EqualsRefOfSubImplS(a, b *SubImpl, f ASTComparison) bool {
 
 // EqualsValueContainer does deep equals between the two objects.
 func EqualsValueContainer(a, b ValueContainer) bool {
-	return EqualsValueContainerS(a, b, DefaultEquality)
+	return EqualsValueContainerS(a, b, nil)
 }
 
 // EqualsValueContainerS does deep equals between the two objects.
@@ -272,7 +272,7 @@ func EqualsValueContainerS(a, b ValueContainer, f ASTComparison) bool {
 
 // EqualsValueSliceContainer does deep equals between the two objects.
 func EqualsValueSliceContainer(a, b ValueSliceContainer) bool {
-	return EqualsValueSliceContainerS(a, b, DefaultEquality)
+	return EqualsValueSliceContainerS(a, b, nil)
 }
 
 // EqualsValueSliceContainerS does deep equals between the two objects.
@@ -284,7 +284,7 @@ func EqualsValueSliceContainerS(a, b ValueSliceContainer, f ASTComparison) bool 
 
 // EqualsSubIface does deep equals between the two objects.
 func EqualsSubIface(inA, inB SubIface) bool {
-	return EqualsSubIfaceS(inA, inB, DefaultEquality)
+	return EqualsSubIfaceS(inA, inB, nil)
 }
 
 // EqualsSubIfaceS does deep equals between the two objects.
@@ -310,7 +310,7 @@ func EqualsSubIfaceS(inA, inB SubIface, f ASTComparison) bool {
 
 // EqualsRefOfInterfaceContainer does deep equals between the two objects.
 func EqualsRefOfInterfaceContainer(a, b *InterfaceContainer) bool {
-	return EqualsRefOfInterfaceContainerS(a, b, DefaultEquality)
+	return EqualsRefOfInterfaceContainerS(a, b, nil)
 }
 
 // EqualsRefOfInterfaceContainerS does deep equals between the two objects.
@@ -326,7 +326,7 @@ func EqualsRefOfInterfaceContainerS(a, b *InterfaceContainer, f ASTComparison) b
 
 // EqualsSliceOfAST does deep equals between the two objects.
 func EqualsSliceOfAST(a, b []AST) bool {
-	return EqualsSliceOfASTS(a, b, DefaultEquality)
+	return EqualsSliceOfASTS(a, b, nil)
 }
 
 // EqualsSliceOfASTS does deep equals between the two objects.
@@ -344,7 +344,7 @@ func EqualsSliceOfASTS(a, b []AST, f ASTComparison) bool {
 
 // EqualsSliceOfInt does deep equals between the two objects.
 func EqualsSliceOfInt(a, b []int) bool {
-	return EqualsSliceOfIntS(a, b, DefaultEquality)
+	return EqualsSliceOfIntS(a, b, nil)
 }
 
 // EqualsSliceOfIntS does deep equals between the two objects.
@@ -362,7 +362,7 @@ func EqualsSliceOfIntS(a, b []int, f ASTComparison) bool {
 
 // EqualsSliceOfRefOfLeaf does deep equals between the two objects.
 func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
-	return EqualsSliceOfRefOfLeafS(a, b, DefaultEquality)
+	return EqualsSliceOfRefOfLeafS(a, b, nil)
 }
 
 // EqualsSliceOfRefOfLeafS does deep equals between the two objects.
@@ -380,7 +380,7 @@ func EqualsSliceOfRefOfLeafS(a, b []*Leaf, f ASTComparison) bool {
 
 // EqualsRefOfBool does deep equals between the two objects.
 func EqualsRefOfBool(a, b *bool) bool {
-	return EqualsRefOfBoolS(a, b, DefaultEquality)
+	return EqualsRefOfBoolS(a, b, nil)
 }
 
 // EqualsRefOfBoolS does deep equals between the two objects.
@@ -396,7 +396,7 @@ func EqualsRefOfBoolS(a, b *bool, f ASTComparison) bool {
 
 // EqualsRefOfValueContainer does deep equals between the two objects.
 func EqualsRefOfValueContainer(a, b *ValueContainer) bool {
-	return EqualsRefOfValueContainerS(a, b, DefaultEquality)
+	return EqualsRefOfValueContainerS(a, b, nil)
 }
 
 // EqualsRefOfValueContainerS does deep equals between the two objects.
@@ -414,7 +414,7 @@ func EqualsRefOfValueContainerS(a, b *ValueContainer, f ASTComparison) bool {
 
 // EqualsRefOfValueSliceContainer does deep equals between the two objects.
 func EqualsRefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
-	return EqualsRefOfValueSliceContainerS(a, b, DefaultEquality)
+	return EqualsRefOfValueSliceContainerS(a, b, nil)
 }
 
 // EqualsRefOfValueSliceContainerS does deep equals between the two objects.
