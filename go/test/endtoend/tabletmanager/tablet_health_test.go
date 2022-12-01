@@ -104,7 +104,7 @@ func TestHealthCheck(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Create database in mysql
-	utils.Exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
+	//utils.Exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
 
 	// start vttablet process, should be in SERVING state as we already have a primary
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)

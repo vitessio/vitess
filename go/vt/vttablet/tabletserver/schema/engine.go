@@ -130,10 +130,10 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn *dbconnpool.DBConnection) error {
 	log.Infof("inside syncVTDatabase %s", sidecardb.UseVTDatabaseQuery)
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
-		_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
+		/*_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
 		if err != nil {
 			return nil, err
-		}
+		}*/
 		return conn.ExecuteFetch(query, maxRows, wantFields)
 	}
 	var rsroHook sidecardb.ReSetSuperReadOnlyHook = func(ctx context.Context) (err error) {
@@ -190,9 +190,9 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 			return err
 		}
 		defer dbaConn.Close()
-		if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
-			return err
-		}
+		//if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
+		//	return err
+		//}
 		conn.Close()
 		return nil
 	}
@@ -212,7 +212,17 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		return err
 	}
 	defer conn.Close()
-
+	dbaConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
+	if err != nil {
+		log.Info("Not able to get connection with all privileges...")
+		return err
+	}
+	defer dbaConn.Close()
+	_, err = dbaConn.ExecuteFetch("SET GLOBAL read_only='OFF'", 1, false)
+	if err != nil {
+		log.Errorf("Error trying to switch off read-only for DB.")
+		return err
+	}
 	dbname := se.env.Config().DB.DBName
 	_, err = conn.ExecuteFetch(fmt.Sprintf("create database if not exists `%s`", dbname), 1, false)
 	if err != nil {
@@ -223,15 +233,8 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		}
 		return err
 	}
-
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
-	dbaConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
-	if err != nil {
-		log.Info("Not able to get connection with all privileges...")
-		return err
-	}
-	defer dbaConn.Close()
 	if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
 		return err
 	}

@@ -82,6 +82,9 @@ func queryReparentJournal(timeCreatedNS int64) string {
 func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error {
 	for {
 		qr, err := mysqld.FetchSuperQuery(ctx, queryReparentJournal(timeCreatedNS))
+		if err != nil {
+			log.Infof("error query reparent journal %v", err)
+		}
 		if err == nil && len(qr.Rows) == 1 {
 			// we have the row, we're done
 			return nil

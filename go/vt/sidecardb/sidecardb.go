@@ -149,8 +149,8 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 		}
 		log.Infof("Created _vt database")
 	case 1:
-		//log.Infof("_vt database already exists, not an error")
-		break
+		log.Infof("_vt database already exists, not an error")
+		//break
 	default:
 		return fmt.Errorf("found too many rows for _vt: %d", len(rs.Rows))
 	}
@@ -167,6 +167,7 @@ func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
 		return "", nil
 	}
 	currentDB := rs.Rows[0][0].ToString()
+	log.Infof("current db is %s", currentDB)
 	_, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false)
 	if err != nil {
 		return "", err

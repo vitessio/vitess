@@ -76,15 +76,15 @@ const denyListQueryList string = "DenyListQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
-	tabletHostname     string
-	initKeyspace       string
-	initShard          string
-	initTabletType     string
-	initDbNameOverride string
-	skipBuildInfoTags  = "/.*/"
-	initTags           flagutil.StringMapValue
-
-	initTimeout = 1 * time.Minute
+	tabletHostname       string
+	initKeyspace         string
+	initShard            string
+	initTabletType       string
+	initDbNameOverride   string
+	skipBuildInfoTags    = "/.*/"
+	initTags             flagutil.StringMapValue
+	initPopulateMetadata bool
+	initTimeout          = 1 * time.Minute
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -95,7 +95,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
-
+	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 }
 

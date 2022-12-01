@@ -45,26 +45,29 @@ func TestEnsureDB(t *testing.T) {
 
 	// Make it the primary.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
-	require.EqualError(t, err, "exit status 1")
+	require.NoError(t, err, "No error expected.")
 
 	// It is still NOT_SERVING because the db is read-only.
-	assert.Equal(t, "NOT_SERVING", tablet.VttabletProcess.GetTabletStatus())
+	assert.Equal(t, "SERVING", tablet.VttabletProcess.GetTabletStatus())
 	status := tablet.VttabletProcess.GetStatusDetails()
-	assert.Contains(t, status, "read-only")
+	assert.Contains(t, status, "healthy")
 
+	// With new changes we expect vttablet to be healthy and non-read-only mode the moment 'TabletExternallyReparented' happen. @rohit-nayak-ps
 	// Switch to read-write and verify that that we go serving.
-	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
-	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
-	require.NoError(t, err)
+	//err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
+	//require.NoError(t, err, "Not suppose to fail.")
+	//err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
+	//require.NoError(t, err)
 	killTablets(t, tablet)
 }
 
 // TestLocalMetadata tests the contents of local_metadata table after vttablet startup
 func TestLocalMetadata(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	// This will no longer hold true since localMetadata is removed as part of this change @rohit-nayak-ps
 	// by default tablets are started with --restore_from_backup
 	// so metadata should exist
-	cluster.VerifyLocalMetadata(t, &replicaTablet, keyspaceName, shardName, cell)
+	//cluster.VerifyLocalMetadata(t, &replicaTablet, keyspaceName, shardName, cell)
 
 	// Create new tablet
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
@@ -84,7 +87,7 @@ func TestLocalMetadata(t *testing.T) {
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
-	cluster.VerifyLocalMetadata(t, rTablet, keyspaceName, shardName, cell)
+	//cluster.VerifyLocalMetadata(t, rTablet, keyspaceName, shardName, cell)
 
 	// Create another new tablet
 	rTablet2 := clusterInstance.NewVttabletInstance("replica", 0, "")
@@ -104,9 +107,9 @@ func TestLocalMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	// check that tablet did _not_ get populated
-	qr, err := rTablet2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
-	require.NoError(t, err)
-	require.Nil(t, qr.Rows)
+	//qr, err := rTablet2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
+	//require.NoError(t, err)
+	//require.Nil(t, qr.Rows)
 
 	// Reset the VtTabletExtraArgs and kill tablets
 	clusterInstance.VtTabletExtraArgs = []string{}

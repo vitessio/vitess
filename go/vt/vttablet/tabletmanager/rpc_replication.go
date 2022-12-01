@@ -304,8 +304,9 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
-	log.Infof("InitPrimary")
+	log.Infof("InitPrimary with semiSync as %t", semiSync)
 	//time.Sleep(10 * time.Second)
+	//tmpCtx := context.TODO()
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
@@ -337,10 +338,11 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 
 	// get the current replication position
-	pos, err := tm.MysqlDaemon.PrimaryPosition()
+	/*pos, err := tm.MysqlDaemon.PrimaryPosition()
+	log.Infof("current primary position is %s", mysql.EncodePosition(pos))
 	if err != nil {
 		return "", err
-	}
+	}*/
 
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
@@ -349,7 +351,14 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
-	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
+	// get the current replication position
+	pos, err := tm.MysqlDaemon.PrimaryPosition()
+	log.Infof("current primary position is %s", mysql.EncodePosition(pos))
+	if err != nil {
+		return "", err
+	}
+
+	// Enforce semi-sync after changing the tablet-type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
@@ -360,7 +369,8 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
-	log.Infof("PopulateReparentJournal: action: %v parent: %v  position: %v", actionName, primaryAlias, position)
+	log.Infof("PopulateReparentJournal: action: %v parent: %v  position: %v timeCreatedNS: %d actionName: %s primaryAlias: %s",
+		actionName, primaryAlias, position, timeCreatedNS, actionName, primaryAlias)
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
@@ -382,7 +392,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 // InitReplica sets replication primary and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64, semiSync bool) error {
-	log.Infof("InitReplica: parent: %v  position: %v", parent, position)
+	log.Infof("InitReplica: parent: %v  position: %v  timeCreatedNS: %d  semisync: %t", parent, position, timeCreatedNS, semiSync)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -422,7 +432,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* stopReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
 		return err
 	}
 
