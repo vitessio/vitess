@@ -60,7 +60,7 @@ const (
 // used for building routing plans.
 type VSchema struct {
 	RoutingRules      map[string]*RoutingRule `json:"routing_rules"`
-	uniqueTables      map[string]*Table
+	globalTables      map[string]*Table
 	uniqueVindexes    map[string]Vindex
 	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
 	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
@@ -79,7 +79,7 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	}
 	tables := make([]string, 0, len(rr.Tables))
 	for _, t := range rr.Tables {
-		tables = append(tables, t.ToString())
+		tables = append(tables, t.String())
 	}
 
 	return json.Marshal(tables)
@@ -97,6 +97,8 @@ type Table struct {
 	Columns                 []Column               `json:"columns,omitempty"`
 	Pinned                  []byte                 `json:"pinned,omitempty"`
 	ColumnListAuthoritative bool                   `json:"column_list_authoritative,omitempty"`
+	ReferencedBy            map[string]*Table      `json:"-"`
+	Source                  *Table                 `json:"-,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -191,7 +193,7 @@ type AutoIncrement struct {
 func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	vschema = &VSchema{
 		RoutingRules:   make(map[string]*RoutingRule),
-		uniqueTables:   make(map[string]*Table),
+		globalTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
@@ -216,7 +218,7 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		},
 	}
 	vschema := &VSchema{
-		uniqueTables:   make(map[string]*Table),
+		globalTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
@@ -233,6 +235,7 @@ func ValidateKeyspace(input *vschemapb.Keyspace) error {
 }
 
 func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	// In the first loop, build tables.
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := &KeyspaceSchema{
 			Keyspace: &Keyspace{
@@ -245,6 +248,101 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema)
 	}
+
+	// In the second loop, build references.
+	for ksname, ks := range source.Keyspaces {
+		ksvschema := vschema.Keyspaces[ksname]
+		if err := buildReferences(ks, vschema, ksvschema); err != nil && ksvschema.Error == nil {
+			ksvschema.Error = err
+		}
+	}
+
+	// In the third loop, build global tables.
+	for ksname, ks := range source.Keyspaces {
+		ksvschema := vschema.Keyspaces[ksname]
+		buildGlobalTables(ks, vschema, ksvschema)
+	}
+}
+
+func buildGlobalTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) {
+	for tname, t := range ksvschema.Tables {
+		// If the keyspace requires explicit routing, don't include any of
+		// its tables in global tables.
+		if !ks.RequireExplicitRouting {
+			if gt, ok := vschema.globalTables[tname]; ok {
+				// There is already an entry table stored in global tables
+				// with this name.
+				if gt == nil {
+					// Table name is already marked ambiguous, nothing to do.
+				} else if gt.Source == t {
+					// If the stored table refers to this table, store this
+					// table instead.
+					vschema.globalTables[tname] = t
+				} else if t.Source == gt {
+					// The source of this table is already stored. Do nothing.
+				} else {
+					// Otherwise, mark this table name ambiguous.
+					vschema.globalTables[tname] = nil
+				}
+			} else {
+				vschema.globalTables[tname] = t
+			}
+		}
+	}
+}
+
+func buildReferences(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) error {
+	keyspace := ksvschema.Keyspace
+	for tname, t := range ksvschema.Tables {
+		table := ks.Tables[tname]
+
+		if t.Type != TypeReference || table.Source == "" {
+			continue
+		}
+
+		_, err := escapeQualifiedTable(table.Source)
+		if err != nil {
+			return fmt.Errorf("invalid source %q for reference table: %s; %v", table.Source, tname, err)
+		}
+
+		sourceParts := strings.Split(table.Source, ".")
+		sourceKsname := sourceParts[0]
+		if sourceKsname == keyspace.Name {
+			return fmt.Errorf("source %q of reference table must be in a different keyspace: %s", table.Source, tname)
+		}
+
+		sourceKs, ok := vschema.Keyspaces[sourceKsname]
+		if !ok {
+			return fmt.Errorf("keyspace %q not found for reference table with source %q: %s",
+				sourceKsname, table.Source, tname)
+		}
+
+		sourceTname := sourceParts[1]
+		sourceT, ok := sourceKs.Tables[sourceTname]
+		if !ok {
+			return fmt.Errorf("table %q not found for reference table with source %q: %s",
+				sourceTname, table.Source, tname)
+		}
+
+		if sourceT.Type != "" {
+			return fmt.Errorf("invalid source table type %q for reference table with source %q: %s",
+				sourceT.Type, table.Source, tname)
+		}
+
+		if sourceT.ReferencedBy == nil {
+			sourceT.ReferencedBy = make(map[string]*Table)
+		}
+
+		if _, ok := sourceT.ReferencedBy[keyspace.Name]; ok {
+			return fmt.Errorf("source table %q may not be referenced more than once per keyspace: %s",
+				table.Source, tname)
+		}
+
+		t.Source = sourceT
+		sourceT.ReferencedBy[keyspace.Name] = t
+	}
+
+	return nil
 }
 
 func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) error {
@@ -255,7 +353,8 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			return err
 		}
 
-		// If the keyspace requires explicit routing, don't include it in global routing
+		// If the keyspace requires explicit routing, don't include its indexes
+		// in global routing.
 		if !ks.RequireExplicitRouting {
 			if _, ok := vschema.uniqueVindexes[vname]; ok {
 				vschema.uniqueVindexes[vname] = nil
@@ -272,7 +371,9 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			ColumnListAuthoritative: table.ColumnListAuthoritative,
 		}
 		switch table.Type {
-		case "", TypeReference:
+		case "":
+			t.Type = table.Type
+		case TypeReference:
 			t.Type = table.Type
 		case TypeSequence:
 			if keyspace.Sharded && table.Pinned == "" {
@@ -390,16 +491,9 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		t.Ordered = colVindexSorted(t.ColumnVindexes)
 
 		// Add the table to the map entries.
-		// If the keyspace requires explicit routing, don't include it in global routing
-		if !ks.RequireExplicitRouting {
-			if _, ok := vschema.uniqueTables[tname]; ok {
-				vschema.uniqueTables[tname] = nil
-			} else {
-				vschema.uniqueTables[tname] = t
-			}
-		}
 		ksvschema.Tables[tname] = t
 	}
+
 	return nil
 }
 
@@ -419,7 +513,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if err != nil {
 				// Better to remove the table than to leave it partially initialized.
 				delete(ksvschema.Tables, tname)
-				delete(vschema.uniqueTables, tname)
+				delete(vschema.globalTables, tname)
 				ksvschema.Error = fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
 				continue
 			}
@@ -448,7 +542,7 @@ func addDual(vschema *VSchema) {
 			// the keyspaces. For consistency, we'll always use the
 			// first keyspace by lexical ordering.
 			first = ksname
-			vschema.uniqueTables["dual"] = t
+			vschema.globalTables["dual"] = t
 		}
 	}
 }
@@ -560,7 +654,7 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 // findTable is like FindTable, but does not return an error if a table is not found.
 func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	if keyspace == "" {
-		table, ok := vschema.uniqueTables[tablename]
+		table, ok := vschema.globalTables[tablename]
 		if table == nil {
 			if ok {
 				return nil, fmt.Errorf("ambiguous table reference: %s", tablename)
@@ -788,9 +882,37 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 	return result, nil
 }
 
-// ToString prints the table name
-func (t *Table) ToString() string {
+func (t *Table) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type                    string                 `json:"type,omitempty"`
+		Name                    sqlparser.IdentifierCS `json:"name"`
+		ColumnVindexes          []*ColumnVindex        `json:"column_vindexes,omitempty"`
+		Ordered                 []*ColumnVindex        `json:"ordered,omitempty"`
+		Owned                   []*ColumnVindex        `json:"owned,omitempty"`
+		AutoIncrement           *AutoIncrement         `json:"auto_increment,omitempty"`
+		Columns                 []Column               `json:"columns,omitempty"`
+		Pinned                  []byte                 `json:"pinned,omitempty"`
+		ColumnListAuthoritative bool                   `json:"column_list_authoritative,omitempty"`
+		Source                  string                 `json:"source,omitempty"`
+	}{
+		Type:                    t.Type,
+		Name:                    t.Name,
+		ColumnVindexes:          t.ColumnVindexes,
+		Ordered:                 t.Ordered,
+		AutoIncrement:           t.AutoIncrement,
+		Columns:                 t.Columns,
+		Pinned:                  t.Pinned,
+		ColumnListAuthoritative: t.ColumnListAuthoritative,
+		Source:                  t.Source.String(),
+	})
+}
+
+// String prints the (possibly qualified) table name
+func (t *Table) String() string {
 	res := ""
+	if t == nil {
+		return res
+	}
 	if t.Keyspace != nil {
 		res = t.Keyspace.Name + "."
 	}
