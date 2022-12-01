@@ -18,6 +18,8 @@ package integration
 
 import (
 	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // ast type helpers
@@ -97,4 +99,17 @@ func Rewrite(node AST, pre, post ApplyFunc) AST {
 	})
 
 	return outer.AST
+}
+
+// ASTComparison is used to compare AST trees and override the normal comparison logic
+type ASTComparison interface {
+	ColNames(a, b *sqlparser.ColName) *bool
+}
+
+type DefaultComparison struct{}
+
+var DefaultEquality = DefaultComparison{}
+
+func (DefaultComparison) ColNames(*sqlparser.ColName, *sqlparser.ColName) *bool {
+	return nil
 }
