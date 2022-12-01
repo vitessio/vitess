@@ -53,11 +53,7 @@ func (e *equalsGen) genFile() (string, *jen.File) {
 
 func (e *equalsGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
 	/*
-		func EqualsAST(inA, inB AST) bool {
-			return EqualASTS(inA, inB, DefaultEquality)
-		}
-
-		func EqualsASTS(inA, inB AST, f ASTComparison) bool {
+		func EqualsAST(inA, inB AST, f ASTComparison) bool {
 			if inA == inB {
 				return true
 			}
@@ -70,7 +66,7 @@ func (e *equalsGen) interfaceMethod(t types.Type, iface *types.Interface, spi ge
 				if !ok {
 					return false
 				}
-				return EqualsSubImplS(a, b, f)
+				return EqualsSubImpl(a, b, f)
 			}
 			return false
 		}
@@ -129,13 +125,9 @@ func compareValueType(t types.Type, a, b *jen.Statement, eq bool, spi generatorS
 
 func (e *equalsGen) structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
 	/*
-		func EqualsRefOfRefContainer(inA RefContainer, inB RefContainer) bool {
-			return EqualsRefOfRefContainerS(inA, inB, DefaultEquality)
-		}
-
-		func EqualsRefOfRefContainerS(inA RefContainer, inB RefContainer, f ASTComparison) bool {
-			return EqualsRefOfLeafS(inA.ASTImplementationType, inB.ASTImplementationType, f ASTComparison) &&
-				EqualsASTS(inA.ASTType, inB.ASTType, f ASTComparison) && inA.NotASTType == inB.NotASTType
+		func EqualsRefOfRefContainer(inA RefContainer, inB RefContainer, f ASTComparison) bool {
+			return EqualsRefOfLeaf(inA.ASTImplementationType, inB.ASTImplementationType, f) &&
+				EqualsAST(inA.ASTType, inB.ASTType, f) && inA.NotASTType == inB.NotASTType
 		}
 	*/
 
@@ -191,11 +183,7 @@ func (e *equalsGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 	typeString := types.TypeString(t, noQualifier)
 
 	/*
-		func EqualsRefOfType(a, b *Type) *Type {
-			return EqualsRefOfTypeS(a, b, DefaultEquality)
-		}
-
-		func EqualsRefOfTypeS(a, b *Type, f ASTComparison) *Type {
+		func EqualsRefOfType(a, b *Type, f ASTComparison) *Type {
 			if a == b {
 				return true
 			}
@@ -204,9 +192,8 @@ func (e *equalsGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 			}
 
 			// only if it is a *ColName
-			res := f.ColNames(a, b)
-			if res != nil {
-				return *res
+			if f != nil {
+				return f.ColNames(a, b)
 			}
 
 			return compareAllStructFields
@@ -234,11 +221,7 @@ func (e *equalsGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 
 func (e *equalsGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
 	/*
-		func EqualsRefOfBool(a, b *bool) bool {
-			return EqualsRefOfBoolS(a, b, DefaultEquality)
-		}
-
-		func EqualsRefOfBoolS(a, b *bool, f ASTComparison) bool {
+		func EqualsRefOfBool(a, b *bool, f ASTComparison) bool {
 			if a == b {
 				return true
 			}
