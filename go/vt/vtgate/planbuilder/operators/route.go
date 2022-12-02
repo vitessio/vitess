@@ -55,6 +55,10 @@ type (
 
 		// TargetDestination specifies an explicit target destination tablet type
 		TargetDestination key.Destination
+
+		// Alternates contains alternate routes to equivalent sources in
+		// other keyspaces.
+		Alternates []*Route
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -615,6 +619,7 @@ func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -717,35 +722,71 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
 }
 
-func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves semantics.TableSet) (*Route, error) {
-	if table.IsInfSchema {
-		return createInfSchemaRoute(ctx, table)
+// createRoute returns either an information_schema route, or else consults the
+// VSchema to find a suitable table, and then creates a route from that.
+func createRoute(
+	ctx *plancontext.PlanningContext,
+	queryTable *QueryTable,
+	solves semantics.TableSet,
+) (*Route, error) {
+	if queryTable.IsInfSchema {
+		return createInfSchemaRoute(ctx, queryTable)
 	}
-	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(table.Table)
+	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, solves)
+}
+
+// findVSchemaTableAndCreateRoute consults the VSchema to find a suitable
+// table, and then creates a route from that.
+func findVSchemaTableAndCreateRoute(
+	ctx *plancontext.PlanningContext,
+	queryTable *QueryTable,
+	tableName sqlparser.TableName,
+	solves semantics.TableSet,
+) (*Route, error) {
+	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if target != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
 	}
 	if err != nil {
 		return nil, err
 	}
-	if vschemaTable.Name.String() != table.Table.Name.String() {
+
+	return createRouteFromVSchemaTable(
+		ctx,
+		queryTable,
+		vschemaTable,
+		solves,
+		// Don't plan alternates if the table query is qualified.
+		queryTable.Table.Qualifier.IsEmpty(),
+	)
+}
+
+// createRouteFromTable creates a route from the given VSchema table.
+func createRouteFromVSchemaTable(
+	ctx *plancontext.PlanningContext,
+	queryTable *QueryTable,
+	vschemaTable *vindexes.Table,
+	solves semantics.TableSet,
+	planAlternates bool,
+) (*Route, error) {
+	if vschemaTable.Name.String() != queryTable.Table.Name.String() {
 		// we are dealing with a routed table
-		name := table.Table.Name
-		table.Table.Name = vschemaTable.Name
-		astTable, ok := table.Alias.Expr.(sqlparser.TableName)
+		name := queryTable.Table.Name
+		queryTable.Table.Name = vschemaTable.Name
+		astTable, ok := queryTable.Alias.Expr.(sqlparser.TableName)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
 		}
 		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
 		astTable.Name = realTableName
-		if table.Alias.As.IsEmpty() {
+		if queryTable.Alias.As.IsEmpty() {
 			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
-			table.Alias.As = sqlparser.NewIdentifierCS(name.String())
+			queryTable.Alias.As = sqlparser.NewIdentifierCS(name.String())
 		}
 	}
 	plan := &Route{
 		Source: &Table{
-			QTable: table,
+			QTable: queryTable,
 			VTable: vschemaTable,
 		},
 		Keyspace: vschemaTable.Keyspace,
@@ -782,24 +823,24 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 	default:
 		plan.RouteOpCode = engine.Scatter
 	}
-	for _, predicate := range table.Predicates {
-		err = plan.UpdateRoutingLogic(ctx, predicate)
+	for _, predicate := range queryTable.Predicates {
+		err := plan.UpdateRoutingLogic(ctx, predicate)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
+	if plan.RouteOpCode == engine.Scatter && len(queryTable.Predicates) > 0 {
 		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
-		oldPredicates := table.Predicates
-		table.Predicates = nil
+		oldPredicates := queryTable.Predicates
+		queryTable.Predicates = nil
 		plan.SeenPredicates = nil
 		for _, pred := range oldPredicates {
 			rewritten := sqlparser.RewritePredicate(pred)
 			predicates := sqlparser.SplitAndExpression(nil, rewritten.(sqlparser.Expr))
 			for _, predicate := range predicates {
-				table.Predicates = append(table.Predicates, predicate)
-				err = plan.UpdateRoutingLogic(ctx, predicate)
+				queryTable.Predicates = append(queryTable.Predicates, predicate)
+				err := plan.UpdateRoutingLogic(ctx, predicate)
 				if err != nil {
 					return nil, err
 				}
@@ -808,13 +849,13 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 
 		if plan.RouteOpCode == engine.Scatter {
 			// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
-			for _, expr := range table.Predicates {
+			for _, expr := range queryTable.Predicates {
 				or, ok := expr.(*sqlparser.OrExpr)
 				if !ok {
 					continue
 				}
 				for _, predicate := range sqlparser.ExtractINFromOR(or) {
-					err = plan.UpdateRoutingLogic(ctx, predicate)
+					err := plan.UpdateRoutingLogic(ctx, predicate)
 					if err != nil {
 						return nil, err
 					}
@@ -823,7 +864,60 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 		}
 	}
 
+	if planAlternates {
+		alternates, err := createAlternateRoutesFromVSchemaTable(
+			ctx,
+			queryTable,
+			vschemaTable,
+			solves,
+		)
+		if err != nil {
+			return nil, err
+		}
+		plan.Alternates = alternates
+	}
+
 	return plan, nil
+}
+
+func createAlternateRoutesFromVSchemaTable(
+	ctx *plancontext.PlanningContext,
+	queryTable *QueryTable,
+	vschemaTable *vindexes.Table,
+	solves semantics.TableSet,
+) ([]*Route, error) {
+	var routes []*Route
+
+	switch vschemaTable.Type {
+	case vindexes.TypeReference:
+		if vschemaTable.Source != nil {
+			route, err := createRouteFromVSchemaTable(
+				ctx,
+				queryTable,
+				vschemaTable.Source,
+				solves,
+				false /*planAlternates*/)
+			if err != nil {
+				return nil, err
+			}
+			routes = append(routes, route)
+		}
+	case "":
+		for _, referenceTable := range vschemaTable.ReferencedBy {
+			route, err := createRouteFromVSchemaTable(
+				ctx,
+				queryTable,
+				referenceTable,
+				solves,
+				false /*planAlternates*/)
+			if err != nil {
+				return nil, err
+			}
+			routes = append(routes, route)
+		}
+	}
+
+	return routes, nil
 }
 
 func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
@@ -841,4 +935,18 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
 	return r.Source.AddColumn(ctx, e)
+}
+
+func (r *Route) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
+	if keyspace.Name == r.Keyspace.Name {
+		return nil
+	}
+
+	for _, alternate := range r.Alternates {
+		if alternate.Keyspace.Name == keyspace.Name {
+			return alternate
+		}
+	}
+
+	return nil
 }
