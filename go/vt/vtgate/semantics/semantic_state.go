@@ -420,6 +420,46 @@ func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	return sqlparser.EqualsExpr(a, b, st.ASTComparison())
 }
 
+func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool {
+	for _, expre := range expres {
+		if st.EqualsExpr(e, expre) {
+			return true
+		}
+	}
+	return false
+}
+
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (sqlparser.Expr)(nil)
+	outer:
+		// we'll loop and remove any duplicates
+		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
+			if result == nil {
+				result = expr
+				continue outer
+			}
+
+			for j := 0; j < i; j++ {
+				if st.EqualsExpr(expr, exprs[j]) {
+					continue outer
+				}
+			}
+			result = &sqlparser.AndExpr{Left: result, Right: expr}
+		}
+		return result
+	}
+}
+
 // ASTComparison returns a struct that implements the interface with the same name in the `sqlparser` package,
 // that overrides how comparisons between two ColNames is performed.
 func (st *SemTable) ASTComparison() sqlparser.ASTComparison {
