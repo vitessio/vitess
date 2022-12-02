@@ -64,14 +64,14 @@ func TestDownPrimary(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
 
-	// Make the rdonly tablet unavailable
-	err := rdonly.MysqlctlProcess.Stop()
+	// Make the rdonly vttablet unavailable
+	err := rdonly.VttabletProcess.TearDown()
 	require.NoError(t, err)
-	// Make the current primary database unavailable.
-	err = curPrimary.MysqlctlProcess.Stop()
+	// Make the current primary vttablet unavailable.
+	err = curPrimary.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	defer func() {
-		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 		utils.PermanentlyRemoveVttablet(clusterInfo, rdonly)
 	}()
