@@ -15,3 +15,38 @@ limitations under the License.
 */
 
 package newfeaturetest
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+)
+
+func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// make tablets[1] a rdonly tablet.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	require.NoError(t, err)
+
+	// Confirm that replication is still working as intended
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Make the rdonly and primary tablets and databases unavailable.
+	utils.StopTablet(t, tablets[1], true)
+	utils.StopTablet(t, tablets[0], true)
+
+	// We expect this to succeed since we only have 1 primary eligible tablet which is down
+	out, err := utils.Ers(clusterInstance, nil, "", "")
+	require.NoError(t, err, out)
+
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[2], tablets[3]})
+}
