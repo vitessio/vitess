@@ -709,8 +709,8 @@
   {
     "comment": "scatter aggregate group by aggregate function",
     "query": "select count(*) b from user group by b",
-    "v3-plan": "VT03005: Can't group on 'b'",
-    "gen4-plan": "VT03005: Can't group on 'count(*)'"
+    "v3-plan": "VT03005: cannot group on 'b'",
+    "gen4-plan": "VT03005: cannot group on 'count(*)'"
   },
   {
     "comment": "scatter aggregate multiple group by (columns)",
@@ -939,7 +939,7 @@
   {
     "comment": "scatter aggregate group by invalid column number",
     "query": "select col from user group by 2",
-    "v3-plan": "VT03014: Unknown column '2' in 'group statement'",
+    "v3-plan": "VT03014: unknown column '2' in 'group statement'",
     "gen4-plan": "Unknown column '2' in 'group statement'"
   },
   {
@@ -1281,7 +1281,7 @@
   {
     "comment": "invalid order by column numner for scatter",
     "query": "select col, count(*) from user group by col order by 5 limit 10",
-    "v3-plan": "VT03014: Unknown column '5' in 'order clause'",
+    "v3-plan": "VT03014: unknown column '5' in 'order clause'",
     "gen4-plan": "Unknown column '5' in 'order clause'"
   },
   {
@@ -1641,7 +1641,7 @@
   {
     "comment": "Group by out of range column number (code is duplicated from symab).",
     "query": "select id from user group by 2",
-    "v3-plan": "VT03014: Unknown column '2' in 'group statement'",
+    "v3-plan": "VT03014: unknown column '2' in 'group statement'",
     "gen4-plan": "Unknown column '2' in 'group statement'"
   },
   {
@@ -1931,12 +1931,13 @@
   {
     "comment": "Cannot have more than one aggr(distinct...",
     "query": "select count(distinct a), count(distinct b) from user",
-    "plan": "VT12001: unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: count(distinct b)",
+    "gen4-plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
   },
   {
     "comment": "multiple distinct functions with grouping.",
     "query": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
-    "v3-plan": "VT12001: unsupported: only one distinct aggregation allowed in a select: sum(distinct col2)",
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct col2)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
@@ -1969,7 +1970,7 @@
   {
     "comment": "aggregate query with order by aggregate column along with NULL",
     "query": "select col, count(*) k from user group by col order by null, k",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex order by expression: null",
+    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: null",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) k from user group by col order by null, k",
@@ -3481,7 +3482,7 @@
   {
     "comment": "multiple distinct aggregations on the same column is allowed",
     "query": "select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1",
-    "v3-plan": "VT12001: unsupported: only one distinct aggregation allowed in a select: sum(distinct tcol2)",
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct tcol2)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1",
@@ -3514,7 +3515,7 @@
   {
     "comment": "multiple distinct aggregations on the same column in different positions",
     "query": "select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1",
-    "v3-plan": "VT12001: unsupported: only one distinct aggregation allowed in a select: sum(distinct tcol2)",
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct tcol2)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1",
@@ -3785,8 +3786,8 @@
   {
     "comment": "select count(distinct user_id, name) from user",
     "query": "select count(distinct user_id, name) from user",
-    "v3-plan": "VT12001: unsupported: only one expression allowed inside aggregates: count(distinct user_id, `name`)",
-    "gen4-plan": "VT03001: Aggregate functions take a single argument 'count(distinct user_id, `name`)'"
+    "v3-plan": "VT12001: unsupported: only one expression is allowed inside aggregates: count(distinct user_id, `name`)",
+    "gen4-plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
   },
   {
     "comment": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
@@ -4792,7 +4793,7 @@
   {
     "comment": "Group By X Order By X",
     "query": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex order by expression: count(`user`.intcol)",
+    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: count(`user`.intcol)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
@@ -4832,7 +4833,7 @@
   {
     "comment": "AggregateRandom in non full group by query",
     "query": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",

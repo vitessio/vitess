@@ -574,7 +574,7 @@
   {
     "comment": "update by primary keyspace id, changing same vindex twice",
     "query": "update user_metadata set email = 'a', email = 'b' where user_id = 1",
-    "plan": "VT03015: Column has duplicate set values: 'email'"
+    "plan": "VT03015: column has duplicate set values: 'email'"
   },
   {
     "comment": "update by primary keyspace id, changing multiple vindex columns",
@@ -1725,7 +1725,7 @@
   {
     "comment": "insert with mimatched column list",
     "query": "insert into user(id) values (1, 2)",
-    "plan": "VT13001: [BUG] column list doesn't match values"
+    "plan": "VT13001: [BUG] column list does not match values"
   },
   {
     "comment": "insert no column list for sharded authoritative table",
@@ -3794,17 +3794,17 @@
   {
     "comment": "delete with unknown reference",
     "query": "delete music from user where id = 1",
-    "plan": "VT03003: Unknown table 'music' in MULTI DELETE"
+    "plan": "VT03003: unknown table 'music' in MULTI DELETE"
   },
   {
     "comment": "delete with derived tables",
     "query": "delete music from (select * from user) music where id = 1",
-    "plan": "VT03004: The target table music of the DELETE is not updatable"
+    "plan": "VT03004: the target table music of the DELETE is not updatable"
   },
   {
     "comment": "delete with derived tables with unknown table",
     "query": "delete user from (select * from user) music where id = 1",
-    "plan": "VT03003: Unknown table 'user' in MULTI DELETE"
+    "plan": "VT03003: unknown table 'user' in MULTI DELETE"
   },
   {
     "comment": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
@@ -3828,7 +3828,7 @@
         "main.user_privacy_consents"
       ]
     },
-    "gen4-plan": "VT12001: unsupported: unable to split predicates to derived table: not :__sq_has_values1"
+    "gen4-plan": "VT12001: unsupported: unable to push predicates to derived table: not :__sq_has_values1"
   },
   {
     "comment": "Delete on backfilling unique lookup vindex should be a scatter",
@@ -4995,17 +4995,17 @@
   {
     "comment": "insert using select with more columns in insert",
     "query": "insert into music(id, user_id) select 1",
-    "plan": "VT03006: Column count doesn't match value count at row 1"
+    "plan": "VT03006: column count doesn't match value count at row 1"
   },
   {
     "comment": "insert using select with more columns in select",
     "query": "insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id",
-    "plan": "VT03006: Column count doesn't match value count at row 1"
+    "plan": "VT03006: column count doesn't match value count at row 1"
   },
   {
     "comment": "insert using select with more columns in select after accounting for star column",
     "query": "insert into music(id, user_id) select id, *, 2 from user",
-    "plan": "VT03006: Column count doesn't match value count at row 1"
+    "plan": "VT03006: column count doesn't match value count at row 1"
   },
   {
     "comment": "insert using select with auto-inc column using vitess sequence, sequence column not present",
@@ -5318,7 +5318,7 @@
   {
     "comment": "insert using select with sharding column is not an autoinc and not present in the insert column query",
     "query": "insert into user_extra(pattern) SELECT 1",
-    "plan": "VT09003: Insert query does not have sharding column 'user_id' in the column list"
+    "plan": "VT09003: INSERT query does not have sharding column 'user_id' in the column list"
   },
   {
     "comment": "sharded same keyspace",
@@ -5995,7 +5995,7 @@
   {
     "comment": "explain dml without any directive should fail",
     "query": "explain format=vtexplain delete from user",
-    "plan": "VT09008: explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
+    "plan": "VT09008: explain format = vtexplain will actually run queries"
   },
   {
     "comment": "explain dml with actually_run_query directive",

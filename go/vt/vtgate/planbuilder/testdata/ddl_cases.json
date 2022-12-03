@@ -59,7 +59,7 @@
   {
     "comment": "simple create table with table qualifier that does not exists",
     "query": "create table a.b(id int)",
-    "plan": "VT05003: Unknown database 'a' in vschema"
+    "plan": "VT05003: unknown database 'a' in vschema"
   },
   {
     "comment": "Alter table",
@@ -121,7 +121,7 @@
   {
     "comment": "Alter table with unknown qualifier",
     "query": "alter table a.b ADD id int",
-    "plan": "VT05003: Unknown database 'a' in vschema"
+    "plan": "VT05003: unknown database 'a' in vschema"
   },
   {
     "comment": "create db foo",
@@ -141,7 +141,7 @@
   {
     "comment": "create db main",
     "query": "create database main",
-    "plan": "VT06001: Can't create database 'main'; database exists"
+    "plan": "VT06001: cannot create database 'main'; database exists"
   },
   {
     "comment": "create db if not exists main",
@@ -157,7 +157,7 @@
   {
     "comment": "alter db foo",
     "query": "alter database foo collate utf8",
-    "plan": "VT05002: Can't alter database 'foo'; unknown database"
+    "plan": "VT05002: cannot alter database 'foo'; unknown database"
   },
   {
     "comment": "alter db main",
@@ -167,7 +167,7 @@
   {
     "comment": "drop db foo",
     "query": "drop database foo",
-    "plan": "VT05001: Can't drop database 'foo'; database doesn't exists"
+    "plan": "VT05001: cannot drop database 'foo'; database does not exists"
   },
   {
     "comment": "drop db main",

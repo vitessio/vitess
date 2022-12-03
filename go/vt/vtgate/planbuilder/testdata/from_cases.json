@@ -580,7 +580,7 @@
   {
     "comment": "routing rules bad table",
     "query": "select * from bad_table",
-    "plan": "VT05003: Unknown database 'noks' in vschema"
+    "plan": "VT05003: unknown database 'noks' in vschema"
   },
   {
     "comment": "routing rules disabled table",
@@ -4609,12 +4609,12 @@
   {
     "comment": "duplicate symbols",
     "query": "select user.id from user join user",
-    "plan": "VT03013: Not unique table/alias: 'user'"
+    "plan": "VT03013: not unique table/alias: 'user'"
   },
   {
     "comment": "duplicate symbols for merging routes",
     "query": "select user.id from user join user_extra user on user.id = user.user_id",
-    "plan": "VT03013: Not unique table/alias: 'user'"
+    "plan": "VT03013: not unique table/alias: 'user'"
   },
   {
     "comment": "non-existent table",

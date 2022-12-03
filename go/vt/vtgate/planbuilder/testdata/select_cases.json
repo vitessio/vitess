@@ -639,7 +639,7 @@
   {
     "comment": "test table lookup failure for authoritative code path",
     "query": "select a.* from authoritative",
-    "v3-plan": "VT05004: Table 'a' does not exist",
+    "v3-plan": "VT05004: table 'a' does not exist",
     "gen4-plan": "Unknown table 'a'"
   },
   {
@@ -3201,13 +3201,13 @@
   {
     "comment": "sql_calc_found_rows in sub queries",
     "query": "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
-    "v3-plan": "VT03008: Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "v3-plan": "VT03008: incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
     "gen4-plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
   },
   {
     "comment": "sql_calc_found_rows in derived table",
     "query": "select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1",
-    "v3-plan": "VT03008: Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "v3-plan": "VT03008: incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
     "gen4-plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
   },
   {
@@ -4242,7 +4242,7 @@
     "comment": "correlated subquery part of an OR clause",
     "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
     "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
-    "gen4-plan": "VT12001: unsupported: exists sub-queries are only supported with AND clause"
+    "gen4-plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
   },
   {
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
@@ -6401,7 +6401,7 @@
   {
     "comment": "Unmergeable scatter subquery with `GROUP BY` on-non vindex column",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
-    "v3-plan": "VT12001: unsupported: in scatter query: group by column must reference column in SELECT list",
+    "v3-plan": "VT12001: unsupported: in scatter query: GROUP BY column must reference column in SELECT list",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",

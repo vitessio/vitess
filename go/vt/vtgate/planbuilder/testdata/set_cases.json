@@ -531,7 +531,7 @@
   {
     "comment": "change read only variable",
     "query": "set socket = ''",
-    "plan": "VT03010: Variable 'socket' is a read only variable"
+    "plan": "VT03010: variable 'socket' is a read only variable"
   },
   {
     "comment": "set transaction read only",
