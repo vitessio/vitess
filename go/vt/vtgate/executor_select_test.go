@@ -3331,6 +3331,126 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 }
 
+func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor.pv = querypb.ExecuteOptions_Gen4
+
+	query := "select * from zip_detail"
+	_, err := executorExec(executor, query, nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           query,
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	require.Nil(t, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+}
+
+func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor.pv = querypb.ExecuteOptions_Gen4
+
+	query := fmt.Sprintf("select * from %s.zip_detail", KsTestSharded)
+	_, err := executorExec(executor, query, nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select * from zip_detail",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	require.Nil(t, sbclookup.Queries)
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+}
+
+func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor.pv = querypb.ExecuteOptions_Gen4
+
+	query := "select * from user join zip_detail on user.zip_detail_id = zip_detail.id"
+	_, err := executorExec(executor, query, nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select * from `user`, zip_detail where `user`.zip_detail_id = zip_detail.id",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	require.Nil(t, sbclookup.Queries)
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	query = "select * from simple join zip_detail on simple.zip_detail_id = zip_detail.id"
+	_, err = executorExec(executor, query, nil)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql:           "select * from `simple` join zip_detail on `simple`.zip_detail_id = zip_detail.id",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	require.Nil(t, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+}
+
+func TestGen4JoinCrossShardQualifiedReferenceTable(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor.pv = querypb.ExecuteOptions_Gen4
+
+	query := "select user.id from user join TestUnsharded.zip_detail on user.zip_detail_id = TestUnsharded.zip_detail.id"
+	_, err := executorExec(executor, query, nil)
+	require.NoError(t, err)
+	unshardedWantQueries := []*querypb.BoundQuery{}
+	for i := 0; i < 8; /*# of shards in sharded keyspace*/ i++ {
+		unshardedWantQueries = append(unshardedWantQueries, &querypb.BoundQuery{
+			Sql:           "select 1 from zip_detail where zip_detail.id = :user_zip_detail_id",
+			BindVariables: map[string]*querypb.BindVariable{"user_zip_detail_id": {Type: sqltypes.Int32, Value: []byte("1")}},
+		})
+	}
+	shardedWantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select `user`.zip_detail_id, `user`.id from `user`",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	utils.MustMatch(t, unshardedWantQueries, sbclookup.Queries)
+	utils.MustMatch(t, shardedWantQueries, sbc1.Queries)
+	utils.MustMatch(t, shardedWantQueries, sbc2.Queries)
+
+	sbclookup.Queries = nil
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	query = "select simple.id from simple join TestExecutor.zip_detail on simple.zip_detail_id = TestExecutor.zip_detail.id"
+	_, err = executorExec(executor, query, nil)
+	require.NoError(t, err)
+	unshardedWantQueries = []*querypb.BoundQuery{
+		{
+			Sql:           "select `simple`.zip_detail_id, `simple`.id from `simple`",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	shardedWantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select 1 from zip_detail where zip_detail.id = :simple_zip_detail_id",
+			BindVariables: map[string]*querypb.BindVariable{
+				"simple_zip_detail_id": {Type: sqltypes.Int32, Value: []byte("1")},
+			},
+		},
+	}
+	utils.MustMatch(t, unshardedWantQueries, sbclookup.Queries)
+	utils.MustMatch(t, shardedWantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+}
+
 func TestRegionRange(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 
