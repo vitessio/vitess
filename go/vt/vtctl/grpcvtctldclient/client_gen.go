@@ -434,6 +434,15 @@ func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctld
 	return client.c.InitShardPrimary(ctx, in, opts...)
 }
 
+// Materialize is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) Materialize(ctx context.Context, in *vtctldatapb.MaterializeRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.Materialize(ctx, in, opts...)
+}
+
 // PingTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) PingTablet(ctx context.Context, in *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
 	if client.c == nil {

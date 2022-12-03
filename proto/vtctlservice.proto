@@ -40,7 +40,7 @@ service Vtctld {
   // When routing query traffic, replica/rdonly traffic can be routed across
   // cells within the group (alias). Only primary traffic can be routed across
   // cells not in the same group (alias).
-  rpc AddCellsAlias(vtctldata.AddCellsAliasRequest) returns (vtctldata.AddCellsAliasResponse) {}; 
+  rpc AddCellsAlias(vtctldata.AddCellsAliasRequest) returns (vtctldata.AddCellsAliasResponse) {};
   // ApplyRoutingRules applies the VSchema routing rules.
   rpc ApplyRoutingRules(vtctldata.ApplyRoutingRulesRequest) returns (vtctldata.ApplyRoutingRulesResponse) {};
   // ApplySchema applies a schema to a keyspace.
@@ -158,6 +158,8 @@ service Vtctld {
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
   // PingTablet checks that the specified tablet is awake and responding to RPCs.
   // This command can be blocked by other in-flight operations.
+  // Materialize creates a new materialize vreplication workflow
+  rpc Materialize(vtctldata.MaterializeRequest) returns (vtctldata.MaterializeResponse) {};
   rpc PingTablet(vtctldata.PingTabletRequest) returns (vtctldata.PingTabletResponse) {};
   // PlannedReparentShard reparents the shard to the new primary, or away from
   // an old primary. Both the old and new primaries need to be reachable and

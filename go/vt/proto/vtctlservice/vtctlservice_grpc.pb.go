@@ -263,6 +263,8 @@ type VtctldClient interface {
 	InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs.
 	// This command can be blocked by other in-flight operations.
+	// Materialize creates a new materialize vreplication workflow
+	Materialize(ctx context.Context, in *vtctldata.MaterializeRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeResponse, error)
 	PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error)
 	// PlannedReparentShard reparents the shard to the new primary, or away from
 	// an old primary. Both the old and new primaries need to be reachable and
@@ -868,6 +870,15 @@ func (c *vtctldClient) InitShardPrimary(ctx context.Context, in *vtctldata.InitS
 	return out, nil
 }
 
+func (c *vtctldClient) Materialize(ctx context.Context, in *vtctldata.MaterializeRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeResponse, error) {
+	out := new(vtctldata.MaterializeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/Materialize", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error) {
 	out := new(vtctldata.PingTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/PingTablet", in, out, opts...)
@@ -1364,6 +1375,8 @@ type VtctldServer interface {
 	InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs.
 	// This command can be blocked by other in-flight operations.
+	// Materialize creates a new materialize vreplication workflow
+	Materialize(context.Context, *vtctldata.MaterializeRequest) (*vtctldata.MaterializeResponse, error)
 	PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error)
 	// PlannedReparentShard reparents the shard to the new primary, or away from
 	// an old primary. Both the old and new primaries need to be reachable and
@@ -1643,6 +1656,9 @@ func (UnimplementedVtctldServer) GetWorkflows(context.Context, *vtctldata.GetWor
 }
 func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitShardPrimary not implemented")
+}
+func (UnimplementedVtctldServer) Materialize(context.Context, *vtctldata.MaterializeRequest) (*vtctldata.MaterializeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Materialize not implemented")
 }
 func (UnimplementedVtctldServer) PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
@@ -2605,6 +2621,24 @@ func _Vtctld_InitShardPrimary_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_Materialize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MaterializeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).Materialize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/Materialize",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).Materialize(ctx, req.(*vtctldata.MaterializeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.PingTabletRequest)
 	if err := dec(in); err != nil {
@@ -3474,6 +3508,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InitShardPrimary",
 			Handler:    _Vtctld_InitShardPrimary_Handler,
+		},
+		{
+			MethodName: "Materialize",
+			Handler:    _Vtctld_Materialize_Handler,
 		},
 		{
 			MethodName: "PingTablet",

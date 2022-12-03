@@ -346,6 +346,11 @@ func (client *localVtctldClient) InitShardPrimary(ctx context.Context, in *vtctl
 	return client.s.InitShardPrimary(ctx, in)
 }
 
+// Materialize is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) Materialize(ctx context.Context, in *vtctldatapb.MaterializeRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeResponse, error) {
+	return client.s.Materialize(ctx, in)
+}
+
 // PingTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) PingTablet(ctx context.Context, in *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
 	return client.s.PingTablet(ctx, in)

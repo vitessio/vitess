@@ -2239,6 +2239,23 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
+// Materialize is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) Materialize(ctx context.Context, req *vtctldatapb.MaterializeRequest) (resp *vtctldatapb.MaterializeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.Materialize")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("cells", req.Cells)
+	span.Annotate("tablet_types", req.TabletTypes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.MaterializeResponse{}, nil
+}
+
 // PingTablet is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest) (resp *vtctldatapb.PingTabletResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.PingTablet")

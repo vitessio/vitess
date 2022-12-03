@@ -35,6 +35,16 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetWorkflows,
 	}
+
+	// Materialize makes a Materialize gRPC call to a vtctld.
+	Materialize = &cobra.Command{
+		Use:                   "Materialize [--cells=<cells>] [--tablet_types=<source_tablet_types>] <json_spec>",
+		Short:                 "Runs",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandMaterialize,
+		Example:               `Materialize '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
+	}
 )
 
 var getWorkflowsOptions = struct {
@@ -65,7 +75,40 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var materializeOptions = struct {
+	Cells       string
+	TabletTypes string
+}{}
+
+func commandMaterialize(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	materializeSpec := cmd.Flags().Arg(0)
+
+	resp, err := client.Materialize(commandCtx, &vtctldatapb.MaterializeRequest{
+		Cells:           materializeOptions.Cells,
+		TabletTypes:     materializeOptions.TabletTypes,
+		MaterializeSpec: materializeSpec,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
 func init() {
 	GetWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
 	Root.AddCommand(GetWorkflows)
+
+	Materialize.Flags().StringVarP(&materializeOptions.Cells, "cells", "c", "", "Choose tablets from these cells to source from")
+	Materialize.Flags().StringVarP(&materializeOptions.TabletTypes, "tablet_types", "t", "", "Choose tablets of these types to source from")
+	Root.AddCommand(Materialize)
 }

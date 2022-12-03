@@ -805,6 +805,16 @@ message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
 }
 
+message MaterializeRequest {
+  string cells = 1;
+  string tablet_types = 2;
+  string materialize_spec = 3;
+}
+
+message MaterializeResponse {
+}
+
+
 message PingTabletRequest {
   topodata.TabletAlias tablet_alias = 1;
 }
@@ -1296,3 +1306,4 @@ message ValidateVSchemaResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
+
