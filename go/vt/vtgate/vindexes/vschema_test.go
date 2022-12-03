@@ -2493,16 +2493,16 @@ func TestFindTable(t *testing.T) {
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},
-	}
-	t2.ReferencedBy = map[string]*Table{
-		"ksb": {
-			Type: "reference",
-			Name: sqlparser.NewIdentifierCS("t2"),
-			Keyspace: &Keyspace{
-				Sharded: true,
-				Name:    "ksb",
+		ReferencedBy: map[string]*Table{
+			"ksb": {
+				Type: "reference",
+				Name: sqlparser.NewIdentifierCS("t2"),
+				Keyspace: &Keyspace{
+					Sharded: true,
+					Name:    "ksb",
+				},
+				Source: "ksa.t2",
 			},
-			Source: t2,
 		},
 	}
 	got, err = vschema.FindTable("", "t2")
@@ -3049,7 +3049,7 @@ func TestMultiColVindexPartialNotAllowed(t *testing.T) {
 	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
 }
 
-func TestReferenceTableHasSourceAndSourceHasReference(t *testing.T) {
+func TestSourceTableHasReferencedBy(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"unsharded": {
@@ -3085,8 +3085,6 @@ func TestReferenceTableHasSourceAndSourceHasReference(t *testing.T) {
 	require.NoError(t, err)
 	src, err := vs.FindTable("unsharded", "src")
 	require.NoError(t, err)
-	require.Equal(t, src, ref1.Source)
-	require.Equal(t, src, ref2.Source)
 	require.Equal(t, src.ReferencedBy, map[string]*Table{
 		"sharded1": ref1,
 		"sharded2": ref2,

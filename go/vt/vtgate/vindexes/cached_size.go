@@ -402,7 +402,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(208)
 	}
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
@@ -459,8 +459,8 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 			size += v.CachedSize(true)
 		}
 	}
-	// field Source *vitess.io/vitess/go/vt/vtgate/vindexes.Table
-	size += cached.Source.CachedSize(true)
+	// field Source string
+	size += hack.RuntimeAllocSize(int64(len(cached.Source)))
 	return size
 }
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {

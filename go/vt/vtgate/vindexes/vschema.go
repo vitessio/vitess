@@ -98,7 +98,7 @@ type Table struct {
 	Pinned                  []byte                 `json:"pinned,omitempty"`
 	ColumnListAuthoritative bool                   `json:"column_list_authoritative,omitempty"`
 	ReferencedBy            map[string]*Table      `json:"-"`
-	Source                  *Table                 `json:"-,omitempty"`
+	Source                  string                 `json:"source,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -274,11 +274,11 @@ func buildGlobalTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *Keys
 				// with this name.
 				if gt == nil {
 					// Table name is already marked ambiguous, nothing to do.
-				} else if gt.Source == t {
+				} else if _, ok := t.ReferencedBy[gt.Keyspace.Name]; ok {
 					// If the stored table refers to this table, store this
 					// table instead.
 					vschema.globalTables[tname] = t
-				} else if t.Source == gt {
+				} else if _, ok := gt.ReferencedBy[t.Keyspace.Name]; ok {
 					// The source of this table is already stored. Do nothing.
 				} else {
 					// Otherwise, mark this table name ambiguous.
@@ -350,7 +350,6 @@ func buildReferences(
 						table.Source, names[0], names[1])
 				}
 
-				t.Source = sourceT
 				sourceT.ReferencedBy[keyspace.Name] = t
 			}
 		}
@@ -388,6 +387,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		case "":
 			t.Type = table.Type
 		case TypeReference:
+			t.Source = table.Source
 			t.Type = table.Type
 		case TypeSequence:
 			if keyspace.Sharded && table.Pinned == "" {
@@ -894,31 +894,6 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 		return nil, fmt.Errorf("could not find a vindex to use for sharding table %v", tableName)
 	}
 	return result, nil
-}
-
-func (t *Table) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Type                    string                 `json:"type,omitempty"`
-		Name                    sqlparser.IdentifierCS `json:"name"`
-		ColumnVindexes          []*ColumnVindex        `json:"column_vindexes,omitempty"`
-		Ordered                 []*ColumnVindex        `json:"ordered,omitempty"`
-		Owned                   []*ColumnVindex        `json:"owned,omitempty"`
-		AutoIncrement           *AutoIncrement         `json:"auto_increment,omitempty"`
-		Columns                 []Column               `json:"columns,omitempty"`
-		Pinned                  []byte                 `json:"pinned,omitempty"`
-		ColumnListAuthoritative bool                   `json:"column_list_authoritative,omitempty"`
-		Source                  string                 `json:"source,omitempty"`
-	}{
-		Type:                    t.Type,
-		Name:                    t.Name,
-		ColumnVindexes:          t.ColumnVindexes,
-		Ordered:                 t.Ordered,
-		AutoIncrement:           t.AutoIncrement,
-		Columns:                 t.Columns,
-		Pinned:                  t.Pinned,
-		ColumnListAuthoritative: t.ColumnListAuthoritative,
-		Source:                  t.Source.String(),
-	})
 }
 
 // String prints the (possibly qualified) table name
