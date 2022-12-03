@@ -33,6 +33,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/json2"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
@@ -2249,6 +2251,17 @@ func (s *VtctldServer) Materialize(ctx context.Context, req *vtctldatapb.Materia
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 
+	if err != nil {
+		return nil, err
+	}
+
+	ms := &vtctldatapb.MaterializeSettings{}
+	if err := json2.Unmarshal([]byte(req.MaterializeSpec), ms); err != nil {
+		return nil, err
+	}
+	ms.Cell = req.Cells
+	ms.TabletTypes = req.TabletTypes
+	err = workflow.Materialize(ctx, s.ts, s.tmc, ms)
 	if err != nil {
 		return nil, err
 	}
