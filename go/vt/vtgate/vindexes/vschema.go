@@ -197,7 +197,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
-	buildKeyspaces(source, vschema)
+	buildKeyspaces(source, vschema, false /*allowUnresolvedReferences*/)
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
 	buildRoutingRule(source, vschema)
@@ -222,7 +222,7 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
-	buildKeyspaces(formal, vschema)
+	buildKeyspaces(formal, vschema, true /*allowUnresolvedReferences*/)
 	err := vschema.Keyspaces[keyspace].Error
 	return vschema.Keyspaces[keyspace], err
 }
@@ -234,7 +234,7 @@ func ValidateKeyspace(input *vschemapb.Keyspace) error {
 	return err
 }
 
-func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, allowUnresolvedReferences bool) {
 	// In the first loop, build tables.
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := &KeyspaceSchema{
@@ -252,7 +252,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	// In the second loop, build references.
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
-		if err := buildReferences(ks, vschema, ksvschema); err != nil && ksvschema.Error == nil {
+		if err := buildReferences(ks, vschema, ksvschema, allowUnresolvedReferences); err != nil && ksvschema.Error == nil {
 			ksvschema.Error = err
 		}
 	}
@@ -291,7 +291,12 @@ func buildGlobalTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *Keys
 	}
 }
 
-func buildReferences(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) error {
+func buildReferences(
+	ks *vschemapb.Keyspace,
+	vschema *VSchema,
+	ksvschema *KeyspaceSchema,
+	allowUnresolvedReferences bool,
+) error {
 	keyspace := ksvschema.Keyspace
 	for tname, t := range ksvschema.Tables {
 		table := ks.Tables[tname]
@@ -312,41 +317,43 @@ func buildReferences(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *Keyspa
 		}
 
 		sourceKs, ok := vschema.Keyspaces[sourceKsname]
-		if !ok {
+		if !ok && !allowUnresolvedReferences {
 			return fmt.Errorf("source %q may not reference a non-existence keyspace %q: %s",
 				table.Source, sourceKsname, tname)
 		}
-
-		if sourceKs.Keyspace.Sharded {
+		if ok && sourceKs.Keyspace.Sharded {
 			return fmt.Errorf("source %q may not reference a table in a sharded keyspace %q: %s",
 				table.Source, sourceKsname, tname)
 		}
 
-		sourceTname := sourceParts[1]
-		sourceT, ok := sourceKs.Tables[sourceTname]
-		if !ok {
-			return fmt.Errorf("source %q may not reference a non-existent table %q in keyspace %q: %s",
-				table.Source, sourceTname, sourceKsname, tname)
-		}
+		if sourceKs != nil {
+			sourceTname := sourceParts[1]
+			sourceT, ok := sourceKs.Tables[sourceTname]
+			if !ok && !allowUnresolvedReferences {
+				return fmt.Errorf("source %q may not reference a non-existent table %q in keyspace %q: %s",
+					table.Source, sourceTname, sourceKsname, tname)
+			}
+			if ok && sourceT.Type != "" {
+				return fmt.Errorf("source %q may not reference a table of type %q: %s",
+					table.Source, sourceT.Type, tname)
+			}
 
-		if sourceT.Type != "" {
-			return fmt.Errorf("source %q may not reference a table of type %q: %s",
-				table.Source, sourceT.Type, tname)
-		}
+			if sourceT != nil {
+				if sourceT.ReferencedBy == nil {
+					sourceT.ReferencedBy = make(map[string]*Table)
+				}
 
-		if sourceT.ReferencedBy == nil {
-			sourceT.ReferencedBy = make(map[string]*Table)
-		}
+				if ot, ok := sourceT.ReferencedBy[keyspace.Name]; ok {
+					names := []string{ot.Name.String(), tname}
+					sort.Strings(names)
+					return fmt.Errorf("source %q may not be referenced more than once per keyspace: %s, %s",
+						table.Source, names[0], names[1])
+				}
 
-		if ot, ok := sourceT.ReferencedBy[keyspace.Name]; ok {
-			names := []string{ot.Name.String(), tname}
-			sort.Strings(names)
-			return fmt.Errorf("source %q may not be referenced more than once per keyspace: %s, %s",
-				table.Source, names[0], names[1])
+				t.Source = sourceT
+				sourceT.ReferencedBy[keyspace.Name] = t
+			}
 		}
-
-		t.Source = sourceT
-		sourceT.ReferencedBy[keyspace.Name] = t
 	}
 
 	return nil
