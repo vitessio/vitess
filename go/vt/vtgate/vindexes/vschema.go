@@ -308,34 +308,39 @@ func buildReferences(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *Keyspa
 		sourceParts := strings.Split(table.Source, ".")
 		sourceKsname := sourceParts[0]
 		if sourceKsname == keyspace.Name {
-			return fmt.Errorf("source %q of reference table must be in a different keyspace: %s", table.Source, tname)
+			return fmt.Errorf("source %q may not reference a table in the same keyspace as table: %s", table.Source, tname)
 		}
 
 		sourceKs, ok := vschema.Keyspaces[sourceKsname]
 		if !ok {
-			return fmt.Errorf("keyspace %q not found for reference table with source %q: %s",
-				sourceKsname, table.Source, tname)
+			return fmt.Errorf("source %q may not reference a non-existence keyspace %q: %s",
+				table.Source, sourceKsname, tname)
+		}
+
+		if sourceKs.Keyspace.Sharded {
+			return fmt.Errorf("source %q may not reference a table in a sharded keyspace %q: %s",
+				table.Source, sourceKsname, tname)
 		}
 
 		sourceTname := sourceParts[1]
 		sourceT, ok := sourceKs.Tables[sourceTname]
 		if !ok {
-			return fmt.Errorf("table %q not found for reference table with source %q: %s",
-				sourceTname, table.Source, tname)
+			return fmt.Errorf("source %q may not reference a non-existent table %q in keyspace %q: %s",
+				table.Source, sourceTname, sourceKsname, tname)
 		}
 
 		if sourceT.Type != "" {
-			return fmt.Errorf("invalid source table type %q for reference table with source %q: %s",
-				sourceT.Type, table.Source, tname)
+			return fmt.Errorf("source %q may not reference a table of type %q: %s",
+				table.Source, sourceT.Type, tname)
 		}
 
 		if sourceT.ReferencedBy == nil {
 			sourceT.ReferencedBy = make(map[string]*Table)
 		}
 
-		if _, ok := sourceT.ReferencedBy[keyspace.Name]; ok {
-			return fmt.Errorf("source table %q may not be referenced more than once per keyspace: %s",
-				table.Source, tname)
+		if ot, ok := sourceT.ReferencedBy[keyspace.Name]; ok {
+			return fmt.Errorf("source %q may not be referenced more than once per keyspace: %s, %s",
+				table.Source, ot.Name, tname)
 		}
 
 		t.Source = sourceT

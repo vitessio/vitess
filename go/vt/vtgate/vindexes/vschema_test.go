@@ -1905,6 +1905,235 @@ func TestBuildVSchemaPrimaryCannotBeOwned(t *testing.T) {
 	}
 }
 
+func TestBuildVSchemaReferenceTableSourceMustBeQualified(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"invalid source \"src\" for reference table: ref; table src must be qualified")
+}
+
+func TestBuildVSchemaReferenceTableSourceMustBeInDifferentKeyspace(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "binary_md5",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "sharded.src",
+					},
+					"src": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"sharded.src\" may not reference a table in the same keyspace as table: ref")
+}
+
+func TestBuildVSchemaReferenceTableSourceKeyspaceMustExist(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"unsharded.src\" may not reference a non-existence keyspace \"unsharded\": ref")
+}
+
+func TestBuildVSchemaReferenceTableSourceTableMustExist(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"foo": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"unsharded.src\" may not reference a non-existent table \"src\" in keyspace \"unsharded\": ref")
+}
+
+func TestBuildVSchemaReferenceTableSourceMayNotReferenceShardedKeyspace(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded1": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "binary_md5",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"src": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+			"sharded2": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "sharded1.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.NoError(t, vschema.Keyspaces["sharded1"].Error)
+	require.Error(t, vschema.Keyspaces["sharded2"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded2"].Error,
+		"source \"sharded1.src\" may not reference a table in a sharded keyspace \"sharded1\": ref")
+}
+
+func TestBuildVSchemaReferenceTableSourceTableMustBeBasic(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded1": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src1": {
+						Type: "sequence",
+					},
+				},
+			},
+			"unsharded2": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src2": {},
+				},
+			},
+			"unsharded3": {
+				Tables: map[string]*vschemapb.Table{
+					"src3": {
+						Type:   "reference",
+						Source: "unsharded2.src2",
+					},
+				},
+			},
+			"sharded1": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref1": {
+						Type:   "reference",
+						Source: "unsharded1.src1",
+					},
+				},
+			},
+			"sharded2": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref2": {
+						Type:   "reference",
+						Source: "unsharded3.src3",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded1"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded1"].Error,
+		"source \"unsharded1.src1\" may not reference a table of type \"sequence\": ref1")
+	require.Error(t, vschema.Keyspaces["sharded2"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded2"].Error,
+		"source \"unsharded3.src3\" may not reference a table of type \"reference\": ref2")
+}
+
+func TestBuildVSchemaSourceMayBeReferencedAtMostOncePerKeyspace(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref1": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+					"ref2": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"unsharded.src\" may not be referenced more than once per keyspace: ref1, ref2")
+}
+
 func TestSequence(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
