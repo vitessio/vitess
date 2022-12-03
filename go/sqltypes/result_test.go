@@ -17,7 +17,6 @@ limitations under the License.
 package sqltypes
 
 import (
-	"reflect"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -31,20 +30,20 @@ func TestRepair(t *testing.T) {
 	}, {
 		Type: VarChar,
 	}}
-	in := Result{
+	in := &Result{
 		Rows: [][]Value{
 			{TestValue(VarBinary, "1"), TestValue(VarBinary, "aa")},
 			{TestValue(VarBinary, "2"), TestValue(VarBinary, "bb")},
 		},
 	}
-	want := Result{
+	want := &Result{
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), TestValue(VarChar, "aa")},
 			{TestValue(Int64, "2"), TestValue(VarChar, "bb")},
 		},
 	}
 	in.Repair(fields)
-	if !reflect.DeepEqual(in, want) {
+	if !in.Equal(want) {
 		t.Errorf("Repair:\n%#v, want\n%#v", in, want)
 	}
 }
@@ -85,7 +84,7 @@ func TestTruncate(t *testing.T) {
 	}
 
 	out := in.Truncate(0)
-	if !reflect.DeepEqual(out, in) {
+	if !out.Equal(in) {
 		t.Errorf("Truncate(0):\n%v, want\n%v", out, in)
 	}
 
@@ -102,7 +101,7 @@ func TestTruncate(t *testing.T) {
 			{TestValue(Int64, "3")},
 		},
 	}
-	if !reflect.DeepEqual(out, want) {
+	if !out.Equal(want) {
 		t.Errorf("Truncate(1):\n%v, want\n%v", out, want)
 	}
 }
@@ -279,19 +278,21 @@ func TestStripMetaData(t *testing.T) {
 		},
 	}}
 	for _, tcase := range testcases {
-		inCopy := tcase.in.Copy()
-		out := inCopy.StripMetadata(tcase.includedFields)
-		if !reflect.DeepEqual(out, tcase.expected) {
-			t.Errorf("StripMetaData unexpected result for %v: %v", tcase.name, out)
-		}
-		if len(tcase.in.Fields) > 0 {
-			// check the out array is different than the in array.
-			if out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL {
-				t.Errorf("StripMetaData modified original Field for %v", tcase.name)
+		t.Run(tcase.name, func(t *testing.T) {
+			inCopy := tcase.in.Copy()
+			out := inCopy.StripMetadata(tcase.includedFields)
+			if !out.Equal(tcase.expected) {
+				t.Errorf("StripMetaData unexpected result for %v: %v", tcase.name, out)
 			}
-		}
-		// check we didn't change the original result.
-		utils.MustMatch(t, tcase.in, inCopy)
+			if len(tcase.in.Fields) > 0 {
+				// check the out array is different than the in array.
+				if out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL {
+					t.Errorf("StripMetaData modified original Field for %v", tcase.name)
+				}
+			}
+			// check we didn't change the original result.
+			utils.MustMatch(t, tcase.in, inCopy)
+		})
 	}
 }
 
@@ -340,7 +341,7 @@ func TestAppendResult(t *testing.T) {
 
 	result.AppendResult(src)
 
-	if !reflect.DeepEqual(result, want) {
+	if !result.Equal(want) {
 		t.Errorf("Got:\n%#v, want:\n%#v", result, want)
 	}
 }

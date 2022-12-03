@@ -94,9 +94,11 @@ func TestLongPolling(t *testing.T) {
 	u.Path = "/workflow/action/1"
 	message := `{"path":"/uuid1","name":"button1"}`
 	buf := bytes.NewReader([]byte(message))
-	if _, err := http.Post(u.String(), "application/json; charset=utf-8", buf); err != nil {
+	pResp, err := http.Post(u.String(), "application/json; charset=utf-8", buf)
+	if err != nil {
 		t.Fatalf("/action/1 post failed: %v", err)
 	}
+	pResp.Body.Close()
 	for timeout := 0; ; timeout++ {
 		// This is an asynchronous action, need to take the lock.
 		tw.mu.Lock()

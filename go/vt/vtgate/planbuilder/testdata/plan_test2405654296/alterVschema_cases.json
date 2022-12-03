@@ -1,0 +1,173 @@
+[
+  {
+    "comment": "Create vindex",
+    "query": "alter vschema create vindex hash_vdx using hash",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema create vindex hash_vdx using hash",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "alter vschema create vindex hash_vdx using `hash`"
+      },
+      "TablesUsed": [
+        "main.hash_vdx"
+      ]
+    }
+  },
+  {
+    "comment": "Create vindex with qualifier",
+    "query": "alter vschema create vindex user.hash_vdx using hash",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema create vindex user.hash_vdx using hash",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "query": "alter vschema create vindex `user`.hash_vdx using `hash`"
+      },
+      "TablesUsed": [
+        "user.hash_vdx"
+      ]
+    }
+  },
+  {
+    "comment": "Drop vindex",
+    "query": "alter vschema drop vindex hash_vdx",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema drop vindex hash_vdx",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "alter vschema drop vindex hash_vdx"
+      },
+      "TablesUsed": [
+        "main.hash_vdx"
+      ]
+    }
+  },
+  {
+    "comment": "Add table",
+    "query": "alter vschema add table a",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema add table a",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "alter vschema add table a"
+      },
+      "TablesUsed": [
+        "main.a"
+      ]
+    }
+  },
+  {
+    "comment": "Add sequence",
+    "query": "alter vschema add sequence a_seq",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema add sequence a_seq",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "alter vschema add sequence a_seq"
+      },
+      "TablesUsed": [
+        "main.a_seq"
+      ]
+    }
+  },
+  {
+    "comment": "Add auto_increment with qualifier",
+    "query": "alter vschema on user.a add auto_increment id using a_seq",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema on user.a add auto_increment id using a_seq",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "query": "alter vschema on `user`.a add auto_increment id using a_seq"
+      },
+      "TablesUsed": [
+        "user.a"
+      ]
+    }
+  },
+  {
+    "comment": "Drop table",
+    "query": "alter vschema drop table a",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema drop table a",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "alter vschema drop table a"
+      },
+      "TablesUsed": [
+        "main.a"
+      ]
+    }
+  },
+  {
+    "comment": "Add Vindex",
+    "query": "alter vschema on a add vindex hash (id)",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema on a add vindex hash (id)",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "alter vschema on a add vindex `hash` (id)"
+      },
+      "TablesUsed": [
+        "main.a"
+      ]
+    }
+  },
+  {
+    "comment": "Drop Vindex",
+    "query": "alter vschema on a drop vindex hash",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter vschema on a drop vindex hash",
+      "Instructions": {
+        "OperatorType": "AlterVSchema",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "query": "alter vschema on a drop vindex `hash`"
+      },
+      "TablesUsed": [
+        "main.a"
+      ]
+    }
+  }
+]

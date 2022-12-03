@@ -53,6 +53,7 @@ type DBConn struct {
 	dbaPool      *dbconnpool.ConnectionPool
 	stats        *tabletenv.Stats
 	current      sync2.AtomicString
+	timeCreated  time.Time
 	setting      string
 	resetSetting string
 
@@ -73,11 +74,12 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 		return nil, err
 	}
 	return &DBConn{
-		conn:    c,
-		info:    appParams,
-		pool:    cp,
-		dbaPool: cp.dbaPool,
-		stats:   cp.env.Stats(),
+		conn:        c,
+		info:        appParams,
+		pool:        cp,
+		dbaPool:     cp.dbaPool,
+		timeCreated: time.Now(),
+		stats:       cp.env.Stats(),
 	}, nil
 }
 
@@ -88,11 +90,12 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 		return nil, err
 	}
 	dbconn := &DBConn{
-		conn:    c,
-		info:    params,
-		dbaPool: dbaPool,
-		pool:    nil,
-		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		conn:        c,
+		info:        params,
+		dbaPool:     dbaPool,
+		pool:        nil,
+		timeCreated: time.Now(),
+		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
 	}
 	if setting == nil {
 		return dbconn, nil
@@ -381,6 +384,11 @@ func (dbc *DBConn) IsClosed() bool {
 	return dbc.conn.IsClosed()
 }
 
+// Expired returns whether a connection has passed its lifetime
+func (dbc *DBConn) Expired(lifetimeTimeout time.Duration) bool {
+	return lifetimeTimeout > 0 && time.Until(dbc.timeCreated.Add(lifetimeTimeout)) < 0
+}
+
 // Recycle returns the DBConn to the pool.
 func (dbc *DBConn) Recycle() {
 	switch {
@@ -442,9 +450,14 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
-// BaseShowTables returns a query that shows tables and their sizes
+// BaseShowTables returns a query that shows tables
 func (dbc *DBConn) BaseShowTables() string {
 	return dbc.conn.BaseShowTables()
+}
+
+// BaseShowTablesWithSizes returns a query that shows tables and their sizes
+func (dbc *DBConn) BaseShowTablesWithSizes() string {
+	return dbc.conn.BaseShowTablesWithSizes()
 }
 
 func (dbc *DBConn) reconnect(ctx context.Context) error {

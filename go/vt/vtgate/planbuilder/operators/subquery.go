@@ -18,13 +18,14 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
 	// SubQuery stores the information about subquery
 	SubQuery struct {
-		Outer Operator
+		Outer ops.Operator
 		Inner []*SubQueryInner
 
 		noColumns
@@ -36,7 +37,7 @@ type (
 		// Inner is the Operator inside the parenthesis of the subquery.
 		// i.e: select (select 1 union select 1), the Inner here would be
 		// of type Concatenate since we have a Union.
-		Inner Operator
+		Inner ops.Operator
 
 		// ExtractedSubquery contains all information we need about this subquery
 		ExtractedSubquery *sqlparser.ExtractedSubquery
@@ -46,12 +47,11 @@ type (
 	}
 )
 
-var _ Operator = (*SubQuery)(nil)
-var _ Operator = (*SubQueryInner)(nil)
+var _ ops.Operator = (*SubQuery)(nil)
+var _ ops.Operator = (*SubQueryInner)(nil)
 
 // Clone implements the Operator interface
-func (s *SubQueryInner) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 1)
+func (s *SubQueryInner) Clone(inputs []ops.Operator) ops.Operator {
 	return &SubQueryInner{
 		Inner:             inputs[0],
 		ExtractedSubquery: s.ExtractedSubquery,
@@ -59,13 +59,12 @@ func (s *SubQueryInner) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (s *SubQueryInner) Inputs() []Operator {
-	return []Operator{s.Inner}
+func (s *SubQueryInner) Inputs() []ops.Operator {
+	return []ops.Operator{s.Inner}
 }
 
 // Clone implements the Operator interface
-func (s *SubQuery) Clone(inputs []Operator) Operator {
-	checkSize(inputs, len(s.Inner)+1)
+func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SubQuery{
 		Outer: inputs[0],
 	}
@@ -80,8 +79,8 @@ func (s *SubQuery) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (s *SubQuery) Inputs() []Operator {
-	operators := []Operator{s.Outer}
+func (s *SubQuery) Inputs() []ops.Operator {
+	operators := []ops.Operator{s.Outer}
 	for _, inner := range s.Inner {
 		operators = append(operators, inner)
 	}
@@ -94,10 +93,14 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 	}
 	subq := &SubQuery{}
 	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := CreateLogicalOperatorFromAST(ctx, sq.Subquery.Select)
+		opInner, err := createLogicalOperatorFromAST(ctx, sq.Subquery.Select)
 		if err != nil {
 			return nil, err
 		}
+		if horizon, ok := opInner.(*Horizon); ok {
+			opInner = horizon.Source
+		}
+
 		subq.Inner = append(subq.Inner, &SubQueryInner{
 			ExtractedSubquery: sq,
 			Inner:             opInner,

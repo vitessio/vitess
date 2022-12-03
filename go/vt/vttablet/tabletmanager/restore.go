@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -38,9 +39,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -105,16 +106,6 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
-	// Tell Orchestrator we're stopped on purpose for some Vitess task.
-	// Do this in the background, as it's best-effort.
-	go func() {
-		if tm.orc == nil {
-			return
-		}
-		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to Restore"); err != nil {
-			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
-		}
-	}()
 
 	var (
 		err       error
@@ -151,25 +142,17 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 
 	startTime = time.Now()
 
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, backupTime)
+	req := &tabletmanagerdatapb.RestoreFromBackupRequest{
+		BackupTime: logutil.TimeToProto(backupTime),
+	}
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req)
 	if err != nil {
 		return err
 	}
-
-	// Tell Orchestrator we're no longer stopped on purpose.
-	// Do this in the background, as it's best-effort.
-	go func() {
-		if tm.orc == nil {
-			return
-		}
-		if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
-			log.Warningf("Orchestrator EndMaintenance failed: %v", err)
-		}
-	}()
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, backupTime time.Time) error {
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest) error {
 
 	tablet := tm.Tablet()
 	originalType := tablet.Type
@@ -192,7 +175,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, backupTime)
+		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, logutil.ProtoToTime(request.BackupTime))
 	}
 
 	params := mysqlctl.RestoreParams{
@@ -206,8 +189,17 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DbName:              topoproto.TabletDbName(tablet),
 		Keyspace:            keyspace,
 		Shard:               tablet.Shard,
-		StartTime:           backupTime,
+		StartTime:           logutil.ProtoToTime(request.BackupTime),
+		DryRun:              request.DryRun,
 	}
+	if request.RestoreToPos != "" {
+		pos, err := mysql.DecodePosition(request.RestoreToPos)
+		if err != nil {
+			return vterrors.Wrapf(err, "restore failed: unable to decode --restore_to_pos: %s", request.RestoreToPos)
+		}
+		params.RestoreToPos = pos
+	}
+	params.Logger.Infof("Restore: original tablet type=%v", originalType)
 
 	// Check whether we're going to restore before changing to RESTORE type,
 	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
@@ -235,6 +227,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
+		params.Logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -254,32 +247,46 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var pos mysql.Position
 	if backupManifest != nil {
 		pos = backupManifest.Position
+		params.Logger.Infof("Restore: pos=%v", mysql.EncodePosition(pos))
 	}
 	// If SnapshotTime is set , then apply the incremental change
 	if keyspaceInfo.SnapshotTime != nil {
+		params.Logger.Infof("Restore: Restoring to time %v from binlog", keyspaceInfo.SnapshotTime)
 		err = tm.restoreToTimeFromBinlog(ctx, pos, keyspaceInfo.SnapshotTime)
 		if err != nil {
 			log.Errorf("unable to restore to the specified time %s, error : %v", keyspaceInfo.SnapshotTime.String(), err)
 			return nil
 		}
 	}
-	switch err {
-	case nil:
+	switch {
+	case err == nil && backupManifest != nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
-		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+		if params.IsIncrementalRecovery() && !params.DryRun {
+			// The whole point of point-in-time recovery is that we want to restore up to a given position,
+			// and to NOT proceed from that position. We want to disable replication and NOT let the replica catch
+			// up with the primary.
+			params.Logger.Infof("Restore: disabling replication")
+			if err := tm.disableReplication(context.Background()); err != nil {
+				return err
+			}
+		} else if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to primary only for "NORMAL" keyspaces
+			params.Logger.Infof("Restore: starting replication at position %v", pos)
 			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
 				return err
 			}
 		}
-	case mysqlctl.ErrNoBackup:
+	case err == mysqlctl.ErrNoBackup:
 		// Starting with empty database.
 		// We just need to initialize replication
 		_, err := tm.initializeReplication(ctx, originalType)
 		if err != nil {
 			return err
 		}
+	case err == nil && params.DryRun:
+		// Do nothing here, let the rest of code run
+		params.Logger.Infof("Dry run. No changes made")
 	default:
 		// If anything failed, we should reset the original tablet type
 		if err := tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone); err != nil {
@@ -296,7 +303,12 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			originalType = initType
 		}
 	}
-
+	if params.IsIncrementalRecovery() && !params.DryRun {
+		// override
+		params.Logger.Infof("Restore: will set tablet type to DRAINED as this is a point in time recovery")
+		originalType = topodatapb.TabletType_DRAINED
+	}
+	params.Logger.Infof("Restore: changing tablet type to %v", originalType)
 	// Change type back to original type if we're ok to serve.
 	return tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone)
 }
@@ -519,6 +531,24 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		log.Warningf("Could not copy up to GTID.")
 		return vterrors.Wrapf(err, "context timeout while restoring up to specified GTID - %s", beforeGTIDPos)
 	}
+}
+
+// disableReplication stopes and resets replication on the mysql server. It moreover sets impossible replication
+// source params, so that the replica can't possibly reconnect. It would take a `CHANGE [MASTER|REPLICATION SOURCE] TO ...` to
+// make the mysql server replicate again (available via tm.MysqlDaemon.SetReplicationPosition)
+func (tm *TabletManager) disableReplication(ctx context.Context) error {
+	cmds := []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
+	}
+	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return vterrors.Wrap(err, "failed to reset replication")
+	}
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, "//", 0, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+		return vterrors.Wrap(err, "failed to disable replication")
+	}
+
+	return nil
 }
 
 func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {

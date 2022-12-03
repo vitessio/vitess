@@ -71,6 +71,8 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		table,
 		table.Keyspace,
 	)
+	applyCommentDirectives(ins, eins)
+
 	var rows sqlparser.Values
 	tc := &tableCollector{}
 	tc.addVindexTable(table)

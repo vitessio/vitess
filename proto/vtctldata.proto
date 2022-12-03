@@ -91,6 +91,8 @@ message MaterializeSettings {
   // and to the SourceTimeZone in reverse workflows
   string target_time_zone = 11;
   repeated string source_shards = 12;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 13;
 }
 
 /* Data types for VtctldServer */
@@ -113,6 +115,8 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
+  string workflow_type = 6;
+  string workflow_sub_type = 7;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -268,6 +272,9 @@ message BackupRequest {
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
   uint64 concurrency = 3;
+  // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
+  // then the backup becomes incremental and applies as of given position.
+  string incremental_from_pos = 4;
 }
 
 message BackupResponse {
@@ -669,6 +676,27 @@ message GetSrvKeyspacesResponse {
   map<string, topodata.SrvKeyspace> srv_keyspaces = 1;
 }
 
+message UpdateThrottlerConfigRequest {
+  string keyspace = 1;
+  // Enable instructs to enable the throttler
+  bool enable = 2;
+  // Disable instructs to disable the throttler
+  bool disable = 3;
+  // Threshold for throttler (with no custom query, ie using default query, only positive values are considered)
+  double threshold = 4;
+  // CustomQuery replaces the default replication lag query
+  string custom_query = 5;
+  // CustomQuerySet indicates that the value of CustomQuery has changed
+  bool custom_query_set = 6;
+  // CheckAsCheckSelf instructs the throttler to respond to /check requests by checking the tablet's own health
+  bool check_as_check_self=7;
+  // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
+  bool check_as_check_shard=8;
+}
+
+message UpdateThrottlerConfigResponse {
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }
@@ -959,6 +987,12 @@ message RestoreFromBackupRequest {
   // BackupTime, if set, will use the backup taken most closely at or before
   // this time. If nil, the latest backup will be restored on the tablet.
   vttime.Time backup_time = 2;
+  // RestoreToPos indicates a position for a point-in-time recovery. The recovery
+  // is expected to utilize one full backup, followed by zero or more incremental backups,
+  // that reach the precise desired position
+  string restore_to_pos = 3;
+  // Dry run does not actually performs the restore, but validates the steps and availability of backups
+  bool dry_run = 4;
 }
 
 message RestoreFromBackupResponse {

@@ -597,7 +597,11 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 				// String terminates mid escape character.
 				return LEX_ERROR, buffer.String()
 			}
-			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
+			// Preserve escaping of % and _
+			if tkn.cur() == '%' || tkn.cur() == '_' {
+				buffer.WriteByte('\\')
+				ch = tkn.cur()
+			} else if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.cur()
 			} else {
 				ch = uint16(decodedChar)

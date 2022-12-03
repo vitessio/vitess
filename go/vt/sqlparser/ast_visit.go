@@ -22,8 +22,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
-	case AccessMode:
-		return VisitAccessMode(in, f)
 	case *AddColumns:
 		return VisitRefOfAddColumns(in, f)
 	case *AddConstraintDefinition:
@@ -210,8 +208,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
-	case IsolationLevel:
-		return VisitIsolationLevel(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONAttributesExpr:
@@ -398,8 +394,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSetExpr(in, f)
 	case SetExprs:
 		return VisitSetExprs(in, f)
-	case *SetTransaction:
-		return VisitRefOfSetTransaction(in, f)
 	case *Show:
 		return VisitRefOfShow(in, f)
 	case *ShowBasic:
@@ -414,6 +408,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowOther(in, f)
 	case *ShowThrottledApps:
 		return VisitRefOfShowThrottledApps(in, f)
+	case *ShowThrottlerStatus:
+		return VisitRefOfShowThrottlerStatus(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Std:
@@ -3181,23 +3177,6 @@ func VisitSetExprs(in SetExprs, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfSetTransaction(in *SetTransaction, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
-		return err
-	}
-	for _, el := range in.Characteristics {
-		if err := VisitCharacteristic(el, f); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 func VisitRefOfShow(in *Show, f Visit) error {
 	if in == nil {
 		return nil
@@ -3274,6 +3253,15 @@ func VisitRefOfShowOther(in *ShowOther, f Visit) error {
 	return nil
 }
 func VisitRefOfShowThrottledApps(in *ShowThrottledApps, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfShowThrottlerStatus(in *ShowThrottlerStatus, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -4222,20 +4210,6 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 }
-func VisitCharacteristic(in Characteristic, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case AccessMode:
-		return VisitAccessMode(in, f)
-	case IsolationLevel:
-		return VisitIsolationLevel(in, f)
-	default:
-		// this should never happen
-		return nil
-	}
-}
 func VisitColTuple(in ColTuple, f Visit) error {
 	if in == nil {
 		return nil
@@ -4673,14 +4647,14 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfSelect(in, f)
 	case *Set:
 		return VisitRefOfSet(in, f)
-	case *SetTransaction:
-		return VisitRefOfSetTransaction(in, f)
 	case *Show:
 		return VisitRefOfShow(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
 	case *ShowThrottledApps:
 		return VisitRefOfShowThrottledApps(in, f)
+	case *ShowThrottlerStatus:
+		return VisitRefOfShowThrottlerStatus(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
@@ -4718,10 +4692,6 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 		return nil
 	}
 }
-func VisitAccessMode(in AccessMode, f Visit) error {
-	_, err := f(in)
-	return err
-}
 func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
 	_, err := f(in)
 	return err
@@ -4731,10 +4701,6 @@ func VisitArgument(in Argument, f Visit) error {
 	return err
 }
 func VisitBoolVal(in BoolVal, f Visit) error {
-	_, err := f(in)
-	return err
-}
-func VisitIsolationLevel(in IsolationLevel, f Visit) error {
 	_, err := f(in)
 	return err
 }

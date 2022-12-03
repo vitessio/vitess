@@ -20,17 +20,17 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // ApplyJoin is a nested loop join - for each row on the LHS,
 // we'll execute the plan on the RHS, feeding data from left to right
 type ApplyJoin struct {
-	LHS, RHS Operator
+	LHS, RHS ops.Operator
 
 	// Columns stores the column indexes of the columns coming from the left and right side
 	// negative value comes from LHS and positive from RHS
@@ -52,9 +52,9 @@ type ApplyJoin struct {
 	Predicate sqlparser.Expr
 }
 
-var _ PhysicalOperator = (*ApplyJoin)(nil)
+var _ ops.PhysicalOperator = (*ApplyJoin)(nil)
 
-func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
+func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
 	return &ApplyJoin{
 		LHS:       lhs,
 		RHS:       rhs,
@@ -68,8 +68,7 @@ func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin boo
 func (a *ApplyJoin) IPhysical() {}
 
 // Clone implements the Operator interface
-func (a *ApplyJoin) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 2)
+func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &ApplyJoin{
 		LHS:        inputs[0],
 		RHS:        inputs[1],
@@ -82,46 +81,42 @@ func (a *ApplyJoin) Clone(inputs []Operator) Operator {
 	}
 }
 
-func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
-	return addPredicate(a, ctx, expr, false)
+func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	return AddPredicate(a, ctx, expr, false, newFilter)
 }
 
 // Inputs implements the Operator interface
-func (a *ApplyJoin) Inputs() []Operator {
-	return []Operator{a.LHS, a.RHS}
+func (a *ApplyJoin) Inputs() []ops.Operator {
+	return []ops.Operator{a.LHS, a.RHS}
 }
 
-var _ joinOperator = (*ApplyJoin)(nil)
+var _ JoinOp = (*ApplyJoin)(nil)
 
-func (a *ApplyJoin) tableID() semantics.TableSet {
-	return TableID(a)
-}
-
-func (a *ApplyJoin) getLHS() Operator {
+func (a *ApplyJoin) GetLHS() ops.Operator {
 	return a.LHS
 }
 
-func (a *ApplyJoin) getRHS() Operator {
+func (a *ApplyJoin) GetRHS() ops.Operator {
 	return a.RHS
 }
 
-func (a *ApplyJoin) setLHS(operator Operator) {
+func (a *ApplyJoin) SetLHS(operator ops.Operator) {
 	a.LHS = operator
 }
 
-func (a *ApplyJoin) setRHS(operator Operator) {
+func (a *ApplyJoin) SetRHS(operator ops.Operator) {
 	a.RHS = operator
 }
 
-func (a *ApplyJoin) makeInner() {
+func (a *ApplyJoin) MakeInner() {
 	a.LeftJoin = false
 }
 
-func (a *ApplyJoin) isInner() bool {
+func (a *ApplyJoin) IsInner() bool {
 	return !a.LeftJoin
 }
 
-func (a *ApplyJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
 	if err != nil {
 		return err
@@ -189,7 +184,7 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 		}
 		a.Columns = append(a.Columns, offset+1)
 	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not try to push this predicate here")
+		return 0, vterrors.VT13002(sqlparser.String(expr))
 	}
 
 	// the expression wasn't already there - let's add it

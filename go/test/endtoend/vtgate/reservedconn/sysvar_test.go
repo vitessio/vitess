@@ -421,3 +421,24 @@ func checkOltpAndOlapInterchangingTx(t *testing.T, conn *mysql.Conn) {
 	utils.Exec(t, conn, "set workload = oltp")
 	utils.AssertMatches(t, conn, "select id, val1 from test where id = 80", "[[INT64(80) NULL]]")
 }
+
+func TestSysVarTxIsolation(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// default from mysql
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+
+	// setting to different value.
+	utils.Exec(t, conn, "set @@transaction_isolation = 'read-committed'")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+
+	// changing setting to different value.
+	utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+
+	// changing setting to different value.
+	utils.Exec(t, conn, "set transaction isolation level serializable")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
+}

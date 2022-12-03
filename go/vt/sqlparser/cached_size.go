@@ -359,6 +359,20 @@ func (cached *Avg) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Begin) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field TxAccessModes []vitess.io/vitess/go/vt/sqlparser.TxAccessMode
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.TxAccessModes)))
+	}
+	return size
+}
 func (cached *BetweenExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3270,27 +3284,6 @@ func (cached *SetExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *SetTransaction) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(48)
-	}
-	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
-	size += cached.Comments.CachedSize(true)
-	// field Characteristics []vitess.io/vitess/go/vt/sqlparser.Characteristic
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Characteristics)) * int64(16))
-		for _, elem := range cached.Characteristics {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
-	return size
-}
 func (cached *Show) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3376,6 +3369,23 @@ func (cached *ShowOther) CachedSize(alloc bool) int64 {
 	return size
 }
 func (cached *ShowThrottledApps) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
+		for _, elem := range cached.Comments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	return size
+}
+func (cached *ShowThrottlerStatus) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
