@@ -339,8 +339,10 @@ func buildReferences(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *Keyspa
 		}
 
 		if ot, ok := sourceT.ReferencedBy[keyspace.Name]; ok {
+			names := []string{ot.Name.String(), tname}
+			sort.Strings(names)
 			return fmt.Errorf("source %q may not be referenced more than once per keyspace: %s, %s",
-				table.Source, ot.Name, tname)
+				table.Source, names[0], names[1])
 		}
 
 		t.Source = sourceT

@@ -2116,11 +2116,11 @@ func TestBuildVSchemaSourceMayBeReferencedAtMostOncePerKeyspace(t *testing.T) {
 			"sharded": {
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"ref1": {
+					"ref2": {
 						Type:   "reference",
 						Source: "unsharded.src",
 					},
-					"ref2": {
+					"ref1": {
 						Type:   "reference",
 						Source: "unsharded.src",
 					},
@@ -3047,4 +3047,115 @@ func TestMultiColVindexPartialNotAllowed(t *testing.T) {
 	require.Len(t, table.ColumnVindexes, 1)
 	require.True(t, table.ColumnVindexes[0].IsUnique())
 	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
+}
+
+func TestReferenceTableHasSourceAndSourceHasReference(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src": {},
+				},
+			},
+			"sharded1": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+			"sharded2": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vs := BuildVSchema(&input)
+	ref1, err := vs.FindTable("sharded1", "ref")
+	require.NoError(t, err)
+	ref2, err := vs.FindTable("sharded2", "ref")
+	require.NoError(t, err)
+	src, err := vs.FindTable("unsharded", "src")
+	require.NoError(t, err)
+	require.Equal(t, src, ref1.Source)
+	require.Equal(t, src, ref2.Source)
+	require.Equal(t, src.ReferencedBy, map[string]*Table{
+		"sharded1": ref1,
+		"sharded2": ref2,
+	})
+}
+
+func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type:   "reference",
+						Source: "unsharded.t1",
+					},
+				},
+			},
+		},
+	}
+	vs := BuildVSchema(&input)
+	t1, err := vs.FindTable("unsharded", "t1")
+	require.NoError(t, err)
+	globalT1, err := vs.FindTable("", "t1")
+	require.NoError(t, err)
+	require.Equal(t, t1, globalT1)
+
+	input.Keyspaces["unsharded"].RequireExplicitRouting = true
+	vs = BuildVSchema(&input)
+	t1, err = vs.FindTable("sharded", "t1")
+	require.NoError(t, err)
+	globalT1, err = vs.FindTable("", "t1")
+	require.NoError(t, err)
+	require.Equal(t, t1, globalT1)
+}
+
+func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded1": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+				},
+			},
+			"unsharded2": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type:   "reference",
+						Source: "unsharded1.t1",
+					},
+				},
+			},
+		},
+	}
+	vs := BuildVSchema(&input)
+	_, err := vs.FindTable("", "t1")
+	require.Error(t, err)
 }
