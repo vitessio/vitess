@@ -889,19 +889,6 @@ func createAlternateRoutesFromVSchemaTable(
 	var routes []*Route
 
 	switch vschemaTable.Type {
-	case vindexes.TypeReference:
-		if vschemaTable.Source != nil {
-			route, err := createRouteFromVSchemaTable(
-				ctx,
-				queryTable,
-				vschemaTable.Source,
-				solves,
-				false /*planAlternates*/)
-			if err != nil {
-				return nil, err
-			}
-			routes = append(routes, route)
-		}
 	case "":
 		for _, referenceTable := range vschemaTable.ReferencedBy {
 			route, err := createRouteFromVSchemaTable(
