@@ -910,7 +910,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on TestExecutor.garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "VT05005: Table 'garbage' does not exist in keyspace 'TestExecutor'"
+	wantErr = "VT05005: table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show vschema vindexes on user"
@@ -941,7 +941,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "VT05005: Table 'garbage' does not exist in keyspace 'TestExecutor'"
+	wantErr = "VT05005: table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show warnings"
@@ -1048,17 +1048,17 @@ func TestExecutorShow(t *testing.T) {
 	query = "show vschema tables"
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "VT05003: Unknown database 'no_such_keyspace' in vschema"
+	want = "VT05003: unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 
 	query = "show vitess_migrations"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "VT05003: Unknown database 'no_such_keyspace' in vschema"
+	want = "VT05003: unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 
 	query = "show vitess_migrations from ks like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "VT05003: Unknown database 'ks' in vschema"
+	want = "VT05003: unknown database 'ks' in vschema"
 	assert.EqualError(t, err, want, query)
 }
 
@@ -1116,7 +1116,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	require.EqualError(t, err, "VT05003: Unknown database 'UnexistentKeyspace' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'UnexistentKeyspace' in vschema")
 }
 
 func TestExecutorComment(t *testing.T) {

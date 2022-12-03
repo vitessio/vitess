@@ -169,17 +169,17 @@ func TestDestinationKeyspace(t *testing.T) {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2",
 		qualifier:     "",
-		expectedError: "VT05003: Unknown database 'ks2' in vschema",
+		expectedError: "VT05003: unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2:-80",
 		qualifier:     "",
-		expectedError: "VT05003: Unknown database 'ks2' in vschema",
+		expectedError: "VT05003: unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "",
 		qualifier:     "ks2",
-		expectedError: "VT05003: Unknown database 'ks2' in vschema",
+		expectedError: "VT05003: unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "",
@@ -237,7 +237,7 @@ func TestSetTarget(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks3",
-		expectedError: "VT05003: Unknown database 'ks3' in vschema",
+		expectedError: "VT05003: unknown database 'ks3' in vschema",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks2@replica",

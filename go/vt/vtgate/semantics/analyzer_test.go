@@ -286,7 +286,7 @@ func TestNotUniqueTableName(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
 			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "Not unique table/alias")
+			require.Contains(t, err.Error(), "VT03013: not unique table/alias")
 		})
 	}
 }

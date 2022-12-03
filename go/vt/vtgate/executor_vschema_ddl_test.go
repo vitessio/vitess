@@ -432,7 +432,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	_, _ = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
 	_ = waitForColVindexes(t, ks, "test", []string{}, executor)
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	require.EqualError(t, err, "VT05005: Table 'test' does not exist in keyspace 'TestExecutor'")
+	require.EqualError(t, err, "VT05005: table 'test' does not exist in keyspace 'TestExecutor'")
 
 	// add it again using the same syntax
 	stmt = "alter vschema on test add vindex test_hash (id) using hash "
@@ -601,11 +601,11 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	stmt = "alter vschema on nonexistent drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
-	require.EqualError(t, err, "VT05003: Unknown database 'InvalidKeyspace' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'InvalidKeyspace' in vschema")
 
 	stmt = "alter vschema on nowhere.nohow drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, "VT05003: Unknown database 'nowhere' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'nowhere' in vschema")
 
 	stmt = "alter vschema on test drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
