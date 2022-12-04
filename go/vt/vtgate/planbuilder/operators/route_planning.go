@@ -505,14 +505,14 @@ func tryMerge(
 		bRoute = altBRoute
 	}
 
-	if canMergeReferenceTable(aRoute, bRoute) {
+	sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
+
+	if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
 		tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
 		if tree != nil || err != nil {
 			return tree, err
 		}
 	}
-
-	sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
 
 	switch aRoute.RouteOpCode {
 	case engine.Unsharded, engine.DBA:
@@ -594,21 +594,6 @@ func leaves(op ops.Operator) (sources []ops.Operator) {
 	}
 
 	panic(fmt.Sprintf("leaves unknown type: %T", op))
-}
-
-func canMergeReferenceTable(aRoute, bRoute *Route) bool {
-	// Dual tables are reference tables that exist in every keyspace.
-	if isDualTable(aRoute) || isDualTable(bRoute) {
-		return true
-	}
-
-	// If either route is to a reference table, it must live in the same
-	// keyspace as the other route.
-	if aRoute.RouteOpCode == engine.Reference || bRoute.RouteOpCode == engine.Reference {
-		return aRoute.Keyspace == bRoute.Keyspace
-	}
-
-	return false
 }
 
 func tryMergeReferenceTable(aRoute, bRoute *Route, merger mergeFunc) (*Route, error) {
