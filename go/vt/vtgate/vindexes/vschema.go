@@ -274,12 +274,14 @@ func buildGlobalTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *Keys
 				// with this name.
 				if gt == nil {
 					// Table name is already marked ambiguous, nothing to do.
+					continue
 				} else if _, ok := t.ReferencedBy[gt.Keyspace.Name]; ok {
 					// If the stored table refers to this table, store this
 					// table instead.
 					vschema.globalTables[tname] = t
 				} else if _, ok := gt.ReferencedBy[t.Keyspace.Name]; ok {
 					// The source of this table is already stored. Do nothing.
+					continue
 				} else {
 					// Otherwise, mark this table name ambiguous.
 					vschema.globalTables[tname] = nil

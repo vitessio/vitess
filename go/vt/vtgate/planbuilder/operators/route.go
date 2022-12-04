@@ -58,7 +58,7 @@ type (
 
 		// Alternates contains alternate routes to equivalent sources in
 		// other keyspaces.
-		Alternates []*Route
+		Alternates map[*vindexes.Keyspace]*Route
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -885,8 +885,8 @@ func createAlternateRoutesFromVSchemaTable(
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
 	solves semantics.TableSet,
-) ([]*Route, error) {
-	var routes []*Route
+) (map[*vindexes.Keyspace]*Route, error) {
+	routes := make(map[*vindexes.Keyspace]*Route)
 
 	switch vschemaTable.Type {
 	case "":
@@ -900,7 +900,7 @@ func createAlternateRoutesFromVSchemaTable(
 			if err != nil {
 				return nil, err
 			}
-			routes = append(routes, route)
+			routes[route.Keyspace] = route
 		}
 	}
 
@@ -929,10 +929,8 @@ func (r *Route) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
 		return nil
 	}
 
-	for _, alternate := range r.Alternates {
-		if alternate.Keyspace.Name == keyspace.Name {
-			return alternate
-		}
+	if route, ok := r.Alternates[keyspace]; ok {
+		return route
 	}
 
 	return nil
