@@ -751,13 +751,15 @@ func findVSchemaTableAndCreateRoute(
 		return nil, err
 	}
 
+	// Plan alternates if no keyspace is specified or does not exist.
+	planAlternates := queryTable.Table.Qualifier.IsEmpty() || !ctx.VSchema.KeyspaceExists(queryTable.Table.Qualifier.String())
+
 	return createRouteFromVSchemaTable(
 		ctx,
 		queryTable,
 		vschemaTable,
 		solves,
-		// Don't plan alternates if the table query is qualified.
-		queryTable.Table.Qualifier.IsEmpty(),
+		planAlternates,
 	)
 }
 
