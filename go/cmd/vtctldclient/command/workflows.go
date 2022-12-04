@@ -39,7 +39,7 @@ var (
 	// Materialize makes a Materialize gRPC call to a vtctld.
 	Materialize = &cobra.Command{
 		Use:                   "Materialize [--cells=<cells>] [--tablet_types=<source_tablet_types>] <json_spec>",
-		Short:                 "Runs",
+		Short:                 "Creates and starts a Materialize workflow based on the provided materialize spec.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandMaterialize,

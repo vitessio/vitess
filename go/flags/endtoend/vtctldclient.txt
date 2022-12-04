@@ -50,6 +50,7 @@ Available Commands:
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
+  Materialize                 Creates and starts a Materialize workflow based on the provided materialize spec.
   PingTablet                  Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
   PlannedReparentShard        Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.
   RebuildKeyspaceGraph        Rebuilds the serving data for the keyspace(s). This command may trigger an update to all connected clients.

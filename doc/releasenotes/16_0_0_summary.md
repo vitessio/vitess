@@ -15,6 +15,9 @@
 
 In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
 
+#### <a id="vstream-copy-resume"/>vtctldclient migration
+
+In [PR 11874](https://github.com/vitessio/vitess/pull/11874) we migrate all vreplication-related commands to vtctld. These include Materialize, MoveTables, Reshard, CreateLookupVindex, VDiff, Mount and Migrate.
 ### Tablet throttler
 
 The tablet throttler can now be configured dynamically. Configuration is now found in the topo service, and applies to all tablets in all shards and cells of a given keyspace. For backwards compatibility `v16` still supports `vttablet`-based command line flags for throttler ocnfiguration.
